@@ -36,6 +36,10 @@ Every transport implements `IRpcTransport`. Swapping transports requires changin
 **CPU-intensive work that would block the main isolate?**
 → Use [Isolate](isolate.md) to offload to a background worker.
 
+**Going through a gRPC proxy or talking to a non-rpc_dart peer?**
+→ Read [gRPC compatibility](grpc-compat.md): seven headers rpc_dart adds, and
+what an intermediary that strips them silently breaks.
+
 ---
 
 ## Changing Transports

@@ -224,6 +224,18 @@ knows nothing about, which is exactly the interop question — an intermediary
 that strips unknown metadata silently disables flow control rather than failing
 visibly.
 
+**Written and shipped in round 271**: `docs/transports/grpc-compat.md`, linked
+from `docs/transports/index.md`. It carries the seven headers, and the part that
+makes it worth having — what a stripping intermediary breaks. The two
+flow-control headers are the answer: remove them and a sender spends its initial
+window and parks permanently, with no error and no timeout, because the
+never-heard-a-grant fallback keys off silence and cannot detect a proxy that
+passes the first grant and drops the rest.
+
+`grpc_compat`'s half of B-23 is therefore DONE, from the code rather than from
+the note. What remains of the note is per-header reasoning, to fold in if a
+later reading finds any of it still true.
+
 That list is the doc, and it is now checked against the implementation instead
 of against a 47-round-old note. What the note may still add is the REASONING for
 each, which is what needs reading when the merge is written.
