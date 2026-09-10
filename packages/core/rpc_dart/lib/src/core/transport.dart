@@ -165,22 +165,16 @@ final class RpcTransportMessage {
 
 /// Capability for transports that can abort a single stream out-of-band.
 ///
-/// The ordinary way to tell a peer "stop, I am gone" is a metadata frame
-/// carrying `grpc-status: CANCELLED` with `endStream: true` — but that is only
-/// legal while this side is still open, and by cancellation time it usually is
-/// not. A server-stream half-closes right after its single request, and a bidi
-/// caller half-closes on teardown; sending anything more is then a protocol
-/// violation. HTTP/2 rejects it with "Open state expected (was:
-/// HalfClosedLocal)", thrown asynchronously out of its stream handler where no
-/// caller can catch it, corrupting the connection. Yet with no signal at all
-/// the peer keeps producing into a stream nobody reads, leaving a server
-/// handler running forever.
+/// The four `IRpc*` capabilities below are deliberately SEPARATE from
+/// [IRpcTransport]: a third-party transport that `implements IRpcTransport`
+/// must keep compiling when one is added. Callers probe with `is` and fall back
+/// to a safe default, so not implementing one is always allowed.
 ///
-/// Transports with a real abort primitive (HTTP/2 RST_STREAM) implement this
-/// alongside [IRpcTransport]. Callers check with `is IRpcStreamReset` and fall
-/// back to the cancellation metadata frame, which is safe on transports that
-/// do not track stream state. Kept separate from [IRpcTransport] so adding it
-/// does not break third-party transports that `implements IRpcTransport`.
+/// Implement this where a real abort primitive exists (HTTP/2 RST_STREAM). The
+/// fallback — a `grpc-status: CANCELLED` metadata frame — is only legal while
+/// this side is still open, and at cancellation time it usually is not: HTTP/2
+/// then throws "Open state expected (was: HalfClosedLocal)" asynchronously,
+/// where no caller can catch it, and the connection is corrupted.
 abstract interface class IRpcStreamReset {
   /// Aborts [streamId], returning true when the reset was delivered.
   ///
@@ -191,14 +185,10 @@ abstract interface class IRpcStreamReset {
 
 /// Capability for transports that carry an [RpcSecurityPolicy].
 ///
-/// Lets layers above the transport — the responder pipeline in particular —
-/// honour the limits the application already configured, instead of needing a
-/// second knob for the same concept. Callers check with
-/// `is IRpcSecurityPolicyAware` and fall back to `const RpcSecurityPolicy()`,
-/// so a transport that does not implement this still gets the safe defaults.
-///
-/// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
-/// does not break third-party transports that `implements IRpcTransport`.
+/// Lets the layers above honour the limits the application already configured
+/// instead of adding a second knob for the same concept. Not implementing it
+/// means those layers use `const RpcSecurityPolicy()` — the defaults, not "no
+/// limits". See [IRpcStreamReset] for why this is a separate interface.
 abstract interface class IRpcSecurityPolicyAware {
   /// The policy this transport was configured with.
   RpcSecurityPolicy get securityPolicy;
@@ -206,33 +196,19 @@ abstract interface class IRpcSecurityPolicyAware {
 
 /// Capability for transports whose stream-id sequence can be CONTINUED.
 ///
-/// A wrapper that survives a dropped connection replaces the transport
-/// underneath it, and a fresh transport starts its ids at 1 — so the first call
-/// after a reconnect is handed the id a call from the old connection still
-/// holds. Every caller releases its id in a `finally` and half-closes by id,
-/// and the id is ALL those operations have to present, so nothing downstream
-/// can tell the two apart. Measured over websocket, one reconnect between two
-/// calls that both got id 1: a late `finishSending` for the dead call
-/// HALF-CLOSED the live one and the server finished serving it.
+/// `RpcClientConnection` builds a WHOLE NEW transport on reconnect, and a fresh
+/// one starts its ids at 1 — so the first call afterwards gets the id a call
+/// from the old connection still holds. Since the id is all a release or a
+/// half-close presents, nothing downstream can tell them apart: measured, a
+/// dead call's late `finishSending` half-closed the live one and the server
+/// finished serving it.
 ///
-/// [RpcChannelTransport.reconnect] and `RpcHttp2CallerTransport.reconnect` fix
-/// this for themselves, but `RpcClientConnection` builds a WHOLE NEW transport
-/// from its factory — which is the path applications are pointed at for
-/// auto-reconnect — so it needs the transport's cooperation. It reads
-/// [lastIssuedStreamId] from the outgoing transport and calls
-/// [resumeStreamIdsAfter] on the incoming one before any call can be made.
+/// **The cursor must survive [IRpcTransport.close].** A reconnect is usually
+/// started by the peer, and a transport learns that by closing itself, so a
+/// cursor destroyed at close is gone before anything above can read it — and
+/// there is no earlier moment to read it at.
 ///
-/// The cursor MUST survive [IRpcTransport.close]. A reconnect is most often
-/// started by the PEER, and a transport learns about that by closing itself —
-/// so a cursor destroyed at close is already gone by the time anything above can
-/// read it, and there is no earlier moment to read it at. Measured over
-/// websocket: an explicit reconnect on a live socket gave ids 1 then 3, while
-/// the same reconnect after the peer dropped the socket gave 1 then 1, and the
-/// dead call's late `finishSending` ended the live one.
-///
-/// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
-/// does not break third-party transports that `implements IRpcTransport`. A
-/// transport that does not implement it keeps the previous behaviour.
+/// See [IRpcStreamReset] for why this is a separate interface.
 abstract interface class IRpcStreamIdSequence {
   /// The highest stream id handed out so far, or a value below the first
   /// assignable id when none has been.
@@ -249,18 +225,16 @@ abstract interface class IRpcStreamIdSequence {
 
 /// Capability: a higher layer takes over flow-control metering for a stream.
 ///
-/// The transport meters what it hands out through `getMessagesForStream`, which
-/// is lazy, so a consumer that stops reading stops credit reaching the peer.
-/// One responder shape is not fed that way: a client-stream handler is fed by
-/// the responder pipeline, so the transport sees nothing to meter and would
-/// otherwise have to credit on arrival -- leaving that direction unbounded.
+/// The transport meters what it hands out through `getMessagesForStream`,
+/// lazily, so a consumer that stops reading stops credit reaching the peer. A
+/// client-stream handler is fed by the responder pipeline instead, so the
+/// transport sees nothing to meter and would have to credit on arrival —
+/// leaving that direction unbounded.
 ///
-/// [deferFlowCredit] says "stop crediting this stream on arrival, I will",
-/// after which [returnFlowCredit] must be called as the application consumes,
-/// or the peer stalls once the window is used up.
+/// Once [deferFlowCredit] is called, [returnFlowCredit] MUST be called as the
+/// application consumes, or the peer stalls when the window runs out.
 ///
-/// Kept separate from [IRpcTransport], like [IRpcStreamReset], so adding it
-/// does not break third-party transports that `implements IRpcTransport`.
+/// See [IRpcStreamReset] for why this is a separate interface.
 abstract interface class IRpcFlowControlled {
   /// Hands metering of [streamId] to the caller.
   void deferFlowCredit(int streamId);
