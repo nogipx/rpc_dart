@@ -3,7 +3,7 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276, 277, 283, 284]
+applied: [272, 274, 275, 276, 277, 283, 284, 287]
 status: confirmed (round 276)
 ---
 

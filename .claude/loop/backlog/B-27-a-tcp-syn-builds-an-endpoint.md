@@ -1,5 +1,5 @@
 ---
-status: open — half discharged (round 275)
+status: closed (round 287)
 round: 274
 commit: 508fba09
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
@@ -86,6 +86,14 @@ Two things the round had to correct about the option as it was put:
 - The default is a behaviour change: a client that opens TCP eagerly and speaks
   HTTP/2 much later is now dropped. Null restores the old behaviour.
 
-**Fix 1 remains open.** Deferring construction until the peer speaks is still
-the correct shape — it removes the work rather than bounding the hold — and is
-still larger than a round.
+**Round 287 closed the second half**: `pingInterval` now defaults to 30s, so the
+stage `prefaceTimeout` cannot cover — a peer that speaks the preface and then
+goes silent — is bounded without the operator having to ask. That was the larger
+of the two decisions and it is what made the shipped default "no bound at all".
+
+**Fix 1 is left, and is deliberately NOT reopened here.** Deferring construction
+until the peer speaks removes the work rather than bounding the hold, which is
+better, and is still larger than a round. With both deadlines now on by default
+the exposure it would remove is a held endpoint for at most one ping interval,
+so it has stopped being urgent. Reopen if the construction cost itself ever
+matters.

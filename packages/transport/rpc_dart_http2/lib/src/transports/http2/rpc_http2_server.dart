@@ -86,7 +86,11 @@ class RpcHttp2Server implements IRpcServer {
     void Function(Socket socket)? onConnectionClosed,
     IRpcTransport Function(IRpcTransport inner, Socket socket)?
     transportWrapper,
-    Duration? pingInterval,
+    Duration? pingInterval = const Duration(seconds: 30),
+    // NOT defaulted. Null here means "follow pingInterval", and that fallback
+    // is load-bearing: giving this a concrete default made a caller passing
+    // `pingInterval: 2s` wait 20s for the ACK, and
+    // server_keepalive_reclaims_half_open_test went red on its own budget.
     Duration? pingTimeout,
     Duration? prefaceTimeout = const Duration(seconds: 30),
   }) : _host = host,
@@ -155,11 +159,25 @@ class RpcHttp2Server implements IRpcServer {
   /// of the process. A fleet of mobile clients on flaky networks accumulates
   /// them.
   ///
-  /// Defaults to `null`, i.e. OFF, so nothing changes for existing callers.
-  /// Left to the caller rather than defaulted for the same reason as the
-  /// WebSocket server's: too short wakes radios and wastes battery, too long
-  /// leaves dead connections resident. Take the shortest idle timeout on the
-  /// path — load balancers commonly use 60s — and halve it.
+  /// **Defaults to 30s, and it used to default to `null`.** Off by default was
+  /// defensible while this read as a reliability feature for flaky networks. It
+  /// is not only that: it is the only thing that reclaims a connection from a
+  /// peer that has spoken HTTP/2 and then gone silent, and [_prefaceTimeout]
+  /// deliberately does not cover that case — 24 preface bytes buy past it.
+  ///
+  /// So the shipped default decided whether a server had any bound on held
+  /// endpoints at all, and the shipped default was none. Measured, 200 sockets
+  /// against this server:
+  ///
+  ///     pingInterval null : endpoints 200, held as long as the peer likes
+  ///     pingInterval on   : endpoints   0
+  ///
+  /// **This is a behaviour change.** An idle connection now carries a PING every
+  /// 30s and is dropped if no ACK arrives within [_pingTimeout]. Pass `null` to
+  /// restore the old behaviour; raise both on a fleet where radio wake-ups
+  /// matter. Too short wakes radios and wastes battery, too long leaves dead
+  /// connections resident — take the shortest idle timeout on the path (load
+  /// balancers commonly use 60s) and halve it, which is where 30s comes from.
   ///
   /// This is the same mechanism gRPC servers use
   /// (`GRPC_ARG_KEEPALIVE_TIME_MS`), so it is understood by foreign peers: a
