@@ -182,6 +182,70 @@ Step 6 is the arm. Without the mark it should over-credit; with the mark it
 should not — which makes it a real canary rather than a guard, and it is the
 only one of the three that can go red in BOTH directions.
 
+### The harness already exists — round 252
+
+`test/transports/flow_control_connection_debt_test.dart` is the shape, and its
+`_drive()` needs almost nothing added. Note which SIDE owes: the client sends,
+so the debt and `_fcForget` are on the **server** (receiver) transport.
+
+    policy      flowControlWindowBytes: 256 KiB,
+                flowControlConnectionWindowBytes: 1 MiB   (separate objects per end)
+    control     receiverReads: true, N calls -> total bytes sent
+    arm         call 1: server binds the view and PAUSES it;
+                        server.releaseStreamId(id);        // _fcForget: repay + mark
+                        then RESUME and drain it           // _fcOnConsumed, already repaid
+                calls 2..N as the control
+    assert      total bytes sent in the arm == the control's
+
+Over-crediting shows as the arm sending MORE than the control — roughly one
+stream window more — because the pool was handed the same 256 KiB twice. That
+is the assertion, and it fails in the right direction without the mark.
+
+### That design is REFUTED — round 253 built it and it measures nothing
+
+Written, run, and canaried: with the unconditional repay applied and NO mark —
+the exact defect the arm exists to catch — the test still passed.
+
+The reason is structural, not a bug in the test. **A draining consumer returns
+credit anyway**, so the pool never becomes the binding constraint and both arms
+simply send their full programmed total. An extra credit changes an internal
+counter that nothing outside can see while nothing wedges. "Assert the arm sent
+no more than the control" can only work if the control WEDGES.
+
+**Round 254 tried the first way out. It fails too.** Reshaped so every stream
+AFTER the trigger binds a consumer that never drains, making the pool rather
+than the programmed total the thing that stops the sender — the wedge point as
+the observable, P-11's method. Canaried the same way: unconditional repay, no
+mark, and the test still passed. Two shapes now, neither able to see the extra
+credit. That is the same wall B-11 hit at round 206 with three shapes, and the
+verdict language for it is INCONCLUSIVE, not clean.
+
+What the two failures have in common is that the over-credit is a change to an
+internal counter, and every observable tried so far is downstream of a
+NEGOTIATION that hides it: credit returned by draining, or a wedge point that
+several limits decide together. The remaining option is the one that does not
+infer — put the number where a test can read it.
+
+Two ways out, neither tried:
+
+- **Make the pool bind after the over-credit.** Keep the paused-release-drain
+  first stream, then run the remaining calls with consumers that never drain, so
+  the pool is the constraint and the wedge POINT is the observable: extra credit
+  means wedging later. This is P-11's method applied after the trigger.
+- **Expose the connection credit** in `_buildHealthDetails`, next to `owedConn`.
+  A library change made purely for observability, which is a real cost and needs
+  the owner's view, but it turns a three-step inference into one number.
+
+The file `test/transports/forget_does_not_double_credit_test.dart` was left
+UNTRACKED rather than committed: it passes on today's code and on the broken
+code alike, so committing it would add a test that pins nothing. The finishing
+round rewrites it along the first bullet or deletes it.
+
+**Cost so far, recorded honestly:** rounds 248, 249, 252 and 253 on this lead.
+248 found the mechanism, 249 built the fix and measured it working, 252 found
+the harness, 253 disproved the arm the previous three assumed would work. The
+fix has been ready since 249; what is missing is still exactly one canary.
+
 ## The tracking-cap hypothesis — DISPROVEN, kept so nobody re-derives it
 
 Found while reading for round 248, measured by nothing yet, and written down
