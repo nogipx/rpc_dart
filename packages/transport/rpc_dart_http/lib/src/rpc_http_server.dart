@@ -82,14 +82,10 @@ class RpcHttpServer implements IRpcServer {
   /// (not recommended — this allows unbounded request bodies).
   ///
   /// [bodyReadTimeout] bounds how long the server waits for a full request
-  /// body. When set, slow request bodies are rejected with `408` instead of
-  /// being buffered indefinitely (slowloris mitigation). It also rejects a
-  /// client that sends `Expect: 100-continue`, because dart:io never answers
-  /// that header and the client's own fallback wait (curl: 1s) runs inside
-  /// this budget — measured, 500ms + the header gives a 408 where the same
-  /// request without it succeeds in 0.02s. See
-  /// [RpcHttpResponderTransport.bodyReadTimeout] for the numbers and the
-  /// options.
+  /// body, rejecting a slow one with `408` instead of buffering it indefinitely
+  /// (slowloris mitigation). It also rejects a client sending
+  /// `Expect: 100-continue`, whose fallback wait runs inside this budget — see
+  /// [RpcHttpResponderTransport.bodyReadTimeout] for that trade-off.
   RpcHttpServer({
     required String host,
     required int port,
@@ -122,13 +118,11 @@ class RpcHttpServer implements IRpcServer {
 
   /// Creates the transport. Port binding is deferred to [afterModulesStart].
   ///
-  /// Calling this twice is a no-op, as it is on both sibling servers
-  /// ([RpcHttp2Server] and `RpcWebSocketServer` each open with
-  /// `if (_isRunning) return;`). Without the guard the second call overwrote
-  /// [_transport], and the first one — already handed to an endpoint if phase
-  /// two had run — became unreachable to [stop].
+  /// Calling this twice is a no-op, as on both sibling servers. Without the
+  /// guard the second call overwrites [_transport], and the first — already
+  /// handed to an endpoint if phase two has run — becomes unreachable to [stop].
   ///
-  /// The guard is on [_transport], not on [isRunning]: [isRunning] only goes
+  /// The guard is on [_transport], NOT on [isRunning]: [isRunning] only goes
   /// true at the END of [afterModulesStart], so between the two phases it
   /// reports false while a transport very much exists.
   @override
@@ -159,18 +153,11 @@ class RpcHttpServer implements IRpcServer {
   /// concerns that must be handled before RPC routing.
   Future<void> afterModulesStart({Handler? preamble}) async {
     // Same reasoning as the guard in start(), with a much sharper consequence:
-    // a second call re-bound a second port and overwrote _httpServer, so the
-    // FIRST listener stayed open with nothing holding it. Measured, both ports
-    // probed with a real HTTP request after stop():
-    //
-    //   first  bind : 58355 -> HTTP 200  (before stop)
-    //   after stop(): 58355 -> HTTP 503, still listening, forever
-    //                 58357 -> no answer (correctly closed)
-    //   contracts disposed: [1]  -- endpoint #0 was never released
-    //
-    // A dead server squatting on a port and answering 503 to everything is
-    // worse than a closed one: a supervisor that rebinds cannot, and a health
-    // check that only looks for a live socket says the port is fine.
+    // a second call binds a second port and overwrites _httpServer, so the
+    // FIRST listener stays open with nothing holding it -- and stop() cannot
+    // reach it. A dead server squatting on a port and answering 503 to
+    // everything is worse than a closed one: a supervisor that rebinds cannot,
+    // and a health check looking only for a live socket says the port is fine.
     if (_httpServer != null) {
       _logger?.warning(
         'afterModulesStart() called again; already listening on '
@@ -187,22 +174,15 @@ class RpcHttpServer implements IRpcServer {
     _endpoint = endpoint;
     _onEndpointCreated(endpoint);
 
-    // Start the endpoint here, as both sibling servers do
-    // (RpcHttp2Server._handleConnection and RpcWebSocketServer
-    // ._handleConnection each call endpoint.start() right after their own
-    // onEndpointCreated). This one did not, so an application written by
-    // analogy registered its contracts and got a server that accepted
-    // connections and answered nothing at all:
+    // Started HERE, as both sibling servers do right after their own
+    // onEndpointCreated. Leave it to the application and one written by analogy
+    // with those two registers its contracts and gets a server that accepts
+    // connections and answers nothing at all -- a silent hang, no error on
+    // either side.
     //
-    //   app calls endpoint.start()        : echo-ok
-    //   app does NOT call endpoint.start(): HUNG, the server answered nothing
-    //
-    // A silent hang, with no error on either side, for a callback the other
-    // two servers do not require.
-    //
-    // Safe when the application starts it too: startResponderListening()
-    // guards on `_respIsListening` precisely because the http2 server and the
-    // shipped examples both do this.
+    // Safe when the application starts it too: startResponderListening() guards
+    // on `_respIsListening` precisely because the http2 server and the shipped
+    // examples both do this.
     endpoint.start();
 
     final Handler handler;
@@ -216,17 +196,12 @@ class RpcHttpServer implements IRpcServer {
       _httpServer = await shelf_io.serve(handler, _host, _port);
     } catch (_) {
       // The bind is the one fallible step here, and it fails for the most
-      // ordinary reason there is: the port is taken. The endpoint above has
-      // already been created, handed to onEndpointCreated (so it holds the
-      // application's contracts) and started. Release it, because until this
-      // catch existed nothing could -- stop() gave up on `!_isRunning`, and
-      // _isRunning is set on the line after the bind. Measured, counting
-      // contract dispose() calls after a failed bind followed by stop():
-      //
-      //   disposed = []      endpoints = 1
-      //
-      // i.e. the app's contracts kept everything they held for the life of the
-      // process, and server.endpoints still handed out the dead endpoint.
+      // ordinary reason there is: the port is taken. By now the endpoint has
+      // been created, handed to onEndpointCreated (so it holds the
+      // application's contracts) and started -- and nothing else can release
+      // it, because stop() gives up on `!_isRunning` and _isRunning is set on
+      // the line after the bind. Without this the contracts keep everything
+      // they hold for the life of the process.
       _endpoint = null;
       try {
         await endpoint.close();
@@ -234,16 +209,11 @@ class RpcHttpServer implements IRpcServer {
         _logger?.warning('Error closing endpoint after a failed bind: $e');
       }
       // Put the server back exactly where start() left it, so the ordinary
-      // response to "address in use" -- wait and call afterModulesStart()
-      // again -- still works. RpcEndpointBase.close() closes the transport it
-      // was handed, so without this rebuild the retry bound successfully and
-      // then answered 503 to every request:
-      //
-      //   retry bound      : ok on 59296
-      //   call after retry : RpcStatusException(14): HTTP 503 from /Svc/echo
-      //
-      // which trades a leak for silent unavailability -- a worse bug than the
-      // one being fixed.
+      // response to "address in use" -- wait, call afterModulesStart() again --
+      // still works. RpcEndpointBase.close() closes the transport it was
+      // handed, so without this rebuild the retry binds successfully and then
+      // answers 503 to every request: a leak traded for silent unavailability,
+      // which is worse.
       _transport = RpcHttpResponderTransport(
         corsPolicy: _corsPolicy,
         securityPolicy: _securityPolicy,
@@ -294,33 +264,25 @@ class RpcHttpServer implements IRpcServer {
   /// Releases everything this server owns, whichever phase it reached.
   ///
   /// Deliberately NOT guarded on [isRunning]. That flag means "phase two
-  /// finished", and it is set on the last line of [afterModulesStart] -- so
-  /// guarding on it made stop() a no-op for every state in which setup was
-  /// abandoned partway, which is exactly when cleanup matters. Each field is
-  /// taken and cleared before it is closed, so this stays idempotent and so a
-  /// later [start] begins from a clean slate.
-  /// [drainTimeout], when given, lets in-flight requests finish first.
+  /// finished" and is set on the last line of [afterModulesStart], so guarding
+  /// on it makes stop() a no-op for every state in which setup was abandoned
+  /// partway — exactly when cleanup matters. Each field is taken and cleared
+  /// before it is closed, so this stays idempotent and a later [start] begins
+  /// from a clean slate.
   ///
-  /// Without it every request running at that moment dies, so a rolling deploy
-  /// drops them. It dies CORRECTLY -- measured with a 2s handler and stop()
-  /// 300ms in, the caller gets `UNAVAILABLE` at 325ms -- so this is a missing
-  /// capability rather than a broken one, and it completes the parity with
-  /// `RpcHttp2Server` and `RpcWebSocketServer`, which gained the same option.
-  ///
-  ///     stop()                 : the request failed UNAVAILABLE at 325 ms
-  ///     stop(drainTimeout: 5s) : the request RETURNED its real answer
+  /// [drainTimeout], when given, lets in-flight requests finish first. Without
+  /// it every request running at that moment dies — correctly, with a prompt
+  /// `UNAVAILABLE`, but a rolling deploy drops them.
   ///
   /// `HttpServer.close(force: false)` is NOT a drain, which is worth stating
-  /// because it reads like one. It stops the server listening and completes as
-  /// soon as the port is released -- measured at 4ms with a 2s request still
-  /// running -- it merely declines to kill active connections. Closing the
-  /// endpoint straight afterwards then killed the handler anyway and the caller
-  /// HUNG for the full 20s test budget, because the connection stayed open with
-  /// no answer ever coming.
+  /// because it reads like one: it stops the server listening and completes as
+  /// soon as the port is released, merely declining to kill active connections.
+  /// Closing the endpoint straight afterwards kills the handler anyway, and the
+  /// caller then HANGS — the connection stays open with no answer ever coming.
   ///
-  /// So the wait is explicit, exactly as on the other two servers: stop
-  /// accepting, poll until the transport reports no pending requests, and only
-  /// then close the endpoint that has to answer them.
+  /// So the wait is explicit, as on the other two servers: stop accepting, poll
+  /// until the transport reports no pending requests, and only then close the
+  /// endpoint that has to answer them.
   @override
   Future<void> stop({Duration? drainTimeout}) async {
     _isRunning = false;

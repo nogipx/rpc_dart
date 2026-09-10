@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301]
 status: confirmed (round 293)
 ---
 
@@ -120,10 +120,25 @@ found by sweeping and none reachable block by block:
   the library doc tells you to construct had no doc, and the close-code mapper
   wore a `RpcChannelTransport.fromChannel` sample.
 
-  **Five files in five rounds, in two packages — this is a property of the
+  Round 301 found the sixth, in a third package, and established what it
+  actually COSTS: `_readBounded`'s doc sat on `_readErrorBody`, and the LSP
+  hover for `_readBounded` returned **signature only** before the fix and the
+  docstring after it. A fused doc is not merely hard to read, it is INVISIBLE to
+  every tool that reads docs by symbol — an IDE, `dart doc`, and any
+  symbol-based agent. That also makes it the one sub-shape here with a real
+  witness: query the hover before and after.
+
+  **Six files in six rounds, in three packages — this is a property of the
   corpus, not of core. Sweep for it explicitly.** A CLASS doc is the easiest to
   lose this way: it and its declaration are separated by exactly the blank line
   that hides the fusion, and it is the doc a user reads first.
+- **PARAGRAPH fusion**, the milder variant — two paragraphs of ONE doc run
+  together with no blank `///` between them, so they render as one paragraph and
+  the second subject is swallowed by the first. Round 301 found three in a
+  single package: `stop()`'s idempotency argument swallowing `[drainTimeout]`'s
+  description, a TLS warning swallowing `[policy]`'s, and `_reject`'s CORS
+  rationale swallowing the body-drain one. Nothing catches it — the compiler
+  sees one valid doc, and the text is correct line by line.
 - **A block duplicated verbatim.** Round 297: eight lines about timer-vs-
   microtask delivery appeared TWICE in a row in `getMessagesForStream`. Each
   copy is correct, which is why nothing caught it.

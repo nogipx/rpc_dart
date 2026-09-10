@@ -68,22 +68,12 @@ final class RpcHttpCorsPolicy {
   /// Creates a CORS policy.
   ///
   /// Throws [ArgumentError] when [allowCredentials] is combined with a `'*'`
-  /// origin. This was an `assert`, which Dart strips in release builds — and
-  /// measured, it is weaker still: `dart run` does not enable asserts either,
-  /// so the guard only ever fired under `dart test`. Everywhere real code runs,
-  /// the invalid pair was accepted and went straight onto the wire:
-  ///
-  ///   access-control-allow-origin      = *
-  ///   access-control-allow-credentials = true
-  ///
-  /// Browsers reject that pairing outright, so the result is not a breach but
-  /// a server whose every cross-origin call fails, with nothing pointing at the
-  /// misconfiguration. A real throw names the mistake at construction, in every
-  /// build mode.
-  ///
-  /// Same reasoning, and the same fix, as the `assert` sweep recorded in
-  /// rpc_dart/test/audit/release_mode_config_guards_test.dart; that sweep
-  /// covered core and did not reach the transports.
+  /// origin. A real throw, NOT an `assert`: Dart strips asserts in release
+  /// builds and `dart run` does not enable them either, so an assert here fires
+  /// only under `dart test` — everywhere real code runs, the invalid pair would
+  /// go straight onto the wire. Browsers reject that pairing outright, so the
+  /// result is not a breach but a server whose every cross-origin call fails,
+  /// with nothing pointing at the misconfiguration.
   RpcHttpCorsPolicy({
     this.allowedOrigins = const [],
     this.allowedHeaders = const [

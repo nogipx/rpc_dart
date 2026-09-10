@@ -103,26 +103,19 @@ int _httpStatusToGrpcCode(int statusCode) {
 ///
 /// ## What streaming methods actually do here
 ///
-/// This used to say streaming methods "will fail". They do not fail, and the
-/// difference matters. Measured against a real server on this transport:
+/// They do not fail — they silently degrade, which is worse:
 ///
-///  * A FINITE stream SUCCEEDS, fully buffered. A server stream of three items
-///    yielded 400ms apart arrived as `[1290, 1290, 1290]`ms — nothing until the
-///    handler completed, then everything at once. Client-streaming and
-///    bidirectional round-trip too, for the same reason: the whole exchange
-///    fits in one request/response pair. Nothing warns that the streaming
-///    semantics are gone.
-///  * An UNBOUNDED stream HANGS, and leaks. A server stream that never
-///    completes produced no items in 5s while the handler kept running — 225
-///    yields by the time the client gave up, and still going afterwards. There
-///    is no response until the handler finishes, so a handler that never
-///    finishes hangs the caller and burns server resources with nothing to
-///    stop it.
+///  * A FINITE stream SUCCEEDS, fully buffered. Nothing arrives until the
+///    handler completes, then everything at once. Client-streaming and
+///    bidirectional round-trip too, since the whole exchange fits in one
+///    request/response pair. Nothing warns that the streaming semantics are
+///    gone.
+///  * An UNBOUNDED stream HANGS, and leaks. There is no response until the
+///    handler finishes, so a handler that never finishes hangs the caller while
+///    the server keeps producing, with nothing to stop it.
 ///
-/// So the practical rule is not "streaming fails" but "streaming silently
-/// degrades to buffering, and an unbounded stream is a hang". Prefer
-/// [`rpc_dart_http2`], [`rpc_dart_websocket`] or [`rpc_dart_isolate`] for any
-/// streaming method; if one must run here, give it a deadline so the hang is
+/// Prefer [`rpc_dart_http2`], [`rpc_dart_websocket`] or [`rpc_dart_isolate`] for
+/// any streaming method; if one must run here, give it a deadline so the hang is
 /// bounded.
 ///
 /// Uses [package:http](https://pub.dev/packages/http) and compiles to all
@@ -172,11 +165,10 @@ class RpcHttpCallerTransport
   /// ```
   ///
   /// Do NOT reach for `badCertificateCallback = (_, __, ___) => true`. It
-  /// accepts every certificate, including an attacker's, which is a
-  /// man-in-the-middle hole rather than a TLS configuration — and against a
-  /// self-signed or private-CA server the snippet above is what actually works.
-  /// This doc used to give that callback as its ONLY example of "configuring
-  /// TLS", which is the sort of thing that gets copied into production.
+  /// accepts every certificate, including an attacker's — a man-in-the-middle
+  /// hole rather than a TLS configuration. Against a self-signed or private-CA
+  /// server the snippet above is what actually works.
+  ///
   /// [policy] bounds what a RESPONSE may cost this client, and is reported to
   /// the endpoint layers through [IRpcSecurityPolicyAware]. It defaults to
   /// `const RpcSecurityPolicy()`, so the built-in limits apply out of the box.
@@ -195,45 +187,17 @@ class RpcHttpCallerTransport
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
 
-  /// Reads the response body, refusing to buffer more than the policy allows.
-  ///
-  /// This used to be `http.Response.fromStream`, which buffers the whole body
-  /// before anything inspects it. The responder side bounds the REQUEST body
-  /// against the same ceiling; the caller had no bound in the other direction
-  /// and took no policy at all, so whatever a server, a proxy or a captive
-  /// portal sent was allocated in full.
-  ///
-  /// Measured with a server answering 192 MiB and the default policy, resident
-  /// memory across one call grew by 756 MiB — the streamed copy, the
-  /// concatenated body, and the parser's buffer — and only then did the frame
-  /// parser reject it with "gRPC frame buffer overflow: 201326592 bytes".
-  /// The limit existed; it just fired after the damage.
-  ///
-  /// Overflow aborts the read immediately: unlike the server, which must keep
-  /// draining so its 400 reaches the client, nothing here needs the rest of a
-  /// body already known to be too big.
   /// Reads at most [_maxReasonBytes] of a NON-200 body and stops.
   ///
-  /// Never throws, and that is the point. This used to go through
-  /// [_readBounded], which raises when the body passes
-  /// `maxMessageLengthBytes` -- so a peer's status was destroyed by the size of
-  /// the page that carried it. Measured with a 64 KiB client limit against a
-  /// 256 KiB error page:
-  ///
-  ///   small 502 page : RpcStatusException(14) "HTTP 502 from ..."
-  ///   BIG 502 page   : RpcException "HTTP response body exceeds the
-  ///                    configured limit of 65536 bytes"
-  ///   BIG 401 page   : the same
-  ///
-  /// Both statuses were lost, and losing UNAVAILABLE costs more than the text:
-  /// `RpcRetryInterceptor` retries it and does not retry a bare `RpcException`.
-  /// A captive portal or a load-balancer HTML page is exactly this case.
+  /// NEVER throws, and that is the point. Routed through [_readBounded] instead,
+  /// a peer's status dies of the size of the page that carried it — and losing
+  /// UNAVAILABLE costs more than the text, because `RpcRetryInterceptor` retries
+  /// it and does not retry a bare `RpcException`. A captive portal or a
+  /// load-balancer HTML page is exactly this case.
   ///
   /// The status code is known BEFORE the body is read, so nothing here needs to
-  /// fail. Stops consuming past the cap rather than draining the rest, keeping
-  /// the previous refusal to read a body already known to be too big -- and
-  /// tighter than before, since this cap is bytes for a message rather than
-  /// the whole message ceiling.
+  /// fail. Consumption stops at the cap rather than draining the rest: a body
+  /// already known to be too big has nothing left worth reading.
   Future<Uint8List> _readErrorBody(http.StreamedResponse response) async {
     final builder = BytesBuilder(copy: false);
     try {
@@ -248,6 +212,17 @@ class RpcHttpCallerTransport
     return builder.takeBytes();
   }
 
+  /// Reads the response body, refusing to buffer more than the policy allows.
+  ///
+  /// The responder bounds the REQUEST body against the same ceiling; this is the
+  /// other direction, and without it whatever a server, a proxy or a captive
+  /// portal sends is allocated in full. The frame parser has a limit of its own,
+  /// but it fires only after the damage — by then the streamed copy, the
+  /// concatenated body and the parser's buffer have all been paid for.
+  ///
+  /// Overflow aborts the read immediately: unlike the server, which must keep
+  /// draining so its 400 reaches the client, nothing here needs the rest of a
+  /// body already known to be too big.
   Future<Uint8List> _readBounded(
     http.StreamedResponse response,
     int streamId,
@@ -283,15 +258,9 @@ class RpcHttpCallerTransport
   /// The collision bites HARDER here than on the streaming transports, because
   /// HTTP/1.1 buffers the whole request and `finishSending` is what SENDS it:
   /// `_pending[id]` holds the body, `finishSending(id)` fires the POST, and
-  /// `releaseStreamId(id)` discards it. So a dead call's teardown either sends
-  /// a live call's request early — with whatever body had been buffered so far
-  /// — or throws it away so that call can never send at all. Measured through
-  /// RpcClientConnection with one forceReconnect between two calls:
-  ///
-  ///     before : A and B both get id 1; A's late finishSending(1) POSTed B's
-  ///              request, and the handler saw `call-B` while B's caller was
-  ///              still buffering
-  ///     after  : A keeps 1, B gets 3, and nothing is sent until B says so
+  /// `releaseStreamId(id)` discards it. So a dead call's teardown either POSTs a
+  /// live call's request early — with whatever body had been buffered so far —
+  /// or throws it away so that call can never send at all.
   @override
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
@@ -393,13 +362,10 @@ class RpcHttpCallerTransport
         // Bounded by the same ceiling as a 200 body.
         final errorBody = await _readErrorBody(streamedResponse);
         final grpcCode = _httpStatusToGrpcCode(streamedResponse.statusCode);
-        // The body was already being read and then DISCARDED, so a reason the
-        // responder had gone to the trouble of sending never reached anyone.
-        // Both of this transport's own rejections say something worth reading
-        // -- "Request body exceeds limit of N bytes" for a 413, the metadata
-        // violation for a 400 -- and the caller reported only
-        // "HTTP 400 from /Svc/echo", which does not say WHICH limit or even
-        // that a limit was involved.
+        // The reason travels. Discard the body and the responder's own
+        // rejections -- "Request body exceeds limit of N bytes", a metadata
+        // violation -- collapse into "HTTP 400 from /Svc/echo", which does not
+        // say WHICH limit, or even that a limit was involved.
         final reason = _shortReason(errorBody);
         _emit(
           RpcTransportMessage(
@@ -426,30 +392,20 @@ class RpcHttpCallerTransport
       streamedResponse.headers.forEach((name, value) {
         // package:http joins multi-values with ', ' — split them back.
         //
-        // KNOWN LIMITATION, and it is not fixable at this layer. HTTP/1.1
-        // permits a receiver to combine repeated field lines into one
-        // comma-separated value (RFC 9110 s5.3), and package:http always does:
-        // `BaseResponse.headers` is a `Map<String, String>`, so by the time the
-        // response reaches here "two headers" and "one header containing a
-        // comma-space" are already the same bytes. package:http's own
-        // `headersSplitValues` is the identical naive comma split, so it offers
-        // no more information.
+        // KNOWN LIMITATION, not fixable at this layer. HTTP/1.1 lets a receiver
+        // combine repeated field lines into one comma-separated value (RFC 9110
+        // s5.3) and package:http always does -- `BaseResponse.headers` is a
+        // `Map<String, String>` -- so by the time a response reaches here, "two
+        // headers" and "one header containing a comma-space" are the same bytes.
         //
-        // So both choices lose something, and this one splits. Measured against
-        // a server sending each shape:
-        //
-        //   x-note: "hello, world"  (one value)   -> arrives as 2 headers
-        //   x-list: "a, b"          (two values)  -> arrives as 2 headers  [ok]
-        //
-        // i.e. a single metadata value containing ", " is split, while genuine
-        // repeated keys survive. NOT splitting would invert that: repeated gRPC
-        // metadata keys — which the spec allows — would collapse into one
-        // joined string.
+        // Both choices therefore lose something, and this one SPLITS: a single
+        // metadata value containing ", " is split apart, while genuinely
+        // repeated keys survive. Not splitting inverts it, collapsing repeated
+        // gRPC metadata keys -- which the spec allows -- into one joined string.
         //
         // grpc-status and grpc-message are unaffected either way: the status is
-        // numeric, and grpc-message is percent-encoded with an unreserved set of
-        // ALPHA/DIGIT/-/./_/~, so both ',' and ' ' are escaped and the literal
-        // ", " can never appear in it.
+        // numeric, and grpc-message is percent-encoded over ALPHA/DIGIT/-/./_/~,
+        // so the literal ", " can never appear in it.
         //
         // Use rpc_dart_http2 (or websocket/isolate) if metadata values must
         // round-trip byte-for-byte; HTTP/2 keeps header fields separate.
@@ -507,26 +463,16 @@ class RpcHttpCallerTransport
   /// Turns a transport-level failure into a gRPC status.
   ///
   /// A connection that is refused, reset, or closed mid-request surfaces from
-  /// package:http as a raw [http.ClientException], and that used to reach the
-  /// caller unchanged. Nothing above the transport can act on it: retry,
-  /// circuit breakers and failover all key off the gRPC status, so the most
-  /// ordinary failure there is -- the server went away -- was unclassifiable.
-  ///
-  /// Measured by stopping the server mid-call, against the two siblings running
-  /// the identical scenario:
-  ///
-  ///     http2     : RpcStatusException(14) after 326 ms
-  ///     websocket : RpcStatusException(14) after 314 ms
-  ///     http/1.1  : ClientException        after 320 ms   <- the odd one out
-  ///
-  /// Same defect shape as GOAWAY -> StateError (ff1f6337), RST_STREAM ->
-  /// StreamTransportException (1cce29fa) and TransportConnectionException
-  /// (e2e8074b), each fixed on its own transport.
+  /// package:http as a raw [http.ClientException]. Passed through unchanged,
+  /// nothing above the transport can act on it: retry, circuit breakers and
+  /// failover all key off the gRPC status, so the most ordinary failure there
+  /// is — the server went away — becomes unclassifiable, where the sibling
+  /// transports all report UNAVAILABLE for it.
   ///
   /// UNAVAILABLE, not INTERNAL: the request did not reach a handler, or its
-  /// answer never came back, so a fresh connection may well succeed -- which is
+  /// answer never came back, so a fresh connection may well succeed — which is
   /// exactly what makes it retryable. Anything already carrying a status
-  /// (including the non-200 mapping above and the frame-parser's own errors) is
+  /// (including the non-200 mapping above and the frame parser's own errors) is
   /// passed through untouched.
   Object _asRpcStatus(Object error, String methodPath) {
     if (error is RpcStatusException || error is RpcException) return error;
@@ -631,26 +577,16 @@ class RpcHttpCallerTransport
 
   /// What a call still in flight is told when the transport is closed under it.
   ///
-  /// This used to be a bare `StateError`, which nothing above the transport can
-  /// classify -- and the code awaiting a call is very often NOT the code that
-  /// called close(), so it got something it could only string-match. Found by
-  /// running one scenario across every transport (2s handler, close() 300ms in)
-  /// and diffing:
+  /// A status rather than a bare `StateError`, because nothing above the
+  /// transport can classify a `StateError` — and the code awaiting a call is
+  /// very often NOT the code that called close(), so it gets something it can
+  /// only string-match.
   ///
-  ///     websocket : close() 5 ms,  call RpcStatusException(14) at 314 ms
-  ///     isolate   : close() 8 ms,  call RpcStatusException(14) at 322 ms
-  ///     http2     : close() 62 ms, call RpcStatusException(14) at 372 ms
-  ///     http/1.1  : close() 11 ms, call StateError             at 322 ms
-  ///
-  /// UNAVAILABLE is chosen to MATCH those three rather than on its own merits.
-  /// A round-68 note recorded this StateError-vs-status split as an open policy
-  /// question for the maintainer, and recommended `CANCELLED` (gRPC's code for a
-  /// locally-aborted call, and non-retryable) for exactly this case. In the
-  /// meantime the other transports converged on UNAVAILABLE through unrelated
-  /// fixes, so matching them is the smaller, safer move: it removes the
-  /// unclassifiable error without inventing a fourth behaviour. Switching all
-  /// four to CANCELLED remains a one-line change per transport and is still the
-  /// maintainer's call.
+  /// UNAVAILABLE is chosen to MATCH the other three transports rather than on
+  /// its own merits; `CANCELLED` (gRPC's code for a locally-aborted call, and
+  /// non-retryable) is arguably the better fit and remains the maintainer's
+  /// call, as a one-line change per transport. Matching is the smaller move: it
+  /// removes the unclassifiable error without inventing a fourth behaviour.
   ///
   /// Deliberately NOT applied to a call made AFTER close: `createStream` keeps
   /// throwing `StateError('Transport is closed')`, matching every sibling. That

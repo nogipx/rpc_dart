@@ -31,14 +31,10 @@ final class _PendingResponse {
   final List<RpcHeader> responseHeaders = [];
 
   /// BytesBuilder, not `List<int>`: a Dart list holds WORD-SIZED elements, so
-  /// this cost several times the response and `Uint8List.fromList` copied it
+  /// this costs several times the response and `Uint8List.fromList` copies it
   /// again. It matters more here than on the request side, because this
   /// transport buffers a whole STREAMING response too — every item of every
-  /// server stream lands here. Median of five requests, end to end:
-  ///
-  ///     2 MiB response :  43 ms ->  24 ms
-  ///     4 MiB response :  81 ms ->  32 ms
-  ///     8 MiB response : 145 ms ->  55 ms
+  /// server stream lands here.
   ///
   /// Draining it with `takeBytes` is safe because `_flushResponse` removes the
   /// pending entry first, so no second flush can reach the same buffer.
@@ -92,17 +88,9 @@ class RpcHttpResponderTransport
   /// This transport enforces `maxActiveStreams`, the method path, metadata and
   /// the body size itself — but `maxConcurrentHandlers`, `halfOpenStreamTimeout`
   /// and the pre-method buffer budget belong to the pipeline, which finds them
-  /// through an `is IRpcSecurityPolicyAware` check. Declaring only
-  /// [IRpcTransport] made every one of those silently inert: measured with
-  /// `maxConcurrentHandlers: 3` and 30 concurrent calls into a parked handler,
-  ///
-  ///     transport is IRpcSecurityPolicyAware : false
-  ///     handlers entered                     : 30 of 30
-  ///
-  /// against 3 once the capability is declared. Exactly the defect
-  /// `RpcHttp2ResponderTransport` had, and the sibling asymmetry is inside this
-  /// package: `RpcHttpCallerTransport` has reported its policy this way all
-  /// along.
+  /// through an `is IRpcSecurityPolicyAware` check. Declare only [IRpcTransport]
+  /// and every one of those goes silently inert: a handler ceiling of 3 admits
+  /// all 30 concurrent calls.
   ///
   /// Falls back to the default policy when none was given, which is what the
   /// pipeline already did for a transport without the capability — so a server
@@ -120,25 +108,17 @@ class RpcHttpResponderTransport
   ///
   /// CAUTION — this rejects a client that sends `Expect: 100-continue`.
   ///
-  /// dart:io never answers that header, so a client which sends it waits out
-  /// its own fallback before transmitting the body (curl: one second). The
-  /// budget here is already running during that wait, so a short timeout
-  /// expires before the first byte and the client gets a 408 saying it was too
-  /// slow — when in fact it was waiting for a `100 Continue` this server was
-  /// never going to send. Measured with curl, same server, same 4 KiB body,
-  /// the header the only variable:
+  /// dart:io never answers that header, so a client which sends it waits out its
+  /// own fallback before transmitting the body (curl: one second). This budget
+  /// is already running during that wait, so a short timeout expires before the
+  /// first byte and the client gets a 408 saying it was too slow — when it was
+  /// waiting for a `100 Continue` this server was never going to send. The
+  /// missing `100 Continue` is the platform's, not this transport's: a bare
+  /// shelf handler and a bare `HttpServer` behave identically.
   ///
-  ///     bodyReadTimeout 500ms + Expect: 100-continue -> HTTP 408 in 0.54s
-  ///     bodyReadTimeout 500ms, no Expect             -> HTTP 200 in 0.02s
-  ///     no timeout       + Expect: 100-continue      -> HTTP 200 in 1.01s
-  ///
-  /// The missing `100 Continue` is the platform's, not this transport's:
-  /// a bare shelf handler and a bare `HttpServer` both take the same ~1.02s
-  /// (measured as controls), so nothing here can send it.
-  ///
-  /// Who actually sends the header: curl for bodies over 1 KiB, and some
-  /// proxies and load balancers. gRPC clients do not, so a pure gRPC
-  /// deployment is unaffected — but this handler mounts on any shelf server.
+  /// Who actually sends the header: curl for bodies over 1 KiB, and some proxies
+  /// and load balancers. gRPC clients do not, so a pure gRPC deployment is
+  /// unaffected — but this handler mounts on any shelf server.
   ///
   /// If that combination matters to you, the choice is a policy one and is
   /// deliberately left open: either leave [bodyReadTimeout] null on endpoints
@@ -160,36 +140,21 @@ class RpcHttpResponderTransport
 
   /// Builds a rejection carrying the CORS headers the policy promises.
   ///
-  /// Only [_flushResponse] used to apply the policy, i.e. the SUCCESS path, so
-  /// every rejection went out bare. A browser cannot read a cross-origin
-  /// response without `Access-Control-Allow-Origin`, so 415, 400, 408 and 503
-  /// were all invisible to a web client: the page saw an opaque CORS failure
-  /// instead of the status the server actually chose, which is the difference
-  /// between "your content-type is wrong" and no diagnosis at all.
-  /// The request body is DRAINED before answering.
+  /// Rejections carry the CORS headers too, not just the success path in
+  /// [_flushResponse]: a browser cannot read a cross-origin response without
+  /// `Access-Control-Allow-Origin`, so a bare 415, 400, 408 or 503 reaches the
+  /// page as an opaque CORS failure instead of the status the server chose.
   ///
-  /// Rejecting without reading it leaves unread bytes on the socket, and
-  /// dart:io then tears the connection down before the status is flushed --
-  /// the same hazard [_handleRequest]'s body reader documents. Measured while
-  /// adding the 405 below: `PUT` came back as a SocketException instead of the
-  /// status, while GET and DELETE happened to survive, purely because of how
-  /// much was still buffered.
+  /// The request body is DRAINED before answering. Rejecting without reading it
+  /// leaves unread bytes on the socket and dart:io tears the connection down
+  /// before the status is flushed, so the peer gets a SocketException instead —
+  /// the same hazard [_handleRequest]'s body reader documents.
   ///
-  /// Drained rather than bounded-and-abandoned for the same reason the body
-  /// reader keeps consuming after an overflow: memory is safe because nothing
-  /// is retained, and wall-clock is bounded by [bodyReadTimeout] when set --
-  /// which used to be a claim rather than a fact. The drain ran with no
-  /// deadline and no counter, so a REFUSED request was the cheaper attack than
-  /// an accepted one. Sixteen sockets promising a body and sending five bytes,
-  /// same server, `bodyReadTimeout: 500ms`, one header different:
-  ///
-  ///     content-type: application/grpc  ->  16 of 16 answered 408 in 3s
-  ///     content-type: text/plain        ->   0 of 16 answered, all draining
-  ///
-  /// and `pendingRequests` read 0 in both, because a refusal happens before
-  /// the stream is registered. The subscription is CANCELLED on expiry: a
-  /// `.timeout()` on the drain future would return the status while the read
-  /// loop kept running.
+  /// Drained under [bodyReadTimeout] rather than unbounded: `_reject` runs
+  /// BEFORE the stream is registered, so these requests are counted by nothing,
+  /// and an undeadlined drain makes a REFUSED request the cheaper attack than an
+  /// accepted one. The subscription is CANCELLED on expiry — a `.timeout()` on
+  /// the drain future returns the status while the read loop keeps running.
   Future<Response> _reject(
     int statusCode,
     Request request, {
@@ -224,25 +189,20 @@ class RpcHttpResponderTransport
       return corsPolicy!.handlePreflight(request);
     }
 
-    // gRPC is POST-only, and nothing checked. Measured with a body on every
-    // method, counting handler executions: 6 of 6 ran -- POST, GET, HEAD, PUT,
-    // DELETE and PATCH -- all answering grpc-status=0.
-    //
-    // GET is the one that matters. A browser can be made to issue a
+    // gRPC is POST-only. Without this check every method runs the handler, and
+    // GET is the one that matters: a browser can be made to issue a
     // cross-origin GET without a preflight, while a POST carrying
-    // `content-type: application/grpc` cannot leave the origin unprompted, so
-    // accepting GET turned every unary method into something an attacker's
-    // page could trigger.
+    // `content-type: application/grpc` cannot leave the origin unprompted -- so
+    // accepting GET turns every unary method into something an attacker's page
+    // can trigger.
     //
-    // RpcHttpCallerTransport hard-codes POST, which is why no test reached
-    // this: only a foreign caller picks the method. Same defect and same blind
-    // spot as 555d6855 on the HTTP/2 server.
+    // Only a FOREIGN caller picks the method (RpcHttpCallerTransport hard-codes
+    // POST), so nothing in this library's own tests reaches it.
     //
-    // Answered as HTTP 405 with `Allow`, rather than as a gRPC status: this
-    // transport already answers its pre-dispatch rejections with real HTTP
-    // statuses (415 for content-type, 400 for a bad path), whereas
-    // gRPC-over-HTTP/2 must always send 200 plus grpc-status. Each is
-    // consistent with its own protocol.
+    // Answered as HTTP 405 with `Allow` rather than as a gRPC status, matching
+    // this transport's other pre-dispatch rejections (415, 400) --
+    // gRPC-over-HTTP/2 must always send 200 plus grpc-status, but HTTP/1.1 need
+    // not.
     if (request.method != 'POST') {
       _logger?.warning('Rejected request: method ${request.method}, not POST');
       return _reject(405, request, extraHeaders: const {'allow': 'POST'});
@@ -265,18 +225,9 @@ class RpcHttpResponderTransport
 
     // Validate Content-Type: must be a gRPC content type (application/grpc*).
     //
-    // Lowercased first, because RFC 9110 s8.3.1 makes the type and subtype
-    // CASE-INSENSITIVE, and this compared the raw string. Measured against this
-    // server:
-    //
-    //     application/grpc        -> 200
-    //     application/grpc+proto  -> 200
-    //     Application/GRPC        -> 415   <- legal, and refused
-    //     APPLICATION/GRPC+PROTO  -> 415   <- legal, and refused
-    //     text/plain              -> 415   (correct)
-    //
-    // The HTTP/2 caller already lowercases before its equivalent check, so the
-    // two halves of this library disagreed about the same header.
+    // LOWERCASED first: RFC 9110 s8.3.1 makes the type and subtype
+    // case-insensitive, so comparing the raw string refuses a legal
+    // `Application/GRPC` with a 415.
     final contentTypeValue = request.headers[RpcHeaders.contentType] ?? '';
     if (!contentTypeValue.toLowerCase().startsWith(
       RpcHeaders.contentTypeGrpc,
@@ -332,25 +283,18 @@ class RpcHttpResponderTransport
 
       // Read request body.
       //
-      // On overflow we stop buffering but keep consuming the stream to its end,
-      // discarding the rest. Bailing out mid-body instead leaves unread bytes
-      // on the socket, and dart:io then tears the connection down before the
-      // 400 is flushed — the client sees "Connection closed before full header
-      // was received" rather than the status. Memory stays bounded because the
-      // buffer is dropped and later chunks are discarded; wall-clock is bounded
-      // by [bodyReadTimeout] when it is set.
-      // BytesBuilder, not `List<int>` + `Uint8List.fromList`. A Dart list holds
-      // WORD-SIZED elements, so the buffer cost several times the body and the
-      // final copy doubled it again — for a body size the PEER chooses, bounded
-      // only by maxMessageLengthBytes. Measured over identical chunk streams:
+      // On overflow, stop buffering but KEEP consuming to the end, discarding
+      // the rest. Bailing out mid-body leaves unread bytes on the socket and
+      // dart:io tears the connection down before the 400 is flushed, so the
+      // client sees "Connection closed before full header was received" rather
+      // than the status. Memory stays bounded because the buffer is dropped;
+      // wall-clock is bounded by [bodyReadTimeout] when set.
       //
-      //      4 MiB body :  78 ms, +112.8 MiB peak  ->  0 ms, ~0
-      //      8 MiB body : 142 ms, +119.9 MiB peak  ->  0 ms, 8.0 MiB
-      //     16 MiB body : 303 ms, +264.2 MiB peak  ->  1 ms, ~0
-      //
-      // 16 MiB is the DEFAULT limit, so that was the cost of one accepted
-      // request. The caller side was moved to the same builder for the same
-      // reason.
+      // BytesBuilder, not `List<int>` + `Uint8List.fromList`: a Dart list holds
+      // WORD-SIZED elements, so the buffer costs several times the body and the
+      // final copy doubles it again -- for a body size the PEER chooses, bounded
+      // only by maxMessageLengthBytes. At the 16 MiB default that was hundreds
+      // of MiB of peak for ONE accepted request.
       Future<Uint8List> readBody() async {
         final builder = BytesBuilder(copy: false);
         var exceeded = false;
@@ -410,22 +354,12 @@ class RpcHttpResponderTransport
         error: e,
         stackTrace: st,
       );
-      // 413, not 400, for a body over the ceiling. `_httpStatusToGrpcCode` in
-      // the caller already maps 413 -> RESOURCE_EXHAUSTED and 400 ->
-      // INVALID_ARGUMENT, so this side was the only reason a peer was told its
-      // ARGUMENTS were malformed rather than its message too large. That
-      // inverts retry semantics too: RpcRetryInterceptor treats
-      // RESOURCE_EXHAUSTED as transient and INVALID_ARGUMENT as final, so the
-      // one status a client could act on was the one it did not get.
-      //
-      // Measured, a 2 MiB request against a server capped at 256 KiB:
-      //
-      //   before : RpcStatusException(3)  "HTTP 400 from /Svc/sink"
-      //   after  : RpcStatusException(8)  "HTTP 413 from /Svc/sink"
-      //
-      // rpc_dart_http2 was given exactly this fix long ago -- see
-      // `_answerFramingViolation`, whose comment argues the same case -- and
-      // this sibling never got it.
+      // 413, not 400, for a body over the ceiling. The caller's
+      // `_httpStatusToGrpcCode` maps 413 -> RESOURCE_EXHAUSTED and 400 ->
+      // INVALID_ARGUMENT, so a 400 here tells a peer its ARGUMENTS were
+      // malformed rather than its message too large -- and inverts the retry
+      // semantics with it, since RpcRetryInterceptor treats RESOURCE_EXHAUSTED
+      // as transient and INVALID_ARGUMENT as final.
       final statusCode = switch (e) {
         TimeoutException() => 408,
         _BodyTooLarge() => 413,

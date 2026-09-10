@@ -7,7 +7,7 @@ project_name: "rpc_dart"
 
 # Dart monorepo (pub workspace + melos). One language, one server.
 language_servers:
-- dart
+  - dart
 
 encoding: "utf-8"
 
@@ -15,7 +15,7 @@ encoding: "utf-8"
 # .dart_tool/package_config.json -- members have none of their own -- so the
 # root must be the workspace folder for cross-package references to resolve.
 ls_workspace_folders:
-- "."
+  - "."
 
 ls_additional_workspace_folders: []
 
@@ -33,7 +33,10 @@ ignored_paths:
 activation_command:
 activation_command_timeout: 180.0
 line_ending:
-language_backend:
+# Scalar, not a list: LSP or JetBrains. LSP is the standalone backend and the
+# one `language_servers` above feeds; JetBrains delegates to a running IDE and
+# ignores that list entirely.
+language_backend: LSP
 
 ls_specific_settings: {}
 
