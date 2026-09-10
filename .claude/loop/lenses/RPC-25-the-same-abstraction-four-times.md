@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311]
+applied: [308, 309, 310, 311, 312]
 status: confirmed (round 308)
 ---
 
@@ -146,6 +146,23 @@ The first is the defect the VM copy was fixed away from, still live on the other
 platform — and its comment says why: unsendable payload is one message's
 problem, and closing makes it the whole connection's. The second silently
 diverged on which frames are legal on the reserved stream.
+
+## A drift is TESTABLE, by definition
+
+If two copies diverge, they behave differently — otherwise there would be
+nothing to fix. So a drift finding can always be pinned from outside, and a
+round that cannot pin it has a claim rather than a finding.
+
+Round 312 wrote the witness round 308 shipped without, and the writing found two
+traps worth carrying:
+
+- **The first version passed on broken code.** A flow-control test that yielded
+  `'z' * 256 KiB` measured 6060 bytes in 22 frames: the payload is charged AS IT
+  APPEARS ON THE WIRE and a run of one character deflates ~900:1, so it never
+  reached the bound. Assert the byte count crossed the threshold, or the test
+  reports success for the wrong reason. Use incompressible data.
+- **`grpc-status 0` with no data is not a passing call.** A test asserting only
+  "no error" is green on a call that delivered nothing.
 
 ## Where to put the shared version
 
