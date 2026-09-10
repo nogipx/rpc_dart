@@ -158,10 +158,29 @@ exists to guarantee, and it has no test. Shipping a flow-control change on two
 of three arms, where the missing one guards an inflating window, is what this
 loop refuses; B-24 was authorised to ship without a witness, this was not.
 
-**What round 250 does:** re-apply those four edits (they are quoted in the
-commit body of this round), write the third arm — forget a stream whose consumer
-is still attached, then drain it, then assert the connection window has not
-grown past its configured size — and ship all three together.
+**What the finishing round does:** re-apply those four edits (quoted verbatim in
+`77ee136a` and in round 249's record), write the third arm, ship all three.
+
+### The third arm, designed — round 251
+
+It is reachable, and it is a variation of P-11 rather than a new bench.
+`releaseStreamId(int)` is PUBLIC and calls `_fcForget` (`:502`), which is the
+whole difficulty solved:
+
+1. a pair with a connection window, as P-11 already builds;
+2. the server sends payload on stream N;
+3. the client binds a consumer to `getMessagesForStream(N)` and PAUSES it, so
+   the bytes are owed;
+4. the client calls `releaseStreamId(N)` — `_fcForget` runs, repays, and marks;
+5. the consumer RESUMES and drains, so `_fcOnConsumed` fires for bytes already
+   repaid;
+6. **assert the pool did not grow**: measure it the way P-11 does, by how much a
+   fresh stream can push before it parks. More than the configured window means
+   the connection was credited twice.
+
+Step 6 is the arm. Without the mark it should over-credit; with the mark it
+should not — which makes it a real canary rather than a guard, and it is the
+only one of the three that can go red in BOTH directions.
 
 ## The tracking-cap hypothesis — DISPROVEN, kept so nobody re-derives it
 
