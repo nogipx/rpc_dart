@@ -268,19 +268,10 @@ abstract interface class RpcIsolateTransport {
 
     // A worker that fails to LOAD -- a 404 on the script, or a parse error --
     // fires an `error` event on the Worker object and then does nothing else.
-    // Nothing used to listen, so the two waits below simply expired and spawn()
-    // handed back a transport wired to a worker that does not exist. Measured
-    // in Chrome against a URI that 404s:
-    //
-    //   spawn() threw : NO -- returned a transport
-    //   spawn() took  : 10002ms   (the two swallowed 5s waits)
-    //   isClosed      : false
-    //   health        : healthy / Transport ready
-    //   a call on it  : HUNG, forever
-    //
-    // The VM sibling wires onError/onExit for exactly this reason, and its own
-    // comment says so: a worker that crashes during startup must make spawn()
-    // throw "instead of returning a silently-dead transport". This is that.
+    // With nobody listening, the two waits below just expire and spawn() hands
+    // back a transport wired to a worker that does not exist: isClosed false,
+    // health "ready", and every call hangs forever. The VM sibling wires
+    // onError/onExit for exactly this reason.
     final workerFailed = Completer<Object>();
     void reportWorkerError(String what) {
       if (!workerFailed.isCompleted) workerFailed.complete(what);
@@ -333,15 +324,14 @@ abstract interface class RpcIsolateTransport {
     }
 
     // Wait for worker init acknowledgment (isolate_manager `initialized()`).
-    // NOTE: this only confirms the worker scope is wired -- it does NOT confirm
-    // the user `entrypoint` has run and subscribed its responder. We must wait
-    // for the worker's own `ready` ack (sent after `entrypoint` returns) before
-    // returning the transport, otherwise early RPC frames race ahead of the
-    // responder subscription and are dropped (the bridge streams do not buffer).
     //
-    // Failing here is FATAL, and deliberately so: not reaching this point means
-    // the worker scope never came up at all, which no worker build has ever
-    // done successfully. It is not the legacy-protocol case handled below.
+    // This confirms only that the worker SCOPE is wired -- not that the user
+    // `entrypoint` has run and subscribed its responder. That needs the
+    // worker's own `ready` ack below, or early RPC frames race ahead of the
+    // subscription and are dropped, because the bridge streams do not buffer.
+    //
+    // Failing HERE is fatal, deliberately: it means the worker scope never came
+    // up at all, which is not the legacy-protocol case handled below.
     try {
       await awaitStartup(controller.ensureInitialized.future, 'initialization');
     } catch (_) {
@@ -368,11 +358,11 @@ abstract interface class RpcIsolateTransport {
       ).toMap(),
     );
 
-    // Wait for the worker responder to be ready. A MISSING ack stays tolerated
-    // on purpose -- a worker built before this protocol never sends one, and
-    // hanging those would be a worse regression than the wait. But a worker
-    // that ERRORS while we wait is not a legacy worker, and that case now
-    // fails instead of being swallowed along with it.
+    // Wait for the worker responder to be ready. A MISSING ack is tolerated on
+    // purpose -- a worker built before this protocol never sends one, and
+    // hanging those would be the worse regression. A worker that ERRORS while
+    // we wait is not a legacy worker, so that case fails rather than being
+    // swallowed along with it.
     try {
       await Future.any([
         ready.future,
@@ -391,9 +381,9 @@ abstract interface class RpcIsolateTransport {
     await readySub.cancel();
 
     // Past startup the worker is the peer, and a peer that dies must not look
-    // healthy. The VM sibling closes its channel from onError/onExit; this is
-    // the same, and without it `health()` answered "healthy / Transport ready"
-    // for a worker that was gone and every call hung.
+    // healthy. Without this swap `health()` answers "healthy / Transport ready"
+    // for a worker that is gone, and every call hangs. The VM sibling closes
+    // its channel from onError/onExit for the same reason.
     worker.removeEventListener('error', errorListener);
     worker.removeEventListener('messageerror', errorListener);
     final deathListener = (Event event) {
@@ -448,13 +438,13 @@ void runRpcIsolateManagerWorker(
     );
   }
 
-  // Wait for the INIT message specifically, not for the first message.
+  // Wait for the INIT message specifically, NOT for the first message.
   //
-  // `.first` used to be enough and is not: RpcChannelTransport advertises the
-  // connection flow-control window from its own constructor, synchronously, and
-  // spawn() builds the transport before it sends init. So message #1 is a
-  // metadata frame, the init branch never matched, and the fallback handed the
-  // entrypoint `const {}` — customParams silently dropped on every web spawn.
+  // RpcChannelTransport advertises the connection flow-control window from its
+  // own constructor, synchronously, and spawn() builds the transport before it
+  // sends init -- so message #1 is a metadata frame. Take `.first` and the init
+  // branch never matches, the fallback hands the entrypoint `const {}`, and
+  // customParams is silently dropped on every web spawn.
   var started = false;
   late final StreamSubscription<dynamic> initSub;
 

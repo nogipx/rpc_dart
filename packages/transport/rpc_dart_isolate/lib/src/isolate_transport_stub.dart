@@ -7,8 +7,12 @@ import 'package:rpc_dart/rpc_dart.dart';
 typedef RpcIsolateEntrypoint =
     void Function(IRpcTransport transport, Map<String, dynamic> customParams);
 
-/// Fallback stub for platforms without `dart:isolate` (e.g., web).
-/// Always throws [UnsupportedError] when used.
+/// Fallback for a platform with NEITHER `dart:isolate` NOR `dart:js_interop`.
+///
+/// Not the web: `rpc_dart_isolate.dart` resolves web to
+/// `isolate_transport_web.dart`, which is a real Worker-backed implementation.
+/// Reaching this stub means no isolate mechanism exists at all, so [spawn]
+/// throws [UnsupportedError].
 abstract interface class RpcIsolateTransport {
   static Future<({IRpcTransport transport, void Function() kill})> spawn({
     required RpcIsolateEntrypoint entrypoint,

@@ -47,7 +47,8 @@ class _IsolateMessage {
 /// "the peer sees the same instance", and every direct object must be SENDABLE.
 /// A message class annotated `@pragma('vm:deeply-immutable')` IS shared for
 /// real; the same class without it is copied.
-/// Used internally by [RpcIsolateTransport.spawn] -- not intended for direct use.
+///
+/// Used internally by [RpcIsolateTransport.spawn] — not for direct use.
 class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
   final SendPort _sendPort;
   final StreamController<RpcTransportMessage> _incomingCtl =
@@ -114,11 +115,10 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
       );
     } catch (error, stack) {
       // SendPort.send throws for exactly one reason: the payload is unsendable.
-      // A dead peer is silent -- a closed ReceivePort and a killed isolate both
-      // accept the send and drop it. So this is ONE message's problem, and
-      // closing the channel here made it the whole connection's: every other
-      // in-flight call died, and `catch (_)` dropped the reason, so the caller
-      // was told UNAVAILABLE.
+      // A dead peer is SILENT -- a closed ReceivePort and a killed isolate both
+      // accept the send and drop it. So this is one message's problem, and
+      // closing the channel here would make it the whole connection's, killing
+      // every other in-flight call over one bad payload.
       Error.throwWithStackTrace(
         ArgumentError(
           'Isolate transport: the message on stream ${message.streamId} cannot '
@@ -153,14 +153,12 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
       case _IsolateMessageType.metadata:
         // Stream 0 is NOT filtered here, unlike the payload cases below.
         //
-        // This transport reserves stream 0 for its own init/ready/close
-        // handshake, and those are distinct enum types -- so a `metadata` frame
-        // on stream 0 is never a handshake message. It is what
-        // RpcChannelTransport uses for CONNECTION-level flow control
-        // (x-rpc-conn-window-update), and dropping it here made the peer look
+        // The init/ready/close handshake this transport reserves stream 0 for
+        // uses distinct enum types, so a `metadata` frame on stream 0 is never
+        // a handshake message -- it is RpcChannelTransport's CONNECTION-level
+        // flow control (x-rpc-conn-window-update). Drop it and the peer looks
         // like one that does not participate in flow control, leaving the
-        // connection window off in both directions. Neither of core's own
-        // channels filters stream 0; this one did.
+        // connection window off in BOTH directions.
         _incomingCtl.add(
           RpcTransportMessage(
             metadata: message.data as RpcMetadata,
@@ -473,71 +471,32 @@ abstract interface class RpcIsolateTransport {
       },
     );
 
-    // Attach the channel and the transport BEFORE waiting for `ready`.
+    // Releases everything spawn() acquired, on the path the CHANNEL closes --
+    // not only inside kill().
     //
-    // `messageController` is a plain broadcast controller, so anything added to
-    // it while nobody is listening is discarded -- and the worker starts
-    // sending well before it acks readiness. Its RpcChannelTransport advertises
-    // the connection window from its constructor, and the user entrypoint runs
-    // after that but still before the ack, so every frame either produces was
-    // dropped on the floor here.
-    //
-    // The window grant is the one that is always lost: without it the host's
-    // connection credit stays null, which reads as "the peer does not
-    // participate in flow control", so host -> worker sends were UNBOUNDED for
-    // the life of every isolate connection.
-    //
-    // Buffering the raw controller is not enough: it would flush synchronously
-    // inside `listen()`, i.e. from _IsolateMultiplexedChannel's constructor,
-    // into an _incomingCtl that RpcChannelTransport has not subscribed to yet.
-    // Subscribing early instead closes the window at both hops -- the two
-    // constructions below are synchronous and back to back, so no port message
-    // can land between them.
-    // Everything spawn() acquired is released HERE, on the path the channel
-    // closes -- not only inside kill().
-    //
-    // The isolate, `errorPort` and `exitPort` used to be reclaimed by kill()
-    // alone. But the thing this function hands back is an IRpcTransport, and
+    // What this function hands back is an IRpcTransport, and
     // `RpcEndpointBase.close()` closes the transport it was given -- so an
     // application that wires the spawned transport into an endpoint and closes
-    // the endpoint reaches close(), never kill(). Measured, with the worker
-    // beating on a port of ours so "still running" is observable:
-    //
-    //   teardown via transport.close() : beats after teardown 12, host process
-    //                                    NEVER EXITED (killed at 15s)
-    //   teardown via kill()            : beats after teardown 0, host process
-    //                                    exited in 809 ms
-    //
-    // i.e. a whole isolate -- thread and heap -- stayed alive per connection,
-    // and the two open ReceivePorts kept the host's event loop alive so the
-    // process could not end either. The suite never saw it because every test
-    // in the package tears down with kill(); nothing exercised the standard
-    // lifecycle call.
-    //
-    // The WEB sibling was the tell: its channel closes via
-    // `controller.close()`, and isolate_manager's controller terminates the
-    // Worker there. Same role, opposite behaviour -- the VM variant was the odd
-    // one out.
+    // the endpoint reaches close(), never kill(). Reclaim the isolate in kill()
+    // alone and that application leaks a whole isolate, thread and heap, per
+    // connection, while the two open ReceivePorts keep the host's event loop
+    // alive so the process cannot exit at all.
     //
     // Killing rather than waiting for a natural exit is deliberate: a worker
     // holding a timer, a subscription or a socket never runs out of work, so
-    // "its ports are closed, it will wind down" is not true in general. This is
-    // what kill() already did; it is now also what close() does.
+    // "its ports are closed, it will wind down" is not true in general.
     var connectionTornDown = false;
     void teardownConnection() {
-      // Not while startup is still in flight. A worker that throws inside the
+      // NOT while startup is still in flight. A worker that throws inside the
       // user entrypoint closes its own channel on the way out, and that channel
       // sends a `close` frame on stream 0 -- so the host channel closes BEFORE
-      // the isolate's uncaught error reaches `errorPort`. Tearing down here
-      // cancelled errorSub/exitSub first, and the real cause was lost:
+      // the isolate's uncaught error reaches `errorPort`. Tear down here and
+      // errorSub/exitSub are cancelled first, losing the real cause: the caller
+      // gets a startup TimeoutException instead of the error the worker threw.
       //
-      //   expected : StateError: boom: worker failed during startup
-      //   got      : TimeoutException ... did not become ready within 0:00:05
-      //
-      // which is precisely the regression `spawn_handshake_failure_test` was
-      // written to catch. Startup has its own cleanup -- the catch below closes
-      // the transport and calls teardownStartup() -- and it needs these ports
-      // OPEN to report why the worker died.
+      // Startup has its own cleanup -- the catch below closes the transport and
+      // calls teardownStartup() -- and it needs these ports OPEN to report why
+      // the worker died.
       if (!ready.isCompleted) return;
       if (connectionTornDown) return;
       connectionTornDown = true;
@@ -549,6 +508,21 @@ abstract interface class RpcIsolateTransport {
       unawaited(exitSub.cancel());
     }
 
+    // Attached BEFORE the `ready` wait below, not after.
+    //
+    // `messageController` is a plain broadcast controller, so anything added
+    // while nobody is listening is DISCARDED -- and the worker starts sending
+    // well before it acks readiness. The window grant is the one always lost:
+    // without it the host's connection credit stays null, which reads as "the
+    // peer does not participate in flow control", leaving host -> worker sends
+    // unbounded for the life of the connection.
+    //
+    // Buffering the raw controller does not fix it: that flushes synchronously
+    // inside `listen()`, i.e. from _IsolateMultiplexedChannel's constructor,
+    // into an _incomingCtl that RpcChannelTransport has not subscribed to yet.
+    // Subscribing early closes the window at BOTH hops -- these two
+    // constructions are synchronous and back to back, so no port message can
+    // land between them.
     hostChannel = _IsolateMultiplexedChannel(
       sendPort: workerSendPort,
       messageStream: messageController.stream,
@@ -585,11 +559,11 @@ abstract interface class RpcIsolateTransport {
       rethrow;
     }
 
-    // Unchanged in effect: close the transport (which sends the close frame to
-    // the worker), then tear down synchronously so the kill is still immediate.
-    // The channel's own onClose reaches teardownConnection() a few microtasks
-    // later and finds it already done -- the guard is what makes the two entry
-    // points idempotent with respect to each other.
+    // Close the transport (which sends the close frame to the worker), then
+    // tear down synchronously so the kill is immediate. The channel's own
+    // onClose reaches teardownConnection() a few microtasks later and finds it
+    // already done -- `connectionTornDown` is what makes the two entry points
+    // idempotent with respect to each other.
     void killIsolate() {
       hostTransport?.close();
       teardownConnection();
@@ -613,7 +587,10 @@ Uint8List _materializeBytes(dynamic data) {
   );
 }
 
-/// Web stub -- overridden by isolate_transport_web.dart on JS platforms.
+/// No-op on the VM: there is no worker scope to wire up.
+///
+/// Exists so the signature matches `isolate_transport_web.dart`, where it is
+/// the real entry point a Worker calls.
 void runRpcIsolateManagerWorker(
   RpcIsolateEntrypoint entrypoint, {
   RpcSecurityPolicy policy = const RpcSecurityPolicy(),

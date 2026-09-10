@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302]
 status: confirmed (round 293)
 ---
 
@@ -23,6 +23,13 @@ pass here*.
 
 Per file, **ALL comment lines** — `///` AND `//` — against total lines. Above
 ~20% the file is prose with code in it. Then, per comment, three questions:
+
+> **The density RANKS where to sweep; it does not decide whether to.** Round 302
+> took `rpc_dart_isolate` at **18.2%**, under the threshold, and found the worst
+> fusion of the whole series: one `//` block carrying two subjects, the first
+> describing code 76 lines below it. The adjacency shape is INDEPENDENT of
+> density — a lean file hides it better, because there is no bloat to prompt a
+> reader to look. Never read a sub-threshold number as "this package is clean".
 
 > **Counting only `///` measures a third of the problem.** Rounds 293-296 ranked
 > by doc lines alone and reported files finished that were not: measured at 297,
@@ -148,6 +155,22 @@ found by sweeping and none reachable block by block:
 
 Sweep for comment runs that span a blank line, change subject mid-block, or
 repeat a phrase already present in the file.
+
+## The sweep also finds prose that is WRONG, not just long
+
+Round 302: `isolate_transport_stub.dart` called itself the fallback "for
+platforms without `dart:isolate` (e.g., web)", while the conditional export
+three lines away routes `dart.library.js_interop` to a real Worker-backed
+implementation. The one platform named as the example is the one that never
+reaches the file.
+
+No gate catches this — the compiler does not read prose, and the contradicting
+evidence lived in a different file. It is rule one applied to a comment: the
+implementation first, and a divergence is a defect fixed in the same round.
+
+**Fixing one COSTS lines**, and that is correct. The stub went 5 comment lines
+to 9 while the package fell 221 to 192. A round that optimised the metric would
+have made the only false statement in the package worse.
 
 ## What NOT to cut
 
