@@ -95,6 +95,35 @@ already-repaid — that needs a per-stream mark.
 ordinary traffic lost its credit. A fifth arm is required before any fix here,
 whichever shape is chosen.
 
+## A starting point for the round that builds it — UNVERIFIED
+
+Found while reading for round 248, measured by nothing yet, and written down
+only so the next round starts at a hypothesis instead of a blank page. Treat it
+as a lead inside a lead, not as a finding.
+
+The ledger already exists per stream: `_fcOweConnection` records bytes routed to
+a consumer that credits on consumption, `_fcSettleOwed` clears them as they are
+taken, and `_fcRepayConnection` repays the remainder at teardown (called from
+two places, `:452` and `:1187`).
+
+But `_fcOweConnection` records nothing unless `_fcCanTrack` allows it:
+
+    bool _fcCanTrack(Map<int, Object?> map, int streamId) =>
+        map.containsKey(streamId) || map.length < _fcTrackCap;
+
+Past `_fcTrackCap` live streams, a NEW stream's debt is never written down —
+while the bytes are still charged against the connection pool on arrival. If
+that reading holds, `_fcRepayConnection` then has nothing to repay for those
+streams and the pool loses that credit permanently, which is a different
+mechanism from "the consumer never drains" and would not be fixed by a mark
+alone.
+
+**What to do with it:** measure before building. P-11 with more than
+`_fcTrackCap` concurrent paused streams, against the same run below the cap, is
+one arm apart. If the cap is the mechanism, the per-stream mark still has to
+answer what happens when the map is full — which is the question round 231
+raised about `_fcOnConsumed`'s second caller, in a different place.
+
 ## Owner decision
 
 **Build the per-stream mark** (round 247). The owner accepted round 231's
