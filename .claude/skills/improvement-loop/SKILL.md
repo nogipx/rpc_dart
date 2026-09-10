@@ -124,7 +124,11 @@ is what `lint` and `stale` are for.
    green, **ONE commit** with the same sections in its body — everything the
    round produced rides in it, and a correction to what this round already
    committed is an `--amend`, not a second commit — and a chat report with the
-   same sections (`methods/reporting.md`). A lesson the round paid for
+   same sections (`methods/reporting.md`).
+   **Then run `lint` AGAIN, after committing**, and read the commit back
+   (`git log -1 --name-only`). The sprawl check compares the new commit against
+   the previous one, so `lint && git commit` measures a state that no longer
+   exists and always passes. Red afterwards means squash and recommit. A lesson the round paid for
    becomes `L-N` (`specs/lesson.md`); without a price in numbers it is not a
    lesson.
 

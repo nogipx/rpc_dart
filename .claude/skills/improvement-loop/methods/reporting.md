@@ -73,6 +73,14 @@ watching them fail:
   commits where one piece of work happened, and which files each touched does
   not change that.
 
+**RUN `lint` AFTER THE COMMIT, NOT BEFORE.** The commit-sprawl check compares
+the commit that just landed against the one before it, so a `lint && git commit`
+chain always passes: it is measuring the state that no longer exists. Three
+consecutive rounds shipped a violation this way — the check was correct, the
+command ran green, and the pair was found only when the owner pointed at it. The
+ordering is `git commit` then `lint`, and a red lint afterwards means squash and
+recommit.
+
 **READ THE COMMIT BACK. Every time.** `git log --oneline -3` plus
 `git status --short`, and for anything with punctuation in it,
 `git log -1 --format=%B`. A commit is the round's only durable output and there
