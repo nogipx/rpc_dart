@@ -6,6 +6,9 @@ record format — `../../skills/improvement-loop/specs/round.md`.
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
 
+- **[271](271-the-stream-opened-before-the-request-existed.md)** FIXED, rpc_dart_http — the responder announced a stream to the pipeline before reading the body, and its error path cleans up only its own map: 8 aborted requests parked 8 pipeline streams for 60 s WITH the documented `bodyReadTimeout` on, wedging a budget every client of that server shares
+- **[270](270-a-gate-that-cannot-fail-is-not-evidence.md)** RETRACTED, no packages — `test:wasm` resolves the LOCAL core after all; `pubspec_overrides.yaml` was one directory listing away. Filed retroactively in 271
+- **[269](269-what-test-wasm-actually-resolves.md)** RETRACTED by round 270, no packages — the claim 270 retracted, and B-23's dossier half sized at 1653 lines. Filed retroactively in 271
 - **[250](250-the-ordering-coincidence-becomes-an-invariant.md)** FIXED, rpc_dart — the frame channel's inbound controller buffers like the other six; shipped with NO canary, on the owner's decision, and the record says so
 - **[268](268-three-flags-three-meanings.md)** CLEAN, rpc_dart — RPC-19 re-swept over its one moved file: zero lines in that diff touch a lifecycle flag, and `_closed` / `_isStopped` / `_disposed` still mean three different things
 - **[267](267-the-documentation-b-23-was-hiding.md)** FIXED, rpc_dart — B-23's architecture half: an inventory made from file names predicted five duplicates, the reading gave two additions and two documentation defects. Three docs shipped, one repaired (it taught `RpcLogger`, which does not exist), four notes retired

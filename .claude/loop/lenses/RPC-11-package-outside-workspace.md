@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
 applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
-applied: [220, 226]
+applied: [220, 226, 269, 270]
 status: confirmed (round 220)
 ---
 
@@ -26,6 +26,16 @@ Does this package resolve core from local source or from the published version?
 
 Without `pubspec_overrides.yaml` the wasm target silently tests the PUBLISHED
 core.
+
+**Rounds 269-270 got this backwards and that is the sharpest thing the lens
+carries.** 269 read `rpc_dart_wasm/pubspec.yaml`, found `rpc_dart '>=5.0.0
+<6.0.0'` and no `dependency_overrides`, and wrote into `config.md` that
+`test:wasm` validates the published core. `pubspec_overrides.yaml` is pub's own
+override mechanism, does not appear in `pubspec.yaml`, and points core at
+`../../core/rpc_dart` — grepping the one says nothing about the other. The
+detector's "Ask" is answerable only from pub's RESOLUTION output, never from a
+manifest. The real blind spot is the inverse and smaller: wasm is never tested
+against an OLDER published 5.x, which its constraint allows.
 
 Round 220 ran the detector. `melos list` gives 21, `packages/` holds 22, and the
 difference is `rpc_dart_wasm`. The gap is wider than "not in the test run":

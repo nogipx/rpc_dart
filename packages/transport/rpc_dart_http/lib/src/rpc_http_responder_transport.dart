@@ -310,15 +310,6 @@ class RpcHttpResponderTransport
         }
       }
 
-      _emit(
-        RpcTransportMessage(
-          streamId: streamId,
-          metadata: RpcMetadata(requestHeaders),
-          isEndOfStream: false,
-          methodPath: methodPath,
-        ),
-      );
-
       // Read request body.
       //
       // On overflow we stop buffering but keep consuming the stream to its end,
@@ -370,6 +361,19 @@ class RpcHttpResponderTransport
         body = await readBody();
       }
 
+      // Announced to the pipeline only once the whole request is in hand.
+      // Emitting this BEFORE the body read opens pipeline state the transport
+      // has no way to close when that read never completes, and RpcHttpServer
+      // shares one responder endpoint across every connection, so those streams
+      // are a budget all clients share.
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata(requestHeaders),
+          isEndOfStream: false,
+          methodPath: methodPath,
+        ),
+      );
       _emit(
         RpcTransportMessage(
           streamId: streamId,

@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-22](P-22-body-that-never-arrives.md)** valid (round 271), rpc_dart_http and
+  the responder pipeline — what a body that never arrives costs, reported as TWO
+  budgets: the transport's `pendingRequests` and the pipeline's `openStreams`.
+  The control is the ablation, not the completed-request arm, and the `abort`
+  arm's 503 is a neighbouring limit
 - **[P-21](P-21-metadata-escapes-the-byte-bound.md)** valid (round 245), core
   buffering — which dimension of a frame does the queue's byte bound see? The
   same 64 KiB as payload stops at 256 frames / 16 MiB, as metadata ran to 4096 /

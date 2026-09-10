@@ -10,12 +10,18 @@ scope: [core, http2]
 Measured across rounds 137 and 139, off-journal; imported from private memory
 after round 235. **Read this before describing any stream-exhaustion issue.**
 
-**Responder endpoints are PER CONNECTION.** `RpcHttp2Server` builds one
-`RpcResponderEndpoint` per socket, so `_respStreams` and
-`RpcSecurityPolicy.maxActiveStreams` are per connection. Wedging one connection
-does not affect another — verified with two connections, the untouched one kept
-serving. **Do not call a stream-exhaustion issue "the server going offline"; an
-earlier commit comment did and was wrong.**
+**Responder endpoints are PER CONNECTION — except on HTTP/1.1.**
+`RpcHttp2Server` builds one `RpcResponderEndpoint` per socket, so `_respStreams`
+and `RpcSecurityPolicy.maxActiveStreams` are per connection. Wedging one
+connection does not affect another — verified with two connections, the
+untouched one kept serving. **Do not call a stream-exhaustion issue "the server
+going offline"; an earlier commit comment did and was wrong.**
+
+**`RpcHttpServer` is the exception, and it says so in its own doc comment
+(line 16): one endpoint for every request the process ever serves.** So on that
+transport the sentence above inverts — a wedged table IS the server going
+offline, for every client at once. Found in round 271, which measured one peer
+refusing every other caller with 8 requests it never finished sending.
 
 **The cost that DOES cross connections is memory.** 2000 parked streams held
 68.2 MB — about 33 KiB each. So a peer pins roughly `maxActiveStreams x 33 KiB`

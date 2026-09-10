@@ -1,10 +1,10 @@
 ---
 refines: U-07
-paths: [packages/core/rpc_dart/lib/**]
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: RpcSecurityPolicy has fields capping concurrency
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266]
-status: confirmed (round 245)
+applied: [214, 215, 245, 266, 271]
+status: confirmed (round 271)
 ---
 
 # RPC-05 — Where a concurrency limit is charged
@@ -91,6 +91,31 @@ all 8 dispatch sites.
 > version of the interceptor test parked the interceptor and used a handler that
 > also parks, so the chain could not unwind and "the slot comes back" failed for
 > an unrelated reason.
+
+## Round 271 — the transport releases its charge, the pipeline never hears
+
+The first application outside core, and the detector needed one more question:
+**who else was charged when you were?** `RpcHttpResponderTransport` opened the
+pipeline's stream (the metadata frame) before reading the request body, then
+cleaned up only its OWN `_pending` when that read never completed. Two budgets,
+one release. Eight aborted requests against `maxActiveStreams: 8`:
+
+    arm      bodyReadTimeout  pendingRequests  openStreams  ordinary call
+    timeout  500ms            0                8            status 8   <- before
+    timeout  500ms            0                0            OK         <- after
+
+> **A limit is not released by the layer that charged it — it is released by
+> whoever can still see the stream.** `bodyReadTimeout` is what the docs point
+> at for this attack and it discharged the transport's budget exactly as
+> documented, which is what made the pipeline's look fine. When two layers open
+> state for one request, ask each teardown path which of them it reaches.
+
+And the mitigation that DID hold — `halfOpenStreamTimeout` — bounds time while
+the attacker controls rate: 60 s x ~68 aborted requests a second keeps a
+default 4096-slot table full forever, at ~33 KiB each. Worse here than anywhere
+else because `RpcHttpServer` keeps ONE responder endpoint for the whole server,
+so C-29's "responder endpoints are PER CONNECTION" has an exception.
+Bench `../probes/P-22-body-that-never-arrives.md`.
 
 ## Which fields this detector actually covers
 
