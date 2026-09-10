@@ -11,6 +11,15 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-32](P-32-rapid-reset-cpu.md)** valid (round 283), http2 — what a flood
+  costs an UNRELATED client, measured as a second connection's call latency
+  rather than as CPU. Report the WORST case, not the median: only the worst moves
+  here, and a median-only reading calls every arm identical
+- **[P-31](P-31-metadata-is-never-paced.md)** valid (round 282), core — **the
+  first SEND-path bench here**: does this path apply backpressure? A real
+  transport pair, a consumer that TOOK a stream and paused, and the observable is
+  whether a send blocks. Its control parks at exactly the window, which is what
+  makes it a measurement rather than a coincidence
 - **[P-30](P-30-pre-method-budget-weighs-payload-only.md)** valid (round 280),
   core — the pre-method budget with the pipeline's admission check TRANSCRIBED
   beside it, because the thing under test is which frames get in and a bench that

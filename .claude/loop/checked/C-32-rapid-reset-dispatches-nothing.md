@@ -26,12 +26,34 @@ here. The `normal` arm is the control and does double duty: it proves the bench
 can dispatch a handler at all, and it shows `maxActiveStreams: 4` refusing 196
 of 200 concurrent calls, which is the ceiling behaving.
 
-## What this does NOT cover
+## The CPU half — measured in round 283, also clean
 
-Only the handler-dispatch half. Each reset stream still costs an HPACK decode
-and a stream-state churn, at a rate `maxActiveStreams` cannot bound because
-nothing is ever live — that is the CPU half of the same CVE and it was not
-measured. A round that takes it needs a throughput observable, not a counter.
+Round 277 covered only handler dispatch and left the churn half open. Round 283
+measured it, with an unrelated connection's call latency as the observable
+rather than CPU:
+
+    arm      attack streams  victim median  victim worst
+    idle                  0        1241 us       2367 us
+    reset              2000        1046 us     373458 us
+    normal             2000         648 us     679531 us
+
+**The control moved further than the subject.** The same 2000 streams NOT reset
+stall the victim for 679 ms against the reset arm's 373 ms, so the stall belongs
+to concurrent admitted work and resetting REDUCES what the server spends — the
+cancel lands before dispatch, which is this record's own mechanism seen from the
+other side. Resets do not buy an attacker work beyond the ceiling.
+
+Only the WORST case moves; the medians are flat and their ordering is noise. A
+bench reporting a median alone would have called all three arms identical.
+
+The 679 ms itself is `maxActiveStreams` at its 4096 default behaving: 2000 is
+under the ceiling, so that is work the server agreed to. Capacity and tuning,
+not a defect.
+
+**RPC-18's caveat bounds this**: an in-process flood yields the event loop, so
+absolute starvation is muted against a cross-process attacker. The comparison
+between arms is what holds, all three running in one harness.
+Bench `../probes/P-32-rapid-reset-cpu.md`.
 
 ## Control
 
