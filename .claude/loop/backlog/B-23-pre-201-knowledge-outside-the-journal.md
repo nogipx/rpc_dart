@@ -232,8 +232,94 @@ window and parks permanently, with no error and no timeout, because the
 never-heard-a-grant fallback keys off silence and cannot detect a proxy that
 passes the first grant and drops the rest.
 
-`grpc_compat`'s half of B-23 is therefore DONE, from the code rather than from
-the note. What remains of the note is per-header reasoning, to fold in if a
+**And round 272 found the deletion half is NOT a formality.** Opening
+`grpc_compat` to retire it showed the note holds more than the header list: a
+standing Dart<->Go interop constraint the owner has restated, and the round-101
+story of how that got unblocked. Neither is in the shipped doc. The note was
+therefore marked PARTLY moved, with a pointer at the top and an explicit "do not
+delete this on the strength of the doc existing" — because this store is not in
+git and a wrong coverage call loses the content outright.
+
+### Two of the five read — round 273
+
+Sizes first: `core_types` 14 lines, `core_design` 15, `transport_architecture`
+27, `logger` 44, `rpc_dart_log` 79. All small; the reading is cheap and only the
+verdicts matter.
+
+**`core_types` — a list of key type names. Mostly covered, one real gap.** Its
+least obvious fact, that `RpcCodec` is CBOR and not JSON, appears in four docs
+files including `core/rpc_dart.md`. But `RpcPeerEndpoint` and
+`IRpcMultiplexedChannel` appear ONLY in `docs/design_rpc_logger_v2.md` — a
+design document, not the reference a user reads. So the note is a duplicate, and
+the reading surfaced a DOCS gap rather than content to migrate: the
+user-facing reference does not name the bidirectional endpoint or the
+multiplexed-channel interface.
+
+**`core_design` — not documentation at all.** Four implementation claims: the
+`_OpaqueValue`/`_OpaqueCodec` bridge, `RpcStatusException` letting handlers pick
+a gRPC code, a double-start warning on `RpcHttp2Server`, and a `CallProcessor`
+race that was FIXED. Those are journal-shaped — findings and their fixes — not
+things a user needs. Nothing here belongs in `docs/`, and the fixed race belongs
+nowhere at all now.
+
+**`transport_architecture` — round 274, and this one is a genuine ADDITION.**
+`docs/architecture.md` is 522 lines and mentions `IRpcMultiplexedChannel`,
+`RpcFrameMultiplexedChannel` and `RpcDirectMultiplexedChannel` **zero times**.
+The note carries the three-layer model — raw byte pipe, multiplexed message
+channel, transport — with the file behind each layer and the three
+`RpcChannelTransport` factories. That is the shape of the code and it is
+undocumented.
+
+Checked against the implementation, as required before anything moves: the
+`DirectMultiplexedChannel` sync-controller claim is still TRUE
+(`direct_multiplexed_channel.dart:17`, `broadcast(sync: true)`). The same claim
+about `ChannelTransport` is now FALSE — rounds 236 and 240 made its inbound
+controller a `BufferedBroadcastController`. One line of five is stale, which is
+about the rate this migration should expect.
+
+So the inventory's prediction — five duplicates, one addition — was wrong:
+this is a second addition, and the biggest one.
+
+### Round 275: the `logger` note found a DOCS DEFECT, not a duplicate
+
+`docs/guides/diagnostics.md` has a section headed **"Logging with `RpcLogger`"**,
+and `RpcLogger` **does not exist anywhere in the code**:
+
+```
+grep RpcLogger  packages/core/rpc_dart/lib, rpc_dart_log/lib   0 hits
+grep LogController                                             log_controller.dart
+LogController in docs/guides/diagnostics.md                    0 mentions
+```
+
+The real API is `LogController` + `LogScope`, and it appears only in
+`design_rpc_logger_v2.md` (a design document) and `core/opentelemetry.md`. So
+the user-facing diagnostics guide teaches a removed name, and the one that
+replaced it is documented nowhere a user would look.
+
+**This is rule one exactly** — prose about code, gone stale, and a divergence is
+a defect. It is also NOT B-23's: the note is what surfaced it, but the defect is
+in the repository's own documentation and outlives any decision about private
+memory. It needs its own round: rewrite that section against
+`lib/src/logger/`, using the note's architecture summary as the outline and
+verifying each name.
+
+The note itself is therefore a third ADDITION rather than a deletion — after the
+guide is fixed, what remains of it (the pipeline order, the sealed `LogRecord`
+variants, the extension points) is the outline that fix should follow.
+
+Verdicts so far: `grpc_compat` partly moved, `core_types` and `core_design`
+deletions, `transport_architecture` to be merged into `docs/architecture.md`
+after its stale line is dropped. Neither of the two deletions is a straight
+duplicate the way the inventory guessed — one leaves a docs gap behind it, the other was mis-filed as
+architecture when it is a round history.
+
+**That is a warning about the other five.** The inventory predicted they reduce
+to duplicates of `docs/`, and the prediction was made from FILE NAMES. Each one
+has to be opened and read before it is dropped; expect at least one more to
+carry something the docs never said.
+
+`grpc_compat`'s header half of B-23 is therefore DONE, from the code rather than
+from the note. What remains of the note is per-header reasoning, to fold in if a
 later reading finds any of it still true.
 
 That list is the doc, and it is now checked against the implementation instead
