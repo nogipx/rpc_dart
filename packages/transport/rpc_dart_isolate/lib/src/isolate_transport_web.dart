@@ -168,8 +168,21 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
           methodPath: message.methodPath,
         ).toMap(),
       );
-    } catch (_) {
-      await close();
+    } catch (error, stack) {
+      // ONE message's problem, not the connection's -- the same rule the VM
+      // sibling states. `postMessage` throws here for one reason: the payload
+      // is not structured-cloneable. A dead worker is SILENT, so a throw is
+      // never how this side learns the peer is gone.
+      //
+      // Closing the channel would kill every other in-flight call over one bad
+      // payload, and swallowing the reason would report it as UNAVAILABLE.
+      Error.throwWithStackTrace(
+        ArgumentError(
+          'Isolate transport: the message on stream ${message.streamId} cannot '
+          'be structured-cloned to the worker. $error',
+        ),
+        stack,
+      );
     }
   }
 
@@ -196,6 +209,13 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
       case _BridgeType.ready:
         break;
       case _BridgeType.metadata:
+        // Stream 0 is NOT filtered here, unlike the payload cases below.
+        //
+        // The init/ready/close handshake this bridge reserves stream 0 for uses
+        // distinct types, so a `metadata` frame on stream 0 is never a
+        // handshake message -- it is RpcChannelTransport's CONNECTION-level
+        // flow control. Drop it and the peer looks like one that does not
+        // participate, leaving the connection window off in BOTH directions.
         _incomingCtl.add(
           RpcTransportMessage(
             metadata: _decodeMetadata(
@@ -207,6 +227,7 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
           ),
         );
       case _BridgeType.data:
+        if (message.streamId == 0) return;
         _incomingCtl.add(
           RpcTransportMessage(
             payload: _materializeBytes(message.payload),
@@ -216,6 +237,7 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
           ),
         );
       case _BridgeType.finish:
+        if (message.streamId == 0) return;
         _incomingCtl.add(
           RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
         );

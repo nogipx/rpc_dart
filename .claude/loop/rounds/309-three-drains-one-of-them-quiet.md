@@ -114,6 +114,18 @@ transport in two platform variants, and `isolate_transport.dart` /
 Worker), not the same one twice. RPC-25 needs siblings; the correct result here
 is that the lens does not apply, and that is a finding rather than a gap.
 
+> **CORRECTED BY ROUND 310. The paragraph above is wrong.** The two variants do
+> not implement one mechanism twice, but they DO implement one abstraction
+> twice: `_IsolateMultiplexedChannel` and `_WebMultiplexedChannel` are the same
+> `IRpcMultiplexedChannel` lifecycle — same fields, same constructor listen,
+> byte-identical `close()`. Applying the detector properly found two drifts, one
+> of them a live defect the VM sibling's own comment documents as wrong.
+>
+> The error was reasoning about the mechanism (SendPort vs Worker) instead of
+> running step 1, which asks for a FIELD every sibling declares. `_incomingCtl`,
+> `_messageSub`, `_closed` and `_onClose` are declared identically in both. The
+> lens says to grep, and this round argued instead.
+
 B-30 is still open and still the owner's call.
 
 ## Links

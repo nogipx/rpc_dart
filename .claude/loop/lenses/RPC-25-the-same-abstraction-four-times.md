@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309]
+applied: [308, 309, 310]
 status: confirmed (round 308)
 ---
 
@@ -85,12 +85,22 @@ two of three servers the ONLY line a drain ever produced was "budget expired,
 closing anyway" — so success was signalled by an absence. **Look at what the
 copies SAY, not only at what they compute.**
 
-## When the lens does not apply
+## "It does not apply here" is a claim, and it needs the grep
 
-It needs SIBLINGS — two or more implementations of one thing. Round 309 checked
-`rpc_dart_isolate` and correctly found none: it ships one transport in two
-platform variants that implement DIFFERENT mechanisms (SendPort against Worker),
-not the same one twice. "The lens does not apply here" is a result, not a gap.
+Round 309 declared `rpc_dart_isolate` out of scope by REASONING: one transport
+in two platform variants, SendPort against Worker, different mechanisms, no
+siblings. Round 310 ran step 1 instead and found `_incomingCtl`, `_messageSub`,
+`_closed` and `_onClose` declared identically in both — the same
+`IRpcMultiplexedChannel` lifecycle twice, with a byte-identical `close()` — and
+two drifts in it, one a live defect.
+
+**Different mechanism is not different abstraction.** Two classes can wrap
+unrelated transports and still be one lifecycle written twice; the wire format
+is a parameter, not the shape. Step 1 asks for a FIELD every sibling declares
+because a field name survives that difference where an argument about mechanism
+does not.
+
+The lens can legitimately not apply — but only after the grep returns nothing.
 
 ## What a no-drift candidate earns
 
@@ -98,6 +108,24 @@ Nothing. Round 309 left `_notify` — eight identical lines in two servers —
 unmerged, because step 3 found no divergence and merging would add a public
 promise to core to save eight lines. **The bar is the drift, not the line
 count.** Record the decision, or the next round reads it as oversight.
+
+**Round 310, the isolate channels.** The remedy is NOT always extraction. The
+two variants compile on different platforms and speak different wire formats, so
+one shared class would be an abstraction over nothing — but the drift was real
+and had to go. **Aligning the copies is a legitimate outcome**: the lens is
+about finding the divergence, and merging is one of two ways to end it.
+
+The drifts, both in the web copy:
+
+    send() failure   VM: throws, names the stream, channel STAYS OPEN
+                     web: catch (_) { await close(); }
+    stream 0         VM: filtered on data/finish, NOT on metadata
+                     web: not filtered at all
+
+The first is the defect the VM copy was fixed away from, still live on the other
+platform — and its comment says why: unsendable payload is one message's
+problem, and closing makes it the whole connection's. The second silently
+diverged on which frames are legal on the reserved stream.
 
 ## Where to put the shared version
 

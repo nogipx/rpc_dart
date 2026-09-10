@@ -36,6 +36,7 @@ import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
+import 'package:rpc_dart_websocket/src/rpc_websocket_channel.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
