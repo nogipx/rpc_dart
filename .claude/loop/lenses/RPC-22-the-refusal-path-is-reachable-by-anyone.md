@@ -3,7 +3,7 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276]
+applied: [272, 274, 275, 276, 277]
 status: confirmed (round 276)
 ---
 
@@ -132,3 +132,12 @@ And note where it is reachable: only when `allowedOrigins` or `allowUpgrade` is
 configured. **Turning the security control on is what opened the path.** Round
 `../rounds/276-the-same-defect-in-the-sibling.md`, bench
 `../probes/P-26-refused-upgrade-has-no-deadline.md`.
+
+**Round 277 aimed it at the canonical instance and came back CLEAN.** HTTP/2
+Rapid Reset (CVE-2023-44487) is this shape exactly — a stream opened and reset
+is beneath `maxActiveStreams` by construction — and rpc_dart dispatches nothing:
+0 handlers from 200 resets, against 4 from 200 normal calls at a ceiling of 4.
+The cancellation is processed before the pipeline reaches dispatch.
+`../checked/C-32-rapid-reset-dispatches-nothing.md`. The CPU half of the CVE —
+HPACK decode and stream churn at a rate nothing bounds — is named there and not
+measured.

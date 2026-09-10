@@ -11,6 +11,15 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-28](P-28-hostile-frames.md)** valid (round 278), core — seventeen named
+  malformed frames through the real decoder, each with a hand-written header so
+  the declared length can lie. Sorts outcomes into typed refusal / short-read /
+  **leaked Error**, which is the one that matters
+- **[P-27](P-27-rapid-reset.md)** valid (round 277), http2 and core — HTTP/2
+  Rapid Reset, and **the only bench here that speaks HTTP/2 to the server without
+  rpc_dart's own caller**: reuse it for anything needing frame-level control.
+  Carries a `diagnose` arm, which is what caught a fixture that could not
+  dispatch a handler at all
 - **[P-26](P-26-refused-upgrade-has-no-deadline.md)** valid (round 276),
   rpc_dart_websocket — P-23's shape aimed at the origin gate. Three arms, and the
   REQUEST SHAPE is the load-bearing one: dart:io hands a connection-upgrade

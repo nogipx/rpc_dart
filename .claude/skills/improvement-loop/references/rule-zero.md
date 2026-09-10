@@ -49,6 +49,17 @@ repository whose own settings had the narrow rule all along.
 - `$VAR`, `${...}`, `$(...)`, backticks, globs, `for` loops over variables. A
   prefix rule does not cover them and they always ask. Including
   `echo "EXIT=$?"` — the Bash tool reports a non-zero exit code by itself.
+
+  **Backticks inside `git commit -m "..."` are the exception that does NOT
+  ask — it silently mangles.** The round record and the commit body are prose
+  about code, so they are full of identifier quoting, and a double-quoted
+  message is still a shell string: the shell runs whatever is between the
+  backticks and substitutes the output. Measured on round 278: `on
+  FormatException` in the body became the empty string, the shell printed
+  `command not found: on`, and the commit SUCCEEDED with a sentence missing two
+  words. Use single quotes inside the message, and read it back with
+  `git log -1 --format=%B` — which is the same check the Gate step already
+  requires for a different reason.
 - **A program written on the command line**: `python3 -c`, `python3 -`,
   `node -e`, `dart -e`, `perl -e`, a heredoc. It is a script authored outside
   `Write`, so it never appears in a diff and nobody can review it; and it is
