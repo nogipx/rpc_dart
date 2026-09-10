@@ -118,11 +118,24 @@ streams and the pool loses that credit permanently, which is a different
 mechanism from "the consumer never drains" and would not be fixed by a mark
 alone.
 
-**What to do with it:** measure before building. P-11 with more than
-`_fcTrackCap` concurrent paused streams, against the same run below the cap, is
-one arm apart. If the cap is the mechanism, the per-stream mark still has to
-answer what happens when the map is full — which is the question round 231
-raised about `_fcOnConsumed`'s second caller, in a different place.
+**And here is the fact that probably kills it**, found one grep later and
+recorded rather than quietly dropped:
+
+    int get _fcTrackCap => _policy.maxActiveStreams;
+
+The tracking cap IS the admission limit. So the map can normally hold every live
+stream, and `_fcCanTrack` can only refuse when `_fcOwedConn` is full of entries
+whose streams have already ended — which `_fcRepayConnection` removes at
+teardown from both `:452` and `:1187`. That makes the hypothesis above a claim
+about STALE ENTRIES in the ledger, not about ordinary overflow, and a much
+narrower thing than it first read as.
+
+**What to do with it:** the cheap check is whether `_fcOwedConn` can retain an
+entry for a stream that has ended — a probe reading `owedConn` out of
+`_buildHealthDetails` (it is exposed, `channel_transport.dart:180`) after N
+completed pause-cancel cycles. If that count returns to zero, this whole note is
+disproven and the round goes straight to the mark the owner authorised. If it
+does not, the leak is in the ledger and the mark alone would not fix it.
 
 ## Owner decision
 
