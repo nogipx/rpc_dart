@@ -134,6 +134,29 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
   ) => _RpcCodecMode.validate(dataTransferMode, requestCodec, responseCodec);
 
+  /// The three decisions every `add*Method` makes before it registers anything:
+  /// are the codecs valid for this mode, which codecs actually apply, and is
+  /// this name already taken.
+  ///
+  /// Shared because all four registrations answered them with the same twelve
+  /// lines, and `_rejectDuplicate` was called from EIGHT places — once per
+  /// branch per method — for a rule that has nothing to do with the branch. A
+  /// duplicate name is refused before the mode is chosen, so a second
+  /// registration cannot depend on which mode it would have used.
+  ///
+  /// Returns null codecs exactly when the mode is zero-copy; a caller reads
+  /// that as the branch condition rather than recomputing it.
+  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
+  _prepareRegistration<TRequest, TResponse>(
+    String methodName,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
+  ) {
+    _validateCodecsForCodecMode(requestCodec, responseCodec);
+    _rejectDuplicate(methodName);
+    return _getEffectiveCodecs(requestCodec, responseCodec);
+  }
+
   /// Registers a unary method with automatic mode selection.
   ///
   /// Codecs provided → serialized mode; codecs omitted → zero-copy (requires
@@ -146,20 +169,12 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    // Validate codecs when serialization is required.
-    _validateCodecsForCodecMode(requestCodec, responseCodec);
-
-    // Determine effective codecs.
-    final (effectiveRequestCodec, effectiveResponseCodec) = _getEffectiveCodecs(
-      requestCodec,
-      responseCodec,
-    );
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _prepareRegistration(methodName, requestCodec, responseCodec);
     final isZeroCopy =
         effectiveRequestCodec == null && effectiveResponseCodec == null;
 
     if (isZeroCopy) {
-      // Zero-copy registration.
-      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<TRequest, TResponse>(
             name: methodName,
@@ -178,7 +193,6 @@ abstract class RpcResponderContract implements IRpcContract {
         return _OpaqueValue.wrap(response);
       }
 
-      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,
@@ -204,20 +218,12 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    // Validate codecs when serialization is required.
-    _validateCodecsForCodecMode(requestCodec, responseCodec);
-
-    // Determine effective codecs.
-    final (effectiveRequestCodec, effectiveResponseCodec) = _getEffectiveCodecs(
-      requestCodec,
-      responseCodec,
-    );
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _prepareRegistration(methodName, requestCodec, responseCodec);
     final isZeroCopy =
         effectiveRequestCodec == null && effectiveResponseCodec == null;
 
     if (isZeroCopy) {
-      // Zero-copy registration.
-      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<TRequest, TResponse>(
             name: methodName,
@@ -238,7 +244,6 @@ abstract class RpcResponderContract implements IRpcContract {
         }
       }
 
-      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,
@@ -275,14 +280,8 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    // Validate codecs when serialization is required.
-    _validateCodecsForCodecMode(requestCodec, responseCodec);
-
-    // Determine effective codecs.
-    final (effectiveRequestCodec, effectiveResponseCodec) = _getEffectiveCodecs(
-      requestCodec,
-      responseCodec,
-    );
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _prepareRegistration(methodName, requestCodec, responseCodec);
     final isZeroCopy =
         effectiveRequestCodec == null && effectiveResponseCodec == null;
 
@@ -295,7 +294,6 @@ abstract class RpcResponderContract implements IRpcContract {
         return result as Object;
       }
 
-      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<Object, Object>(
             name: methodName,
@@ -316,7 +314,6 @@ abstract class RpcResponderContract implements IRpcContract {
         return _OpaqueValue.wrap(response);
       }
 
-      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,
@@ -346,14 +343,8 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    // Validate codecs when serialization is required.
-    _validateCodecsForCodecMode(requestCodec, responseCodec);
-
-    // Determine effective codecs.
-    final (effectiveRequestCodec, effectiveResponseCodec) = _getEffectiveCodecs(
-      requestCodec,
-      responseCodec,
-    );
+    final (effectiveRequestCodec, effectiveResponseCodec) =
+        _prepareRegistration(methodName, requestCodec, responseCodec);
     final isZeroCopy =
         effectiveRequestCodec == null && effectiveResponseCodec == null;
 
@@ -368,7 +359,6 @@ abstract class RpcResponderContract implements IRpcContract {
         }
       }
 
-      _rejectDuplicate(methodName);
       _zeroCopyMethods[methodName] =
           RpcZeroCopyMethodRegistration<Object, Object>(
             name: methodName,
@@ -391,7 +381,6 @@ abstract class RpcResponderContract implements IRpcContract {
         }
       }
 
-      _rejectDuplicate(methodName);
       _methods[methodName] =
           RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
             name: methodName,

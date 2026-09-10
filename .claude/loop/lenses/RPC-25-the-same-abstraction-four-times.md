@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313]
+applied: [308, 309, 310, 311, 312, 313, 315]
 status: confirmed (round 308)
 ---
 
@@ -115,6 +115,23 @@ VALUE never is.
 
 So the diff has a second axis: compare each copy to the thing it READS, not only
 to its sibling.
+
+## The exception: a duplicated RULE
+
+A no-drift duplication is normally declined (below). The exception is when what
+is duplicated is a RULE rather than a computation, because the risk is not what
+the code does now — it is what the next edit does.
+
+Round 315, core's `RpcResponderContract`: `_rejectDuplicate` — "is this method
+name already taken" — was called from **eight** places, once per branch in each
+of the four `add*Method` registrations. The check reads BOTH registration maps,
+so it cannot depend on the branch it sits in. Eight copies are eight chances to
+answer it differently later, and the analyzer would say nothing about seven of
+them.
+
+Ask: *does this duplicated thing decide something, and would enforcing it on
+three of four paths compile?* If yes, merge it even with no drift. If it merely
+computes a value the same way everywhere, decline.
 
 ## What a no-drift candidate earns
 
