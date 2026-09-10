@@ -93,7 +93,12 @@ name must appear in the round record.
   in `async*`, ints above 2^53, clock resolution, `Random.secure`, VM-only
   codecs.
 - `melos run test:wasm` — the Flutter package outside the workspace; covers the
-  Dart bridge only.
+  Dart bridge only. **And it tests the PUBLISHED core, not this tree.**
+  `rpc_dart_wasm` is not a workspace member and declares
+  `rpc_dart: '>=5.0.0 <6.0.0'` with no `dependency_overrides`, so pub resolves
+  rpc_dart from pub.dev. A core change that breaks the wasm bridge passes this
+  command green until the core is released. Verified round 269 against
+  `packages/transport/rpc_dart_wasm/pubspec.yaml:32`.
 - `melos run analyze:native` — the plugin's Swift and Kotlin against the real
   frameworks. With the toolchains missing it exits 2, so "nothing was checked"
   can never read as success.

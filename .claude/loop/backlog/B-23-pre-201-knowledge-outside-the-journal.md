@@ -359,6 +359,42 @@ deliberately NOT carried over: the claim that the logger API is frozen as of
 notes at all: it is the per-subsystem dossiers, which split into negatives and
 lens evidence the way the first six did in the curate pass.
 
+### The dossier half, sized — round 269
+
+```
+release_gate_blind_spots     90 lines
+isolate_transport           229
+performance_work            286
+websocket_transport         325
+backpressure_flow_control   332
+wasm_transport              391
+                          1653 total
+```
+
+Eighteen times the architecture half's 179 lines, and a different KIND of
+content: these are measurements and verified-clean lists, which belong in
+`checked/` and in lens `## Evidence`, not in `docs/`. The architecture half's
+lesson — that a verdict made from a file name is worthless — applies harder
+here, because a negative imported without re-measuring is precisely the B-09
+objection: a guess wearing the clothes of knowledge.
+
+**Order to take them in**, cheapest and most checkable first:
+
+1. `release_gate_blind_spots` (90) — its claims are about which gate command
+   covers what, and every one is verifiable by running the gate.
+2. `isolate_transport` (229) — teardown and unsendable payloads; RPC-20 and
+   RPC-21 already carry part of it.
+3. `performance_work` (286) — baselines and eliminated hypotheses; the numbers
+   date from before the flow-control work and most will be stale.
+4. `websocket_transport` (325) — the priority transport, and the one with a
+   ranked lead list that may already be closed.
+5. `backpressure_flow_control` (332) — the demand chain; rounds 245, 266 moved
+   this ground.
+6. `wasm_transport` (391) — largest, and the hardest to verify without a device.
+
+Nothing here should be imported wholesale. Each claim is either re-measured and
+becomes a negative with today's sha, or it is dropped.
+
 **Still owed from this half:** file the docs gap `core_types` exposed. That gap narrowed in
 round 278 — `IRpcMultiplexedChannel` is now in `architecture.md` — leaving
 `RpcPeerEndpoint`, the bidirectional endpoint, documented nowhere a user reads.

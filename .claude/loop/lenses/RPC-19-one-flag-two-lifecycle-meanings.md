@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one object models both "the caller shut me down" and "the connection is gone"
 breaks: a hang.
-applied: [238]
-status: swept here (round 238, 9cbd2d47)
+applied: [238, 268]
+status: swept here (round 268, 847d53d2)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
