@@ -95,7 +95,75 @@ already-repaid — that needs a per-stream mark.
 ordinary traffic lost its credit. A fifth arm is required before any fix here,
 whichever shape is chosen.
 
-## A starting point for the round that builds it — UNVERIFIED
+## The mechanism, localised (round 248) — REASONED, NOT YET MEASURED
+
+The tracking-cap hypothesis below is dead; what replaced it is narrower and sits
+in one condition. There are exactly two repay paths:
+
+- the per-stream controller's `onCancel` (`channel_transport.dart:447-453`),
+  which its own comment says "runs on an explicit cancel and again when a closed
+  controller reaches `done`";
+- `_fcForget` (`:1181-1188`), which repays **only if** `consumer == null ||
+  !consumer.hasListener`, deferring to the first path otherwise.
+
+**A paused subscription never receives `done`.** So a consumer that pauses and
+abandons the stream reaches neither path: `onCancel` cannot fire because the
+listener is stuck, and `_fcForget` skipped the repay precisely BECAUSE a
+listener existed. That is this lead's title restated as a code condition, and it
+explains the measured 4 calls against a 1024 KiB pool where three controls reach
+3072.
+
+**A one-line fix suggests itself and is WRONG.** Dropping the `hasListener`
+condition so `_fcForget` always repays looks right — the ledger only holds bytes
+nobody took — until you follow what happens if the consumer drains afterwards:
+
+    _fcCredit(streamId, bytes)  ->  _fcCreditConnection(bytes)   (:1046, uncond.)
+
+`_fcRepayConnection` has already returned those bytes to the pool, and
+`_fcSettleOwed` then finds no entry to clear, so the connection is credited
+TWICE for the same bytes and its window inflates past the configured size. The
+bound stops bounding. That is round 231's finding arrived at from the opposite
+direction, and it is exactly why the mark is not optional.
+
+**So the mark's job is to make a late consumption unambiguous**: record that a
+stream's debt was settled at forget, so a `_fcOnConsumed` arriving afterwards
+credits the per-stream window without crediting the connection again. That is
+the shape the round has to build and canary — and note it needs a THIRD arm
+beyond round 231's two: the wedge must lift, ordinary traffic must still be
+credited, and a consumer that drains AFTER forget must not over-credit.
+
+**Measure before changing it.** P-11 is the bench, and the canary needs both
+arms round 231 warned about: the wedge must lift, and ORDINARY traffic must
+still be credited — the two are what made round 230's version unbuildable.
+
+## Round 249 built it and MEASURED it working — then reverted it
+
+Not a guess any more. The mark was implemented exactly as described above:
+`_fcForget` repays unconditionally and marks a stream that still had a live
+listener; `_fcOnConsumed` passes `creditConnection: false` for a marked stream;
+the mark is dropped in the controller's `onCancel`.
+
+    P-11 case C (receiver binds and PAUSES)      before        after
+    KiB sent per call        [256,256,256,256,0]   [256 x 12]
+    total sent                        1024 KiB      3072 KiB
+    wedged at call                           4         never
+
+Case B, the draining control, stayed at 3072 KiB and never wedged, and the whole
+core suite passed (1417 tests) — so ordinary traffic is still credited. Two of
+round 231's three arms, measured.
+
+**Reverted anyway, and the tree is clean.** The third arm — a consumer that
+drains AFTER forget must not credit the connection twice — is the one the mark
+exists to guarantee, and it has no test. Shipping a flow-control change on two
+of three arms, where the missing one guards an inflating window, is what this
+loop refuses; B-24 was authorised to ship without a witness, this was not.
+
+**What round 250 does:** re-apply those four edits (they are quoted in the
+commit body of this round), write the third arm — forget a stream whose consumer
+is still attached, then drain it, then assert the connection window has not
+grown past its configured size — and ship all three together.
+
+## The tracking-cap hypothesis — DISPROVEN, kept so nobody re-derives it
 
 Found while reading for round 248, measured by nothing yet, and written down
 only so the next round starts at a hypothesis instead of a blank page. Treat it
