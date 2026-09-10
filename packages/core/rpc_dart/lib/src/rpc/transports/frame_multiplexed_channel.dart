@@ -18,8 +18,18 @@ class RpcFrameMultiplexedChannel
     implements IRpcMultiplexedChannel, IRpcChannelProtocolClose {
   final IRpcChannel _channel;
   final RpcSecurityPolicy _policy;
-  final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast();
+
+  /// Buffered, like every other inbound controller in the library.
+  ///
+  /// This class starts decoding from its own constructor, so anything arriving
+  /// before the transport subscribes is retained rather than dropped. Nothing
+  /// loses a frame today — `fromChannel` builds channel and transport in one
+  /// expression — but that is an ordering property of a constructor, not an
+  /// invariant, and this type is public and documented for direct construction.
+  final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
   StreamSubscription<Uint8List>? _channelSub;
 
   /// Growable reassembly buffer. Valid data is `_buf[0.._bufLen)`; capacity may

@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 247)
+status: closed (round 250)
 round: 240
 commit: c84ff1cf
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
