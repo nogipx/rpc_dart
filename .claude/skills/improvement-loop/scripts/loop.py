@@ -775,11 +775,18 @@ def journal_commit_sprawl(root: Path, loop: Path, rep: "Report") -> None:
             str(rel / "probes" / DIRS["probes"]),
         }
         if shared:
-            rep.warn(
+            # An ERROR, not a warning, and that distinction was itself measured:
+            # as a warning this fired twice on consecutive rounds, was read both
+            # times, and was talked past both times ("leaving the warning
+            # visible rather than squashing it"). A rule whose enforcement is a
+            # line of advisory text depends on the judgement that already
+            # failed. As an error it fails the gate, and the round cannot report
+            # green until the commits are one.
+            rep.error(
                 f"commits {older[0]} and {newer[0]} both edit "
                 f"{sorted(shared)[0]} and touch nothing outside {rel}/ — one "
-                "round, one commit: a correction to what this round already "
-                "committed is an amend, not a second commit")
+                "round, one commit: squash them with `git reset --soft` and "
+                "recommit, or amend if the older one is HEAD")
             return
 
 

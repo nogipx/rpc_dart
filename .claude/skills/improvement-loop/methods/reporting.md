@@ -57,6 +57,13 @@ Two consequences worth naming:
 - **A correction to something already committed in THIS round is an amend.**
   `git commit --amend -F <file>` — same round, same commit.
 
+`loop.py lint` ENFORCES this: two consecutive commits that touch only the
+journal and edit the same record are an **error**, not a warning, so the gate
+cannot be green until they are one. It was a warning first, and that version
+fired twice on consecutive rounds, was read both times, and was reasoned past
+both times. A rule enforced by advisory text depends on exactly the judgement
+that already failed.
+
 **READ THE COMMIT BACK. Every time.** `git log --oneline -3` plus
 `git status --short`, and for anything with punctuation in it,
 `git log -1 --format=%B`. A commit is the round's only durable output and there
