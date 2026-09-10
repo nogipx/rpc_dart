@@ -342,11 +342,39 @@ the unconditional repay and no mark, the test still passed. So the batching
 explanation is incomplete: crossing the threshold is necessary and not
 sufficient, and where the second grant goes is still unaccounted for.
 
-**Five designs, five passes, and the honest reading is that the mechanism is not
-understood well enough to witness.** Continuing to invent shapes blind is what
-the last five rounds already did. The next round either traces the grant —
-`_fcSendConnGrant` out, `xConnWindowUpdate` in, and what the sender does with a
-second one — or B-22 is parked the way B-25 was.
+### Round 265 traced the grant, and the five failures were CORRECT
+
+The receiving side clamps (`channel_transport.dart:1166-1174`):
+
+```dart
+final granted = parsed > window ? window : parsed;
+final next = (_fcConnCredit ?? 0) + granted;
+_fcConnCredit = next > window ? window : next;   // clamped at the window
+```
+
+with its own comment saying why: *a peer must not be able to raise our ceiling*.
+So a second grant for the same bytes arrives and cannot lift the sender's credit
+past the configured window. **There is no observable over-credit on the wire,
+because a defence built against a hostile peer also absorbs our own double
+accounting.**
+
+That settles five rounds of "the canary passed": the canaries were right and the
+hypothesis was wrong. The double credit is real inside `_fcCreditConnection`'s
+accumulator and is neutralised one hop later, at the only place it could do
+harm.
+
+**What this means for the fix.** The `hasListener` guard can be dropped —
+`_fcForget` repaying unconditionally is safe, because the worst case, a peer
+crediting the same bytes twice, is exactly what the receive-side clamp exists to
+absorb. **The per-stream mark is unnecessary.** B-22 becomes the one-line change
+round 248 proposed and talked itself out of, and round 249's measurement is its
+witness: P-11 case C, 1024 -> 3072 KiB, wedged at call 4 -> never.
+
+**What is still owed before shipping**: the clamp protects the SENDER's ceiling,
+so the remaining question is whether an unconditional repay can inflate anything
+on the RECEIVER's own side — `_fcConnPending`, which accumulates before the
+threshold. That is one read of `_fcCreditConnection`'s accumulator against
+`_fcOwedConn`, not another canary.
 
 **Two corrections owed on the record.** Round 263's batching account is now only
 partial. And the guard test was committed in `40d4304d` even though that
