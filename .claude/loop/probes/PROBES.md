@@ -11,6 +11,10 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-33](P-33-hostile-reflection-requests.md)** valid (round 284), core —
+  P-28's shape aimed at the OTHER hand-rolled parser here, the reflection
+  service's request decoder. Prints the response SIZE and not just a verdict,
+  which is the only reason its one interesting row is visible
 - **[P-32](P-32-rapid-reset-cpu.md)** valid (round 283), http2 — what a flood
   costs an UNRELATED client, measured as a second connection's call latency
   rather than as CPU. Report the WORST case, not the median: only the worst moves
