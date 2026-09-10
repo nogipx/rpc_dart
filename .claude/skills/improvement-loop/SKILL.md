@@ -62,9 +62,11 @@ is the allowlist, not memory: this skill's `allowed-tools` plus
 `permissions.allow` in `.claude/settings.json`, where `setup` mode writes the
 toolchain, the gate and `loop.py`; `loop.py lint` checks the gate is covered.
 Anything the allowlist does not cover — variables, substitutions, globs,
-`| head`, `cd X &&`, `git stash`, `rm`, heredocs, reading files through the
-shell instead of `Read` — is forbidden; the list and the reasons are in
-`references/rule-zero.md`.
+`| head`, two commands joined by `;` or `&&`, `git stash`, `rm`, heredocs,
+reading files through the shell instead of `Read` — is forbidden; the list and
+the reasons are in `references/rule-zero.md`. **One command per `Bash` call**:
+a chain matches no prefix rule, so welding `echo "EXIT=$?"` onto an allowed
+command is what makes it ask.
 
 **No program written on the command line.** `python3` is allowlisted for
 `scripts/loop.py` and nothing else — never `python3 -c`, `-e`, `node -e`,

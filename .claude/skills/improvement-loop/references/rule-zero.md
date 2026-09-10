@@ -9,6 +9,21 @@ In force when `unattended: yes`. A permission prompt stops the round dead, and
 there is nobody to answer it. A command that *may* ask is the wrong command:
 find the path before running, not after.
 
+**Never issue a command that needs approval.** Not "issue it and see" — a
+prompt is a failure of the round, whether or not a human happens to answer it.
+Before every `Bash` call, check the command against the two lists below; if it
+is not obviously covered, use `Read`/`Grep`/`Glob` instead, or split it into
+calls that are.
+
+## One command per call
+
+`;`, `&&`, `||` and `|` between two commands make the line match **no** prefix
+rule, so it prompts even when each half would have been allowed alone. Issue
+them as separate `Bash` calls — they can go in the same message. The pattern
+that keeps recurring is a status echo welded onto an allowed command
+(`loop.py lint; echo "EXIT=$?"`): the allowed half is invisible to the
+allowlist because of the half that was never needed.
+
 ## What the allowlist covers
 
 - The skill's `allowed-tools`: `Read`, `Edit`, `Write`, `Glob`, `Grep`,
