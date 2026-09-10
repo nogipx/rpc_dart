@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305]
 status: confirmed (round 293)
 ---
 
@@ -135,8 +135,13 @@ found by sweeping and none reachable block by block:
   symbol-based agent. That also makes it the one sub-shape here with a real
   witness: query the hover before and after.
 
-  **Six files in six rounds, in three packages — this is a property of the
-  corpus, not of core. Sweep for it explicitly.** A CLASS doc is the easiest to
+  **Eight instances by round 305, in five packages, and it lands on every KIND
+  of declaration** — a public class (300), a private method (301), a local `//`
+  block (302), a private method again (303), a typedef (304), and a static
+  function whose doc was eaten by a `const` 67 lines above it (305). It is
+  independent of the declaration kind, of comment density (302), and of package.
+  What it depends on is a blank line between a doc and the thing below it, which
+  nothing checks. **Sweep for it explicitly.** A CLASS doc is the easiest to
   lose this way: it and its declaration are separated by exactly the blank line
   that hides the fusion, and it is the doc a user reads first.
 - **PARAGRAPH fusion**, the milder variant — two paragraphs of ONE doc run

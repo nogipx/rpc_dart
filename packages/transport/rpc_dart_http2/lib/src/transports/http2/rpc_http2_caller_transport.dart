@@ -22,14 +22,12 @@ class _DrainSignal {
   bool goawayReceived = false;
 }
 
-/// HTTP/2 транспорт для клиентских RPC вызовов
+/// Client-side HTTP/2 transport: one [IRpcTransport] over one connection,
+/// multiplexing outgoing RPC calls on the gRPC-compatible wire format.
 ///
-/// Реализует IRpcTransport поверх HTTP/2 протокола для исходящих вызовов.
-/// Поддерживает мультиплексирование потоков и gRPC-совместимый протокол.
-///
-/// Реализует [IRpcSecurityPolicyAware]: слои эндпоинта определяют политику
-/// через `is`-проверку, поэтому транспорт, который её не объявляет, получает
-/// `const RpcSecurityPolicy()` вместо настроенной приложением.
+/// Declares [IRpcSecurityPolicyAware] because the endpoint layers find the
+/// policy with an `is` check: a transport that does not declare it silently
+/// gets `const RpcSecurityPolicy()` instead of the configured one.
 class RpcHttp2CallerTransport
     implements
         IRpcTransport,
@@ -60,13 +58,11 @@ class RpcHttp2CallerTransport
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
 
-  /// HTTP/2 соединение
   http2.ClientTransportConnection _connection;
 
-  /// Фабрика для повторного создания соединения при переподключении
+  /// Rebuilds the connection on [reconnect].
   final Future<http2.ClientTransportConnection> Function() _connectionFactory;
 
-  /// Контроллер для входящих сообщений
   final BufferedBroadcastController<RpcTransportMessage> _messageController =
       BufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
@@ -74,26 +70,24 @@ class RpcHttp2CallerTransport
 
   /// Per-stream dedicated controllers for [getMessagesForStream].
   ///
-  /// HTTP/2 already demultiplexes by stream natively, yet every message was
-  /// funnelled onto the shared broadcast above and then re-filtered per stream
-  /// (O(active-streams) per message). Each stream now gets its own controller
-  /// and messages are routed to it directly; the broadcast is still fed for
-  /// global consumers (and keeps the [RpcHttp2StreamError] envelope semantics).
+  /// HTTP/2 already demultiplexes by stream natively, so routing each message
+  /// straight to its own controller avoids re-filtering the shared broadcast
+  /// once per active stream per message. The broadcast is still fed for global
+  /// consumers, and keeps the [RpcHttp2StreamError] envelope semantics.
   final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
 
-  /// Счетчик для генерации Stream ID
-  int _nextStreamId = 1; // Клиент использует нечетные ID
+  /// Next outgoing stream id. The client side of HTTP/2 uses ODD ids.
+  int _nextStreamId = 1;
 
-  /// Активные HTTP/2 streams
+  /// Live HTTP/2 streams.
   final Map<int, http2.ClientTransportStream> _activeStreams = {};
 
   /// Backpressured writers, one per request stream.
   ///
-  /// `sendData` enqueues regardless of the server's window, so a server whose
-  /// handler stops consuming did not slow this client down at all: measured
-  /// against a deaf handler, the client pulled its entire 156.3 MiB request
-  /// while only 4.4 MiB was on the wire -- the remaining ~152 MiB sat in
-  /// package:http2's outgoing queue, in this process's memory.
+  /// `sendData` enqueues regardless of the server's window, so without a pump a
+  /// server whose handler stops consuming does not slow this client down at
+  /// all: the whole request is pulled into package:http2's outgoing queue, in
+  /// this process's memory, while a fraction of it is on the wire.
   ///
   /// Unlike the responder there is no header/data ordering to preserve here:
   /// HEADERS go out with `makeRequest`, so this sink only ever carries DATA.
@@ -102,10 +96,9 @@ class RpcHttp2CallerTransport
   RpcHttp2OutgoingPump _pumpFor(int streamId, http2.TransportStream stream) =>
       _outgoingPumps[streamId] ??= RpcHttp2OutgoingPump(stream);
 
-  /// Подписки на входящие сообщения streams
   final Map<int, StreamSubscription> _streamSubscriptions = {};
 
-  /// Парсеры для каждого stream (для фрагментированных сообщений)
+  /// Per-stream frame parsers, which carry the state for a fragmented message.
   final Map<int, RpcMessageParser> _streamParsers = {};
 
   /// Streams this side has already half-closed by sending END_STREAM.
@@ -121,10 +114,9 @@ class RpcHttp2CallerTransport
   ///
   /// package:http2 completes a stream's `incomingMessages` NORMALLY when the
   /// connection goes away mid-response, so `onDone` alone cannot tell a
-  /// finished call from a truncated one. Without this, a server stream cut off
-  /// by a dead peer was delivered to the consumer as a clean end -- partial
-  /// data reported as complete, with no error anywhere. The websocket and
-  /// isolate transports surface it as an error; only this one did not.
+  /// finished call from a truncated one. Without this a server stream cut off
+  /// by a dead peer reaches the consumer as a clean end — partial data reported
+  /// as complete, with no error anywhere.
   final Set<int> _statusReceived = {};
 
   /// Ids handed out by [createStream] that have not been retired yet.
@@ -149,27 +141,23 @@ class RpcHttp2CallerTransport
   final Set<int> _resetStreams = {};
   static const int _maxRememberedResetStreams = 1024;
 
-  /// Целевой хост
   final String _host;
 
-  /// Схема (http/https)
+  /// `http` or `https`.
   final String _scheme;
 
-  /// Порт подключения
   final int _port;
 
-  /// Флаг закрытия. Set ONLY by [close]; permanent.
+  /// Set ONLY by [close]; permanent.
   bool _isClosed = false;
 
   /// No live connection, but recovery is expected.
   ///
-  /// A failed [reconnect] used to set [_isClosed] instead, which conflated two
-  /// states that need opposite handling. [health] already read that flag as
-  /// "disconnected, reconnect required" and reported DEGRADED, while the send
-  /// paths read it as "closed" and the post-factory re-check in [reconnect]
-  /// read it as "the caller closed us" -- so the transport told you to
-  /// reconnect and then refused every attempt. One failed reconnect was
-  /// terminal, even when the connection had been perfectly healthy.
+  /// Distinct from [_isClosed], which is terminal. Conflate them and a failed
+  /// [reconnect] becomes permanent: [health] reads the flag as "reconnect
+  /// required" and reports DEGRADED, while the send paths and [reconnect]'s own
+  /// post-factory re-check read it as "the caller closed us" — so the transport
+  /// tells you to reconnect and then refuses every attempt.
   bool _disconnected = false;
 
   /// How often to PING an otherwise idle connection, and the ONLY way this
@@ -177,24 +165,14 @@ class RpcHttp2CallerTransport
   ///
   /// A NAT box, load balancer or mobile network that silently stops forwarding
   /// sends no FIN and no RST, so the socket still looks fine to both ends.
-  /// Measured through a TCP relay frozen mid-flight, which is exactly that:
+  /// Without a ping a call on that path hangs to its own deadline while
+  /// `health()` still reports the transport ready — and that second half is
+  /// what matters operationally: a supervisor polling health to decide whether
+  /// to reconnect sees green and never reconnects.
   ///
-  ///     no keepalive       : the call HUNG for the full 12s and died on the
-  ///                          caller's own timeout, while health() still
-  ///                          reported "HTTP/2 transport ready"
-  ///     pingInterval 2s    : the connection is torn down, the call fails
-  ///                          UNAVAILABLE, and health() reports it down
-  ///     control, no freeze : returned in 4ms
-  ///
-  /// The health() line is the one that matters operationally: a supervisor
-  /// polling health to decide whether to reconnect sees green and never
-  /// reconnects, so every call on that connection waits out its deadline.
-  ///
-  /// Defaults to null (OFF), so nothing changes for existing callers, and the
-  /// interval is left to the deployment for the same reason as everywhere else
-  /// here: too short wakes radios and wastes battery, too long leaves dead
-  /// connections resident. This is the client half of
-  /// `GRPC_ARG_KEEPALIVE_TIME_MS`.
+  /// Null (OFF) by default. The interval is a deployment question: too short
+  /// wakes radios and wastes battery, too long leaves dead connections
+  /// resident. This is the client half of `GRPC_ARG_KEEPALIVE_TIME_MS`.
   final Duration? _pingInterval;
 
   /// How long to wait for the PING ACK before declaring the path dead.
@@ -225,7 +203,6 @@ class RpcHttp2CallerTransport
     }
   }
 
-  /// Логгер
   final LogScope? _logger;
 
   final RpcSecurityPolicy _policy;
@@ -315,7 +292,7 @@ class RpcHttp2CallerTransport
     });
   }
 
-  /// Создает клиентский HTTP/2 транспорт через защищенное соединение.
+  /// Connects over TLS (h2), advertising ALPN `h2`.
   ///
   /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
   /// Proxy auth is taken from the URI's userinfo (`http://user:pass@proxy:3128`).
@@ -329,7 +306,7 @@ class RpcHttp2CallerTransport
     Duration? pingInterval,
     Duration? pingTimeout,
   }) async {
-    logger?.internal('Создание защищенного HTTP/2 соединения с $host:$port');
+    logger?.internal('Opening a secure HTTP/2 connection to $host:$port');
 
     final drainSignal = _DrainSignal();
 
@@ -365,7 +342,7 @@ class RpcHttp2CallerTransport
     }
 
     final connection = await createConnection();
-    logger?.internal('HTTP/2 соединение установлено');
+    logger?.internal('HTTP/2 connection established');
 
     return RpcHttp2CallerTransport._(
       connection: connection,
@@ -381,7 +358,7 @@ class RpcHttp2CallerTransport
     );
   }
 
-  /// Создает клиентский HTTP/2 транспорт поверх уже установленного сокета.
+  /// Wraps an ALREADY-ESTABLISHED socket.
   ///
   /// Use this when you need full control over the underlying connection — for
   /// example a TLS [SecureSocket] with custom certificate validation /
@@ -426,7 +403,7 @@ class RpcHttp2CallerTransport
     );
   }
 
-  /// Создает клиентский HTTP/2 транспорт через незащищенное соединение.
+  /// Connects in plaintext (h2c).
   ///
   /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
   /// Proxy auth is taken from the URI's userinfo (`http://user:pass@proxy:3128`).
@@ -440,7 +417,7 @@ class RpcHttp2CallerTransport
     Duration? pingInterval,
     Duration? pingTimeout,
   }) async {
-    logger?.internal('Создание HTTP/2 соединения с $host:$port');
+    logger?.internal('Opening an HTTP/2 connection to $host:$port');
 
     final drainSignal = _DrainSignal();
 
@@ -470,7 +447,7 @@ class RpcHttp2CallerTransport
     }
 
     final connection = await createConnection();
-    logger?.internal('HTTP/2 соединение установлено');
+    logger?.internal('HTTP/2 connection established');
 
     return RpcHttp2CallerTransport._(
       connection: connection,
@@ -486,30 +463,22 @@ class RpcHttp2CallerTransport
     );
   }
 
-  /// Establishes an HTTP/2 connection through an HTTP CONNECT proxy.
-  ///
-  /// The CONNECT handshake is performed with a single, persistent socket
-  /// subscription that is kept alive (non-TLS) or cancelled before TLS upgrade.
-  /// This avoids re-subscribing to a single-subscription Socket stream, which
-  /// would throw StateError when http2 tries to call socket.listen() again.
   /// How long a proxy has to answer CONNECT before the attempt is abandoned.
   ///
-  /// There was no timeout at all, and `connect()` is what an application
-  /// awaits at startup. Measured against a proxy that accepts the TCP
-  /// connection and then says nothing: connect() was still pending after 8s
-  /// and would never have settled.
+  /// Unbounded, this hangs an application at STARTUP: `connect()` is what it
+  /// awaits, and a proxy that accepts the TCP connection and then says nothing
+  /// leaves that future pending forever.
   static const Duration _proxyHandshakeTimeout = Duration(seconds: 30);
 
   /// Ceiling on a proxy's CONNECT response headers.
   ///
-  /// `headerBuf` grew until CRLFCRLF appeared, with no bound, so a proxy that
-  /// streams headers forever is an OOM on the client: measured at **268 MiB of
-  /// RSS in 6 seconds** and still climbing. A real CONNECT response is a status
-  /// line and a handful of headers; 64 KiB is already absurdly generous.
+  /// `headerBuf` accumulates until CRLFCRLF appears, so an unbounded read makes
+  /// a proxy that streams headers forever an OOM on the CLIENT. A real CONNECT
+  /// response is a status line and a handful of headers; 64 KiB is already
+  /// absurdly generous.
   ///
-  /// A proxy is a machine on the path and often not the operator's, so
-  /// trusting it without bound is the wrong default -- the same reasoning that
-  /// bounds a response body in e8c5bc9f.
+  /// A proxy is a machine on the path and often not the operator's, so trusting
+  /// it without bound is the wrong default.
   static const int _maxProxyHeaderBytes = 64 * 1024;
 
   /// Builds the http2 connection with the peer's header blocks bounded.
@@ -521,17 +490,14 @@ class RpcHttp2CallerTransport
   /// stream-state handling -- so the stream need not even exist and nothing
   /// above the transport can see it.
   ///
-  /// Measured against a hostile server that answers with HEADERS lacking
-  /// END_HEADERS and then CONTINUATION frames forever:
+  /// A hostile server answering with HEADERS that lack END_HEADERS and then
+  /// CONTINUATION frames forever costs the CLIENT more RSS than the same flood
+  /// costs the server, with the transport still reporting open throughout.
   ///
-  ///   64 MiB of frames -> client RSS +194.3 MiB, transport still reporting
-  ///                       open
-  ///
-  /// which is worse than the server side measured (+53.7 MiB) for the same
-  /// flood. "You dialed the server" is not a defence: a client gets pointed at
-  /// a compromised endpoint, and a proxy is a machine on the path that is often
-  /// not the operator's -- the same reasoning that bounds the CONNECT response
-  /// in [_maxProxyHeaderBytes] and the response body in e8c5bc9f.
+  /// "You dialed the server" is not a defence: a client gets pointed at a
+  /// compromised endpoint, and a proxy is a machine on the path that is often
+  /// not the operator's — the same reasoning that bounds the CONNECT response
+  /// in [_maxProxyHeaderBytes].
   ///
   /// [skipConnectionPreface] is false here and must stay false: the 24-octet
   /// preface travels client-to-server only, so a client that skipped 24 bytes
@@ -565,6 +531,12 @@ class RpcHttp2CallerTransport
     return http2.ClientTransportConnection.viaStreams(guarded, outgoing);
   }
 
+  /// Establishes an HTTP/2 connection through an HTTP CONNECT proxy.
+  ///
+  /// The handshake uses a SINGLE, persistent socket subscription — kept alive
+  /// for a plaintext tunnel, cancelled before the TLS upgrade. Re-subscribing
+  /// to a single-subscription Socket stream throws StateError the moment http2
+  /// calls `socket.listen()` again.
   static Future<http2.ClientTransportConnection> _connectH2ViaProxy({
     required Uri proxyUri,
     required String targetHost,
