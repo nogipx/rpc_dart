@@ -3,7 +3,7 @@ refines: U-23
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a package's public surface comes from a barrel that re-exports wholesale
 breaks: "wrong result: a type nobody meant to publish becomes a compatibility promise, and the implementation starts depending on its own public API."
-applied: [289, 290, 291, 292]
+applied: [289, 290, 291, 292, 307]
 status: confirmed (round 291)
 ---
 
@@ -67,6 +67,31 @@ but core's own tests. Hiding them broke no dependent package: 21 analysed clean.
 > basis. Measured in round 292: zero. Everyone using `Uint8List` already
 > imported it. A round's prose about the NEXT round is prose, and rule one
 > applies to it.
+
+**`rpc_dart_http2`, round 307 — the first application outside core.**
+
+    public top-level surface                 21 -> 4
+    declarations removed                           17
+    errors from the change  30, in 5 TEST files, 0 in lib/, 0 in any other package
+
+One line — `export 'rpc_http2_common.dart';` — published 18 declarations, of
+which 17 nothing outside the package used: header conversion in four directions,
+frame validation, the status mappers, `disableNagle`, the outgoing pump.
+`http2ErrorCodeFromMessage` parses an error code back out of an exception's
+message text because package:http2 exposes no field for it; publishing it
+promised that parsing.
+
+**The shape does not care about package size** (24k lines in core, 4.5k here),
+but unlike RPC-23's fusion it is NOT a corpus-wide property: the other three
+transports were checked and are clean. It is a property of one barrel, and three
+greps find it.
+
+> **A third-party re-export is the same question as an SDK one.**
+> `rpc_dart_isolate` has `export 'package:isolate_manager/...' show
+> isolateManagerCustomWorker;`. Checked and KEPT in 307: writing a web worker
+> needs that exact symbol, and it is `show`-limited to one name rather than
+> wholesale. Recorded so it is not re-litigated — the test is whether the
+> re-export is chosen and bounded, not whether it is foreign.
 
 ## Where the boundary reports itself
 

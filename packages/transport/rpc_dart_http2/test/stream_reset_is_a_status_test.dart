@@ -31,6 +31,7 @@ import 'dart:io';
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
+import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_common.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

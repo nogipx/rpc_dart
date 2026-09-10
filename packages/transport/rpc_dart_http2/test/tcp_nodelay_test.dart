@@ -31,6 +31,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 // `disableNagle` comes through the barrel: the package exports its whole
 // src/transports/http2 directory.
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
+import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_common.dart';
 import 'package:test/test.dart';
 
 /// IPPROTO_TCP / TCP_NODELAY, the same on macOS and Linux.
