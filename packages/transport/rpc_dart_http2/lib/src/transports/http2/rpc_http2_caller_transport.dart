@@ -728,10 +728,10 @@ class RpcHttp2CallerTransport
     }
 
     final streamId = _nextStreamId;
-    _nextStreamId += 2; // Клиент использует нечетные ID (1, 3, 5, ...)
+    _nextStreamId += 2; // Client ids are odd: 1, 3, 5, ...
     _reservedStreams.add(streamId);
 
-    _logger?.internal('Создан stream: $streamId');
+    _logger?.internal('Created stream $streamId');
     return streamId;
   }
 
@@ -739,31 +739,25 @@ class RpcHttp2CallerTransport
   bool releaseStreamId(int streamId) {
     if (_isClosed) return false;
 
-    _logger?.internal('Освобождение stream: $streamId');
+    _logger?.internal('Releasing stream $streamId');
 
-    // Release must not WRITE to the stream. This used to send
-    // `sendData(Uint8List(0), endStream: true)`, but by the time the pipeline
-    // releases an id the request direction is already finished -- every call
-    // ends with END_STREAM -- so that was a DATA frame on a half-closed
-    // (local) stream. package:http2 treats it as a connection error and
-    // terminates the CONNECTION, taking every other call on it down too, and
-    // the throw is asynchronous so the try/catch here never saw it.
+    // Release must NOT write to the stream. By the time the pipeline releases
+    // an id the request direction is already finished -- every call ends with
+    // END_STREAM -- so an empty `sendData(endStream: true)` here is a DATA
+    // frame on a half-closed (local) stream. package:http2 treats that as a
+    // CONNECTION error and terminates the connection, taking every other call
+    // on it down, and the throw is asynchronous so the try/catch below never
+    // sees it.
     //
-    // Measured on a default client/server pair, one connection:
-    //   before: 4 of 40 sequential unary calls, then "Connection error:
-    //           Connection is being forcefully terminated"
-    //   after : 40 of 40, and 8 of 8 concurrent rounds
-    //
-    // A stream that has NOT been half-closed yet is one the caller abandoned
-    // mid-request; RST_STREAM is the legal way to drop that, and terminate()
-    // is what resetStream already uses.
+    // A stream that has NOT been half-closed is one the caller abandoned
+    // mid-request; RST_STREAM is the legal way to drop that.
     final stream = _activeStreams.remove(streamId);
     if (stream != null && !_halfClosedLocal.contains(streamId)) {
       try {
         stream.terminate();
-        _logger?.internal('RST_STREAM для незавершённого stream $streamId');
+        _logger?.internal('RST_STREAM on unfinished stream $streamId');
       } catch (e) {
-        _logger?.internal('Не удалось сбросить stream $streamId: $e');
+        _logger?.internal('Could not reset stream $streamId: $e');
       }
     }
 
@@ -771,11 +765,9 @@ class RpcHttp2CallerTransport
     // awaiting sendMessage never unwinds once its stream is gone.
     _outgoingPumps.remove(streamId)?.dispose();
 
-    // Отменяем подписку на сообщения
     final subscription = _streamSubscriptions.remove(streamId);
     subscription?.cancel();
 
-    // Удаляем парсер и tracking для этого stream
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
     _halfClosedLocal.remove(streamId);
@@ -794,14 +786,13 @@ class RpcHttp2CallerTransport
   }) async {
     _ensureUsable();
 
-    // Получаем путь метода из метаданных
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
 
     _logger?.internal(
-      'Отправка метаданных для stream $streamId: $methodPath (endStream: $endStream)',
+      'Sending metadata for stream $streamId: $methodPath '
+      '(endStream: $endStream)',
     );
 
-    // Конвертируем RPC метаданные в HTTP/2 headers
     final headers = rpcMetadataToHttp2RequestHeaders(
       metadata,
       method: 'POST',
@@ -810,66 +801,34 @@ class RpcHttp2CallerTransport
       authority: _host,
     );
 
-    // Создаем HTTP/2 stream.
-    //
-    // A connection that is gone must be reported as UNAVAILABLE, not as
-    // package:http2's raw StateError. GOAWAY is the routine case, not an
-    // exotic one: every load balancer drains with it, and every gRPC server
+    // A connection that is gone must be reported as UNAVAILABLE, never as
+    // package:http2's raw StateError, which nothing above the transport can
+    // classify: RpcRetryInterceptor retries UNAVAILABLE and RESOURCE_EXHAUSTED
+    // and cannot act on a StateError at all. GOAWAY is the routine case, not an
+    // exotic one -- every load balancer drains with it, and every gRPC server
     // with a max-connection-age sends it on a schedule.
     //
-    // The bug this fixes is an inconsistency inside this one transport. The
-    // same underlying condition -- the peer's connection is gone -- produced
-    // two different answers:
-    //
-    //   connection dies MID-call  -> RpcStatusException(14) "No response
-    //                                received" (caller_pipeline), retryable
-    //   connection dead, NEW call -> StateError "The http/2 connection is no
-    //                                longer active", NOT retryable
-    //
-    // and only one of them is usable. RpcRetryInterceptor's default retries
-    // UNAVAILABLE and RESOURCE_EXHAUSTED, and its doc states the intent
-    // outright: "a lost connection becomes UNAVAILABLE". Measured against a
-    // raw package:http2 server that answered one call and then sent GOAWAY,
-    // with maxAttempts: 3 and attempts counted at the transport:
-    //
-    //   before: 1 attempt   (StateError is not a status, so not classifiable)
-    //   after : 3 attempts
-    //
-    // Same defect shape as e4756025, where non-200 statuses collapsing to
-    // INTERNAL made 502/503/504 permanently non-retryable.
-    //
     // This makes the failure CLASSIFIABLE; it does not by itself make a retry
-    // succeed on a dead connection -- that needs reconnect(), exactly as it
-    // already does for the mid-call UNAVAILABLE above. Both checks are here
-    // because isOpen can go false between the test and the call.
+    // succeed on a dead connection -- that needs reconnect(). Both checks are
+    // here because isOpen can go false between the test and the call.
     if (!_connection.isOpen) {
       // `ClientTransportConnection.isOpen` is
       //   !isFinishing && !isTerminated && canOpenStream
-      // so it folds a HEALTHY connection that is merely at the peer's
+      // so it folds a HEALTHY connection merely at the peer's
       // MAX_CONCURRENT_STREAMS (canOpenStream == false) together with a dead
       // one. Reporting the first as "the peer closed it or sent GOAWAY;
       // reconnect" is wrong three ways: the peer is alive, it sent no GOAWAY,
       // and reconnecting drops every in-flight call instead of waiting for a
-      // slot. Measured against a raw server advertising concurrentStreamLimit=1
-      // and holding the one stream open, the second call got exactly that
-      // UNAVAILABLE-GOAWAY-reconnect message.
+      // slot.
       //
-      // canOpenStream can only be false while streams are in flight
-      // (activeStreams < limit, limit >= 1), so our own active-stream count
-      // separates the cases: not-open WITH active streams is saturation,
-      // not-open with none is a finishing/terminated connection.
-      // GOAWAY outranks the saturation heuristic below, and must: a draining
-      // connection ALSO has streams in flight, so without this it was reported
-      // as "at MAX_CONCURRENT_STREAMS; the connection is healthy" for the whole
-      // drain -- advice to wait for a slot on a connection that is shutting
-      // down. Round 76 called that case transient and self-correcting, which
-      // held for a connection that was DYING (it converges in ~200ms) but not
-      // for a graceful drain, which can last as long as the server's budget.
+      // canOpenStream can only be false while streams are in flight, so our own
+      // active-stream count separates the cases: not-open WITH active streams
+      // is saturation, not-open with none is a finishing/terminated connection.
       //
-      // Measured against this package's own drained shutdown:
-      //   before : RpcStatusException(8) "at the server's MAX_CONCURRENT_STREAMS
-      //            limit ... the connection is healthy"
-      //   after  : RpcStatusException(14) "sent GOAWAY ... reconnect"
+      // GOAWAY outranks that heuristic and MUST: a draining connection also has
+      // streams in flight, so checking saturation first reports a shutting-down
+      // connection as "healthy, wait for a slot" for the whole drain -- which
+      // can last as long as the server's budget.
       if (_drainSignal.goawayReceived) {
         throw RpcStatusException(
           RpcStatus.unavailable,
@@ -906,13 +865,12 @@ class RpcHttp2CallerTransport
     if (endStream) _halfClosedLocal.add(streamId);
 
     _logger?.internal(
-      'HTTP/2 stream создан: $streamId (активных: ${_activeStreams.length})',
+      'HTTP/2 stream $streamId opened (active: ${_activeStreams.length})',
     );
 
-    // Настраиваем обработку входящих сообщений
     _setupStreamListener(streamId, stream, methodPath);
 
-    _logger?.internal('Метаданные отправлены для stream $streamId');
+    _logger?.internal('Metadata sent for stream $streamId');
   }
 
   @override
@@ -925,7 +883,8 @@ class RpcHttp2CallerTransport
     // cancellation metadata frame instead throws "Open state expected (was:
     // HalfClosedLocal)" asynchronously out of the http2 stream handler.
     _logger?.internal(
-      'Сброс stream $streamId через RST_STREAM${reason != null ? ': $reason' : ''}',
+      'Resetting stream $streamId with RST_STREAM'
+      '${reason != null ? ': $reason' : ''}',
     );
 
     // Tear the local side down FIRST. Terminating makes http2 surface the
@@ -965,33 +924,30 @@ class RpcHttp2CallerTransport
       throw StateError('Stream $streamId not found. Send metadata first.');
     }
 
-    _logger?.internal(
-      'Отправка данных для stream $streamId: ${data.length} байт (endStream: $endStream)',
-    );
-
     assert(
       isGrpcFrame(data),
-      'IRpcTransport.sendMessage ожидает gRPC frame с 5-байтовым префиксом',
+      'IRpcTransport.sendMessage expects a gRPC frame with a 5-byte prefix',
     );
 
     if (_halfClosedLocal.contains(streamId)) {
       // Already half-closed: another DATA frame is a connection error.
-      _logger?.warning(
-        'Отброшена отправка на уже завершённый stream $streamId',
-      );
+      _logger?.warning('Dropped a send on finished stream $streamId');
       return;
     }
 
-    // Отправляем данные через HTTP/2 как уже сформированный gRPC frame.
-    // Через pump: `sendData` не ждёт окно сервера, и запрос целиком оседал
-    // в исходящей очереди package:http2. См. [_outgoingPumps].
+    // Through the pump: `sendData` does not wait for the server's window, so
+    // the whole request would settle in package:http2's outgoing queue. See
+    // [_outgoingPumps].
     await _pumpFor(
       streamId,
       stream,
     ).add(http2.DataStreamMessage(data, endStream: endStream));
     if (endStream) _halfClosedLocal.add(streamId);
 
-    _logger?.internal('Данные отправлены для stream $streamId');
+    _logger?.internal(
+      'Sent ${data.length} byte(s) for stream $streamId '
+      '(endStream: $endStream)',
+    );
   }
 
   @override
@@ -1006,14 +962,12 @@ class RpcHttp2CallerTransport
     // the request direction, and a second END_STREAM would be a DATA frame on
     // a half-closed stream -- a CONNECTION error in HTTP/2.
     if (_halfClosedLocal.contains(streamId)) {
-      _logger?.internal('Stream $streamId уже завершён, повтор не нужен');
+      _logger?.internal('Stream $streamId is already finished; nothing to do');
       return;
     }
 
-    _logger?.internal('Завершение отправки для stream $streamId');
-
-    // Отправляем END_STREAM. Не ждём окно пира: половинное закрытие -- сигнал,
-    // а не полезная нагрузка, и оно не должно висеть на мёртвом пире.
+    // END_STREAM WITHOUT waiting on the peer's window: a half-close is a
+    // signal, not payload, and it must not hang on a dead peer.
     final pump = _outgoingPumps[streamId];
     if (pump != null) {
       pump.endStreamNow();
@@ -1022,7 +976,7 @@ class RpcHttp2CallerTransport
     }
     _halfClosedLocal.add(streamId);
 
-    _logger?.internal('Отправка завершена для stream $streamId');
+    _logger?.internal('Finished sending for stream $streamId');
   }
 
   Map<String, Object?> _buildHealthDetails() => {
@@ -1038,21 +992,19 @@ class RpcHttp2CallerTransport
     'messageControllerClosed': _messageController.isClosed,
   };
 
-  /// Настраивает обработчик входящих сообщений для HTTP/2 stream
+  /// Subscribes to one stream's incoming messages.
   void _setupStreamListener(
     int streamId,
     http2.ClientTransportStream stream,
     String methodPath,
   ) {
-    _logger?.internal('Настройка обработчика для stream $streamId');
-
     final subscription = stream.incomingMessages.listen(
       (http2.StreamMessage message) {
         _handleIncomingMessage(streamId, message, methodPath);
       },
       onError: (error, stackTrace) {
         _logger?.error(
-          'Ошибка в stream $streamId',
+          'Error on stream $streamId',
           error: error,
           stackTrace: stackTrace,
         );
@@ -1133,16 +1085,15 @@ class RpcHttp2CallerTransport
         _emitStreamError(streamId, error, stackTrace);
       },
       onDone: () {
-        _logger?.internal('Stream $streamId завершен');
+        _logger?.internal('Stream $streamId ended');
 
         if (_statusReceived.contains(streamId)) {
-          // Отправляем сообщение о завершении потока
           _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
         } else {
           // No trailers and no Trailers-Only status: the response was cut off.
-          // Reporting a clean end here handed the consumer partial data as if
-          // it were complete -- a server stream truncated by a dead peer looked
-          // exactly like one that finished.
+          // Reporting a clean end here would hand the consumer partial data as
+          // if it were complete -- a server stream truncated by a dead peer
+          // looking exactly like one that finished.
           _logger?.warning(
             'Stream $streamId ended without a gRPC status; reporting '
             'UNAVAILABLE rather than a clean end',
@@ -1169,7 +1120,6 @@ class RpcHttp2CallerTransport
           );
         }
 
-        // Очищаем ресурсы
         _activeStreams.remove(streamId);
         _streamSubscriptions.remove(streamId);
         _streamParsers.remove(streamId);
@@ -1183,25 +1133,21 @@ class RpcHttp2CallerTransport
     _streamSubscriptions[streamId] = subscription;
   }
 
-  /// Обрабатывает входящее сообщение от HTTP/2 stream
+  /// Dispatches one incoming frame to the headers or data handler.
   void _handleIncomingMessage(
     int streamId,
     http2.StreamMessage message,
     String methodPath,
   ) {
-    // Убираем избыточное логирование - оставляем только в конкретных обработчиках
-
     try {
       if (message is http2.HeadersStreamMessage) {
-        // Обрабатываем входящие headers (метаданные)
         _handleHeadersMessage(streamId, message, methodPath);
       } else if (message is http2.DataStreamMessage) {
-        // Обрабатываем входящие данные
         _handleDataMessage(streamId, message, methodPath);
       }
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при обработке сообщения stream $streamId',
+        'Error handling a message on stream $streamId',
         error: e,
         stackTrace: stackTrace,
       );
@@ -1210,7 +1156,7 @@ class RpcHttp2CallerTransport
     }
   }
 
-  /// Обрабатывает входящие HTTP/2 headers (initial response or trailers).
+  /// Handles an incoming HEADERS frame (initial response or trailers).
   void _handleHeadersMessage(
     int streamId,
     http2.HeadersStreamMessage message,
@@ -1257,7 +1203,7 @@ class RpcHttp2CallerTransport
       _initialHeadersReceived.add(streamId);
     }
 
-    // Конвертируем HTTP/2 headers в RPC метаданные (pseudo-headers отфильтрованы)
+    // Pseudo-headers are filtered out by the converter.
     // A client is exposed to the same flood from the server it dialled.
     final metadata = http2HeadersToRpcMetadata(
       message.headers,
@@ -1311,7 +1257,7 @@ class RpcHttp2CallerTransport
       }
     }
 
-    // Создаем транспортное сообщение
+    // Build the transport message.
     final transportMessage = RpcTransportMessage(
       streamId: streamId,
       metadata: metadata,
@@ -1322,14 +1268,14 @@ class RpcHttp2CallerTransport
     _emit(transportMessage);
   }
 
-  /// Обрабатывает входящие HTTP/2 данные
+  /// Parses an incoming DATA frame into gRPC messages and emits them.
   void _handleDataMessage(
     int streamId,
     http2.DataStreamMessage message,
     String methodPath,
   ) {
     try {
-      // Получаем или создаем парсер для этого stream
+      // One parser per stream, created on first data.
       if (_streamParsers.length >= _policy.maxActiveStreams &&
           !_streamParsers.containsKey(streamId)) {
         throw RpcException(
@@ -1346,16 +1292,15 @@ class RpcHttp2CallerTransport
         ),
       );
 
-      // Распаковываем gRPC frame(s) используя RpcMessageParser
+      // Decode the gRPC frame(s) in this chunk.
       final bytes = message.bytes is Uint8List
           ? message.bytes as Uint8List
           : Uint8List.fromList(message.bytes);
       final messages = parser(bytes);
 
-      // Отправляем каждое сообщение отдельно.
-      // END_STREAM применяется только к действительно последнему сообщению
-      // батча — сравнение по индексу, а не по значению (Uint8List сравнивается
-      // по идентичности, что ломается при повторе одной и той же ссылки).
+      // END_STREAM belongs to the last message of the batch only, matched by
+      // INDEX rather than by value: Uint8List compares by identity, which
+      // breaks the moment the same reference appears twice.
       // A DATA frame carrying END_STREAM does NOT end the gRPC call unless a
       // status has already arrived.
       //
@@ -1392,11 +1337,11 @@ class RpcHttp2CallerTransport
       }
 
       _logger?.internal(
-        'Обработано ${messages.length} сообщений для stream $streamId',
+        'Parsed ${messages.length} message(s) for stream $streamId',
       );
     } catch (e, stackTrace) {
       _logger?.error(
-        'Ошибка при распаковке gRPC данных для stream $streamId',
+        'Error decoding gRPC data for stream $streamId',
         error: e,
         stackTrace: stackTrace,
       );
@@ -1527,7 +1472,7 @@ class RpcHttp2CallerTransport
     // cancellation was a transport failure.
     if (_resetStreams.contains(streamId)) {
       _logger?.internal(
-        'Подавлена ошибка для сброшенного stream $streamId: $error',
+        'Suppressed an error for reset stream $streamId: $error',
       );
       return;
     }
@@ -1676,7 +1621,7 @@ class RpcHttp2CallerTransport
       );
     }
 
-    _logger?.info('Попытка переподключения HTTP/2 клиента к $_host:$_port');
+    _logger?.info('Reconnecting the HTTP/2 client to $_host:$_port');
 
     // terminate(), not finish(). finish() writes a GOAWAY, and reconnect is
     // called precisely when the connection is already gone -- either the peer
@@ -1700,7 +1645,7 @@ class RpcHttp2CallerTransport
       try {
         await subscription.cancel();
       } catch (e) {
-        _logger?.warning('Ошибка при отмене подписки: $e');
+        _logger?.warning('Error cancelling a subscription: $e');
       }
     }
     _streamSubscriptions.clear();
@@ -1780,7 +1725,7 @@ class RpcHttp2CallerTransport
       // the timer) is left with no keepalive at all — blind again after exactly
       // the first drop, which is when a flaky path is most likely.
       _startKeepalive();
-      _logger?.info('HTTP/2 клиент успешно переподключен');
+      _logger?.info('HTTP/2 client reconnected');
       return RpcHealthStatus.healthy(
         component: runtimeType.toString(),
         message: 'HTTP/2 connection re-established',
@@ -1793,7 +1738,7 @@ class RpcHttp2CallerTransport
       // could never recover.
       _disconnected = true;
       _logger?.error(
-        'Не удалось переподключить HTTP/2 клиент',
+        'Failed to reconnect the HTTP/2 client',
         error: error,
         stackTrace: stackTrace,
       );
@@ -1813,7 +1758,7 @@ class RpcHttp2CallerTransport
   Future<void> close() async {
     if (_isClosed) return;
 
-    _logger?.info('Закрытие HTTP/2 транспорта');
+    _logger?.info('Closing the HTTP/2 transport');
     _isClosed = true;
     // Stop probing before anything is torn down: a ping issued against a
     // connection this method is about to terminate would fail and re-run the
@@ -1821,63 +1766,48 @@ class RpcHttp2CallerTransport
     _keepalive?.cancel();
     _keepalive = null;
 
-    // Даем серверу время на завершение обработки активных потоков
+    // A short grace period for streams still finishing.
     if (_activeStreams.isNotEmpty) {
-      _logger?.internal(
-        'Ожидание завершения ${_activeStreams.length} активных потоков',
-      );
+      _logger?.internal('Waiting on ${_activeStreams.length} active stream(s)');
       await Future.delayed(Duration(milliseconds: 50));
     }
 
-    // Abort EVERY remaining stream, half-closed ones included.
+    // Abort EVERY remaining stream, half-closed ones INCLUDED.
     //
-    // This used to skip streams already half-closed locally, which is every
-    // ordinary unary call (they send endStream: true with the request). Those
-    // streams were left open on the wire -- and then, a few lines below, their
-    // subscriptions were cancelled and their controllers closed, so no response
-    // could ever reach the caller. `finish()` at the end of this method then
-    // waited for exactly those streams to complete.
+    // Skipping the half-closed ones means skipping every ordinary unary call,
+    // since those send endStream: true with the request. Those streams stay
+    // open on the wire while the lines below cancel their subscriptions and
+    // close their controllers -- so no response can reach the caller -- and
+    // `finish()` at the end of this method then waits for exactly them. That
+    // blocks shutdown for up to the graceful budget on work whose answer has
+    // already been made undeliverable; the wait cannot rescue a call, it only
+    // delays close().
     //
-    // So close() blocked for up to the graceful budget on work whose answer it
-    // had already made undeliverable. Measured against the websocket sibling
-    // running the identical scenario (2s handler, close() 300ms in):
-    //
-    //     websocket : close() 5 ms,    call UNAVAILABLE at 314 ms
-    //     http2     : close() 1734 ms, call UNAVAILABLE at 2043 ms
-    //
-    // and decisively, with a 600ms handler so the response lands well INSIDE
-    // the wait: close() took 339ms, the response arrived -- and the call still
-    // failed UNAVAILABLE at 648ms. The wait cannot rescue a call; it only
-    // delays shutdown.
-    //
-    // RST_STREAM is legal on a half-closed stream (it is how `resetStream`
-    // cancels one, and the only legal way to abort after END_STREAM). The rule
-    // the old filter came from is about DATA, not RST: never send DATA on a
-    // stream whose request direction is finished.
+    // RST_STREAM is legal on a half-closed stream, and is the only legal way to
+    // abort after END_STREAM. The rule that suggests otherwise is about DATA,
+    // not RST: never send DATA on a stream whose request direction is finished.
     final streamsToClose = _activeStreams.values.toList();
     for (final stream in streamsToClose) {
       try {
         stream.terminate();
-        _logger?.internal('RST_STREAM для stream ${stream.id} при закрытии');
+        _logger?.internal('RST_STREAM on stream ${stream.id} during close');
       } catch (e) {
-        _logger?.warning('Ошибка при закрытии stream ${stream.id}: $e');
-        // В крайнем случае используем terminate
+        _logger?.warning('Error closing stream ${stream.id}: $e');
         try {
           stream.terminate();
         } catch (e2) {
-          _logger?.warning('Ошибка при terminate stream ${stream.id}: $e2');
+          _logger?.warning('Error terminating stream ${stream.id}: $e2');
         }
       }
     }
     _activeStreams.clear();
 
-    // Отменяем все подписки (копируем список)
     final subscriptionsToCancel = List.from(_streamSubscriptions.values);
     for (final subscription in subscriptionsToCancel) {
       try {
         await subscription.cancel();
       } catch (e) {
-        _logger?.warning('Ошибка при отмене подписки: $e');
+        _logger?.warning('Error cancelling a subscription: $e');
       }
     }
     _streamSubscriptions.clear();
@@ -1887,45 +1817,34 @@ class RpcHttp2CallerTransport
     }
     _outgoingPumps.clear();
 
-    // Очищаем парсеры и tracking
     _streamParsers.clear();
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
     _reservedStreams.clear();
     _statusReceived.clear();
 
-    // Закрываем per-stream контроллеры
     for (final ctl in _streamControllers.values) {
       if (!ctl.isClosed) unawaited(ctl.close());
     }
     _streamControllers.clear();
 
-    // Закрываем контроллер сообщений
     if (!_messageController.isClosed) {
       try {
         await _messageController.close();
       } catch (e) {
-        _logger?.warning('Ошибка при закрытии контроллера сообщений: $e');
+        _logger?.warning('Error closing the message controller: $e');
       }
     }
 
-    // Закрываем HTTP/2 соединение.
-    //
     // BOUNDED, then forceful. `finish()` is the graceful HTTP/2 shutdown: it
     // sends GOAWAY and waits for open streams to drain. Over a HALF-OPEN path
-    // the peer never drains anything, so that await never completes and
-    // close() hangs forever. Measured with one call in flight:
-    //
-    //   live path : close() returned in 104 ms
-    //   half-open : close() NEVER returned (still pending at 20.4 s)
-    //
-    // The in-flight stream is the load-bearing condition -- with none open,
-    // finish() returns promptly even on a dead path, which is why a first
-    // probe without one wrongly reported no hang.
+    // the peer drains nothing, so that await never completes and close() hangs
+    // forever -- with an in-flight stream as the load-bearing condition, since
+    // with none open finish() returns promptly even on a dead path.
     //
     // Timing out alone is not enough: Future.timeout abandons the await, not
-    // the work, so the connection would stay alive and unreferenced. terminate()
-    // is what actually releases it, and is the right primitive on a dead
+    // the work, so the connection would stay alive and unreferenced.
+    // terminate() is what releases it, and is the right primitive on a dead
     // connection anyway -- finish() on one throws from package:http2 into the
     // root zone.
     try {
@@ -1937,11 +1856,11 @@ class RpcHttp2CallerTransport
       try {
         _connection.terminate();
       } catch (e2) {
-        _logger?.warning('Ошибка при закрытии HTTP/2 соединения: $e2');
+        _logger?.warning('Error closing the HTTP/2 connection: $e2');
       }
     }
 
-    _logger?.info('HTTP/2 транспорт закрыт');
+    _logger?.info('HTTP/2 transport closed');
   }
 
   @override
