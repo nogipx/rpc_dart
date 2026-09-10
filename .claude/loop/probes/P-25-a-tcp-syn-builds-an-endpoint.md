@@ -38,6 +38,16 @@ http2  ping               0          200                 -
 websocket                  0            0                 -
 ```
 
+Round 275 added the `off` and `preface` arms when it shipped `prefaceTimeout`;
+`off` is the ablation and reproduces the row above.
+
+```
+arm      prefaceTimeout  bytes sent  endpoints after 2s
+off      null            0                  200
+default  500ms           0                    0
+preface  500ms           24                 200
+```
+
 > **Poll for the release, do not sleep for it.** A first run slept 2s after
 > destroying the peers, read `endpoints 200` and nearly reported a leak. Polling
 > to a 15s deadline gives `endpoints 0, contracts disposed 201` — the teardown is

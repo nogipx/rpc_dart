@@ -3,8 +3,8 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274]
-status: confirmed (round 274)
+applied: [272, 274, 275]
+status: confirmed (round 275)
 ---
 
 # RPC-22 — The path a peer reaches without being accepted
@@ -89,6 +89,24 @@ sending zero bytes:
 > four, and nothing counts connections. Ask where the FIRST counter sits, then
 > ask what an attacker can do before reaching it.
 
-Deferred as B-27 (owner decision on the default). Bench
-`../probes/P-25-a-tcp-syn-builds-an-endpoint.md`; round
-`../rounds/274-work-before-the-peer-speaks.md`.
+Deferred as B-27; the owner chose the deadline and round 275 shipped it
+(`prefaceTimeout`, 30s, armed on accept and disarmed by the connection preface).
+
+> **Price a pre-protocol bound in BYTES the attacker must send, before shipping
+> it.** The fix was first proposed as "disarm on the first inbound byte", which
+> raises the attacker's cost from 0 to 1. Binding it to the 24-octet preface
+> raises it to 24. Measured, that is the whole difference:
+>
+>     arm      bytes sent  endpoints after 2s
+>     default      0                0
+>     preface     24              200
+>
+> So a deadline of this kind bounds traffic that never speaks the protocol —
+> scanners, TLS probes, a load balancer that pre-warms TCP — and buys nothing
+> against a peer that is willing to conform. The second stage needs a different
+> mechanism, and here it already existed: the keepalive. Say which stage a bound
+> covers, or it will be read as covering both.
+
+Bench `../probes/P-25-a-tcp-syn-builds-an-endpoint.md`; rounds
+`../rounds/274-work-before-the-peer-speaks.md` and
+`../rounds/275-a-deadline-on-saying-nothing.md`.

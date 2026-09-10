@@ -88,6 +88,7 @@ class RpcHttp2Server implements IRpcServer {
     transportWrapper,
     Duration? pingInterval,
     Duration? pingTimeout,
+    Duration? prefaceTimeout = const Duration(seconds: 30),
   }) : _host = host,
        _port = port,
        _securityPolicy = securityPolicy,
@@ -100,7 +101,40 @@ class RpcHttp2Server implements IRpcServer {
        _onConnectionClosed = onConnectionClosed,
        _transportWrapper = transportWrapper,
        _pingInterval = pingInterval,
-       _pingTimeout = pingTimeout;
+       _pingTimeout = pingTimeout,
+       _prefaceTimeout = prefaceTimeout;
+
+  /// How long an ACCEPTED socket may go without sending the HTTP/2 connection
+  /// preface before it is dropped. Null disables the deadline.
+  ///
+  /// [_handleConnection] is wired to the accept stream, so everything it builds
+  /// — the transport, the endpoint, and [_onEndpointCreated], where the
+  /// application registers its contracts — is built before the peer has sent a
+  /// byte. Every limit this server has is PER CONNECTION, so `maxActiveStreams`,
+  /// `maxConcurrentHandlers`, `halfOpenStreamTimeout` and the pre-method budget
+  /// are all downstream of a peer that has not opened a stream. Nothing counted
+  /// connections. Measured with 200 sockets sending zero bytes:
+  ///
+  ///     endpoints 200, contracts built 200      <- before
+  ///     endpoints   0, contracts built   0      <- after, at this deadline
+  ///
+  /// against 0 and 0 on the websocket server, which only builds an endpoint for
+  /// an ALREADY-UPGRADED connection.
+  ///
+  /// **What it is and is not for.** It bounds traffic that never speaks HTTP/2
+  /// at all: port scanners, TLS probes, misdirected HTTP/1.1 clients, a stuck
+  /// load balancer. It is NOT a defence against a determined attacker, who
+  /// simply sends the 24 preface bytes — from that point the connection is a
+  /// conforming idle client and [_pingInterval] is the mechanism that reclaims
+  /// it. Two stages, two mechanisms; this one is the cheap half, and it is the
+  /// half that is on by default.
+  ///
+  /// 30s is three orders of magnitude of slack: a conforming client sends the
+  /// preface within one RTT, and under TLS the socket is only handed here after
+  /// the handshake. **A client that opens the TCP connection eagerly and speaks
+  /// HTTP/2 much later — some load balancers pre-warm this way — is dropped**;
+  /// pass null to keep the old behaviour.
+  final Duration? _prefaceTimeout;
 
   /// How often to send an HTTP/2 PING on an otherwise idle connection, and the
   /// only way this server detects a HALF-OPEN one.
@@ -577,6 +611,11 @@ class RpcHttp2Server implements IRpcServer {
     // throwing onEndpointCreated is ordinary, because that callback is where
     // the application registers its contracts.
     RpcResponderEndpoint? created;
+    // Armed before anything is built, cancelled by the preface below and by the
+    // release wiring. See [_prefaceTimeout]: without it a TCP SYN buys an
+    // endpoint and a run of the application's callback, held for as long as the
+    // peer keeps the socket open.
+    Timer? prefaceDeadline;
 
     try {
       // Создаем HTTP/2 соединение.
@@ -607,6 +646,10 @@ class RpcHttp2Server implements IRpcServer {
             ),
           );
           socket.destroy();
+        },
+        onPrefaceComplete: () {
+          prefaceDeadline?.cancel();
+          prefaceDeadline = null;
         },
       );
       final connection = http2.ServerTransportConnection.viaStreams(
@@ -682,6 +725,22 @@ class RpcHttp2Server implements IRpcServer {
       // `socket.done` release wiring is only installed after it.
       created = endpoint;
 
+      // Armed here rather than at the top of the method so it can name the
+      // endpoint it releases; the preface cannot have arrived yet, because
+      // nothing has subscribed to the guarded stream until endpoint.start().
+      final deadline = _prefaceTimeout;
+      if (deadline != null) {
+        prefaceDeadline = Timer(deadline, () {
+          prefaceDeadline = null;
+          _logger?.warning(
+            'Dropping $clientAddress: no HTTP/2 connection preface within '
+            '${deadline.inSeconds}s',
+          );
+          _releaseEndpoint(endpoint, socket);
+          socket.destroy();
+        });
+      }
+
       // Уведомляем о создании endpoint'а
       _onEndpointCreated?.call(endpoint);
 
@@ -700,6 +759,7 @@ class RpcHttp2Server implements IRpcServer {
           .then((_) {
             _logger?.debug('HTTP/2 соединение $clientAddress закрыто');
             keepalive?.cancel();
+            prefaceDeadline?.cancel();
             _releaseEndpoint(endpoint, socket);
           })
           .catchError((error) {
@@ -707,9 +767,11 @@ class RpcHttp2Server implements IRpcServer {
               'Ошибка при закрытии соединения $clientAddress: $error',
             );
             keepalive?.cancel();
+            prefaceDeadline?.cancel();
             _releaseEndpoint(endpoint, socket);
           });
     } catch (e, stackTrace) {
+      prefaceDeadline?.cancel();
       _logger?.error(
         'Ошибка при создании HTTP/2 RPC соединения',
         error: e,

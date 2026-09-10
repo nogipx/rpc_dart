@@ -1,5 +1,5 @@
 ---
-status: open
+status: open — half discharged (round 275)
 round: 274
 commit: 508fba09
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
@@ -69,4 +69,23 @@ it, any peer holds N endpoints with N SYNs and zero bytes.
 
 ## Owner decision
 
-—
+**Fix 2, the deadline — chosen in the session after round 274, shipped as round
+275.** `RpcHttp2Server.prefaceTimeout`, default 30s, armed on accept and
+disarmed by the connection preface through a new `onPrefaceComplete` on the
+header-block guard. 200 silent sockets: endpoints 200 -> 0.
+
+Two things the round had to correct about the option as it was put:
+
+- Disarming on the FIRST BYTE, as the question sketched it, is worthless — the
+  attacker sends one byte. The preface version only raises the cost to 24. What
+  the deadline actually buys is a bound on traffic that never speaks HTTP/2 at
+  all: scanners, TLS probes, a stuck load balancer. Against a determined peer it
+  buys nothing, and `pingInterval` — which round 274's control proved already
+  works — is the mechanism for that half. **Its default is still null, and that
+  is the larger open decision.**
+- The default is a behaviour change: a client that opens TCP eagerly and speaks
+  HTTP/2 much later is now dropped. Null restores the old behaviour.
+
+**Fix 1 remains open.** Deferring construction until the peer speaks is still
+the correct shape — it removes the work rather than bounding the hold — and is
+still larger than a round.

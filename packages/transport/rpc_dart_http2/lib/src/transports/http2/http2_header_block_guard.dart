@@ -40,6 +40,10 @@ import 'dart:typed_data';
 /// silently disables the guard in one direction and corrupts parsing in the
 /// other -- see [_HeaderBlockScanner._connectionPrefaceSize].
 /// [onGoaway], when given, fires the first time the peer sends a GOAWAY frame.
+/// [onPrefaceComplete], when given, fires once the peer has finished sending
+/// the 24-octet connection preface — i.e. the first evidence that an accepted
+/// socket is an HTTP/2 client at all. Only meaningful with
+/// [skipConnectionPreface] true.
 ///
 /// This scanner is the only place in the transport that sees raw frames, and
 /// package:http2 exposes no "the peer is draining" signal of its own —
@@ -53,12 +57,14 @@ Stream<List<int>> guardHttp2HeaderBlock(
   required void Function(int observedBytes) onViolation,
   bool skipConnectionPreface = true,
   void Function()? onGoaway,
+  void Function()? onPrefaceComplete,
 }) {
   final controller = StreamController<List<int>>();
   final scanner = _HeaderBlockScanner(
     maxHeaderBlockBytes,
     skipConnectionPreface: skipConnectionPreface,
     onGoaway: onGoaway,
+    onPrefaceComplete: onPrefaceComplete,
   );
   late StreamSubscription<List<int>> sub;
   var violated = false;
@@ -103,8 +109,10 @@ class _HeaderBlockScanner {
     this._max, {
     required bool skipConnectionPreface,
     void Function()? onGoaway,
+    void Function()? onPrefaceComplete,
   }) : _prefaceRemaining = skipConnectionPreface ? _connectionPrefaceSize : 0,
-       _onGoaway = onGoaway;
+       _onGoaway = onGoaway,
+       _onPrefaceComplete = onPrefaceComplete;
 
   static const int _frameHeaderSize = 9;
   static const int _typeHeaders = 0x1;
@@ -117,6 +125,15 @@ class _HeaderBlockScanner {
 
   final void Function()? _onGoaway;
   bool _goawaySeen = false;
+
+  /// Fires once, when the peer has finished sending the connection preface.
+  ///
+  /// The scanner is the only thing in the transport that sees raw bytes before
+  /// package:http2 does, so it is the only place that can tell "this peer has
+  /// begun speaking HTTP/2" from "this peer has been accepted". Never fires when
+  /// [skipConnectionPreface] is false, because in that direction there is no
+  /// preface to complete.
+  final void Function()? _onPrefaceComplete;
 
   /// Length of the client connection preface, RFC 9113 s3.4: the 24-octet
   /// sequence "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" that opens every client-to-
@@ -152,6 +169,7 @@ class _HeaderBlockScanner {
             : _prefaceRemaining;
         i += skip;
         _prefaceRemaining -= skip;
+        if (_prefaceRemaining == 0) _onPrefaceComplete?.call();
         continue;
       }
       if (_payloadRemaining > 0) {
