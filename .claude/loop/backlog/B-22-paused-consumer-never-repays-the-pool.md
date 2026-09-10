@@ -334,8 +334,30 @@ methods' own rule arriving late: *check the QUANTITY through a metric, not
 through an indirect consequence*, and *a canary that unexpectedly passes means
 the test is wrong*.
 
-**The arm, fifth and last version:** owe more than half the connection window at
-forget — e.g. a 256 KiB connection window with 200 KiB outstanding, or 1 MiB
+### Round 264 built that fifth version too, and it ALSO passes
+
+Connection window 256 KiB, grant threshold 128 KiB, 160 KiB owed across the
+forget — comfortably above the batching threshold that round 263 blamed. With
+the unconditional repay and no mark, the test still passed. So the batching
+explanation is incomplete: crossing the threshold is necessary and not
+sufficient, and where the second grant goes is still unaccounted for.
+
+**Five designs, five passes, and the honest reading is that the mechanism is not
+understood well enough to witness.** Continuing to invent shapes blind is what
+the last five rounds already did. The next round either traces the grant —
+`_fcSendConnGrant` out, `xConnWindowUpdate` in, and what the sender does with a
+second one — or B-22 is parked the way B-25 was.
+
+**Two corrections owed on the record.** Round 263's batching account is now only
+partial. And the guard test was committed in `40d4304d` even though that
+commit's message says it stayed untracked: `git add packages/core/rpc_dart`
+swept the untracked file in, and the post-commit check read `git status` (clean,
+because the file had been added) instead of the commit's contents. It is kept
+and relabelled as a guard rather than removed, since the invariant is worth
+pinning and the five dead shapes are worth recording.
+
+**The arm's fifth version, for the record:** owe more than half the connection
+window at forget — e.g. a 256 KiB connection window with 200 KiB outstanding, or 1 MiB
 with 600 KiB — then forget, then drain, and assert the SENDER's
 `flowControlConnectionCredit` never exceeds the configured window. Below the
 threshold nothing is observable at all, which is the one thing every earlier
