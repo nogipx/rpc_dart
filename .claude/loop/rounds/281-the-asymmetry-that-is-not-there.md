@@ -37,8 +37,29 @@ ChannelTransport._fcOnConsumed     line 1012  if (bytes == 0) return;
 ```
 
 Nothing is charged for a metadata frame and nothing is credited back. The two
-ends agree, so no credit can leak, and the six sites are consistent with each
-other. **There is no third instance of the round 279/280 defect here.**
+ends agree, so no credit can leak. **There is no third instance of the round
+279/280 defect here.**
+
+**Correction, added later: "and the six sites are consistent with each other"
+was an ASSUMPTION when this round wrote it.** Two of the six are
+`ChannelTransport`'s and were read; the other four are http2's and were not — I
+generalised from one transport to the other. Read since:
+
+```
+rpc_http2_responder_transport.dart:880  _fcDischarge(id, payload?.length ?? 0)
+rpc_http2_responder_transport.dart:890  _fcOnDelivered(id, payload?.length ?? 0)
+```
+
+The conclusion holds and the model is different, which is why the check was
+worth doing rather than assuming. http2 keeps a LOCAL outstanding-bytes budget
+(`_fcOutstanding`) instead of a peer-window credit protocol, and past
+`_fcWindow` it REFUSES the call rather than throttling. Charge and discharge use
+the same expression, so they are symmetric and nothing leaks — but the residual
+lands differently: a metadata flood never trips `_fcRefuseOverrun`, which is
+round 282's finding arriving at the same place by another road.
+
+> **"Consistent with each other" is a claim about code you have read.** Six
+> sites were named; two were read; the sentence covered all six.
 
 ## Mechanism
 
