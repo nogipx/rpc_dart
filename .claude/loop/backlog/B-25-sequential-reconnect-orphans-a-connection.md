@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 247)
+status: closed (round 262)
 round: 241
 commit: aaa5806d
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
@@ -216,7 +216,21 @@ to the bottom — but nobody should read this section as closing in. The owner's
 
 ## Owner decision
 
-**Hunt the mechanism first** (round 247). Do NOT spend 2000 cycles an arm on a
+**PARKED** (round 262). Six rounds of hunting eliminated three accounts without
+finding the cause, and the owner's answer to "redo the race test / buy the rate
+/ park it" was to park it. No further rounds take this lead.
+
+What is banked, and it is why parking is cheap: the leak is measured (5 orphans
+in 390 direct cycles, always a DISCARDED connection, never the live one), the
+failing test is named, three wrong explanations are recorded with their
+disproofs, and the one untried variable — a discard racing a concurrent connect,
+which every probe so far did in isolation — is written down with the three-arm
+design it needs. Whoever picks this up starts there, not at the top.
+
+Reopen it when it costs something real in production; the numbers here will
+still be true, and `loop.py stale` will say what has moved underneath them.
+
+**Hunt the mechanism first** (round 247, superseded). Do NOT spend 2000 cycles an arm on a
 rate comparison. Find what makes the outgoing sink's close fail to reach the
 peer in ~1.3% of discards; a deterministic reproduction gives a real canary and
 makes the powered rate measurement unnecessary.

@@ -290,6 +290,18 @@ does not, the leak is in the ledger and the mark alone would not fix it.
 
 ## Owner decision
 
+**Expose the connection credit, then finish** (round 262). The owner authorised
+adding the connection credit to `_buildHealthDetails`, beside `owedConn`, purely
+so the third canary arm can READ the number instead of inferring it — both
+inferring designs are disproved above. The diagnostics surface grows by one key
+that exists for testing, and that is the accepted cost.
+
+The finishing round therefore: adds the field; writes the arm (forget a stream
+whose consumer is attached, drain it afterwards, assert the credit did not grow
+past the configured window); watches it FAIL with the unconditional repay and no
+mark; applies the four edits from round 249's record; watches it pass; runs all
+three arms and the gate.
+
 **Build the per-stream mark** (round 247). The owner accepted round 231's
 finding that it is not optional: mark each stream's owed bytes so the ledger can
 tell owed from never-owed, instead of routing `_fcOnConsumed` through it

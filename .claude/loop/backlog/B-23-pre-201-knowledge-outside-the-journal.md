@@ -121,7 +121,14 @@ U-15 already held two of them, and L-07 and L-08 were filed for the other two.
 
 ## Owner decision
 
-**The six architecture notes go into the repository as docs** (round 247) —
+**Inventory first, then decide per note** (round 262). Given round 261's finding
+that this is a merge rather than a move, the owner narrowed the earlier
+authorisation: one round answers, for each of the six, whether `docs/` already
+says it — add, contradict, or repeat — and a note that only REPEATS is deleted
+rather than moved. Nothing is written into `docs/` before that list exists.
+
+**The six architecture notes go into the repository as docs** (round 247,
+narrowed above) —
 core_types, core_design, transport_architecture, logger, rpc_dart_log,
 grpc_compat. They describe what the code IS, which is documentation's job rather
 than the journal's, and in the repo they become reviewable in diffs and age
