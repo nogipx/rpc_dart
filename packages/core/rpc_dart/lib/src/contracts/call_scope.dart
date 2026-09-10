@@ -87,21 +87,16 @@ final class RpcCallScope {
     if (_isClosed) {
       // Best-effort: run immediately, don't block.
       //
-      // The failure has to be caught HERE. [close] wraps every disposer in a
-      // try/catch and logs what throws, but a callback arriving after close
-      // never reaches that loop: it ran through a bare `Future.microtask` whose
-      // returned future was dropped, so a cleanup that failed became an
+      // The failure must be caught HERE. [close] wraps every disposer in a
+      // try/catch, but a callback arriving AFTER close never reaches that loop,
+      // so an unguarded `Future.microtask` turns a failing cleanup into an
       // unhandled async error -- fatal in the root zone, which is where a
-      // server's main() runs. Measured: the identical failing disposer escaped
-      // 0 times when registered before close and 1 time after, through
-      // onDispose, [use] and [listen] alike, and a root-zone reproduction
-      // terminated the process outright ("Unhandled exception: Bad state:
-      // rollback failed", never reaching the line after it).
+      // server's main() runs.
       //
-      // Reachable without any misuse: a deadline closes the scope while the
-      // handler is still running -- Dart cannot preempt a plain async function
-      // -- and the handler then registers its rollback in a `finally`, exactly
-      // as this class documents. One failing rollback took the server down.
+      // Reachable with no misuse at all: a deadline closes the scope while the
+      // handler is still running, since Dart cannot preempt a plain async
+      // function, and the handler then registers its rollback in a `finally`
+      // exactly as this class documents. One failing rollback ends the process.
       unawaited(
         Future.microtask(callback).catchError((
           Object error,
@@ -212,20 +207,18 @@ final class RpcCallScope {
     // Run disposers in reverse (LIFO) order.
     for (var i = _disposers.length - 1; i >= 0; i--) {
       try {
-        // Bounded. A disposer that never completes -- a flush to a dead socket,
-        // a lock nobody releases -- used to block this loop forever, and with
-        // it `_cleanupStream`, `closeResponderResources` and therefore
-        // `RpcResponderEndpoint.close()`. Measured: one handler registering a
-        // disposer that never returns left responder.close() unfinished after
-        // 4s and indefinitely thereafter, so a single misbehaving handler
-        // stopped the whole endpoint from shutting down.
+        // BOUNDED. A disposer that never completes -- a flush to a dead socket,
+        // a lock nobody releases -- otherwise blocks this loop forever, and with
+        // it `_cleanupStream`, `closeResponderResources` and so
+        // `RpcResponderEndpoint.close()`: one misbehaving handler stops the
+        // whole endpoint from shutting down.
         //
-        // On timeout the disposer is abandoned, not cancelled -- there is no
-        // way to cancel an arbitrary Future -- so it may still be running. That
-        // is strictly better than never shutting down, and it is reported
-        // rather than hidden.
+        // On timeout the disposer is ABANDONED, not cancelled -- an arbitrary
+        // Future cannot be cancelled -- so it may still be running. Better than
+        // never shutting down, and reported rather than hidden.
+        //
         // Future.value handles the FutureOr: a synchronous disposer stays
-        // synchronous and simply cannot time out.
+        // synchronous and cannot time out.
         await Future<void>.value(_disposers[i]()).timeout(disposerTimeout);
       } on TimeoutException {
         _log.error(

@@ -100,24 +100,15 @@ final class RpcMetadata {
     ]);
   }
 
-  /// Creates metadata for the final trailer.
+  /// Creates the end-of-stream trailer carrying [statusCode] (see [RpcStatus])
+  /// and, on error, an optional [message].
   ///
-  /// Builds trailers sent at the end of the stream carrying the gRPC status.
-  /// [statusCode] Completion code (see RpcStatus).
-  /// [message] Optional message (usually on error).
-  /// [maxMessageLength] caps the ENCODED `grpc-message`, which is what
-  /// [RpcSecurityPolicy.isValidHeaderValue] measures.
-  ///
-  /// Passing it is how a long message stops costing the whole answer. A trailer
-  /// that fails validation is not sent, and the caller then sees whatever the
-  /// pipeline makes of a call with no status: measured over the isolate
-  /// transport with `maxHeaderValueBytes: 64`, a handler's deliberate
-  /// `RpcStatusException(7, '<70 chars>')` reached the peer as
-  /// `status 13 "Responder dispatch failed"` -- the code the service CHOSE,
-  /// destroyed by a length limit. Trimming the message keeps the code and as
-  /// much of the text as fits.
-  ///
-  /// Returns trailer metadata for stream completion.
+  /// **Pass [maxMessageLength]**, which caps the ENCODED `grpc-message` — the
+  /// same thing [RpcSecurityPolicy.isValidHeaderValue] measures. A trailer that
+  /// fails validation is never sent, and the caller then gets whatever the
+  /// pipeline makes of a call with no status at all: the status the handler
+  /// deliberately CHOSE, destroyed by a length limit on its explanation.
+  /// Trimming keeps the code and as much of the text as fits.
   static RpcMetadata forTrailer(
     int statusCode, {
     String message = '',
@@ -211,21 +202,15 @@ final class RpcMetadata {
 
   /// Returns the binary status details from the `grpc-status-details-bin` header.
   ///
-  /// Normalised before decoding, because a real gRPC peer sends this UNPADDED.
-  /// The spec requires implementations to accept `-bin` values both with and
-  /// without base64 padding, and grpc-go strips it: observed directly, a header
-  /// handed to grpcurl as `aGVsbG8gd29ybGQ=` arrived here as
-  /// `aGVsbG8gd29ybGQ`. Dart's `base64Decode` is strict about padding, so the
-  /// bare call threw and the `catch` below turned that into "absent" --
-  /// silently dropping the structured details of every error a grpc-go server
-  /// reports. Measured before the fix:
+  /// NORMALISED before decoding, because a real gRPC peer sends this unpadded:
+  /// the spec requires `-bin` values to be accepted with and without base64
+  /// padding, and grpc-go strips it. Dart's `base64Decode` is strict, so a bare
+  /// call throws and the `catch` below turns that into "absent" — silently
+  /// dropping the structured details of every error a grpc-go server reports.
   ///
-  ///     statusDetailsBin(padded)   -> hello world
-  ///     statusDetailsBin(unpadded) -> NULL, dropped
-  ///
-  /// `base64.normalize` restores the padding (and accepts the url-safe
-  /// alphabet, which is the same leniency the spec asks for). The catch stays
-  /// for input that is genuinely not base64.
+  /// `base64.normalize` restores the padding and accepts the url-safe alphabet,
+  /// the same leniency the spec asks for. The catch stays for input that is
+  /// genuinely not base64.
   Uint8List? get statusDetailsBin {
     final raw = getHeaderValue(RpcHeaders.grpcStatusDetails);
     if (raw == null || raw.isEmpty) return null;
@@ -307,10 +292,9 @@ final class RpcMetadata {
   /// [_maxGrpcMessageLength]) without cutting an incomplete `%HH` triplet.
   ///
   /// [maxLength] exists because the ENCODED string is what
-  /// [RpcSecurityPolicy.isValidHeaderValue] measures, and a trailer that fails
-  /// that check is not sent at all. A message longer than the peer's
-  /// `maxHeaderValueBytes` therefore used to cost the whole answer -- see
-  /// [forTrailer].
+  /// [RpcSecurityPolicy.isValidHeaderValue] measures, and a trailer failing that
+  /// check is not sent at all — so an over-long message costs the whole answer.
+  /// See [forTrailer].
   static String encodeGrpcMessage(String message, {int? maxLength}) {
     final limit = maxLength == null
         ? _maxGrpcMessageLength

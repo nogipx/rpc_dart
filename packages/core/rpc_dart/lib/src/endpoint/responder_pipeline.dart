@@ -962,17 +962,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// Handles the peer's `x-client-cancelled` notice for [state].
   ///
   /// Trips the handler's cancellation token FIRST, with the client's [reason].
-  /// That token is the server's cooperative-cancellation signal — the one
-  /// [drain] and [_onDeadlineExceeded] both fire — and this path used to be the
-  /// only one that skipped it, ignoring the `reason` it was handed. Tearing the
-  /// responder down stops a `Stream` handler at its next suspension point, but
-  /// says nothing to a handler that polls `context.cancellationToken` or awaits
-  /// `cancelled`, which is the documented way to abandon long work. A 3s unary
-  /// job cancelled by its caller after 100ms ran all 3s to completion (295 of
-  /// 300 work units after the client was already gone).
   ///
-  /// Cancelling before teardown also means a handler observing the token sees
-  /// the client's reason rather than a bare close.
+  /// That token is the server's cooperative-cancellation signal, the one [drain]
+  /// and [_onDeadlineExceeded] both fire. Tearing the responder down stops a
+  /// `Stream` handler at its next suspension point but says nothing to one that
+  /// polls `context.cancellationToken` or awaits `cancelled` — the documented
+  /// way to abandon long work — so such a handler runs to completion long after
+  /// its caller is gone.
+  ///
+  /// Cancelling before teardown also lets a handler observing the token see the
+  /// client's reason rather than a bare close.
   Future<void> _handleClientCancellation(
     RpcResponderStreamState state,
     String reason,
@@ -995,22 +994,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   ) async {
     if (state.responder != null) return;
 
-    // Charge the handler slot HERE, where a handler is actually about to exist.
+    // Charge the handler slot HERE, where a handler is about to exist.
     //
-    // Charging it at stream admission instead was a cheap denial of service: a
-    // stream is half-open from its opening metadata frame until dispatch, which
-    // for unary needs the request payload, so metadata-only frames parked slots
-    // for handlers that would never run. Measured with maxConcurrentHandlers: 8
-    // and maxActiveStreams: 4096, eight metadata-only frames -- no payload, no
-    // handler entered -- refused every subsequent call with RESOURCE_EXHAUSTED
-    // until halfOpenStreamTimeout (60s) expired. An operator setting this knob
-    // to their real capacity would be handing out a kill switch of that size.
+    // Charging at stream ADMISSION instead is a cheap denial of service: a
+    // stream is half-open from its opening metadata frame until dispatch, so
+    // metadata-only frames park slots for handlers that never run, and one such
+    // frame per configured slot refuses every later call until
+    // halfOpenStreamTimeout expires. The knob would be a kill switch the size of
+    // the operator's real capacity.
     //
-    // The burst case still holds because this runs with NO await before it and
-    // both dispatch sites are reached synchronously from _onMessage: a batch of
-    // calls is charged one frame at a time, so the ceiling sees each. Charging
-    // on handler ENTRY, which is one await further on, does not -- 30
-    // concurrent http2 calls all got in against a limit of 3.
+    // Charging on handler ENTRY, one await further on, is no good either -- a
+    // simultaneous burst walks straight through. This point works because it
+    // runs with NO await before it and both dispatch sites are reached
+    // synchronously from _onMessage, so a batch is charged one frame at a time.
     final maxHandlers = _respMaxHandlers;
     if (maxHandlers != null && !_respSlotHeld.contains(state.id)) {
       if (_respSlotHeld.length >= maxHandlers) {

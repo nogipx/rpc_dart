@@ -15,44 +15,28 @@ import 'dart:collection';
 /// connection) would be lost. This controller queues them and flushes on the
 /// first `listen`, then forwards live events straight through.
 ///
-/// This is the buffering core of HTTP/2's `StreamMessageQueueIn` (hold until a
-/// listener exists, dispatch on listen), adapted to a broadcast controller so
-/// the several consumers a transport exposes can all attach.
-///
 /// Buffering applies ONLY while there is no listener: broadcast streams have no
 /// per-listener backpressure, so once listened, events pass straight through.
-/// Detach/re-attach is handled too — events delivered between listeners are
-/// queued and flushed when the next listener attaches.
+/// Detach and re-attach are handled the same way — events delivered between
+/// listeners are queued and flushed when the next one arrives.
 ///
 /// Leak-safety:
 ///  * the pending queue is cleared on [close];
 ///  * it never grows past [maxPendingEvents] events, NOR past
-///    [maxPendingBytes] when a [sizeOf] is supplied. If either bound is hit
-///    while still unlistened — a producer feeding a controller nobody consumes,
-///    i.e. a misuse/abandoned transport — further events are dropped and
-///    [onOverflow] fires once.
+///    [maxPendingBytes] when a [sizeOf] is supplied. Hitting either bound while
+///    still unlistened — a producer feeding a controller nobody consumes, i.e.
+///    an abandoned transport — drops further events and fires [onOverflow] once.
 ///
-/// **Both dimensions are needed, and the count alone was the bug.** A bound on
-/// events says nothing about bytes: the neighbouring limit,
-/// `RpcSecurityPolicy.maxMessageLengthBytes`, bounds ONE message at 16 MiB by
-/// default, so 4096 events admitted up to 64 GiB of payload while this class's
-/// doc claimed memory stayed bounded. Measured with the queue's own counter,
-/// 4096 messages at three sizes:
+/// **BOTH dimensions are required.** A bound on events says nothing about
+/// bytes, and the neighbouring `RpcSecurityPolicy.maxMessageLengthBytes` bounds
+/// ONE message at 16 MiB by default — so a count-only bound of 4096 admits up to
+/// 64 GiB of payload while appearing to keep memory bounded.
 ///
-///     16 KiB each   pending=4096   retained   64 MiB
-///     64 KiB each   pending=4096   retained  256 MiB
-///    256 KiB each   pending=4096   retained 1024 MiB
-///
-/// — the count never moves, the bytes scale linearly. Through a real transport
-/// with nothing subscribed: RSS +549 MiB against +2 MiB with a listener
-/// attached.
-///
-/// Implements [StreamSink] (the writable half of a `StreamController`) so it
-/// can be used polymorphically as a sink and exposes [stream] like a controller
-/// does. It deliberately does NOT implement the full `StreamController`: that
-/// interface exposes settable `onListen`/`onPause`/`onResume`/`onCancel`, and
-/// this type uses `onListen` internally to flush the buffer — exposing it would
-/// let callers override the flush and break the buffering invariant.
+/// Implements [StreamSink], the writable half of a `StreamController`, so it can
+/// stand in for one as a sink while exposing [stream] as a controller does. It
+/// deliberately does NOT implement the whole of `StreamController`, whose
+/// settable `onListen` this type uses internally to flush the buffer: exposing
+/// it would let a caller override the flush and break the invariant.
 class BufferedBroadcastController<T> implements StreamSink<T> {
   /// Creates a buffered broadcast controller.
   ///
@@ -61,8 +45,8 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   /// [sizeOf]. [onOverflow] fires once if either bound is exceeded.
   ///
   /// [sizeOf] is optional because this type is generic and cannot know how to
-  /// weigh a `T`. Without it the byte bound cannot be applied and only the
-  /// count applies — which is what every caller here used to get.
+  /// weigh a `T` — but WITHOUT it only the count bound applies, which is the
+  /// half that does not bound memory. Supply one.
   BufferedBroadcastController({
     this.maxPendingEvents = 4096,
     this.maxPendingBytes = 16 * 1024 * 1024,

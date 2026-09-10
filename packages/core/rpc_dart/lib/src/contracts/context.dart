@@ -29,13 +29,12 @@ final class RpcContext {
 
   /// Unique request ID.
   ///
-  /// Eager on purpose. Making it lazy looked like free savings — a token costs
-  /// three `Random.secure()` draws and the responder mints one only to replace
-  /// it — but a lazy field COPIES AS UNSET, so every `withX` copy would then
-  /// generate an id of its own and the caller's context would disagree with the
-  /// one actually sent. Caught by
-  /// `request_id_is_adopted_test`; the cheap version is to pass the id in at
-  /// construction instead, which [RpcContext.withHeaders] now allows.
+  /// EAGER on purpose. Lazy looks like free savings — a token costs three
+  /// `Random.secure()` draws, and the responder mints one only to replace it —
+  /// but a lazy field copies as UNSET, so every `withX` copy would generate an
+  /// id of its own and the caller's context would disagree with what it sent.
+  /// The cheap version is passing the id in at construction, which
+  /// [RpcContext.withHeaders] allows.
   final String requestId;
 
   /// Logger scope for this request context.
@@ -97,13 +96,14 @@ final class RpcContext {
   /// Creates a copy of the context with additional headers.
   ///
   /// The count and total-size caps apply to the MERGED result, not to
-  /// [additionalHeaders] alone. Sanitising only the additions restarted both
-  /// counters at zero on every call, so the caps bounded a single call rather
-  /// than the context: one `withHeaders` of 500 headers correctly yielded 128,
-  /// but 500 `withHeader` calls — what [RpcContextBuilder] does, one header at
-  /// a time — yielded all 500, and 100 headers of 8KB reached 800KB against a
-  /// 64KB budget. Existing headers are merged first, so an over-cap addition is
-  /// dropped rather than displacing a header already in the context.
+  /// [additionalHeaders] alone. Sanitise only the additions and both counters
+  /// restart at zero per call, so the caps bound one call instead of the
+  /// context: a single `withHeaders` of 500 is capped correctly, while 500
+  /// `withHeader` calls — what [RpcContextBuilder] does, one header at a time —
+  /// pass all 500.
+  ///
+  /// Existing headers merge FIRST, so an over-cap addition is dropped rather
+  /// than displacing a header already in the context.
   RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) {
     final merged = Map<String, String>.from(_headers)
       ..addAll(additionalHeaders);
@@ -321,34 +321,17 @@ final class RpcContext {
 
   static int _idCounter = 0;
 
-  /// Generates a 16-byte url-safe token that is unique even on platforms where
-  /// [Random.secure] is unavailable (e.g. the bare node test runtime) and a
-  /// default [Random] may repeat within the same millisecond. The first 12
-  /// bytes are random (unpredictability where a strong RNG exists); the last 4
-  /// carry a process-wide monotonic counter so two tokens never collide.
-  /// The strong generator, created ONCE.
+  /// The strong generator, created ONCE, so the `try` stays off the hot path.
   ///
-  /// `Random.secure()` was constructed per token. The constructor itself is
-  /// cheap (0.04us measured), so this is not where the cost was — but there is
-  /// no reason to build one per call either, and it removes a `try` from the
-  /// hot path.
+  /// **Null on any node runtime**, not just the test runner: `Random.secure()`
+  /// throws `UnknownJsTypeError` there, while the VM and Chrome both provide it.
+  /// Every token on node therefore comes from a NON-CRYPTOGRAPHIC generator.
   ///
-  /// Null when the platform has no strong RNG, where the monotonic counter
-  /// below still guarantees uniqueness but NOT unpredictability.
-  ///
-  /// Measured, because "the bare node test runtime" understated it:
-  ///
-  ///     VM              : available
-  ///     Chrome (dart2js): available
-  ///     node  (dart2js) : THROWS UnknownJsTypeError
-  ///                       'Value of "this" must be of type nullish or must be
-  ///                        the global object'
-  ///
-  /// So on node — any node, not only the test runner — every token comes from a
-  /// non-cryptographic generator. That is acceptable for what these ids are
-  /// (correlation in logs and on the wire, never secrets or capability tokens),
-  /// and it is recorded here so nobody builds something that needs
-  /// unpredictability on top of them.
+  /// That is acceptable for what these ids are — correlation in logs and on the
+  /// wire, never secrets or capability tokens — and recorded so nobody builds
+  /// something needing unpredictability on top of them. The monotonic counter in
+  /// [_uniqueToken] still guarantees uniqueness there; it guarantees nothing
+  /// about guessability.
   static final Random? _strongRng = () {
     try {
       return Random.secure();
@@ -363,24 +346,21 @@ final class RpcContext {
   /// `1 << 32` evaluates to 0 there and `nextInt(0)` throws.
   static const int _randomWordMax = 4294967296;
 
+  /// A 16-byte url-safe token, unique even where [Random.secure] is missing and
+  /// a default [Random] may repeat within one millisecond.
+  ///
+  /// The first 12 bytes are random — unpredictable where a strong RNG exists,
+  /// see [_strongRng] — and the last 4 carry a process-wide monotonic counter,
+  /// so two tokens never collide whatever the generator.
   static String _uniqueToken() {
     final bytes = Uint8List(16);
     final view = ByteData.view(bytes.buffer);
     final rng = _strongRng ?? _fallbackRng;
 
-    // THREE draws of 32 bits, not twelve of 8. Same 96 bits, same generator,
-    // and it was 83% of the cost of an RPC.
-    //
-    // `Random.secure().nextInt()` reaches the system entropy source on every
-    // call, at ~11us each. Measured per token-worth of randomness:
-    //
-    //     12 x secure.nextInt(256)  : 130.18 us
-    //      3 x secure.nextInt(2^32) :  33.88 us
-    //
-    // and a unary call spends THREE tokens (a requestId and a traceId on the
-    // caller, one more on the responder), so 390us of a 505us call was this.
-    // Nothing is traded away: identical entropy, from the identical source,
-    // fetched in fewer syscalls.
+    // THREE draws of 32 bits, not twelve of 8: the same 96 bits from the same
+    // generator, in a quarter of the time. `Random.secure().nextInt()` reaches
+    // the system entropy source on EVERY call, and a unary call spends three
+    // tokens, so the per-byte form cost the majority of an RPC's total time.
     view.setUint32(0, rng.nextInt(_randomWordMax));
     view.setUint32(4, rng.nextInt(_randomWordMax));
     view.setUint32(8, rng.nextInt(_randomWordMax));
@@ -518,14 +498,12 @@ abstract final class RpcContextUtils {
 
   /// Creates a context for tracing.
   ///
-  /// ONE token for both ids. The request id and the trace id used to be two
-  /// independent [RpcContext._uniqueToken] draws, and a token is three
-  /// `Random.secure()` calls at ~34us -- 31% of an in-memory unary call went on
-  /// the pair. A call that starts its own trace has exactly one request in it,
-  /// so the two ids name the same thing; deriving both from one token keeps
-  /// every property that matters (same entropy, same source, still unique, still
-  /// unpredictable) and halves the cost. They are correlated, which costs
-  /// nothing: both travel in the SAME request metadata already.
+  /// ONE token for both ids. A call that starts its own trace holds exactly one
+  /// request, so the two ids name the same thing, and deriving both from one
+  /// [_uniqueToken] keeps every property that matters — same entropy, same
+  /// source, still unique, still unpredictable — for half the cost. The two are
+  /// then correlated, which costs nothing: they travel in the same request
+  /// metadata anyway.
   static RpcContext withTracing({
     String? traceId,
     String? spanId,

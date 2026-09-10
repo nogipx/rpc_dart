@@ -461,3 +461,9 @@ melos:
           fi
         done
         git push --follow-tags
+
+    claude:
+      run: claude --system-prompt="$(serena prompts print-cc-system-prompt-override)"
+
+    serena:
+      run: serena start-mcp-server --transport streamable-http --port 9121

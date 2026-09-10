@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298]
+applied: [293, 294, 295, 296, 297, 298, 299]
 status: confirmed (round 293)
 ---
 
@@ -110,8 +110,14 @@ found by sweeping and none reachable block by block:
   the worst case: `_normalize` carried `register`'s ENTIRE doc, code sample
   included, and `register` carried the same nine lines again twenty lines later,
   so the same instruction appeared twice with no way to tell which was current.
-  **Three files in three rounds — this is a property of the corpus, not a
-  coincidence.**
+  Round 299 showed a fused doc can HIDE something, not just misattribute it:
+  `_uniqueToken`'s description sat on `_strongRng`, so the function minting every
+  request id had no doc at all — and the fact that `Random.secure()` THROWS on
+  node, making those ids non-cryptographic, was buried under a heading about a
+  different member.
+
+  **Four files in four rounds — this is a property of the corpus, not a
+  coincidence. Sweep for it explicitly.**
 - **A block duplicated verbatim.** Round 297: eight lines about timer-vs-
   microtask delivery appeared TWICE in a row in `getMessagesForStream`. Each
   copy is correct, which is why nothing caught it.
