@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: an inbound size limit exists, and something buffers before it is consulted
 breaks: DoS.
-applied: [236, 279]
-status: confirmed (round 279)
+applied: [236, 279, 280]
+status: confirmed (round 280)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -143,6 +143,29 @@ point where the weighed total stays under the bound right up to the 4096-event
 ceiling. A shape that maximises damage per weighed byte is what to construct,
 not a shape that looks extreme. Bench
 `../probes/P-29-metadata-weighs-characters.md`.
+
+**Round 280 asked the generalisation rather than waiting for a sweep**, and a
+grep for every weighing site split them in two. Nine `sizeOf:` sites all route
+through `bufferedBytes`, so 279 fixed every queue at once; a SECOND family
+charges `payload?.length ?? 0` directly. The pre-method budget was one of them:
+
+    arm       charge  parked  refused   charged      RSS   ceiling
+    metadata  old       4000        0  0.00 MiB   789.2 MiB   16.0
+    metadata  fixed      106     3894  15.93 MiB   27.6 MiB   16.0
+    payload   fixed     4000        0  15.63 MiB   11.7 MiB   16.0
+
+> **Two accountings of the same object drift apart the moment one is fixed.**
+> `bufferedBytes` and the pre-method charge weighed the same message
+> differently, and only one of them was ever corrected. After fixing a weigher,
+> grep for every OTHER expression that measures the same thing — here
+> `payload?.length ?? 0` — and check each against the damage rather than against
+> the weigher you just fixed.
+
+Still outstanding from that grep, named with line numbers in round 280:
+`_fcOweConnection`, `_fcDischarge` and `_fcOnDelivered` charge flow-control
+credit by payload length at six sites. That is a backpressure question rather
+than a memory bound, so it needs a different observable.
+Bench `../probes/P-30-pre-method-budget-weighs-payload-only.md`.
 
 No catalog shape covers this; a candidate for `catalog/` at the next curate,
 by the usual test — it holds in any code that buffers untrusted input.

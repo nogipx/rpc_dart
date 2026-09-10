@@ -907,7 +907,22 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       // metadata-less first chunk. Replayed once metadata resolves the method.
       //
       // Bounded: see [_respPreMethodBytes]. Nothing else limits this window.
-      final bytes = message.payload?.length ?? 0;
+      //
+      // `bufferedBytes`, not `payload.length`. This charged the payload alone,
+      // so a frame carrying one payload byte and a large header block cost the
+      // budget ONE BYTE while retaining the whole block — and unlike the
+      // queue's bound there is no event ceiling behind it, because
+      // `_preMethodBufferedMessages` is a plain List. Measured, 4000 such
+      // frames of 2000 tiny headers each:
+      //
+      //     charged to the budget   0.00 MiB
+      //     resident               789.9 MiB
+      //     the ceiling             16.0 MiB
+      //
+      // against a payload arm that charged 15.63 MiB for 11.6 MiB resident.
+      // The budget did not bind at all. Must stay identical to what
+      // `bufferPreMethod` accumulates, or the release desyncs from this total.
+      final bytes = message.bufferedBytes;
       if (_respPreMethodBytes + bytes > _respMaxPreMethodBytes) {
         _log.warning(
           'Refusing stream ${state.id}: $_respPreMethodBytes bytes already '

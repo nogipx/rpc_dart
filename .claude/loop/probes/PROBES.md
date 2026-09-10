@@ -11,6 +11,11 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-30](P-30-pre-method-budget-weighs-payload-only.md)** valid (round 280),
+  core — the pre-method budget with the pipeline's admission check TRANSCRIBED
+  beside it, because the thing under test is which frames get in and a bench that
+  admits everything cannot see it. Carries its own ablation: pass `old` to charge
+  the pre-fix expression without touching the library
 - **[P-29](P-29-metadata-weighs-characters.md)** valid (round 279), core — P-21
   extended with the shape P-21 lacks: many TINY headers, where characters and
   cost diverge 12x. Two traps it had to survive — the metadata must be DECODED

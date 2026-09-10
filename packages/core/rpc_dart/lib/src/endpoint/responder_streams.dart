@@ -253,10 +253,14 @@ final class RpcResponderStreamState {
   /// once [methodKey] is set.
   void bufferPreMethod(RpcTransportMessage message) {
     _preMethodBufferedMessages.add(message);
-    _preMethodBufferedBytes += message.payload?.length ?? 0;
+    // `bufferedBytes`, not `payload.length`: a parked frame retains its header
+    // block too, and weighing the payload alone charged one byte for a frame
+    // that held megabytes. Must stay identical to the pipeline's pre-method
+    // admission check, which keeps the connection-wide total this releases from.
+    _preMethodBufferedBytes += message.bufferedBytes;
   }
 
-  /// Payload bytes currently parked in the pre-method buffer.
+  /// Bytes currently parked in the pre-method buffer.
   ///
   /// The responder pipeline keeps a connection-wide total of these and refuses
   /// to park more than one maximum message's worth; see
