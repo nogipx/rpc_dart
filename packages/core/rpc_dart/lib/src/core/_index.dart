@@ -7,6 +7,7 @@ export 'buffered_broadcast.dart';
 export 'channel.dart';
 export 'channel_frame.dart';
 export 'compression.dart';
+export 'drain.dart';
 export 'multiplexed_channel.dart';
 export 'error_details.dart';
 export 'errors.dart';

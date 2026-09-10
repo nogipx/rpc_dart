@@ -238,27 +238,15 @@ class RpcHttpServer implements IRpcServer {
   ) async {
     if (transport == null) return;
 
-    Future<int> pending() async {
-      final health = await transport.health();
-      return (health.details['pendingRequests'] as int?) ?? 0;
-    }
-
-    final deadline = DateTime.now().add(budget);
-    var remaining = await pending();
-    if (remaining == 0) return;
-    _logger?.debug('Draining $remaining in-flight request(s) before shutdown');
-
-    while (remaining > 0 && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 25));
-      remaining = await pending();
-    }
-
-    if (remaining > 0) {
-      _logger?.warning(
-        'Drain budget $budget expired with $remaining request(s) still in '
-        'flight; closing anyway',
-      );
-    }
+    return drainUntilIdle(
+      pending: () async {
+        final health = await transport.health();
+        return (health.details['pendingRequests'] as int?) ?? 0;
+      },
+      budget: budget,
+      logger: _logger,
+      unit: 'request',
+    );
   }
 
   /// Releases everything this server owns, whichever phase it reached.

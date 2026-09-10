@@ -182,26 +182,12 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Waits, up to [budget], for in-flight calls to finish.
   ///
-  /// `activeResponders` counts live responder streams; a handler that outlives
-  /// its stream is not counted, the same caveat gRPC's own drain carries.
-  Future<void> _drain(Duration budget) async {
-    final deadline = DateTime.now().add(budget);
-    var remaining = _inFlightCalls();
-    if (remaining == 0) return;
-    _logger?.info('Draining $remaining in-flight call(s) before shutdown');
-
-    while (remaining > 0 && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 25));
-      remaining = _inFlightCalls();
-    }
-
-    if (remaining > 0) {
-      _logger?.warning(
-        'Drain budget $budget expired with $remaining call(s) still in '
-        'flight; closing anyway',
-      );
-    }
-  }
+  /// The polling loop is [drainUntilIdle]; what is server-specific is the
+  /// COUNT. `activeResponders` counts live responder streams, so a handler that
+  /// outlives its stream is not counted — the same caveat gRPC's own drain
+  /// carries.
+  Future<void> _drain(Duration budget) =>
+      drainUntilIdle(pending: _inFlightCalls, budget: budget, logger: _logger);
 
   /// Live responder streams across every endpoint this server owns.
   ///

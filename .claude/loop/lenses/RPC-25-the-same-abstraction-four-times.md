@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308]
+applied: [308, 309]
 status: confirmed (round 308)
 ---
 
@@ -70,6 +70,34 @@ another file, meters both paths.
 analyzer sees two correct methods, and every test passes because the second
 `getMessagesForStream` call is the uncommon path. It is visible only when the
 four are put side by side — which is what the extraction forces.
+
+**Round 309, the drain loop.** Three servers polling a count to zero, 65 lines.
+The drift was in the LOGGING, not the logic — the copies agreed on what to do
+and disagreed on what to say:
+
+                     start log   success log
+    websocket        info        (none)
+    http             debug       (none)
+    http2            info        info "Drain complete"
+
+An operator watching an HTTP/1.1 deploy at the default level saw nothing, and on
+two of three servers the ONLY line a drain ever produced was "budget expired,
+closing anyway" — so success was signalled by an absence. **Look at what the
+copies SAY, not only at what they compute.**
+
+## When the lens does not apply
+
+It needs SIBLINGS — two or more implementations of one thing. Round 309 checked
+`rpc_dart_isolate` and correctly found none: it ships one transport in two
+platform variants that implement DIFFERENT mechanisms (SendPort against Worker),
+not the same one twice. "The lens does not apply here" is a result, not a gap.
+
+## What a no-drift candidate earns
+
+Nothing. Round 309 left `_notify` — eight identical lines in two servers —
+unmerged, because step 3 found no divergence and merging would add a public
+promise to core to save eight lines. **The bar is the drift, not the line
+count.** Record the decision, or the next round reads it as oversight.
 
 ## Where to put the shared version
 
