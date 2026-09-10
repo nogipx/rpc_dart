@@ -29,26 +29,23 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// Attaches the caller's observer to the transport's global inbound stream.
   ///
   /// A caller consumes its responses through `getMessagesForStream`, so it has
-  /// no use for the per-message events here — but leaving the stream
-  /// unsubscribed had two costs.
+  /// no use for the per-message events here. Leaving the stream unsubscribed
+  /// costs two things.
   ///
-  /// It RETAINED them. The transport routes every inbound frame to both the
+  /// It RETAINS them. The transport routes every inbound frame to both the
   /// per-stream controller and the global [BufferedBroadcastController], which
   /// buffers while it has no listener so the responder pipeline does not miss
-  /// frames that arrive before it subscribes. A caller-only endpoint never
-  /// subscribes at all, so nothing ever drained it: measured at 900 messages
-  /// held after 300 unary calls (three frames each), climbing to the 4096-event
-  /// cap and staying there for the life of the connection, each one pinning its
-  /// payload.
+  /// frames arriving before it subscribes. A caller-only endpoint never
+  /// subscribes, so nothing drains it and the buffer climbs to its event cap and
+  /// stays there for the life of the connection, each entry pinning a payload.
   ///
-  /// And it SWALLOWED transport-level errors. A channel failure, or a frame
-  /// that violates the security policy without belonging to a known stream,
-  /// is reported only here. With no listener a pure client saw none of it; the
-  /// in-flight call simply hung until its own timeout.
+  /// And it SWALLOWS transport-level errors. A channel failure, or a frame that
+  /// violates the security policy without belonging to a known stream, is
+  /// reported ONLY here — so a pure client sees none of it and the in-flight
+  /// call hangs until its own timeout.
   ///
-  /// Not wired into [RpcPeerEndpoint]: its responder half already subscribes
-  /// (its parity filter drops locally-initiated frames, but the subscription
-  /// exists, so the buffer stays drained and errors are logged once).
+  /// Not wired into [RpcPeerEndpoint]: its responder half already subscribes, so
+  /// the buffer stays drained and errors are logged once.
   void startCallerListening() {
     if (_callerIncomingSub != null) return;
     _callerIncomingSub = transport.incomingMessages.listen(
@@ -199,10 +196,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// `serverStream()` and `bidirectionalStream()` return cold streams, so until
   /// something subscribes there is no call on the wire to cancel.
   ///
-  /// Tracking at hand-out time leaked one token per unlistened stream (measured
-  /// 10 leaked from 10 dropped `serverStream` calls, 10 more from bidi) and made
-  /// `isMethodActive`/`getActiveCallsCount`/`pendingRequests` report a call that
-  /// never happened, permanently.
+  /// Track at hand-out time instead and every unlistened stream leaks a token
+  /// permanently, with `isMethodActive`, `getActiveCallsCount` and
+  /// `pendingRequests` all reporting a call that never happened.
   void _trackCallerRequest(
     String serviceName,
     String methodName,
@@ -293,16 +289,14 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         sentAt: sentAt,
       ).execute(metadata: metadata, timeout: timeout);
     } finally {
-      // A ping that reaches the wire frees its id implicitly — it sends with
-      // endStream: true and the transport releases finished streams — but the
-      // id is allocated BEFORE the context is validated, so a cancelled token
-      // or an expired deadline threw straight past that with nothing to free
-      // it. Ping is the keepalive/health check, so those are the failures it
-      // actually hits: a health-check loop against a stalled connection leaks
-      // one id per attempt until maxActiveStreams is reached, and from then on
-      // every call on the transport fails. Hence the finally around the whole
-      // body. releaseStreamId is idempotent, so the double release on the
-      // success path is harmless.
+      // A ping that reaches the wire frees its id implicitly -- it sends with
+      // endStream: true and the transport releases finished streams -- but the
+      // id is allocated BEFORE the context is validated, so a cancelled token or
+      // an expired deadline throws straight past that with nothing to free it.
+      // Ping is the keepalive, so those are the failures it actually hits: a
+      // health-check loop against a stalled connection leaks one id per attempt
+      // until maxActiveStreams is reached, and every call then fails.
+      // releaseStreamId is idempotent, so the double release is harmless.
       transport.releaseStreamId(streamId);
     }
   }
@@ -420,16 +414,13 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       },
     );
 
-    // Bridge through a StreamController instead of `() async* { yield* stream }`.
+    // Bridged through a StreamController, NOT `() async* { yield* stream }`.
     //
-    // On dart2js, cancelling a subscription to a chain of suspended `async*`/
-    // `await for` generators (handleServerStream -> middleware ->
-    // ServerStreamCaller.call) hung forever for a long-lived server-stream: the
-    // returned `sub.cancel()` Future never completed. An explicit
-    // StreamController with onCancel makes cancellation deterministic and
-    // identical on the VM and dart2js: we unsubscribe from the inner stream but
-    // do NOT wait for that cancellation to complete (it may hang on dart2js),
-    // and immediately release the request tracking.
+    // On dart2js, cancelling a subscription to a chain of suspended `async*` /
+    // `await for` generators hangs forever for a long-lived server stream --
+    // `sub.cancel()` never completes. An explicit controller with onCancel makes
+    // cancellation identical on the VM and dart2js: unsubscribe from the inner
+    // stream WITHOUT awaiting that cancellation, and release the tracking now.
     late final StreamController<TResponse> controller;
     StreamSubscription<TResponse>? sub;
     var finished = false;
@@ -460,21 +451,14 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           cancelOnError: false,
         );
       },
-      // Hand the consumer's demand upstream.
-      //
-      // This controller sat between the caller and the whole response chain and
-      // drained it at full speed whatever the consumer did, so `pause()` on the
-      // returned stream stopped delivery to the listener and NOTHING else.
-      // Measured with a paused consumer, counting events at every hop over 2s
-      // (user held at 1400):
-      //
-      //   transport route   +4600   processor recv +4600   processor emit +4601
-      //   transformer       +4600   caller yield   +4600   pipeline add   +4600
-      //
-      // Every stage kept decoding and materialising responses nobody had asked
-      // for. With this and the matching hook in CallProcessor, all of them stop
-      // (+0/+1) and buffering collapses back to the transport's own per-stream
-      // controller, which holds undecoded frames.
+      // Hand the consumer's demand upstream. This controller sits between the
+      // caller and the whole response chain, so without these hooks it drains
+      // that chain at full speed whatever the consumer does: `pause()` on the
+      // returned stream stops delivery to the listener and NOTHING else, while
+      // every stage behind it keeps decoding and materialising responses nobody
+      // asked for. With this and the matching hook in CallProcessor, buffering
+      // collapses back to the transport's per-stream controller, which holds
+      // frames still undecoded.
       onPause: () => sub?.pause(),
       onResume: () => sub?.resume(),
       onCancel: () {
@@ -485,13 +469,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         // the token, so cancel it first.
         //
         // Only when the stream did NOT already complete normally. On normal
-        // completion onDone runs finish() (finished=true) and closes the
-        // controller; `await for` then tears down its subscription, which
-        // triggers this onCancel. Firing the token here would poison a
-        // shared/reused RpcContext cancellation token, making the NEXT call on
-        // that context throw RpcCancelledException even though this stream
-        // succeeded (observed as failed blob downloads on the manifest→chunks
-        // sequence, which reuses one RpcContext).
+        // completion onDone runs finish() and closes the controller, and
+        // `await for` then tears down its subscription, reaching this onCancel.
+        // Firing the token there poisons a REUSED RpcContext's cancellation
+        // token, so the next call on that context throws RpcCancelledException
+        // even though this stream succeeded.
         if (!finished) {
           ctx.cancellationToken?.cancel('server-stream subscription cancelled');
         }
@@ -572,22 +554,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       ),
     );
 
-    // Bridge through a StreamController instead of returning the async* chain
-    // (handleBidirectionalStream -> middleware -> _buildBidirectionalStream).
-    //
-    // [serverStream] has bridged for this reason since the dart2js hang;
-    // bidirectional never did, and had the same defect on the VM too.
-    // Cancelling a subscription to a chain of suspended `async*`/`await for`
-    // generators does not complete until the upstream produces again, so
-    // `sub.cancel()` only returned while the server happened to be emitting.
-    // Measured with the request stream left open:
-    //
-    //   always-emitting handler, 1 request -> cancel returned (received=19)
-    //   always-emitting handler, no request -> CANCEL DEADLOCKED
-    //   echo handler,            1 request -> CANCEL DEADLOCKED (received=1)
-    //
-    // An idle bidi stream -- a subscription waiting for the next server push,
-    // which is the normal state of one -- could not be cancelled at all.
+    // Bridged for the same reason [serverStream] is, and here it matters on the
+    // VM too: cancelling a subscription to a chain of suspended `async*` /
+    // `await for` generators does not complete until the upstream produces
+    // again, so `sub.cancel()` only returns while the server happens to be
+    // emitting. An IDLE bidi stream -- one waiting for the next server push,
+    // which is its normal state -- then cannot be cancelled at all.
     late final StreamController<R> controller;
     StreamSubscription<R>? sub;
     var finished = false;
@@ -687,29 +659,26 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       if (isCleaned) return;
       isCleaned = true;
 
-      // The request side failed on OUR end (the producer threw, or a send did).
-      // The server is mid-handler and has heard nothing: onDone half-closes via
-      // finishSending() and the handler ends by itself, but an errored request
-      // stream sends no such signal, and the token notice below only covers
-      // consumer cancellation. Measured over one connection, 50 bidi calls
-      // whose request stream throws left activeResponders=51 and
-      // streamControllers=51 on the responder, with activeStreams at 0
-      // throughout -- so maxActiveStreams never noticed. Sent before the
-      // teardown below, which closes the processor and with it the only route
-      // to the transport.
+      // The request side failed on OUR end -- the producer threw, or a send did
+      // -- and the server is mid-handler having heard nothing. `onDone`
+      // half-closes through finishSending() and the handler ends by itself, but
+      // an ERRORED request stream sends no such signal, and the token notice
+      // below covers only consumer cancellation. Without this the responder
+      // leaks a responder and a stream controller per call, while
+      // `activeStreams` stays 0 so maxActiveStreams never notices.
+      //
+      // Sent BEFORE the teardown below, which closes the processor and with it
+      // the only route to the transport.
       if (abortPeer && !finishedNaturally) {
         await caller
             .abort('bidirectional request stream failed')
             .catchError((_) {});
       }
 
-      // Tell the server the consumer is gone. The cancellation token is the
-      // only thing that triggers CallProcessor._sendCancellationToServer, and
-      // without it the responder never learns: its handler keeps producing
-      // into a stream nobody reads, forever. That notice now goes out as a
-      // transport-level reset (RST_STREAM on HTTP/2) when the transport
-      // supports one, so it is legal even though this side has half-closed.
-      // Untracking clears the token, so fire it first.
+      // Tell the server the consumer is gone. The cancellation token is the ONLY
+      // thing that triggers CallProcessor._sendCancellationToServer, and without
+      // it the responder never learns: its handler keeps producing into a stream
+      // nobody reads, forever. Untracking clears the token, so fire it first.
       if (fromCancel && !finishedNaturally) {
         context.cancellationToken?.cancel(
           'bidirectional subscription cancelled',
@@ -738,18 +707,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         return;
       }
 
-      // Cancelling the REQUEST subscription is not awaited here either, for
-      // exactly the reason the branch above gives: `requests` is typically a
-      // suspended async* middleware chain, and cancelling a generator parked
-      // in `await for` does not complete until its upstream produces again --
-      // which, for a request stream the caller keeps open, is never.
-      //
-      // That reasoning was applied only to the consumer-cancelled path, but it
-      // holds just as well when the SERVER finishes first: this await never
-      // returned, so `controller.close()` below was unreachable and the
-      // consumer hung on a stream that had already delivered its last message.
-      // A bidi call whose server ends the conversation while the client still
-      // holds its request sink open -- an ordinary shape -- never terminated.
+      // Not awaited here either, for the reason the branch above gives -- and it
+      // holds just as well when the SERVER finishes first. Await it and
+      // `controller.close()` below is unreachable, so a bidi call whose server
+      // ends the conversation while the client still holds its request sink
+      // open, an ordinary shape, never terminates for the consumer.
       unawaited(request?.cancel().catchError((_) {}));
 
       // Everything else is best-effort: the controller MUST close, or the

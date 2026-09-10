@@ -89,29 +89,23 @@ final class _ReconnectingTransportProxy
   /// Highest stream id any transport this proxy has owned handed out.
   ///
   /// Every transport the factory builds is FRESH, so it starts its ids at 1 —
-  /// and the first call after a reconnect is then handed the id a call from the
+  /// and the first call after a reconnect is then handed an id a call from the
   /// previous connection still holds. Callers release their id in a `finally`
-  /// and half-close by id, and the id is all those operations have to present,
-  /// so nothing downstream can tell the two apart. Measured through this proxy
-  /// over websocket, one forceReconnect between two calls:
+  /// and half-close BY id, and the id is all those operations present, so
+  /// nothing downstream can tell the two apart: the dead call's late
+  /// `finishSending(1)` ends the live one's request stream.
   ///
-  ///     A had id 1, B has id 1
-  ///     A's late finishSending(1) -> B's handler ENDED, the server saw B's
-  ///                                  request stream close and finished it
-  ///
-  /// The transports fix this for their OWN reconnect(); this path replaces the
-  /// transport wholesale instead, so it has to carry the watermark across.
+  /// A transport's own `reconnect()` handles this itself; this path replaces the
+  /// transport wholesale, so it has to carry the watermark across.
   int _idWatermark = -1;
 
   /// Reads the cursor off [inner] and remembers the max.
   ///
-  /// Read as early as the path allows, and on [_retire] that is already after
-  /// the transport closed itself — a peer-started drop is REPORTED by that
-  /// close. So the cursor has to outlive it, which is now part of
-  /// [IRpcStreamIdSequence]; while [RpcChannelTransport] rewound it at close,
-  /// this read returned "nothing issued yet" and the sequence restarted anyway.
-  /// Reading before an orderly close is still the safe order for a third-party
-  /// transport, and that mistake cost a whole wrong fix in round 142.
+  /// Read as early as the path allows. On [_retire] that is already AFTER the
+  /// transport closed itself, since a peer-started drop is reported by that
+  /// close — so the cursor must outlive `close()`, which is part of
+  /// [IRpcStreamIdSequence]'s contract. Reading before an orderly close is
+  /// still the safe order for a third-party transport.
   void _noteIdWatermark(IRpcTransport? inner) {
     if (inner is! IRpcStreamIdSequence) return;
     final cursor = (inner as IRpcStreamIdSequence).lastIssuedStreamId;
@@ -124,12 +118,11 @@ final class _ReconnectingTransportProxy
   /// Installs [inner] as the live transport, retiring whatever was attached.
   ///
   /// Retiring means CLOSING the previous transport, not merely dropping its
-  /// subscription. Replacing `_inner` without closing it orphaned the whole
-  /// transport -- socket still open, and no longer reachable, so even
-  /// [RpcClientConnection.dispose] could not clean it up. Calling `connect()`
-  /// while already online is the ordinary way to reach this (an app doing it on
-  /// resume, or behind a retry button): three calls left three live transports,
-  /// two of which outlived dispose().
+  /// subscription: replacing `_inner` alone orphans it with its socket still
+  /// open and nothing holding a reference, so not even
+  /// [RpcClientConnection.dispose] can reclaim it. Calling `connect()` while
+  /// already online is the ordinary way to get here — an app doing it on resume,
+  /// or behind a retry button.
   void attach(IRpcTransport inner) {
     // The proxy OWNS every transport handed to it, so a closed proxy cannot
     // simply ignore one: nothing else holds a reference, and `_msgCtl` is
@@ -181,37 +174,30 @@ final class _ReconnectingTransportProxy
 
   /// Drops [inner] as the live transport and closes it.
   ///
-  /// The drop path used to only null out `_inner`, leaving the transport to
-  /// close itself when its incoming stream ended. Every transport in this repo
-  /// does, but that is unspecified behaviour to depend on: a transport that
-  /// ends its read side without closing (a half-close, or any third-party
-  /// implementation) was orphaned exactly as a superseded one was. Since the
-  /// proxy takes ownership at [attach], it closes here too. Closing an
-  /// already-closed transport is a no-op.
+  /// Nulling `_inner` and leaving the transport to close itself when its
+  /// incoming stream ends is not enough. Every transport in this repo does
+  /// close, but that is unspecified behaviour to rely on: one that ends its read
+  /// side without closing — a half-close, or any third-party implementation —
+  /// is orphaned exactly as a superseded transport would be. The proxy takes
+  /// ownership at [attach], so it closes here. Closing twice is a no-op.
   void _retire(IRpcTransport inner) {
     _noteIdWatermark(inner);
     _inner = null;
     unawaited(inner.close().catchError((_) {}));
   }
 
+  /// Drops the live transport, closing it and keeping its id cursor.
   Future<void> detach() async {
     // forceReconnect() runs detach() and then reconnects, so this is the path
     // the watermark is most often collected on.
     _noteIdWatermark(_inner);
-    // Guarded for the same reason the close below is, and it was the one hop
-    // here that was not. `incomingMessages` belongs to a transport the FACTORY
-    // built, so its onCancel is user code; a throw there used to reject detach()
-    // before the close ran, and this method owns both. Measured against a
-    // transport whose onCancel throws, with a plain one as the control:
-    //
-    //   control        built=2 closed=2 leaked=0 unhandled=0 disposeThrew=false
-    //   cancel throws  built=1 closed=0 leaked=1 unhandled=1 disposeThrew=true
-    //
-    // i.e. the transport was dropped rather than closed and nothing could
-    // reclaim it; forceReconnect() never reconnected, because it runs
-    // `detach().then(...)` with no onError, so the rejection went to the zone --
-    // the ROOT zone in an application, where it ends the isolate; and dispose()
-    // threw, leaving `_msgCtl` open.
+    // BOTH steps are guarded, and this method owns both. `incomingMessages`
+    // belongs to a transport the FACTORY built, so its onCancel is user code;
+    // a throw there rejects detach() before the close runs, leaving the
+    // transport dropped rather than closed and unreachable. The rejection then
+    // goes to the zone -- forceReconnect() runs `detach().then(...)` with no
+    // onError, and in an application that zone is the ROOT one, which ends the
+    // isolate -- and dispose() throws, leaving `_msgCtl` open.
     try {
       await _innerSub?.cancel();
     } catch (_) {}
@@ -244,19 +230,16 @@ final class _ReconnectingTransportProxy
   @override
   Stream<RpcTransportMessage> get incomingMessages => _msgCtl.stream;
 
-  /// Per-stream routing, delegated to the live transport.
+  /// Per-stream routing, DELEGATED to the live transport.
   ///
-  /// This used to re-filter the proxy's own broadcast
-  /// (`incomingMessages.where(...)`), which runs one predicate per ACTIVE
-  /// STREAM for every inbound message. Every real transport routes through a
-  /// per-stream map instead, so wrapping one in [RpcClientConnection] -- the
-  /// recommended way to get auto-reconnect -- silently gave that up. Measured
-  /// at 100 streams / 20 000 messages: 6ms delegated vs 342ms filtered, 50.9x.
+  /// Re-filtering the proxy's own broadcast instead runs one predicate per
+  /// active stream for every inbound message, which is quadratic; every real
+  /// transport routes through a per-stream map, and wrapping one here must not
+  /// silently give that up.
   ///
-  /// Safe to delegate because a stream id is connection-scoped: as this class
-  /// documents, in-flight calls do not survive a reconnect, so no subscription
-  /// needs to span two inner transports. [RpcWebSocketCallerTransport] already
-  /// delegates for exactly this reason.
+  /// Safe to delegate because a stream id is connection-scoped: in-flight calls
+  /// do not survive a reconnect, so no subscription needs to span two inner
+  /// transports.
   ///
   /// Falls back to the filtered broadcast only while disconnected, so a caller
   /// that subscribes before the first connect still gets a live stream.
@@ -533,20 +516,14 @@ class RpcClientConnection {
             onTimeout: () {
               // Future.timeout abandons the AWAIT, not the WORK behind it. The
               // factory keeps running, and a connect that is merely slow --
-              // the exact case connectTimeout exists for -- still completes
-              // and hands back a live transport that this iteration has
-              // already given up on. Nothing referenced it, so it stayed
-              // connected for the life of the process.
-              //
-              // Measured with a 60ms factory against a 15ms timeout and the
-              // default unlimited retries: 49 live transports after 1.2s,
-              // still climbing, and dispose() reclaimed none of them (52
-              // afterwards, as the in-flight factories kept landing). One
-              // leaked socket per retry, forever, on any client that sets
+              // the exact case connectTimeout exists for -- still completes and
+              // hands back a live transport this iteration has given up on,
+              // referenced by nothing and connected for the life of the
+              // process. One leaked socket per retry, on any client that sets
               // connectTimeout and sits on a slow network.
               //
-              // Adopt the abandoned attempt: whenever it settles, close what
-              // it produced.
+              // Adopt the abandoned attempt: whenever it settles, close what it
+              // produced.
               _discardAbandonedAttempt(factoryFuture);
               throw TimeoutException('Connect timed out', _connectTimeout);
             },
@@ -555,19 +532,15 @@ class RpcClientConnection {
           inner = await factoryFuture;
         }
 
-        // Establishing a transport takes real time (a socket handshake is tens
-        // to hundreds of ms), and disconnect()/dispose() can land anywhere in
-        // that window. The loop's own `while (!_isStopped)` is checked before
-        // the await, not after, so without this re-check the freshly opened
-        // transport was attached to a connection the caller had already torn
-        // down: dispose() returned, then the factory resolved and left a live
-        // socket on a closed proxy that nothing could reach any more.
-        //
-        // Measured with a 100ms factory and dispose() 10ms in, 50 iterations:
-        // 50 leaked sockets, and currentState read RpcClientOnline AFTER
-        // dispose(). disconnect() was the same, which also made it a
-        // correctness bug and not only a leak: it claims to stop the
-        // connection, yet the endpoint came back online behind it.
+        // Re-checked AFTER the await. A socket handshake takes tens to hundreds
+        // of ms and disconnect()/dispose() can land anywhere in that window,
+        // while the loop's own `while (!_isStopped)` is checked before it. Skip
+        // this and a freshly opened transport attaches to a connection the
+        // caller already tore down: a live socket on a closed proxy that nothing
+        // can reach, and `currentState` reading RpcClientOnline after
+        // dispose(). For disconnect() that is a correctness bug and not only a
+        // leak -- it claims to stop the connection, and the endpoint comes back
+        // online behind it.
         //
         // The transport is ours from the moment the factory returns it, so
         // abandoning it means closing it.
@@ -578,27 +551,20 @@ class RpcClientConnection {
           return;
         }
 
-        // Without [IRpcStreamIdSequence] the watermark in the proxy is a no-op
-        // in BOTH directions, and a dead call's teardown ends a live one: id 1
-        // is handed out twice and the first call's `finishSending(1)` half-closes
-        // the second. Measured, one forceReconnect between two calls:
+        // Without [IRpcStreamIdSequence] the proxy's watermark is a no-op in
+        // BOTH directions and a dead call's teardown ends a live one (see
+        // [_ReconnectingTransportProxy._idWatermark]). The capability is
+        // discovered by an `is` check, so a decorator that forwards every
+        // IRpcTransport member and declares nothing else erases it in silence.
         //
-        //     factory returns          id after swap   handlers ended
-        //     the transport itself           3             0 -> 0
-        //     a plain decorator              1             0 -> 1
+        // Refusing costs nothing real: every first-party caller transport
+        // implements it, so what is refused is a hand-written decorator or mock
+        // that is not working today either -- it is losing a call per reconnect.
         //
-        // The capability is discovered by an `is` check, so a decorator that
-        // forwards every IRpcTransport member and declares nothing else erases
-        // it in silence. Refusing costs nothing real: every first-party caller
-        // transport implements it -- isolate, wasm and websocket through
-        // RpcChannelTransport, http2 and http by declaration -- so what is
-        // refused is a hand-written decorator or mock, and those are not working
-        // today, they are losing a call on every reconnect.
-        //
-        // On EVERY attach, not only the reconnect: refusing later would hide it
-        // until it happened in production. Not thrown -- the catch below retries
-        // with backoff, and a programmer error is not transient, so this ends
-        // the loop the way an exhausted retry budget does.
+        // Checked on EVERY attach, not just the reconnect, or it stays hidden
+        // until production. Not thrown: the catch below retries with backoff and
+        // a programmer error is not transient, so this ends the loop the way an
+        // exhausted retry budget does.
         if (inner is! IRpcStreamIdSequence) {
           unawaited(inner.close().catchError((_) {}));
           final error = ArgumentError.value(
@@ -668,9 +634,9 @@ class RpcClientConnection {
     _state = s;
     if (!_stateCtl.isClosed) _stateCtl.add(s);
     // The callback is USER code and this runs inside futures nobody catches --
-    // forceReconnect()'s `detach().then(...)` has no onError. A throw here used
-    // to reach the root zone, which ends the isolate, and to abort the connect
-    // loop before it built anything: unhandled 1, transports built 0.
+    // forceReconnect()'s `detach().then(...)` has no onError. Unguarded, a throw
+    // here reaches the root zone, which ends the isolate, and aborts the connect
+    // loop before it builds anything.
     try {
       _onStateChanged?.call(s);
     } catch (e) {

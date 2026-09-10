@@ -34,8 +34,8 @@ class RpcFrameMultiplexedChannel
 
   /// Growable reassembly buffer. Valid data is `_buf[0.._bufLen)`; capacity may
   /// exceed [_bufLen]. Appends grow capacity geometrically, so a peer dribbling
-  /// one frame across many tiny chunks costs O(n) total instead of O(n^2)
-  /// (the old code reallocated and recopied the whole buffer on every chunk).
+  /// one frame across many tiny chunks costs O(n) rather than the O(n^2) of
+  /// reallocating and recopying per chunk.
   Uint8List _buf = Uint8List(0);
   int _bufLen = 0;
   bool _closed = false;
@@ -55,21 +55,16 @@ class RpcFrameMultiplexedChannel
 
   /// Whether an oversized inbound frame kills the connection.
   ///
-  /// The two sides of a connection want opposite answers, and both were
-  /// measured:
+  /// The two sides of a connection want opposite answers:
   ///
   /// - A SERVER (true, the default). dart:io buffers a whole WebSocket message
   ///   before delivering it, so the peak is resident before this class sees a
-  ///   byte and cannot be avoided. Closing is then the only lever there is: a
-  ///   connection that survives lets one peer repeat that peak as often as it
-  ///   likes. See `oversized_message_is_refused_test` in rpc_dart_websocket.
-  /// - A CLIENT (false). The peer here is the server it chose, and killing the
+  ///   byte and cannot be avoided. Closing is then the only lever left — a
+  ///   connection that survives lets one peer repeat that peak at will.
+  /// - A CLIENT (false). The peer is the server it chose, and killing the
   ///   connection over one large response takes every other in-flight call with
-  ///   it. Measured against a server sending 2 MiB to a client capped at 256
-  ///   KiB: the call failed AND the next one got "Transport is disconnected and
-  ///   has no socket", where http2 -- same library, same scenario -- failed only
-  ///   the call. gRPC's answer is RESOURCE_EXHAUSTED on that RPC, which is what
-  ///   this produces.
+  ///   it. gRPC's answer is RESOURCE_EXHAUSTED on that RPC, which is what this
+  ///   produces.
   final bool closeOnOversizedFrame;
 
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
@@ -153,12 +148,11 @@ class RpcFrameMultiplexedChannel
   /// Largest legal channel-frame payload, in bytes.
   ///
   /// A channel frame's payload is not the application message: it is the
-  /// gRPC-framed message, so it carries a [RpcConstants.messagePrefixSize]
-  /// prefix that [RpcSecurityPolicy.maxMessageLengthBytes] — "max payload size
-  /// of a single decoded gRPC message" — does not count. Bounding the frame
-  /// payload by the policy value directly made the real ceiling
-  /// `maxMessageLengthBytes - 5`, so a message at exactly the configured limit
-  /// was rejected as oversized.
+  /// gRPC-FRAMED message, so it carries a [RpcConstants.messagePrefixSize]
+  /// prefix that [RpcSecurityPolicy.maxMessageLengthBytes] does not count.
+  /// Bound the frame payload by the policy value directly and the real ceiling
+  /// becomes `maxMessageLengthBytes - 5`, rejecting a message at exactly the
+  /// configured limit.
   int get _maxFramePayloadBytes =>
       _policy.maxMessageLengthBytes + RpcConstants.messagePrefixSize;
 
@@ -220,11 +214,10 @@ class RpcFrameMultiplexedChannel
     final payloadLen = view.getUint32(5);
 
     // A metadata frame is bounded by maxMetadataBytes, 256x tighter than the
-    // data ceiling at the defaults (64 KiB against 16 MiB). Checking only the
-    // data ceiling left every metadata frame between the two to be buffered and
-    // then rejected inside decodeAll, which reaches _failChannel -- so round
-    // 161's fix worked for a big RESPONSE and not for big TRAILERS, measured
-    // identically fatal on both sides.
+    // data ceiling at the defaults (64 KiB against 16 MiB). Check only the data
+    // ceiling and every metadata frame between the two is buffered and then
+    // rejected inside decodeAll, which reaches _failChannel -- so refusing a big
+    // RESPONSE works while big TRAILERS still kill the connection.
     final isMetadata = (view.getUint8(4) & RpcChannelFrame.flagMetadata) != 0;
     final ceiling = isMetadata
         ? (_policy.maxMetadataBytes < _maxFramePayloadBytes
@@ -242,16 +235,12 @@ class RpcFrameMultiplexedChannel
   /// Notified as skipped bytes ARRIVE, never for bytes merely announced.
   ///
   /// The receiver returns flow-control credit only for messages it DELIVERS, so
-  /// a skipped frame otherwise shrinks the peer's window for good. Measured with
-  /// an 8 MiB connection window and 2 MiB refused per call: the connection
-  /// wedged on the FOURTH refusal and every later call timed out at 6 s.
-  /// Nothing before round 161 could hit this -- the connection used to die on
-  /// the first oversized frame, so there was no "later".
+  /// a skipped frame otherwise shrinks the peer's window permanently and the
+  /// connection wedges after enough refusals.
   ///
-  /// Crediting the DECLARED length instead was worse than the wedge it fixed: a
-  /// peer sending nothing but 9-byte headers had its own window topped up for
-  /// free, which is the one thing flow control exists to stop. Measured: 9 bytes
-  /// delivered, 1 048 576 bytes granted back.
+  /// Crediting the DECLARED length instead is worse than the wedge it fixes: a
+  /// peer sending nothing but 9-byte headers gets its window topped up for free,
+  /// which is the one thing flow control exists to stop.
   void Function(int streamId, int bytes)? onFrameDiscarded;
 
   /// Returns credit for [bytes] of a refused frame that have actually arrived.
@@ -274,17 +263,12 @@ class RpcFrameMultiplexedChannel
           message:
               'Received message larger than max '
               '($payloadLen vs. $_maxFramePayloadBytes)',
-          // This trailer is emitted INBOUND, so RpcChannelTransport validates it
-          // like anything else the peer sent -- and a metadata violation is
-          // answered by closing the connection. Its own message is ~52
-          // characters, so a smaller `maxHeaderValueBytes` turned "refuse this
-          // call" back into "kill the connection", undoing round 161 by the
-          // length of its own diagnosis. Measured over websocket, one oversized
-          // response then a small call:
-          //
-          //   cap 8192 : status 8              next call ok
-          //   cap   64 : RpcFrameException     next call StateError (dead)
-          //   cap   32 : the same
+          // Trimmed, because this trailer is emitted INBOUND: the transport
+          // validates it like anything else the peer sent, and a metadata
+          // violation is answered by closing the connection. Untrimmed, a
+          // `maxHeaderValueBytes` shorter than this message turns "refuse the
+          // call" back into "kill the connection" -- by the length of the
+          // refusal's own diagnosis.
           maxMessageLength: _policy.maxHeaderValueBytes,
         ),
         isEndOfStream: true,
@@ -382,27 +366,17 @@ class RpcFrameMultiplexedChannel
     }
 
     // Receive-path cap: never let the reassembly buffer grow past the policy
-    // limit. A peer dribbling bytes toward a huge declared frame is stopped
-    // here even before the per-frame length check fires.
+    // limit. A peer dribbling bytes toward a huge declared frame is stopped here
+    // before the per-frame length check fires.
     //
-    // Checked BEFORE the append, which is the whole point. Appending first
-    // allocated the oversized chunk in full and copied it, and only then
-    // consulted the limit that exists to prevent exactly that -- so the cap
-    // bounded what was RETAINED and not what was ALLOCATED. Measured with a
-    // 16 MiB policy limit, feeding one 256 MiB chunk:
-    //
-    //   allocated by the channel : 256.2 MiB   (16x the configured cap)
-    //   after this check         : 0.0 MiB
-    //
-    // and the chunk size is entirely peer-controlled on the transport this
-    // matters most for: dart:io's WebSocket has no message-size limit and
-    // delivers one WS message as ONE chunk, measured at 96 MiB arriving whole.
-    // So any unauthenticated peer could make a server allocate an arbitrary
-    // multiple of its own configured ceiling, once per message, before being
-    // disconnected for it.
-    //
-    // The reported byte count is unchanged: the old text printed `_bufLen`
-    // after the append, which is this same sum.
+    // Checked BEFORE the append, which is the whole point. Append first and the
+    // oversized chunk is allocated and copied in full before the limit that
+    // exists to prevent that is consulted, so the cap bounds what is RETAINED
+    // and not what is ALLOCATED. Chunk size is entirely peer-controlled on the
+    // transport this matters most for -- dart:io's WebSocket has no
+    // message-size limit and delivers one message as ONE chunk -- so an
+    // unauthenticated peer could make a server allocate an arbitrary multiple of
+    // its own ceiling, once per message, before being disconnected for it.
     final incoming = _bufLen + data.length;
     if (incoming > _maxBufferedFrameBytes) {
       _failChannel(
@@ -430,10 +404,8 @@ class RpcFrameMultiplexedChannel
         maxMetadataLen: _policy.maxMetadataBytes,
         // Same split as closeOnOversizedFrame, for the same reason: a peer we
         // must keep talking to gets the offending CALL failed, a peer we do not
-        // gets the connection closed. One undecodable metadata frame used to
-        // kill the whole connection either way -- measured against a hostile
-        // WASM guest, where a single 9-byte empty metadata frame took every
-        // in-flight call with it.
+        // gets the connection closed. Without it, one 9-byte empty metadata
+        // frame takes every in-flight call on the connection with it.
         onMalformedMetadata: closeOnOversizedFrame ? null : _refuseMetadata,
       );
     } on RpcFrameException catch (error) {
@@ -508,16 +480,13 @@ class RpcFrameMultiplexedChannel
     _bufLen = 0;
 
     // Tell the peer this was ITS fault, where the underlying protocol can say
-    // so. A framing violation is deterministic: the peer sent something
-    // malformed and will send it again if it believes the failure was
-    // transient. Closing silently is exactly that invitation -- a WebSocket
-    // peer then sees 1005 "no status received", which maps to UNAVAILABLE and
-    // is retried. Measured against an rpc_dart server:
+    // so. A framing violation is deterministic -- the peer will send the same
+    // malformed bytes again if it reads the failure as transient -- and closing
+    // silently is exactly that invitation: a WebSocket peer sees 1005 "no status
+    // received", indistinguishable from an ordinary server shutdown, which maps
+    // to UNAVAILABLE and is retried.
     //
-    //   server shutdown           : 1005 -> UNAVAILABLE (retryable)  correct
-    //   client protocol violation : 1005 -> UNAVAILABLE (retryable)  WRONG
-    //
-    // Channels without a close code on the wire fall through to the ordinary
+    // Channels with no close code on the wire fall through to the ordinary
     // close, so this changes nothing for them.
     unawaited(closeForProtocolError(error.message));
   }
@@ -525,10 +494,9 @@ class RpcFrameMultiplexedChannel
   /// Forwarded so layers ABOVE this channel can report a peer fault too.
   ///
   /// The transport validates inbound metadata against the security policy, and
-  /// that violation is as deterministic as a framing one — but it could only
-  /// reach `close()`, because this wrapper hid the capability. Measured against
-  /// a raw peer: a policy violation closed 1005 (UNAVAILABLE, retried) while a
-  /// framing violation closed 4400 (UNKNOWN, not retried).
+  /// that violation is as deterministic as a framing one. Hide the capability
+  /// here and the transport can only reach `close()`, so a policy violation
+  /// reads to the peer as retryable while a framing one does not.
   @override
   Future<void> closeForProtocolError(String reason) async {
     final channel = _channel;

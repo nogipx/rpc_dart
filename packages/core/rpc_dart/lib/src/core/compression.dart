@@ -27,21 +27,15 @@ abstract class RpcCompressionCodec {
   /// Decompresses [data] and returns the original bytes.
   ///
   /// When [maxOutputBytes] is non-null an implementation MUST stop and throw
-  /// (e.g. [FormatException]) before materializing output past the limit. This
-  /// is the ONLY defence against a decompression bomb that acts in time: the
-  /// layer above re-checks the length afterwards, but by then the memory has
-  /// already been allocated, so that check bounds what is RETAINED and not what
-  /// is ALLOCATED.
+  /// (e.g. [FormatException]) BEFORE materializing output past the limit. This
+  /// is the only defence against a decompression bomb that acts in time: the
+  /// layer above re-checks the length afterwards, by which point the memory is
+  /// already allocated, so that check bounds what is RETAINED, not what is
+  /// ALLOCATED.
   ///
-  /// Measured over a real websocket connection, 20 requests whose payloads
-  /// expand to 1 GiB each -- 19.9 MiB actually sent:
-  ///
-  ///     codec honours the hint : RSS +162 MiB
-  ///     codec ignores it       : RSS +1549 MiB
-  ///
-  /// Both survive; the difference is a 10x peak an attacker chooses. A codec
-  /// that genuinely cannot bound its output should refuse to be registered
-  /// rather than ignore the hint.
+  /// A codec that ignores the hint hands an attacker a peak of roughly ten
+  /// times what an honouring one costs, chosen by the attacker. One that
+  /// genuinely cannot bound its output should refuse to be registered instead.
   Uint8List decompress(Uint8List data, {int? maxOutputBytes});
 }
 
@@ -86,33 +80,17 @@ abstract final class RpcGrpcCompression {
     return map;
   }
 
-  /// Registers [codec] for [encoding], replacing any existing one.
-  ///
-  /// Call this once at application startup before any RPC calls are made.
-  /// On web, register a gzip codec backed by `package:archive` (or similar)
-  /// to enable gzip compression:
-  ///
-  /// ```dart
-  /// RpcGrpcCompression.register('gzip', ArchiveGzipCodec());
-  /// ```
   /// Normalises a content-coding name for lookup.
   ///
-  /// RFC 9110 s8.4.1: "All content-coding values are case-insensitive", and
-  /// gRPC defines `grpc-encoding` as a Content-Coding — so `GZIP`, `Gzip` and
-  /// `gzip` are the same coding, and a conforming peer may send any of them.
+  /// RFC 9110 s8.4.1 makes all content-coding values case-insensitive, and gRPC
+  /// defines `grpc-encoding` as a Content-Coding, so `GZIP`, `Gzip` and `gzip`
+  /// are one coding and a conforming peer may send any of them. Comparing
+  /// exactly refuses legal spellings in BOTH directions: a local call sending
+  /// `IDENTITY` is rejected before it reaches the wire, and a foreign client
+  /// sending `GZIP` is answered UNIMPLEMENTED for a request we can serve.
   ///
-  /// The registry compared exactly, which refused legal spellings on BOTH
-  /// sides. Measured before the fix:
-  ///
-  ///     isSupported('gzip')     -> true      isSupported('GZIP')     -> false
-  ///     isSupported('identity') -> true      isSupported('IDENTITY') -> false
-  ///     a call sending grpc-encoding: IDENTITY -> RpcException, refused
-  ///                                               locally, never reaching the
-  ///                                               wire
-  ///
-  /// and a foreign client sending `GZIP` was answered UNIMPLEMENTED by our
-  /// responder for a request it should have served. Applied on registration too,
-  /// so `register('GZIP', ...)` and a peer's `gzip` find each other.
+  /// Applied on registration too, so `register('GZIP', ...)` and a peer's
+  /// `gzip` find each other.
   static String _normalize(String encoding) => encoding.trim().toLowerCase();
 
   /// Registers [codec] for [encoding], replacing any existing one.

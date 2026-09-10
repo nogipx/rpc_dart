@@ -57,20 +57,17 @@ sealed class RateLimit {
 
   /// Throws [ArgumentError] if this spec cannot enforce anything.
   ///
-  /// These bounds used to be `assert`s in the constructors, which Dart STRIPS
-  /// in release builds -- so a misconfiguration a developer would trip over in
-  /// debug became a silently disabled rate limiter in production. A zero window
-  /// makes the token bucket's refill `(elapsed / 0) * max` evaluate to
-  /// Infinity, which clamps to a full bucket on every call: measured at 50/50
-  /// requests accepted against `max: 5`, versus 5/50 with a sane window. The
-  /// sliding-window variant instead throws IntegerDivisionByZeroException on
-  /// first use, failing every call.
+  /// A real throw rather than an `assert`, which Dart STRIPS in release builds
+  /// — turning a misconfiguration a developer trips over in debug into a
+  /// silently disabled rate limiter in production. A zero window makes the token
+  /// bucket's refill `(elapsed / 0) * max` evaluate to Infinity, clamping to a
+  /// full bucket on every call, and makes the sliding window throw
+  /// IntegerDivisionByZeroException on first use.
   ///
-  /// A real throw, checked by [RpcRateLimiter] for every spec it is given, is
-  /// the same guard in every build mode. Moving it out of the constructors also
-  /// makes the `const` factories usable: `Duration` supports neither comparison
-  /// nor property access in a constant expression, so an assert mentioning one
-  /// made `const RateLimit.slidingWindow(...)` a compile error.
+  /// Here rather than in the constructors, because `Duration` supports neither
+  /// comparison nor property access in a constant expression: an assert
+  /// mentioning one makes `const RateLimit.slidingWindow(...)` a compile error.
+  /// [RpcRateLimiter] calls this for every spec it is given.
   void _validate();
 }
 
@@ -266,78 +263,45 @@ class _TokenBucketCounter extends _RateLimitCounter {
 
 /// Rate-limiting interceptor for [RpcResponderEndpoint].
 ///
-/// ## Static limits (no [keyExtractor])
-///
-/// One shared counter per slot — same limit for all callers:
-///
-/// ```dart
-/// RpcRateLimiter(
-///   global: RateLimit.slidingWindow(max: 1000, window: Duration(seconds: 1)),
-///   perService: {'HeavyService': RateLimit.slidingWindow(max: 10, window: Duration(seconds: 1))},
-///   perMethod: {'UserService.search': RateLimit.tokenBucket(max: 5, window: Duration(seconds: 1))},
-/// )
-/// ```
-///
-/// ## Per-key limits ([keyExtractor] provided)
-///
-/// Each unique key extracted from the call context gets **independent counters**
-/// for [perService] and [perMethod] slots. Typical use: isolate users so one
-/// caller cannot exhaust the limit for others.
-///
-/// [global] is always a single shared counter regardless of [keyExtractor].
-///
 /// ```dart
 /// RpcRateLimiter(
 ///   global: RateLimit.slidingWindow(max: 5000, window: Duration(seconds: 1)),
-///   perMethod: {
-///     'SyncService.push': RateLimit.tokenBucket(max: 10, window: Duration(seconds: 1), burst: 20),
-///   },
-///   keyExtractor: (ctx) => ctx.context.getValue<String>('userId'),
+///   perService: {'Heavy': RateLimit.slidingWindow(max: 10, window: second)},
+///   perMethod: {'Sync.push': RateLimit.tokenBucket(max: 10, window: second)},
+///   perKeyFallback: RateLimit.slidingWindow(max: 50, window: second),
+///   keyExtractor: (call) => call.context.getValue<String>('userId'),
 /// )
 /// ```
 ///
-/// ## Per-key fallback ([perKeyFallback])
+/// ## Which counter a call charges
 ///
-/// A catch-all limit applied per `(key, method)` when no [perMethod] or
-/// [perService] spec matches. Equivalent to listing every method in [perMethod]
-/// with the same spec, but without explicit enumeration.
+/// `perMethod[key]` > `perService[key]` > `perKeyFallback[key:method]` >
+/// [global] — the first that matches, and only that one.
 ///
-/// ```dart
-/// RpcRateLimiter(
-///   global: RateLimit.slidingWindow(max: 5000, window: Duration(seconds: 1)),
-///   perKeyFallback: RateLimit.slidingWindow(max: 50, window: Duration(seconds: 1)),
-///   keyExtractor: (call) =>
-///       call.context.getValue<String>('userId') ??
-///       'anon:${call.endpoint.hashCode}',
-/// )
-/// ```
+/// Without [keyExtractor] every slot is ONE shared counter. With it, each key
+/// gets independent [perService] and [perMethod] counters, so one caller cannot
+/// exhaust another's budget; [global] stays shared either way. A key of `null`
+/// skips the dynamic limits and charges [global] alone.
 ///
-/// If [keyExtractor] returns `null` for a call, dynamic limits are skipped and
-/// only [global] applies.
+/// [perKeyFallback] is a catch-all per `(key, method)` for calls no other spec
+/// matches — the same thing as listing every method, without enumerating them.
 ///
-/// ## Streaming calls
+/// ## What a streaming call costs
 ///
 /// Metering follows the direction of client-driven load:
 ///
 /// - **Unary** — one token per call.
-/// - **Client-stream / bidirectional** — one token per **inbound request**
-///   message. This is genuine client-driven load, so per-message accounting is
-///   the default and cannot be disabled.
-/// - **Server-stream** — one token at **establishment** (per stream open),
-///   like a unary call. The response messages are server-paced output, not
-///   client load, so they are not metered. This keeps a burst of pushes from
-///   tripping the limit and tearing down a long-lived subscription. Set
-///   [meterServerStreamMessages] to `true` to instead charge one token per
-///   emitted response (e.g. to cap a client-attributable firehose); when the
-///   limit is hit the stream emits a RESOURCE_EXHAUSTED error and stops.
+/// - **Client-stream / bidirectional** — one token per INBOUND request message.
+///   This is genuine client-driven load, so it cannot be disabled.
+/// - **Server-stream** — one token at establishment, like a unary call.
+///   Responses are server-paced output rather than client load, and charging
+///   them lets a burst of pushes tear down a long-lived subscription. Set
+///   [meterServerStreamMessages] to charge per emitted response instead, e.g.
+///   to cap a client-attributable firehose; the stream then errors
+///   RESOURCE_EXHAUSTED and stops when the limit is reached.
 ///
-/// Call [dispose] when the endpoint shuts down to cancel the cleanup timer.
-///
-/// ## Priority
-///
-/// `perMethod[key]` > `perService[key]` > `perKeyFallback[key:method]` > `global`
-///
-/// All limits are enforced within a single Dart isolate (no locks needed).
+/// Enforced within a single Dart isolate, so no locking. Call [dispose] at
+/// shutdown to cancel the cleanup timer.
 class RpcRateLimiter extends IRpcInterceptor {
   /// Creates a rate limiter.
   ///
@@ -370,10 +334,9 @@ class RpcRateLimiter extends IRpcInterceptor {
        _meterServerStreamMessages = meterServerStreamMessages,
        _cleanupIntervalUs = cleanupInterval.inMicroseconds,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
-    // Was an assert, so it vanished in release: _getDynamic evicts when
-    // `store.length >= _maxTrackedKeys`, which with 0 is true on an EMPTY map,
-    // and `store.keys.first` then throws 'Bad state: No element'. Every call
-    // reached the client as INTERNAL.
+    // A throw, not an assert, which vanishes in release. At 0, _getDynamic's
+    // `store.length >= _maxTrackedKeys` is true on an EMPTY map and
+    // `store.keys.first` throws, so every call reaches the client as INTERNAL.
     if (maxTrackedKeys <= 0) {
       throw ArgumentError.value(
         maxTrackedKeys,

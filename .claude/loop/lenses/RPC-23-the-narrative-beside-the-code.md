@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297]
+applied: [293, 294, 295, 296, 297, 298]
 status: confirmed (round 293)
 ---
 
@@ -106,7 +106,12 @@ found by sweeping and none reachable block by block:
   comment ran into `_maxPolicyViolations`' with no declaration between them, so
   both attached to the constant — one member undocumented, the other's reading
   as if the first half described it. Round 297 found the same shape at
-  `_reclaimGrace`, wearing `_onDeadlineExceeded`'s description.
+  `_reclaimGrace`, wearing `_onDeadlineExceeded`'s description. Round 298 found
+  the worst case: `_normalize` carried `register`'s ENTIRE doc, code sample
+  included, and `register` carried the same nine lines again twenty lines later,
+  so the same instruction appeared twice with no way to tell which was current.
+  **Three files in three rounds — this is a property of the corpus, not a
+  coincidence.**
 - **A block duplicated verbatim.** Round 297: eight lines about timer-vs-
   microtask delivery appeared TWICE in a row in `getMessagesForStream`. Each
   copy is correct, which is why nothing caught it.
