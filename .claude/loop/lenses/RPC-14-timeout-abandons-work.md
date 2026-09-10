@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246]
+applied: [223, 233, 246, 273]
 status: swept here (round 246, cd6ee68e)
 ---
 
@@ -28,6 +28,21 @@ source that then fails late, or never settles at all, costs nothing.
 ## Ask
 
 What lives on after the timeout fires, and who releases it?
+
+**And the answer may be "the layer below".** Round 273 predicted the shape at
+`RpcHttpResponderTransport`'s `readBody().timeout(...)` — a `.timeout` on a
+future whose `await for` it cannot cancel — one round after the identical
+construct on the same file's `_reject` had proved to need an explicit cancel.
+Measured, it stops: 384 KiB accepted after the 408 (the socket's own buffering)
+against 16384 KiB in 49 ms with the deadline off. dart:io detaches the body of
+a finished exchange, so the response ends the read that the timeout does not.
+`_reject`'s drain runs BEFORE any response exists, which is the whole
+difference, and it is invisible in our code.
+
+> **Two call sites with the same construct are not the same defect.** Before
+> concluding nothing ends an abandoned subscription, ask what else could close
+> the stream. `../checked/C-31-the-408-really-does-stop-the-read.md`,
+> bench `../probes/P-24-read-after-the-408.md`.
 
 ## The wider family — an await another path can interleave with
 

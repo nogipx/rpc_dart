@@ -11,6 +11,15 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+- **[P-25](P-25-a-tcp-syn-builds-an-endpoint.md)** valid (round 274), http2 and
+  websocket — what a connection that never speaks costs a server, counted on the
+  library's own `endpoints` and a contract-construction counter (RSS moved by
+  -28.7 to +0.4 MiB across identical runs and is unusable). Three controls: the
+  keepalive arm, the preface arm, and the sibling server
+- **[P-24](P-24-read-after-the-408.md)** valid (round 273), rpc_dart_http — does
+  the server keep reading after it has answered? Measured as the PEER's send
+  pressure with every flush deadlined, so a stopped read is a number rather than
+  a hang. The control is the same bench against a server with no deadline
 - **[P-23](P-23-the-refusal-path-has-no-deadline.md)** valid (round 272),
   rpc_dart_http — N slowloris sockets against a REJECTION exit, counting how many
   the server lets go inside a window. The control is one header: `application/grpc`

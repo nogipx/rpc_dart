@@ -14,6 +14,7 @@
       "Bash(git show:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git reset --soft:*)",
       "Bash(grep:*)",
       "Bash(ls:*)",
       "Bash(uptime)"

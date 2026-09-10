@@ -1,9 +1,9 @@
 ---
-status: open
+status: closed (round 273) — REFUTED
 round: 272
 commit: eac7dde2
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-probe: packages/transport/rpc_dart_http/.dart_tool/probe/refusal_path_has_no_deadline.dart
+probe: packages/transport/rpc_dart_http/.dart_tool/probe/read_after_the_408.dart
 reason: "not measured — round 272's bench answered the refusal path; this is the accepted path, read off the code and worth one arm of the same probe"
 ---
 
@@ -47,6 +47,19 @@ write pressure — a server that has stopped reading stops draining the send
 buffer.
 
 Pre-fix expectation: the writes keep being accepted. Post-fix: they back up.
+
+## Round 273 measured it — REFUTED
+
+The read stops. 384 KiB accepted after the 408, then a 3s stall, reproduced on
+two runs; the control with the deadline off took all 16384 KiB in 49 ms. dart:io
+detaches the body of a finished exchange, so the RESPONSE ends the loop that the
+timeout does not. `_reject` differed because its drain runs before any response
+exists.
+
+The prediction above was made from our code alone and was wrong for a reason
+that is not in our code at all. Kept as
+`../checked/C-31-the-408-really-does-stop-the-read.md`; bench
+`../probes/P-24-read-after-the-408.md`.
 
 ## Owner decision
 

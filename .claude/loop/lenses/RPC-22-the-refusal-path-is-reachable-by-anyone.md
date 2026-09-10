@@ -3,8 +3,8 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272]
-status: confirmed (round 272)
+applied: [272, 274]
+status: confirmed (round 274)
 ---
 
 # RPC-22 — The path a peer reaches without being accepted
@@ -69,3 +69,26 @@ its connection.
 
 Bench `../probes/P-23-the-refusal-path-has-no-deadline.md`; round
 `../rounds/272-refused-is-cheaper-than-accepted.md`.
+
+**Round 274 found the stage EARLIER than any rejection.** On a connection-
+oriented server there is a peer that has been accepted and has not yet said
+anything, and `RpcHttp2Server._handleConnection` is wired to the accept stream:
+it builds the transport, the endpoint, and calls `onEndpointCreated` — where the
+application registers its contracts — before a single byte arrives. 200 sockets
+sending zero bytes:
+
+    server / arm         endpoints  contracts built  reclaim by default
+    http2  default          200          200         none
+    http2  pingInterval       0          200         the keepalive
+    websocket                  0            0         idleTimeout, 2 min
+
+> **Every limit that is PER CONNECTION is downstream of the peer who has not
+> opened a connection's worth of anything yet.** `maxActiveStreams`,
+> `maxConcurrentHandlers`, `halfOpenStreamTimeout` and the pre-method budget are
+> all per connection here, so a peer that never opens a stream is beneath all
+> four, and nothing counts connections. Ask where the FIRST counter sits, then
+> ask what an attacker can do before reaching it.
+
+Deferred as B-27 (owner decision on the default). Bench
+`../probes/P-25-a-tcp-syn-builds-an-endpoint.md`; round
+`../rounds/274-work-before-the-peer-speaks.md`.
