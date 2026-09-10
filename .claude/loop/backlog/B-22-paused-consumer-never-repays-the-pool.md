@@ -310,11 +310,36 @@ and grants at half a window, and if it clamps at the configured window the
 "double credit" simply cannot exceed it — which would make the mark unnecessary
 and the one-line fix (drop the `hasListener` guard) correct after all.
 
-**That is a claim about `_fcCreditConnection`, and it is unverified.** Reading
-it is the next step, and it is cheap. If it clamps, B-22 ships as one line with
-round 249's wedge measurement as its witness and no mark at all; if it does not,
-there is an over-credit that four observables cannot see, which is its own
-finding.
+### Round 263 read it, and the four failures have ONE cause
+
+`_fcCreditConnection` does not clamp. It batches:
+
+```dart
+_fcConnPending += bytes;
+if (_fcConnPending < (window ~/ 2).clamp(1, window)) return;
+final granted = _fcConnPending;
+_fcConnPending = 0;
+unawaited(_fcSendConnGrant(granted));
+```
+
+A grant reaches the peer only once half the connection window has accumulated.
+Every arm above sent 128-256 KiB against a 1 MiB window, so the 512 KiB
+threshold was never crossed and **no window update was ever sent** — there was
+nothing for any observable to see, in any of the four. The quantity was below
+the mechanism's own granularity.
+
+So the over-credit is REAL (nothing clamps it) and the mark IS needed; four
+rounds of "canary passed" were measuring beneath the threshold. This is the
+methods' own rule arriving late: *check the QUANTITY through a metric, not
+through an indirect consequence*, and *a canary that unexpectedly passes means
+the test is wrong*.
+
+**The arm, fifth and last version:** owe more than half the connection window at
+forget — e.g. a 256 KiB connection window with 200 KiB outstanding, or 1 MiB
+with 600 KiB — then forget, then drain, and assert the SENDER's
+`flowControlConnectionCredit` never exceeds the configured window. Below the
+threshold nothing is observable at all, which is the one thing every earlier
+attempt got wrong.
 
 **Expose the connection credit, then finish** (round 247/262 decision). The owner authorised
 adding the connection credit to `_buildHealthDetails`, beside `owedConn`, purely
