@@ -25,6 +25,11 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+- **[P-37](P-37-guard-versus-filter.md)** valid (round 338), core — whether the
+  level guard predicts the filter it stands in for, asked at the controller's own
+  stream rather than of the guard. Two of four configurations disagreed and one
+  was a MUTE. Needs no instrumentation, which is what makes it cheap to re-run
+  after any change to `_resolveLevel`
 - **[P-36](P-36-discarded-log-strings-every-shape.md)** valid (round 337), core —
   log messages built for a level that discards them, per round trip, on **all
   four call shapes** and under **two logger configurations**. Round 333's

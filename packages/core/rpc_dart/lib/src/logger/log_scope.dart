@@ -63,15 +63,20 @@ class LogScope {
        _clock = clock ?? DateTime.now;
 
   // --- Level guards for hot-path optimization ---
+  //
+  // These must ask EXACTLY what [_log] asks, `tag` included: a guard that
+  // predicts the filter wrongly in the false direction is a mute, not a missed
+  // optimisation, and `_resolveLevel` consults the tag override ahead of both
+  // the scope overrides and `minLevel`.
 
   /// Whether internal-level records pass the current filter.
-  bool get isInternal => _controller.accepts(RpcLogLevel.internal, name);
+  bool get isInternal => _controller.accepts(RpcLogLevel.internal, name, tag);
 
   /// Whether trace-level records pass the current filter.
-  bool get isTrace => _controller.accepts(RpcLogLevel.trace, name);
+  bool get isTrace => _controller.accepts(RpcLogLevel.trace, name, tag);
 
   /// Whether debug-level records pass the current filter.
-  bool get isDebug => _controller.accepts(RpcLogLevel.debug, name);
+  bool get isDebug => _controller.accepts(RpcLogLevel.debug, name, tag);
 
   // --- Hierarchy ---
 
