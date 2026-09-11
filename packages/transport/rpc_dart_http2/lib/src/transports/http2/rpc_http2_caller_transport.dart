@@ -797,6 +797,11 @@ class RpcHttp2CallerTransport
   }) async {
     _ensureUsable();
 
+    // See the responder's sendMetadata: the configured policy has to apply
+    // outbound here too, or it is a one-directional rule on this transport
+    // alone.
+    _policy.validateMetadata(metadata);
+
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
 
     if (_logger?.isInternal ?? false) {

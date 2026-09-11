@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 340) — fixed with the two lines rpc_dart_http already has
 round: 339
 commit: e63e551b
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]

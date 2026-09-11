@@ -685,6 +685,13 @@ class RpcHttp2ResponderTransport
   }) async {
     if (_isClosed) throw StateError('Transport is closed');
 
+    // The policy governs what we EMIT, not only what we accept. `_headerValue`
+    // already rejects non-printable-ASCII, but that is a hardcoded rule, not
+    // the configured one: without this, maxHeaders, maxHeaderValueBytes and the
+    // name/path checks held inbound only, on the one transport of five that
+    // does not get them from RpcChannelTransport.sendMetadata.
+    _policy.validateMetadata(metadata);
+
     // A response goes out on the client-initiated stream; an unknown id
     // (server-push) must fail loudly rather than silently drop the metadata.
     final incomingStream = _requireIncomingStream(streamId, 'send metadata');

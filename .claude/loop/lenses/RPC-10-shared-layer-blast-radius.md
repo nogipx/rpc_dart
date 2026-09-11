@@ -3,7 +3,7 @@ refines: U-11
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: several transports share parts of one layer
 breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
-applied: []
+applied: [340]
 status: confirmed (round 150, off-journal)
 ---
 
@@ -64,3 +64,21 @@ boundary is genuinely different from a network transport's.**
 
 Imported from private memory after round 238; the map and the round-197
 measurement had no home in the journal.
+
+## Applied, round 340 — the map still holds, and it paid
+
+Re-verified before use rather than trusted: every cell above is unchanged on the
+current tree. The lens then found its first defect by turning the question
+around — not *does a shared-layer fix reach everyone*, but **what does a
+transport that bypasses the shared layer have to re-implement, and did it?**
+
+`RpcChannelTransport.sendMetadata` validates outbound metadata against the
+security policy. `rpc_dart_http` ported that to both halves; `rpc_dart_http2`
+never did, so `maxHeaders`, `maxHeaderValueBytes` and the name/path rules were
+enforced inbound only on that transport.
+
+**The detector for the next one is already written in the code**: http2 carries
+comments naming `RpcChannelTransport` behaviours someone noticed were missing and
+ported by hand — `createStream`'s `maxActiveStreams`, `finishSending`'s
+idempotence. Each is an entry on a list nobody has enumerated. Read
+`RpcChannelTransport`'s method bodies as that list.
