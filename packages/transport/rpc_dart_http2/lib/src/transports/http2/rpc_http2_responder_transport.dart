@@ -397,6 +397,30 @@ class RpcHttp2ResponderTransport
           ),
           endStream: true,
         );
+      } on ArgumentError catch (e) {
+        // The REFUSAL ITSELF violated the policy that produced it. Trimming the
+        // message covers `maxHeaderValueBytes` and not `maxHeaders`: this
+        // trailer carries grpc-status AND grpc-message, so a cap below 2
+        // refuses the refusal, and the peer was told "connection lost or
+        // stream reset before trailers" -- UNAVAILABLE, which reads as
+        // retryable -- for a deterministic policy rejection it should retry
+        // never.
+        //
+        // The status survives and the text gives way, the same trade the
+        // message trimming above already makes.
+        _logger?.warning(
+          'Refusal for stream $streamId does not fit the policy ($e); '
+          'sending the status alone',
+        );
+        try {
+          await sendMetadata(
+            streamId,
+            RpcMetadata.forTrailer(status),
+            endStream: true,
+          );
+        } catch (e2) {
+          _logger?.warning('Could not reject stream $streamId: $e2');
+        }
       } catch (e) {
         _logger?.warning('Could not reject stream $streamId: $e');
       } finally {

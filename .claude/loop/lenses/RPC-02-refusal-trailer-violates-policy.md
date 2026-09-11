@@ -3,8 +3,8 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320, 327]
-status: swept here (round 327, 1ab3e26e)
+applied: [216, 243, 320, 327, 349]
+status: confirmed (round 349) — the 327 sweep was undone by round 340
 ---
 
 # RPC-02 — A refusal trailer that violates the policy it enforced
