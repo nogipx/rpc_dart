@@ -2,7 +2,7 @@
 refines: U-03
 paths: [packages/**/analysis_options.yaml, analysis_options.yaml]
 applies: the project has a static-analysis gate configured from a shared preset
-breaks: "wrong result: an unchecked implicit downcast from `dynamic` throws at run time where the analyser could have refused it, and the class stays invisible to CI so every instance costs a round."
+breaks: "wrong result: an unchecked implicit downcast from `dynamic` throws at run time where the analyser could have refused it — LATENT on this corpus (round 329), so the damage is a permanently unguarded surface rather than a live defect."
 applied: [325, 326, 328]
 status: confirmed (round 325)
 ---
@@ -87,6 +87,40 @@ golangci-lint), every one of them has strictness dials outside its preset, and
 every one of them silently falls back to a parent config when a unit has none.
 A candidate for `catalog/`, not promoted here — that is a change to the SKILL,
 and a curate pass touches project data only.
+
+## What this lens does NOT buy — measured in round 329
+
+The `breaks:` line above originally claimed the downcasts throw at run time and
+that "a whole class of defect the loop finds by hand is invisible to CI". Round
+329 tested both halves and **both were overclaims.**
+
+**It found no live defect.** 534 issues fixed across rounds 325, 326 and 328,
+and every test count in the workspace unchanged at each one — `rpc_dart`
+`+1435 ~1`, http2 `+204`, websocket `+137`, isolate `+74`. The surface was
+latent throughout. That is still worth closing, permanently and for the cost of
+three rounds; it is not the same as finding a bug.
+
+**And it does not catch the classes this loop hunts.** Round 242's defect — an
+unguarded `.then()` running user code, which ends the isolate when it throws —
+is still in `client_connection.dart:432` in the shape RPC-13 describes, and the
+floor calls it clean. A three-case probe says why:
+
+```dart
+void inVoidFunction()          { work().then((_) {}); }   // not flagged
+Future<void> inAsyncFunction() async { work().then((_) {}); }   // FLAGGED
+void withNestedVoid()          { void inner() { work(); } ... } // not flagged
+```
+
+`unawaited_futures` fires only inside an `async` body. Round 242's site is a
+`void` method, which is exactly where a fire-and-forget future is most likely to
+be written and least likely to be awaited.
+
+> **A lint floor and a defect lens cover different things, and the overlap is
+> smaller than it looks.** Nothing in the floor addresses RPC-01 (credit on
+> skip), RPC-05 (charge point), RPC-14 (timeout abandons work), RPC-16 (check
+> before await) or RPC-17 (limit after residency) either. Raise the floor for
+> the surface it closes cheaply; do not let a green gate read as coverage of the
+> classes rounds are spent on.
 
 ## The asymmetry worth keeping
 

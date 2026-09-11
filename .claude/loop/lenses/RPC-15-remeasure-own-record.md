@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329]
 status: confirmed (round 211)
 ---
 
@@ -44,6 +44,18 @@ without it, 0 with it.
 > When an ablation shows nothing, suspect the observable before the code: round
 > 210 was watching the call future, which resolves on a path the fix does not
 > touch.
+
+**Round 329 aimed it at a FOUR-ROUND-OLD lens instead of a stale one**, and that
+is the variant worth keeping: RPC-26's `breaks:` line had consumed three rounds
+and 534 edits without anyone testing it. Both halves were overclaims — no live
+defect among the 534 (every test count unchanged at each round), and the floor
+does not catch RPC-13's class, which round 242's own defect still demonstrates
+at `client_connection.dart:432`.
+
+> **The record most worth re-measuring is not always the oldest one.** `stale`
+> ranks by age, so a claim made four rounds ago and acted on three times is
+> invisible to it. Ask instead which record has been the most EXPENSIVE, and
+> whether anyone tested it.
 
 Round 321 is that note one level out, and it says the detector is not only
 `stale`. A record can be a COMMENT a previous round wrote to explain its own
