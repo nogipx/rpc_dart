@@ -8,8 +8,9 @@ SPDX-License-Identifier: MIT
 
 ### Changed
 
-- Requires rpc_notify 1.2.0, which releases per-topic distributors instead of
-  retaining them for the life of the process.
+- Requires rpc_notify 1.4.0, which releases per-topic distributors instead of
+  retaining them for the life of the process, and no longer disposes a
+  repository it was handed. Through it, rpc_dart 6 — see its changelog.
 
 ## 1.0.0
 

@@ -23,7 +23,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_dart: '>=5.0.0 <6.0.0'
+  rpc_dart: '>=6.0.0 <7.0.0'
 
 dev_dependencies:
   lints: ^6.0.0

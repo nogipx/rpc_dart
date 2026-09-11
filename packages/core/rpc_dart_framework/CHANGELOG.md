@@ -4,6 +4,17 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.5.0
+
+### Changed
+
+- Requires rpc_dart 6 and rpc_dart_isolate 0.4. See their changelogs.
+
+### Performance
+
+- `RpcApp`'s lifecycle logging no longer builds its message strings when the
+  level discards them (9 call sites).
+
 ## 0.4.0
 
 ### Fixed

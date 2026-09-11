@@ -6,20 +6,88 @@ SPDX-License-Identifier: MIT
 
 ## 0.3.0
 
+The largest release this transport has had. It is the one a gRPC deployment
+actually exposes, and most of what follows is what an unauthenticated peer could
+do to a server before it.
+
+### Breaking
+
+- **The HTTP/2 wire machinery is no longer exported.** Frame, stream and
+  connection internals were public by omission; the transports, the server and
+  the policy types are the supported surface.
+- **`pingInterval` defaults to 30s** on the server. A peer that completes the
+  handshake and then goes silent used to hold its connection, endpoint and
+  contracts forever. Set it to null for the old behaviour.
+- **Requires rpc_dart 6.** See its changelog — notably that a handler's bare
+  `Exception` text no longer reaches the caller, `closeOnProtocolError` now
+  defaults to false, and unary honours `RpcDataTransferMode`.
+
+### Security
+
+- **A peer that only sends violating frames is bounded.** `_validateInbound`
+  ported the half that had a name (`closeOnProtocolError`) and not the
+  256-violation backstop beside it: at the default policy, 2000 violating header
+  blocks were all accepted, the connection stayed open, and RSS rose 27 MiB. The
+  responder now closes on the flag or the backstop, the caller on the backstop
+  alone — because killing a client's connection over one peer fault takes its
+  other in-flight calls with it, and 256 times is no longer one bad frame.
+- **Outbound metadata is checked against the security policy.** Only inbound was
+  checked, so under `maxHeaders: 32, maxHeaderValueBytes: 64` this side happily
+  sent 64 headers, a 200-character value and a header name containing a space —
+  all of which the shared layer refuses.
+- **The peer's header block is bounded before it is converted**, on the caller
+  as well as the responder. This is the CONTINUATION flood: HTTP/2 exempts
+  HEADERS from flow control, so the only bound is on size.
+- **A socket that never sends the HTTP/2 preface is dropped** (`prefaceTimeout`).
+  A TCP SYN used to build a transport, an endpoint and the application's
+  contracts before a byte arrived: 200 silent sockets gave 200 endpoints.
+- **The CONNECT-proxy handshake is bounded in time and memory.**
+- **`maxActiveStreams` is honoured on the caller**, and the advertised
+  `SETTINGS_MAX_CONCURRENT_STREAMS` now matches what the server enforces,
+  clamped to what the field can carry.
+- **gRPC is POST-only**; the server used to execute a handler for any method.
+- **A request the policy rejects is answered**, not dropped — and the refusal now
+  survives its own policy: under `maxHeaders: 1` the trailer carrying both
+  `grpc-status` and `grpc-message` could not be sent, and the peer was told
+  "Response ended without a gRPC status" (UNAVAILABLE, which reads as retryable)
+  for a deterministic rejection it must never retry. The status survives and the
+  message gives way.
+
 ### Fixed
 
-- Per-connection endpoints are closed when their connection ends. One
-  `RpcResponderEndpoint` is created per socket and they were never released,
-  so every connection leaked its endpoint and everything it held.
-- Cancelled streams are aborted with RST_STREAM, the primitive HTTP/2 has for
-  it, instead of a metadata frame that is illegal once this side has
-  half-closed.
-
-### Changed
-
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- **Per-connection endpoints are closed when their connection ends.** One
+  `RpcResponderEndpoint` is created per socket and none were ever released.
+- **Cancelled streams are aborted with RST_STREAM**, the primitive HTTP/2 has
+  for it, instead of a metadata frame that is illegal once this side has
+  half-closed — and a peer's RST_STREAM is now delivered, so a cancelled call
+  actually stops.
+- **Backpressure works in both directions.** The caller no longer buffers its
+  whole request for a stalled peer, an upload into a handler that is not
+  consuming is throttled, and a slow reader genuinely slows the server down.
+  A call that stalls is refused rather than pausing the connection's read loop,
+  which would have stalled every other stream on it.
+- **A stream ended on DATA without trailers is not a clean end**, and a
+  truncated response stream is no longer reported as complete.
+- **Graceful shutdown**: opt-in drain on `stop()`, GOAWAY sent when draining,
+  and receiving one no longer kills in-flight calls. `close()` no longer waits
+  for streams it has already doomed. A draining connection is reported as
+  draining rather than saturated, and one at MAX_CONCURRENT_STREAMS as
+  saturated rather than dead.
+- **Keepalive on both halves** (caller and server PING), which is the only way
+  to reclaim a half-open path.
+- **Reconnect**: usable more than once, no longer orphans a connection per
+  concurrent attempt, does not un-close a closed transport, and no longer
+  restarts the stream-id sequence — a fresh id sequence after a reconnect reuses
+  ids the peer still has state for.
+- **Status mapping**: a peer RST_STREAM and a drained connection surface gRPC
+  statuses instead of `StateError` and a raw transport exception; a non-200
+  `:status` maps through the gRPC table; a 200 whose content-type is not gRPC is
+  rejected; an over-limit request is answered `RESOURCE_EXHAUSTED`.
+- **A transport wrapper no longer drops the security policy**, and a decorator
+  that declares a capability can no longer switch the upload bound off.
+- **The endpoint is released when `onEndpointCreated` throws.**
+- **The caller no longer kills its own connection after four calls.**
+- **Nagle is off on every socket**, as gRPC does.
 
 ## 0.2.4
 

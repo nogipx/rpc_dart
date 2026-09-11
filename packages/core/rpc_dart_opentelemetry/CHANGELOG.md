@@ -8,9 +8,7 @@ SPDX-License-Identifier: MIT
 
 ### Changed
 
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- Requires rpc_dart 6. See its changelog.
 
 ## 0.3.6
 

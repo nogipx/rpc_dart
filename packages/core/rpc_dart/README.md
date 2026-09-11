@@ -256,12 +256,14 @@ other.
 ```dart
 const policy = RpcSecurityPolicy(
   maxActiveStreams: 4096,          // concurrent streams, per connection
+  maxConcurrentHandlers: 256,      // handlers RUNNING, default null
   maxMessageLengthBytes: 16 << 20, // single message, framing included
+  maxBufferedBytes: 16 << 20,      // queued for a stream nobody is reading
   maxMetadataBytes: 64 * 1024,
   maxHeaders: 128,
   halfOpenStreamTimeout: Duration(seconds: 60),
-  closeOnProtocolError: true,
-);
+  closeOnProtocolError: false,     // the default; a 256-violation backstop
+);                                 // closes the connection either way
 ```
 
 `maxActiveStreams` applies to streams the peer opens, not just your own calls.
@@ -269,6 +271,19 @@ const policy = RpcSecurityPolicy(
 request — set it to `null` to disable. Note it covers dispatch only: a stream
 that has reached a handler and then goes idle is deliberately not reclaimed,
 because that is also what a legitimate long-lived subscription looks like.
+
+`maxConcurrentHandlers` is a different dimension from `maxActiveStreams`, which
+bounds stream STATE. Dart cannot interrupt a running async function, so a
+handler that ignores its cancellation token keeps going after its stream is
+reclaimed and its admission slot returned — a peer pacing its calls past the
+reclaim grace accumulates handlers with nothing to stop them. At the ceiling a
+new call is refused with `RESOURCE_EXHAUSTED`, which is retryable.
+
+`maxBufferedBytes` bounds what is queued for a stream whose consumer is not
+reading. Metadata is deliberately exempt from flow control — HTTP/2 exempts
+HEADERS for the same reason, a control frame that cannot be sent deadlocks the
+stream it is trying to end — so size is what bounds it. Over the limit the
+stream fails with `RESOURCE_EXHAUSTED` and the connection survives.
 
 ---
 

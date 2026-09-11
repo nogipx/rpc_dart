@@ -13,9 +13,9 @@ SPDX-License-Identifier: MIT
 
 ### Changed
 
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- Requires rpc_dart 6 and rpc_dart_websocket 0.4. See their changelogs — in
+  particular that the WebSocket client no longer offers `permessage-deflate`,
+  which this collector's transport used by default.
 
 ## 0.2.2
 

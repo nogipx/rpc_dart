@@ -6,11 +6,16 @@ SPDX-License-Identifier: MIT
 
 ## 0.3.0
 
+### Fixed
+
+- **A method resolves as a `file_containing_symbol`.** Reflection clients ask
+  for a method by its fully-qualified name; only services and messages were
+  matched, so the lookup failed for the one shape `grpcurl` uses most.
+
 ### Changed
 
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- Requires rpc_dart 6. See its changelog.
+- The README's JSON example told readers to run a call that cannot work.
 
 ## 0.2.3
 

@@ -8,9 +8,11 @@ SPDX-License-Identifier: MIT
 
 ### Changed
 
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- Requires rpc_dart 6 and rpc_blob 2.3. Two core majors are spanned here: see
+  rpc_dart's 5.0.0 and 6.0.0 entries — flow control on by default, an expired
+  deadline as `RpcDeadlineExceededException` on every shape, a stream that ends
+  without a trailer raising `UNAVAILABLE`, and a handler's bare `Exception` text
+  no longer reaching the caller.
 
 ## 2.0.0
 

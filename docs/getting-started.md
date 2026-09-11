@@ -15,10 +15,10 @@ This guide builds a small calculator service end-to-end: define the interface, g
 ```yaml
 # pubspec.yaml
 dependencies:
-  rpc_dart: ^2.6.1
+  rpc_dart: ^6.0.0
 
 dev_dependencies:
-  rpc_dart_generator: ^0.1.6
+  rpc_dart_generator: ^0.6.0
   build_runner: any
 ```
 

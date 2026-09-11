@@ -4,6 +4,138 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 6.0.0
+
+The theme is what a peer can make this side hold, and what leaves it without
+being asked for. Every item below was measured against a failing witness before
+it was fixed; the numbers are the reason each one is here.
+
+### Breaking
+
+- **Three `RpcSecurityPolicy` knobs are gone**: `maxWebSocketMessageBytes`,
+  `maxChunkedMessageBytes`, `maxChunkCount`. All three were documented "NOT
+  CURRENTLY ENFORCED" and nothing outside `security_policy.dart` ever read one.
+  With `maxWebSocketMessageBytes: 1 MiB` set, four 15 MiB messages were accepted
+  and the connection stayed open. A control that is present, configurable and
+  inert is worse than a missing one: an operator hardening a deployment stops
+  looking. What actually bounds an inbound message is `maxMessageLengthBytes`,
+  and that is now pinned by a test rather than claimed in a doc comment.
+- **`closeOnProtocolError` defaults to `false`.** Killing the connection over
+  one bad frame takes every other in-flight call with it. A peer that only
+  sends violating frames is still bounded, by a 256-violation backstop that
+  closes the connection regardless of the flag.
+- **Unary honours `RpcDataTransferMode` instead of guessing from the
+  transport.** On a transport reporting `supportsZeroCopy`: `auto` (the default)
+  and `zeroCopy` take the object path as before; `codec` now serializes, which
+  is what it always said. Writing `codec` used to change nothing. The mode is
+  what a caller writes down to refuse the object path's costs — no size limit
+  applies to an object, and a `toJson` that deliberately omits a field is not
+  consulted at all when the object crosses a process boundary.
+- **A response that ends without a `grpc-status` is reported as `UNAVAILABLE`
+  on the channel transports too** (websocket, isolate, wasm). http2 has said so
+  since 4.x; the others ended the stream cleanly, so the same truncation was
+  loud on one transport and silent on three, handing a consumer partial data as
+  if it were complete. Client side only — a client's ordinary half-close carries
+  no status and is not truncation. The end marker is withheld rather than
+  followed by an error, because a cleanly closed stream swallows the error that
+  arrives after it.
+- **A handler error is default-deny on the wire.** A bare `Exception('...')`
+  thrown by a handler no longer has its text delivered; throw
+  `RpcStatusException`, which also lets the handler choose a status instead of
+  taking INTERNAL. Forwarding any `Exception` was defensible for code you wrote
+  and not for the libraries under it — measured identically on http2, websocket
+  and isolate, callers received `"boom, path = '/etc/private/key.pem'"`,
+  `"refused, address = 127.0.0.1, port = 5432"` and
+  `"_SecretException: db-password-hunter2"`. An allow-list of the leaky types
+  cannot work, because most belong to packages this library has never heard of.
+  `RpcStatusException` and rpc_dart's own `RpcException` hierarchy still travel
+  intact.
+- **A transport that cannot carry the stream-id watermark is refused at
+  attach.** A decorator that dropped `IRpcStreamIdSequence` silently restarted
+  the id sequence after a reconnect, so a new call reused an id the peer still
+  had state for. Transports now continue their sequence across a reconnect
+  (`RpcChannelTransport.resumeStreamIdsAfter` / `lastIssuedStreamId`).
+- **Thirteen pipeline internals are no longer exported** from
+  `package:rpc_dart/rpc_dart.dart`: `CallProcessor`, `StreamProcessor`, the two
+  pipeline mixins, `RpcResponderStreamState`, `RpcResponderStreamStore`,
+  `RpcResponderMethodRegistry`, `RpcResponderMethodBinding`,
+  `RpcResponderPingHandler`, `RpcEndpointPingProtocol`,
+  `RpcEndpointPingExchange`, `RpcEndpointPingResult`, `RpcLongTimer`. 152 public
+  types became 139; nothing in this workspace used any of them.
+- **`dart:typed_data` is no longer re-exported.** Import it directly. Measured
+  across the workspace: zero files needed a new import.
+- **Registering a duplicate method name throws from one place**, not eight —
+  the four registration shapes had four copies of the check with different
+  wording.
+
+### Security
+
+Each of these is reachable by an unauthenticated peer on an open connection.
+
+- **A metadata flood is bounded.** Metadata is exempt from flow control by
+  design (HTTP/2 exempts HEADERS because a control frame that cannot be sent
+  deadlocks the stream it is trying to end), and the per-stream controller that
+  receives it was unweighed and uncapped: 4000 frames, 32 MiB, none paced and no
+  bound fired. Frames queued for a stream are now charged against
+  `maxBufferedBytes`; over the bound the STREAM fails with `RESOURCE_EXHAUSTED`
+  and the connection survives, because a peer flooding one call must not take
+  down the others sharing the socket. A consumer that keeps up is unaffected.
+- **A queued header is charged for what it retains, not for its text.**
+  `["h1","v1"]` weighed 4 bytes and retained ~100. At 500 headers per frame —
+  the attacker's optimum, where the weighed total stays under the bound right up
+  to the event ceiling — 4096 frames were admitted for 190 MiB retained.
+- **The pre-method budget counts metadata too.** It charged
+  `payload?.length ?? 0`, so 4000 metadata frames were charged 0.00 MiB and
+  pinned 789 MiB against a 16 MiB ceiling.
+- **Two peer-keyed collections were unbounded**: `_statusSeen` and the
+  finished-stream set, both keyed by ids the peer chooses.
+- **The frame channel and the reconnect proxy buffer their inbound streams**,
+  so a frame arriving before anything listens is no longer dropped or held
+  unbounded.
+- **`maxConcurrentHandlers` (new, default null) bounds running handlers, not
+  just stream state.** A handler that ignores its cancellation token cannot be
+  preempted, so reclaiming its stream returns the admission slot while the work
+  continues. Against `maxActiveStreams: 4`, one call every 250 ms with a 40 ms
+  deadline: 37 concurrent handlers after 20 s and growing, versus 4 with the new
+  limit. It is invisible while it happens — `activeStreams` read 0 at the moment
+  37 handlers were running — and saturating the connection hides it, so a load
+  test reports the ceiling holding. Pacing is what defeats it.
+
+### Fixed
+
+- **A unary call whose request stream fails is answered**, instead of the
+  failure being logged while the caller waits out its deadline.
+- **Flow control**: connection credit is repaid for bytes nobody consumed even
+  when a consumer is attached (a paused consumer never receives `done`, so the
+  repay never ran and the bytes stayed owed forever — 1024 → 3072 KiB); a zero
+  grant is participation, not a legacy peer that should be flooded; a grant for
+  a stream that has ended is refused instead of resurrecting its credit.
+- **A throwing state callback no longer ends the isolate.**
+- **The stream-id cursor survives a transport's own `close()`.**
+- **Connection-pool credit is exposed for diagnostics** (`health()`).
+
+### Performance
+
+- **Log message strings are no longer built for levels that discard them.** 158
+  interpolating call sites across core and the transports were counted and
+  guarded; the 26 constant-message calls were left alone, because a const string
+  costs nothing to build.
+- **The guards ask the filter's own question.** `isInternal`/`isTrace`/`isDebug`
+  omitted the `tag`, which `_resolveLevel` consults ahead of everything else —
+  so under a tag override the guard predicted the filter wrongly in the mute
+  direction, silencing 222 call sites that should have logged.
+- **One context token per call instead of two**, drawn in 3 syscalls instead of
+  12.
+
+### Changed
+
+- The analysis floor was raised (strict language modes plus a wider lint set)
+  and the 320 issues under it fixed. Internal, but it is why this release
+  touches nearly every file.
+- `RpcStreamRouter` and the drain loop are extracted rather than copied into
+  each transport — four and three copies respectively, now one each, tested
+  once.
+
 ## 5.0.1
 
 ### Fixed

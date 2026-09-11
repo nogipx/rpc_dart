@@ -6,11 +6,22 @@ SPDX-License-Identifier: MIT
 
 ## 0.2.0
 
+### Security
+
+- **Gzip inflation is bounded as it happens, not checked once it is over.** The
+  limit ran on `result.length`, so the output existed before it was refused:
+  4.0 MiB of compressed zeros against a 16 MiB limit cost 1873 MiB of RSS over
+  17.5 seconds (~470x). The gzip trailer's ISIZE is the size mod 2^32, so a
+  pre-check on it clears trivially.
+- **The residual on web is documented rather than claimed fixed.** `dart2js` has
+  no incremental inflater available, so the same payload is refused in 12 ms on
+  the VM and 15 980 ms on dart2js — about 65 KiB of wire buys 64 MiB and sixteen
+  seconds of the event loop. The ISIZE contract is now pinned by a test on both
+  runtimes so the difference cannot drift unnoticed.
+
 ### Changed
 
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- Requires rpc_dart 6. See its changelog.
 
 ## 0.1.3
 

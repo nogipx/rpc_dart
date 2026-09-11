@@ -4,6 +4,14 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 1.4.0
+
+### Changed
+
+- Requires rpc_dart 6. See its changelog — notably that a handler's bare
+  `Exception` text no longer reaches the caller, so a repository error now
+  needs an `RpcStatusException` to say anything to the peer.
+
 ## 1.3.0
 
 ### Fixed

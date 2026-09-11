@@ -4,6 +4,16 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.6.0
+
+### Changed
+
+- Requires rpc_dart 6. See its changelog — in particular the thirteen pipeline
+  types no longer exported from the public barrel, and `dart:typed_data` no
+  longer being re-exported.
+- Analysed under the workspace's raised floor (strict language modes plus a
+  wider lint set). This package and the wasm one were the last two outside it.
+
 ## 0.5.0
 
 ### Changed

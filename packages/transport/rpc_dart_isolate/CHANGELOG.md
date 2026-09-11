@@ -4,6 +4,33 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.0
+
+### Breaking
+
+- **A send failure no longer closes the web channel.** One message the structured
+  clone algorithm refuses used to take the whole connection with it; the send
+  now fails and the connection survives. Code relying on the close to notice a
+  send failure must observe the failure itself.
+- **Requires rpc_dart 6.** See its changelog.
+
+### Fixed
+
+- **One unsendable message no longer kills the connection** on the IO side
+  either.
+- **Connection-level flow control never worked at all here** — it does now.
+- **`transport.close()` releases the isolate and its ports.**
+- **The web `spawn()` notices a worker that died** instead of waiting forever.
+- **`customParams` reach a web worker.** They were dropped silently.
+- **No JS-interop member is torn off**, which is a compile error on the JS
+  targets. `dart analyze` cannot see this — the rule lives in the CFE's
+  JS-target checks — and `unnecessary_lambdas` actively asks for the broken
+  form, so the gate now compiles this package for a JS target.
+
+### Documentation
+
+- What actually crosses the isolate boundary, and what "zero-copy" means here.
+
 ## 0.3.0
 
 ### Changed

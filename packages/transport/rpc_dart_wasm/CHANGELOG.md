@@ -6,11 +6,38 @@ SPDX-License-Identifier: MIT
 
 ## 0.2.0
 
+The release where the native halves were compiled and then actually RUN. The
+levels find different things and the order is strict — reading < compiling <
+running: reading shipped a dead-runtime report through a call that is a no-op
+after boot; compiling would not have caught the 30 s boot stall; and running is
+what showed that on iOS a page loaded with `baseURL: nil` cannot fetch its own
+module at all.
+
+### Fixed
+
+- **A runtime that dies on its own answers its callers** instead of leaving them
+  waiting.
+- **iOS**: the runtime could not fetch its own module, and its timers recursed.
+  A guest whose glue code throws cost 30 s of silence before anything was
+  reported.
+- **Android**: a boot failure said nothing about why; a 16 MiB message killed
+  the runtime; closing a runtime with traffic in flight killed the app.
+- **A running guest's failures reach the host**, and a failed handler inside the
+  guest is reported at ERROR rather than info.
+- **`close()` releases both channels the bridge opened.**
+- **Bytes that arrive before the transport binds are buffered**, not dropped.
+- The iOS privacy manifest ships with the plugin.
+
 ### Changed
 
-- Requires rpc_dart 5. See its changelog: flow control is on by default, an
-  expired deadline is now `RpcDeadlineExceededException` on every shape, and a
-  stream that ends without a trailer raises `UNAVAILABLE`.
+- Requires rpc_dart 6. See its changelog.
+- The plugin's Swift and Kotlin are type-checked by a gate
+  (`melos run analyze:native`), and there is a device gate that builds and runs
+  them (`melos run test:wasm:device`). Neither `analyze` nor `test` compiles a
+  line of either.
+- The package's `dart:js_interop` implementation is compiled for a JS target by
+  `test:wasm`. It had no JS-target compile anywhere — `analyze` runs over it at
+  `--fatal-infos` and is structurally incapable of seeing its one failure mode.
 
 ## 0.1.2
 

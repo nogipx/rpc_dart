@@ -15,8 +15,11 @@ import 'dart:io';
 ///   fvm dart run tool/bump_dep.dart rpc_dart --dry-run  # preview, write nothing
 ///
 /// Handles both constraint forms used in this repo and preserves the form:
-///   rpc_dart:           '>=X <Y'  ->  '>=<target> <Y>'   (range; floor only)
+///   rpc_dart:           '>=X <Y'  ->  '>=<target> <Y>'   (range)
 ///   rpc_dart_generator: ^X        ->  ^<target>          (caret)
+/// The upper bound of a range moves only when the target reaches it, i.e. on a
+/// MAJOR bump: `>=5.0.0 <6.0.0` with target 6.0.0 becomes `>=6.0.0 <7.0.0`, not
+/// the empty `>=6.0.0 <6.0.0`.
 /// Edits are line-level (formatting/comments preserved), never lower a floor,
 /// skip the package's own pubspec, and warn on any other constraint shape.
 /// Run `fvm dart pub get` at the repo root afterwards.
@@ -102,11 +105,21 @@ void main(List<String> args) {
 String? _rewriteConstraint(String value, String target) {
   final v = value.trim();
 
-  // Quoted range: '>=FLOOR <UPPER'  (keep the upper bound).
-  final range = RegExp(r"^('?)>=([0-9][0-9.]*)( +<[^'\s]*)('?)$").firstMatch(v);
+  // Quoted range: '>=FLOOR <UPPER'.
+  final range = RegExp(r"^('?)>=([0-9][0-9.]*)( +<)([^'\s]*)('?)$")
+      .firstMatch(v);
   if (range != null) {
     if (_compare(target, range.group(2)!) <= 0) return null;
-    return '${range.group(1)}>=$target${range.group(3)}${range.group(4)}';
+    // The upper bound moves only when the target has reached or passed it —
+    // which is the MAJOR case. Left alone, a floor raised to 6.0.0 under an
+    // unchanged `<6.0.0` yields `>=6.0.0 <6.0.0`: a range no version satisfies,
+    // written silently into twenty pubspecs. The workspace resolves siblings
+    // from local source, so nothing in this repo would notice; only a user
+    // adding the package from pub.dev would.
+    final upper = _compare(target, range.group(4)!) >= 0
+        ? '${_major(target) + 1}.0.0'
+        : range.group(4)!;
+    return '${range.group(1)}>=$target${range.group(3)}$upper${range.group(5)}';
   }
 
   // Caret: ^X
@@ -138,9 +151,13 @@ Directory? _repoRoot() {
 Iterable<File> _pubspecs(Directory root) sync* {
   for (final entity
       in Directory('${root.path}/packages').listSync(recursive: true)) {
+    // `.symlinks` is CocoaPods' plugin tree inside the wasm example: every
+    // pubspec under it is a symlink back to one already in this list, so
+    // walking it reports the same file twice under a build-state path.
     if (entity is File &&
         entity.uri.pathSegments.last == 'pubspec.yaml' &&
-        !entity.path.contains('.dart_tool')) {
+        !entity.path.contains('.dart_tool') &&
+        !entity.path.contains('.symlinks')) {
       yield entity;
     }
   }
@@ -166,6 +183,10 @@ String? _readVersion(File pubspec) {
 }
 
 String _rel(Directory root, File f) => f.path.replaceFirst('${root.path}/', '');
+
+/// The major component of [v], or 0 if it has none.
+int _major(String v) =>
+    int.tryParse(v.split(RegExp('[-+]')).first.split('.').first) ?? 0;
 
 /// Compares dot-separated versions ignoring pre-release/build suffixes.
 /// Negative if [a] < [b], 0 if equal, positive if [a] > [b].

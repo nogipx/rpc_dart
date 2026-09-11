@@ -20,7 +20,7 @@ environment:
 resolution: workspace
 
 dependencies:
-  rpc_notify: ^1.2.0
+  rpc_notify: ^1.4.0
   postgres: ^3.5.9
 
 dev_dependencies:
