@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332]
 status: confirmed (round 308)
 ---
 
@@ -267,3 +267,24 @@ watched and one not, with nothing in the file recording which.
 > unequally covered: after the extraction the existing test guards both call
 > shapes, because there is one implementation to guard. That is a measurable
 > return where "they might drift later" is not.
+
+**Round 332 pointed that criterion at this lens's own output and it came back
+worse.** `RpcStreamRouter` — the class round 308 extracted from the four
+routers above — had no test file at all, 24 rounds later. Ablating the rule it
+exists to enforce, `operator []` returning the SAME stream on a repeated lookup,
+which is exactly what http2's caller had got wrong:
+
+```
+rpc_dart_http    ablated     +123   all passed
+rpc_dart_http2   ablated     +204   all passed
+reuse branch reached         http 0 times, http2 1 time
+```
+
+Reachable and watched by nothing — L-04 case 1, settled with one `print` rather
+than a rebuilt bench.
+
+> **Extracting shared code moves the code but not the tests.** A class four
+> callers depend on inherits their coverage of THEIR behaviour, not coverage of
+> the rule it was extracted to hold. After an extraction, ask what test
+> exercises the NEW unit. Round 308 created this class; nothing tested it until
+> `test/core/stream_router_test.dart` in 332.
