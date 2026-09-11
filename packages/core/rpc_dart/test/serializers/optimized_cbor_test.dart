@@ -77,7 +77,7 @@ void main() {
           'booleans': [true, false],
           'null_value': null,
           'arrays': [
-            [],
+            <Object?>[],
             [1, 2, 3],
             ['a', 'b', 'c'],
             [1, 'mixed', true, null],
@@ -110,7 +110,7 @@ void main() {
         for (int i = 0; i < (testData['floats'] as List).length; i++) {
           expect(
             (fastDecoded['floats'] as List)[i],
-            closeTo((testData['floats'] as List)[i], 0.000001),
+            closeTo((testData['floats'] as List)[i] as num, 0.000001),
           );
         }
       });
@@ -218,8 +218,8 @@ void main() {
         var current = decoded;
         for (int i = 50; i > 0; i--) {
           expect(current['level'], equals(i));
-          expect(current['data'].length, equals(5));
-          current = current['nested'];
+          expect((current['data'] as List).length, equals(5));
+          current = current['nested'] as Map<String, dynamic>;
         }
         expect(current['leaf'], equals(true));
         expect(current['depth'], equals(0));

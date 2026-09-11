@@ -26,7 +26,7 @@ void main() {
       unawaited(scope.done.then((_) => done = true));
 
       await scope.close();
-      await Future.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
       expect(done, isTrue);
     });
@@ -66,7 +66,7 @@ void main() {
 
         var called = false;
         scope.onDispose(() => called = true);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         expect(called, isTrue);
       });
@@ -95,7 +95,7 @@ void main() {
 
         source.add(1);
         source.add(2);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         expect(results, [1, 2]);
 
@@ -113,12 +113,12 @@ void main() {
         tracked.listen(results.add);
 
         source.add(1);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         await scope.close();
 
         source.add(2); // should not reach listener
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         expect(results, [1]);
         await source.close();
@@ -145,13 +145,13 @@ void main() {
         scope.listen<int>(source.stream, results.add);
 
         source.add(1);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
         expect(results, [1]);
 
         await scope.close();
 
         source.add(2);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
         expect(results, [1]); // no 2
 
         await source.close();
@@ -165,14 +165,14 @@ void main() {
         final sub = scope.listen<int>(source.stream, results.add);
 
         source.add(1);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
         expect(results, [1]);
 
         // Manual cancel before scope close.
         await sub.cancel();
 
         source.add(2);
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
         expect(results, [1]);
 
         await source.close();
@@ -188,7 +188,7 @@ void main() {
         expect(scope.isClosed, isFalse);
         expect(scope.remaining, isNotNull);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(Duration(milliseconds: 100));
         expect(scope.isClosed, isTrue);
       });
 
@@ -199,7 +199,7 @@ void main() {
         var cleaned = false;
         scope.onDispose(() => cleaned = true);
 
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(Duration(milliseconds: 100));
         expect(cleaned, isTrue);
       });
 
@@ -209,7 +209,7 @@ void main() {
         );
         final scope = RpcCallScope(context: context);
 
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
         expect(scope.isClosed, isTrue);
       });
     });
@@ -223,7 +223,7 @@ void main() {
         expect(scope.isClosed, isFalse);
 
         token.cancel('test');
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         expect(scope.isClosed, isTrue);
       });
@@ -237,7 +237,7 @@ void main() {
         scope.onDispose(() => cleaned = true);
 
         token.cancel('test');
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         expect(cleaned, isTrue);
       });
@@ -247,7 +247,7 @@ void main() {
         final context = RpcContext.withCancellation(token);
         final scope = RpcCallScope(context: context);
 
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
         expect(scope.isClosed, isTrue);
       });
     });

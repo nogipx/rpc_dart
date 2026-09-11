@@ -52,7 +52,7 @@ class ClientStreamingExample {
           .asyncMap((message) async {
             print('КЛИЕНТ: → "${message.value}"');
             // Небольшая задержка между сообщениями
-            await Future.delayed(Duration(milliseconds: 50));
+            await Future<void>.delayed(Duration(milliseconds: 50));
             return message;
           });
       final result1 = await client.aggregateMessages(
@@ -77,7 +77,7 @@ class ClientStreamingExample {
       final secureStream = Stream.fromIterable(secureMessages.map((m) => m.rpc))
           .asyncMap((message) async {
             print('КЛИЕНТ: → Защищенное сообщение: "${message.value}"');
-            await Future.delayed(Duration(milliseconds: 30));
+            await Future<void>.delayed(Duration(milliseconds: 30));
             return message;
           });
       final result2 = await client.aggregateMessages(
@@ -92,7 +92,7 @@ class ClientStreamingExample {
         cancellationToken,
       ).withValue('batch-size', 100).withTraceId('cancel-aggregate-789');
       // Отменяем через 150мс
-      Future.delayed(Duration(milliseconds: 150), () {
+      Future<void>.delayed(Duration(milliseconds: 150), () {
         print('КЛИЕНТ: Отменяем агрегацию');
         cancellationToken.cancel('User cancelled operation');
       });
@@ -184,7 +184,7 @@ final class DataAggregatorResponder extends RpcResponderContract
         receivedMessages.add(message.value);
         logger.internal('📨 Получено сообщение #$count: "${message.value}"');
         // Имитируем обработку
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
         // Проверяем лимит для batch обработки
         if (batchSize != null && count >= batchSize) {
           logger.info('📊 Достигнут лимит batch: $batchSize');

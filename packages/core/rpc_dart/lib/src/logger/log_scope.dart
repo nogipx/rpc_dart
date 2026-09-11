@@ -199,9 +199,9 @@ class LogScope {
       parentSpanId: _parentSpanId,
       traceId: traceId ?? _traceId,
       data: data != null ? {...?_boundData, ...data} : _boundData,
-      onComplete: (span) => _controller.add(span),
-      onEvent: (event) => _controller.add(event),
-      onStart: (start) => _controller.add(start),
+      onComplete: _controller.add,
+      onEvent: _controller.add,
+      onStart: _controller.add,
       clock: _clock,
     );
   }

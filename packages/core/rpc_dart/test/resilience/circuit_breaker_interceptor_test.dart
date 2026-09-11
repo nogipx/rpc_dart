@@ -109,7 +109,7 @@ void main() {
       expect(cb.state, CircuitBreakerState.open);
 
       // Wait for reset timeout.
-      await Future.delayed(Duration(milliseconds: 80));
+      await Future<void>.delayed(Duration(milliseconds: 80));
 
       // Next call should go through (half-open probe).
       final result = await cb.interceptUnary<String, String>(
@@ -139,7 +139,7 @@ void main() {
         // expected
       }
 
-      await Future.delayed(Duration(milliseconds: 80));
+      await Future<void>.delayed(Duration(milliseconds: 80));
 
       // Probe fails.
       try {

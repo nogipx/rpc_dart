@@ -35,7 +35,7 @@ class LogRedactor {
   ///
   /// Keys are compared case-insensitively (after stringification); nested maps
   /// and lists are recursed into regardless of their generic type arguments.
-  Map<String, Object> _redactDynamic(Map data) {
+  Map<String, Object> _redactDynamic(Map<Object?, Object?> data) {
     final result = <String, Object>{};
     for (final entry in data.entries) {
       final key = entry.key.toString();
@@ -53,8 +53,8 @@ class LogRedactor {
   /// list element (e.g. a list of objects) are still masked; scalars pass
   /// through unchanged.
   Object _redactValue(Object value) {
-    if (value is Map) return _redactDynamic(value);
-    if (value is List) {
+    if (value is Map<Object?, Object?>) return _redactDynamic(value);
+    if (value is List<Object?>) {
       return [
         for (final element in value)
           element == null ? element : _redactValue(element),

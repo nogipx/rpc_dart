@@ -27,9 +27,9 @@ void main() {
           handler: (request) async* {
             receivedRequests.add(request);
             yield 'Response 1 for: $request'.rpc;
-            await Future.delayed(Duration(milliseconds: 1));
+            await Future<void>.delayed(Duration(milliseconds: 1));
             yield 'Response 2 for: $request'.rpc;
-            await Future.delayed(Duration(milliseconds: 1));
+            await Future<void>.delayed(Duration(milliseconds: 1));
             yield 'Response 3 for: $request'.rpc;
           },
         );
@@ -287,7 +287,7 @@ void main() {
 
         // Act
         await client.send('Hello Server'.rpc);
-        await subscription.asFuture();
+        await subscription.asFuture<void>();
 
         // Assert
         expect(receivedRequests.length, equals(1));
@@ -607,7 +607,7 @@ void main() {
 
         // Act
         await client.send('start stream'.rpc);
-        await subscription.asFuture();
+        await subscription.asFuture<void>();
 
         // Assert
         expect(receivedResponses.length, equals(50));

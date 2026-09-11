@@ -44,7 +44,7 @@ void main() {
       };
 
       final result = redactor.redact(data);
-      final users = (result['users'] as List).cast<Map>();
+      final users = (result['users'] as List).cast<Map<Object?, Object?>>();
 
       expect(users[0]['password'], '[REDACTED]');
       expect(users[1]['password'], '[REDACTED]');

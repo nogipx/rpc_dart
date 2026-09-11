@@ -57,10 +57,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   final RpcContext? _context;
 
   /// Cancellation subscription.
-  StreamSubscription? _cancellationSubscription;
+  StreamSubscription<void>? _cancellationSubscription;
 
   /// Incoming messages subscription.
-  StreamSubscription? _subscription;
+  StreamSubscription<void>? _subscription;
 
   /// Request handler.
   late final FutureOr<TResponse> Function(TRequest request) _handler;
@@ -142,7 +142,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
               // Cancel subscription to incoming messages.
               _subscription?.cancel();
             },
-            onError: (error, stackTrace) {
+            onError: (Object error, StackTrace stackTrace) {
               _logger.error(
                 'Error monitoring cancellation [id: $id]',
                 error: error,
@@ -251,7 +251,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           _streamStates.remove(streamId);
         }
       },
-      onError: (error, stackTrace) async {
+      onError: (Object error, StackTrace stackTrace) async {
         _logger.error(
           'Transport error for $_methodPath',
           error: error,

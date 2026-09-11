@@ -64,7 +64,7 @@ final class TestService extends RpcResponderContract {
         callLog.add('ServerStreamMethod: ${request.message}');
         for (int i = 0; i < 3; i++) {
           yield TestResponse('Reply ${i + 1} to: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -655,8 +655,8 @@ void main() {
 
 /// Тестовый сервис имитирующий реальные ресурсы которые нужно освобождать
 final class ResourceHeavyService extends RpcResponderContract {
-  final List<StreamController> _activeStreams = [];
-  final Map<String, StreamSubscription> _subscriptions = {};
+  final List<StreamController<void>> _activeStreams = [];
+  final Map<String, StreamSubscription<void>> _subscriptions = {};
   final List<Timer> _timers = [];
   int activeConnections = 0;
   bool _resourcesActive = false;

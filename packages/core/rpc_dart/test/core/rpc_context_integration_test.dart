@@ -5,8 +5,8 @@
 
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RpcContext Integration Tests', () {
@@ -221,7 +221,7 @@ void main() {
         for (final req in requests) {
           requestsController.add(req.rpc);
         }
-        requestsController.close();
+        unawaited(requestsController.close());
 
         final response = await responsesFuture;
 
@@ -260,7 +260,7 @@ void main() {
         for (final req in requests) {
           requestsController.add(req.rpc);
         }
-        requestsController.close();
+        unawaited(requestsController.close());
 
         final response = await responsesFuture;
 
@@ -307,13 +307,13 @@ void main() {
         requestsController.add('msg2'.rpc);
 
         // Ждем немного для обработки
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         // Закрываем поток запросов
         await requestsController.close();
 
         // Ждем завершения
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
         await responseSubscription.cancel();
 
         // Assert
@@ -365,11 +365,11 @@ void main() {
         requestsController.add('secure-msg'.rpc);
 
         // Ждем обработки
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         // Закрываем поток
         await requestsController.close();
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
         await responseSubscription.cancel();
 
         // Assert

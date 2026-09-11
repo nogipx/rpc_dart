@@ -191,7 +191,7 @@ final class RpcEndpointPingExchange {
 
             completeSuccess(result);
           },
-          onError: (error, stackTrace) {
+          onError: (Object error, StackTrace stackTrace) {
             _log.error(
               'Error receiving ping response [streamId: $streamId]',
               error: error,

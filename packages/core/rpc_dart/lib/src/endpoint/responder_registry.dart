@@ -260,14 +260,17 @@ final class RpcResponderMethodRegistry {
         wrappedHandler = (dynamic request, {RpcContext? context}) async {
           final result = await zeroCopyMethod.callUnaryHandler(
             context!,
-            request,
+            request as Object,
           );
           return result;
         };
         break;
       case RpcMethodType.serverStream:
         wrappedHandler = (dynamic request, {RpcContext? context}) {
-          return zeroCopyMethod.callServerStreamHandler(context!, request);
+          return zeroCopyMethod.callServerStreamHandler(
+            context!,
+            request as Object,
+          );
         };
         break;
       case RpcMethodType.clientStream:

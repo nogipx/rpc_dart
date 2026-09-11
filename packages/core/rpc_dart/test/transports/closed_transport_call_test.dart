@@ -56,13 +56,15 @@ final class _Contract extends RpcResponderContract {
 Future<List<Object>> _unhandledDuring(Future<void> Function() body) async {
   final unhandled = <Object>[];
   final done = Completer<void>();
-  runZonedGuarded(() async {
-    try {
-      await body();
-    } finally {
-      if (!done.isCompleted) done.complete();
-    }
-  }, (error, stack) => unhandled.add(error));
+  unawaited(
+    runZonedGuarded(() async {
+      try {
+        await body();
+      } finally {
+        if (!done.isCompleted) done.complete();
+      }
+    }, (Object error, StackTrace stack) => unhandled.add(error)),
+  );
   await done.future;
   // Give any stranded error a turn to be reported.
   await Future<void>.delayed(const Duration(milliseconds: 50));

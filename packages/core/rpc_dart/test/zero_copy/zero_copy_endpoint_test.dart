@@ -160,7 +160,7 @@ void main() {
       print('   Количество: ${response.count}');
 
       // Ждем чтобы все сообщения были обработаны
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');

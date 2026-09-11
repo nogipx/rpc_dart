@@ -68,7 +68,7 @@ final class ChatContract extends RpcPeerContract {
       handler: (req, {context}) async* {
         for (var i = 1; i <= 3; i++) {
           yield PeerResponse('$_prefix:$i:${req.text}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: _requestCodec,
@@ -93,7 +93,7 @@ final class ChatContract extends RpcPeerContract {
       handler: (requests, {context}) async* {
         await for (final r in requests) {
           yield PeerResponse('$_prefix:${r.text}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: _requestCodec,
@@ -193,7 +193,7 @@ void main() {
       final ctrl = StreamController<String>();
       final future = contractA.mirror(ctrl.stream).take(3).toList();
 
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
       ctrl.add('1');
       ctrl.add('2');
       ctrl.add('3');
@@ -231,7 +231,7 @@ void main() {
       final ctrl = StreamController<String>();
       final future = contractB.mirror(ctrl.stream).take(3).toList();
 
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
       ctrl.add('p');
       ctrl.add('q');
       ctrl.add('r');

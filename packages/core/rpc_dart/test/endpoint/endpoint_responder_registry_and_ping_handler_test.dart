@@ -101,7 +101,7 @@ void main() {
           metadata.add(message.metadata!);
         }
       });
-      addTearDown(() => sub.cancel());
+      addTearDown(sub.cancel);
 
       await handler.respond(
         streamId: streamId,
@@ -157,7 +157,7 @@ void main() {
           trailers.complete(metadata);
         }
       });
-      addTearDown(() => sub.cancel());
+      addTearDown(sub.cancel);
 
       await handler.respond(
         streamId: streamId,

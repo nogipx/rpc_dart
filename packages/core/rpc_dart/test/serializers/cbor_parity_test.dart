@@ -388,7 +388,7 @@ void main() {
 
     test('rejects deeply-nested arrays with FormatException', () {
       // Shallow nesting still decodes fine.
-      expect(CborCodec.decodeUnsafe(nestedArrays(10)), isA<List>());
+      expect(CborCodec.decodeUnsafe(nestedArrays(10)), isA<List<Object?>>());
       // A pathological depth throws instead of crashing the isolate.
       expect(
         () => CborCodec.decodeUnsafe(nestedArrays(5000)),
@@ -403,7 +403,7 @@ void main() {
     });
 
     test('rejects deeply-nested maps with FormatException', () {
-      expect(CborCodec.decode(nestedMaps(10)), isA<Map>());
+      expect(CborCodec.decode(nestedMaps(10)), isA<Map<Object?, Object?>>());
       expect(
         () => CborCodec.decode(nestedMaps(5000)),
         throwsA(

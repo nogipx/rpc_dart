@@ -5,8 +5,8 @@
 
 import 'dart:typed_data';
 
-import 'errors.dart';
 import '../logger/_index.dart';
+import 'errors.dart';
 import 'protocol.dart';
 
 /// Internal state for parsing incoming gRPC stream data.

@@ -16,7 +16,7 @@ class TestRequest implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'message': message};
 
   static TestRequest fromJson(Map<String, dynamic> json) =>
-      TestRequest(json['message']);
+      TestRequest(json['message'] as String);
 
   @override
   String toString() => 'TestRequest($message)';
@@ -39,7 +39,7 @@ class TestResponse implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'result': result};
 
   static TestResponse fromJson(Map<String, dynamic> json) =>
-      TestResponse(json['result']);
+      TestResponse(json['result'] as String);
 
   @override
   String toString() => 'TestResponse($result)';
@@ -65,7 +65,7 @@ final class ZeroCopyTestService extends RpcResponderContract {
         final count = int.tryParse(request.message) ?? 3;
         for (int i = 1; i <= count; i++) {
           yield TestResponse('Number $i for: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
         print('🔥 SERVER HANDLER завершен');
       },
@@ -103,7 +103,7 @@ final class ZeroCopyTestService extends RpcResponderContract {
           } else {
             yield TestResponse('echo: ${request.message}');
           }
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
         print('🔥 BIDIRECTIONAL HANDLER завершен');
       },
@@ -176,7 +176,7 @@ void main() {
         print('❌ Ошибка: $e');
       }
 
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       print('\n📊 Анализ:');
       print('   Ответов получено: ${responses.length}');
@@ -229,7 +229,7 @@ void main() {
 
         print('📥 Получен ответ: ${response.result}');
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         print('\n📊 Анализ:');
         final directCount = sentMessages.where((m) => m.isDirect).length;
@@ -293,13 +293,13 @@ void main() {
 
         // Отправляем запросы
         requestController.add(TestRequest('ping 1'));
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         requestController.add(TestRequest('hello'));
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         await requestController.close();
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         print('\n📊 Анализ:');
         final directCount = sentMessages.where((m) => m.isDirect).length;

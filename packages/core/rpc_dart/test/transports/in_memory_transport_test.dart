@@ -30,7 +30,7 @@ void main() {
         final testData = Uint8List.fromList([1, 2, 3, 4, 5]);
         await transport1.sendMessage(streamId, testData);
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
@@ -96,7 +96,7 @@ void main() {
         final testData = Uint8List.fromList('Hello World'.codeUnits);
         await transport1.sendMessage(streamId, testData);
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
@@ -117,7 +117,7 @@ void main() {
         );
         await transport1.sendMetadata(streamId, metadata);
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
@@ -138,7 +138,7 @@ void main() {
           endStream: true,
         );
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.isEndOfStream, isTrue);
@@ -164,7 +164,7 @@ void main() {
           Uint8List.fromList('from2'.codeUnits),
         );
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(messages1.length, equals(1));
         expect(messages2.length, equals(1));
@@ -184,7 +184,7 @@ void main() {
         final testObject = {'key': 'value', 'number': 42};
         await transport1.sendDirectObject(streamId, testObject);
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.directPayload, same(testObject));
@@ -201,7 +201,7 @@ void main() {
         final streamId = transport1.createStream();
         await transport1.finishSending(streamId);
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(1));
         expect(receivedMessages.first.streamId, equals(streamId));
@@ -219,7 +219,7 @@ void main() {
         await transport1.finishSending(streamId);
         await transport1.finishSending(streamId);
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         final endStreamMessages = receivedMessages
             .where((msg) => msg.isEndOfStream && msg.streamId == streamId)
@@ -253,7 +253,7 @@ void main() {
           Uint8List.fromList('message3'.codeUnits),
         );
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(stream1Messages.length, equals(2));
         expect(stream2Messages.length, equals(1));
@@ -351,7 +351,7 @@ void main() {
           endStream: true,
         );
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         // Verify request
         expect(serverMessages.length, equals(3));
@@ -394,7 +394,7 @@ void main() {
           );
         }
 
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(receivedMessages.length, equals(3));
 
@@ -415,7 +415,7 @@ void main() {
       expect(serverTransport.isClosed, isFalse);
 
       await clientTransport.close();
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future<void>.delayed(Duration(milliseconds: 10));
 
       expect(clientTransport.isClosed, isTrue);
       expect(serverTransport.isClosed, isTrue);
@@ -428,7 +428,7 @@ void main() {
       expect(serverTransport.isClosed, isFalse);
 
       await serverTransport.close();
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future<void>.delayed(Duration(milliseconds: 10));
 
       expect(clientTransport.isClosed, isTrue);
       expect(serverTransport.isClosed, isTrue);

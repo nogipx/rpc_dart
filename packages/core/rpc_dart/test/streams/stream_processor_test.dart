@@ -137,9 +137,7 @@ void main() {
 
       // Создаем коллектор для входящих запросов
       final receivedRequests = <RpcString>[];
-      final subscription = processor.requests.listen(
-        (request) => receivedRequests.add(request),
-      );
+      final subscription = processor.requests.listen(receivedRequests.add);
 
       // Отправляем простое сообщение
       final request = 'test request'.rpc;
@@ -155,7 +153,7 @@ void main() {
       );
 
       // Ждем обработки
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       // Проверяем результат
       expect(receivedRequests, hasLength(1));
@@ -172,7 +170,7 @@ void main() {
       final completer = Completer<void>();
       final subscription = processor.requests.listen(
         null,
-        onDone: () => completer.complete(),
+        onDone: completer.complete,
       );
 
       // Отправляем END_STREAM сообщение

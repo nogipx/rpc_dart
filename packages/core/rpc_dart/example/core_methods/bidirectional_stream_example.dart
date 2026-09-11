@@ -79,7 +79,7 @@ class BidirectionalStreamExample {
         cancellationToken,
       ).withValue('chat-type', 'long-running');
       // Отменяем через 300мс
-      Future.delayed(Duration(milliseconds: 300), () {
+      Future<void>.delayed(Duration(milliseconds: 300), () {
         print('КЛИЕНТ: Отменяем чат');
         cancellationToken.cancel('User left chat');
       });
@@ -167,7 +167,7 @@ final class ChatServiceResponder extends RpcResponderContract
         logger.info('✅ Завершаем чат-сессию');
         break;
       }
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future<void>.delayed(Duration(milliseconds: 10));
     }
   }
 

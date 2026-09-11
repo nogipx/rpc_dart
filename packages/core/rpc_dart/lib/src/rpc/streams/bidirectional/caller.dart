@@ -146,7 +146,7 @@ final class BidirectionalStreamCaller<
           _logger.internal('Request stream completed');
           await finishSending();
         },
-        onError: (error, stackTrace) {
+        onError: (Object error, StackTrace stackTrace) {
           _logger.error(
             'Error in request stream',
             error: error,
@@ -163,7 +163,7 @@ final class BidirectionalStreamCaller<
   Future<void> close() async {
     _logger.internal('Closing BidirectionalStreamCaller');
     if (_requestSink != null) {
-      _requestSink!.close(); // Do not await completion.
+      unawaited(_requestSink!.close());
     }
     await _processor.close();
   }

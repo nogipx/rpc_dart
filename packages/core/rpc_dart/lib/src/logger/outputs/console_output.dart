@@ -50,11 +50,11 @@ class ConsoleOutput extends LogOutput {
 
   void _writePretty(LogRecord record) {
     switch (record) {
-      case LogSpanStart start:
+      case final LogSpanStart start:
         _writePrettySpanStart(start);
-      case LogEvent event:
+      case final LogEvent event:
         _writePrettyEvent(event);
-      case LogSpan span:
+      case final LogSpan span:
         _writePrettySpan(span);
     }
   }
@@ -136,9 +136,9 @@ class ConsoleOutput extends LogOutput {
     switch (record) {
       case LogSpanStart _:
         return; // span start is implicit in JSON (events carry spanId)
-      case LogEvent event:
+      case final LogEvent event:
         print(_jsonEncode(event.toJson()));
-      case LogSpan span:
+      case final LogSpan span:
         print(_jsonEncode(span.toJson()));
     }
   }
@@ -147,11 +147,11 @@ class ConsoleOutput extends LogOutput {
     switch (record) {
       case LogSpanStart _:
         return; // skip in compact mode
-      case LogEvent event:
+      case final LogEvent event:
         final time = _formatTime(event.timestamp);
         final level = event.level.name.toUpperCase().substring(0, 3);
         print('$time $level ${event.scope}: ${event.message}');
-      case LogSpan span:
+      case final LogSpan span:
         final time = _formatTime(span.endTime);
         final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
         print(

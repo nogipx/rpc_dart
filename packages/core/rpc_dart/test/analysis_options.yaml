@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# The package's floor, minus one rule that is wrong for test code.
+#
+# Everything else applies here exactly as it does to `lib/`, including
+# strict-casts, strict-inference and strict-raw-types: round 325 fixed all 208
+# issues those reported across test/ and example/, so the type strictness is
+# real here and not waived.
+#
+# `unnecessary_lambdas` is off, and the reason is a thing it actually did rather
+# than a thing it might do. Applied automatically, it inlined the helper behind
+# `bidi_server_ends_first_test.dart`'s one-line test body — and took with it the
+# fifteen-line comment recording WHY that guard is narrow:
+#
+#     infinite handler, 1 request sent -> cancel returned (received=19)
+#     infinite handler, no request     -> CANCEL DEADLOCKED (received=0)
+#     mirror handler,   1 request sent -> CANCEL DEADLOCKED (received=1)
+#
+# A measured, still-unfixed deadlock, deleted to save a closure. Of the 26 sites
+# the rule reported, 14 are constructs where a tearoff is wrong or worse —
+# `expect(() => x.y(), throwsA(...))` (10), `putIfAbsent(k, () => T())` (3), and
+# that test body. `lib/` keeps the rule and was cleaned of all 9 of its own.
+include: ../analysis_options.yaml
+
+linter:
+  rules:
+    unnecessary_lambdas: false

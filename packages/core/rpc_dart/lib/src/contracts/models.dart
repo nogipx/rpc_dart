@@ -75,7 +75,7 @@ final class RpcMethodRegistration<
   ) async {
     final typedHandler =
         handler as Future<TResponse> Function(TRequest, {RpcContext? context});
-    return await typedHandler(request, context: context);
+    return typedHandler(request, context: context);
   }
 
   /// Type-safe server-stream handler invocation with context.
@@ -99,7 +99,7 @@ final class RpcMethodRegistration<
               Stream<TRequest>, {
               RpcContext? context,
             });
-    return await typedHandler(requests, context: context);
+    return typedHandler(requests, context: context);
   }
 
   /// Type-safe bidirectional-stream handler invocation with context.
@@ -159,7 +159,7 @@ final class RpcZeroCopyMethodRegistration<
   ) async {
     final typedHandler =
         handler as Future<TResponse> Function(TRequest, {RpcContext? context});
-    return await typedHandler(request, context: context);
+    return typedHandler(request, context: context);
   }
 
   /// Type-safe server-stream handler invocation with context.
@@ -183,7 +183,7 @@ final class RpcZeroCopyMethodRegistration<
               Stream<TRequest>, {
               RpcContext? context,
             });
-    return await typedHandler(requests, context: context);
+    return typedHandler(requests, context: context);
   }
 
   /// Type-safe bidirectional-stream handler invocation with context.

@@ -46,9 +46,9 @@ Map<String, Completer<String>> _cancelled = {};
 Map<String, int> _work = {};
 
 Completer<void> _started_(String s) =>
-    _started.putIfAbsent(s, () => Completer<void>());
+    _started.putIfAbsent(s, Completer<void>.new);
 Completer<String> _cancelled_(String s) =>
-    _cancelled.putIfAbsent(s, () => Completer<String>());
+    _cancelled.putIfAbsent(s, Completer<String>.new);
 
 /// Cooperative work loop: bumps a counter until its token trips.
 Future<void> _burn(String shape, RpcContext? context) async {

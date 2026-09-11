@@ -95,8 +95,8 @@ void main() {
 
   group('valid configuration is untouched', () {
     test('the documented defaults construct', () {
-      expect(() => RpcRetryInterceptor(), returnsNormally);
-      expect(() => RpcRateLimiter(), returnsNormally);
+      expect(RpcRetryInterceptor.new, returnsNormally);
+      expect(RpcRateLimiter.new, returnsNormally);
     });
 
     test('maxAttempts: 1 means no retries, and is legal', () {

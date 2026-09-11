@@ -48,7 +48,7 @@ void main() {
     test('span has duration', () async {
       final scope = controller.scope('api');
       final span = scope.startSpan('slow');
-      await Future.delayed(Duration(milliseconds: 20));
+      await Future<void>.delayed(Duration(milliseconds: 20));
       span.end();
 
       expect(

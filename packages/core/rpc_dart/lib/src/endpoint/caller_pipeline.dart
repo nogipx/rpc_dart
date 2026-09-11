@@ -742,7 +742,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           controller.add(msg.payload!);
         }
       },
-      onError: (e, st) {
+      onError: (Object e, StackTrace st) {
         controller.addError(e, st);
         unawaited(cleanup());
       },
@@ -774,7 +774,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           }
         });
       },
-      onError: (e, st) {
+      onError: (Object e, StackTrace st) {
         controller.addError(e, st);
         unawaited(cleanup(abortPeer: true));
       },

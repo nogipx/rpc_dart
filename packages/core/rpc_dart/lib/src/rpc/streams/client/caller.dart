@@ -19,7 +19,7 @@ final class ClientStreamCaller<
   final Completer<TResponse> _responseCompleter = Completer<TResponse>();
 
   /// Subscription to responses.
-  StreamSubscription? _subscription;
+  StreamSubscription<void>? _subscription;
 
   /// Marks send completion.
   bool _sendingFinished = false;
@@ -145,7 +145,7 @@ final class ClientStreamCaller<
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error in response stream',
           error: error,

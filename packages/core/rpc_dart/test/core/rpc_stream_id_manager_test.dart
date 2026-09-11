@@ -131,7 +131,7 @@ void main() {
       expect(manager.generateId(), equals(3));
       expect(manager.generateId(), equals(5));
 
-      expect(() => manager.generateId(), throwsA(isA<RpcException>()));
+      expect(manager.generateId, throwsA(isA<RpcException>()));
     });
   });
 

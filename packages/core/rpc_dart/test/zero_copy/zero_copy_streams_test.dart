@@ -16,7 +16,7 @@ class TestRequest implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'message': message};
 
   static TestRequest fromJson(Map<String, dynamic> json) =>
-      TestRequest(json['message']);
+      TestRequest(json['message'] as String);
 
   @override
   String toString() => 'TestRequest($message)';
@@ -39,7 +39,7 @@ class TestResponse implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'result': result};
 
   static TestResponse fromJson(Map<String, dynamic> json) =>
-      TestResponse(json['result']);
+      TestResponse(json['result'] as String);
 
   @override
   String toString() => 'TestResponse($result)';
@@ -64,7 +64,7 @@ final class StreamingTestService extends RpcResponderContract {
         final count = int.tryParse(request.message) ?? 3;
         for (int i = 1; i <= count; i++) {
           yield TestResponse('Number $i for: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
       // ✅ НЕ передаем кодеки → автоматически zero-copy режим
@@ -97,7 +97,7 @@ final class StreamingTestService extends RpcResponderContract {
           } else {
             yield TestResponse('echo: ${request.message}');
           }
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
       // ✅ НЕ передаем кодеки → автоматически zero-copy режим
@@ -170,7 +170,7 @@ void main() {
       }
 
       // Ждем обработки всех сообщений
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');
@@ -227,7 +227,7 @@ void main() {
       print('📥 Получен итоговый ответ: ${response.result}');
 
       // Ждем обработки всех сообщений
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       print('\n📊 Анализ сообщений:');
       print('   Всего сообщений: ${sentMessages.length}');
@@ -279,13 +279,13 @@ void main() {
 
       // Отправляем несколько запросов
       requestController.add(TestRequest('ping 1'));
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       requestController.add(TestRequest('hello world'));
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       requestController.add(TestRequest('ping 2'));
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       await requestController.close();
 
@@ -293,7 +293,7 @@ void main() {
       // планирование грубее, поэтому ждем прихода всех ответов с таймаутом.
       final deadline = DateTime.now().add(Duration(seconds: 5));
       while (responses.length < 3 && DateTime.now().isBefore(deadline)) {
-        await Future.delayed(Duration(milliseconds: 5));
+        await Future<void>.delayed(Duration(milliseconds: 5));
       }
 
       print('\n📊 Анализ сообщений:');

@@ -25,7 +25,7 @@ void main() {
 
     test('allows custom binary formats without extra allocations', () {
       final codec = RpcBinaryCodec<List<int>>(
-        toBytes: (value) => Uint8List.fromList(value),
+        toBytes: Uint8List.fromList,
         fromBytes: (bytes) => bytes,
       );
 

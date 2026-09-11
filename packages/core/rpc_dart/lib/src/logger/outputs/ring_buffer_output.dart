@@ -55,14 +55,14 @@ class RingBufferOutput extends LogOutput {
 
       final matches = switch (record) {
         LogSpanStart() => false, // span starts are transient, not queryable
-        LogEvent event => filter.matches(
+        final LogEvent event => filter.matches(
           level: event.level,
           scope: event.scope,
           tag: event.tag,
           traceId: event.traceId,
           requestId: event.requestId,
         ),
-        LogSpan span => filter.matches(
+        final LogSpan span => filter.matches(
           level: RpcLogLevel.info, // spans don't have a level; treat as info
           scope: span.scope,
           traceId: span.traceId,

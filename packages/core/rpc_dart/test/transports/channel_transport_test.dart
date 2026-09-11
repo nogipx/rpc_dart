@@ -230,7 +230,7 @@ void main() {
         final payload = Uint8List.fromList('hello'.codeUnits);
         await client.sendMessage(streamId, payload);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(received.first.streamId, equals(streamId));
@@ -253,7 +253,7 @@ void main() {
           endStream: true,
         );
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(received.first.isEndOfStream, isTrue);
@@ -282,7 +282,7 @@ void main() {
           Uint8List.fromList('response'.codeUnits),
         );
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(serverReceived.length, equals(1));
         expect(clientReceived.length, equals(1));
@@ -308,7 +308,7 @@ void main() {
         await client.close();
 
         await client.sendMessage(streamId, Uint8List.fromList([1]));
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received, isEmpty);
 
@@ -329,7 +329,7 @@ void main() {
         );
         await client.sendMetadata(streamId, metadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(received.first.streamId, equals(streamId));
@@ -352,7 +352,7 @@ void main() {
         ], methodPath: '/Svc/Method');
         await client.sendMetadata(streamId, metadata);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         final msg = received.first;
@@ -375,7 +375,7 @@ void main() {
         final metadata = RpcMetadata.forClientRequest('Svc', 'Method');
         await client.sendMetadata(streamId, metadata, endStream: true);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(received.first.isEndOfStream, isTrue);
@@ -409,7 +409,7 @@ void main() {
         final streamId = client.createStream();
         await client.finishSending(streamId);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(received.first.streamId, equals(streamId));
@@ -428,7 +428,7 @@ void main() {
         await client.finishSending(streamId);
         await client.finishSending(streamId);
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(received.first.isEndOfStream, isTrue);
@@ -454,7 +454,7 @@ void main() {
         await client.sendMessage(stream3, Uint8List.fromList('b'.codeUnits));
         await client.sendMessage(stream1, Uint8List.fromList('c'.codeUnits));
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(msgs1.length, equals(2));
         expect(msgs3.length, equals(1));
@@ -483,7 +483,7 @@ void main() {
         await client.sendMessage(s1, Uint8List.fromList([4]));
         await client.sendMessage(s2, Uint8List.fromList([5]));
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(5));
         expect(received[0].streamId, equals(s1));
@@ -534,7 +534,7 @@ void main() {
           endStream: true,
         );
 
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         // Verify request
         expect(serverReceived.length, equals(3));
@@ -584,7 +584,7 @@ void main() {
 
         await client.close();
         // Channel done triggers server close
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(server.isClosed, isTrue);
       });
@@ -624,7 +624,7 @@ void main() {
         // Close the channel directly (simulating network drop)
         await channel.close();
         await s2c.close();
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         // Transport auto-closes when channel done fires
         expect(transport.isClosed, isTrue);
@@ -677,7 +677,7 @@ void main() {
         );
 
         s2c.addError(StateError('network error'));
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(errors.length, equals(1));
         expect(errors.first, isA<StateError>());
@@ -708,11 +708,11 @@ void main() {
         );
         final mid = frame.length ~/ 2;
         s2c.add(Uint8List.sublistView(frame, 0, mid));
-        await Future.delayed(Duration(milliseconds: 5));
+        await Future<void>.delayed(Duration(milliseconds: 5));
         expect(received, isEmpty);
 
         s2c.add(Uint8List.sublistView(frame, mid));
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
         expect(
@@ -750,7 +750,7 @@ void main() {
         combined.setRange(frame1.length, combined.length, frame2);
 
         s2c.add(combined);
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(2));
         expect(received[0].streamId, equals(1));
@@ -807,7 +807,7 @@ class _TestChannel implements IRpcChannel {
     await _sub.cancel();
     // Fire-and-forget: _output may never have had a subscriber,
     // so its done future would never complete if awaited.
-    if (!_output.isClosed) _output.close();
-    if (!_inCtl.isClosed) _inCtl.close();
+    if (!_output.isClosed) unawaited(_output.close());
+    if (!_inCtl.isClosed) unawaited(_inCtl.close());
   }
 }

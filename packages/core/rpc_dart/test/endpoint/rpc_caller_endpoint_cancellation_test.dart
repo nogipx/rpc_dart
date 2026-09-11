@@ -56,7 +56,7 @@ final class TestService extends RpcResponderContract {
         // Симулируем долгую операцию с проверкой отмены
         for (int i = 0; i < 100; i++) {
           context?.cancellationToken?.throwIfCancelled();
-          await Future.delayed(Duration(milliseconds: 10));
+          await Future<void>.delayed(Duration(milliseconds: 10));
         }
 
         callLog.add('SlowMethod completed: ${request.message}');
@@ -73,7 +73,7 @@ final class TestService extends RpcResponderContract {
         for (int i = 0; i < 10; i++) {
           context?.cancellationToken?.throwIfCancelled();
           yield TestResponse('Item $i for: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 50));
+          await Future<void>.delayed(Duration(milliseconds: 50));
         }
 
         callLog.add('SlowStreamMethod completed: ${request.message}');
@@ -152,7 +152,7 @@ void main() {
       );
 
       // Ждем немного
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
 
       // Отменяем все методы сервиса
       callerEndpoint.cancelServiceMethods('TestService', 'Service shutdown');
@@ -186,7 +186,7 @@ void main() {
       );
 
       // Ждем немного
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
 
       // Отменяем все методы
       callerEndpoint.cancelAllMethods('Global cancellation');
@@ -265,7 +265,7 @@ void main() {
       );
 
       // Добавляем небольшую задержку между запросами
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future<void>.delayed(Duration(milliseconds: 10));
 
       final future2 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
@@ -276,7 +276,7 @@ void main() {
       );
 
       // Ждем достаточно времени, чтобы оба запроса зарегистрировались
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future<void>.delayed(Duration(milliseconds: 100));
 
       // Проверяем, что у нас есть 2 токена для одного метода
       final tokens = callerEndpoint.getCancellationTokensForMethod(
@@ -307,7 +307,7 @@ void main() {
         request: TestRequest('operation'),
       );
 
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
 
       final customReason = 'User clicked cancel button';
       callerEndpoint.cancelMethod('TestService', 'SlowMethod', customReason);

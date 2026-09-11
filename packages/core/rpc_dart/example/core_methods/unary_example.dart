@@ -68,7 +68,7 @@ class UnaryRpcExample {
         final cancellationToken = RpcCancellationToken();
         final cancelContext = RpcContext.withCancellation(cancellationToken);
         // Отменяем через 100мс
-        Future.delayed(Duration(milliseconds: 100), () {
+        Future<void>.delayed(Duration(milliseconds: 100), () {
           print('КЛИЕНТ: Отменяем операцию');
           cancellationToken.cancel('User cancelled');
         });
@@ -148,7 +148,7 @@ final class MultiServiceResponder extends RpcResponderContract
     final logger = LogScope.noop;
     logger.info('🔧 Получен запрос: ${message.value}');
     logger.info('🔍 Context: $context');
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future<void>.delayed(Duration(milliseconds: 10));
     return 'Здравствуйте! Это ответ от сервера: ${message.value}'.rpc;
   }
 
@@ -162,7 +162,7 @@ final class MultiServiceResponder extends RpcResponderContract
     logger.info('🔍 Context: $context');
     final userId = context?.getHeader('user-id');
     final traceId = context?.traceId;
-    await Future.delayed(Duration(milliseconds: 20));
+    await Future<void>.delayed(Duration(milliseconds: 20));
     return 'Текущее время: ${DateTime.now()} [user: $userId, trace: $traceId]'
         .rpc;
   }
@@ -177,7 +177,7 @@ final class MultiServiceResponder extends RpcResponderContract
     logger.info('🔍 Context: $context');
     final requestType = context?.getValue<String>('request-type');
     context?.cancellationToken?.throwIfCancelled();
-    await Future.delayed(Duration(milliseconds: 30));
+    await Future<void>.delayed(Duration(milliseconds: 30));
     return 'Все системы работают нормально [$requestType]'.rpc;
   }
 
@@ -199,7 +199,7 @@ final class MultiServiceResponder extends RpcResponderContract
     logger.info('🔍 Context: $context');
     for (int i = 0; i < 100; i++) {
       context?.cancellationToken?.throwIfCancelled();
-      await Future.delayed(Duration(milliseconds: 10));
+      await Future<void>.delayed(Duration(milliseconds: 10));
       if (i % 20 == 0) {
         logger.internal('📊 Прогресс: $i%');
       }

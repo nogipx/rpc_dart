@@ -64,7 +64,7 @@ final class TestService extends RpcResponderContract {
         callLog.add('ServerStreamMethod: ${request.message}');
         for (int i = 0; i < 3; i++) {
           yield TestResponse('Reply ${i + 1} to: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
       requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -95,7 +95,7 @@ final class TestService extends RpcResponderContract {
         await for (final request in requests) {
           callLog.add('BidirectionalMethod: ${request.message}');
           yield TestResponse('Echo: ${request.message}');
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
 
         callLog.add('BidirectionalMethod: завершен');
@@ -230,17 +230,17 @@ void main() {
       final responsesFuture = responseStream.take(3).toList();
 
       // Небольшая задержка перед отправкой запросов для стабильности
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       // Отправляем запросы с увеличенными интервалами
       controller.add(TestRequest('Bi Message 1'));
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       controller.add(TestRequest('Bi Message 2'));
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       controller.add(TestRequest('Bi Message 3'));
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       // Закрываем контроллер, сигнализируя конец потока запросов
       await controller.close();
@@ -300,7 +300,7 @@ void main() {
       }, throwsA(isA<StateError>()));
 
       // Выделяем время для завершения всех асинхронных операций
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
     });
   });
 }

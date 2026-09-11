@@ -3,8 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:test/test.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('RpcContext', () {
@@ -237,7 +237,7 @@ void main() {
 
       expect(merged.traceId, equals('right-trace'));
       expect(merged.requestId, equals(rightContext.requestId));
-      expect(merged.getValue('shared-key'), equals('right-shared'));
+      expect(merged.getValue<String>('shared-key'), equals('right-shared'));
       expect(merged.getHeader('x-left'), equals('left-value'));
       expect(merged.getHeader('x-right'), equals('right-value'));
     });
@@ -260,7 +260,7 @@ void main() {
       expect(context.deadline, isNotNull);
       expect(context.getHeader('x-user-id'), equals('123'));
       expect(context.getHeader('authorization'), equals('Bearer token-abc'));
-      expect(context.getValue('custom-data'), equals('test-value'));
+      expect(context.getValue<String>('custom-data'), equals('test-value'));
     });
 
     test('inherits from parent context', () {

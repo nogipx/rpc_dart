@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -323,9 +324,9 @@ void main() {
         // Arrange & Act
         final context1 = RpcContext.empty();
         // Добавляем небольшую задержку чтобы timestamp был разный
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
         final context2 = RpcContext.empty();
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
         final context3 = RpcContext.empty();
 
         // Assert
@@ -496,11 +497,11 @@ void main() {
         bool notified = false;
 
         // Act
-        sut.cancelled.then((_) => notified = true);
+        unawaited(sut.cancelled.then((_) => notified = true));
         sut.cancel();
 
         // Даем время на выполнение callback
-        await Future.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
         // Assert
         expect(notified, isTrue);

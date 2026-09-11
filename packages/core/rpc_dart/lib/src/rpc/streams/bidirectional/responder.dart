@@ -94,7 +94,7 @@ final class BidirectionalStreamResponder<
       StreamController<TResponse>();
 
   /// Subscription for outgoing responses.
-  StreamSubscription? _responseSubscription;
+  StreamSubscription<void>? _responseSubscription;
 
   /// Initializes response forwarding.
   void _initResponseForwarding() {
@@ -119,7 +119,7 @@ final class BidirectionalStreamResponder<
         _logger.internal('Response stream completed [id: $id]');
         await finishReceiving();
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error in response stream [id: $id]',
           error: error,
@@ -193,7 +193,7 @@ final class BidirectionalStreamResponder<
     _isActive = false;
     await _responseSubscription?.cancel();
     if (!_responseController.isClosed) {
-      _responseController.close(); // Do not await completion.
+      unawaited(_responseController.close());
     }
     await _processor.close();
     _completeDone();

@@ -186,7 +186,7 @@ void main() {
         for (int i = 5; i > 0; i--) {
           expect(current['level'], equals(i));
           expect((current['children'] as List).length, equals(5));
-          current = (current['children'] as List)[0];
+          current = (current['children'] as List)[0] as Map<String, dynamic>;
         }
         expect(current['leaf'], equals(true));
 
@@ -258,9 +258,9 @@ void main() {
           '',
           'text',
           'unicode: 🌟',
-          [],
+          <Object?>[],
           [1, 2, 3],
-          {},
+          <Object?, Object?>{},
           {'key': 'value'},
           Uint8List.fromList([1, 2, 3, 4]),
         ];

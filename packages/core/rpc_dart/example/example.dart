@@ -71,31 +71,31 @@ void main() async {
   // Callback-based (auto-close on return/throw)
   await apiScope.withSpan('handleRequest', (span) async {
     span.event('Parsing request body');
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future<void>.delayed(Duration(milliseconds: 10));
 
     // Nested sub-span
     await apiScope.withSpan('db.query', (dbSpan) async {
       dbSpan.event('SELECT * FROM orders WHERE id = 789');
-      await Future.delayed(Duration(milliseconds: 25));
+      await Future<void>.delayed(Duration(milliseconds: 25));
     });
 
     span.event('Serializing response');
-    await Future.delayed(Duration(milliseconds: 5));
+    await Future<void>.delayed(Duration(milliseconds: 5));
   });
 
   // Manual span (explicit start/end)
   final span = apiScope.startSpan('backgroundJob');
   span.event('Step 1: fetching data');
-  await Future.delayed(Duration(milliseconds: 15));
+  await Future<void>.delayed(Duration(milliseconds: 15));
   span.event('Step 2: processing');
-  await Future.delayed(Duration(milliseconds: 20));
+  await Future<void>.delayed(Duration(milliseconds: 20));
   span.end(status: SpanStatus.ok);
 
   // Error span
   try {
     await apiScope.withSpan('failingOperation', (span) async {
       span.event('Starting risky work');
-      await Future.delayed(Duration(milliseconds: 5));
+      await Future<void>.delayed(Duration(milliseconds: 5));
       throw Exception('Something went wrong');
     });
   } catch (_) {
@@ -112,7 +112,7 @@ void main() async {
 
   await apiScope.withSpan('spanInSilentMode', (span) async {
     span.event('This event inside span will NOT appear either');
-    await Future.delayed(Duration(milliseconds: 10));
+    await Future<void>.delayed(Duration(milliseconds: 10));
   });
   // But the span summary WILL appear (spans bypass level filter)
 

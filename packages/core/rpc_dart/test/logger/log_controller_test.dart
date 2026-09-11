@@ -134,7 +134,7 @@ void main() {
       scope.info('one');
       scope.info('two');
 
-      await Future.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
       expect(records, hasLength(2));
     });
 

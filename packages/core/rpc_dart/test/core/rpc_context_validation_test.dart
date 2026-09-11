@@ -4,8 +4,9 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'package:test/test.dart';
+
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:test/test.dart';
 
 /// Комплексные тесты валидации корректности реализации RPC контекста
 /// Проверяют правильность работы во всех типах RPC методов и edge cases
@@ -294,17 +295,17 @@ void main() {
         });
 
         requestController.add('hello'.rpc);
-        await Future.delayed(
+        await Future<void>.delayed(
           Duration(milliseconds: 1),
         ); // Даем время для обработки
         requestController.add('world'.rpc);
-        await Future.delayed(
+        await Future<void>.delayed(
           Duration(milliseconds: 1),
         ); // Даем время для обработки
         await requestController.close();
 
         // Ждем больше времени для получения ответов
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
         await subscription.cancel();
 
         // Assert
@@ -508,7 +509,9 @@ final class ValidationServiceContract extends RpcResponderContract {
     RpcString request, {
     RpcContext? context,
   }) async {
-    await Future.delayed(Duration(seconds: 5)); // Превышает timeout в тесте
+    await Future<void>.delayed(
+      Duration(seconds: 5),
+    ); // Превышает timeout в тесте
     return 'slow-result'.rpc;
   }
 
@@ -526,7 +529,7 @@ final class ValidationServiceContract extends RpcResponderContract {
     // Проверяем отмену каждые 10мс
     for (int i = 0; i < 1000; i++) {
       context?.cancellationToken?.throwIfCancelled();
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
     }
     return 'long-result'.rpc;
   }

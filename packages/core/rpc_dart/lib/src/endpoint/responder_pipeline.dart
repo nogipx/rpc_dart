@@ -378,7 +378,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         if (messageFilter != null && !messageFilter(message)) return;
         _processResponderMessage(message);
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _log.error(
           'Transport incoming error',
           error: error,

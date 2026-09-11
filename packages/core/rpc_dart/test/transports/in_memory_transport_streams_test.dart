@@ -72,7 +72,7 @@ void main() {
       );
 
       // Даем время на обработку сообщений
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       // Создаем новый клиентский поток - должен иметь ID 3
       final streamId2 = clientTransport.createStream();
@@ -89,7 +89,7 @@ void main() {
       );
 
       // Даем время на обработку
-      await Future.delayed(Duration(milliseconds: 1));
+      await Future<void>.delayed(Duration(milliseconds: 1));
 
       // Создаем еще один поток - должен быть ID 7, т.к. 5 еще не успел освободиться
       final streamId4 = clientTransport.createStream();
@@ -139,7 +139,7 @@ void main() {
       }
 
       // Одновременно завершаем все потоки
-      final futures = <Future>[];
+      final futures = <Future<void>>[];
       for (final id in streamIds) {
         futures.add(clientTransport.finishSending(id));
       }

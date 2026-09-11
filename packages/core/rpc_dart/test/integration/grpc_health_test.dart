@@ -55,7 +55,7 @@ void main() {
       status.setStatus('Svc', GrpcServingStatus.serving);
       status.setStatus('Svc', GrpcServingStatus.notServing);
 
-      await Future.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
       expect(events, [
         ('Svc', GrpcServingStatus.serving),
@@ -72,7 +72,7 @@ void main() {
       status.setStatus('Svc', GrpcServingStatus.serving);
       status.clearStatus('Svc');
 
-      await Future.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
       expect(events.last, ('Svc', GrpcServingStatus.serviceUnknown));
 
@@ -228,11 +228,11 @@ void main() {
       });
 
       // Wait for initial status to arrive
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
 
       // Trigger changes
       healthStatus.setStatus('WatchMe', GrpcServingStatus.notServing);
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
       healthStatus.setStatus('WatchMe', GrpcServingStatus.serving);
 
       await completer.future.timeout(Duration(seconds: 5));
@@ -263,7 +263,7 @@ void main() {
         }
       });
 
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
 
       // Register the service after Watch started
       healthStatus.setStatus('NewSvc', GrpcServingStatus.serving);

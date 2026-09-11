@@ -160,7 +160,7 @@ void main() {
 
     group('Arrays', () {
       test('Empty array', () {
-        expect(bytesToHex(CborCodec.encodeUnsafe([])), equals('80'));
+        expect(bytesToHex(CborCodec.encodeUnsafe(<Object?>[])), equals('80'));
       });
 
       test('Small arrays', () {
@@ -263,7 +263,7 @@ void main() {
     group('RFC 7049 Appendix A examples', () {
       test('Examples from RFC 7049 Appendix A', () {
         // Таблица 1: Examples from Appendix A
-        var examples = [
+        final examples = [
           // Integer
           {'value': 0, 'hex': '00'},
           {'value': 1, 'hex': '01'},
@@ -287,7 +287,7 @@ void main() {
           {'value': '"\\', 'hex': '62225c'},
 
           // Array
-          {'value': [], 'hex': '80'},
+          {'value': <Object?>[], 'hex': '80'},
           {
             'value': [1, 2, 3],
             'hex': '83010203',
@@ -332,7 +332,7 @@ void main() {
           },
 
           // Map
-          {'value': {}, 'hex': 'a0'},
+          {'value': <Object?, Object?>{}, 'hex': 'a0'},
           {
             'value': {
               'a': 1,

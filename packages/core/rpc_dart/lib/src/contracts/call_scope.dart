@@ -27,7 +27,7 @@ final class RpcCallScope {
   final List<FutureOr<void> Function()> _disposers = [];
   final Completer<void> _done = Completer<void>();
   Timer? _deadlineTimer;
-  StreamSubscription? _cancellationSub;
+  StreamSubscription<void>? _cancellationSub;
   bool _isClosed = false;
 
   /// The context this scope is bound to (if any).
@@ -178,7 +178,7 @@ final class RpcCallScope {
       onDone: onDone,
       cancelOnError: cancelOnError,
     );
-    onDispose(() => sub.cancel());
+    onDispose(sub.cancel);
     return sub;
   }
 
@@ -201,7 +201,9 @@ final class RpcCallScope {
 
     _deadlineTimer?.cancel();
     _deadlineTimer = null;
-    _cancellationSub?.cancel();
+    // Not awaited: cancel() stops delivery immediately, and this close() is the
+    // one path that must never block — see the disposer timeout below.
+    unawaited(_cancellationSub?.cancel() ?? Future<void>.value());
     _cancellationSub = null;
 
     // Run disposers in reverse (LIFO) order.

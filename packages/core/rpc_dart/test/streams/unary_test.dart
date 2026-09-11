@@ -102,7 +102,7 @@ void main() {
           responseCodec: serializer,
           handler: (request) async {
             // Задержка больше таймаута
-            await Future.delayed(Duration(seconds: 1));
+            await Future<void>.delayed(Duration(seconds: 1));
             return 'Delayed response'.rpc;
           },
         );

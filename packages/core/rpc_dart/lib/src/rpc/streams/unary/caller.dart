@@ -141,8 +141,8 @@ final class UnaryCaller<TRequest, TResponse> {
     // was listening yet. `ignore()` attaches a listener without consuming the
     // result, so the `await` below still receives the error.
     completer.future.ignore();
-    StreamSubscription? subscription;
-    StreamSubscription? cancellationSubscription;
+    StreamSubscription<void>? subscription;
+    StreamSubscription<void>? cancellationSubscription;
 
     /// In-flight "the caller is gone" notice, awaited before the stream id is
     /// released so the frame goes out on a live id.
@@ -337,7 +337,7 @@ final class UnaryCaller<TRequest, TResponse> {
                 }
               }
             },
-            onError: (error, stackTrace) {
+            onError: (Object error, StackTrace stackTrace) {
               _logger.error(
                 'Transport error [streamId: $streamId]',
                 error: error,

@@ -46,7 +46,7 @@ void main() {
       final fast = CborCodec.decode(bytes);
       final slow = CborCodec.decodeUnsafe(bytes);
 
-      expect(slow, isA<Map>());
+      expect(slow, isA<Map<Object?, Object?>>());
       final slowMap = (slow as Map).map((k, v) => MapEntry(k.toString(), v));
       expect(fast, equals(slowMap));
     });

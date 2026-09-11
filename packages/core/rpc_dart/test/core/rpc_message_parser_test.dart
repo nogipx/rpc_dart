@@ -195,7 +195,7 @@ void main() {
     test('10 сообщений в одном чанке', () {
       final parser = RpcMessageParser();
       final messages = List.generate(10, (i) => [i, i + 1, i + 2]);
-      final chunk = _concat(messages.map((m) => _frame(m)).toList());
+      final chunk = _concat(messages.map(_frame).toList());
 
       final result = parser(chunk);
 

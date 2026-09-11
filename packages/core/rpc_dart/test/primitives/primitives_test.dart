@@ -205,7 +205,7 @@ void main() {
 
       final json = list.toJson();
       final restored = RpcList.fromJsonRaw<RpcString>(
-        (json['items'] as List<dynamic>),
+        json['items'] as List<dynamic>,
         RpcString.fromJson,
       );
       expect(restored.toList(), equals(list.toList()));

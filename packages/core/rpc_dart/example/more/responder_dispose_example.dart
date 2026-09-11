@@ -97,8 +97,8 @@ class ResourceResponse {
 // =============================================================================
 final class DatabaseService extends RpcResponderContract {
   // Имитируем подключения к базе данных
-  final List<StreamController> _connections = [];
-  final List<StreamSubscription> _subscriptions = [];
+  final List<StreamController<void>> _connections = [];
+  final List<StreamSubscription<void>> _subscriptions = [];
   int activeConnections = 0;
   DatabaseService() : super('DatabaseService');
   @override
@@ -226,7 +226,7 @@ final class CachingService extends RpcResponderContract {
 final class AnalyticsService extends RpcResponderContract {
   // Имитируем аналитические ресурсы
   final List<Timer> _timers = [];
-  final List<StreamController> _eventStreams = [];
+  final List<StreamController<void>> _eventStreams = [];
   int activeTimers = 0;
   AnalyticsService() : super('AnalyticsService');
   @override

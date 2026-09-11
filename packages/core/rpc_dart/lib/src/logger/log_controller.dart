@@ -245,7 +245,7 @@ class LogController {
   }
 
   LogRecord _enrich(LogRecord record) {
-    var extra = <String, Object>{};
+    final extra = <String, Object>{};
     for (final enricher in _enrichers) {
       extra.addAll(enricher.enrich(record));
     }

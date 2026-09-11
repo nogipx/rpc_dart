@@ -59,7 +59,7 @@ void main() {
 
         // Ждем обработки сообщений
         while (receivedResponses.length < 2) {
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
 
         // Assert
@@ -126,7 +126,7 @@ void main() {
 
         // Ждем обработки
         while (clientReceivedResponses.length < 2) {
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
 
         // Assert
@@ -190,14 +190,14 @@ void main() {
         // Act
         await correctClient.send('correct request'.rpc);
         // Добавляем задержку, чтобы запрос успел обработаться
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         await incorrectClient.send('incorrect request'.rpc);
         // Добавляем задержку, чтобы запрос успел обработаться
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         // Ждем обработки всех запросов
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         // Assert
         expect(handlerCallCount, equals(1));
@@ -264,7 +264,7 @@ void main() {
 
         // Ждем обработки всех сообщений
         while (clientMessages.length < 3) {
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
 
         // Assert
@@ -329,7 +329,7 @@ void main() {
 
         // Ждем обработки всех сообщений
         while (receivedResponses.length < messageCount) {
-          await Future.delayed(Duration(milliseconds: 1));
+          await Future<void>.delayed(Duration(milliseconds: 1));
         }
 
         // Assert

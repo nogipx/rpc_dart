@@ -3,8 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:test/test.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:test/test.dart';
 
 // Тестовый класс для представления адреса
 class Address implements IRpcSerializable {
@@ -121,7 +121,7 @@ class Person implements IRpcSerializable {
     final addressJson = json['address'] as Map<String, dynamic>;
     final contactJson = json['contact'] as Map<String, dynamic>;
     final alternativeAddressesJson =
-        (json['alternativeAddresses'] as Map<String, dynamic>);
+        json['alternativeAddresses'] as Map<String, dynamic>;
 
     return Person(
       name: json['name'] as String,

@@ -59,46 +59,48 @@ void main() {
     final uncaught = <Object>[];
     final finished = Completer<void>();
 
-    runZonedGuarded(
-      () async {
-        final pair = RpcChannelTransport.pair();
-        final caller = RpcCallerEndpoint(transport: pair.$1);
-        final responder = RpcResponderEndpoint(transport: pair.$2);
-        responder.registerServiceContract(_ThrowsOnCancelContract());
-        responder.start();
+    unawaited(
+      runZonedGuarded(
+        () async {
+          final pair = RpcChannelTransport.pair();
+          final caller = RpcCallerEndpoint(transport: pair.$1);
+          final responder = RpcResponderEndpoint(transport: pair.$2);
+          responder.registerServiceContract(_ThrowsOnCancelContract());
+          responder.start();
 
-        final token = RpcCancellationToken();
-        final sub = caller
-            .serverStream<RpcString, RpcString>(
-              serviceName: 'Svc',
-              methodName: 'watch',
-              request: 'x'.rpc,
-              requestCodec: _codec,
-              responseCodec: _codec,
-              context: RpcContext.withCancellation(token),
-            )
-            .listen((_) {}, onError: (Object _) {});
+          final token = RpcCancellationToken();
+          final sub = caller
+              .serverStream<RpcString, RpcString>(
+                serviceName: 'Svc',
+                methodName: 'watch',
+                request: 'x'.rpc,
+                requestCodec: _codec,
+                responseCodec: _codec,
+                context: RpcContext.withCancellation(token),
+              )
+              .listen((_) {}, onError: (Object _) {});
 
-        // Let the handler get going, then hang up the way a client does when
-        // the last subscriber of a coalesced transfer leaves.
-        await Future<void>.delayed(const Duration(milliseconds: 60));
-        token.cancel('last subscriber left');
+          // Let the handler get going, then hang up the way a client does when
+          // the last subscriber of a coalesced transfer leaves.
+          await Future<void>.delayed(const Duration(milliseconds: 60));
+          token.cancel('last subscriber left');
 
-        // Long enough for the teardown to run and for anything it throws to
-        // reach the zone.
-        await Future<void>.delayed(const Duration(milliseconds: 300));
+          // Long enough for the teardown to run and for anything it throws to
+          // reach the zone.
+          await Future<void>.delayed(const Duration(milliseconds: 300));
 
-        await sub.cancel();
-        await caller.close();
-        await responder.close();
-        await pair.$1.close();
-        await pair.$2.close();
-        finished.complete();
-      },
-      (Object error, StackTrace stack) {
-        uncaught.add(error);
-        if (!finished.isCompleted) finished.complete();
-      },
+          await sub.cancel();
+          await caller.close();
+          await responder.close();
+          await pair.$1.close();
+          await pair.$2.close();
+          finished.complete();
+        },
+        (Object error, StackTrace stack) {
+          uncaught.add(error);
+          if (!finished.isCompleted) finished.complete();
+        },
+      ),
     );
 
     await finished.future;

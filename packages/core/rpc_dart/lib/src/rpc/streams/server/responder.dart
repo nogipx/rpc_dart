@@ -30,7 +30,7 @@ final class ServerStreamResponder<
   late final StreamProcessor<TRequest, TResponse> _processor;
 
   /// Incoming request subscription.
-  StreamSubscription? _subscription;
+  StreamSubscription<void>? _subscription;
 
   /// Our subscription to the user handler's response stream, and the relay it
   /// feeds.

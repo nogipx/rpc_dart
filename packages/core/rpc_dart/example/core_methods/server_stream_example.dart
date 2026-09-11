@@ -60,7 +60,7 @@ class ServerStreamingExample {
         cancellationToken,
       ).withValue('stream-type', 'long-running');
       // Отменяем через 200мс
-      Future.delayed(Duration(milliseconds: 200), () {
+      Future<void>.delayed(Duration(milliseconds: 200), () {
         print('КЛИЕНТ: Отменяем stream');
         cancellationToken.cancel('User cancelled');
       });
@@ -138,7 +138,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
       final response = 'Ответ #$i на запрос "${request.value}"';
       logger.internal('🎯 Отправляем: $response');
       yield response.rpc;
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
     }
     logger.info('✅ Завершен поток ответов');
   }
@@ -160,7 +160,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
       context?.cancellationToken?.throwIfCancelled();
       logger.internal('🎯 Отправляем число: $i');
       yield i.rpc;
-      await Future.delayed(Duration(milliseconds: delay));
+      await Future<void>.delayed(Duration(milliseconds: delay));
     }
     logger.info('✅ Завершен поток чисел');
   }
@@ -180,7 +180,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
         final response = 'Долгий ответ #$i для "${request.value}"';
         logger.internal('🎯 Отправляем: $response');
         yield response.rpc;
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(Duration(milliseconds: 100));
       }
       logger.info('✅ Завершен долгий поток');
     } catch (e) {

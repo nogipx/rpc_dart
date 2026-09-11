@@ -199,10 +199,7 @@ void main() {
       );
 
       await client.finishSending();
-      await expectLater(
-        () => client.finishSending(),
-        throwsA(isA<StateError>()),
-      );
+      await expectLater(client.finishSending, throwsA(isA<StateError>()));
 
       await client.close();
       await server.close();

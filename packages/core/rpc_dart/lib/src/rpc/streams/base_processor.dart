@@ -315,7 +315,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       (response) {
         // No-op: transmission is queued synchronously in send().
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error in response stream for $_methodPath [streamId: $_streamId]',
           error: error,
@@ -444,7 +444,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     final subscription = _scope.listen<RpcTransportMessage>(
       messageStream,
       _handleMessage,
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'message_stream_listen error [methodPath: $_methodPath, streamId: $_streamId]',
           error: error,
@@ -480,9 +480,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     // This cannot deadlock: a handler that never reads is still free to return
     // a response at any time, which completes the call. Only the peer's
     // SENDING is throttled, and the alternative is unbounded memory.
-    _requestController.onListen = () => subscription.resume();
-    _requestController.onPause = () => subscription.pause();
-    _requestController.onResume = () => subscription.resume();
+    _requestController.onListen = subscription.resume;
+    _requestController.onPause = subscription.pause;
+    _requestController.onResume = subscription.resume;
     if (_requestController.hasListener) {
       // Already subscribed before the bind: onListen will not fire again.
       subscription.resume();
@@ -830,7 +830,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           );
         }
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error monitoring cancellation [streamId: $_streamId]',
           error: error,
@@ -1008,7 +1008,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           );
         }
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error in request stream for $_methodPath [streamId: $_streamId]',
           error: error,
@@ -1094,7 +1094,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         // Close on the first send failure: the stream is no longer coherent,
         // so further sends would put a gapped request sequence on the wire.
         if (!_requestController.isClosed) {
-          _requestController.close();
+          unawaited(_requestController.close());
         }
       }
     });
@@ -1105,7 +1105,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     final subscription = _scope.listen<RpcTransportMessage>(
       _transport.getMessagesForStream(_streamId),
       _handleResponse,
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error in response stream',
           error: error,
@@ -1157,8 +1157,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     // keeps feeding this controller after every stage above has stopped
     // pulling, so a paused consumer still pays to decode every message; pausing
     // here leaves the frames undecoded in the transport's per-stream buffer.
-    _responseController.onPause = () => subscription.pause();
-    _responseController.onResume = () => subscription.resume();
+    _responseController.onPause = subscription.pause;
+    _responseController.onResume = subscription.resume;
   }
 
   /// Sends initial metadata with context support.
@@ -1318,7 +1318,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           );
         }
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error monitoring cancellation [streamId: $_streamId]',
           error: error,

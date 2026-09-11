@@ -119,7 +119,7 @@ final class ClientStreamResponder<
             _completeDone();
           }
         })
-        .catchError((error, stackTrace) async {
+        .catchError((Object error, StackTrace stackTrace) async {
           _logger.error(
             'Client stream handling failed [id: $id]',
             error: error,

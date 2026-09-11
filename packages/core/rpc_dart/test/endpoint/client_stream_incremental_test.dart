@@ -53,7 +53,7 @@ final _codec = RpcCodec(RpcString.fromJson);
 /// Completed by the handler as each named chunk arrives.
 Map<String, Completer<void>> _arrivals = {};
 Completer<void> _arrival(String key) =>
-    _arrivals.putIfAbsent(key, () => Completer<void>());
+    _arrivals.putIfAbsent(key, Completer<void>.new);
 
 /// Every value the handlers observed, in arrival order.
 List<String> _seen = [];

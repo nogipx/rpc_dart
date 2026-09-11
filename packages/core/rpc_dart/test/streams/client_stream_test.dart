@@ -44,13 +44,13 @@ void main() {
 
         // Act
         await client.send('request1'.rpc);
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         await client.send('request2'.rpc);
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         await client.send('request3'.rpc);
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
 
         final response = await client.finishSending();
 

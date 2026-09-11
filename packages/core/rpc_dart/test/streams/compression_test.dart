@@ -283,7 +283,7 @@ void main() {
       await client.send(largePayload);
 
       while (receivedResponses.length < 2) {
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
       }
 
       expect(receivedRequests.length, equals(2));
@@ -340,7 +340,7 @@ void main() {
       await client.send('ping'.rpc);
 
       while (receivedResponses.isEmpty) {
-        await Future.delayed(Duration(milliseconds: 1));
+        await Future<void>.delayed(Duration(milliseconds: 1));
       }
 
       expect(receivedResponses.first, equals('echo:ping'.rpc));
