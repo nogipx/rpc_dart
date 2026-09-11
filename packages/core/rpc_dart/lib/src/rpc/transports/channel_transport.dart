@@ -66,6 +66,26 @@ class RpcChannelTransport
   /// buffer until their consumer binds on their own.
   final Map<int, StreamController<RpcTransportMessage>> _streamControllers = {};
 
+  /// Bytes sitting in each per-stream controller, weighed by
+  /// [RpcTransportMessage.bufferedBytes] so METADATA counts.
+  ///
+  /// B-28: flow control was the only thing in front of this buffer, and
+  /// metadata walks past flow control — `sendMetadata` spends no window and
+  /// `_fcOnConsumed` returns early on zero bytes, both deliberately. Measured
+  /// in round 282: 4000 metadata frames, 32 MiB, none paced and no bound fired,
+  /// from an unauthenticated peer.
+  ///
+  /// The window is the wrong tool and HTTP/2 says so — flow control there
+  /// applies to DATA only, and HEADERS are exempt precisely because a control
+  /// frame that cannot be sent deadlocks the stream it is trying to end. So
+  /// this is a BUFFER bound rather than a pacing one, which is also how the
+  /// protocol bounds headers (`SETTINGS_MAX_HEADER_LIST_SIZE`, not the window).
+  final Map<int, int> _streamBuffered = {};
+
+  /// Streams already failed for overrunning [_streamBuffered]; further frames
+  /// for them are dropped rather than re-reported.
+  final Set<int> _streamOverflowed = {};
+
   // ── Per-stream flow control ────────────────────────────────────────────────
   //
   // Credit rides on bare metadata frames (see [RpcHeaders.xWindowUpdate]),
@@ -387,17 +407,58 @@ class RpcChannelTransport
     return _fcMetered(streamId, ctl.stream);
   }
 
+  /// Charges [message] against the per-stream buffer bound; false means it must
+  /// not be queued.
+  ///
+  /// Fails THE STREAM, not the connection. A peer flooding one call must not
+  /// take down the others sharing the socket — the same reasoning as
+  /// `closeOnOversizedFrame: !isClient` in [RpcChannelTransport.fromChannel],
+  /// and the reason this is not routed through `closeOnProtocolError`.
+  bool _admitToStreamBuffer(
+    RpcTransportMessage message,
+    StreamController<RpcTransportMessage> ctl,
+  ) {
+    final streamId = message.streamId;
+    if (_streamOverflowed.contains(streamId)) return false;
+
+    final limit = _policy.effectiveMaxBufferedBytes;
+    final next = (_streamBuffered[streamId] ?? 0) + message.bufferedBytes;
+    if (next > limit) {
+      _streamOverflowed.add(streamId);
+      ctl.addError(
+        RpcStatusException(
+          RpcStatus.resourceExhausted,
+          'Stream $streamId buffered more than $limit bytes without being '
+          'consumed',
+        ),
+      );
+      return false;
+    }
+    _streamBuffered[streamId] = next;
+    return true;
+  }
+
   /// Returns credit as each message is handed to the consumer.
   ///
   /// `map` is lazy: a paused consumer pauses this subscription too, so nothing
   /// is credited while messages sit in the controller's buffer. That is what
   /// carries the consumer's pause all the way to the remote producer.
+  ///
+  /// It ALSO releases the per-stream buffer charge, which is why this maps even
+  /// with flow control off: the bound in [_admitToStreamBuffer] applies either
+  /// way, and without this the charge would only ever grow.
   Stream<RpcTransportMessage> _fcMetered(
     int streamId,
     Stream<RpcTransportMessage> source,
   ) {
-    if (!_fcEnabled) return source;
+    if (!_fcEnabled) {
+      return source.map((message) {
+        _releaseStreamBuffer(streamId, message);
+        return message;
+      });
+    }
     return source.map((message) {
+      _releaseStreamBuffer(streamId, message);
       _fcOnConsumed(streamId, message);
       return message;
     });
@@ -525,6 +586,8 @@ class RpcChannelTransport
     _activeStreams.clear();
     _finishedStreams.clear();
     _fcDeferred.clear();
+    _streamBuffered.clear();
+    _streamOverflowed.clear();
     // A pending grace timer holds this transport alive for its whole duration,
     // and on the VM a live timer also keeps the isolate from exiting.
     _fcGraceTimer?.cancel();
@@ -1061,6 +1124,18 @@ class RpcChannelTransport
 
   /// Drops flow-control state for a finished stream, releasing any parked
   /// sender so a torn-down call can never leave one waiting forever.
+  /// Drops [message]'s charge as the consumer takes it.
+  void _releaseStreamBuffer(int streamId, RpcTransportMessage message) {
+    final held = _streamBuffered[streamId];
+    if (held == null) return;
+    final left = held - message.bufferedBytes;
+    if (left <= 0) {
+      _streamBuffered.remove(streamId);
+    } else {
+      _streamBuffered[streamId] = left;
+    }
+  }
+
   void _fcForget(int streamId) {
     // Repaid UNCONDITIONALLY: with nothing bound to drain the id, this is the
     // last moment anything runs for it. A consumer still attached may yet drain
@@ -1074,6 +1149,10 @@ class RpcChannelTransport
     _fcPendingGrant.remove(streamId);
     _fcAdvertised.remove(streamId);
     _fcDeferred.remove(streamId);
+    // Keyed on the PEER's stream id, like the flow-control maps above, so they
+    // are dropped at the same moment and for the same reason.
+    _streamBuffered.remove(streamId);
+    _streamOverflowed.remove(streamId);
     _fcWake(streamId);
   }
 
@@ -1176,6 +1255,7 @@ class RpcChannelTransport
       // Credited by _fcMetered when the consumer takes it; outstanding against
       // the connection pool until then, and repaid if it never does.
       _fcOweConnection(message.streamId, message.payload?.length ?? 0);
+      if (!_admitToStreamBuffer(message, ctl)) return;
       if (!truncatedEnd) {
         ctl.add(message);
       } else if (message.payload != null || message.isDirect) {

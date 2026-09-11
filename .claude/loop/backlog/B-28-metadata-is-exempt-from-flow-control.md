@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 350) — bounded the buffer; pacing was the wrong tool
 round: 281
 commit: e481520a
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
@@ -80,4 +80,36 @@ hard-versus-soft failure question. See
 
 ## Owner decision
 
-—
+**Taken: fix it (round 350).** Of the two candidates the lead named, only one
+survives contact with the protocol.
+
+**Charging metadata against the send window is the WRONG tool, and HTTP/2 says
+so.** Flow control there applies to DATA only; HEADERS are exempt by design,
+because a control frame that cannot be sent deadlocks the stream it is trying to
+end — a trailer waiting on a window the peer will only open once it sees that
+trailer. Pacing metadata would diverge from the protocol this library implements
+and introduce that deadlock.
+
+So the fix is the other one: **bound the buffer**, which is also how the protocol
+bounds headers (`SETTINGS_MAX_HEADER_LIST_SIZE`, not the window).
+
+`RpcChannelTransport` now charges every frame queued into a per-stream controller
+against `effectiveMaxBufferedBytes`, weighed by `RpcTransportMessage.bufferedBytes`
+— the weigher round 279 already wrote for the other queue, whose own doc says
+"one home for the rule, because every transport buffers these". Over the bound,
+the STREAM fails with `RESOURCE_EXHAUSTED`; the connection survives, because a
+peer flooding one call must not take down the others sharing the socket.
+
+Measured, 200 metadata frames of ~8 KiB against a 256 KiB bound:
+
+```
+                                    before      after
+errors on the stream                none        RESOURCE_EXHAUSTED
+transport closed                    no          no
+ordinary exchange (default policy)  ok          ok
+consumer that KEEPS UP, 200 frames  ok          ok
+```
+
+The last row is the one that makes it a buffer bound and not a throughput cap.
+
+Guarded by `packages/core/rpc_dart/test/streams/metadata_flood_is_bounded_test.dart`.

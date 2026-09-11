@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: an inbound size limit exists, and something buffers before it is consulted
 breaks: DoS.
-applied: [236, 279, 280]
-status: confirmed (round 280)
+applied: [236, 279, 280, 350]
+status: confirmed (round 350)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -166,6 +166,24 @@ Still outstanding from that grep, named with line numbers in round 280:
 credit by payload length at six sites. That is a backpressure question rather
 than a memory bound, so it needs a different observable.
 Bench `../probes/P-30-pre-method-budget-weighs-payload-only.md`.
+
+**Round 350 closed that thread, and the answer was that the six sites are
+right.** They were suspected of an asymmetry (281 refuted it: nothing charged,
+nothing credited) and then of needing to charge metadata after all — and that is
+the wrong tool, because HTTP/2 applies flow control to DATA only and exempts
+HEADERS by design: a control frame that cannot be sent deadlocks the stream it
+is trying to end. The defect was the purest instance this lens has: **the limit
+did not fire at all, and the residency was unbounded.** The per-stream view from
+`getMessagesForStream` is a plain `StreamController`, and flow control was the
+only thing in front of it. Bounded now by the round-279 weigher, the one buffer
+that had never asked it.
+
+> **Both halves of the lens can pass while the buffer has no limit at all.**
+> WHEN does the limit run and WHAT does it count are questions about a limit that
+> exists. The detector list above enumerates buffering SITES for that reason —
+> and this site was not on it, because it is not on the inbound parse path; it is
+> the per-stream fan-out the parse path feeds. After fixing a weigher, also ask
+> which queues the weigher is not applied to.
 
 No catalog shape covers this; a candidate for `catalog/` at the next curate,
 by the usual test — it holds in any code that buffers untrusted input.
