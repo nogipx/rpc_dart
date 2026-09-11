@@ -342,11 +342,29 @@ melos:
 
     license:annotate:
       description: Add the SPDX MIT header to source files that lack it.
+      # NOT `--recursive .`, and the difference is not cosmetic. `reuse annotate`
+      # does not read REUSE.toml, so a whole-tree run re-heads every path the
+      # TOML already covers — and two of those trees BREAK when it does:
+      #
+      #   .claude/**   a loop record opens with YAML frontmatter, and the header
+      #                lands at line 1, inside the `---` fence
+      #   the wasm     a `.license` sidecar under the example's Android `res/`
+      #   example      fails the build outright (see REUSE.toml)
+      #
+      # `git ls-files --cached --others --exclude-standard` is the same file set
+      # `--recursive .` walks — tracked, plus new and not ignored. The pathspecs
+      # drop the two excluded trees, and then the files reuse skips ITSELF while
+      # walking (the license store, per-package LICENSEs, existing sidecars),
+      # because naming a file explicitly bypasses that filter.
       run: >
-        reuse annotate
+        git ls-files -z --cached --others --exclude-standard
+        -- ':!:.claude/*' ':!:packages/transport/rpc_dart_wasm/example/*'
+        ':!:LICENSE' ':!:*/LICENSE' ':!:LICENSES/*' ':!:*.license'
+        ':!:REUSE.toml' ':!:*/REUSE.toml'
+        | xargs -0 reuse annotate
         --license MIT
         --copyright 'Karim "nogipx" Mamatkazin <nogipx@gmail.com>'
-        --merge-copyrights --skip-existing --skip-unrecognised --recursive .
+        --merge-copyrights --skip-existing --skip-unrecognised
 
     # --- Maintenance: raise an in-repo dependency floor across packages ---
     # Only needed when a sibling starts using a new API of the bumped package

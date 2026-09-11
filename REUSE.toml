@@ -16,12 +16,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
 SPDX-License-Identifier = "MIT"
 
-# Agent tooling: the improvement-loop skill and its settings, and Serena's
-# project config. JSON admits no comments and `.gitignore` has nowhere sensible
-# to put one, so these are annotated rather than headed. Serena REWRITES
-# `.serena/project.yml` on activation, so an inline header there would not
-# survive even though YAML would carry one. The skill's own `.py`/`.dart` DO
-# carry inline headers, per the rule above that source code heads itself.
+# Agent tooling: the improvement-loop skill, the journal it writes, and Serena's
+# project config. Covered WHOLESALE here, and `license:annotate` is told to skip
+# the tree — see the note on that script in the root pubspec.
+#
+# The reason is not tidiness. A loop record opens with YAML frontmatter that
+# `loop.py` parses, and `reuse annotate` inserts its comment block at line 1,
+# INSIDE the `---` fence. The first run over this tree rewrote 300 records that
+# way. Serena has the same shape from the other direction: it REWRITES
+# `.serena/project.yml` on activation, so a header there would not survive.
 #
 # `reuse lint` had been failing on these since `87e9d2f4 add skill`, about
 # thirty commits and twenty rounds. CI reported it the whole time; what missed
@@ -29,9 +32,7 @@ SPDX-License-Identifier = "MIT"
 # not include the license step. Fixed in config.md at the same time.
 [[annotations]]
 path = [
-  ".claude/.gitignore",
-  ".claude/settings.json",
-  ".claude/skills/**/*.json",
+  ".claude/**",
   ".serena/**",
 ]
 precedence = "aggregate"
@@ -45,7 +46,9 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
 SPDX-License-Identifier = "MIT"
 
-# Generated app-shell assets and project files for the rpc_dart_wasm example.
+# The rpc_dart_wasm example: a generated Flutter app shell whose only purpose is
+# to give `flutter build` something to compile the plugin into. Covered
+# WHOLESALE here, and `license:annotate` skips it too.
 #
 # Annotated HERE rather than with `.license` sidecars, and that is not a style
 # choice: Android's resource compiler rejects any file under `res/` that is not
@@ -54,16 +57,17 @@ SPDX-License-Identifier = "MIT"
 #   ic_launcher.png.license: Error: The file name must end with .xml or .png
 #
 # which is how the example came to be unbuildable for Android while building
-# fine for iOS. Xcode asset catalogues tolerate the stray file but do not need
-# it either.
+# fine for iOS. Listing only `android/**` and `ios/**` was not enough to prevent
+# that: `reuse annotate` does not read this file, so a `--recursive .` run wrote
+# those sidecars back regardless of the coverage here. The path is excluded from
+# the annotate step for that reason; this entry is what keeps `reuse lint` green
+# once nothing heads the tree.
 [[annotations]]
 path = [
-  "packages/transport/rpc_dart_wasm/example/android/**",
-  "packages/transport/rpc_dart_wasm/example/ios/**",
-  "packages/transport/rpc_dart_wasm/example/.metadata",
-  "packages/transport/rpc_dart_wasm/example/analysis_options.yaml",
-  # The plugin's own privacy manifest, for the same reason: it is COPIED into
-  # rpc_dart_wasm_privacy.bundle, so a sidecar beside it would ship to users.
+  "packages/transport/rpc_dart_wasm/example/**",
+  # The plugin's own privacy manifest, for the same reason as the icons: it is
+  # COPIED into rpc_dart_wasm_privacy.bundle, so a sidecar beside it would ship
+  # to users.
   "packages/transport/rpc_dart_wasm/ios/Resources/PrivacyInfo.xcprivacy",
 ]
 precedence = "aggregate"
