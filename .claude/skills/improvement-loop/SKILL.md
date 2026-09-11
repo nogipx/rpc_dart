@@ -109,7 +109,17 @@ measurement someone took, on a tree that has since moved, and nothing checks it.
    **A bench that could not see the defect makes the verdict INCONCLUSIVE, not
    CLEAN** — however many times it was rebuilt.
 3. **Measure in numbers.** No numbers, no defect.
-4. **Fix.** Minimally, at the point that renders the wrong verdict.
+4. **Fix.** Minimal in DEPTH, complete in BREADTH — and those are different
+   axes. Minimal means one mechanism, at the point that renders the wrong
+   verdict; it does NOT mean a convenient subset of the instances.
+   **Sweep the whole surface of the class before writing the record.** Count the
+   instances first — `grep` the shape across every package the lens's `paths:`
+   name — then fix all of them, or say in `## Not fixed` exactly how many are
+   left, where, and why, with the number. A round that fixes the instances it
+   happened to be looking at and calls the rest "remaining work" has shifted the
+   job to the owner without saying so; that is an under-delivery even when every
+   number in the record is true. If the full sweep is genuinely too large for one
+   round, that is a fact to state up front, not to discover at the end.
    **The narrative does not go beside the code.** The round record and the commit
    body already hold the measurement, the controls and the story; repeating them
    in a comment inflates the file every round forever. A comment earns its place
@@ -148,6 +158,14 @@ says yes. Everything else — whether the set is worked out, whether a lead is
 worth taking — is your call from the state `next` prints. Near the cap, do not
 open work that spans several rounds: an unfinished tree is worse than one never
 started.
+
+**"Too large for one round" is a measurement, not a feeling, and it is taken
+BEFORE the fix.** Count the instances, decide the scope, and put the scope in
+`## Target` — "all 58 sites" or "the 16 on the per-call path, because the other
+42 are X and cost Y". Deciding it afterwards, from whatever got done, is how a
+round ends up reporting a subset as if it were the job. When the owner asked
+about a class of defect, the class is the scope; narrowing it is their call to
+make, not yours to assume.
 
 ## References — on demand
 
