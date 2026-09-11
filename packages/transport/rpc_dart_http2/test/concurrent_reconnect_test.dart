@@ -95,17 +95,22 @@ void main() {
   late Uri proxyUri;
   var opened = 0;
   var closed = 0;
+  late StreamController<void> closes;
 
   setUp(() async {
     opened = 0;
     closed = 0;
+    closes = StreamController<void>.broadcast();
     server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
       // Do NOT read socket.remotePort here: on close the peer is gone and it
       // throws OS Error 22.
       onConnectionOpened: (_) => opened++,
-      onConnectionClosed: (_) => closed++,
+      onConnectionClosed: (_) {
+        closed++;
+        if (!closes.isClosed) closes.add(null);
+      },
       onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
     );
     await server.start();
@@ -117,6 +122,7 @@ void main() {
   });
 
   tearDown(() async {
+    await closes.close();
     await proxy.close();
     await server.stop();
   });
@@ -128,13 +134,50 @@ void main() {
     logger: LogScope.noop,
   );
 
-  /// Connections the server still holds. Polled, so closes have time to land.
-  Future<int> liveConnections() async {
-    final deadline = DateTime.now().add(const Duration(seconds: 8));
-    while (DateTime.now().isBefore(deadline) && opened - closed > 0) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+  /// Waits for the server to report every connection it opened as closed, and
+  /// returns both what is still live and how long the wait took.
+  ///
+  /// It reports the ELAPSED time because `opened - closed == 1` has two causes
+  /// that need opposite fixes -- a connection nobody can close, and one whose
+  /// close simply has not landed. A bare count cannot tell them apart, and CI
+  /// failed on exactly that number with the cause unknowable from the message.
+  ///
+  /// Measured on an idle machine, teardown settles in ~1735 ms and the figure
+  /// is flat in the number of connections (2, 2, 3 -> 1733, 1735, 1739 ms), so
+  /// it is one fixed wait rather than per-connection work. Against the previous
+  /// 8 s budget that is a margin of 4.6x, which a loaded CI box can exhaust
+  /// without anything having leaked. Waiting on the close EVENTS rather than
+  /// polling means the budget below costs nothing when the test passes.
+  Future<({int live, int ms})> settle({
+    Duration within = const Duration(seconds: 30),
+  }) async {
+    final started = DateTime.now();
+    while (opened - closed > 0) {
+      final left = within - DateTime.now().difference(started);
+      if (left <= Duration.zero) break;
+      try {
+        await closes.stream.first.timeout(left);
+      } on TimeoutException {
+        break;
+      }
     }
-    return opened - closed;
+    return (
+      live: opened - closed,
+      ms: DateTime.now().difference(started).inMilliseconds,
+    );
+  }
+
+  /// `expect(live, 0)` with the evidence attached.
+  Future<void> expectNothingLive(String what) async {
+    final s = await settle();
+    expect(
+      s.live,
+      0,
+      reason:
+          '$what: opened=$opened closed=$closed, still live after ${s.ms}ms. '
+          'Near the budget means a slow teardown; far below it means a '
+          'connection nothing can close.',
+    );
   }
 
   test(
@@ -145,12 +188,9 @@ void main() {
       await Future.wait([t.reconnect(), t.reconnect()]);
       await t.close();
 
-      expect(
-        await liveConnections(),
-        0,
-        reason:
-            'the losing attempt assigned a live connection that was immediately '
-            'overwritten, leaving nothing able to close it',
+      await expectNothingLive(
+        'the losing attempt assigned a live connection that was immediately '
+        'overwritten, leaving nothing able to close it',
       );
       expect(
         opened,
@@ -169,7 +209,9 @@ void main() {
       await Future.wait([t.reconnect(), t.reconnect(), t.reconnect()]);
       await t.close();
 
-      expect(await liveConnections(), 0);
+      await expectNothingLive(
+        'three concurrent reconnects orphaned a connection',
+      );
       expect(opened, 2);
     },
     timeout: const Timeout(Duration(seconds: 90)),
@@ -188,7 +230,7 @@ void main() {
       expect(opened, 3, reason: 'a sequential reconnect is a real one');
 
       await t.close();
-      expect(await liveConnections(), 0);
+      await expectNothingLive('a sequential reconnect orphaned a connection');
     },
     timeout: const Timeout(Duration(seconds: 90)),
   );
