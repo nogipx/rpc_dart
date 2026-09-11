@@ -20,6 +20,32 @@ numbers, not a retelling.
 - **[L-12](L-12-sweep-the-class-not-the-sample.md)** active (rounds 333-334, named by the owner), process — count the class before fixing any of it and put the count in `## Target`: 333 measured 58 interpolating log sites in core and guarded 16, 334 guarded 24 more and filed "~20 remain", while the real surface was ~200 across core and four transports. Both records were true and both were subsets; "remaining work" written at the END is a decision the owner never got to make
 - **[L-11](L-11-a-gauge-cannot-name-its-own-cause.md)** active (round 321, billed on CI), metric — assert an event at the peer, never by polling a gauge that rises and falls: three rounds on one assertion, both CI failures reading `Actual: <0>`, which is what a sample says whether nothing happened or it never looked
 
+## Curate after round 348 — all twelve re-read, all still hold
+
+`stale` ages eight of them; the classification is the same as the lenses' and it
+comes out the same way. Two were APPLIED in this block and are stronger for it,
+not weaker:
+
+- **L-01** (one half masks the other's witness) — round 343 hit it on a
+  redundancy that is DELIBERATE rather than accidental: `_streamParsers` is
+  pruned at two sites and either alone suffices, so the single-site ablation
+  read exactly like a bench with no sensitivity. That case is not in L-01's own
+  record and is now the clearest instance of it.
+- **L-11** (a gauge cannot name its own cause) — round 339 applied it to the
+  last three assertions of its kind in `rpc_dart_http2`, and the CI failure that
+  prompted it was the same message L-11 was written about, `Actual: <0>` versus
+  `Actual: <1>`.
+
+**No candidate for a thirteenth, and that is a deliberate call.** Rounds 337-348
+produced four rules that read like lessons — sweep the class before the sample,
+an arm reporting zero must prove it could report one, a comment naming the
+mechanism is not the same as having read it, a step that runs last is only as
+reliable as everything before it. The first is already **L-12**; the other three
+are each written into the round that paid for them and into the lens or bench
+that carries them forward. Filing them here as well would grow the layer whose
+binding constraint is the attention it costs to read, which is the same argument
+this file already makes against promoting lessons into `methods/`.
+
 ## Promotion candidacy — curate pass after round 220
 
 All three hold OUTSIDE this repository, so all three are candidates for the

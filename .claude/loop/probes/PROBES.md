@@ -25,6 +25,19 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+**Curate after round 348: the same decision, and this block supplies the
+evidence the 327 one had to borrow.** `stale` now ages 38 of 42 benches, because
+round 337 guarded 158 log sites across 21 files. Four of this block's own
+benches were BUILT after that churn and validated against it — P-38, P-39, P-40
+each with a control that fired, and P-41 whose control needed two prunes removed
+before it would. P-36 was built before it and re-run after, unchanged. A status
+field flipped to `stale` on churn that five consecutive benches saw through would
+send the next round rebuilding apparatus that works.
+
+The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
+transports rounds 340 and 342 changed — and both were re-run in those rounds,
+after the change, which is what the status is for.
+
 - **[P-42](P-42-does-terminate-reject.md)** valid (round 347), http2 — which
   connection state puts an error in the zone, with a REACHABILITY column that is
   the control: three arms reported zero unhandled errors while the line under

@@ -10,8 +10,38 @@ deleted — no findings is a result too, and a deleted lens gets reinvented.
 
 ## Due a re-measurement
 
-**Empty — and the curate pass after round 327 had to measure that rather than
-read it off `loop.py stale`, which says the opposite.**
+**RPC-02, added by the curate pass after round 348, by the same classification
+the note below describes — and this time it came out the other way.**
+
+`stale` reports RPC-02, RPC-09, RPC-14 and RPC-19 as aged, 25 to 29 files each.
+One `git log` per lens along its own paths separates them:
+
+```
+RPC-02   4 commits since 1ab3e26e   8a28f1bf, 4527416a  <- BOTH in its territory
+RPC-09   8 commits since 9bb632e0   none in its territory
+RPC-14   8 commits since 34f0b039   none in its territory
+RPC-19  10 commits since 4b5727a5   none in its territory
+```
+
+RPC-02 is *a refusal survives its own policy*, and rounds 340 and 342 changed
+refusal behaviour on the transport the lens was swept on: 340 made http2 validate
+OUTBOUND metadata against the policy, which is the lens's own rule applied in the
+direction it had not been; 342 added the 256-violation backstop, which changes
+what a refusal costs a connection. Neither was measured against this lens. **It
+ages back in on behaviour, not churn.**
+
+The other three do not. Their windows are dominated by round 337's 158 log
+guards and the two lint-floor rounds; the behavioural commits inside them —
+`355f773c` (answering a failed unary request stream), `13fc66c3` (an inbound
+size cap), `fbe8f744` (one caller-stream bridge) — are not about a deadline
+below a write, a timeout abandoning work, or a flag with two lifecycle meanings.
+
+> **Round 347 met RPC-14's shape in a dependency and it is worth recording here
+> rather than ageing the lens for it**: `finish().timeout()` abandons the AWAIT,
+> not the work, which is exactly what the lens is about — but the code doing it
+> is `package:http2`, outside every path the lens names. Filed as B-35.
+
+The note the pass after round 327 wrote, which is the method above:
 
 `stale` reports RPC-09, RPC-14 and RPC-19 as aged, three to five rounds after
 each was swept clean (322, 323, 324). Classifying the commits along each lens's
