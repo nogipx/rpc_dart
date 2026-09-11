@@ -3,7 +3,7 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292, 334]
+applied: [209, 289, 290, 291, 292, 334, 335]
 status: confirmed (round 209)
 ---
 
@@ -89,3 +89,19 @@ guards and it came back `Actual: <false>`.
 > optional-collaborator question to the detector: not only "does the wrapper
 > forward this interface" but "does every branch that constructs this
 > collaborator pass the same arguments".
+
+**Round 335 swept that question over the whole corpus: 27 construction sites,
+one defect, and it was 334's.** `CallProcessor` (4), the seven stream responders
+(8), the stream callers (4), `RpcMessageParser` (3) and `RpcChannelTransport`
+(8) all agree. `../checked/C-36-construction-argument-parity.md` holds the list.
+
+> **Read the VALUE where the text differs, or the check has a two-thirds false
+> positive rate on its own findings.** Two of the 27 differ textually and
+> neither is a defect: core passes `policy.effectiveMaxBufferedBytes` where
+> http2 passes the nullable `_policy.maxBufferedBytes`, and the parser's own
+> fallback makes them identical; core passes a `decompressor` where http2 passes
+> none, and that is deliberate layering — the transport parser re-encodes the
+> compressed frame so the ENDPOINT parser decompresses, once.
+
+Run it when a class GAINS an optional parameter, not on a schedule: the surface
+only changes when a constructor does.
