@@ -3,7 +3,7 @@ refines: U-11
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: several transports share parts of one layer
 breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
-applied: [340, 341, 342]
+applied: [340, 341, 342, 343]
 status: confirmed (round 150, off-journal)
 ---
 
@@ -140,3 +140,21 @@ The role question turned out to have an answer already written in the code, at
 wrong answer for a client, whose other in-flight calls die with the connection".
 So the FIELD is role-sensitive and the BACKSTOP is not, which is how round 342
 split them.
+
+## Where the vein runs out — round 343
+
+Applying the same reading to the OTHER unnamed mechanisms — the bounded
+`_finishedStreams` and the gated `_statusSeen`, both there because an id can be
+the peer's choice — came back CLEAN, and the reason generalises:
+
+**A missing port only matters where the hand-rolled transport faces the same
+threat.** The http2 caller and the http responder mint their own stream ids, so
+the peer cannot name a key and the gating problem cannot arise. The http2
+responder takes the peer's ids and bounds them with `maxActiveStreams` and
+`SETTINGS_MAX_CONCURRENT_STREAMS` instead — a different mechanism for the same
+job, which a "did they port it?" reading scores as a miss.
+
+So the question to ask is not *did they copy this* but *do they face this, and
+with what*. Full audit in `checked/C-37`. The three dimensions that terminate
+are now worked out (fields 341, `_validateInbound`'s bodies 342, per-stream
+state 343); what is left under this lens is open-ended reading.

@@ -25,6 +25,12 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+- **[P-41](P-41-per-stream-state-is-reclaimed.md)** valid (round 343), http2 —
+  does per-stream state come back to zero after the calls that made it, read from
+  the transports' own `health()` details so nothing needs instrumenting. Its
+  control had to delete **both** prunes: `_streamParsers` is removed in two
+  places and either alone suffices, so the single-site ablation changed nothing
+  and read exactly like a bench that cannot see a leak (L-01)
 - **[P-40](P-40-policy-violation-backstop.md)** valid (round 342), http2 + core —
   what bounds a peer that only sends frames the policy refuses, at the DEFAULT
   policy. Its control is the shared layer's 256-violation backstop, and reaching
