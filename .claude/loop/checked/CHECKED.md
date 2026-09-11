@@ -10,6 +10,23 @@ wrong. A negative is never deleted; re-measuring one is a round's target, and
 where 20 of 50 records had aged — almost all of them because rounds 206-220
 rewrote `channel_transport.dart` and the three http2 transports.
 
+**Curate after round 327 deliberately did NOT mark the 28 newly-stale records
+one by one, and the reason is a number.** Rounds 325 and 326 raised the analysis
+floor across core and transport: two commits, `f70775cb` and `1ab3e26e`, 161
+files, entirely type annotations, type arguments, import order and tearoffs —
+every test count in the workspace unchanged. `stale` computes from path churn and
+cannot tell that from a logic change, so it now reports **28 of 34 negatives, 30
+of 31 benches and 3 of 4 sweeps** as aged. Marking all of them would set the flag
+on nearly every record in the store, which is the same as setting it on none.
+
+The classification is per-record and cheap — one `git log <sha>..HEAD -- <paths>`
+— and `../lenses/LENSES.md` carries it for the sweeps, `../backlog/BACKLOG.md`
+for the leads, where it found two that are genuinely aged (B-11, B-21) behind six
+that are not. **Do that before treating a stale flag here as a reason to
+re-measure.** Round 319 is the counterexample that keeps this honest: there the
+same assumption was made in the other direction and 19 of 31 commits turned out
+to be behavioural.
+
 - **[C-34](C-34-the-caller-contract-has-nothing-to-duplicate.md)** round 317, core — `RpcCallerContract` holds NO registration map: its four `call*` methods dispatch through the endpoint immediately, so a repeated method name is two calls, which is the normal case. The preamble that looks identical to the responder's resolves the same mode for a different LIFETIME — once per registration there, once per call here. So the missing `_rejectDuplicate` is correct, and merging the two preambles (which round 315 left open) would carry a registration rule onto a call path, where at best it is dead and at worst it refuses a second call
 - **[C-33](C-33-hostile-reflection-requests.md)** round 284, core — the reflection service against seventeen malformed requests: 0 leaked Errors, 0 leaked Exceptions, every one answered as a gRPC error. The un-typed `catch (_)` is load-bearing; a bare `on Exception` would let an `Error` reach the zone. The recursive descriptor parser is NOT peer-reachable and is out of scope; a 1 MiB symbol echoes back 1 MiB, which is 1:1 and bounded by `maxMessageLengthBytes`
 - **[C-32](C-32-rapid-reset-dispatches-nothing.md)** round 277, http2 and core — HTTP/2 Rapid Reset (CVE-2023-44487) dispatches no handler: 0 from 200 resets against 4 from 200 normal calls at `maxActiveStreams: 4`. The cancellation is processed before the pipeline reaches dispatch. **The CPU half is covered too (round 283)** — the same streams NOT reset stall an unrelated connection for 679 ms against the reset arm's 373 ms, so resetting REDUCES what the server spends

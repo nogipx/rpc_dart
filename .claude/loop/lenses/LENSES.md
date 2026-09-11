@@ -10,9 +10,34 @@ deleted — no findings is a result too, and a deleted lens gets reinvented.
 
 ## Due a re-measurement
 
-Empty as of round 223 — the queue is drained. Every lens below has either been
-swept against a known sha or is on the "nobody has taken these" list with a
-reason. The next `curate` decides what ages back in.
+**Empty — and the curate pass after round 327 had to measure that rather than
+read it off `loop.py stale`, which says the opposite.**
+
+`stale` reports RPC-09, RPC-14 and RPC-19 as aged, three to five rounds after
+each was swept clean (322, 323, 324). Classifying the commits along each lens's
+own paths:
+
+```
+RPC-09   1 commit since 9bb632e0   f70775cb
+RPC-14   1 commit since 34f0b039   f70775cb, 1ab3e26e
+RPC-19   1 commit since 4b5727a5   1ab3e26e
+```
+
+Both are the lint-floor rounds (325, 326), and both are **mechanical**: typed
+`onError` closures, `Future<void>.delayed`, `StreamSubscription<void>`, import
+order, tearoffs. 161 files, and every test count in the workspace unchanged
+across them. Nothing these lenses are about moved.
+
+> **A repo-wide mechanical sweep ages the whole journal at once.** `stale`
+> computes from path churn, so it cannot tell a type argument from a logic
+> change, and after rounds 325-326 it reports **30 of 31 benches, 28 of 34
+> negatives and 3 of 4 sweeps** as aged. Round 319 hit the inverse of this and
+> was right to check: there, 19 of 31 commits WERE behavioural. The rule is that
+> the classification is cheap — one `git log` per record — and skipping it in
+> either direction is what costs a round.
+
+So the queue is empty by measurement. What ages back in is whatever the next
+BEHAVIOURAL commit touches.
 
 ## Imported from private memory, never applied here — take these first
 
@@ -41,6 +66,12 @@ abstractions (RPC-25).
 
 ## The gate itself
 
+`loop.py yield` after round 327: **RPC-26 is 2 rounds, 2 FIXED** — the only lens
+applied more than once with every application paying. Ranked here rather than
+under "Productive lately" because its remaining surface is known and finite: 20
+of 22 packages have never had the count taken, and two of those are deliberate
+exclusions with reasons.
+
 - **[RPC-26](RPC-26-the-gate-floor-nobody-chose.md)** confirmed (325) — `melos run analyze` runs `--fatal-infos --fatal-warnings` and is green, which reads as strict and is not: the package inherits `package:lints/recommended.yaml` and nobody asked what the preset OMITS. Two independent dials — `analyzer: language:` (strict-casts / inference / raw-types, which **no preset enables**) and the rules outside the preset. Raised on core: **320 issues on a green tree**, 78 + 34 in `lib/`, 168 + 40 in `test/` + `example/`. **69 of lib's 112 collapsed into eleven edits** — every one an untyped `onError: (error, stackTrace)`, which makes both parameters `dynamic` and every downstream use an unchecked implicit downcast, in RPC-13's own subject matter. Reject a rule with its count (`close_sinks` 13 and `cancel_subscriptions` 6 were all field-held false positives); and note that a raised floor invites an automated fix that can DELETE measurements. Only 1 of 22 packages raised so far; refines U-03
 
 ## Productive lately
@@ -63,7 +94,7 @@ abstractions (RPC-25).
 - **[RPC-09](RPC-09-deadline-below-write.md)** swept here (244) — the deadline sits below a blocking write; the answer path is independent of the send, demonstrated by ablation, so it cannot arise. Re-swept over 6 moved files: the one parking site still has all three wake paths, close() among them; refines U-16
 - **[RPC-02](RPC-02-refusal-trailer-violates-policy.md)** swept here (243) — the refusal trailer fails the policy it enforced; only trailers crossing a validating hop are at risk. Re-swept over 10 moved files: 12 of 12 message-carrying sites capped, including the two refusal paths added since; refines U-09
 - **[RPC-05](RPC-05-concurrency-limit-charge-point.md)** confirmed (round 271) — a limit is charged, or released, at the wrong point of the lifecycle; every stateful policy field swept at 215. Round 245 asked WHAT a limit charges instead of where, and found metadata weighing zero against the buffer's byte bound: 256 MiB against a 16 MiB cap. Round 271 asked WHO ELSE was charged: the HTTP/1.1 responder discharged its own budget on a failed body read and left the pipeline's parked for 60 s; refines U-07
-- **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (220) — a package outside the workspace is invisible to the gate; wasm's Dart is analysed and formatted by nothing, clean anyway; refines U-03
+- **[RPC-11](RPC-11-package-outside-workspace.md)** confirmed (220) — a package outside the workspace is invisible to the gate; wasm's Dart is analysed and formatted by nothing, clean anyway; refines U-03. **Pairs with [RPC-26](RPC-26-the-gate-floor-nobody-chose.md)**, and the curate pass after 327 kept them separate deliberately: RPC-11 is code the gate never SEES, RPC-26 is code it sees with nothing switched on. Both read as `No issues found!`, and round 326 found the second in three packages at once
 - **[RPC-07](RPC-07-web-as-separate-runtime.md)** confirmed (219) — green on the VM, broken on dart2js; the gate is a census, nine of twelve packages get a build-and-construct check (B-18); refines U-03
 - **[RPC-08](RPC-08-policy-field-single-transport.md)** confirmed (119, off-journal), applied in 205 — a policy field inert at a neighbouring transport; refines U-19
 

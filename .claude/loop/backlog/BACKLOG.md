@@ -8,6 +8,27 @@ entire awaiting-decision queue.
 `(stale, sha)` means code under that lead's paths has changed since its number
 was taken. The blocker and the number age separately — see U-21.
 
+**Curate after round 327 classified all eight stale leads instead of trusting
+the flag**, and the first pass at it was wrong — a guess that "most of this is
+the lint rounds" survived until the `git log`s were actually read:
+
+```
+                 commits since its sha        verdict
+  B-28                 2   both docs          mechanical
+  B-29                 1   the lint floor     mechanical
+  B-31                 1   the lint floor     mechanical
+  B-32                 1   the lint floor     mechanical
+  B-11                 7   2 behavioural      GENUINELY AGED
+  B-21                12   8 fix() + 1 refactor!   GENUINELY AGED
+  B-09, B-23          29   pre-201 shas       GENUINELY AGED
+```
+
+Four are `(stale, mechanical)`: their numbers stand and re-measuring them is work
+with a known answer. **B-11 and B-21 are not** — B-21 in particular has eight
+`fix(rpc_dart)` commits across `client_connection.dart` and `transport.dart`
+since its number was taken, which is exactly the shape round 319 found under
+RPC-02. They are ranked accordingly and marked the ordinary way.
+
 ## Awaiting an owner decision
 
 Re-sorted in the audit after round 287, which found this section holding one
@@ -19,7 +40,8 @@ choice about what the library promises, not a number.
 - **[B-33](B-33-blob-adapters-disagree-on-a-missing-blob.md)** open, owner scope decision (round 318) — `IBlobRepository.deleteBlob` promises only "returns `true` when something was removed", and on the SAME input (blob missing, `expectedVersion` set) `in_memory` **throws StateError** while `webdav` **returns false**. These are interchangeable by design, so a caller written against one silently takes the other branch on the other. Two more implementations (minio, sqlite) were not compared; `IDataStorageAdapter` and `INotifyRepository` have the same structure and were not looked at. Aggravated by `*_postgres`/`*_minio` being excluded from `test:unit` — the least-exercised adapters are where this accumulates. Out of scope: core and transport only for now; sits with B-10
 - **[B-32](B-32-zero-copy-unary-may-not-dispatch.md)** open, but the alarming half is ANSWERED and WRONG (round 316) — round 315 left the zero-copy generic asymmetry open; reading the dispatch produced a convincing argument that unary should throw, because the registry's static type is `<Object, Object>` and Dart function parameters are contravariant. It does not throw: **Dart generics are reified**, so `callUnaryHandler` runs with the instance's real type arguments, and `unsendable_direct_object_test.dart:120` already covers exactly the shape predicted to fail. One grep answered what a page of type reasoning did not. What remains open is only the cosmetic unification of the two registration shapes, which RPC-25 declines (no drift, no rule)
 - **[B-31](B-31-the-web-channel-has-no-reachable-witness.md)** open, owner decision (round 313) — round 310's isolate web `send` fix is analyser- and sibling-verified but has **no test**, and the only route to one widens the surface. Through the public API needs a real `Worker`, i.e. a browser the ordinary gate never runs. Directly on the channel would be one line — the class takes its transmit function as a constructor parameter, so a throwing stub reaches the defect with no Worker — but `_WebMultiplexedChannel` is library-private, and Dart privacy is per-library, so `src/`-importing does not help the way it did in 307. That leaves `@visibleForTesting`, which is an API-shape trade rather than a bug fix. A cheaper variant (extract the send-failure POLICY and test that) witnesses the decision but not the integration
-- **[B-30](B-30-russian-comments-outside-the-mandate.md)** open, MEASURED (round 303) — the root `CLAUDE.md` says "English for code, comments, and logs"; **25 lib files are in Russian**, and only the three http2 ones are inside the owner's five-package mandate. `rpc_data` holds 16 of them, in `models.dart`, the contract and the repository interfaces — the API surface its users read first, on a package that is PUBLISHED, so dartdoc renders it. One is `.g.dart`, so that one means fixing the generator's source. Not swept in 303 because the mandate names five packages and these are none of them
+- **[B-30](B-30-russian-comments-outside-the-mandate.md)** open, MEASURED (round 303) — the root `CLAUDE.md` says "English for code, comments, and logs"; **25 lib files are in Russian**, and only the three http2 ones are inside the owner's five-package mandate. `rpc_data` holds 16 of them, in `models.dart`, the contract and the repository interfaces — the API surface its users read first, on a package that is PUBLISHED, so dartdoc renders it. One is `.g.dart`, so that one means fixing the generator's source. Not swept in 303 because the mandate names five packages and these are none of them.
+  **Curate after 327 re-took the count and the lead was measuring the wrong half.** `lib/` is 23 files today. `test/` and `example/` across core and transport hold **55 more** — more than twice the lead's whole number, never counted, and unlike the `lib/` ones they are squarely inside the owner's current core-and-transport scope. Rounds 325 and 326 read through several of them while raising the lint floor (`rpc_responder_endpoint_test.dart`, `responder_dispose_example.dart`, `http2_rpc_integration_test.dart`) and touched the code without touching the comments, because that was not the round's job. The in-scope half is the cheaper and larger one
 - **[B-29](B-29-the-isize-bomb-is-unbounded-on-web.md)** open, MEASURED (round 286) — a gzip payload whose ISIZE understates it is refused in **12 ms on the VM and 15980 ms on dart2js**, because `boundedInflate` is `=> null` there and the limit runs on `result.length` after the output exists. ~65 KiB of wire buys 64 MiB and sixteen seconds of the event loop. **No fix is worth proposing** — a compressed-size heuristic would refuse ordinary traffic at deflate's 1032:1 ceiling, and `package:archive` has no incremental inflater on web — so what remains is documenting the residual or accepting a lower effective limit there
 
 ## Open — decided, ready to implement
@@ -28,14 +50,14 @@ choice about what the library promises, not a number.
 
 ## Open
 
-- **[B-23](B-23-pre-201-knowledge-outside-the-journal.md)** open, reason "cost" (curate after 234) — 52,203 words of pre-201 knowledge sit outside the journal, where nothing routes to or ages them. NOT duplication: `checked/` imported the negatives, the SHAPES and METHODS stayed out. Two lenses recovered (RPC-16, RPC-17); ~30 dossiers left, and the four METHOD entries are the highest value
+- **[B-23](B-23-pre-201-knowledge-outside-the-journal.md)** open, reason "cost" (curate after 234) *(stale, aba26aa3 — 94 commits)* — 52,203 words of pre-201 knowledge sit outside the journal, where nothing routes to or ages them. NOT duplication: `checked/` imported the negatives, the SHAPES and METHODS stayed out. Two lenses recovered (RPC-16, RPC-17); ~30 dossiers left, and the four METHOD entries are the highest value
 - **[B-26](B-26-timeout-bounds-the-wait-not-the-body-read.md)** closed (round 273), **REFUTED** — the prediction was that `.timeout()` on `readBody()` leaves its `await for` consuming; it does not. 384 KiB accepted after the 408 against 16384 KiB in 49 ms with the deadline off, because dart:io detaches the body of a finished exchange. Wrong for a reason that is not in our code; kept as C-31
 - **[B-25](B-25-sequential-reconnect-orphans-a-connection.md)** closed (round 262), PARKED by the owner — **a connection leak, measured and unexplained.** A sequential http2 reconnect leaves a DISCARDED connection open about 1.3% of the time (5 in 390 direct cycles, always ordinal 1 or 2). Six rounds eliminated three accounts — socket.destroy() as the fix, the dropped terminate() Future, the header-block guard — without finding the cause. The one untried variable, a discard racing a concurrent connect, is written up with its three-arm design. Reopen when it costs something real
 - **[B-24](B-24-frame-channel-buffer-is-an-ordering-coincidence.md)** closed (round 250) — the frame channel's inbound controller now buffers like the other six. Shipped with NO canary on the owner's decision: no construction path loses a frame today, so a witness would have had to invent the very await whose absence makes the code safe
-- **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
-- **[B-09](B-09-unfiled-grpc-compat-items.md)** open *(stale, 5bf4d34e)* — unfiled "documented, not fixed" items from private memory
+- **[B-21](B-21-reconnectable-transport-type.md)** open, next major (round 224) *(stale, ed1a54bc — **12 commits, 8 of them `fix()`**)* — make the reconnect capability a compile-time requirement; moves round 224's runtime refusal to a red squiggle, and fixes nothing currently broken. **Ranked up by the curate after 327**: its paths (`client_connection.dart`, `transport.dart`) have taken more behavioural churn than any other lead's since its number, so "fixes nothing currently broken" is the claim most likely to have decayed
+- **[B-11](B-11-endpoint-reachability-needs-latency.md)** open, reason "bench" (round 206) *(stale, c48a14d8 — 7 commits, 2 behavioural)* — does an endpoint client reach the connection-pool wedge? three benches could not see it; the gap is made of latency
+- **[B-09](B-09-unfiled-grpc-compat-items.md)** open *(stale, 5bf4d34e — 29 commits)* — unfiled "documented, not fixed" items from private memory
 - **[B-03](B-03-wasm-no-package-swift.md)** open, not urgent (round 182) — wasm: no `Package.swift`, and under SPM there is no plugin at all
-- **[B-21](B-21-reconnectable-transport-type.md)** open, next major (round 224) — make the reconnect capability a compile-time requirement; moves round 224's runtime refusal to a red squiggle, and fixes nothing currently broken
 
 ## Deferred by the owner
 

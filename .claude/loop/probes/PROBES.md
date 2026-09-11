@@ -11,6 +11,20 @@ paths has moved since its control was last run, so the next round to reuse it
 repeats that control FIRST. Only a round with a control sets `valid` again.
 Marked in the curate pass after round 220.
 
+**Curate after round 327 left all 30 newly-stale benches at `valid`, on
+evidence.** The staleness is the lint-floor rounds (325, 326 — 161 mechanical
+files, every test count unchanged); see `../checked/CHECKED.md` for the full
+argument. Two benches were reused across that boundary and both reproduced their
+controls exactly: **P-10** in round 322, all eight cells of its table identical
+to round 221's, and **P-08** in round 327, all four rows identical to round
+216's — the latter across 111 rounds. Demoting 30 benches to `stale` on churn
+that has twice failed to move a control would send the next round rebuilding
+apparatus that works.
+
+The rule the spec states still stands and is what those two rounds did: **repeat
+the control first, then trust the bench.** That is cheaper than the status field
+either way.
+
 - **[P-35](P-35-upgraded-then-silent.md)** valid (round 288), rpc_dart_websocket —
   P-25's question one stage later: the peer COMPLETES the upgrade and then never
   speaks websocket, so it answers no PING. A raw socket on purpose — a real

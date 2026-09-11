@@ -68,11 +68,33 @@ about which one is wrong".
 
 Drive the failure in a **subprocess** and assert on its exit code and its
 lifetime, not on anything visible from inside. `rpc_dart_isolate` already owns
-that harness — `close_releases_the_isolate_test.dart` — and it is the shape both
-outstanding leads need:
-`../backlog/B-20-detached-guard-has-no-witness.md` for core, and the closing
-note on `../backlog/B-04-isolate-future-timeout-unaudited.md` for the isolate
-startup path.
+that harness — `close_releases_the_isolate_test.dart`.
+
+**Round 323 used it, and the isolate half of this lesson is now closed.**
+`startup_failure_releases_the_isolate_test.dart` drives a spawn whose worker
+blocks synchronously, and asks whether the host process exits. Both halves of
+that failure path were ablated separately, and the number that matters is the
+one this lesson predicted:
+
+```
+223  teardown removed, isolate suite:          +73,     all passed
+323  teardown removed, WITH the new witness:   +73 -1   <- the only red is it
+```
+
+The lesson's structural claim held on re-measurement: nothing that already
+existed watched that path, three rounds and a hundred commits later.
+
+> **What 323 added to the remedy: which failure is REACHABLE is decided by code
+> you did not write.** The aim was `isolate_transport.dart:417`, the first
+> handshake. Unreachable — the bootstrap sends its handshake SendPort at line
+> 257, *before* it calls the entrypoint at 285, so no user code can make that
+> deadline expire, and a test aimed there lands on the ready deadline at 545
+> instead. Read the ordering before choosing the arm; that path is still
+> unwitnessed and its teardown is a strict subset, which is weaker than a canary.
+
+Still outstanding: `../backlog/B-20-detached-guard-has-no-witness.md` for core —
+though round 225's amendment above says that one is probably case 2
+(unreachable), not case 1.
 
 ## Where it does NOT apply
 

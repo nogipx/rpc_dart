@@ -3,8 +3,8 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320]
-status: swept here (round 320, 3228c5de)
+applied: [216, 243, 320, 327]
+status: swept here (round 327, 1ab3e26e)
 ---
 
 # RPC-02 — A refusal trailer that violates the policy it enforced
@@ -64,6 +64,22 @@ Same caveat as 243, stated again because it keeps being the thing that matters:
 what gives "every site passes the cap" its meaning; 243 did not repeat it and
 neither did 320. A third consecutive reading is worth less than one re-ablation,
 and the next round to touch this lens should ablate rather than re-read.
+
+**Round 327 paid that debt.** `P-08` re-run whole, all four rows identical to
+round 216's — including the ablated one, where removing `maxMessageLength` from
+`_fcRefuseOverrun`'s trailer turns `status 8` into a raw `ArgumentError` at a cap
+of 64 while the other rows do not move. The bench still isolates the trailer from
+the request headers, 111 rounds and five doc-and-lint sweeps later, so "every
+site passes the cap" still means what 216 measured rather than what three rounds
+read.
+
+> **The detector needs two corrections, both found by getting them wrong.**
+> First, 4 of the 20 `RpcMetadata.forTrailer` grep hits are not assembly sites —
+> one is the declaration, three are COMMENTS that name it. Second, do not look
+> for the cap in a fixed window below the call: at
+> `frame_multiplexed_channel.dart:261` it sits eleven lines down, behind the
+> six-line comment explaining why an INBOUND trailer needs one. An 8-line window
+> reports 11 of 12 and names the best-documented site as the broken one.
 
 > **Only a trailer that passes through a validating hop is at risk.** Sort the
 > sites by that first — it cut the surface here from 21 to 12 — and check the

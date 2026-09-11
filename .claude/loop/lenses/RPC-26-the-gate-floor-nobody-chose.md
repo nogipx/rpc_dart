@@ -75,6 +75,19 @@ unchecked in sixteen error handlers across core.
 > sibling numbers. Raise the floor and fix by hand, or read the diff of whatever
 > fixed it; a rule that can delete evidence has a cost the count does not show.
 
+## Catalog candidate (curate after 327)
+
+`refines: U-03`, but it is not U-03. That shape is a target the gate never
+EXECUTES; this one is a target it executes with nothing switched on. Both print
+green, and the second is the one nobody looks for.
+
+Nothing in it is Dart-specific: every configurable analyser inherits a preset
+someone else chose for a general audience (ESLint, ruff, clippy,
+golangci-lint), every one of them has strictness dials outside its preset, and
+every one of them silently falls back to a parent config when a unit has none.
+A candidate for `catalog/`, not promoted here — that is a change to the SKILL,
+and a curate pass touches project data only.
+
 ## The asymmetry worth keeping
 
 The two dials do not cost the same. The type modes found 208 real implicit
