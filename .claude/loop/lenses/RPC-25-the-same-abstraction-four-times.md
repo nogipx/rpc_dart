@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331]
 status: confirmed (round 308)
 ---
 
@@ -242,3 +242,28 @@ differently and must:
 
 A merge that erases these is worse than the duplication: it swaps four honest
 copies for one class with four flags.
+
+## The other reason to merge: unequal coverage (round 331)
+
+Rounds 316, 317 and 318 all declined on "no drift, no rule", and that bar is
+right. Round 331 found the case it misses.
+
+`caller_pipeline.dart`'s two outer stream bridges were **identical** — 37
+non-comment lines each, differing only in a type parameter and a message string.
+No divergence, so by the bar above, decline. Then:
+
+```
+ablate `if (!finished)` in                suite result
+  serverStream's copy                     +1434 ~1 -1   caught
+  bidirectionalStream's copy              +1435 ~1      NOTHING CAUGHT IT
+```
+
+One test pins that rule — the one that stops a normal completion poisoning a
+REUSED context's token — and it has no bidi arm. Two identical guards, one
+watched and one not, with nothing in the file recording which.
+
+> **Ask which copy the TESTS reach, not only whether the copies agree.**
+> Duplication with no divergence can still be worth removing when the copies are
+> unequally covered: after the extraction the existing test guards both call
+> shapes, because there is one implementation to guard. That is a measurable
+> return where "they might drift later" is not.

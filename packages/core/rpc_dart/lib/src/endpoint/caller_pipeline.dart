@@ -213,6 +213,88 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   String _callerMethodKey(String serviceName, String methodName) =>
       '$serviceName/$methodName';
 
+  /// Wraps a caller-side response stream in the controller both streaming
+  /// shapes need between the consumer and the call.
+  ///
+  /// Three jobs that are easy to get individually right and collectively wrong,
+  /// which is why `serverStream` and `bidirectionalStream` share one copy:
+  ///
+  /// 1. **The call starts on first listen**, not when the cold stream was handed
+  ///    out; `finish()` is the matching untrack, and it runs only from
+  ///    onDone/onCancel — neither of which fires for a stream nobody listened to.
+  /// 2. **Demand is handed upstream.** Without onPause/onResume this controller
+  ///    drains the whole response chain at full speed whatever the consumer
+  ///    does: `pause()` would stop delivery to the listener and NOTHING else,
+  ///    while every stage behind it kept decoding responses nobody asked for.
+  ///    With these and the matching hook in CallProcessor, buffering collapses
+  ///    back to the transport's per-stream controller, which holds frames still
+  ///    undecoded.
+  /// 3. **Cancellation reaches the server** — the token is the only thing that
+  ///    triggers `CallProcessor._sendCancellationToServer`, and without firing
+  ///    it the handler keeps producing for an abandoned stream.
+  ///
+  /// [cancelReason] is the only thing the two shapes disagreed on.
+  ///
+  /// Two rules the body encodes, each of which cost a round:
+  ///
+  /// - Fire the token ONLY when the stream did not already complete. On normal
+  ///   completion onDone runs `finish()` and closes the controller, `await for`
+  ///   tears down its subscription, and that reaches onCancel — firing there
+  ///   poisons a REUSED RpcContext's token, so the next call on that context
+  ///   throws RpcCancelledException even though this stream succeeded.
+  /// - Do NOT await `sub.cancel()`. On dart2js, cancelling the inner chain of
+  ///   `async*` generators may never complete, which would block cancellation on
+  ///   the client side.
+  Stream<T> _bridgeCallerResponses<T>({
+    required Stream<T> stream,
+    required String serviceName,
+    required String methodName,
+    required RpcContext ctx,
+    required String cancelReason,
+  }) {
+    late final StreamController<T> controller;
+    StreamSubscription<T>? sub;
+    var finished = false;
+
+    void finish() {
+      if (finished) return;
+      finished = true;
+      _untrackCallerRequest(serviceName, methodName, ctx.requestId);
+    }
+
+    controller = StreamController<T>(
+      onListen: () {
+        _trackCallerRequest(serviceName, methodName, ctx);
+        sub = stream.listen(
+          (event) {
+            if (!controller.isClosed) controller.add(event);
+          },
+          onError: (Object error, StackTrace trace) {
+            if (!controller.isClosed) controller.addError(error, trace);
+          },
+          onDone: () {
+            finish();
+            if (!controller.isClosed) controller.close();
+          },
+          cancelOnError: false,
+        );
+      },
+      onPause: () => sub?.pause(),
+      onResume: () => sub?.resume(),
+      onCancel: () {
+        if (!finished) {
+          ctx.cancellationToken?.cancel(cancelReason);
+        }
+        finish();
+        final inner = sub;
+        sub = null;
+        unawaited(inner?.cancel().catchError((_) {}));
+      },
+    );
+
+    return controller.stream;
+  }
+
   void _untrackCallerRequest(
     String serviceName,
     String methodName,
@@ -421,73 +503,13 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // `sub.cancel()` never completes. An explicit controller with onCancel makes
     // cancellation identical on the VM and dart2js: unsubscribe from the inner
     // stream WITHOUT awaiting that cancellation, and release the tracking now.
-    late final StreamController<TResponse> controller;
-    StreamSubscription<TResponse>? sub;
-    var finished = false;
-
-    void finish() {
-      if (finished) return;
-      finished = true;
-      _untrackCallerRequest(serviceName, methodName, ctx.requestId);
-    }
-
-    controller = StreamController<TResponse>(
-      onListen: () {
-        // The call starts here, not when serverStream() returned this cold
-        // stream. finish() is the matching untrack, and it only runs from
-        // onDone/onCancel -- which never fire for a stream nobody listened to.
-        _trackCallerRequest(serviceName, methodName, ctx);
-        sub = stream.listen(
-          (event) {
-            if (!controller.isClosed) controller.add(event);
-          },
-          onError: (Object error, StackTrace trace) {
-            if (!controller.isClosed) controller.addError(error, trace);
-          },
-          onDone: () {
-            finish();
-            if (!controller.isClosed) controller.close();
-          },
-          cancelOnError: false,
-        );
-      },
-      // Hand the consumer's demand upstream. This controller sits between the
-      // caller and the whole response chain, so without these hooks it drains
-      // that chain at full speed whatever the consumer does: `pause()` on the
-      // returned stream stops delivery to the listener and NOTHING else, while
-      // every stage behind it keeps decoding and materialising responses nobody
-      // asked for. With this and the matching hook in CallProcessor, buffering
-      // collapses back to the transport's per-stream controller, which holds
-      // frames still undecoded.
-      onPause: () => sub?.pause(),
-      onResume: () => sub?.resume(),
-      onCancel: () {
-        // Propagate the cancellation to the server. The cancellation token is
-        // the only thing that triggers CallProcessor._sendCancellationToServer
-        // (the grpc-status=CANCELLED trailer); without firing it the server
-        // keeps producing responses for an abandoned stream. finish() untracks
-        // the token, so cancel it first.
-        //
-        // Only when the stream did NOT already complete normally. On normal
-        // completion onDone runs finish() and closes the controller, and
-        // `await for` then tears down its subscription, reaching this onCancel.
-        // Firing the token there poisons a REUSED RpcContext's cancellation
-        // token, so the next call on that context throws RpcCancelledException
-        // even though this stream succeeded.
-        if (!finished) {
-          ctx.cancellationToken?.cancel('server-stream subscription cancelled');
-        }
-        finish();
-        // Intentionally do NOT wait for sub.cancel(): on dart2js, cancelling the
-        // inner chain of async* generators may never complete, which would block
-        // cancellation on the client side. Fire the cancellation and move on.
-        final inner = sub;
-        sub = null;
-        unawaited(inner?.cancel().catchError((_) {}));
-      },
+    return _bridgeCallerResponses<TResponse>(
+      stream: stream,
+      serviceName: serviceName,
+      methodName: methodName,
+      ctx: ctx,
+      cancelReason: 'server-stream subscription cancelled',
     );
-
-    return controller.stream;
   }
 
   /// Creates a client-stream call builder.
@@ -560,57 +582,17 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // again, so `sub.cancel()` only returns while the server happens to be
     // emitting. An IDLE bidi stream -- one waiting for the next server push,
     // which is its normal state -- then cannot be cancelled at all.
-    late final StreamController<R> controller;
-    StreamSubscription<R>? sub;
-    var finished = false;
-
-    void finish() {
-      if (finished) return;
-      finished = true;
-      _untrackCallerRequest(serviceName, methodName, ctx.requestId);
-    }
-
-    controller = StreamController<R>(
-      onListen: () {
-        // The call starts on first listen, not when this cold stream was
-        // handed out; finish() is the matching untrack.
-        _trackCallerRequest(serviceName, methodName, ctx);
-        sub = stream.listen(
-          (event) {
-            if (!controller.isClosed) controller.add(event);
-          },
-          onError: (Object error, StackTrace trace) {
-            if (!controller.isClosed) controller.addError(error, trace);
-          },
-          onDone: () {
-            finish();
-            if (!controller.isClosed) controller.close();
-          },
-          cancelOnError: false,
-        );
-      },
-      // Same demand hand-off as the server-stream controller above.
-      onPause: () => sub?.pause(),
-      onResume: () => sub?.resume(),
-      onCancel: () {
-        // Tell the server, or its handler keeps producing into a stream nobody
-        // reads. Fired here as well as in _buildBidirectionalStream's cleanup
-        // because the inner chain may not unwind promptly; cancel() is
-        // idempotent. Only when the stream did NOT finish on its own -- firing
-        // afterwards would poison a shared RpcContext's token and break the
-        // NEXT call made with it.
-        if (!finished) {
-          ctx.cancellationToken?.cancel('bidirectional subscription cancelled');
-        }
-        finish();
-        // Deliberately not awaited: this is the cancel that may never complete.
-        final inner = sub;
-        sub = null;
-        unawaited(inner?.cancel().catchError((_) {}));
-      },
+    //
+    // The token is fired here as well as in _buildBidirectionalStream's
+    // cleanup, because the inner chain may not unwind promptly; cancel() is
+    // idempotent.
+    return _bridgeCallerResponses<R>(
+      stream: stream,
+      serviceName: serviceName,
+      methodName: methodName,
+      ctx: ctx,
+      cancelReason: 'bidirectional subscription cancelled',
     );
-
-    return controller.stream;
   }
 
   /// Wires up a [BidirectionalStreamCaller] to a request stream, producing
