@@ -10,6 +10,10 @@
 // and nothing else, so the pipeline held the stream until `halfOpenStreamTimeout`
 // (60s by default) reclaimed it.
 //
+// The peer GOES SILENT rather than hanging up. Both cost the server the same
+// 2009 ms of `bodyReadTimeout`, measured, but a socket destroyed at the flush
+// has nowhere to deliver the answer this test reads.
+//
 // `bodyReadTimeout` is what the docs point at for exactly this attack, and it
 // worked on the transport's side only. Measured, 8 aborted requests against
 // `maxActiveStreams: 8` with the mitigation ON:
@@ -94,9 +98,21 @@ int _openStreams(RpcResponderEndpoint e) =>
 Future<int> _pendingRequests(RpcHttpResponderTransport t) async =>
     (await t.health()).details['pendingRequests']! as int;
 
-/// Sends gRPC request headers promising a body, then dies mid-body.
-Future<void> _abortMidBody(int port) async {
+/// Sends gRPC request headers promising a body, then goes silent, HOLDING the
+/// connection. Completes with the first line the server answers, or `closed` if
+/// it hangs up instead; never on its own.
+Future<String> _silentMidBody(int port) async {
   final socket = await Socket.connect('127.0.0.1', port);
+  final answered = Completer<String>();
+  void settle(String how) {
+    if (!answered.isCompleted) answered.complete(how);
+  }
+
+  socket.listen(
+    (bytes) => settle(String.fromCharCodes(bytes).split('\r\n').first),
+    onDone: () => settle('closed'),
+    onError: (_) => settle('closed'),
+  );
   socket.write(
     'POST /Svc/echo HTTP/1.1\r\n'
     'host: 127.0.0.1:$port\r\n'
@@ -107,7 +123,8 @@ Future<void> _abortMidBody(int port) async {
   // Five bytes: a gRPC length prefix promising four more that never arrive.
   socket.add(const <int>[0, 0, 0, 0, 4]);
   await socket.flush();
-  socket.destroy();
+  addTearDown(socket.destroy);
+  return answered.future;
 }
 
 /// Polls [read] until it returns [want], or gives up after [budget].
@@ -123,35 +140,6 @@ Future<int> _until(
     value = await read();
   }
   return value;
-}
-
-/// The highest value [read] reports over [budget].
-///
-/// The rise-check below needs "did these requests reach the transport at all",
-/// and asking for a SIMULTANEOUS count is a stronger question than that. It
-/// flaked in a loaded full-suite run -- `Expected: <4> Actual: <0>` -- because
-/// the sockets are opened one at a time and `bodyReadTimeout` can answer the
-/// first before the last one connects, so the count never reaches 4 at any
-/// single instant. A peak is what the guard actually means.
-///
-/// A peak is only meaningful over a window that CONTAINS the event, which is
-/// why the caller starts this before the aborts rather than after them. That
-/// second flake reads identically to the first -- `Actual: <0>` -- and has a
-/// different cause, so fixing the question without fixing the window left it
-/// live.
-///
-/// Starts by polling immediately, so a rise that has already happened when the
-/// budget opens is still seen.
-Future<int> _peak(Future<int> Function() read, Duration budget) async {
-  final deadline = DateTime.now().add(budget);
-  var peak = 0;
-  while (DateTime.now().isBefore(deadline)) {
-    final value = await read();
-    if (value > peak) peak = value;
-    if (value == 0 && peak > 0) break; // risen and settled; nothing more to see
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-  }
-  return peak;
 }
 
 Future<RpcString> _echo(RpcCallerEndpoint caller) =>
@@ -171,33 +159,35 @@ void main() {
       // RESOURCE_EXHAUSTED until the 60s half-open reclaim.
       final rig = await _serve();
 
-      // The observation starts BEFORE the aborts, and that ordering is the
-      // whole point. `_abortMidBody` destroys its socket the moment the headers
-      // are out, so a request can be answered by a read ERROR — promptly —
-      // rather than by bodyReadTimeout two seconds later. Which of the two
-      // happens is TCP and scheduling, so polling only after the loop makes the
-      // rise a coin toss: on a loaded machine all four can be answered before
-      // the first poll, and the guard reads 0 on a server that did everything
-      // right.
-      final peak = _peak(
-        () => _pendingRequests(rig.transport),
-        const Duration(seconds: 8),
+      // Arrival is read at the PEER, not polled from `pendingRequests`. Two
+      // sampled versions of this check both failed on CI as `Actual: <0>`, which
+      // is what a poll says whether nothing arrived or it looked at the wrong
+      // moment -- so the number could not name its own cause. The three outcomes
+      // below can: a status, `closed`, or `STILL DRAINING`.
+      //
+      // 408 is emitted at one place, in the accepted path's catch; every
+      // pre-registration refusal answers its own code through `_reject`. So it
+      // says the request reached the transport AND that bodyReadTimeout released
+      // it -- which is what the next expectation assumes and never checked.
+      final answers = await Future.wait(
+        [
+          for (var i = 0; i < _maxActiveStreams; i++) _silentMidBody(rig.port),
+        ].map(
+          (f) => f.timeout(
+            _bodyReadTimeout * 6,
+            onTimeout: () => 'STILL DRAINING',
+          ),
+        ),
       );
-
-      for (var i = 0; i < _maxActiveStreams; i++) {
-        await _abortMidBody(rig.port);
-      }
-
-      // The RISE: without it, "openStreams == 0" would also pass on a server
-      // the aborted requests never reached. A PEAK, not a simultaneous count --
-      // see [_peak] for what that cost.
       expect(
-        await peak,
-        greaterThan(0),
-        reason: 'the aborted requests must reach the transport at all',
+        answers,
+        everyElement(contains('408')),
+        reason:
+            'each aborted request must reach the transport and be released '
+            'by bodyReadTimeout',
       );
 
-      // Then for bodyReadTimeout to answer them all with 408.
+      // And for the transport's own budget to come back with them.
       expect(
         await _until(
           () => _pendingRequests(rig.transport),

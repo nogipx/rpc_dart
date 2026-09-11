@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321]
 status: confirmed (round 211)
 ---
 
@@ -44,3 +44,10 @@ without it, 0 with it.
 > When an ablation shows nothing, suspect the observable before the code: round
 > 210 was watching the call future, which resolves on a path the fix does not
 > touch.
+
+Round 321 is that note one level out, and it says the detector is not only
+`stale`. A record can be a COMMENT a previous round wrote to explain its own
+fix, and nothing ages those: round 314's said an aborted socket is answered by a
+prompt read error rather than by `bodyReadTimeout`, which measured false — both
+cost the server the same 2009 ms. The round that re-reads such a comment should
+measure it, because it reads exactly like evidence and is a record of reasoning.

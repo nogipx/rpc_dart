@@ -17,6 +17,7 @@ numbers, not a retelling.
 - **[L-10](L-10-a-hand-built-peer-needs-the-real-serializer.md)** active (round 277), fixture — a bench that speaks to the server as a raw peer must build its body with the library's own `codec.serialize`, not by hand: rpc_dart's wire format is CBOR and nothing in the request shape says so. Two rebuilds, and the failure is invisible because `wireStatusFor` is DEFAULT DENY — every cause comes back as the literal "Internal server error"
 - **[L-09](L-09-a-delete-has-an-inbound-half.md)** active (round 239), process — a delete has an INBOUND half, and an index that does not link is not an index: 19 dangling links, then 10 orphaned notes, both found by the owner
 - **[L-08](L-08-a-per-test-connection-hides-it.md)** active (pre-201, imported after 234), fixture — a per-test connection cannot see a per-connection defect: 74 green tests over a caller that killed its own connection after 4 calls. The reproduction is one loop on one connection
+- **[L-11](L-11-a-gauge-cannot-name-its-own-cause.md)** active (round 321, billed on CI), metric — assert an event at the peer, never by polling a gauge that rises and falls: three rounds on one assertion, both CI failures reading `Actual: <0>`, which is what a sample says whether nothing happened or it never looked
 
 ## Promotion candidacy — curate pass after round 220
 
