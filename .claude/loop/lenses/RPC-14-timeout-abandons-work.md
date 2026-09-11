@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273]
-status: swept here (round 246, cd6ee68e)
+applied: [223, 233, 246, 273, 323]
+status: swept here (round 323, 34f0b039)
 ---
 
 # RPC-14 — A timeout abandons the wait, not the work
@@ -136,3 +136,27 @@ isolate and its ports are left behind, the isolate suite still passes (`+73`).
 So this verdict is "the class does not arise today", not "the class cannot
 arise". See `../lessons/L-04-a-guard-with-no-witness.md`; the witness needs the
 subprocess shape `close_releases_the_isolate_test.dart` already uses.
+
+**Round 323 built it, for the READY deadline.** `startup_failure_releases_the_isolate_test.dart`
+spawns a synchronously blocking worker with a 500 ms `startupTimeout` and asks
+whether the host process exits. Both halves of that path are load-bearing and
+were canaried separately — `teardownStartup()` for the isolate and the
+error/exit ports, `hostTransport.close()` for `hostReceivePort` via the
+channel's `onClose` — and removing either leaves the child `still running`.
+The suite went `+73` to `+74`, and under the ablation reads `+73 -1`: the only
+red is the new test, so nothing that already existed watched this path.
+
+> **Which deadline is reachable is decided by the bootstrap's ORDER.** The
+> worker sends its handshake SendPort at `isolate_transport.dart:257`, before it
+> calls the entrypoint at 285 — so no user code can make the FIRST handshake
+> time out, and a test aiming at line 417 lands on 545 instead. The first
+> handshake path is still unwitnessed; its teardown is a strict subset of the
+> ready path's, which is a weaker statement than a canary.
+
+The core sites have never been listed here. Round 323's count, for the next
+sweep to compare against: 7 in `rpc_dart/lib`, of which 2 hold something and
+handle it deliberately (`client_connection.dart:514` adopts the abandoned
+attempt; `call_scope.dart:222` abandons a USER disposer by design and logs it)
+and 5 wait on data. `base_endpoint.dart:203` is the near-miss — a timeout around
+`close()`, which produces no handle, and dart:async drops a post-timeout error
+instead of raising it.
