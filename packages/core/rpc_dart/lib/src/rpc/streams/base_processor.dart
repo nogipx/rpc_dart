@@ -409,7 +409,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
-      _logger.internal('Trailer sent for $_methodPath [streamId: $_streamId]');
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Trailer sent for $_methodPath [streamId: $_streamId]',
+        );
+      }
     } catch (e, stackTrace) {
       if (_isTransportClosed(e)) {
         _logger.debug(
@@ -593,9 +597,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       return;
     }
 
-    _logger.internal(
-      'Message received [streamId: $_streamId, type: serialized_data, size: ${messageBytes.length}]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Message received [streamId: $_streamId, type: serialized_data, '
+        'size: ${messageBytes.length}]',
+      );
+    }
 
     try {
       final uint8Message = messageBytes is Uint8List
@@ -700,7 +707,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // whether initial headers went out. Both carry the same grpc-status and
       // optional grpc-message.
       if (!_initialMetadataSent) {
-        _logger.internal('Sending Trailers-Only error [streamId: $_streamId]');
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Sending Trailers-Only error [streamId: $_streamId]',
+          );
+        }
         _initialMetadataSent = true;
       }
 
@@ -717,7 +728,9 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       );
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
 
-      _logger.internal('Error sent to client [streamId: $_streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Error sent to client [streamId: $_streamId]');
+      }
       _trailerSent = true;
     } catch (e, stackTrace) {
       if (_isTransportClosed(e)) {
@@ -1163,9 +1176,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Sends initial metadata with context support.
   Future<void> _sendInitialMetadata() async {
-    _logger.internal(
-      'Sending initial metadata for $_methodPath [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Sending initial metadata for $_methodPath [streamId: $_streamId]',
+      );
+    }
 
     final baseMetadata = RpcMetadata.forClientRequest(
       _serviceName,
@@ -1199,9 +1214,12 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       }
 
-      _logger.internal(
-        'Context headers added: ${_context.headers.length} custom + system [streamId: $_streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Context headers added: ${_context.headers.length} custom + system '
+          '[streamId: $_streamId]',
+        );
+      }
     } else {
       headerMap[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
 
@@ -1215,9 +1233,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     ], methodPath: baseMetadata.methodPath);
     await _transport.sendMetadata(_streamId, metadata);
 
-    _logger.internal(
-      'Initial metadata sent for $_methodPath [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Initial metadata sent for $_methodPath [streamId: $_streamId]',
+      );
+    }
   }
 
   /// Surfaces deadline expiry as an error on the response stream.
@@ -1248,7 +1268,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       if (!_isActive) return;
       if (context!.isCancelled) return;
 
-      _logger.internal('Deadline exceeded [streamId: $_streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Deadline exceeded [streamId: $_streamId]');
+      }
       final error = RpcDeadlineExceededException(deadline, Duration.zero);
       // Single-subscription controllers buffer the error for a late
       // subscriber, so do not gate on hasListener.

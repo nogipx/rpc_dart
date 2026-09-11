@@ -445,6 +445,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
               responseCodec: responseCodec!,
               context: c,
               transferMode: transferMode,
+              // Without this the serialized path logs to LogScope.noop while
+              // the zero-copy branch above logs normally, so the DEFAULT unary
+              // call is the one with no caller-side diagnostics.
+              logger: _log,
             ).call(req);
           },
         );

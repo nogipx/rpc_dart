@@ -117,9 +117,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _handler = handler;
     _logger = logger?.child('UnaryResponder') ?? LogScope.noop;
     _methodPath = '/$_serviceName/$_methodName';
-    _logger.internal(
-      'Created unary server for $_methodPath${_context?.cancellationToken != null ? " with cancellation token" : ""}',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Created unary server for $_methodPath'
+        '${_context?.cancellationToken != null ? " with cancellation token" : ""}',
+      );
+    }
 
     // Register initial stream as belonging to this method.
     _stateFor(id).belongsToThisMethod = true;
@@ -324,9 +327,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Deserialize request using parser to extract framed messages.
-      _logger.internal(
-        'Parsing request frame of ${message.payload!.length} bytes [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Parsing request frame of ${message.payload!.length} bytes '
+          '[streamId: $streamId]',
+        );
+      }
       final messages = _parserFor(state)(message.payload!);
       if (messages.isEmpty) {
         _logger.error(
@@ -340,24 +346,31 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
       final request = _requestSerializer.deserialize(messages.first);
 
-      _logger.internal(
-        'Handling request for $_methodPath [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Handling request for $_methodPath [streamId: $streamId]',
+        );
+      }
 
       // Handle request.
       final response = await _handler(request);
-      _logger.internal(
-        'Request handled, preparing response [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Request handled, preparing response [streamId: $streamId]',
+        );
+      }
 
       // Serialize and optionally compress response.
       if (_logger.isInternal) {
         _logger.internal('Serializing response [streamId: $streamId]');
       }
       final serializedResponse = _responseSerializer.serialize(response);
-      _logger.internal(
-        'Response serialized, size: ${serializedResponse.length} bytes [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Response serialized, size: ${serializedResponse.length} bytes '
+          '[streamId: $streamId]',
+        );
+      }
       final useCompression = responseEncoding != null;
       final payload = useCompression
           ? RpcGrpcCompression.compress(

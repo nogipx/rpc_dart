@@ -3,7 +3,7 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292]
+applied: [209, 289, 290, 291, 292, 334]
 status: confirmed (round 209)
 ---
 
@@ -55,3 +55,37 @@ FORWARDING decorator would discharge twice and lose the bound the other way.
 
 > **Restoring a capability is not the same as routing it somewhere that can
 > honour it.** Ask which object owns the state the capability manipulates.
+
+## It also happens in a constructor argument (round 334)
+
+Every instance above is a wrapper failing to forward an INTERFACE. The same
+shape reaches a plain factory, and there it is harder to see:
+
+```dart
+if (isZeroCopy) {
+  final processor = CallProcessor<TRequest, TResponse>(
+    ..., logger: _log,          // logged
+  );
+  ...
+}
+return UnaryCaller<TRequest, TResponse>(
+  ..., transferMode: transferMode,
+                                  // NOTHING
+).call(req);
+```
+
+Two branches of one `if`, eight lines apart in `caller_pipeline.dart`.
+`UnaryCaller`'s `logger` is optional and defaults to `LogScope.noop`, so the
+serialized path — the default for every codec-based unary call — had no
+caller-side diagnostics at all, for as long as the class has existed. Every
+other construction site in both pipelines passes its logger: three stream
+callers and seven responders.
+
+Found only because round 334 extended a witness to name a line behind the new
+guards and it came back `Actual: <false>`.
+
+> **Two branches of one `if` are two call sites, and the shorter one is the
+> default.** No type differs, no analyzer rule fires, both compile. Add the
+> optional-collaborator question to the detector: not only "does the wrapper
+> forward this interface" but "does every branch that constructs this
+> collaborator pass the same arguments".

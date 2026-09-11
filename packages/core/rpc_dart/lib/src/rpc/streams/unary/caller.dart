@@ -65,9 +65,12 @@ final class UnaryCaller<TRequest, TResponse> {
        _transferMode = transferMode {
     _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
     _methodPath = '/$_serviceName/$_methodName';
-    _logger.internal(
-      'Created unary client for $_methodPath${_context != null ? ' with context' : ''}',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Created unary client for $_methodPath'
+        '${_context != null ? ' with context' : ''}',
+      );
+    }
   }
 
   /// Executes the unary call.
@@ -92,7 +95,9 @@ final class UnaryCaller<TRequest, TResponse> {
     // Create a new stream for this call.
     final streamId = _transport.createStream();
 
-    _logger.internal('Unary call $_methodPath started [streamId: $streamId]');
+    if (_logger.isInternal) {
+      _logger.internal('Unary call $_methodPath started [streamId: $streamId]');
+    }
 
     // Parser and peer encoding are per call, not per caller. RpcMessageParser
     // keeps a reassembly buffer, so a shared instance would carry the leftover
@@ -202,9 +207,11 @@ final class UnaryCaller<TRequest, TResponse> {
       var hasPendingResponse = false;
 
       // Subscribe to responses for this stream.
-      _logger.internal(
-        'Configuring response subscription [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Configuring response subscription [streamId: $streamId]',
+        );
+      }
       subscription = _transport
           .getMessagesForStream(streamId)
           .listen(
@@ -287,7 +294,9 @@ final class UnaryCaller<TRequest, TResponse> {
                 }
               } else if (message.isMetadataOnly && message.metadata != null) {
                 // Received metadata (possibly trailers).
-                _logger.internal('Metadata received [streamId: $streamId]');
+                if (_logger.isInternal) {
+                  _logger.internal('Metadata received [streamId: $streamId]');
+                }
                 final encoding = message.metadata!.getHeaderValue(
                   RpcHeaders.grpcEncoding,
                 );
@@ -377,7 +386,9 @@ final class UnaryCaller<TRequest, TResponse> {
           );
 
       // Send initial metadata with context headers.
-      _logger.internal('Sending initial metadata [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Sending initial metadata [streamId: $streamId]');
+      }
       final baseMetadata = RpcMetadata.forClientRequest(
         _serviceName,
         _methodName,
@@ -438,7 +449,9 @@ final class UnaryCaller<TRequest, TResponse> {
       // caller can write down to get the codec honoured.
       if (_transferMode != RpcDataTransferMode.codec &&
           _transport.supportsZeroCopy) {
-        _logger.internal('Zero-copy request send [streamId: $streamId]');
+        if (_logger.isInternal) {
+          _logger.internal('Zero-copy request send [streamId: $streamId]');
+        }
         final sendingDirect = _transport.sendDirectObject(
           streamId,
           request as Object,
@@ -463,7 +476,9 @@ final class UnaryCaller<TRequest, TResponse> {
         );
       }
 
-      _logger.internal('Serializing request [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Serializing request [streamId: $streamId]');
+      }
       final serializedRequest = _requestSerializer.serialize(request);
       final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
       if (requestEncoding != null &&
@@ -486,16 +501,21 @@ final class UnaryCaller<TRequest, TResponse> {
               encoding: requestEncoding,
             )
           : serializedRequest;
-      _logger.internal(
-        'Request serialized, size: ${serializedRequest.length} bytes [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Request serialized, size: ${serializedRequest.length} bytes '
+          '[streamId: $streamId]',
+        );
+      }
       final framedRequest = RpcMessageFrame.encode(
         payload,
         compressed: useCompression,
       );
-      _logger.internal(
-        'Sending request and closing request stream [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Sending request and closing request stream [streamId: $streamId]',
+        );
+      }
       // NOT awaited before the wait below, and that ordering is the whole point.
       //
       // A peer that REFUSES this request stops reading it, so the send parks on
@@ -526,9 +546,11 @@ final class UnaryCaller<TRequest, TResponse> {
       );
 
       // Await response with timeout if provided.
-      _logger.internal(
-        'Response timeout set to $effectiveTimeout [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Response timeout set to $effectiveTimeout [streamId: $streamId]',
+        );
+      }
       return await completer.future.timeout(
         effectiveTimeout,
         onTimeout: () {
@@ -560,9 +582,11 @@ final class UnaryCaller<TRequest, TResponse> {
       rethrow;
     } finally {
       // Always cancel response stream subscription.
-      _logger.internal(
-        'Cancelling response subscription [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Cancelling response subscription [streamId: $streamId]',
+        );
+      }
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
       // Let the cancellation notice finish before the id is released, so the
@@ -579,7 +603,9 @@ final class UnaryCaller<TRequest, TResponse> {
   /// Closes the client; transport remains open.
   Future<void> close() async {
     // Client does not own the transport, so do not close it.
-    _logger.internal('Unary client $_methodPath closed');
+    if (_logger.isInternal) {
+      _logger.internal('Unary client $_methodPath closed');
+    }
   }
 
   /// Validates context before call.
@@ -594,8 +620,11 @@ final class UnaryCaller<TRequest, TResponse> {
       throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
     }
 
-    _logger.internal(
-      'Context verified: requestId=${_context.requestId}, traceId=${_context.traceId}',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Context verified: requestId=${_context.requestId}, '
+        'traceId=${_context.traceId}',
+      );
+    }
   }
 }

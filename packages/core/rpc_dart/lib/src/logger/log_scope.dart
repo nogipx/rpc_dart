@@ -18,8 +18,9 @@ class LogScope {
   /// **That is not the same as free at the call site.** These take a `String`,
   /// so `noop.internal('x=$x')` builds the string, calls an empty method and
   /// drops it. Measured on one unary round trip over an in-memory pair with no
-  /// logger attached: **35 discarded messages, 1566 characters**, about 2.0 us
-  /// of CPU on the VM and 3.5 us on dart2js.
+  /// logger attached: before the guards went in, **35 discarded messages and
+  /// 1566 characters** per call, about 2.0 us of CPU on the VM and 3.5 us on
+  /// dart2js. Guarding the per-call paths brought that to **6 and 263**.
   ///
   /// Use the [isInternal]/[isTrace]/[isDebug] guards on any path that runs per
   /// call or per message. They exist for this and cost a bool read.

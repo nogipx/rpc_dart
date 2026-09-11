@@ -264,7 +264,9 @@ final class RpcMessageParser {
     // instead of O(N) copies of shrinking buffer inside the loop above.
     _state.compact();
 
-    _logger.internal('Chunk processed, messages extracted: ${result.length}');
+    if (_logger.isInternal) {
+      _logger.internal('Chunk processed, messages extracted: ${result.length}');
+    }
     return result;
   }
 }

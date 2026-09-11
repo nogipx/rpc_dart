@@ -77,6 +77,25 @@ void main() {
       expect(seen.any((m) => m.startsWith('Serializing response')), isTrue);
       expect(seen.any((m) => m.startsWith('Sending success trailer')), isTrue);
 
+      // Round 334 guarded the caller and the shared processor too, so the
+      // assertion has to reach those as well — a guard is only watched where a
+      // test names a line behind it.
+      expect(
+        seen.any((m) => m.startsWith('Unary call /Svc/echo started')),
+        isTrue,
+        reason: 'the unary caller was muted',
+      );
+      expect(
+        seen.any((m) => m.startsWith('Serializing request')),
+        isTrue,
+        reason: 'the caller request path was muted',
+      );
+      expect(
+        seen.any((m) => m.startsWith('Chunk processed, messages extracted')),
+        isTrue,
+        reason: 'the frame parser was muted',
+      );
+
       await sub.cancel();
       await caller.close();
       await responder.close();
