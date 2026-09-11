@@ -1187,8 +1187,29 @@ class RpcHttp2CallerTransport
       );
 
       _emitStreamError(streamId, e, stackTrace);
+
+      // A client is ground the same way a server is, and the shared layer
+      // closes here too -- `RpcChannelTransport._validateInbound` runs on both
+      // roles and the websocket CALLER inherits it. Only the backstop, NOT
+      // `closeOnProtocolError`: the library's stated position for a client is
+      // that killing the connection over one peer fault is the wrong answer,
+      // because the other in-flight calls die with it (see
+      // `closeOnOversizedFrame: !isClient`). A peer that has done it 256 times
+      // is no longer one bad frame.
+      if (e is ArgumentError && ++_policyViolations > _maxPolicyViolations) {
+        _logger?.warning(
+          'Peer sent $_policyViolations policy violations; closing',
+        );
+        unawaited(close());
+      }
     }
   }
+
+  /// How many policy violations a connection may cost before the peer is
+  /// treated as hostile. The same 256 as `RpcChannelTransport`.
+  static const int _maxPolicyViolations = 256;
+
+  int _policyViolations = 0;
 
   /// Handles an incoming HEADERS frame (initial response or trailers).
   void _handleHeadersMessage(

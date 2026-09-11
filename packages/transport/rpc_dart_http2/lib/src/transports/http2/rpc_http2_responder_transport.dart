@@ -409,12 +409,26 @@ class RpcHttp2ResponderTransport
         // Answered FIRST, then closed: the peer has to learn it was its own
         // fault, or a plain disconnect reads as UNAVAILABLE and is retried.
         // Same order as the channel transport's protocol close.
-        if (error is ArgumentError && _policy.closeOnProtocolError) {
+        if (error is ArgumentError &&
+            (_policy.closeOnProtocolError ||
+                ++_policyViolations > _maxPolicyViolations)) {
           await _closeForProtocolError();
         }
       }
     }());
   }
+
+  /// How many policy violations a connection may cost before it is treated as
+  /// hostile rather than misconfigured.
+  ///
+  /// The same backstop, and the same 256, as `RpcChannelTransport`: the field
+  /// defaulting to false says one bad frame must not end the connection, NOT
+  /// that a peer may grind forever. Measured here at the default policy, 2000
+  /// violating header blocks were all accepted with the connection still open
+  /// and RSS up 27 MiB, against a shared-layer control that closed after 256.
+  static const int _maxPolicyViolations = 256;
+
+  int _policyViolations = 0;
 
   /// Ends the connection after a policy violation, when the policy asks for it.
   Future<void> _closeForProtocolError() async {

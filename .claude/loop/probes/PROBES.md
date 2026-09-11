@@ -25,6 +25,12 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+- **[P-40](P-40-policy-violation-backstop.md)** valid (round 342), http2 + core —
+  what bounds a peer that only sends frames the policy refuses, at the DEFAULT
+  policy. Its control is the shared layer's 256-violation backstop, and reaching
+  that control needs a hostile CHANNEL STUB: since round 340 a well-behaved
+  sender refuses to emit the frame, so `RpcChannelTransport.pair()` reads
+  "refused after 0 sends" and looks like no inbound check at all
 - **[P-39](P-39-aggregate-metadata-bound.md)** valid (round 341), rpc_dart_http —
   whether `maxMetadataBytes` is enforced, asked with a raw HTTP/1.1 POST because
   our own caller would never build the block. **960 000 bytes accepted against a

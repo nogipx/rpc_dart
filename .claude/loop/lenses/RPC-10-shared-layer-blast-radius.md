@@ -3,7 +3,7 @@ refines: U-11
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: several transports share parts of one layer
 breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
-applied: [340, 341]
+applied: [340, 341, 342]
 status: confirmed (round 150, off-journal)
 ---
 
@@ -110,6 +110,33 @@ closeOnProtocolError                       channel transports + http2
                                              caller. OPEN, needs a round
 ```
 
-The one open cell is a genuine question rather than an oversight: whether a
-CALLER should tear down its connection on a peer's protocol violation is not the
-same decision as whether a server should.
+The one open cell looked like a genuine design question — whether a CALLER
+should tear down its connection on a peer's protocol violation is not the same
+decision as whether a server should. Round 342 took it and found the question
+was the wrong one.
+
+## The blind spot in the enumeration — round 342
+
+`_validateInbound` does two things:
+
+```dart
+if (_policy.closeOnProtocolError || ++_policyViolations > _maxPolicyViolations)
+```
+
+**Only the first is a field.** The second is a 256-violation backstop — a
+`static const int` and an `int` — so a field-by-field sweep cannot see it, and
+the http2 responder's port had copied the half that had a name. Measured: 2000
+violating header blocks accepted at the default policy, connection still open,
+RSS up 27 MiB.
+
+So the enumeration above is complete for what it enumerates and blind to
+everything else. **After the field names, read the shared layer's method BODIES
+for mechanisms that have no name**: constants, counters, caps, ordering
+requirements. Those are the entries a hand-rolled port silently drops, because
+there is nothing to grep for.
+
+The role question turned out to have an answer already written in the code, at
+`channel_transport.dart:268` — `closeOnOversizedFrame: !isClient`, "exactly the
+wrong answer for a client, whose other in-flight calls die with the connection".
+So the FIELD is role-sensitive and the BACKSTOP is not, which is how round 342
+split them.
