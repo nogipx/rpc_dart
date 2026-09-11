@@ -12,10 +12,24 @@
 # set round 325 gave it. `melos run analyze --fatal-infos --fatal-warnings` was
 # green across all of them, which is what a gate with nothing switched on says.
 #
-# Packages include this by RELATIVE path, not by a package: URI: the generator
-# cannot resolve `package:lints/...` from every context the repo is analysed in
-# (see the warnings `melos run format:check` still prints for it), and a
-# relative include always resolves.
+# Packages include this by RELATIVE path, not by a package: URI. Round 326 said
+# that was because "a relative include always resolves"; round 328 measured it
+# and the true story is narrower, in a way worth knowing.
+#
+# `rpc_dart_generator` has no per-package `.dart_tool/package_config.json` — the
+# pub workspace centralises that at the root (the same fact that makes its
+# `build_test` goldens unrunnable in this layout) — and `dart format` does not
+# walk up to find the root's. So it cannot resolve ANY `package:` URI in an
+# analysis_options file, whichever file names it: the warning `melos run
+# format:check` prints for that package predates the shared floor and is not
+# fixable from configuration.
+#
+# What the relative include DOES buy is that everything the formatter actually
+# needs still arrives. Measured by setting `page_width` to 100 here: both
+# `rpc_dart_log` (which resolves) and `rpc_dart_generator` (which does not)
+# reformatted. The unresolvable half is `package:lints/...`, which only the
+# ANALYSER needs, and `dart analyze` resolves it fine — so the warning is noise
+# on a path that works.
 #
 # `analyzer: language:` is the half that matters and the half no preset enables.
 # Measured on core in round 325: the three modes found 208 implicit downcasts

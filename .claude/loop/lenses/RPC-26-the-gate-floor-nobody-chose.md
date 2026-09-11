@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/**/analysis_options.yaml, analysis_options.yaml]
 applies: the project has a static-analysis gate configured from a shared preset
 breaks: "wrong result: an unchecked implicit downcast from `dynamic` throws at run time where the analyser could have refused it, and the class stays invisible to CI so every instance costs a round."
-applied: [325, 326]
+applied: [325, 326, 328]
 status: confirmed (round 325)
 ---
 
@@ -115,9 +115,20 @@ priority transport with 137 tests because nothing was switched on.
 > because that package's gate never had a rule to break.
 
 The fix is one floor, not N copies: `analysis_options_base.yaml` at the repo
-root, included by RELATIVE path (a `package:` URI does not resolve from every
-context this repo is analysed in), plus `analysis_options_test.yaml` for `test/`
-directories. Still outside it, deliberately: `rpc_dart_wasm` (not a workspace
-member, Flutter dependency set, count not taken) and `rpc_dart_generator` (its
-`package:lints` include already fails to resolve in some contexts — understand
-that before adding indirection).
+root, included by RELATIVE path, plus `analysis_options_test.yaml` for `test/`
+directories.
+
+**Round 328 brought in the last two and all 22 packages are now on it.** They
+held 3 issues between them, against 211 for the other nine — the packages nobody
+had raised were the cleanest in the repo, which is worth knowing before assuming
+an unraised package is the worst one.
+
+> **A config that fails to RESOLVE is not necessarily a config that fails to
+> APPLY, and the difference is one measurement.** `rpc_dart_generator` has no
+> per-package `.dart_tool/package_config.json` (the workspace centralises it),
+> and `dart format` does not walk up, so it cannot resolve `package:lints/...`
+> in any analysis_options file — the warning predates the shared floor. It reads
+> like a hole. It is not: setting `page_width: 100` in the base reformatted the
+> generator along with everyone else, so the `formatter:` section arrives. Only
+> the half the ANALYSER needs is unresolvable, and `dart analyze` resolves it.
+> Change a setting and check whether the target obeys it before filing the hole.

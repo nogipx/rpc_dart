@@ -2,4 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-include: package:lints/recommended.yaml
+# rpc_dart_wasm is NOT a pub-workspace member, so it resolves standalone -- but
+# the include below is a RELATIVE path and needs no resolution at all, which is
+# exactly why the shared floor uses one.
+include: ../../../analysis_options_base.yaml

@@ -15,10 +15,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_generator_consumer/calculator_contract.dart';
 import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
-
-import 'package:rpc_dart_generator_consumer/calculator_contract.dart';
 
 class CalculatorResponder extends CalculatorContractResponder {
   @override

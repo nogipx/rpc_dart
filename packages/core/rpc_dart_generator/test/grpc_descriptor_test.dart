@@ -10,14 +10,13 @@ import 'package:build_test/build_test.dart';
 import 'package:package_config/package_config.dart';
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart_generator/builder.dart';
-import 'package:test/test.dart';
-
 // The reflection package owns the canonical proto wire writer/parser. These
 // tests validate that the descriptor bytes this generator emits are accepted
 // by the reflection server that serves them (proving the two byte-identical
 // proto writers stay in lockstep).
 import 'package:rpc_dart_grpc_reflection/src/proto_parser.dart';
 import 'package:rpc_dart_grpc_reflection/src/proto_writer.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('grpc descriptor — explicit field numbers, enum mapping', () {
