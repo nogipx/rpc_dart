@@ -195,7 +195,23 @@ melos:
       # PUBLISHED core, so it can be green while the core about to ship breaks
       # it -- see the comments in that file before removing it.
       description: Run the rpc_dart_wasm Flutter tests (outside the workspace).
-      run: cd packages/transport/rpc_dart_wasm && fvm flutter pub get && fvm flutter test
+      # The JS-TARGET COMPILE first, for the same reason test:web runs its own
+      # first: it is deterministic, takes under a second, and it is the only
+      # check anywhere that sees `lib/src/wasm/rpc_wasm.dart` — this package's
+      # `dart:js_interop` implementation — against the rules of the target it
+      # exists to serve. `flutter test` below runs on the VM and never compiles
+      # it; test:web does not include this package; test:wasm:device builds for
+      # iOS and Android.
+      #
+      # `dart analyze` does NOT cover this: measured in round 345, it reports
+      # "No issues found!" on the exact tear-off that made `dart compile js`
+      # fail in round 344.
+      run: |
+        set -e
+        cd packages/transport/rpc_dart_wasm
+        fvm flutter pub get
+        fvm dart compile js tool/js_target_entry.dart -o "${TMPDIR:-/tmp}/rpc_wasm_js_target.js"
+        fvm flutter test
 
     # The wasm plugin's Swift and Kotlin. `flutter test` covers the Dart bridge
     # and nothing else, and this package has no example app, so a native change
