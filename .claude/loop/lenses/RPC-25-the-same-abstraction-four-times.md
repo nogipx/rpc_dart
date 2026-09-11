@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336]
 status: confirmed (round 308)
 ---
 
@@ -288,3 +288,33 @@ than a rebuilt bench.
 > the rule it was extracted to hold. After an extraction, ask what test
 > exercises the NEW unit. Round 308 created this class; nothing tested it until
 > `test/core/stream_router_test.dart` in 332.
+
+## The siblings can be two branches of one `if` (rounds 334, 336)
+
+The detector says to compare sibling implementations across packages. The
+responder and caller pipelines hold a cheaper version of the same thing: a
+zero-copy branch and a serialized branch, in one method, for each of four call
+shapes. Both rounds that read them found a defect.
+
+Round 336's is the sharper one. The zero-copy unary branch carries a comment
+from an earlier fix:
+
+> the three streaming shapes already route their request-stream errors, and this
+> one did not
+
+True, and it excluded the fourth shape from its own count — the SERIALIZED unary
+branch, which is a different method and the default for every codec-based unary
+call. Measured on a request stream that errors before a request arrives:
+
+```
+ServerStreamResponder    status 13 sent to the peer
+UnaryResponder           NONE
+```
+
+The caller waits for a response that never comes. `UnaryResponder`'s own
+`onDone`, eight lines above the offending `onError`, already answers with
+`invalidArgument` — so the method both knew how and failed to.
+
+> **A comment that says "the others already do this" is a claim about the
+> others, and it names them. Re-read it as a CHECKLIST: every shape it does not
+> name is a shape nobody checked.**

@@ -262,6 +262,38 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           error: error,
           stackTrace: stackTrace,
         );
+
+        // ANSWER it. Logging alone leaves the caller waiting for a response
+        // that will never come: it eventually reports UNAVAILABLE "Stream
+        // closed without receiving response", which says nothing about the
+        // cause. The three streaming shapes route this through
+        // StreamProcessor's request controller and the zero-copy unary branch
+        // calls sendError directly; this one did neither.
+        final wire = wireStatusFor(error);
+        for (final entry in _streamStates.entries.toList()) {
+          final state = entry.value;
+          if (!state.belongsToThisMethod || state.requestHandled) continue;
+          state.requestHandled = true;
+          try {
+            await _transport.sendMetadata(
+              entry.key,
+              RpcMetadata.forTrailer(
+                wire.status,
+                message: wire.message,
+                statusDetailsBin: wire.detailsBin,
+                maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
+              ),
+              endStream: true,
+            );
+          } catch (e, st) {
+            _logger.error(
+              'Failed to report the transport error to the peer '
+              '[streamId: ${entry.key}]',
+              error: e,
+              stackTrace: st,
+            );
+          }
+        }
       },
     );
   }
