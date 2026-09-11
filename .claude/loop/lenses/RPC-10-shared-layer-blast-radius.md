@@ -3,7 +3,7 @@ refines: U-11
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: several transports share parts of one layer
 breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
-applied: [340]
+applied: [340, 341]
 status: confirmed (round 150, off-journal)
 ---
 
@@ -82,3 +82,34 @@ comments naming `RpcChannelTransport` behaviours someone noticed were missing an
 ported by hand — `createStream`'s `maxActiveStreams`, `finishSending`'s
 idempotence. Each is an entry on a list nobody has enumerated. Read
 `RpcChannelTransport`'s method bodies as that list.
+
+## The cheaper form of the question — round 341
+
+Reading for missing behaviours does not terminate. **Enumerating
+`RpcSecurityPolicy`'s fields does**, and it asks the same thing: a field is
+either enforced everywhere it applies, or it is a knob that does nothing
+somewhere. One pass over ~14 fields against five transports found
+`maxMetadataBytes` unenforced on `rpc_dart_http` — 960 000 bytes of headers
+answered 200 OK against a 64 KiB bound.
+
+The state of that enumeration, so the next round starts from it rather than
+redoing it:
+
+```
+maxMessageLengthBytes, maxBufferedBytes,   parser, every transport      OK
+  maxMessagesPerChunk
+maxActiveStreams                           createStream + inbound       OK
+maxHeaders, maxHeaderNameBytes,            validateMetadata             OK
+  maxHeaderValueBytes, maxMethodPathLength   (http2 outbound: round 340)
+maxMetadataBytes                           FIXED round 341; isolate
+                                             exempt by trust boundary
+halfOpenStreamTimeout                      responder pipeline, so all   OK
+flowControl*                               shared layer; http2 native   OK
+closeOnProtocolError                       channel transports + http2
+                                             RESPONDER — NOT the http2
+                                             caller. OPEN, needs a round
+```
+
+The one open cell is a genuine question rather than an oversight: whether a
+CALLER should tear down its connection on a peer's protocol violation is not the
+same decision as whether a server should.

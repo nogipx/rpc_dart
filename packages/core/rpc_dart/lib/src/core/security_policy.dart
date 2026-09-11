@@ -54,8 +54,15 @@ final class RpcSecurityPolicy {
   // bounded by maxMessageLengthBytes via effectiveMaxBufferedBytes during frame
   // reassembly; chunking is rpc_blob's, with its own limits.
 
-  /// Max encoded metadata payload size for transports that serialize metadata
-  /// (for example, JSON over WebSocket).
+  /// Max size of one INBOUND metadata block, however the transport carries it.
+  ///
+  /// Each enforces it where it knows the real byte count — the frame channel on
+  /// the serialized payload (websocket, wasm), http2 on the HPACK header block,
+  /// `rpc_dart_http` on the header lines. It is NOT implied by [maxHeaders] and
+  /// [maxHeaderValueBytes]: their defaults together allow 1 MiB.
+  ///
+  /// The isolate transport does not apply it, and that is deliberate — reaching
+  /// its channel at all means arbitrary code in this process (RPC-10).
   final int maxMetadataBytes;
 
   /// Max number of headers inside [RpcMetadata].

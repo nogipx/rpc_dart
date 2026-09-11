@@ -264,6 +264,38 @@ class RpcHttpResponderTransport
       });
 
       if (policy != null) {
+        // The AGGREGATE bound, which `validateMetadata` does not carry: it
+        // checks maxHeaders and the per-header caps, and those do not imply a
+        // total. The defaults allow 128 headers of 8 KiB, which is 1 MiB
+        // against a 64 KiB `maxMetadataBytes` -- measured at 960 KB accepted
+        // with 200 OK, every individual header legal.
+        //
+        // Counted here rather than in the policy because each transport knows
+        // its own byte count: the frame channel bounds the serialized payload,
+        // http2 the HPACK block, and this one the header lines. Same rule,
+        // measured where the number is real.
+        var metadataBytes = 0;
+        for (final h in requestHeaders) {
+          // `name: value\r\n` is the wire form; this undercounts by 4 per
+          // header, so it can only ever reject later than the wire would.
+          metadataBytes += h.name.length + h.value.length;
+        }
+        if (metadataBytes > policy.maxMetadataBytes) {
+          _logger?.warning(
+            'Rejected request: metadata block of $metadataBytes bytes exceeds '
+            '${policy.maxMetadataBytes} [streamId: $streamId]',
+          );
+          _pending.remove(streamId);
+          _idManager.releaseId(streamId);
+          return _reject(
+            400,
+            request,
+            body:
+                'Metadata violation: metadata block of $metadataBytes bytes '
+                'exceeds the limit of ${policy.maxMetadataBytes} bytes',
+          );
+        }
+
         try {
           policy.validateMetadata(RpcMetadata(requestHeaders));
         } on ArgumentError catch (e) {

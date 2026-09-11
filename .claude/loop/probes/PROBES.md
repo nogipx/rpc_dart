@@ -25,6 +25,12 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+- **[P-39](P-39-aggregate-metadata-bound.md)** valid (round 341), rpc_dart_http —
+  whether `maxMetadataBytes` is enforced, asked with a raw HTTP/1.1 POST because
+  our own caller would never build the block. **960 000 bytes accepted against a
+  64 KiB bound**, every header individually legal, and dart:io imposes no limit
+  of its own. Its control is a second server at `maxHeaders: 8`: without a row
+  that refuses, the 200s prove nothing
 - **[P-38](P-38-outbound-metadata-against-the-policy.md)** valid (round 340),
   http2 + core — whether a transport refuses outbound metadata its own policy
   forbids, with `RpcChannelTransport.pair()` as the control arm because four of
