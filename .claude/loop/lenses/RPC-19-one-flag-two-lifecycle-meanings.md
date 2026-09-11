@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one object models both "the caller shut me down" and "the connection is gone"
 breaks: a hang.
-applied: [238, 268]
-status: swept here (round 268, 847d53d2)
+applied: [238, 268, 324]
+status: swept here (round 324, 4b5727a5)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -97,5 +97,27 @@ Bench `../probes/P-17-retry-until-the-peer-returns.md`, whose ablation is what
 makes that CLEAN mean anything — and which took two attempts to aim: removing
 the `_disconnected` branch from `health()` moved nothing, because the bench
 reads what `reconnect()` returns. **Ablate the observable the bench samples.**
+
+**Round 324 re-swept it over 21 moved files and found the detector's own blind
+spot.** The counts hold — `_disconnected` is 14 code lines (a `grep -c` says 15;
+one is a comment), and of 11 lifecycle flags in these paths 10 have exactly one
+writer and are retired by the rule above. The eleventh,
+`RpcClientConnection._isStopped`, has four writers and carries one meaning, with
+`_disposed` carrying the terminal one.
+
+Then the ablation that matters: **writing `_isStopped = true` on the give-up
+path — this lens's literal defect — changes nothing.** `+120`, every test green,
+resume included. `connect()` clears the flag unconditionally, which is the
+`_isClosed = false` that `48847ffc` had deleted from http2; keeping it makes
+extra writers harmless.
+
+> **A recovery API can be made one-shot by a COUNTER as easily as by a flag, and
+> this detector cannot see that.** `maxAttempts` is a budget only because
+> `connect()` resets `_reconnectAttempts`. Remove the reset and every later
+> `connect()` gives up at once — the exact give-away — while all 119 other
+> resilience tests stay green. After listing the writers, ask what else the
+> recovery path RESETS.
+> `../rounds/324-the-flag-was-never-the-risk.md`,
+> pinned by `resume_after_giving_up_test.dart`.
 
 Imported from private memory in the curate pass after round 234.
