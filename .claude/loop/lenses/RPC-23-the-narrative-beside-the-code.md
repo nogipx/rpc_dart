@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333]
 status: confirmed (round 293)
 ---
 
@@ -204,3 +204,27 @@ flushed" is why the drain exists, and a future reader who deletes the drain
 without it will reintroduce the bug.
 
 Cut the how-we-found-it. Keep the what-breaks-if-you-undo-it.
+
+## The worst kind: prose that CAUSES the defect (round 333)
+
+Most of what this lens cuts is inert — a stale story, a table from a round
+record, evidence nobody will re-check. `LogScope.noop` carried a different
+species:
+
+```dart
+/// No-op logger. All methods are empty, zero cost.
+```
+
+The methods are empty; the CALL is not free. `internal(String message, ...)`
+takes a String, so Dart builds the interpolation at the call site before the
+empty body is entered. Measured on one unary round trip with no logger attached:
+**35 discarded messages, 1566 characters, ~2.0 us of CPU on the VM and ~3.5 us
+on dart2js.** The same class exposes `isInternal` "for hot-path optimization",
+used at 25 of 58 interpolating sites — and the per-call unary responder had 38
+calls and zero guards.
+
+> **A doc comment that states a COST is load-bearing, and wrong ones are
+> expensive in a way stale narrative is not.** Stale narrative misleads a reader
+> about history; "zero cost" told every author not to guard, and they did not.
+> When a comment makes a performance or safety claim, measure it or delete the
+> claim — do not carry it forward because it is short.

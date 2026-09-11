@@ -159,7 +159,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   }
 
   void _setupRequestHandler() {
-    _logger.internal('Configuring request handler for $_methodPath');
+    if (_logger.isInternal) {
+      _logger.internal('Configuring request handler for $_methodPath');
+    }
 
     _subscription = _transport.incomingMessages.listen(
       (message) async {
@@ -269,7 +271,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger.internal('Message processing cancelled [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Message processing cancelled [streamId: $streamId]');
+      }
       return;
     }
 
@@ -297,7 +301,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Mark as handling immediately to prevent duplicates.
     state.requestHandled = true;
-    _logger.internal('Handling request for $_methodPath [streamId: $streamId]');
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Handling request for $_methodPath [streamId: $streamId]',
+      );
+    }
 
     try {
       // Determine response encoding from client's grpc-accept-encoding.
@@ -305,7 +313,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {
-        _logger.internal('Sending initial headers [streamId: $streamId]');
+        if (_logger.isInternal) {
+          _logger.internal('Sending initial headers [streamId: $streamId]');
+        }
         await _transport.sendMetadata(
           streamId,
           RpcMetadata.forServerInitialResponse(encoding: responseEncoding),
@@ -325,7 +335,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         throw RpcException('Failed to extract message from payload');
       }
 
-      _logger.internal('Deserializing request [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Deserializing request [streamId: $streamId]');
+      }
       final request = _requestSerializer.deserialize(messages.first);
 
       _logger.internal(
@@ -339,7 +351,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
 
       // Serialize and optionally compress response.
-      _logger.internal('Serializing response [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Serializing response [streamId: $streamId]');
+      }
       final serializedResponse = _responseSerializer.serialize(response);
       _logger.internal(
         'Response serialized, size: ${serializedResponse.length} bytes [streamId: $streamId]',
@@ -355,18 +369,26 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         payload,
         compressed: useCompression,
       );
-      _logger.internal('Sending response [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Sending response [streamId: $streamId]');
+      }
       await _transport.sendMessage(streamId, framedResponse);
 
       // Send success trailer.
-      _logger.internal('Sending success trailer [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Sending success trailer [streamId: $streamId]');
+      }
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
-      _logger.internal('Response sent for $_methodPath [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Response sent for $_methodPath [streamId: $streamId]',
+        );
+      }
     } catch (e, stackTrace) {
       _logger.error(
         'Request processing failed [streamId: $streamId]',
@@ -386,7 +408,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // On error, send trailer with status.
       // RpcStatusException carries a specific gRPC status code; all other
       // exceptions map to INTERNAL.
-      _logger.internal('Sending error trailer [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Sending error trailer [streamId: $streamId]');
+      }
       final wire = wireStatusFor(e);
       await _transport.sendMetadata(
         streamId,
@@ -404,7 +428,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
     } finally {
       // Clear state for this stream (single call removes all per-stream data).
-      _logger.internal('Clearing state for stream $streamId');
+      if (_logger.isInternal) {
+        _logger.internal('Clearing state for stream $streamId');
+      }
       _streamStates.remove(streamId);
     }
   }
@@ -449,7 +475,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {
-        _logger.internal('Sending initial headers [streamId: $streamId]');
+        if (_logger.isInternal) {
+          _logger.internal('Sending initial headers [streamId: $streamId]');
+        }
         // Zero-copy bypasses serialization/compression; no encoding header needed.
         await _transport.sendMetadata(
           streamId,
@@ -459,7 +487,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Zero-copy: get object directly without deserialization.
-      _logger.internal('Zero-copy object access [streamId: $streamId]');
+      if (_logger.isInternal) {
+        _logger.internal('Zero-copy object access [streamId: $streamId]');
+      }
       final request = message.directPayload as TRequest;
 
       _logger.internal(
@@ -474,7 +504,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Zero-copy: send response directly if supported.
       if (_transport.supportsZeroCopy) {
-        _logger.internal('Zero-copy response sending [streamId: $streamId]');
+        if (_logger.isInternal) {
+          _logger.internal('Zero-copy response sending [streamId: $streamId]');
+        }
         await _transport.sendDirectObject(streamId, response as Object);
       } else {
         // Fallback to standard serialization for other transports.
@@ -529,7 +561,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
     } finally {
       // Clear state for this stream (single call removes all per-stream data).
-      _logger.internal('Zero-copy cleanup for stream $streamId');
+      if (_logger.isInternal) {
+        _logger.internal('Zero-copy cleanup for stream $streamId');
+      }
       _streamStates.remove(streamId);
     }
   }
@@ -548,7 +582,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Closes the responder; transport remains open.
   @override
   Future<void> close() async {
-    _logger.internal('Closing unary server $_methodPath');
+    if (_logger.isInternal) {
+      _logger.internal('Closing unary server $_methodPath');
+    }
     await _subscription?.cancel();
     await _cancellationSubscription?.cancel();
     _logger.internal('All subscriptions cancelled');
