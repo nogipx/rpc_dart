@@ -25,6 +25,12 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+- **[P-42](P-42-does-terminate-reject.md)** valid (round 347), http2 — which
+  connection state puts an error in the zone, with a REACHABILITY column that is
+  the control: three arms reported zero unhandled errors while the line under
+  test never ran. Its last row, `finish()` and nothing after it, is what
+  identifies the source — `finish()` throws after its own future completes, so
+  whatever is in flight when it lands looks like the culprit
 - **[P-41](P-41-per-stream-state-is-reclaimed.md)** valid (round 343), http2 —
   does per-stream state come back to zero after the calls that made it, read from
   the transports' own `health()` details so nothing needs instrumenting. Its
