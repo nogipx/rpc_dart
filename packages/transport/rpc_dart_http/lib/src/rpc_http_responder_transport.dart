@@ -250,9 +250,11 @@ class RpcHttpResponderTransport
     final pending = _PendingResponse(request);
     _pending[streamId] = pending;
 
-    _logger?.internal(
-      'Incoming HTTP request $methodPath [streamId: $streamId]',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'Incoming HTTP request $methodPath [streamId: $streamId]',
+      );
+    }
 
     try {
       // Collect and validate request headers.
@@ -447,7 +449,9 @@ class RpcHttpResponderTransport
     final pending = _pending.remove(streamId);
     if (pending == null) return;
 
-    _logger?.internal('Flushing HTTP response [streamId: $streamId]');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Flushing HTTP response [streamId: $streamId]');
+    }
 
     // Use Map<String, Object> to support multi-value headers (List<String>).
     final headers = <String, Object>{'content-type': 'application/grpc+proto'};

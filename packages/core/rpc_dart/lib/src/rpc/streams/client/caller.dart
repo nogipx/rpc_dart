@@ -70,9 +70,11 @@ final class ClientStreamCaller<
     }
 
     _logger = logger?.child('ClientCaller') ?? LogScope.noop;
-    _logger.internal(
-      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller for $serviceName.$methodName',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamCaller for $serviceName.$methodName',
+      );
+    }
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,
@@ -91,16 +93,20 @@ final class ClientStreamCaller<
   void _setupResponseHandler() {
     _subscription = _processor.responses.listen(
       (rpcMessage) {
-        _logger.internal(
-          'Received response from server: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Received response from server: isMetadataOnly=${rpcMessage.isMetadataOnly}, isEndOfStream=${rpcMessage.isEndOfStream}',
+          );
+        }
 
         // Check for errors in metadata/trailers.
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
           final statusCode = rpcMessage.metadata!.getHeaderValue(
             RpcHeaders.grpcStatus,
           );
-          _logger.internal('Status code from metadata: $statusCode');
+          if (_logger.isInternal) {
+            _logger.internal('Status code from metadata: $statusCode');
+          }
 
           if (statusCode != null && statusCode != '0') {
             final errorMessage =
@@ -141,7 +147,9 @@ final class ClientStreamCaller<
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
-          _logger.internal('Received payload: ${rpcMessage.payload}');
+          if (_logger.isInternal) {
+            _logger.internal('Received payload: ${rpcMessage.payload}');
+          }
           _responseCompleter.complete(rpcMessage.payload!);
         }
       },
@@ -182,7 +190,11 @@ final class ClientStreamCaller<
             );
           } catch (e) {
             // If completer already finished, ignore.
-            _logger.internal('Completer already completed, skipping error: $e');
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Completer already completed, skipping error: $e',
+              );
+            }
           }
         }
       },
@@ -197,7 +209,9 @@ final class ClientStreamCaller<
       );
     }
 
-    _logger.internal('Sending request to client stream: $request');
+    if (_logger.isInternal) {
+      _logger.internal('Sending request to client stream: $request');
+    }
     await _processor.send(request);
   }
 
@@ -301,7 +315,9 @@ final class ClientStreamCaller<
     requestSub = requests.listen(
       (request) {
         if (_sendingFinished) return;
-        _logger.internal('Sending request: $request');
+        if (_logger.isInternal) {
+          _logger.internal('Sending request: $request');
+        }
         requestSub.pause();
         unawaited(
           send(request)

@@ -134,7 +134,9 @@ class RpcApp {
 
     _container = RpcContainer();
     for (final module in _modules) {
-      _log?.debug('configure: ${module.name}');
+      if (_log?.isDebug ?? false) {
+        _log?.debug('configure: ${module.name}');
+      }
       module.configure(_container);
       module.configureWithEnv(_container, _env);
     }
@@ -144,7 +146,9 @@ class RpcApp {
       await _startServer();
 
       for (final module in _modules) {
-        _log?.debug('onStart: ${module.name}');
+        if (_log?.isDebug ?? false) {
+          _log?.debug('onStart: ${module.name}');
+        }
         await module.onStart(_container);
         startedModules.add(module);
       }
@@ -172,7 +176,9 @@ class RpcApp {
     await _drainEndpoints();
 
     for (final module in _modules.reversed) {
-      _log?.debug('onStop: ${module.name}');
+      if (_log?.isDebug ?? false) {
+        _log?.debug('onStop: ${module.name}');
+      }
       try {
         await module.onStop().timeout(
           _config.shutdownTimeout,
@@ -194,7 +200,9 @@ class RpcApp {
     await _server?.stop();
     for (final module in _modules.reversed) {
       if (module is RpcIsolateModule) {
-        _log?.debug('terminating isolate: ${module.name}');
+        if (_log?.isDebug ?? false) {
+          _log?.debug('terminating isolate: ${module.name}');
+        }
         await module.terminateIsolate();
       }
     }
@@ -304,7 +312,9 @@ class RpcApp {
     // Spawn isolates.
     for (final module in _modules) {
       if (module is RpcIsolateModule) {
-        _log?.debug('spawning isolate: ${module.name}');
+        if (_log?.isDebug ?? false) {
+          _log?.debug('spawning isolate: ${module.name}');
+        }
         await module.initIsolate();
         _spawnedIsolates.add(module);
       }
@@ -324,7 +334,9 @@ class RpcApp {
     _log?.warning('Rolling back partial startup');
 
     for (final module in startedModules.reversed) {
-      _log?.debug('rollback onStop: ${module.name}');
+      if (_log?.isDebug ?? false) {
+        _log?.debug('rollback onStop: ${module.name}');
+      }
       try {
         await module.onStop();
       } catch (e, st) {
@@ -350,7 +362,9 @@ class RpcApp {
     }
 
     for (final module in _spawnedIsolates.reversed) {
-      _log?.debug('rollback terminate isolate: ${module.name}');
+      if (_log?.isDebug ?? false) {
+        _log?.debug('rollback terminate isolate: ${module.name}');
+      }
       try {
         await module.terminateIsolate();
       } catch (e, st) {
@@ -403,9 +417,11 @@ class RpcApp {
     final endpoints = _server?.endpoints ?? [];
     if (endpoints.isEmpty) return;
 
-    _log?.debug(
-      'Draining in-flight streams (timeout: ${_config.drainTimeout.inSeconds}s)',
-    );
+    if (_log?.isDebug ?? false) {
+      _log?.debug(
+        'Draining in-flight streams (timeout: ${_config.drainTimeout.inSeconds}s)',
+      );
+    }
 
     // Signal all endpoints to start draining (rejects new streams, cancels active contexts).
     await Future.wait([

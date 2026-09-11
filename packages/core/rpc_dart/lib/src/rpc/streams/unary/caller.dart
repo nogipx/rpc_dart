@@ -218,16 +218,20 @@ final class UnaryCaller<TRequest, TResponse> {
             (message) async {
               if (message.isDirect && message.directPayload != null) {
                 // Zero-copy: received object directly.
-                _logger.internal(
-                  'Zero-copy response received [streamId: $streamId]',
-                );
+                if (_logger.isInternal) {
+                  _logger.internal(
+                    'Zero-copy response received [streamId: $streamId]',
+                  );
+                }
                 try {
                   final response = message.directPayload as TResponse;
                   if (!completer.isCompleted) {
-                    _logger.internal(
-                      'Zero-copy unary response held pending status '
-                      '[streamId: $streamId]',
-                    );
+                    if (_logger.isInternal) {
+                      _logger.internal(
+                        'Zero-copy unary response held pending status '
+                        '[streamId: $streamId]',
+                      );
+                    }
                     pendingResponse = response;
                     hasPendingResponse = true;
                   } else {
@@ -269,10 +273,12 @@ final class UnaryCaller<TRequest, TResponse> {
                     }
                     final response = _responseSerializer.deserialize(msgBytes);
                     if (!completer.isCompleted) {
-                      _logger.internal(
-                        'Unary response held pending status '
-                        '[streamId: $streamId]',
-                      );
+                      if (_logger.isInternal) {
+                        _logger.internal(
+                          'Unary response held pending status '
+                          '[streamId: $streamId]',
+                        );
+                      }
                       pendingResponse = response;
                       hasPendingResponse = true;
                       break; // Only first response is needed for unary call.
@@ -309,9 +315,11 @@ final class UnaryCaller<TRequest, TResponse> {
 
                 if (statusCode != null) {
                   final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
-                  _logger.internal(
-                    'Completion status received: $code [streamId: $streamId]',
-                  );
+                  if (_logger.isInternal) {
+                    _logger.internal(
+                      'Completion status received: $code [streamId: $streamId]',
+                    );
+                  }
                   // The status is what completes the call. Deliberately NOT
                   // gated on isEndOfStream: a peer that sends the status
                   // without it would otherwise leave the held response stuck
@@ -319,9 +327,11 @@ final class UnaryCaller<TRequest, TResponse> {
                   if (code == RpcStatus.ok &&
                       hasPendingResponse &&
                       !completer.isCompleted) {
-                    _logger.internal(
-                      'Unary call $_methodPath completed [streamId: $streamId]',
-                    );
+                    if (_logger.isInternal) {
+                      _logger.internal(
+                        'Unary call $_methodPath completed [streamId: $streamId]',
+                      );
+                    }
                     completer.complete(pendingResponse as TResponse);
                   } else if (code != RpcStatus.ok && !completer.isCompleted) {
                     final errorMessage =
@@ -366,10 +376,12 @@ final class UnaryCaller<TRequest, TResponse> {
               // every time. ClientStreamCaller has always had this handler;
               // unary simply lacked it.
               if (completer.isCompleted) return;
-              _logger.internal(
-                'Response stream closed without a response '
-                '[streamId: $streamId]',
-              );
+              if (_logger.isInternal) {
+                _logger.internal(
+                  'Response stream closed without a response '
+                  '[streamId: $streamId]',
+                );
+              }
               // remainingTime, not isExpired: isExpired is strict and so is
               // false at the instant the deadline lands, where a peer closing
               // on its own copy of the same deadline arrives.
@@ -421,9 +433,11 @@ final class UnaryCaller<TRequest, TResponse> {
           }
         }
 
-        _logger.internal(
-          'Context headers added: ${_context.headers.length} custom + system',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Context headers added: ${_context.headers.length} custom + system',
+          );
+        }
       }
 
       final metadata = RpcMetadata([

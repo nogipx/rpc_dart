@@ -47,6 +47,14 @@ transports  _logger?.internal(...)     nullable
 The two halves are not the same defect, and a count taken first would have said
 so before either round chose a subset.
 
+## Applied, round 337
+
+The full sweep: 158 sites, counted and put in `## Target` before the first edit.
+The count paid for itself twice over — it showed that the two halves are not the
+same defect (nullable vs not), that three transports were not in the class at
+all, and that **unary is the CHEAPEST of the four call shapes by a factor of
+seven**, which is the fact that made 333's and 334's "nearly done" wrong.
+
 ## Where it does NOT apply
 
 A round that finds ONE instance of a shape and fixes it is not under-delivering

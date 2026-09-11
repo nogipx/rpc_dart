@@ -74,7 +74,9 @@ final class RpcCallerEndpoint extends RpcEndpointBase
         token.cancel(reason ?? 'Method cancelled by user');
       }
       _callerTokens.remove(key);
-      _log.internal('Cancelled all calls for method: $key ($count)');
+      if (_log.isInternal) {
+        _log.internal('Cancelled all calls for method: $key ($count)');
+      }
       return count;
     }
     return 0;
@@ -97,9 +99,11 @@ final class RpcCallerEndpoint extends RpcEndpointBase
       _callerTokens.remove(key);
     }
 
-    _log.internal(
-      'Cancelled all methods of service $serviceName ($totalCancelled calls)',
-    );
+    if (_log.isInternal) {
+      _log.internal(
+        'Cancelled all methods of service $serviceName ($totalCancelled calls)',
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------

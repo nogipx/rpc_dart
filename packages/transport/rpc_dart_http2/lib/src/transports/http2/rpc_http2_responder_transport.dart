@@ -252,9 +252,11 @@ class RpcHttp2ResponderTransport
   void _handleIncomingStream(http2.ServerTransportStream stream) {
     final streamId = stream.id;
     _incomingStreams[streamId] = stream;
-    _logger?.internal(
-      'New incoming stream $streamId (active: ${_incomingStreams.length})',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'New incoming stream $streamId (active: ${_incomingStreams.length})',
+      );
+    }
 
     final subscription = stream.incomingMessages.listen(
       (http2.StreamMessage message) {
@@ -268,7 +270,11 @@ class RpcHttp2ResponderTransport
         // a clean end-of-stream instead, which is also what lets the responder
         // tear the call down and stop the handler.
         if (error is http2.StreamTransportException) {
-          _logger?.internal('Stream $streamId reset by peer: ${error.message}');
+          if (_logger?.isInternal ?? false) {
+            _logger?.internal(
+              'Stream $streamId reset by peer: ${error.message}',
+            );
+          }
           _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
           return;
         }
@@ -282,7 +288,9 @@ class RpcHttp2ResponderTransport
         _emitStreamError(streamId, error, stackTrace);
       },
       onDone: () {
-        _logger?.internal('Incoming stream $streamId ended');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('Incoming stream $streamId ended');
+        }
         _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
 
         // NOT removed from _incomingStreams here: the response still has to go
@@ -307,10 +315,12 @@ class RpcHttp2ResponderTransport
     // Synthesising the same `x-client-cancelled` frame the websocket sibling
     // sends reuses that tested teardown path rather than adding a second one.
     stream.onTerminated = (errorCode) {
-      _logger?.internal(
-        'Stream $streamId reset by peer (errorCode: $errorCode), '
-        'cancelling the call',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Stream $streamId reset by peer (errorCode: $errorCode), '
+          'cancelling the call',
+        );
+      }
       _emit(
         RpcTransportMessage.withMetadata(
           streamId: streamId,
@@ -464,7 +474,9 @@ class RpcHttp2ResponderTransport
       ),
     );
 
-    _logger?.internal('Headers received for stream $streamId: $methodPath');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Headers received for stream $streamId: $methodPath');
+    }
   }
 
   /// Parses a request's DATA frame into gRPC messages and emits them.
@@ -505,9 +517,11 @@ class RpcHttp2ResponderTransport
         _emit(transportMessage);
       }
 
-      _logger?.internal(
-        'Parsed ${messages.length} incoming message(s) for stream $streamId',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Parsed ${messages.length} incoming message(s) for stream $streamId',
+        );
+      }
     } catch (e, stackTrace) {
       _logger?.error(
         'Error decoding incoming gRPC data for stream $streamId',
@@ -581,7 +595,9 @@ class RpcHttp2ResponderTransport
     // even id is not a real http2 stream, so any send on it would silently lose
     // data; the id is handed back for API compatibility and sends fail fast via
     // [_requireIncomingStream].
-    _logger?.internal('Created outgoing stream $streamId');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Created outgoing stream $streamId');
+    }
     return streamId;
   }
 
@@ -615,7 +631,9 @@ class RpcHttp2ResponderTransport
   bool releaseStreamId(int streamId) {
     if (_isClosed) return false;
 
-    _logger?.internal('Releasing stream $streamId');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Releasing stream $streamId');
+    }
 
     final incomingStream = _incomingStreams.remove(streamId);
     final pump = _outgoingPumps.remove(streamId);
@@ -629,9 +647,15 @@ class RpcHttp2ResponderTransport
         } else {
           incomingStream.sendData(Uint8List(0), endStream: true);
         }
-        _logger?.internal('Sent END_STREAM releasing stream $streamId');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('Sent END_STREAM releasing stream $streamId');
+        }
       } catch (e) {
-        _logger?.internal('Falling back to terminate on stream $streamId: $e');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal(
+            'Falling back to terminate on stream $streamId: $e',
+          );
+        }
         pump?.dispose();
         incomingStream.terminate();
       }
@@ -688,10 +712,12 @@ class RpcHttp2ResponderTransport
         incomingStream,
       ).add(http2.HeadersStreamMessage(headers, endStream: endStream));
 
-      _logger?.internal(
-        'Metadata sent for stream $streamId '
-        '(${endStream ? (_initialHeadersSent.contains(streamId) ? "trailers" : "trailers-only") : "initial headers"})',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Metadata sent for stream $streamId '
+          '(${endStream ? (_initialHeadersSent.contains(streamId) ? "trailers" : "trailers-only") : "initial headers"})',
+        );
+      }
     } catch (e) {
       _logger?.error('Error sending metadata for stream $streamId: $e');
       rethrow;
@@ -721,9 +747,11 @@ class RpcHttp2ResponderTransport
         incomingStream,
       ).add(http2.DataStreamMessage(data, endStream: endStream));
 
-      _logger?.internal(
-        'Sent ${data.length} response byte(s) for stream $streamId',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Sent ${data.length} response byte(s) for stream $streamId',
+        );
+      }
     } catch (e) {
       _logger?.error('Error sending data for stream $streamId: $e');
       rethrow;
@@ -736,9 +764,11 @@ class RpcHttp2ResponderTransport
 
     final incomingStream = _incomingStreams[streamId];
     if (incomingStream == null) {
-      _logger?.internal(
-        'Incoming stream $streamId not found, skipping finish sending',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Incoming stream $streamId not found, skipping finish sending',
+        );
+      }
       return;
     }
 
@@ -749,7 +779,9 @@ class RpcHttp2ResponderTransport
         incomingStream,
       ).add(http2.DataStreamMessage(Uint8List(0), endStream: true));
 
-      _logger?.internal('Finished sending the response for stream $streamId');
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal('Finished sending the response for stream $streamId');
+      }
     } catch (e) {
       _logger?.warning('Error finishing the send for stream $streamId: $e');
     }
@@ -854,7 +886,9 @@ class RpcHttp2ResponderTransport
     // A short grace period for streams still finishing.
     final totalStreams = _incomingStreams.length;
     if (totalStreams > 0) {
-      _logger?.internal('Waiting on $totalStreams active stream(s)');
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal('Waiting on $totalStreams active stream(s)');
+      }
       await Future<void>.delayed(Duration(milliseconds: 50));
     }
 
@@ -869,11 +903,15 @@ class RpcHttp2ResponderTransport
         } else {
           stream.sendData(Uint8List(0), endStream: true);
         }
-        _logger?.internal('Sent END_STREAM for stream ${stream.id}');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('Sent END_STREAM for stream ${stream.id}');
+        }
       } catch (e) {
-        _logger?.internal(
-          'Falling back to terminate on stream ${stream.id}: $e',
-        );
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal(
+            'Falling back to terminate on stream ${stream.id}: $e',
+          );
+        }
         try {
           stream.terminate();
         } catch (e2) {

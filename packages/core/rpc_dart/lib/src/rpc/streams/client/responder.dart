@@ -63,9 +63,11 @@ final class ClientStreamResponder<
     }
 
     _logger = logger?.child('ClientResponder') ?? LogScope.noop;
-    _logger.internal(
-      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder for $serviceName.$methodName [id: $id]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder for $serviceName.$methodName [id: $id]',
+      );
+    }
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -83,7 +85,9 @@ final class ClientStreamResponder<
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger.internal('Binding to message stream [id: $id]');
+    if (_logger.isInternal) {
+      _logger.internal('Binding to message stream [id: $id]');
+    }
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -96,19 +100,27 @@ final class ClientStreamResponder<
     }
 
     _handlerStarted = true;
-    _logger.internal('Configuring request handler for client stream [id: $id]');
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Configuring request handler for client stream [id: $id]',
+      );
+    }
 
     // Invoke handler directly with the request stream.
     handler(_processor.requests)
         .then((response) async {
-          _logger.internal(
-            'Handler completed, sending response: $response [id: $id]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Handler completed, sending response: $response [id: $id]',
+            );
+          }
 
           try {
             await _processor.send(response);
             await _processor.finishSending();
-            _logger.internal('Response delivered to client [id: $id]');
+            if (_logger.isInternal) {
+              _logger.internal('Response delivered to client [id: $id]');
+            }
           } catch (e, stackTrace) {
             _logger.error(
               'Failed to send response to client [id: $id]',

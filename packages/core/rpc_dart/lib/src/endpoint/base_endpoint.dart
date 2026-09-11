@@ -164,13 +164,17 @@ abstract base class RpcEndpointBase {
   /// Adds [middleware] to the processing chain.
   void addMiddleware(IRpcMiddleware middleware) {
     _middlewares.add(middleware);
-    _log.internal('Middleware added: ${middleware.toString()}');
+    if (_log.isInternal) {
+      _log.internal('Middleware added: ${middleware.toString()}');
+    }
   }
 
   /// Adds [interceptor] to the processing chain.
   void addInterceptor(IRpcInterceptor interceptor) {
     _interceptors.add(interceptor);
-    _log.internal('Interceptor added: ${interceptor.toString()}');
+    if (_log.isInternal) {
+      _log.internal('Interceptor added: ${interceptor.toString()}');
+    }
   }
 
   /// Returns true while the endpoint has not been closed.

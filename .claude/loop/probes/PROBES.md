@@ -25,6 +25,13 @@ The rule the spec states still stands and is what those two rounds did: **repeat
 the control first, then trust the bench.** That is cheaper than the status field
 either way.
 
+- **[P-36](P-36-discarded-log-strings-every-shape.md)** valid (round 337), core —
+  log messages built for a level that discards them, per round trip, on **all
+  four call shapes** and under **two logger configurations**. Round 333's
+  ancestor took one shape and one configuration and so measured 6 discarded
+  messages where serverStream had 42; attaching a real logger at `error` removes
+  none of them. Core-only by construction: a wrong guard in a transport leaves
+  every cell unchanged
 - **[P-35](P-35-upgraded-then-silent.md)** valid (round 288), rpc_dart_websocket —
   P-25's question one stage later: the peer COMPLETES the upgrade and then never
   speaks websocket, so it answers no PING. A raw socket on purpose — a real

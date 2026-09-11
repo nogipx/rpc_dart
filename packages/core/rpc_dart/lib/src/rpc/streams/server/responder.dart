@@ -83,9 +83,11 @@ final class ServerStreamResponder<
     }
 
     _logger = logger?.child('ServerResponder') ?? LogScope.noop;
-    _logger.internal(
-      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder for $serviceName.$methodName [id: $id]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder for $serviceName.$methodName [id: $id]',
+      );
+    }
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -103,7 +105,9 @@ final class ServerStreamResponder<
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger.internal('Binding to message stream [id: $id]');
+    if (_logger.isInternal) {
+      _logger.internal('Binding to message stream [id: $id]');
+    }
     _processor.bindToMessageStream(messageStream);
   }
 
@@ -111,30 +115,41 @@ final class ServerStreamResponder<
   void _setupRequestHandler(
     Stream<TResponse> Function(TRequest request) handler,
   ) {
-    _logger.internal('Configuring request handler for server stream [id: $id]');
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Configuring request handler for server stream [id: $id]',
+      );
+    }
 
     _subscription = _processor.requests.listen(
       (request) async {
-        _logger.internal(
-          'Received request for server stream: $request [id: $id]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Received request for server stream: $request [id: $id]',
+          );
+        }
 
         if (!_requestHandled) {
-          _logger.internal(
-            'Processing first request for server stream [id: $id]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Processing first request for server stream [id: $id]',
+            );
+          }
           _requestHandled = true;
 
           try {
-            _logger.internal('Invoking request handler [id: $id]');
+            if (_logger.isInternal) {
+              _logger.internal('Invoking request handler [id: $id]');
+            }
             final handlerStream = handler(request);
-            _logger.internal(
-              'Handler invoked, response stream received [id: $id]',
-            );
-
-            _logger.internal(
-              'Processing response stream from handler [id: $id]',
-            );
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Handler invoked, response stream received [id: $id]',
+              );
+              _logger.internal(
+                'Processing response stream from handler [id: $id]',
+              );
+            }
 
             // Relay the handler stream through a controller we own, so close()
             // can cancel the upstream subscription and end the `await for`.
@@ -162,15 +177,19 @@ final class ServerStreamResponder<
             await for (var response in relay.stream) {
               if (!_isActive) break;
               responseCount++;
-              _logger.internal(
-                'Received response #$responseCount from handler: $response [id: $id]',
-              );
+              if (_logger.isInternal) {
+                _logger.internal(
+                  'Received response #$responseCount from handler: $response [id: $id]',
+                );
+              }
 
               try {
                 await _processor.send(response);
-                _logger.internal(
-                  'Response #$responseCount sent to client [id: $id]',
-                );
+                if (_logger.isInternal) {
+                  _logger.internal(
+                    'Response #$responseCount sent to client [id: $id]',
+                  );
+                }
               } catch (e, stackTrace) {
                 _logger.error(
                   'Failed to send response #$responseCount to client [id: $id]',
@@ -183,13 +202,17 @@ final class ServerStreamResponder<
               }
             }
 
-            _logger.internal(
-              'Handler response stream completed, total responses: $responseCount [id: $id]',
-            );
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Handler response stream completed, total responses: $responseCount [id: $id]',
+              );
+            }
 
             // Finish sending responses.
             await _processor.finishSending();
-            _logger.internal('Response sending finished [id: $id]');
+            if (_logger.isInternal) {
+              _logger.internal('Response sending finished [id: $id]');
+            }
             _completeDone();
           } catch (error, trace) {
             _logger.error(
@@ -206,9 +229,11 @@ final class ServerStreamResponder<
             _completeDone();
           }
         } else {
-          _logger.internal(
-            'Ignoring extra request (first already handled) [id: $id]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Ignoring extra request (first already handled) [id: $id]',
+            );
+          }
         }
       },
       onError: (Object error, StackTrace stackTrace) async {
@@ -241,7 +266,9 @@ final class ServerStreamResponder<
         _completeDone();
       },
       onDone: () {
-        _logger.internal('Request stream completed [id: $id]');
+        if (_logger.isInternal) {
+          _logger.internal('Request stream completed [id: $id]');
+        }
       },
     );
   }

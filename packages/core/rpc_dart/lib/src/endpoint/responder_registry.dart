@@ -104,7 +104,9 @@ final class RpcResponderMethodRegistry {
       );
     }
 
-    _log.internal('Registering service contract: $serviceName');
+    if (_log.isInternal) {
+      _log.internal('Registering service contract: $serviceName');
+    }
     _contracts[serviceName] = contract;
 
     // Only if nothing has been declared yet. `setup()` is public and calling it
@@ -129,9 +131,11 @@ final class RpcResponderMethodRegistry {
         throw RpcException('Method $methodKey is already registered');
       }
 
-      _log.internal(
-        'Registering method: $methodKey (${registration.type.name})',
-      );
+      if (_log.isInternal) {
+        _log.internal(
+          'Registering method: $methodKey (${registration.type.name})',
+        );
+      }
 
       _methods[methodKey] = RpcResponderMethodBinding(
         serviceName: serviceName,
@@ -152,10 +156,12 @@ final class RpcResponderMethodRegistry {
         );
       }
 
-      _log.internal(
-        'Registering zero-copy method: '
-        '$methodKey (${zeroCopyRegistration.type.name}) [ZERO-COPY]',
-      );
+      if (_log.isInternal) {
+        _log.internal(
+          'Registering zero-copy method: '
+          '$methodKey (${zeroCopyRegistration.type.name}) [ZERO-COPY]',
+        );
+      }
 
       _methods[methodKey] = RpcResponderMethodBinding(
         serviceName: serviceName,
@@ -165,11 +171,13 @@ final class RpcResponderMethodRegistry {
       );
     }
 
-    _log.internal(
-      'Contract $serviceName registered with '
-      '${contract.methods.length} methods and '
-      '${contract.zeroCopyMethods.length} zero-copy methods',
-    );
+    if (_log.isInternal) {
+      _log.internal(
+        'Contract $serviceName registered with '
+        '${contract.methods.length} methods and '
+        '${contract.zeroCopyMethods.length} zero-copy methods',
+      );
+    }
   }
 
   /// Removes the contract for [serviceName] and its method bindings.
@@ -181,7 +189,9 @@ final class RpcResponderMethodRegistry {
       throw RpcException('Contract for service $serviceName is not registered');
     }
 
-    _log.internal('Unregistering service contract: $serviceName');
+    if (_log.isInternal) {
+      _log.internal('Unregistering service contract: $serviceName');
+    }
 
     // Match on the binding's own serviceName, not on a '$serviceName.' key
     // prefix. Service names may legitimately contain dots -- gRPC names are
@@ -197,7 +207,7 @@ final class RpcResponderMethodRegistry {
 
     for (final methodKey in methodKeys) {
       final binding = _methods.remove(methodKey);
-      if (binding != null) {
+      if (binding != null && _log.isInternal) {
         _log.internal(
           'Unregistering method: $methodKey (${binding.type.name})',
         );
@@ -206,7 +216,9 @@ final class RpcResponderMethodRegistry {
 
     try {
       contract.dispose();
-      _log.internal('Contract $serviceName resources released');
+      if (_log.isInternal) {
+        _log.internal('Contract $serviceName resources released');
+      }
     } catch (error, stackTrace) {
       _log.error(
         'Error releasing resources of contract $serviceName: $error',
@@ -225,9 +237,11 @@ final class RpcResponderMethodRegistry {
 
       try {
         contract.dispose();
-        _log.internal(
-          'Contract $serviceName resources released on endpoint close',
-        );
+        if (_log.isInternal) {
+          _log.internal(
+            'Contract $serviceName resources released on endpoint close',
+          );
+        }
       } catch (error, stackTrace) {
         _log.error(
           'Error releasing resources of contract $serviceName: $error',

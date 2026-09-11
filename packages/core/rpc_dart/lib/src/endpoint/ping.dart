@@ -137,9 +137,11 @@ final class RpcEndpointPingExchange {
                 return;
               }
 
-              _log.internal(
-                'Received initial ping response metadata [streamId: $streamId]',
-              );
+              if (_log.isInternal) {
+                _log.internal(
+                  'Received initial ping response metadata [streamId: $streamId]',
+                );
+              }
               return;
             }
 
@@ -185,9 +187,11 @@ final class RpcEndpointPingExchange {
               responseHeaders: headersMap,
             );
 
-            _log.internal(
-              'Ping completed successfully, RTT=${result.roundTrip.inMilliseconds}ms [streamId: $streamId]',
-            );
+            if (_log.isInternal) {
+              _log.internal(
+                'Ping completed successfully, RTT=${result.roundTrip.inMilliseconds}ms [streamId: $streamId]',
+              );
+            }
 
             completeSuccess(result);
           },
@@ -211,7 +215,9 @@ final class RpcEndpointPingExchange {
         );
 
     try {
-      _log.internal('Sending ping request [streamId: $streamId]');
+      if (_log.isInternal) {
+        _log.internal('Sending ping request [streamId: $streamId]');
+      }
       await transport.sendMetadata(streamId, metadata, endStream: true);
     } catch (error, stackTrace) {
       await subscription.cancel();

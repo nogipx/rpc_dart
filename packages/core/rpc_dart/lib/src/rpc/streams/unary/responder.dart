@@ -138,9 +138,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           .asStream()
           .listen(
             (_) {
-              _logger.internal(
-                'Operation cancelled, stopping request handling [id: $id]',
-              );
+              if (_logger.isInternal) {
+                _logger.internal(
+                  'Operation cancelled, stopping request handling [id: $id]',
+                );
+              }
 
               // Cancel subscription to incoming messages.
               _subscription?.cancel();
@@ -180,9 +182,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           final state = _stateFor(streamId);
           if (message.methodPath == _methodPath) {
             state.belongsToThisMethod = true;
-            _logger.internal(
-              'Unary server: stream $streamId bound to method $_methodPath',
-            );
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Unary server: stream $streamId bound to method $_methodPath',
+              );
+            }
           }
           // Capture client's grpc-accept-encoding for response compression.
           final accept = message.metadata!.getHeaderValue(
@@ -208,9 +212,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
         if (_streamStates[streamId]?.requestHandled == true) {
           // Ignore additional messages after first request handled.
-          _logger.internal(
-            'Ignoring extra message for stream $streamId (request already handled)',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Ignoring extra message for stream $streamId (request already handled)',
+            );
+          }
           return;
         }
 
@@ -218,9 +224,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         try {
           _checkCancellation();
         } catch (e) {
-          _logger.internal(
-            'Message skipped due to cancellation [streamId: $streamId]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Message skipped due to cancellation [streamId: $streamId]',
+            );
+          }
           return;
         }
 
@@ -314,18 +322,22 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
     // Ensure the message targets this responder (id=0 accepts all for tests).
     if (id != 0 && streamId != id) {
-      _logger.internal(
-        'Message for stream $streamId does not belong to this responder (id=$id), skipping',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Message for stream $streamId does not belong to this responder (id=$id), skipping',
+        );
+      }
       return;
     }
 
     final state = _stateFor(streamId);
 
     if (state.requestHandled) {
-      _logger.internal(
-        'Message for stream $streamId already handled, skipping',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Message for stream $streamId already handled, skipping',
+        );
+      }
       return;
     }
 
@@ -488,34 +500,42 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger.internal(
-        'Zero-copy message processing cancelled [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy message processing cancelled [streamId: $streamId]',
+        );
+      }
       return;
     }
 
     // Ensure message targets this responder.
     if (id != 0 && streamId != id) {
-      _logger.internal(
-        'Zero-copy message for stream $streamId does not belong to this responder (id=$id), skipping',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy message for stream $streamId does not belong to this responder (id=$id), skipping',
+        );
+      }
       return;
     }
 
     final state = _stateFor(streamId);
 
     if (state.requestHandled) {
-      _logger.internal(
-        'Zero-copy message for stream $streamId already handled, skipping',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy message for stream $streamId already handled, skipping',
+        );
+      }
       return;
     }
 
     // Mark as handling immediately.
     state.requestHandled = true;
-    _logger.internal(
-      'Zero-copy request processing for $_methodPath [streamId: $streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Zero-copy request processing for $_methodPath [streamId: $streamId]',
+      );
+    }
 
     try {
       // Send initial headers if not already sent.
@@ -537,15 +557,19 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
       final request = message.directPayload as TRequest;
 
-      _logger.internal(
-        'Zero-copy request handling for $_methodPath [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy request handling for $_methodPath [streamId: $streamId]',
+        );
+      }
 
       // Handle request.
       final response = await _handler(request);
-      _logger.internal(
-        'Zero-copy request completed, preparing response [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy request completed, preparing response [streamId: $streamId]',
+        );
+      }
 
       // Zero-copy: send response directly if supported.
       if (_transport.supportsZeroCopy) {
@@ -555,27 +579,33 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         await _transport.sendDirectObject(streamId, response as Object);
       } else {
         // Fallback to standard serialization for other transports.
-        _logger.internal(
-          'Fallback response serialization [streamId: $streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Fallback response serialization [streamId: $streamId]',
+          );
+        }
         final serializedResponse = _responseSerializer.serialize(response);
         final framedResponse = RpcMessageFrame.encode(serializedResponse);
         await _transport.sendMessage(streamId, framedResponse);
       }
 
       // Send success trailer.
-      _logger.internal(
-        'Zero-copy sending success trailer [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy sending success trailer [streamId: $streamId]',
+        );
+      }
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
-      _logger.internal(
-        'Zero-copy response completed for $_methodPath [streamId: $streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Zero-copy response completed for $_methodPath [streamId: $streamId]',
+        );
+      }
     } catch (e, stackTrace) {
       _logger.error(
         'Zero-copy request processing error [streamId: $streamId]',

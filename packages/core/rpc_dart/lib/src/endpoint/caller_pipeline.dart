@@ -98,7 +98,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         token.cancel(reason ?? 'Request cancelled by user');
         tokens.remove(requestId);
         if (tokens.isEmpty) _callerTokens.remove(key);
-        _log.internal('Request cancelled: $key[$requestId]');
+        if (_log.isInternal) {
+          _log.internal('Request cancelled: $key[$requestId]');
+        }
         return true;
       }
     }

@@ -50,9 +50,11 @@ final class BidirectionalStreamCaller<
     }
 
     _logger = logger?.child('BidirectionalCaller') ?? LogScope.noop;
-    _logger.internal(
-      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller for $serviceName.$methodName',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamCaller for $serviceName.$methodName',
+      );
+    }
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,

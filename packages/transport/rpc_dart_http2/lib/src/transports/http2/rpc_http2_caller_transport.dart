@@ -305,7 +305,9 @@ class RpcHttp2CallerTransport
     Duration? pingInterval,
     Duration? pingTimeout,
   }) async {
-    logger?.internal('Opening a secure HTTP/2 connection to $host:$port');
+    if (logger?.isInternal ?? false) {
+      logger?.internal('Opening a secure HTTP/2 connection to $host:$port');
+    }
 
     final drainSignal = _DrainSignal();
 
@@ -416,7 +418,9 @@ class RpcHttp2CallerTransport
     Duration? pingInterval,
     Duration? pingTimeout,
   }) async {
-    logger?.internal('Opening an HTTP/2 connection to $host:$port');
+    if (logger?.isInternal ?? false) {
+      logger?.internal('Opening an HTTP/2 connection to $host:$port');
+    }
 
     final drainSignal = _DrainSignal();
 
@@ -730,7 +734,9 @@ class RpcHttp2CallerTransport
     _nextStreamId += 2; // Client ids are odd: 1, 3, 5, ...
     _reservedStreams.add(streamId);
 
-    _logger?.internal('Created stream $streamId');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Created stream $streamId');
+    }
     return streamId;
   }
 
@@ -738,7 +744,9 @@ class RpcHttp2CallerTransport
   bool releaseStreamId(int streamId) {
     if (_isClosed) return false;
 
-    _logger?.internal('Releasing stream $streamId');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Releasing stream $streamId');
+    }
 
     // Release must NOT write to the stream. By the time the pipeline releases
     // an id the request direction is already finished -- every call ends with
@@ -754,9 +762,13 @@ class RpcHttp2CallerTransport
     if (stream != null && !_halfClosedLocal.contains(streamId)) {
       try {
         stream.terminate();
-        _logger?.internal('RST_STREAM on unfinished stream $streamId');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('RST_STREAM on unfinished stream $streamId');
+        }
       } catch (e) {
-        _logger?.internal('Could not reset stream $streamId: $e');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('Could not reset stream $streamId: $e');
+        }
       }
     }
 
@@ -787,10 +799,12 @@ class RpcHttp2CallerTransport
 
     final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
 
-    _logger?.internal(
-      'Sending metadata for stream $streamId: $methodPath '
-      '(endStream: $endStream)',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'Sending metadata for stream $streamId: $methodPath '
+        '(endStream: $endStream)',
+      );
+    }
 
     final headers = rpcMetadataToHttp2RequestHeaders(
       metadata,
@@ -863,13 +877,17 @@ class RpcHttp2CallerTransport
     _activeStreams[streamId] = stream;
     if (endStream) _halfClosedLocal.add(streamId);
 
-    _logger?.internal(
-      'HTTP/2 stream $streamId opened (active: ${_activeStreams.length})',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'HTTP/2 stream $streamId opened (active: ${_activeStreams.length})',
+      );
+    }
 
     _setupStreamListener(streamId, stream, methodPath);
 
-    _logger?.internal('Metadata sent for stream $streamId');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Metadata sent for stream $streamId');
+    }
   }
 
   @override
@@ -881,10 +899,12 @@ class RpcHttp2CallerTransport
     // half-closed, which is exactly when cancellation arrives. Sending the
     // cancellation metadata frame instead throws "Open state expected (was:
     // HalfClosedLocal)" asynchronously out of the http2 stream handler.
-    _logger?.internal(
-      'Resetting stream $streamId with RST_STREAM'
-      '${reason != null ? ': $reason' : ''}',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'Resetting stream $streamId with RST_STREAM'
+        '${reason != null ? ': $reason' : ''}',
+      );
+    }
 
     // Tear the local side down FIRST. Terminating makes http2 surface the
     // reset back to us as a stream error, and _emitStreamError would then
@@ -943,10 +963,12 @@ class RpcHttp2CallerTransport
     ).add(http2.DataStreamMessage(data, endStream: endStream));
     if (endStream) _halfClosedLocal.add(streamId);
 
-    _logger?.internal(
-      'Sent ${data.length} byte(s) for stream $streamId '
-      '(endStream: $endStream)',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'Sent ${data.length} byte(s) for stream $streamId '
+        '(endStream: $endStream)',
+      );
+    }
   }
 
   @override
@@ -961,7 +983,11 @@ class RpcHttp2CallerTransport
     // the request direction, and a second END_STREAM would be a DATA frame on
     // a half-closed stream -- a CONNECTION error in HTTP/2.
     if (_halfClosedLocal.contains(streamId)) {
-      _logger?.internal('Stream $streamId is already finished; nothing to do');
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Stream $streamId is already finished; nothing to do',
+        );
+      }
       return;
     }
 
@@ -975,7 +1001,9 @@ class RpcHttp2CallerTransport
     }
     _halfClosedLocal.add(streamId);
 
-    _logger?.internal('Finished sending for stream $streamId');
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal('Finished sending for stream $streamId');
+    }
   }
 
   Map<String, Object?> _buildHealthDetails() => {
@@ -1084,7 +1112,9 @@ class RpcHttp2CallerTransport
         _emitStreamError(streamId, error, stackTrace);
       },
       onDone: () {
-        _logger?.internal('Stream $streamId ended');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('Stream $streamId ended');
+        }
 
         if (_statusReceived.contains(streamId)) {
           _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
@@ -1335,9 +1365,11 @@ class RpcHttp2CallerTransport
         _emit(transportMessage);
       }
 
-      _logger?.internal(
-        'Parsed ${messages.length} message(s) for stream $streamId',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Parsed ${messages.length} message(s) for stream $streamId',
+        );
+      }
     } catch (e, stackTrace) {
       _logger?.error(
         'Error decoding gRPC data for stream $streamId',
@@ -1462,9 +1494,11 @@ class RpcHttp2CallerTransport
     // would tell a consumer that deliberately cancelled that its own
     // cancellation was a transport failure.
     if (_resetStreams.contains(streamId)) {
-      _logger?.internal(
-        'Suppressed an error for reset stream $streamId: $error',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Suppressed an error for reset stream $streamId: $error',
+        );
+      }
       return;
     }
     _streams.addError(streamId, error, stackTrace);
@@ -1758,7 +1792,11 @@ class RpcHttp2CallerTransport
 
     // A short grace period for streams still finishing.
     if (_activeStreams.isNotEmpty) {
-      _logger?.internal('Waiting on ${_activeStreams.length} active stream(s)');
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'Waiting on ${_activeStreams.length} active stream(s)',
+        );
+      }
       await Future<void>.delayed(Duration(milliseconds: 50));
     }
 
@@ -1780,7 +1818,9 @@ class RpcHttp2CallerTransport
     for (final stream in streamsToClose) {
       try {
         stream.terminate();
-        _logger?.internal('RST_STREAM on stream ${stream.id} during close');
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal('RST_STREAM on stream ${stream.id} during close');
+        }
       } catch (e) {
         _logger?.warning('Error closing stream ${stream.id}: $e');
         try {

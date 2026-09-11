@@ -90,9 +90,11 @@ Future<void> _notifyPeerOfCancellation(
         reason: reason,
       );
       if (reset) {
-        logger.internal(
-          'Cancellation delivered via stream reset [streamId: $streamId]',
-        );
+        if (logger.isInternal) {
+          logger.internal(
+            'Cancellation delivered via stream reset [streamId: $streamId]',
+          );
+        }
         return;
       }
     } catch (error, stackTrace) {
@@ -112,15 +114,21 @@ Future<void> _notifyPeerOfCancellation(
       RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
     ]);
 
-    logger.internal(
-      'Sending cancellation notice to server [streamId: $streamId]',
-    );
+    if (logger.isInternal) {
+      logger.internal(
+        'Sending cancellation notice to server [streamId: $streamId]',
+      );
+    }
     await transport.sendMetadata(
       streamId,
       cancellationMetadata,
       endStream: true,
     );
-    logger.internal('Cancellation notice sent to server [streamId: $streamId]');
+    if (logger.isInternal) {
+      logger.internal(
+        'Cancellation notice sent to server [streamId: $streamId]',
+      );
+    }
   } catch (e, stackTrace) {
     logger.error(
       'Failed to send cancellation metadata [streamId: $streamId]',
@@ -272,9 +280,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _methodPath = '/$_serviceName/$_methodName';
     _responseEncoding = _pickResponseEncoding(context);
 
-    _logger.internal(
-      'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} StreamProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
+      );
+    }
 
     _scope.onDispose(() {
       if (!_requestController.isClosed) _requestController.close();
@@ -383,9 +393,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         }
       } catch (e, stackTrace) {
         if (_isTransportClosed(e)) {
-          _logger.debug(
-            'Transport closed, skipping response send [streamId: $_streamId]',
-          );
+          if (_logger.isDebug) {
+            _logger.debug(
+              'Transport closed, skipping response send [streamId: $_streamId]',
+            );
+          }
           return;
         }
         _logger.error(
@@ -416,9 +428,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
     } catch (e, stackTrace) {
       if (_isTransportClosed(e)) {
-        _logger.debug(
-          'Transport closed, skipping trailer send [streamId: $_streamId]',
-        );
+        if (_logger.isDebug) {
+          _logger.debug(
+            'Transport closed, skipping trailer send [streamId: $_streamId]',
+          );
+        }
         return;
       }
       _logger.error(
@@ -441,9 +455,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
     _messageBound = true;
 
-    _logger.internal(
-      'Stream bound [methodPath: $_methodPath, streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Stream bound [methodPath: $_methodPath, streamId: $_streamId]',
+      );
+    }
 
     final subscription = _scope.listen<RpcTransportMessage>(
       messageStream,
@@ -459,9 +475,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
       onDone: () {
-        _logger.internal(
-          'Stream finished: message_stream_completed [methodPath: $_methodPath, streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Stream finished: message_stream_completed [methodPath: $_methodPath, streamId: $_streamId]',
+          );
+        }
         if (!_requestController.isClosed) {
           _requestController.close();
         }
@@ -510,19 +528,23 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger.internal(
-        'Message skipped due to cancellation [streamId: $_streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Message skipped due to cancellation [streamId: $_streamId]',
+        );
+      }
       return;
     }
 
-    _logger.internal(
-      'Message received [streamId: ${message.streamId}, type: ${message.isMetadataOnly
-          ? "metadata"
-          : message.isDirect
-          ? "zero_copy"
-          : "serialized"}, size: ${message.payload?.length}]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Message received [streamId: ${message.streamId}, type: ${message.isMetadataOnly
+            ? "metadata"
+            : message.isDirect
+            ? "zero_copy"
+            : "serialized"}, size: ${message.payload?.length}]',
+      );
+    }
 
     // Extract encoding hints from initial request metadata.
     if (message.isMetadataOnly && message.metadata != null) {
@@ -547,9 +569,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     if (message.isEndOfStream) {
-      _logger.internal(
-        'Stream finished: end_of_stream_received [methodPath: $_methodPath, streamId: $_streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Stream finished: end_of_stream_received [methodPath: $_methodPath, streamId: $_streamId]',
+        );
+      }
       if (!_requestController.isClosed) {
         _requestController.close();
       }
@@ -655,9 +679,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     try {
       _checkCancellation();
     } catch (e) {
-      _logger.internal(
-        'Response skipped due to cancellation [streamId: $_streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Response skipped due to cancellation [streamId: $_streamId]',
+        );
+      }
       return;
     }
 
@@ -734,9 +760,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _trailerSent = true;
     } catch (e, stackTrace) {
       if (_isTransportClosed(e)) {
-        _logger.debug(
-          'Transport closed, skipping error send [streamId: $_streamId]',
-        );
+        if (_logger.isDebug) {
+          _logger.debug(
+            'Transport closed, skipping error send [streamId: $_streamId]',
+          );
+        }
         return;
       }
       _logger.error(
@@ -751,9 +779,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger.internal(
-      'Finishing response send for $_methodPath [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Finishing response send for $_methodPath [streamId: $_streamId]',
+      );
+    }
 
     await _sendSequence;
 
@@ -792,9 +822,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger.internal(
-      'Closing StreamProcessor for $_methodPath [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Closing StreamProcessor for $_methodPath [streamId: $_streamId]',
+      );
+    }
     _isActive = false;
 
     await _scope.close();
@@ -810,9 +842,11 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _scope.listen<void>(
       _context!.cancellationToken!.cancelled.asStream(),
       (_) {
-        _logger.internal(
-          'Operation cancelled, shutting down processor [streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Operation cancelled, shutting down processor [streamId: $_streamId]',
+          );
+        }
         _isActive = false;
 
         final reason =
@@ -950,9 +984,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       _methodPath = '/$_serviceName/$_methodName';
 
-      _logger.internal(
-        'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Created ${_isZeroCopy ? "Zero-copy" : "Serialized"} CallProcessor for $_methodPath [streamId: $_streamId]${_context?.cancellationToken != null ? " with cancellation token" : ""}',
+        );
+      }
 
       _scope.onDispose(() {
         // Free the stream id so an aborted call (cancellation, deadline, error)
@@ -1010,9 +1046,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         try {
           await _sendSequence;
           await _transport.finishSending(_streamId);
-          _logger.internal(
-            'finishSending completed for $_methodPath [streamId: $_streamId]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'finishSending completed for $_methodPath [streamId: $_streamId]',
+            );
+          }
         } catch (e, stackTrace) {
           _logger.error(
             'Failed to finish sending requests [streamId: $_streamId]',
@@ -1049,9 +1087,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           _initialMetadataSent = true;
         }
 
-        _logger.internal(
-          'Sending request for $_methodPath [streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Sending request for $_methodPath [streamId: $_streamId]',
+          );
+        }
 
         if (_isZeroCopy) {
           if (_logger.isInternal) {
@@ -1090,9 +1130,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             requestEncoding,
           );
 
-          _logger.internal(
-            'Request sent for $_methodPath [streamId: $_streamId]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Request sent for $_methodPath [streamId: $_streamId]',
+            );
+          }
         }
       } catch (e, stackTrace) {
         _logger.error(
@@ -1129,9 +1171,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
       },
       onDone: () {
-        _logger.internal(
-          'Response stream completed for $_methodPath [streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Response stream completed for $_methodPath [streamId: $_streamId]',
+          );
+        }
         if (!_responseController.isClosed) {
           // Our own deadline is authoritative over a bare close: the peer ends
           // its stream on the same deadline, closing this one at almost the
@@ -1223,9 +1267,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     } else {
       headerMap[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
 
-      _logger.internal(
-        'Added base request-id for null context [streamId: $_streamId]',
-      );
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Added base request-id for null context [streamId: $_streamId]',
+        );
+      }
     }
 
     final metadata = RpcMetadata([
@@ -1287,9 +1333,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     _scope.listen<void>(
       _context!.cancellationToken!.cancelled.asStream(),
       (_) async {
-        _logger.internal(
-          'Operation cancelled by client, notifying server [streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Operation cancelled by client, notifying server [streamId: $_streamId]',
+          );
+        }
 
         _isActive = false;
         final cancelledException = RpcCancelledException(
@@ -1378,9 +1426,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
     }
 
-    _logger.internal(
-      'Context verified: requestId=${_context.requestId}, traceId=${_context.traceId} [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Context verified: requestId=${_context.requestId}, traceId=${_context.traceId} [streamId: $_streamId]',
+      );
+    }
   }
 
   /// Handles an incoming response.
@@ -1409,9 +1459,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
         if (!_responseController.isClosed) {
           _responseController.add(rpcMessage);
-          _logger.internal(
-            'Metadata pushed to response stream [streamId: $_streamId]',
-          );
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Metadata pushed to response stream [streamId: $_streamId]',
+            );
+          }
         }
       }
 
@@ -1422,9 +1474,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       }
 
       if (message.isEndOfStream) {
-        _logger.internal(
-          'END_STREAM received, closing response stream [streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'END_STREAM received, closing response stream [streamId: $_streamId]',
+          );
+        }
         if (!_responseController.isClosed) {
           _responseController.close();
         }
@@ -1455,9 +1509,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
       if (!_responseController.isClosed) {
         _responseController.add(rpcMessage);
-        _logger.internal(
-          'Zero-copy response added to response stream [streamId: $_streamId]',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Zero-copy response added to response stream [streamId: $_streamId]',
+          );
+        }
       } else {
         _logger.warning(
           'Zero-copy: cannot add response to closed controller [streamId: $_streamId]',
@@ -1520,9 +1576,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
           if (!_responseController.isClosed) {
             _responseController.add(rpcMessage);
-            _logger.internal(
-              'Deserialized response added to stream [streamId: $_streamId]',
-            );
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Deserialized response added to stream [streamId: $_streamId]',
+              );
+            }
           } else {
             _logger.warning(
               'Cannot add response to closed controller [streamId: $_streamId]',
@@ -1579,9 +1637,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> finishSending() async {
     if (!_isActive) return;
 
-    _logger.internal(
-      'Finishing request send for $_methodPath [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Finishing request send for $_methodPath [streamId: $_streamId]',
+      );
+    }
 
     // A client stream may legitimately carry ZERO messages, and gRPC expects
     // that to open the call anyway: HEADERS, then end-of-stream. Initial
@@ -1629,9 +1689,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   Future<void> close() async {
     if (!_isActive) return;
 
-    _logger.internal(
-      'Closing CallProcessor for $_methodPath [streamId: $_streamId]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Closing CallProcessor for $_methodPath [streamId: $_streamId]',
+      );
+    }
     _isActive = false;
 
     await _scope.close();

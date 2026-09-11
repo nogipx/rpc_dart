@@ -409,7 +409,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// deadline paths.
   void _abortActiveStreams(String reason) {
     if (_respStreams.length == 0) return;
-    _log.internal('Aborting ${_respStreams.length} active stream(s): $reason');
+    if (_log.isInternal) {
+      _log.internal(
+        'Aborting ${_respStreams.length} active stream(s): $reason',
+      );
+    }
 
     for (final state in _respStreams.values) {
       final token = state.cachedContext?.cancellationToken;
@@ -567,9 +571,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (_respStreams[message.streamId] == null &&
         _respClosedStreams.contains(message.streamId)) {
       if (message.methodPath == null || message.metadata == null) {
-        _log.internal(
-          'Ignoring trailing frame for closed stream ${message.streamId}',
-        );
+        if (_log.isInternal) {
+          _log.internal(
+            'Ignoring trailing frame for closed stream ${message.streamId}',
+          );
+        }
         return;
       }
       _respClosedStreams.remove(message.streamId);
@@ -776,9 +782,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    _log.internal(
-      'Metadata received [method: $methodKey] [streamId: ${state.id}]',
-    );
+    if (_log.isInternal) {
+      _log.internal(
+        'Metadata received [method: $methodKey] [streamId: ${state.id}]',
+      );
+    }
 
     // Replay any payload / end-of-stream frames that were observed before this
     // metadata frame (broadcast-transport reordering right after a connection
@@ -1808,9 +1816,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (token != null && !token.isCancelled) {
       token.cancel('deadline exceeded');
     }
-    _log.internal(
-      'Stream ${state.id} exceeded its deadline — cancelling handler',
-    );
+    if (_log.isInternal) {
+      _log.internal(
+        'Stream ${state.id} exceeded its deadline — cancelling handler',
+      );
+    }
 
     // Cancelling the token is only a REQUEST to stop, and Dart cannot preempt a
     // handler that ignores it. Without this backstop such a handler pins its

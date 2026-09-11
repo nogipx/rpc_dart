@@ -47,9 +47,11 @@ final class ServerStreamCaller<
     }
 
     _logger = logger?.child('ServerCaller') ?? LogScope.noop;
-    _logger.internal(
-      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller for $serviceName.$methodName',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamCaller for $serviceName.$methodName',
+      );
+    }
 
     _processor = CallProcessor<TRequest, TResponse>(
       transport: transport,

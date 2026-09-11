@@ -62,9 +62,11 @@ final class BidirectionalStreamResponder<
     }
 
     _logger = logger?.child('BidirectionalResponder') ?? LogScope.noop;
-    _logger.internal(
-      'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder for $serviceName.$methodName [id: $id]',
-    );
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder for $serviceName.$methodName [id: $id]',
+      );
+    }
 
     _processor = StreamProcessor<TRequest, TResponse>(
       transport: transport,
@@ -106,7 +108,9 @@ final class BidirectionalStreamResponder<
           await _processor.send(
             response,
           ); // Use processor directly to avoid cyclic dependency.
-          _logger.internal('Response sent via responseSink [id: $id]');
+          if (_logger.isInternal) {
+            _logger.internal('Response sent via responseSink [id: $id]');
+          }
         } catch (e, stackTrace) {
           _logger.error(
             'Failed to send response via responseSink [id: $id]',
@@ -116,7 +120,9 @@ final class BidirectionalStreamResponder<
         }
       },
       onDone: () async {
-        _logger.internal('Response stream completed [id: $id]');
+        if (_logger.isInternal) {
+          _logger.internal('Response stream completed [id: $id]');
+        }
         await finishReceiving();
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -131,7 +137,9 @@ final class BidirectionalStreamResponder<
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    _logger.internal('Binding to message stream [id: $id]');
+    if (_logger.isInternal) {
+      _logger.internal('Binding to message stream [id: $id]');
+    }
     _processor.bindToMessageStream(messageStream);
   }
 

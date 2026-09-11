@@ -328,9 +328,11 @@ class RpcHttpCallerTransport
     if (call == null) return;
 
     _inFlight.add(streamId);
-    _logger?.internal(
-      'Firing HTTP POST ${call.methodPath} [streamId: $streamId]',
-    );
+    if (_logger?.isInternal ?? false) {
+      _logger?.internal(
+        'Firing HTTP POST ${call.methodPath} [streamId: $streamId]',
+      );
+    }
 
     final uri = Uri.parse('$_baseUrl${call.methodPath}');
     try {
@@ -351,9 +353,11 @@ class RpcHttpCallerTransport
 
       final streamedResponse = await _httpClient.send(request);
 
-      _logger?.internal(
-        'HTTP response ${streamedResponse.statusCode} for [streamId: $streamId]',
-      );
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'HTTP response ${streamedResponse.statusCode} for [streamId: $streamId]',
+        );
+      }
 
       if (streamedResponse.statusCode != 200) {
         // Drain before reporting: leaving bytes unread on the socket makes

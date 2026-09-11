@@ -64,7 +64,9 @@ final class RpcResponderPingHandler {
         endStream: true,
       );
 
-      _log.internal('Ping handled successfully [streamId: $streamId]');
+      if (_log.isInternal) {
+        _log.internal('Ping handled successfully [streamId: $streamId]');
+      }
     } catch (error, stackTrace) {
       _log.error(
         'Error handling ping [streamId: $streamId]',

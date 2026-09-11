@@ -178,12 +178,16 @@ class RpcHttp2Server implements IRpcServer {
       securityContext: securityContext,
       logger: logger,
       onEndpointCreated: (endpoint) {
-        logger?.debug(
-          'Registering ${contracts.length} contract(s) on a new endpoint',
-        );
+        if (logger?.isDebug ?? false) {
+          logger?.debug(
+            'Registering ${contracts.length} contract(s) on a new endpoint',
+          );
+        }
         for (final contract in contracts) {
           endpoint.registerServiceContract(contract);
-          logger?.debug('Registered contract: ${contract.serviceName}');
+          if (logger?.isDebug ?? false) {
+            logger?.debug('Registered contract: ${contract.serviceName}');
+          }
         }
       },
       onConnectionError: (error, stackTrace) {
@@ -242,9 +246,11 @@ class RpcHttp2Server implements IRpcServer {
     for (final connection in List.of(_connections.values)) {
       unawaited(
         Future<void>.sync(connection.finish).catchError((Object error) {
-          _logger?.internal(
-            'GOAWAY on a connection that was already gone: $error',
-          );
+          if (_logger?.isInternal ?? false) {
+            _logger?.internal(
+              'GOAWAY on a connection that was already gone: $error',
+            );
+          }
         }),
       );
     }
@@ -512,7 +518,9 @@ class RpcHttp2Server implements IRpcServer {
   /// Builds the transport, endpoint and lifecycle wiring for one connection.
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
-    _logger?.debug('New HTTP/2 connection from $clientAddress');
+    if (_logger?.isDebug ?? false) {
+      _logger?.debug('New HTTP/2 connection from $clientAddress');
+    }
 
     // See disableNagle: an RPC's write pattern is the one Nagle penalises, and
     // every socket this server accepted had it enabled.
@@ -647,7 +655,9 @@ class RpcHttp2Server implements IRpcServer {
       _onEndpointCreated?.call(endpoint);
       endpoint.start();
 
-      _logger?.debug('RPC endpoint created for $clientAddress');
+      if (_logger?.isDebug ?? false) {
+        _logger?.debug('RPC endpoint created for $clientAddress');
+      }
 
       // Keepalive: the only thing that reclaims a HALF-OPEN connection. See
       // [_pingInterval]. Started only when configured, and always cancelled by
@@ -656,7 +666,9 @@ class RpcHttp2Server implements IRpcServer {
 
       socket.done
           .then((_) {
-            _logger?.debug('HTTP/2 connection $clientAddress closed');
+            if (_logger?.isDebug ?? false) {
+              _logger?.debug('HTTP/2 connection $clientAddress closed');
+            }
             keepalive?.cancel();
             prefaceDeadline?.cancel();
             _releaseEndpoint(endpoint, socket);
