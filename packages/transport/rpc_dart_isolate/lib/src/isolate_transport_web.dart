@@ -434,7 +434,16 @@ void runRpcIsolateManagerWorker(
 
   final controller = IsolateManagerControllerImpl<Object?, Object?>(
     scope,
-    onDispose: scope.close,
+    // A CLOSURE, not `scope.close` — `close` is an external extension type
+    // interop member and tearing one off is a compile error on the JS targets:
+    // "Tear-offs of external extension type interop member 'close' are
+    // disallowed". The `onClose` below has always used this form.
+    //
+    // `unnecessary_lambdas` asks for the tear-off, so the two gates contradict
+    // each other on this line and only one of them can be satisfied. The
+    // analyzer is the one that is wrong here: its advice does not compile.
+    // ignore: unnecessary_lambdas
+    onDispose: () => scope.close(),
   );
 
   final channel = _WebMultiplexedChannel(

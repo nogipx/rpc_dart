@@ -243,6 +243,19 @@ melos:
         # compile/load failure. Force IPv4 so the guard is deterministic.
         export NODE_OPTIONS=--dns-result-order=ipv4first
         web() { (cd "$1" && fvm dart test -p node ${2:-}); }
+        # The dart2js COMPILE runs FIRST, before any suite. It is deterministic,
+        # takes ~2 s, needs no network or browser, and it is the only step here
+        # that checks LIBRARY code against the JS interop rules -- everything
+        # below it tests behaviour that already compiled.
+        #
+        # It used to be the last line, welded to the chrome run. Behind twelve
+        # suites under `set -e`, anything flaky ahead of it hides it: round 344
+        # shipped `onDispose: scope.close` and CI answered "Tear-offs of external
+        # extension type interop member 'close' are disallowed", while the local
+        # gate had already aborted on an unrelated ENETDOWN and never reached the
+        # compile at all.
+        (cd packages/transport/rpc_dart_isolate \
+          && fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js)
         web packages/core/rpc_dart
         web packages/core/rpc_dart_compression
         web packages/core/rpc_dart_grpc_reflection
@@ -261,7 +274,6 @@ melos:
         # succeeded. Serialised, the same three files pass every time; a single
         # cold start can still take ~70s here, hence --timeout 3x.
         (cd packages/transport/rpc_dart_isolate \
-          && fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js \
           && fvm dart test -p chrome -j 1 --timeout 3x test/web_smoke_test.dart test/web_worker/echo_worker_test.dart test/web_worker/worker_startup_failure_test.dart)
 
     # --- Code generation (build_runner) ---

@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
 applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
-applied: [220, 226, 269, 270]
+applied: [220, 226, 269, 270, 344]
 status: confirmed (round 220)
 ---
 
