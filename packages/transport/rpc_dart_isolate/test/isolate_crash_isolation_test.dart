@@ -161,7 +161,7 @@ void main() {
         );
 
         // Ждем немного чтобы краш произошел
-        await Future.delayed(Duration(milliseconds: 100));
+        await Future<void>.delayed(Duration(milliseconds: 100));
 
         // Act 3 - проверяем что основной процесс и другой изолят все еще работают
         print('🔍 Проверяем состояние после краша...');
@@ -255,7 +255,7 @@ void main() {
 
           print('💀 Крашим ${crashIsolate.name}...');
           await crashIsolate.transport.sendDirectObject(streamId, 'CRASH_NOW');
-          await Future.delayed(
+          await Future<void>.delayed(
             Duration(milliseconds: 50),
           ); // Даем время на краш
         }
@@ -318,6 +318,6 @@ Future<void> _waitForClosed(
         health.level == RpcHealthLevel.unhealthy) {
       return;
     }
-    await Future.delayed(interval);
+    await Future<void>.delayed(interval);
   }
 }

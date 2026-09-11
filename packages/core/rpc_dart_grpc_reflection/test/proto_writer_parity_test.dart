@@ -3,9 +3,8 @@
 
 import 'dart:typed_data';
 
+import 'package:rpc_dart_grpc_reflection/src/proto_writer.dart';
 import 'package:test/test.dart';
-
-import '../lib/src/proto_writer.dart';
 
 // Pins the canonical byte output of ProtoWriter. rpc_dart_generator carries a
 // byte-identical private copy (_ProtoWriter) which cannot share this class

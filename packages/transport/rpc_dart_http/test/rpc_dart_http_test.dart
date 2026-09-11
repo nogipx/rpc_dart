@@ -142,7 +142,7 @@ void main() {
       final reqBody = RpcMessageFrame.encode(Uint8List.fromList([1]));
       await clientTransport.sendMessage(streamId, reqBody, endStream: true);
 
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       await clientSub.cancel();
       await serverSub.cancel();
 
@@ -342,7 +342,7 @@ void main() {
         body: RpcMessageFrame.encode(Uint8List.fromList([1])),
       );
 
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       await serverTransport.close();
 
       try {
@@ -380,7 +380,7 @@ void main() {
         request: RpcString('hello'),
       );
 
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       await clientTransport.close();
 
       try {
@@ -420,7 +420,7 @@ void main() {
         '\r\n'
         'x', // only 1 byte of promised 100
       );
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       await socket.close();
 
       // dart:io surfaces "Connection closed while receiving data" only once it
@@ -432,7 +432,7 @@ void main() {
 
       final deadline = DateTime.now().add(const Duration(seconds: 10));
       while (await pendingCount() != 0 && DateTime.now().isBefore(deadline)) {
-        await Future.delayed(const Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
 
       expect(await pendingCount(), 0);
@@ -537,7 +537,7 @@ void main() {
       final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
       await clientTransport.sendMessage(streamId, body, endStream: true);
 
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
       final combinedValues = receivedMeta
           .expand((m) => m.metadata?.headers ?? <RpcHeader>[])
@@ -744,7 +744,7 @@ void main() {
       final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
       await clientTransport.sendMessage(streamId, body, endStream: true);
 
-      await Future.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       await sub.cancel();
 
       final trailer = messages.lastWhere(
@@ -1048,7 +1048,7 @@ void main() {
       );
       await clientTransport.sendMessage(streamId, body, endStream: true);
 
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
       final initialMeta = receivedMeta.firstWhere(
         (m) => !m.isEndOfStream,

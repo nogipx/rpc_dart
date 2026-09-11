@@ -4,10 +4,9 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'package:universal_io/io.dart';
-
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:universal_io/io.dart';
 
 import 'http2_header_block_guard.dart';
 import 'rpc_http2_common.dart';
@@ -96,7 +95,7 @@ class RpcHttp2CallerTransport
   RpcHttp2OutgoingPump _pumpFor(int streamId, http2.TransportStream stream) =>
       _outgoingPumps[streamId] ??= RpcHttp2OutgoingPump(stream);
 
-  final Map<int, StreamSubscription> _streamSubscriptions = {};
+  final Map<int, StreamSubscription<void>> _streamSubscriptions = {};
 
   /// Per-stream frame parsers, which carry the state for a fragmented message.
   final Map<int, RpcMessageParser> _streamParsers = {};
@@ -1002,7 +1001,7 @@ class RpcHttp2CallerTransport
       (http2.StreamMessage message) {
         _handleIncomingMessage(streamId, message, methodPath);
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         _logger?.error(
           'Error on stream $streamId',
           error: error,
@@ -1760,7 +1759,7 @@ class RpcHttp2CallerTransport
     // A short grace period for streams still finishing.
     if (_activeStreams.isNotEmpty) {
       _logger?.internal('Waiting on ${_activeStreams.length} active stream(s)');
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
     }
 
     // Abort EVERY remaining stream, half-closed ones INCLUDED.
@@ -1793,7 +1792,9 @@ class RpcHttp2CallerTransport
     }
     _activeStreams.clear();
 
-    final subscriptionsToCancel = List.from(_streamSubscriptions.values);
+    final subscriptionsToCancel = List<StreamSubscription<void>>.from(
+      _streamSubscriptions.values,
+    );
     for (final subscription in subscriptionsToCancel) {
       try {
         await subscription.cancel();
@@ -1842,7 +1843,7 @@ class RpcHttp2CallerTransport
         'Graceful HTTP/2 shutdown did not complete ($e); terminating',
       );
       try {
-        _connection.terminate();
+        unawaited(_connection.terminate());
       } catch (e2) {
         _logger?.warning('Error closing the HTTP/2 connection: $e2');
       }

@@ -293,7 +293,7 @@ final class CalculatorResponder extends RpcResponderContract
       double currentResult = 0.0;
 
       for (int i = 0; i < steps.length; i++) {
-        await Future.delayed(Duration(milliseconds: 50));
+        await Future<void>.delayed(Duration(milliseconds: 50));
 
         // Промежуточные вычисления
         switch (steps[i]) {
@@ -442,7 +442,7 @@ Future<void> main() async {
       ComputeRequest(operationType: 'product', numbers: [1.1, 2.2, 3.3]),
       ComputeRequest(
         operationType: 'variance',
-        numbers: List.generate(5000, (i) => (i * 0.1)),
+        numbers: List.generate(5000, (i) => i * 0.1),
       ),
     ];
 
@@ -483,7 +483,7 @@ Future<void> main() async {
           ),
         ]).asyncMap((request) async {
           // Небольшая задержка между запросами для корректной передачи
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future<void>.delayed(Duration(milliseconds: 100));
           return request;
         });
 

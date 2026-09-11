@@ -109,7 +109,7 @@ class LogCollectorMcpServer {
       return _json({
         'client_id': 'rpc-dart-log-local',
         'client_name': body['client_name'] ?? 'claude',
-        'redirect_uris': body['redirect_uris'] ?? [],
+        'redirect_uris': body['redirect_uris'] ?? <Object?>[],
         'grant_types': ['authorization_code'],
         'response_types': ['code'],
         'token_endpoint_auth_method': 'none',
@@ -217,7 +217,7 @@ Investigation strategy:
     return switch (method) {
       'initialize' => _rpcResult(id, {
         'protocolVersion': '2024-11-05',
-        'capabilities': {'tools': {}},
+        'capabilities': {'tools': <String, Object?>{}},
         'serverInfo': {'name': 'rpc_dart_log', 'version': '0.1.0'},
         'instructions': _mcpInstructions,
       }),
@@ -275,7 +275,7 @@ Investigation strategy:
         'Overview of all log sources: connected devices, scope stats (total/errors/warnings/spans), '
         'recent errors (last 5 inline), active traceIds as 8-char prefixes with error counts, '
         'and current cursor. ALWAYS call this first before querying logs.',
-    'inputSchema': {'type': 'object', 'properties': {}},
+    'inputSchema': {'type': 'object', 'properties': <String, Object?>{}},
     'annotations': {'readOnlyHint': true},
   };
 

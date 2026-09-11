@@ -12,8 +12,8 @@
 // grows for as long as the collector runs.
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_log/src/protocol.dart';
 import 'package:rpc_dart_log/src/mcp_buffer.dart';
+import 'package:rpc_dart_log/src/protocol.dart';
 import 'package:test/test.dart';
 
 TaggedRecord _record(String scope) => TaggedRecord(

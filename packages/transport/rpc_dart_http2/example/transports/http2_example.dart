@@ -29,7 +29,7 @@ Future<void> main() async {
 
   try {
     // Даем серверу время на запуск
-    await Future.delayed(Duration(milliseconds: 500));
+    await Future<void>.delayed(Duration(milliseconds: 500));
 
     // Создаем HTTP/2 клиента
     print('🔌 Подключение HTTP/2 клиента...');
@@ -136,7 +136,7 @@ Future<void> _demonstrateClientStreamingRpc(RpcCallerEndpoint endpoint) async {
     Stream<RpcString> createRequestStream() {
       return Stream.fromIterable(messages).asyncMap((msg) async {
         print('   📤 Отправляем: "${msg.value}"');
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
         return msg;
       });
     }
@@ -169,7 +169,7 @@ Future<void> _demonstrateBidirectionalRpc(RpcCallerEndpoint endpoint) async {
     ];
 
     final requestStream = Stream.fromIterable(messages).asyncMap((msg) async {
-      await Future.delayed(Duration(milliseconds: 300));
+      await Future<void>.delayed(Duration(milliseconds: 300));
       print('   📤 Отправляем: "${msg.value}"');
       return msg;
     });
@@ -223,7 +223,7 @@ final class _DemoServiceContract extends RpcResponderContract {
         print('🔄 HTTP/2 GetStream: запрос "$message"');
 
         for (int i = 1; i <= 5; i++) {
-          await Future.delayed(Duration(milliseconds: 200));
+          await Future<void>.delayed(Duration(milliseconds: 200));
           yield RpcString('HTTP/2 поток #$i из 5: ответ на "$message"');
         }
         print('🔄 HTTP/2 GetStream: завершен');
@@ -266,7 +266,7 @@ final class _DemoServiceContract extends RpcResponderContract {
           print('🔄 HTTP/2 Chat: получено "$message"');
 
           // Отвечаем с небольшой задержкой для реалистичности
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future<void>.delayed(Duration(milliseconds: 100));
           yield RpcString('HTTP/2 сервер отвечает на: $message');
         }
 

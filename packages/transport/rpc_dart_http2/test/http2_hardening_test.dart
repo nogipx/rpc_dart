@@ -25,8 +25,8 @@ void main() {
       Object? errorB;
       final dataB = <RpcTransportMessage>[];
 
-      final subA = streamA.listen((_) {}, onError: (e) => errorA = e);
-      final subB = streamB.listen(dataB.add, onError: (e) => errorB = e);
+      final subA = streamA.listen((_) {}, onError: (Object e) => errorA = e);
+      final subB = streamB.listen(dataB.add, onError: (Object e) => errorB = e);
 
       // Inject a stream-scoped error for stream 3.
       controller.addError(
@@ -35,7 +35,7 @@ void main() {
       // Stream 5 keeps receiving data normally.
       controller.add(RpcTransportMessage(streamId: 5, isEndOfStream: true));
 
-      await Future.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(errorA, isA<StateError>());
       expect(errorB, isNull, reason: 'stream B must not see stream A error');
@@ -55,13 +55,13 @@ void main() {
 
       Object? errorA;
       Object? errorB;
-      final subA = streamA.listen((_) {}, onError: (e) => errorA = e);
-      final subB = streamB.listen((_) {}, onError: (e) => errorB = e);
+      final subA = streamA.listen((_) {}, onError: (Object e) => errorA = e);
+      final subB = streamB.listen((_) {}, onError: (Object e) => errorB = e);
 
       // A plain (non-enveloped) error is connection-level and must fan out.
       controller.addError(StateError('connection died'));
 
-      await Future.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(errorA, isA<StateError>());
       expect(errorB, isA<StateError>());
@@ -82,7 +82,7 @@ void main() {
       controller.add(RpcTransportMessage(streamId: 5));
       controller.add(RpcTransportMessage(streamId: 3, isEndOfStream: true));
 
-      await Future.delayed(const Duration(milliseconds: 20));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
       expect(received, [3, 3]);
 

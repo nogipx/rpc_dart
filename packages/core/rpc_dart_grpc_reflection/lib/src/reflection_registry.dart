@@ -203,7 +203,7 @@ class RpcReflectionRegistry {
       return;
     }
     result.add(bytes);
-    for (final dep in (_dependencies[filename] ?? const [])) {
+    for (final dep in _dependencies[filename] ?? const <String>[]) {
       _collectDeps(dep, result, visited, missing);
     }
   }

@@ -171,7 +171,7 @@ void main() {
         );
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -270,7 +270,7 @@ void main() {
         await transport.sendMessage(streamId, testData);
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -308,7 +308,7 @@ void main() {
         await transport.sendMetadata(streamId, metadata);
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -345,7 +345,7 @@ void main() {
         );
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -380,7 +380,7 @@ void main() {
         await transport.finishSending(streamId);
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -415,7 +415,7 @@ void main() {
         await transport.finishSending(streamId); // Повторный вызов
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         final finishMessages = receivedMessages
@@ -463,7 +463,7 @@ void main() {
         );
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(stream1Messages.length, greaterThan(0));
@@ -545,7 +545,7 @@ void main() {
         await transport.finishSending(streamId);
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -586,7 +586,7 @@ void main() {
         );
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         // Ожидаем, что получим сообщение об ошибке
@@ -629,7 +629,7 @@ void main() {
         await transport.sendDirectObject(streamId, complexObject);
 
         // Даем время для обработки в изоляте
-        await Future.delayed(Duration(milliseconds: 300));
+        await Future<void>.delayed(Duration(milliseconds: 300));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -693,7 +693,7 @@ void main() {
         }
 
         // Даем время для обработки всех сообщений
-        await Future.delayed(Duration(milliseconds: 400));
+        await Future<void>.delayed(Duration(milliseconds: 400));
 
         // Assert
         expect(receivedMessages.length, greaterThanOrEqualTo(testCases.length));
@@ -805,7 +805,7 @@ void main() {
         await transport.sendDirectObject(streamId, errorTrigger);
 
         // Даем время для обработки
-        await Future.delayed(Duration(milliseconds: 200));
+        await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
@@ -989,7 +989,7 @@ void main() {
           await transport.sendMessage(streamId, testData);
 
           // Ждем ответ
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future<void>.delayed(Duration(milliseconds: 100));
 
           // Освобождаем stream
           final released = transport.releaseStreamId(streamId);

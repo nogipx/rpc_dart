@@ -250,7 +250,9 @@ Map<int, List<int>> _parseFields(Uint8List bytes) {
 
     if (wireType == 0) {
       final start = pos;
-      while (pos < bytes.length && bytes[pos] & 0x80 != 0) pos++;
+      while (pos < bytes.length && bytes[pos] & 0x80 != 0) {
+        pos++;
+      }
       if (pos < bytes.length) pos++;
       result.putIfAbsent(fieldNumber, () => bytes.sublist(start, pos).toList());
     } else if (wireType == 2) {
@@ -297,7 +299,9 @@ List<List<int>> _parseRepeatedBytes(Uint8List bytes, int targetField) {
     final wireType = tag & 0x7;
 
     if (wireType == 0) {
-      while (pos < bytes.length && bytes[pos] & 0x80 != 0) pos++;
+      while (pos < bytes.length && bytes[pos] & 0x80 != 0) {
+        pos++;
+      }
       if (pos < bytes.length) pos++;
     } else if (wireType == 2) {
       var len = 0;

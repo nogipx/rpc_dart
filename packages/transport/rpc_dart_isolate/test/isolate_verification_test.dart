@@ -148,7 +148,7 @@ void cpuIntensiveServer(IRpcTransport transport, Map<String, dynamic> params) {
           if (n <= 1) return n;
           int a = 0, b = 1;
           for (int i = 2; i <= n; i++) {
-            int temp = a + b;
+            final int temp = a + b;
             a = b;
             b = temp;
           }
@@ -353,7 +353,7 @@ void main() {
         final results = await Future.wait([
           taskFuture,
           mainThreadTimer.isActive
-              ? Future.delayed(
+              ? Future<void>.delayed(
                   Duration(milliseconds: 60),
                 ) // Даем чуть больше времени
               : Future.value(null),

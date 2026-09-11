@@ -28,7 +28,7 @@ void main() async {
   await transport.close();
 }
 
-class _DummyWebSocketChannel extends StreamChannelMixin
+class _DummyWebSocketChannel extends StreamChannelMixin<Object?>
     implements WebSocketChannel {
   final _controller = StreamChannelController<Object?>(sync: true);
 
@@ -36,7 +36,7 @@ class _DummyWebSocketChannel extends StreamChannelMixin
   WebSocketSink get sink => _DummySink(_controller.local.sink);
 
   @override
-  Stream get stream => _controller.foreign.stream;
+  Stream<Object?> get stream => _controller.foreign.stream;
 
   @override
   Future<void> get ready async {}
@@ -51,9 +51,10 @@ class _DummyWebSocketChannel extends StreamChannelMixin
   String? get closeReason => null;
 }
 
-class _DummySink extends DelegatingStreamSink implements WebSocketSink {
+class _DummySink extends DelegatingStreamSink<Object?>
+    implements WebSocketSink {
   _DummySink(super.sink);
 
   @override
-  Future close([int? closeCode, String? closeReason]) => super.close();
+  Future<void> close([int? closeCode, String? closeReason]) => super.close();
 }

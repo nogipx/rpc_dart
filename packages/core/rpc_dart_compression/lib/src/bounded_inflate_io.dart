@@ -42,9 +42,7 @@ Uint8List? boundedInflate(Uint8List data, int limit) {
   final builder = BytesBuilder(copy: false);
   var total = 0;
 
-  final out = ByteConversionSink.withCallback((bytes) {
-    builder.add(bytes);
-  });
+  final out = ByteConversionSink.withCallback(builder.add);
 
   // A sink that counts as it goes and refuses to grow past the cap.
   final counting = _CountingSink(out, limit, () => total, (n) => total = n);

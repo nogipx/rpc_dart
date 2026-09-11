@@ -210,8 +210,8 @@ class RpcApp {
     _log?.info('RpcApp running — send SIGTERM or SIGINT to stop');
 
     final done = Completer<void>();
-    StreamSubscription? sigtermSub;
-    StreamSubscription? sigintSub;
+    StreamSubscription<void>? sigtermSub;
+    StreamSubscription<void>? sigintSub;
 
     void onSignal(ProcessSignal signal) {
       _log?.info('Received $signal — shutting down');
@@ -228,8 +228,8 @@ class RpcApp {
     } catch (_) {}
 
     await Future.any([done.future, _stopCompleter.future]);
-    sigtermSub?.cancel();
-    sigintSub?.cancel();
+    await sigtermSub?.cancel();
+    await sigintSub?.cancel();
     await stop();
   }
 
@@ -256,7 +256,8 @@ class RpcApp {
     }
 
     final endpointHealth = <Map<String, Object?>>[];
-    for (final endpoint in (_server?.endpoints ?? [])) {
+    for (final endpoint
+        in _server?.endpoints ?? const <RpcResponderEndpoint>[]) {
       endpointHealth.add(endpoint.collectEndpointMetrics());
     }
 

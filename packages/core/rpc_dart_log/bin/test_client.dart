@@ -26,20 +26,20 @@ void main(List<String> args) async {
   );
 
   // Wait for connection
-  await Future.delayed(Duration(seconds: 2));
+  await Future<void>.delayed(Duration(seconds: 2));
 
   final log = controller.scope('test');
 
   for (var i = 1; i <= 5; i++) {
     log.info('test message $i', data: {'i': i});
     print('Sent message $i');
-    await Future.delayed(Duration(milliseconds: 500));
+    await Future<void>.delayed(Duration(milliseconds: 500));
   }
 
   log.error('test error', error: 'SomeError');
   print('Sent error');
 
-  await Future.delayed(Duration(seconds: 1));
+  await Future<void>.delayed(Duration(seconds: 1));
   controller.dispose();
   print('Done.');
 }

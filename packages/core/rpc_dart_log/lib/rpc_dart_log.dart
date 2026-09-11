@@ -21,5 +21,5 @@
 /// ```
 library;
 
-export 'src/protocol.dart' show DeviceInfo;
 export 'src/log_output.dart' show LogCollectorOutput;
+export 'src/protocol.dart' show DeviceInfo;

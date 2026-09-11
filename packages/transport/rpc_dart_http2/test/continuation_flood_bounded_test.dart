@@ -124,7 +124,7 @@ void main() {
         },
         cancelOnError: false,
       );
-      socket.done.catchError((Object _) => socket);
+      unawaited(socket.done.catchError((Object _) => socket));
 
       socket.add(_preface.codeUnits);
       socket.add(_frameHeader(length: 0, type: 0x4, flags: 0, streamId: 0));

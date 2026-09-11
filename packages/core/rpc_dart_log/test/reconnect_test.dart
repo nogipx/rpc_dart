@@ -23,14 +23,13 @@ import 'dart:async';
 
 import 'package:async/async.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_log/rpc_dart_log.dart';
+import 'package:rpc_dart_log/src/contract/log_responder.dart';
+import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-import 'package:rpc_dart_log/rpc_dart_log.dart';
-import 'package:rpc_dart_log/src/contract/log_responder.dart';
-import 'package:rpc_dart_log/src/contract/messages.dart';
 
 void main() {
   test('reconnects to a fresh collector and delivers all buffered records, '

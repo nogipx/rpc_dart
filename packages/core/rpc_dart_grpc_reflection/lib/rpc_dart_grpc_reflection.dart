@@ -2,5 +2,5 @@
 // SPDX-License-Identifier: MIT
 
 export 'src/descriptor_builder.dart';
-export 'src/reflection_registry.dart';
 export 'src/reflection_contract.dart';
+export 'src/reflection_registry.dart';

@@ -69,7 +69,7 @@ void main() {
 
       listener.listen((socket) async {
         socket.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
-        socket.done.catchError((Object _) => socket);
+        unawaited(socket.done.catchError((Object _) => socket));
 
         // Our SETTINGS, then ACK the client's, so the connection comes up.
         socket.add(_frameHeader(length: 0, type: 0x4, flags: 0, streamId: 0));

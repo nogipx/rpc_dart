@@ -40,7 +40,7 @@ class _RecordingMeter implements Meter {
     return c as Counter<T>;
   }
 
-  bool hasValues(String name) => (counters[name]?.values.isNotEmpty) ?? false;
+  bool hasValues(String name) => counters[name]?.values.isNotEmpty ?? false;
 }
 
 void main() {

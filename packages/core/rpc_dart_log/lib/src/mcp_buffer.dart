@@ -445,9 +445,9 @@ class LogCollectorMcpBuffer {
   }
 
   String _collapseKey(TaggedRecord tagged) => switch (tagged.record) {
-    LogEvent e => '${tagged.deviceLabel}|${e.scope}|${e.message}',
-    LogSpan s => '${tagged.deviceLabel}|${s.scope}|${s.name}',
-    LogSpanStart s => '${tagged.deviceLabel}|${s.scope}|start',
+    final LogEvent e => '${tagged.deviceLabel}|${e.scope}|${e.message}',
+    final LogSpan s => '${tagged.deviceLabel}|${s.scope}|${s.name}',
+    final LogSpanStart s => '${tagged.deviceLabel}|${s.scope}|start',
   };
 
   // ---------------------------------------------------------------------------
@@ -458,8 +458,8 @@ class LogCollectorMcpBuffer {
     final device = tagged.deviceLabel;
     return switch (tagged.record) {
       LogSpanStart() => '',
-      LogEvent event => _formatEvent(device, event, noData: noData),
-      LogSpan span => _formatSpan(device, span),
+      final LogEvent event => _formatEvent(device, event, noData: noData),
+      final LogSpan span => _formatSpan(device, span),
     };
   }
 
@@ -616,8 +616,8 @@ class _Filter {
 
     if (_messagePattern != null) {
       final target = switch (r) {
-        LogEvent event => event.message,
-        LogSpan span => span.name,
+        final LogEvent event => event.message,
+        final LogSpan span => span.name,
         _ => '',
       };
       if (!_messagePattern.hasMatch(target)) return false;

@@ -6,8 +6,8 @@ import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-import 'protocol.dart';
 import 'log_server.dart';
+import 'protocol.dart';
 
 // ANSI color codes
 const _reset = '\x1B[0m';
@@ -36,7 +36,7 @@ class LogCollectorConsole {
   void printConnection(LogCollectorConnectionEvent event) {
     final now = _formatTime(DateTime.now());
     switch (event) {
-      case DeviceConnected e:
+      case final DeviceConnected e:
         final s = e.session;
         if (colored) {
           _sink.writeln(
@@ -47,7 +47,7 @@ class LogCollectorConsole {
         } else {
           _sink.writeln('$now + ${s.deviceName} (${s.app})');
         }
-      case DeviceDisconnected e:
+      case final DeviceDisconnected e:
         if (colored) {
           _sink.writeln(
             '$_dim$now$_reset $_red-$_reset '
@@ -67,9 +67,9 @@ class LogCollectorConsole {
     switch (record) {
       case LogSpanStart():
         return; // skip transient span starts
-      case LogEvent event:
+      case final LogEvent event:
         _printEvent(label, event);
-      case LogSpan span:
+      case final LogSpan span:
         _printSpan(label, span);
     }
   }

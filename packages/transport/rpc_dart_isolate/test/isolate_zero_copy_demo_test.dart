@@ -99,7 +99,7 @@ void processingServer(IRpcTransport transport, Map<String, dynamic> params) {
         final average = sum / payload.numbers.length;
 
         // Симуляция работы
-        await Future.delayed(Duration(milliseconds: 10));
+        await Future<void>.delayed(Duration(milliseconds: 10));
 
         stopwatch.stop();
 

@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/**/analysis_options.yaml, analysis_options.yaml]
 applies: the project has a static-analysis gate configured from a shared preset
 breaks: "wrong result: an unchecked implicit downcast from `dynamic` throws at run time where the analyser could have refused it, and the class stays invisible to CI so every instance costs a round."
-applied: [325]
+applied: [325, 326]
 status: confirmed (round 325)
 ---
 
@@ -82,6 +82,29 @@ downcasts and raw generics; the style rules found 112 mostly-cosmetic ones. **If
 only one is ever turned on, turn on `analyzer: language:`** — it is the half
 that changes what compiles rather than what reads well.
 
-Only `rpc_dart` was raised in round 325. The other 21 packages still sit on
-whatever their own `analysis_options.yaml` inherited, and the same count has
-never been taken for any of them.
+## The sharper case: no floor at all
+
+**Round 326 took the count over core and transport and found something worse
+than a weak preset.** Three packages — `rpc_dart_framework`,
+`rpc_dart_grpc_reflection`, `rpc_dart_websocket` — had **no
+`analysis_options.yaml` at all**, so they fell through to the repo-root file,
+which configured only the formatter. No `include:`, no `linter:`. `melos run
+analyze --fatal-infos --fatal-warnings` printed `No issues found!` for a
+priority transport with 137 tests because nothing was switched on.
+
+> **Count the packages with NO options file before counting what the preset
+> omits.** It reads identically in CI and it is the bigger hole. Of the 211
+> issues the floor found across nine packages, **ten violate
+> `lints/recommended` itself** — the baseline, not the strict extras — and all
+> ten are in two of those three. One is
+> `curly_braces_in_flow_control_structures`, the lint `CLAUDE.md` records as
+> having once shipped into a published `rpc_dart`; it is in the tree again,
+> because that package's gate never had a rule to break.
+
+The fix is one floor, not N copies: `analysis_options_base.yaml` at the repo
+root, included by RELATIVE path (a `package:` URI does not resolve from every
+context this repo is analysed in), plus `analysis_options_test.yaml` for `test/`
+directories. Still outside it, deliberately: `rpc_dart_wasm` (not a workspace
+member, Flutter dependency set, count not taken) and `rpc_dart_generator` (its
+`package:lints` include already fails to resolve in some contexts — understand
+that before adding indirection).

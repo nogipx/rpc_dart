@@ -71,8 +71,8 @@ void main(List<String> args) async {
     if (!completer.isCompleted) completer.complete();
   }
 
-  StreamSubscription? sigterm;
-  StreamSubscription? sigint;
+  StreamSubscription<void>? sigterm;
+  StreamSubscription<void>? sigint;
   try {
     sigterm = ProcessSignal.sigterm.watch().listen(onSignal);
   } catch (_) {}
@@ -81,8 +81,8 @@ void main(List<String> args) async {
   } catch (_) {}
 
   await completer.future;
-  sigterm?.cancel();
-  sigint?.cancel();
+  await sigterm?.cancel();
+  await sigint?.cancel();
 
   stdout.writeln('\nShutting down...');
   await mcp.stop();

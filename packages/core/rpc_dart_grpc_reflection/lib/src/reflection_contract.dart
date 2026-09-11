@@ -49,11 +49,11 @@ class ServerReflectionContract extends RpcResponderContract {
       methodName: 'ServerReflectionInfo',
       requestCodec: RpcBinaryCodec<Uint8List>(
         toBytes: (b) => b,
-        fromBytes: (b) => Uint8List.fromList(b),
+        fromBytes: Uint8List.fromList,
       ),
       responseCodec: RpcBinaryCodec<Uint8List>(
         toBytes: (b) => b,
-        fromBytes: (b) => Uint8List.fromList(b),
+        fromBytes: Uint8List.fromList,
       ),
       handler: _handleReflection,
     );

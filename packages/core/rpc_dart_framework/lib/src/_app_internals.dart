@@ -45,7 +45,7 @@ List<RpcModule> sortModulesByDependencies(List<RpcModule> modules) {
   while (queue.isNotEmpty) {
     final m = queue.removeAt(0);
     sorted.add(m);
-    for (final dependent in dependents[m] ?? const []) {
+    for (final dependent in dependents[m] ?? const <RpcModule>[]) {
       inDegree[dependent] = inDegree[dependent]! - 1;
       if (inDegree[dependent] == 0) queue.add(dependent);
     }

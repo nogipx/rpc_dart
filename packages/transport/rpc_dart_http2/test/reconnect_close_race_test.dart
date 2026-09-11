@@ -191,7 +191,7 @@ void main() {
 
   /// Waits until the server has observed every connection close, or [budget].
   ///
-  /// This used to be a flat `Future.delayed(4s)` on the assumption that a
+  /// This used to be a flat `Future<void>.delayed(4s)` on the assumption that a
   /// GOAWAY travelling client -> proxy -> server always lands inside it. It
   /// does on an idle machine and does NOT under a full `melos run test:unit`,
   /// where this file competes with every other package: the assertion then read

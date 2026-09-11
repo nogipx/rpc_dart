@@ -25,10 +25,10 @@
 
 import 'dart:typed_data';
 
+import 'package:rpc_dart_grpc_reflection/src/reflection_contract.dart';
+import 'package:rpc_dart_grpc_reflection/src/reflection_registry.dart';
 import 'package:test/test.dart';
 
-import '../../lib/src/reflection_contract.dart';
-import '../../lib/src/reflection_registry.dart';
 import '../helpers.dart';
 
 void main() {

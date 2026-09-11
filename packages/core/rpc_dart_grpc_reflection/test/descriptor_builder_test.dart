@@ -5,9 +5,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart';
+import 'package:rpc_dart_grpc_reflection/src/proto_parser.dart';
 import 'package:test/test.dart';
-
-import '../lib/src/proto_parser.dart';
 
 void main() {
   group('RpcFileDescriptorBuilder — round-trip via parser', () {

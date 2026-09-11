@@ -53,7 +53,7 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
   final SendPort _sendPort;
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast(sync: true);
-  late final StreamSubscription _messageSub;
+  late final StreamSubscription<void> _messageSub;
   bool _closed = false;
   final void Function()? _onClose;
 
@@ -325,9 +325,9 @@ abstract interface class RpcIsolateTransport {
     _IsolateMultiplexedChannel? hostChannel;
     RpcChannelTransport? hostTransport;
 
-    late final StreamSubscription initSub;
-    late final StreamSubscription errorSub;
-    late final StreamSubscription exitSub;
+    late final StreamSubscription<void> initSub;
+    late final StreamSubscription<void> errorSub;
+    late final StreamSubscription<void> exitSub;
 
     // Race the handshake (worker's SendPort) against an isolate error/exit
     // before handshake and a startup timeout, so spawn() fails fast and

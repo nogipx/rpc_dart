@@ -14,8 +14,8 @@
 // when isolateCaller is read. An orphaned (still-alive) caller returns fine.
 
 import 'package:rpc_dart/rpc_dart.dart';
-import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 import 'package:rpc_dart_framework/rpc_dart_framework.dart';
+import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 import 'package:test/test.dart';
 
 // Top-level entrypoint required by Isolate.spawn.

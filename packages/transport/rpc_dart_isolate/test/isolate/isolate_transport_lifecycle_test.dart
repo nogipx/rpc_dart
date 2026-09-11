@@ -72,7 +72,7 @@ Future<RpcHealthStatus> _waitForStatusChange(
       return status;
     }
 
-    await Future.delayed(interval);
+    await Future<void>.delayed(interval);
     status = await transport.health();
   }
 

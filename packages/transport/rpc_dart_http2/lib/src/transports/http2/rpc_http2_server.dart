@@ -38,7 +38,7 @@ class RpcHttp2Server implements IRpcServer {
 
   /// Whether the server is serving over TLS (`true`) or plaintext h2c (`false`).
   bool get isSecure => _securityContext != null;
-  final List<StreamSubscription> _subscriptions = [];
+  final List<StreamSubscription<void>> _subscriptions = [];
   final List<RpcResponderEndpoint> _endpoints = [];
 
   /// The HTTP/2 connection behind each endpoint.
@@ -421,7 +421,7 @@ class RpcHttp2Server implements IRpcServer {
 
       final subscription = connections.listen(
         _handleConnection,
-        onError: (error, stackTrace) {
+        onError: (Object error, StackTrace stackTrace) {
           _logger?.error(
             'Server socket error',
             error: error,
@@ -661,7 +661,7 @@ class RpcHttp2Server implements IRpcServer {
             prefaceDeadline?.cancel();
             _releaseEndpoint(endpoint, socket);
           })
-          .catchError((error) {
+          .catchError((Object error) {
             _logger?.warning('Error closing connection $clientAddress: $error');
             keepalive?.cancel();
             prefaceDeadline?.cancel();

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 
@@ -42,31 +44,31 @@ Future<void> runIsolateExample() async {
     (message) {
       print('КЛИЕНТ: Получен ответ: "${message.payload}"');
     },
-    onError: (error) {
+    onError: (Object error) {
       print('КЛИЕНТ: Ошибка: $error');
     },
   );
 
   // Отправляем запросы
   print('\nОтправляем запрос: "Привет, сервер!"');
-  client.send('Привет, сервер!'.rpc);
+  unawaited(client.send('Привет, сервер!'.rpc));
 
-  await Future.delayed(Duration(milliseconds: 500));
+  await Future<void>.delayed(Duration(milliseconds: 500));
 
   print('\nОтправляем запрос: "Как дела?"');
-  client.send('Как дела?'.rpc);
+  unawaited(client.send('Как дела?'.rpc));
 
-  await Future.delayed(Duration(milliseconds: 500));
+  await Future<void>.delayed(Duration(milliseconds: 500));
 
   print('\nОтправляем запрос: "Проверка эхо"');
-  client.send('Проверка эхо'.rpc);
+  unawaited(client.send('Проверка эхо'.rpc));
 
   // Ждем обработки сообщений
-  await Future.delayed(Duration(seconds: 1));
+  await Future<void>.delayed(Duration(seconds: 1));
 
   // Завершаем отправку
   print('\nЗавершаем отправку...');
-  client.finishSending();
+  unawaited(client.finishSending());
 
   // Отменяем подписку на ответы
   await subscription.cancel();

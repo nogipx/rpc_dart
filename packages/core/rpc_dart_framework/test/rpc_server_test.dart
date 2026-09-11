@@ -623,7 +623,7 @@ void main() {
 
     // -------------------------------------------------------------------------
     group('keyExtractor (per-key dynamic limits)', () {
-      final _isRateLimited = isA<Exception>().having(
+      final isRateLimited = isA<Exception>().having(
         (e) => e.toString(),
         'message',
         contains('Rate limit exceeded'),
@@ -652,7 +652,7 @@ void main() {
         await client.ping(const PingRequest('a2'), context: ctxA);
         await expectLater(
           client.ping(const PingRequest('a3'), context: ctxA),
-          throwsA(_isRateLimited),
+          throwsA(isRateLimited),
         );
         // user_b has their own independent counter — full budget still available
         await client.ping(const PingRequest('b1'), context: ctxB);
@@ -689,7 +689,7 @@ void main() {
         await client.ping(const PingRequest('2'));
         await expectLater(
           client.ping(const PingRequest('3')),
-          throwsA(_isRateLimited),
+          throwsA(isRateLimited),
         );
 
         await app.dispose();
@@ -721,7 +721,7 @@ void main() {
           // Third call (any method) must be rejected for user_a
           await expectLater(
             client.ping(const PingRequest('3'), context: ctx),
-            throwsA(_isRateLimited),
+            throwsA(isRateLimited),
           );
 
           // user_b has their own budget — must work
@@ -763,7 +763,7 @@ void main() {
           await client.ping(const PingRequest('1'), context: ctx);
           await expectLater(
             client.ping(const PingRequest('2'), context: ctx),
-            throwsA(_isRateLimited),
+            throwsA(isRateLimited),
           );
           // echo uses perService counter (max 10 per user) — must work
           for (var i = 0; i < 5; i++) {
@@ -800,7 +800,7 @@ void main() {
         // 4th call — global exhausted regardless of which user calls
         await expectLater(
           client.ping(const PingRequest('b2'), context: ctxB),
-          throwsA(_isRateLimited),
+          throwsA(isRateLimited),
         );
 
         await app.dispose();
@@ -828,7 +828,7 @@ void main() {
         await client.ping(const PingRequest('a2'), context: ctxA);
         await expectLater(
           client.ping(const PingRequest('a3'), context: ctxA),
-          throwsA(_isRateLimited),
+          throwsA(isRateLimited),
         );
         // echo is a separate (key, method) counter — still works for user_a
         await client.echo(const PingRequest('ae1'), context: ctxA);
@@ -869,7 +869,7 @@ void main() {
           await client.ping(const PingRequest('1'), context: ctx);
           await expectLater(
             client.ping(const PingRequest('2'), context: ctx),
-            throwsA(_isRateLimited),
+            throwsA(isRateLimited),
           );
           // echo falls through to perKeyFallback (max 10) — works fine
           for (var i = 0; i < 5; i++) {
@@ -905,7 +905,7 @@ void main() {
         await client.ping(const PingRequest('2'));
         await expectLater(
           client.ping(const PingRequest('3')),
-          throwsA(_isRateLimited),
+          throwsA(isRateLimited),
         );
 
         await app.dispose();

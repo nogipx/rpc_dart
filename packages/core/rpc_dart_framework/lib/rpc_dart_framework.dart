@@ -22,7 +22,7 @@
 /// - [RpcAppConfig]      — framework configuration (timeouts, hooks, env override).
 /// - [RpcCallSpy]        — test interceptor recording all calls.
 /// - [RpcFaultInjector]  — test interceptor injecting errors and latency.
-library rpc_dart_framework;
+library;
 
 export 'src/rpc_app.dart';
 export 'src/rpc_app_config.dart';

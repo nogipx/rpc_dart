@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# The floor for `test/` directories: everything in analysis_options_base.yaml
+# except one rule that is wrong for test code.
+#
+# The type strictness is NOT waived here. strict-casts, strict-inference and
+# strict-raw-types apply to tests exactly as they do to `lib/`, and rounds 325
+# and 326 fixed every issue they reported.
+#
+# `unnecessary_lambdas` is off, and the reason is a thing it actually did rather
+# than a thing it might do. Applied automatically to core's tests in round 325,
+# it inlined the helper behind `bidi_server_ends_first_test.dart`'s one-line test
+# body — and took with it the fifteen-line comment recording WHY that guard is
+# narrow:
+#
+#     infinite handler, 1 request sent -> cancel returned (received=19)
+#     infinite handler, no request     -> CANCEL DEADLOCKED (received=0)
+#     mirror handler,   1 request sent -> CANCEL DEADLOCKED (received=1)
+#
+# A measured, still-unfixed deadlock, deleted to save a closure.
+#
+# The counts, measured rather than assumed. In core, 14 of the rule's 26 hits
+# were constructs where a tearoff is wrong or worse — `expect(() => x.y(),
+# throwsA(...))` (10), `putIfAbsent(k, () => T())` (3), and that test body.
+# Across the other nine packages the split is the same shape: 27 of 33 hits are
+# in `test/`, 6 in `lib/`.
+#
+# `lib/` keeps the rule everywhere, and every `lib/` hit has been fixed.
+include: analysis_options_base.yaml
+
+linter:
+  rules:
+    unnecessary_lambdas: false

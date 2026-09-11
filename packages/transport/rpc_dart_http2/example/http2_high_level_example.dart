@@ -50,7 +50,7 @@ Future<void> main() async {
     }
 
     // Даем время на корректное закрытие соединений
-    await Future.delayed(Duration(milliseconds: 100));
+    await Future<void>.delayed(Duration(milliseconds: 100));
   } finally {
     await server.stop();
   }

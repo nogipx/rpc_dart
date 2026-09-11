@@ -146,8 +146,8 @@ class LogCollectorOutput extends LogOutput {
 
     final json = switch (record) {
       LogSpanStart() => throw StateError('unreachable'),
-      LogEvent event => event.toJson(),
-      LogSpan span => span.toJson(),
+      final LogEvent event => event.toJson(),
+      final LogSpan span => span.toJson(),
     };
     _enqueue(LogCollectorRecord(json));
     _pump();

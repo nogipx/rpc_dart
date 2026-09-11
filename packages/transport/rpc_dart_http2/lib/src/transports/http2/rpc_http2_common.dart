@@ -5,10 +5,9 @@
 
 import 'dart:async';
 
-import 'package:universal_io/io.dart';
-
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:universal_io/io.dart';
 
 /// gRPC User-Agent header value.
 const String kGrpcUserAgent = 'rpc-dart/1.0.0';

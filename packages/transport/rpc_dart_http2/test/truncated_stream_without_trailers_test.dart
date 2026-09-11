@@ -98,7 +98,7 @@ Future<ServerSocket> _rawServer({required bool withTrailers}) async {
   final listener = await ServerSocket.bind('127.0.0.1', 0);
   listener.listen((socket) async {
     socket.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
-    socket.done.catchError((Object _) => socket);
+    unawaited(socket.done.catchError((Object _) => socket));
 
     socket.add(_frameHeader(length: 0, type: 0x4, flags: 0, streamId: 0));
     socket.add(_frameHeader(length: 0, type: 0x4, flags: 0x1, streamId: 0));

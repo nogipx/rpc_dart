@@ -114,17 +114,17 @@ class _FakeServerConnection implements http2.ServerTransportConnection {
   Stream<http2.ServerTransportStream> get incomingStreams => _incoming.stream;
 
   @override
-  Future finish() async {
+  Future<void> finish() async {
     if (!_incoming.isClosed) await _incoming.close();
   }
 
   @override
-  Future terminate([int? errorCode]) async {
+  Future<void> terminate([int? errorCode]) async {
     if (!_incoming.isClosed) await _incoming.close();
   }
 
   @override
-  Future ping() async {}
+  Future<void> ping() async {}
 
   @override
   set onActiveStateChanged(http2.ActiveStateHandler callback) {}
@@ -188,11 +188,11 @@ class _NullSink implements StreamSink<http2.StreamMessage> {
   void addError(Object error, [StackTrace? stackTrace]) {}
 
   @override
-  Future addStream(Stream<http2.StreamMessage> stream) async {}
+  Future<void> addStream(Stream<http2.StreamMessage> stream) async {}
 
   @override
-  Future close() async {}
+  Future<void> close() async {}
 
   @override
-  Future get done async {}
+  Future<void> get done async {}
 }

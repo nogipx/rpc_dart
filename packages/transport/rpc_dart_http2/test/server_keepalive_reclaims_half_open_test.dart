@@ -80,8 +80,8 @@ class _FreezableRelay {
         onError: (Object _) {},
         cancelOnError: false,
       );
-      down.done.catchError((Object _) => down);
-      up.done.catchError((Object _) => up);
+      unawaited(down.done.catchError((Object _) => down));
+      unawaited(up.done.catchError((Object _) => up));
     });
     return relay;
   }

@@ -168,7 +168,7 @@ class RpcHttp2ResponderTransport
     _fcRefused.remove(streamId);
   }
 
-  final Map<int, StreamSubscription> _streamSubscriptions = {};
+  final Map<int, StreamSubscription<void>> _streamSubscriptions = {};
 
   /// Per-stream frame parsers, which carry the state for a fragmented message.
   final Map<int, RpcMessageParser> _streamParsers = {};
@@ -197,10 +197,8 @@ class RpcHttp2ResponderTransport
   /// Subscribes to the connection's incoming client streams.
   void _setupConnectionListener() {
     _connection.incomingStreams.listen(
-      (http2.ServerTransportStream stream) {
-        _handleIncomingStream(stream);
-      },
-      onError: (error, stackTrace) {
+      _handleIncomingStream,
+      onError: (Object error, StackTrace stackTrace) {
         _logger?.error(
           'HTTP/2 connection error',
           error: error,
@@ -262,7 +260,7 @@ class RpcHttp2ResponderTransport
       (http2.StreamMessage message) {
         _handleIncomingMessage(streamId, message);
       },
-      onError: (error, stackTrace) {
+      onError: (Object error, StackTrace stackTrace) {
         // A peer RST_STREAM is a cancellation, not a transport fault: the
         // client walked away (a cancelled subscription, a deadline). Reporting
         // it as a stream error pushes an RpcHttp2StreamError at every
@@ -857,7 +855,7 @@ class RpcHttp2ResponderTransport
     final totalStreams = _incomingStreams.length;
     if (totalStreams > 0) {
       _logger?.internal('Waiting on $totalStreams active stream(s)');
-      await Future.delayed(Duration(milliseconds: 50));
+      await Future<void>.delayed(Duration(milliseconds: 50));
     }
 
     for (final stream in _incomingStreams.values) {

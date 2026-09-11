@@ -3,9 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 export 'rpc_http2_caller_transport.dart';
-export 'rpc_http2_responder_transport.dart';
-export 'rpc_http2_server.dart';
-
 // `rpc_http2_common.dart` is NOT re-exported wholesale. It is HTTP/2 wire
 // machinery -- header conversion, frame checks, the outgoing pump, Nagle --
 // used by this package's own transports and nothing else in the repo. Exported
@@ -19,3 +16,5 @@ export 'rpc_http2_server.dart';
 // Code inside this package imports the file directly; so do the tests that
 // exercise the machinery.
 export 'rpc_http2_common.dart' show RpcHttp2StreamError;
+export 'rpc_http2_responder_transport.dart';
+export 'rpc_http2_server.dart';

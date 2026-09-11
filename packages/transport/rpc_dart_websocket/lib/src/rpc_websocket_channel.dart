@@ -51,7 +51,7 @@ int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
 class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   final WebSocketChannel _ws;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
-  late final StreamSubscription _sub;
+  late final StreamSubscription<void> _sub;
   bool _closed = false;
 
   RpcWebSocketChannel(this._ws) {

@@ -104,7 +104,7 @@ class _WebMultiplexedChannel implements IRpcMultiplexedChannel {
   final void Function(Map<String, Object?> data) _send;
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast(sync: true);
-  late final StreamSubscription _messageSub;
+  late final StreamSubscription<void> _messageSub;
   bool _closed = false;
   final void Function()? _onClose;
 
@@ -280,7 +280,7 @@ abstract interface class RpcIsolateTransport {
     final channel = _WebMultiplexedChannel(
       messageStream: controller.onMessage,
       send: controller.sendIsolate,
-      onClose: () => controller.close(),
+      onClose: controller.close,
     );
     final transport = RpcChannelTransport(
       channel: channel,
@@ -434,7 +434,7 @@ void runRpcIsolateManagerWorker(
 
   final controller = IsolateManagerControllerImpl<Object?, Object?>(
     scope,
-    onDispose: () => scope.close(),
+    onDispose: scope.close,
   );
 
   final channel = _WebMultiplexedChannel(
@@ -505,7 +505,7 @@ RpcMetadata _decodeMetadata(Map<String, Object?> raw) {
     throw StateError('Invalid metadata headers: $raw');
   }
   final headers = headersRaw
-      .whereType<Map>()
+      .whereType<Map<Object?, Object?>>()
       .map(
         (header) => RpcHeader(
           header['name']?.toString() ?? '',

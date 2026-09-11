@@ -1,0 +1,52 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+# The one analysis floor for every package in this repository.
+#
+# Before round 326 there were three floors and nobody had chosen any of them:
+# nine packages inherited `package:lints/recommended.yaml` by copy-paste, three
+# (`rpc_dart_framework`, `rpc_dart_grpc_reflection`, `rpc_dart_websocket`) had no
+# options file at all and so fell through to a root file that configured only
+# the formatter — **no lint rules whatsoever** — and `rpc_dart` had the strict
+# set round 325 gave it. `melos run analyze --fatal-infos --fatal-warnings` was
+# green across all of them, which is what a gate with nothing switched on says.
+#
+# Packages include this by RELATIVE path, not by a package: URI: the generator
+# cannot resolve `package:lints/...` from every context the repo is analysed in
+# (see the warnings `melos run format:check` still prints for it), and a
+# relative include always resolves.
+#
+# `analyzer: language:` is the half that matters and the half no preset enables.
+# Measured on core in round 325: the three modes found 208 implicit downcasts
+# and raw generics, while every lint rule together found 112 mostly-cosmetic
+# ones. If only one dial is ever raised, raise this one.
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+formatter:
+  page_width: 80
+
+linter:
+  rules:
+    # Async correctness — the class RPC-13 and RPC-14 keep finding by hand.
+    - unawaited_futures
+    - avoid_void_async
+    - unnecessary_await_in_return
+    # Real mistakes, zero hits on this corpus: kept as a floor, not a cleanup.
+    - literal_only_boolean_expressions
+    - no_adjacent_strings_in_list
+    - throw_in_finally
+    - test_types_in_equals
+    - avoid_type_to_string
+    - avoid_slow_async_io
+    # Readability.
+    - unnecessary_parenthesis
+    - unnecessary_lambdas
+    - prefer_final_locals
+    - directives_ordering

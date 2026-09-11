@@ -199,18 +199,20 @@ void main() {
       final requestController = StreamController<RpcString>();
 
       // Отправляем сообщения с задержкой но НЕ закрываем стрим сразу
-      Future.microtask(() async {
-        for (final msg in messages) {
-          await Future.delayed(Duration(milliseconds: 200));
-          print('🔄 Отправляем bidirectional сообщение: ${msg.value}');
-          requestController.add(msg);
-        }
+      unawaited(
+        Future.microtask(() async {
+          for (final msg in messages) {
+            await Future<void>.delayed(Duration(milliseconds: 200));
+            print('🔄 Отправляем bidirectional сообщение: ${msg.value}');
+            requestController.add(msg);
+          }
 
-        // Ждем немного перед закрытием чтобы дать серверу время ответить
-        await Future.delayed(Duration(milliseconds: 300));
-        print('🏁 Клиент закрывает request stream');
-        requestController.close();
-      });
+          // Ждем немного перед закрытием чтобы дать серверу время ответить
+          await Future<void>.delayed(Duration(milliseconds: 300));
+          print('🏁 Клиент закрывает request stream');
+          await requestController.close();
+        }),
+      );
 
       final requestStream = requestController.stream;
 
@@ -262,7 +264,7 @@ void main() {
 
     test('параллельные_rpc_вызовы_разных_типов', () async {
       // Act - делаем параллельные вызовы разных типов
-      final futures = <Future>[];
+      final futures = <Future<void>>[];
 
       // Unary вызов
       futures.add(
@@ -339,7 +341,7 @@ final class TestServiceContract extends RpcResponderContract {
         print('🔄 Обработка server streaming: $message');
 
         for (int i = 1; i <= 3; i++) {
-          await Future.delayed(Duration(milliseconds: 100));
+          await Future<void>.delayed(Duration(milliseconds: 100));
           yield RpcString('Stream message #$i for: $message');
         }
       },
@@ -383,7 +385,7 @@ final class TestServiceContract extends RpcResponderContract {
           yield response;
 
           // Добавляем небольшую задержку чтобы ответ успел отправиться
-          await Future.delayed(Duration(milliseconds: 50));
+          await Future<void>.delayed(Duration(milliseconds: 50));
           print('✅ Bidirectional ответ отправлен: ${response.value}');
         }
 

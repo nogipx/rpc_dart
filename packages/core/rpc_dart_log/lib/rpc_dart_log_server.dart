@@ -8,7 +8,8 @@
 /// Use [LogCollectorConsole] for terminal rendering with device labels.
 library;
 
-export 'src/protocol.dart' show DeviceInfo, TaggedRecord;
+export 'src/log_console.dart' show LogCollectorConsole;
+export 'src/log_mcp.dart' show LogCollectorMcpServer;
 export 'src/log_server.dart'
     show
         LogCollectorServer,
@@ -16,6 +17,5 @@ export 'src/log_server.dart'
         LogCollectorConnectionEvent,
         DeviceConnected,
         DeviceDisconnected;
-export 'src/log_console.dart' show LogCollectorConsole;
-export 'src/log_mcp.dart' show LogCollectorMcpServer;
 export 'src/mcp_buffer.dart' show LogCollectorMcpBuffer;
+export 'src/protocol.dart' show DeviceInfo, TaggedRecord;

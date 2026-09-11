@@ -207,13 +207,15 @@ class LogCollectorServer {
 /// This is needed because [RpcWebSocketServer] expects
 /// `Stream<WebSocketChannel>` but [WebSocketTransformer.upgrade]
 /// returns a raw [WebSocket].
-class _WebSocketAdapter with StreamChannelMixin implements WebSocketChannel {
+class _WebSocketAdapter
+    with StreamChannelMixin<dynamic>
+    implements WebSocketChannel {
   final WebSocket _socket;
 
   _WebSocketAdapter(this._socket);
 
   @override
-  Stream get stream => _socket;
+  Stream<dynamic> get stream => _socket;
 
   @override
   WebSocketSink get sink => _WebSocketSinkAdapter(_socket);
@@ -244,12 +246,12 @@ class _WebSocketSinkAdapter implements WebSocketSink {
       _socket.addError(error, stackTrace);
 
   @override
-  Future addStream(Stream stream) => _socket.addStream(stream);
+  Future<void> addStream(Stream<dynamic> stream) => _socket.addStream(stream);
 
   @override
-  Future close([int? closeCode, String? closeReason]) =>
+  Future<void> close([int? closeCode, String? closeReason]) =>
       _socket.close(closeCode, closeReason);
 
   @override
-  Future get done => _socket.done;
+  Future<void> get done => _socket.done;
 }
