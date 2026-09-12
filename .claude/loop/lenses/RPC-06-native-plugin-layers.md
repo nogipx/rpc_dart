@@ -3,7 +3,7 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355]
+applied: [348, 355, 357]
 status: confirmed (round 355)
 ---
 
@@ -93,3 +93,27 @@ twelve are ASCII by protocol or read an alphabet the code defines.
 
 Bench `../probes/P-47-native-text-encoding.md`,
 `../rounds/355-the-encoding-both-sides-agreed-on-and-neither-said.md`.
+
+## Round 357 — the Ask answered against the round itself
+
+INCONCLUSIVE, and the lens is why. Round 357 found the iOS recv loop giving up
+silently — conclusive from READING, because Android's driver already reports
+death and breaks and its comment describes the iOS behaviour. It wrote the fix.
+`analyze:native` said `PASS swift / PASS kotlin`.
+
+Then this lens's own Ask — *was this code RUN, or only read and compiled?* —
+answered "compiled", and the fix was reverted rather than committed. No
+simulator could be started: five `flutter emulators --launch` attempts, waits up
+to 240 s, `-d "iPhone 16"` refused, `flutter doctor` listing only macOS and
+Chrome. One had booted earlier in the same session.
+
+> **The lens applies to the round, not only to the code.** Its whole point is
+> that compiling is not running; a round that stops at compiling and ships
+> anyway has failed its own detector. `../backlog/B-38-ios-recv-loop-dies-silently.md`
+> holds the patch so the next round with a device spends its time measuring
+> rather than rediscovering.
+
+> **`analyze:native` passing is not evidence about behaviour, and round 348
+> already priced that.** Two green lines from a gate never shown to fail; here
+> the gate was shown to fail (348 ablated both languages) and still says nothing
+> about whether the loop recovers.
