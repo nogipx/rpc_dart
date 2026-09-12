@@ -3,8 +3,8 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292, 334, 335]
-status: confirmed (round 209)
+applied: [209, 289, 290, 291, 292, 334, 335, 352]
+status: confirmed (round 352)
 ---
 
 # RPC-04 — Transport capabilities hidden by a wrapper
@@ -105,3 +105,48 @@ one defect, and it was 334's.** `CallProcessor` (4), the seven stream responders
 
 Run it when a class GAINS an optional parameter, not on a schedule: the surface
 only changes when a constructor does.
+
+## Round 352 — the wrapper core recommends
+
+The 209 sweep was right that the surface is small and wrong about where it ends.
+It looked for WRAPPER HOOKS — a `transportWrapper` parameter a user passes
+something to — and core's own `_ReconnectingTransportProxy` is not one: it is a
+wrapper the library builds itself, and `RpcClientConnection` is documented as
+*"the recommended, transport-agnostic way to get auto-reconnect on a client"*.
+So it is what most applications hand to an endpoint, and it declared
+`IRpcTransport, IRpcStreamReset` and nothing else.
+
+Every wrapper in the workspace, which is the whole sweep:
+
+    RpcWebSocketCallerTransport               all four
+    _CapabilityPreservingTransport (http2)    policy + flow control
+    _ReconnectingTransportProxy               IRpcStreamReset alone
+
+The same endpoint built twice over the SAME transport, once directly and once
+through the proxy:
+
+    effect     direct                  proxy (before)
+    policy     20 MiB received         gRPC frame buffer overflow (max: 16777221)
+    zerocopy   accepted                Zero-copy requires a transport that...
+    flowctl    deferred=1              deferred=0
+
+> **`16777221` is 16 MiB plus the 5-byte message prefix — `const
+> RpcSecurityPolicy()`'s own `effectiveMaxBufferedBytes`.** Measure the EFFECT
+> and the number names which policy the object was built from. The `is` check
+> only tells you it failed.
+
+> **A capability can also be dropped by a LITERAL.** Three of the four were
+> missing interfaces; the fourth was `bool get supportsZeroCopy => false` on a
+> proxy whose `sendDirectObject` has always delegated. No interface is absent, so
+> a detector that greps for `implements` will never see it.
+
+> **Answer from the LAST attach, not from a null inner.** The responder
+> pipeline's limit caches are `??=`, so a read landing in a reconnect gap pins
+> the fallback for the endpoint's whole life — the same defect arriving by a
+> second route, and invisible to a bench that never disconnects.
+
+`RpcWebSocketCallerTransport`'s own class comment states this defect in the
+abstract, over the class that had it (U-14). Bench
+`../probes/P-44-capabilities-through-the-proxy.md`, rebuilt once because the
+frame channel's own policy refused the body in BOTH arms.
+`../rounds/352-the-wrapper-that-declared-nothing.md`.

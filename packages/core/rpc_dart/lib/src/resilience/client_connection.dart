@@ -69,12 +69,33 @@ typedef RpcConnectionLogger = void Function(String level, String message);
 ///
 /// The [RpcCallerEndpoint] is created once with this proxy and survives
 /// across reconnects transparently.
+///
+/// Forwards the inner transport's optional capabilities. Each is discovered by
+/// an `is` check in the layer above, so a wrapper implementing [IRpcTransport]
+/// alone hides them: the configured policy gives way to
+/// `const RpcSecurityPolicy()`, flow credit is returned on arrival instead of
+/// on consumption, and a codec-free call is refused outright.
 final class _ReconnectingTransportProxy
-    implements IRpcTransport, IRpcStreamReset {
+    implements
+        IRpcTransport,
+        IRpcStreamReset,
+        IRpcSecurityPolicyAware,
+        IRpcFlowControlled,
+        IRpcStreamIdSequence {
   _ReconnectingTransportProxy();
 
   IRpcTransport? _inner;
   StreamSubscription<RpcTransportMessage>? _innerSub;
+
+  /// Remembered from the transport most recently attached.
+  ///
+  /// The layers above read these ONCE and cache the answer — the responder
+  /// pipeline's limit caches are `??=` — so answering from a null `_inner`
+  /// during a reconnect gap would pin the defaults for the endpoint's whole
+  /// life. Every transport the factory builds is configured the same way, so
+  /// the last one attached is the honest answer while none is.
+  RpcSecurityPolicy? _lastPolicy;
+  bool _lastZeroCopy = false;
 
   /// Buffered, because [attach] is what DRAINS the inner transport's own
   /// buffer. A plain broadcast here discards everything the peer sent before
@@ -143,6 +164,10 @@ final class _ReconnectingTransportProxy
     }
     _innerSub = null;
     _inner = inner;
+    if (inner is IRpcSecurityPolicyAware) {
+      _lastPolicy = (inner as IRpcSecurityPolicyAware).securityPolicy;
+    }
+    _lastZeroCopy = inner.supportsZeroCopy;
 
     // Cancel before closing, so the old transport's terminal event cannot be
     // mistaken for a drop of the new one. The identity guards below make that
@@ -224,8 +249,15 @@ final class _ReconnectingTransportProxy
   @override
   bool get isClosed => _closed;
 
+  /// Answers for the transport being wrapped, not for the wrapper.
+  ///
+  /// Hardcoding false made every codec-free call throw
+  /// `Zero-copy requires a transport that supports zero-copy` behind a
+  /// connection that supports it perfectly well — `sendDirectObject` has always
+  /// delegated. Held across a reconnect gap so a call that arrives while
+  /// offline is refused by [_require] rather than silently downgraded.
   @override
-  bool get supportsZeroCopy => false;
+  bool get supportsZeroCopy => _inner?.supportsZeroCopy ?? _lastZeroCopy;
 
   @override
   Stream<RpcTransportMessage> get incomingMessages => _msgCtl.stream;
@@ -271,6 +303,59 @@ final class _ReconnectingTransportProxy
     final inner = _inner;
     if (inner is! IRpcStreamReset) return false;
     return (inner as IRpcStreamReset).resetStream(streamId, reason: reason);
+  }
+
+  // Optional capabilities ─────────────────────────────────────────────────
+  //
+  // Explicit casts rather than `is`-promotion: these interfaces are neither
+  // subtypes nor supertypes of IRpcTransport, so Dart forms no intersection
+  // type and the test promotes nothing.
+
+  @override
+  RpcSecurityPolicy get securityPolicy {
+    final inner = _inner;
+    if (inner is IRpcSecurityPolicyAware) {
+      return (inner as IRpcSecurityPolicyAware).securityPolicy;
+    }
+    return _lastPolicy ?? const RpcSecurityPolicy();
+  }
+
+  @override
+  void deferFlowCredit(int streamId) {
+    final inner = _inner;
+    if (inner is IRpcFlowControlled) {
+      (inner as IRpcFlowControlled).deferFlowCredit(streamId);
+    }
+  }
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) {
+    final inner = _inner;
+    if (inner is IRpcFlowControlled) {
+      (inner as IRpcFlowControlled).returnFlowCredit(streamId, bytes);
+    }
+  }
+
+  /// The highest id ANY transport this proxy has owned handed out.
+  ///
+  /// The live transport's own cursor is behind the watermark right after a
+  /// reconnect, since [attach] seeds it and the seed only moves it forward.
+  @override
+  int get lastIssuedStreamId {
+    final inner = _inner;
+    final live = inner is IRpcStreamIdSequence
+        ? (inner as IRpcStreamIdSequence).lastIssuedStreamId
+        : -1;
+    return live > _idWatermark ? live : _idWatermark;
+  }
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    if (streamId > _idWatermark) _idWatermark = streamId;
+    final inner = _inner;
+    if (inner is IRpcStreamIdSequence) {
+      (inner as IRpcStreamIdSequence).resumeStreamIdsAfter(streamId);
+    }
   }
 
   @override

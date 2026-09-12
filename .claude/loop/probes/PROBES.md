@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-44](P-44-capabilities-through-the-proxy.md)** valid (round 352), core
+  resilience and endpoint — what the layers above lose to a transport wrapper,
+  in EFFECT rather than in `is`: the largest response the caller's parser takes,
+  whether a codec-free call is accepted, whether the responder pipeline could
+  defer metering. Rebuilt once because the frame channel's OWN policy refused the
+  body in both arms — a neighbouring limit firing first
 - **[P-43](P-43-cancelled-stream-probe.md)** valid (round 351), core resilience —
   what a circuit breaker admits after a half-open STREAM probe, by how the probe
   ended. Its control is the same consumer that does NOT cancel, with the source
