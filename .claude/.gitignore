@@ -2,3 +2,9 @@
 settings.local.json
 scheduled_tasks.lock
 .obsidian/
+
+# The evidence-loop skill is its own repository and is linked in, not copied.
+# The link points outside this tree, so committing it would give every other
+# clone a dangling path that looks like a directory. CLAUDE.md says how to
+# recreate it; `.claude/loop/` — the journal this project owns — stays in git.
+skills/evidence-loop

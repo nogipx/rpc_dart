@@ -225,6 +225,24 @@ on `Version X already exists`, after the other packages have gone out.
   (async* cancel, int > 2^53, clock/Random); run `melos run test:web` for
   web-relevant changes.
 
+## The evidence-loop skill is linked, not copied
+
+`.claude/loop/` — the journal, 350 rounds of it — belongs to this repository and
+is in git. The skill that reads it lives in its own repository and is linked in:
+
+```
+ln -s <path>/evidence-loop-skill .claude/skills/evidence-loop
+```
+
+**The link is gitignored on purpose.** It points outside this tree, so a
+committed symlink would be a dangling path in every other clone. After a fresh
+clone the skill is simply absent until that command is run; `loop.py` then works
+through the link, and `.claude/settings.json` already allows it at that path.
+
+Fix the skill in its own repository, not through the link. An edit made here
+lands in the other repository's working tree, where it is easy to commit by
+accident into an unrelated change.
+
 ## Style
 
 - No emoji anywhere (code, comments, commits, docs).
