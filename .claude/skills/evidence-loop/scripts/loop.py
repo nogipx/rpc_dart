@@ -705,7 +705,10 @@ def skill_graph(rep: "Report") -> None:
     from nothing), and no cross-reference names a step by number (two had
     drifted onto the wrong step).
     """
-    files = sorted(SKILL_ROOT.rglob("*.md"))
+    # README.md is packaging, not instruction: it tells a human what the repo is
+    # and is never read by a round. Everything else must be reachable.
+    files = [p for p in sorted(SKILL_ROOT.rglob("*.md"))
+             if p != SKILL_ROOT / "README.md"]
     root_md = SKILL_ROOT / "SKILL.md"
     if root_md.exists():
         # `allowed-tools` grants permissions exactly like permissions.allow, and
