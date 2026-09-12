@@ -213,6 +213,15 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       // count is exact; here we only release a pending success.
     }
 
+    // The consumer walked away before the source terminated, so the probe
+    // proved nothing either way. Free the gate without recording an outcome.
+    void resolveInconclusive() {
+      if (resolved) return;
+      resolved = true;
+      cancelAbandonTimer();
+      _releaseProbe();
+    }
+
     controller = StreamController<TResponse>(
       onListen: () {
         listened = true;
@@ -222,8 +231,12 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       onPause: () => sub.pause(),
       onResume: () => sub.resume(),
       onCancel: () async {
-        // Downstream cancelled: stop pulling from the source. The probe gate
-        // is released by source termination or the abandon timer, not here.
+        // Downstream cancelled before the source terminated. A cancelled
+        // subscription never delivers onDone, and onListen already cancelled
+        // the abandon timer, so without this the gate stays pinned and the
+        // breaker rejects every later call forever. Reached after a normal
+        // close too, where `resolved` makes it a no-op.
+        resolveInconclusive();
         await sub.cancel();
       },
     );
@@ -292,6 +305,14 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     }
   }
 
+  /// Releases the single-probe gate without recording an outcome, leaving the
+  /// breaker half-open so the next call takes its turn as the probe. For
+  /// outcomes that say nothing about recovery: a cancellation, an error the
+  /// [failureOn] predicate rejects, a consumer that cancelled a stream probe.
+  void _releaseProbe() {
+    if (_state == CircuitBreakerState.halfOpen) _probeInFlight = false;
+  }
+
   void _onSuccess() {
     switch (_state) {
       case CircuitBreakerState.halfOpen:
@@ -318,15 +339,10 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
         (failureOn == null || failureOn!(error));
 
     if (!counts) {
-      // The outcome is inconclusive — it says nothing about whether the
-      // service recovered. But if this call was the admitted half-open probe,
-      // the gate MUST still be released: returning early left _probeInFlight
-      // pinned true with the state stuck at halfOpen, so every later call was
-      // rejected with CircuitBreakerOpenException forever, with nothing but a
-      // manual reset() to clear it. A cancelled probe is ordinary (deadline,
-      // caller navigated away), so this wedged real clients. Stay half-open
-      // and let the next call take its turn as the probe.
-      if (_state == CircuitBreakerState.halfOpen) _probeInFlight = false;
+      // Inconclusive: it says nothing about whether the service recovered. The
+      // gate must still be released, or an ordinary cancellation (deadline,
+      // caller navigated away) pins the breaker half-open forever.
+      _releaseProbe();
       return;
     }
 

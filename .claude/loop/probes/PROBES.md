@@ -38,6 +38,11 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-43](P-43-cancelled-stream-probe.md)** valid (round 351), core resilience —
+  what a circuit breaker admits after a half-open STREAM probe, by how the probe
+  ended. Its control is the same consumer that does NOT cancel, with the source
+  closed at the same point in both arms — the first version varied the cancel and
+  the source's termination together and could not tell the two apart
 - **[P-42](P-42-does-terminate-reject.md)** valid (round 347), http2 — which
   connection state puts an error in the zone, with a REACHABILITY column that is
   the control: three arms reported zero unhandled errors while the line under

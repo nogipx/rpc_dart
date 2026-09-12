@@ -1,10 +1,10 @@
 ---
 refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
-applies: RpcSecurityPolicy has fields capping concurrency
+applies: something caps concurrency by HOLDING state that must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271]
-status: confirmed (round 271)
+applied: [214, 215, 245, 266, 271, 351]
+status: confirmed (round 351)
 ---
 
 # RPC-05 — Where a concurrency limit is charged
@@ -16,12 +16,16 @@ A new limit charges the resource at the wrong point of the lifecycle.
 ## Detector
 
 For every `RpcSecurityPolicy` field, where exactly it is checked: stream
-admission, handler entry, dispatch.
+admission, handler entry, dispatch. Then the limits that are NOT policy fields —
+rounds 245 and 351 both found the defect in one: anything that holds a counter, a
+byte total or a single slot and hands it back later. Grep for the give-back
+(`= false`, `--`, `remove`) and ask which endings reach it.
 
 ## Ask
 
 Charging at entry — is it a no-op against a burst? Charging at admission — does
-it deny service to half-open streams?
+it deny service to half-open streams? And: **enumerate the endings**, then check
+each one reaches the release.
 
 ## Evidence
 
@@ -158,3 +162,37 @@ say so: the same run with a short timeout, and an ablation of the release.
 > **A held resource is not a leaked one.** Before calling a non-zero counter a
 > leak, find the bound that is supposed to release it and shorten THAT. If the
 > number goes to zero, you have found a policy, not a defect. Recorded as C-20.
+
+## Round 351 — a one-slot limit, and the ending nobody wired
+
+The smallest limit in the library: the circuit breaker's half-open gate, one
+slot, `bool _probeInFlight`. `_checkState()` charges it; `_wrapStream` gives it
+back from the source's `onError`, the source's `onDone` and an abandon timer.
+The consumer's cancel reaches none of the three — `onListen` cancels the timer,
+and a cancelled subscription never delivers `onDone` — so `stream.first` or
+`take(n)` on a probe pinned the gate and the breaker refused every later call
+forever, recoverable only by `reset()`.
+
+    arm                   state after probe   admitted/attempted
+    keep-serverStream     closed              5/5     control
+    cancel-serverStream   halfOpen            0/5  -> 5/5
+    keep-bidi             closed              5/5     control
+    cancel-bidi           halfOpen            0/5  -> 5/5
+
+> **Round 214's rule, restated on a gate instead of a counter: enumerate the
+> endings.** Four of the five had a release and the fifth had none, and the
+> missing one was the ordinary consumer idiom. The give-away was a COMMENT — *"the
+> probe gate is released by source termination or the abandon timer, not here"* —
+> asserting a release from two mechanisms that, by the time `onCancel` runs,
+> cannot fire. U-01 and rule one: the code, not the prose.
+
+> **The sibling had it right.** `rpc_dart_opentelemetry`'s `_wrapWithSpan` is the
+> only other interceptor in the workspace that wraps a stream around per-call
+> state, and it ends its span in `onCancel`. One `grep -n onCancel` across the
+> interceptors is the whole sweep (U-14).
+
+Bench `../probes/P-43-cancelled-stream-probe.md`, whose control took two attempts
+to aim: the first varied the cancel AND whether the source terminated, which
+cannot distinguish "cancel skips the release" from "a live source has not
+released yet". `../rounds/351-the-ending-nobody-wired.md`; the neighbouring
+ending that releases but answers wrongly is `../backlog/B-36-the-abandon-timer-fabricates-a-success.md`.
