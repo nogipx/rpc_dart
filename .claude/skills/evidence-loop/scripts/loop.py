@@ -30,6 +30,9 @@ Choosing what to work on is the agent's.
     loop.py catalog  every defect shape, with what each applies to (lenses mode)
     loop.py review   the seven verdict questions, plus the trait-gated ones
     loop.py selftest this file's own checks, against a fixture in a temp dir
+    loop.py evals    the scenarios in evals/, each one agent to act and one to
+                     grade, in a throwaway repo. Costs real invocations; takes
+                     an id to run just one. Never part of the gate
 
 NOTHING HERE GUESSES AT PROSE. Every value this file reads comes from a place a
 schema declares: a frontmatter key, a fenced `gate` block, a file name listed in
@@ -1354,6 +1357,21 @@ def lint_report(root: Path, loop: Path, skill: bool = True) -> "Report":
                      "status/lint/stale/next will ask for permission")
     bare_interpreters(rules, ".claude/settings.json", rep)
 
+    # The journal names the skill by PATH, in backticks rather than as a
+    # markdown link, so `skill_graph` -- which walks links and stops at the
+    # skill's own boundary -- cannot see these. They break silently the moment
+    # the skill directory is renamed.
+    for md in sorted(loop.rglob("*.md")):
+        for raw in re.findall(r"`([^`]*skills/[^`]*)`", md.read_text()):
+            ref = raw.strip().rstrip("/")
+            if "<" in ref:
+                continue                       # a placeholder, not a path
+            target = (root / ref) if ref.startswith(".claude/") else (md.parent / ref)
+            if not target.exists():
+                rep.error(f"{md.relative_to(loop)}: names «{raw}», which does not "
+                          "exist — a path to the skill, written as prose, that "
+                          "nothing else checks")
+
     if skill:
         skill_graph(rep)
         script_names(rep)
@@ -1949,6 +1967,149 @@ def cmd_init(root: Path, loop: Path) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- evals
+
+# The verdict goes LAST, and is read from the last line. Asked for it first, a
+# judge labelled a run PASS and then argued, correctly, that it failed: the
+# label is written before the reasoning that would decide it. Reasoning first,
+# then the token, and the parser takes the final `VERDICT:` line. Anything else
+# -- no verdict, an unparseable one -- counts as a failure, never as a pass.
+JUDGE = """You are grading one scenario from a skill's evaluation set.
+
+Below are: what the skill was asked to do, what a correct outcome looks like,
+what changed on disk, and what the agent actually said.
+
+Grade ONLY against the expectation. The agent's reasoning does not count, only
+what it did and what it reported. Do not be generous: if the expectation names
+something specific and it is absent, that is a failure.
+
+## Asked
+{prompt}
+
+## A correct outcome
+{expected}
+
+## What changed on disk
+{facts}
+
+## What the agent said
+{output}
+
+---
+
+First write one short paragraph comparing what was expected against what
+happened, quoting the evidence. THEN, on the very last line and nothing after
+it, write exactly one of:
+
+VERDICT: PASS
+VERDICT: FAIL
+"""
+VERDICT_RE = re.compile(r"^VERDICT:\s*(PASS|FAIL)\s*$", re.M)
+
+
+def eval_fixture(dest: Path, scenario: dict) -> Path:
+    """A throwaway repository: the skill, a journal, and a permission rule."""
+    skill_dst = dest / ".claude" / "skills" / SKILL_ROOT.name
+    skill_dst.parent.mkdir(parents=True)
+    shutil.copytree(SKILL_ROOT, skill_dst)
+    loop = dest / ".claude" / "loop"
+    build_fixture(loop, **scenario.get("fixture", {}))
+    (dest / ".claude" / "settings.json").write_text(json.dumps(
+        {"permissions": {"allow": [
+            f"Bash(python3 {skill_dst / 'scripts' / 'loop.py'}:*)"]}}, indent=2))
+    return loop
+
+
+def disk_facts(loop: Path, before: set) -> str:
+    after = {p.name for p in (loop / "rounds").glob("*.md")}
+    added = sorted(after - before)
+    return (f"round files added: {', '.join(added) if added else 'none'}\n"
+            f"rounds/ now holds {len(after)} file(s)")
+
+
+def run_claude(prompt: str, cwd: Path, timeout: int) -> tuple[bool, str]:
+    try:
+        out = subprocess.run(
+            ["claude", "-p", prompt, "--permission-mode", "bypassPermissions",
+             "--output-format", "text"],
+            cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False)
+    except FileNotFoundError:
+        return False, "the `claude` CLI is not on PATH"
+    except subprocess.TimeoutExpired:
+        return False, f"no answer within {timeout}s"
+    if out.returncode != 0:
+        return False, (out.stderr or out.stdout)[-400:]
+    return True, out.stdout
+
+
+def cmd_evals(root: Path, loop: Path) -> int:
+    """Run the scenarios in evals/evals.json: one agent to act, one to grade.
+
+    Every run costs two real agent invocations and works inside a THROWAWAY
+    repository under /tmp with `--permission-mode bypassPermissions`, because
+    the agent has to write files. Never part of `lint` or the gate.
+
+    A scenario with no `fixture` is SKIPPED and counted as skipped, never as a
+    pass: most scenarios need the agent to find a real defect, and a defect is
+    not something a synthetic journal can hold.
+    """
+    path = SKILL_ROOT / "evals" / "evals.json"
+    items = json.loads(path.read_text()).get("evals", [])
+    wanted = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].isdigit() else None
+    if wanted:
+        items = [e for e in items if str(e.get("id")) == wanted]
+    # `in`, not truthiness: `"fixture": {}` means "the default journal, no
+    # overrides" and is wired; an empty dict is falsy and would read as absent.
+    runnable = [e for e in items if "fixture" in e]
+    skipped = [e for e in items if "fixture" not in e]
+
+    print(f"{len(runnable)} scenario(s) to run, {len(skipped)} without a fixture.")
+    print("Each run is two real agent invocations in a throwaway repo under "
+          "/tmp, with permissions bypassed there.")
+    if not runnable:
+        print("Nothing to run. Add a `fixture` to a scenario to make it runnable.")
+    passed, failed = [], []
+    for e in runnable:
+        tmp = Path(tempfile.mkdtemp(prefix=f"eval-{e['id']}-"))
+        try:
+            fl = eval_fixture(tmp, e)
+            before = {p.name for p in (fl / "rounds").glob("*.md")}
+            print(f"\n=== {e['id']} {e['name']}")
+            ok, out = run_claude(e["prompt"], tmp, e.get("timeout", 600))
+            if not ok:
+                failed.append((e, f"the agent did not run: {out}"))
+                print(f"  ERROR  {out[:200]}")
+                continue
+            ok, verdict = run_claude(
+                JUDGE.format(prompt=e["prompt"], expected=e["expected_output"],
+                             facts=disk_facts(fl, before), output=out[-6000:]),
+                tmp, 300)
+            if not ok:
+                failed.append((e, f"the judge did not run: {verdict}"))
+                print(f"  ERROR  {verdict[:200]}")
+                continue
+            marks = VERDICT_RE.findall(verdict)
+            if not marks:
+                failed.append((e, f"the judge wrote no VERDICT line: {verdict.strip()[:200]}"))
+                print("  FAIL   no verdict line — counted as a failure, not a pass")
+            elif marks[-1] == "PASS":
+                passed.append(e)
+                print("  PASS")
+            else:
+                failed.append((e, verdict.strip()))
+                print(f"  FAIL   {verdict.strip()[:300]}")
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    print(f"\nevals: {len(passed)} passed, {len(failed)} failed, "
+          f"{len(skipped)} skipped for want of a fixture")
+    for e in skipped:
+        print(f"  skipped  {e['id']} {e['name']}")
+    for e, why in failed:
+        print(f"  FAILED   {e['id']} {e['name']}: {why.splitlines()[0][:160]}")
+    return 1 if failed else 0
+
+
 # ---------------------------------------------------------------- selftest
 
 FIXTURE = {
@@ -2520,6 +2681,13 @@ def cmd_selftest(root: Path, loop: Path) -> int:
         catches("an uncovered gate command under unattended", "permissions.allow",
                 **{"config.md": FIXTURE["config.md"]
                    .replace("unattended: no", "unattended: yes")})
+        catches("a journal path to the skill that does not resolve",
+                "which does not exist",
+                **{"LOOP.md": "# LOOP.md\n\nrules: `../skills/renamed-loop/`\n"})
+        check("a placeholder path is not reported",
+              not any("does not exist" in e for e in
+                      errs(**{"LOOP.md": "# LOOP.md\n\n`.claude/skills/<name>/`\n"})),
+              "`<name>` is a schema placeholder, not a broken path")
     finally:
         shutil.rmtree(tmp3, ignore_errors=True)
 
@@ -2547,7 +2715,8 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["init", "status", "next", "brief", "lint",
-                                        "stale", "catalog", "review", "yield", "selftest"])
+                                        "stale", "catalog", "review", "yield",
+                                        "selftest", "evals"])
     ap.add_argument("arg", nargs="?", help=argparse.SUPPRESS)
     ap.add_argument("--root", default=".", help="repository root (the current directory by default)")
     ap.add_argument("--loop", default=".claude/loop", help="path to the loop data relative to the root")
@@ -2557,7 +2726,7 @@ def main(argv: list[str]) -> int:
     return {"init": cmd_init, "status": cmd_status, "next": cmd_next, "brief": cmd_brief,
             "lint": cmd_lint, "stale": cmd_stale, "catalog": cmd_catalog,
             "yield": cmd_yield, "review": cmd_review,
-            "selftest": cmd_selftest}[a.command](root, loop)
+            "selftest": cmd_selftest, "evals": cmd_evals}[a.command](root, loop)
 
 
 if __name__ == "__main__":

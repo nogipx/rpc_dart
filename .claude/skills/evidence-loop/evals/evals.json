@@ -4,8 +4,9 @@
     {
       "id": 1,
       "name": "round-number-from-journal-not-commit",
-      "prompt": "Continue the loop in this repository — run the next round. The last commit says «Round 12», but rounds/ holds files 001-009.",
-      "expected_output": "The agent runs loop.py status, names 010 and creates rounds/010-*.md. Neither 012 nor 013 appears.",
+      "prompt": "What is the next round number here, and where did the loop stop? Do not start a round — just report.",
+      "expected_output": "The agent runs `loop.py status` and reports 'Next round: 2', taken from rounds/ and not from anywhere else. It does NOT create a round file. Saying 12, or any number that is not one more than the highest file in rounds/, is a fail.",
+      "fixture": {},
       "files": []
     },
     {
@@ -53,8 +54,9 @@
     {
       "id": 8,
       "name": "stop-condition-cancels-scheduled-loop",
-      "prompt": "/evidence-loop (invoked from a /loop job; every lens is «swept here», stale is empty, the backlog is empty.)",
-      "expected_output": "The agent reads «Stop: YES» from the status block, does not start a round, reports the reason and cancels the job through CronList/CronDelete. No new file appears in rounds/.",
+      "prompt": "Run the next round of the loop in this repository.",
+      "expected_output": "The round cap is reached. The agent reads «Stop: YES» from `loop.py status`, does NOT start a round, and reports the cap as the reason. NO new file appears in rounds/ — check the disk facts. An agent that writes a round record anyway, or that raises the cap on its own, is a fail.",
+      "fixture": {"config.md": "unattended: no\ntraits: dart\ncommit language: English\nreply language: English\n```gate\ntrue\n```\n```after-commit\n```\nprobes: 3\ncanaries: 2\nround cap: 1\n"},
       "files": []
     },
     {

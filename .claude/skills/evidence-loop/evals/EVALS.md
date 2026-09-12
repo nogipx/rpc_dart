@@ -43,7 +43,9 @@
    does. For `brief` and `review`, read the OUTPUT: the failure mode of
    concatenation is a half that silently did not arrive, and a checklist missing
    its trait-gated items still looks like a checklist.
-4. **The scenarios below** — the judgement half, which no script can check.
+4. **`loop.py evals`** — the scenarios below, the judgement half. Two real agent
+   invocations per scenario in a throwaway repository under `/tmp`, so it is
+   never part of the gate and takes an id to run just one.
 
 Checks 1-3 are mechanical and take a minute; the crashes they catch are the ones
 that stop a round dead. Check 4 catches the opposite kind: everything runs, and
@@ -56,9 +58,23 @@ paid for by a mistake, or from machinery the skill added (the verdict check,
 benches, lessons, stopping from `/loop`, traits selecting items, a project
 extending the trait vocabulary, continuations, `next` reporting state and
 deciding nothing, `brief` replacing the reading list, `selftest` guarding edits
-to the script). Run them through skill-creator or by hand: give an agent the
-skill and a fixture repository, and compare against `expected_output`. The skill
-counts as regressed if even one scenario produces a different outcome.
+to the script). The skill counts as regressed if even one produces a different
+outcome.
+
+**A scenario runs only if it declares a `fixture`** — overrides handed to the
+same builder `selftest` uses, `{}` for the default journal. One without a
+fixture is SKIPPED and counted as skipped, never as a pass. Most scenarios have
+none, because they need the agent to find a real defect and a synthetic journal
+cannot hold one; wiring those needs a small repository with a planted defect.
+
+**The judge writes its verdict LAST, and the runner reads the final
+`VERDICT:` line.** Asked for the verdict first, a judge labelled a run PASS and
+then argued, correctly, that it had failed — the label is written before the
+reasoning that decides it. A missing or unparseable verdict counts as a failure.
+
+**Canary the runner itself.** Point a scenario's `expected_output` at something
+the agent demonstrably did not do and confirm it reports FAIL. A grader that
+cannot fail reads as evidence and is worse than no grader.
 
 **Run them on a smaller model too.** Most of this skill is inferential — weigh
 damage against reachability, decide what is worth finishing, tell a witness from
