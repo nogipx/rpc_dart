@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356]
+applied: [222, 225, 242, 330, 346, 347, 356, 358]
 status: confirmed (round 356)
 ---
 
@@ -112,3 +112,41 @@ failed on its own uninitialised variable whenever `configure` or
 Bench `../probes/P-48-boot-failure-on-a-real-guest.md` — the only bench in the
 journal that can see `rpc_wasm.dart` at all, since it is `dart:js_interop` and
 runs on no VM. `../rounds/356-the-zone-ate-the-reason.md`.
+
+## Round 358 — where a `catch` cannot reach, and how to find out cheaply
+
+`RpcWebSocketChannel.send` calls `_ws.sink.add` unguarded, in a file whose two
+close paths are both `try`/`catch`. The obvious fix is a third `try`/`catch`,
+and **it was applied, re-run, and changed nothing** — the refusal is not on that
+stack:
+
+```
+_StreamSinkImpl.add            <- throws Bad state: StreamSink is closed
+IOWebSocket.sendBytes
+AdapterWebSocketChannel.<fn>
+_RootZone.runUnaryGuarded      <- the zone the CONTROLLER was built in
+_GuaranteeSink.add
+RpcWebSocketChannel.send
+```
+
+> **A sink's `add` is a queue, not a call.** Anything that forwards through a
+> StreamController runs the real work a microtask later, in the zone the
+> controller was constructed in — so a `catch` at the call site, and even a
+> `runZonedGuarded` at the call site, both see nothing. Read the sink's
+> implementation before writing the guard; the give-away in the stack is a
+> `runUnaryGuarded` frame BETWEEN your call and the throw.
+
+> **The construction zone is the lever, and it is testable.** Building the same
+> `WebSocketChannel` inside `runZonedGuarded` moved the error from fatal to
+> delivered — one arm, and it turns "unfixable" into a scoped decision, because
+> the library constructs the socket at its own entry points and the user
+> constructs it everywhere else.
+
+> **Ask which close it is.** A PEER close does not reach this at all — the sink
+> keeps accepting until it learns. Only our OWN raw socket, closed in the same
+> turn, does. The item as filed said "the peer closed"; the table said otherwise,
+> and that changed both the severity and the reachability.
+
+DEFERRED to `../backlog/B-39-websocket-send-throws-into-the-root-zone.md`, the
+sibling of B-35 one dependency over. Bench
+`../probes/P-49-send-into-a-dead-socket.md`.

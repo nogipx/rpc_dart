@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-49](P-49-send-into-a-dead-socket.md)** valid (round 358), rpc_dart_websocket
+  — does a websocket send throw when the socket is already gone, one arm per way
+  it can be dead. **Each arm prints its sampled flags BEFORE the send**, because
+  one arm throws into the root zone and takes the process with it: a row that
+  never prints is a row that was never measured. Rebuilt once — the first version
+  drove a full endpoint pair and could not tell the arms apart, because `onDone`
+  always won the race
 - **[P-48](P-48-boot-failure-on-a-real-guest.md)** valid (round 356), rpc_dart_wasm
   — what a failed boot hands back, inside a REAL dart2wasm guest on a device.
   **The only bench that can see `rpc_wasm.dart` at all**: it is
