@@ -2007,24 +2007,71 @@ VERDICT: FAIL
 VERDICT_RE = re.compile(r"^VERDICT:\s*(PASS|FAIL)\s*$", re.M)
 
 
+# A journal for a scenario that ships the fixture PROJECT: the gate runs its
+# suite, and `byte-limits` is the trait that fits it -- a ceiling with something
+# charged and released against it -- so the domain items about charge points
+# arrive with the checklist.
+PROJECT_CONFIG = (
+    "unattended: no\ntraits: byte-limits\n"
+    "commit language: English\nreply language: English\n"
+    "## Toolchain\n\n`python3`, no installation needed.\n\n"
+    "## Gate\n\n```gate\npython3 -m unittest discover -s .\n```\n"
+    "```after-commit\n```\n"
+    "## Probes\n\n`probe_*.py` at the repository root; overwrite, do not delete.\n\n"
+    "## Severity bar\n\nAnything that leaks a bounded resource.\n\n"
+    "probes: 3\ncanaries: 2\nround cap: 50\n")
+
+
 def eval_fixture(dest: Path, scenario: dict) -> Path:
-    """A throwaway repository: the skill, a journal, and a permission rule."""
+    """A throwaway repository: the skill, a journal, and optionally the project.
+
+    With `"project": true` the fixture carries `evals/project/` -- a router with
+    a bounded queue whose `fail` path never returns the slot it charged, and a
+    suite of four tests that all pass without noticing. That is what makes a
+    scenario about FINDING something runnable: a synthetic journal holds no
+    defect, so an agent asked to hunt in one has nothing to find.
+    """
     skill_dst = dest / ".claude" / "skills" / SKILL_ROOT.name
     skill_dst.parent.mkdir(parents=True)
     shutil.copytree(SKILL_ROOT, skill_dst)
+    if scenario.get("project"):
+        for f in sorted((SKILL_ROOT / "evals" / "project").glob("*.py")):
+            shutil.copy(f, dest / f.name)
+        scenario.setdefault("fixture", {}).setdefault("config.md", PROJECT_CONFIG)
     loop = dest / ".claude" / "loop"
-    build_fixture(loop, **scenario.get("fixture", {}))
+    if scenario.get("fixture") is not None:
+        build_fixture(loop, **scenario["fixture"])
     (dest / ".claude" / "settings.json").write_text(json.dumps(
         {"permissions": {"allow": [
-            f"Bash(python3 {skill_dst / 'scripts' / 'loop.py'}:*)"]}}, indent=2))
+            f"Bash(python3 {skill_dst / 'scripts' / 'loop.py'}:*)",
+            "Bash(python3 -m unittest:*)", "Bash(python3 probe_:*)"]}}, indent=2))
     return loop
 
 
 def disk_facts(loop: Path, before: set) -> str:
+    """Ground truth for the judge, so a verdict can quote the disk.
+
+    Includes the fixture project's own suite: a round that claims FIXED while
+    the suite is red, or that never made it green, is a failure whatever the
+    record says.
+    """
     after = {p.name for p in (loop / "rounds").glob("*.md")}
     added = sorted(after - before)
-    return (f"round files added: {', '.join(added) if added else 'none'}\n"
-            f"rounds/ now holds {len(after)} file(s)")
+    facts = [f"round files added: {', '.join(added) if added else 'none'}",
+             f"rounds/ now holds {len(after)} file(s)"]
+    repo = loop.parent.parent
+    if (repo / "router.py").exists():
+        out = subprocess.run(["python3", "-m", "unittest", "discover", "-s", "."],
+                             cwd=repo, capture_output=True, text=True, check=False)
+        tail = (out.stderr or out.stdout).strip().splitlines()
+        facts.append(f"the project's suite now: {tail[-1] if tail else '?'}")
+        src = (repo / "router.py").read_text()
+        facts.append("router.fail still leaks the slot: "
+                     + ("yes" if "_pending.remove" not in src.split("def fail")[-1]
+                        else "no, it now releases"))
+        facts.append(f"test files present: "
+                     f"{', '.join(sorted(p.name for p in repo.glob('test_*.py')))}")
+    return "\n".join(facts)
 
 
 def run_claude(prompt: str, cwd: Path, timeout: int) -> tuple[bool, str]:
@@ -2046,8 +2093,9 @@ def cmd_evals(root: Path, loop: Path) -> int:
     """Run the scenarios in evals/evals.json: one agent to act, one to grade.
 
     Every run costs two real agent invocations and works inside a THROWAWAY
-    repository under /tmp with `--permission-mode bypassPermissions`, because
-    the agent has to write files. Never part of `lint` or the gate.
+    repository in a temporary directory, with `--permission-mode
+    bypassPermissions`, because the agent has to write files there. Never part
+    of `lint` or the gate.
 
     A scenario with no `fixture` is SKIPPED and counted as skipped, never as a
     pass: most scenarios need the agent to find a real defect, and a defect is
@@ -2058,14 +2106,18 @@ def cmd_evals(root: Path, loop: Path) -> int:
     wanted = sys.argv[2] if len(sys.argv) > 2 and sys.argv[2].isdigit() else None
     if wanted:
         items = [e for e in items if str(e.get("id")) == wanted]
-    # `in`, not truthiness: `"fixture": {}` means "the default journal, no
-    # overrides" and is wired; an empty dict is falsy and would read as absent.
-    runnable = [e for e in items if "fixture" in e]
-    skipped = [e for e in items if "fixture" not in e]
+    # Wired means it can be stood up: a `fixture` key (`{}` is the default
+    # journal, and is falsy, so test membership and not truth) or `project`,
+    # which brings the fixture repository and a journal with it.
+    def wired(e: dict) -> bool:
+        return "fixture" in e or bool(e.get("project"))
+
+    runnable = [e for e in items if wired(e)]
+    skipped = [e for e in items if not wired(e)]
 
     print(f"{len(runnable)} scenario(s) to run, {len(skipped)} without a fixture.")
-    print("Each run is two real agent invocations in a throwaway repo under "
-          "/tmp, with permissions bypassed there.")
+    print("Each run is two real agent invocations in a throwaway repo in a "
+          "temporary directory, with permissions bypassed there.")
     if not runnable:
         print("Nothing to run. Add a `fixture` to a scenario to make it runnable.")
     passed, failed = [], []

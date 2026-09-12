@@ -44,8 +44,8 @@
    concatenation is a half that silently did not arrive, and a checklist missing
    its trait-gated items still looks like a checklist.
 4. **`loop.py evals`** — the scenarios below, the judgement half. Two real agent
-   invocations per scenario in a throwaway repository under `/tmp`, so it is
-   never part of the gate and takes an id to run just one.
+   invocations per scenario in a throwaway repository in a temporary directory,
+   so it is never part of the gate and takes an id to run just one.
 
 Checks 1-3 are mechanical and take a minute; the crashes they catch are the ones
 that stop a round dead. Check 4 catches the opposite kind: everything runs, and
@@ -61,11 +61,24 @@ deciding nothing, `brief` replacing the reading list, `selftest` guarding edits
 to the script). The skill counts as regressed if even one produces a different
 outcome.
 
-**A scenario runs only if it declares a `fixture`** — overrides handed to the
-same builder `selftest` uses, `{}` for the default journal. One without a
-fixture is SKIPPED and counted as skipped, never as a pass. Most scenarios have
-none, because they need the agent to find a real defect and a synthetic journal
-cannot hold one; wiring those needs a small repository with a planted defect.
+**A scenario runs only if it is wired**: a `fixture` (overrides handed to the
+same builder `selftest` uses, `{}` for the default journal) or `"project": true`
+or both. One that is wired to nothing is SKIPPED and counted as skipped, never
+as a pass.
+
+`"project": true` ships [project/](project/), a router whose bounded queue
+charges a slot in `submit` and only ever returns it in `complete` — `fail`
+forgets. Its four tests all pass without noticing. That planted defect is what
+makes a scenario about FINDING something runnable: a synthetic journal holds no
+defect, so an agent asked to hunt in one has nothing to hunt.
+
+The defect is measurable and has a control, which is what the scenarios lean
+on: failing twenty messages runs out of slots at `max_pending`, completing the
+same twenty never refuses. `project/probe_slots.py` is that bench.
+
+The judge is also given ground truth from the disk — whether `router.fail` now
+releases, whether the suite is green, which test files exist — so a verdict can
+quote the repository rather than the agent's own summary of it.
 
 **The judge writes its verdict LAST, and the runner reads the final
 `VERDICT:` line.** Asked for the verdict first, a judge labelled a run PASS and
