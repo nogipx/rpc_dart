@@ -42,15 +42,15 @@ has to be decided at setup, and in what order.
    `permissions.allow`, one prefix rule per toolchain and gate command —
    `Bash(dart test:*)`, `Bash(dart analyze:*)` — plus a rule for the script with
    an absolute path:
-   `Bash(python3 /.../improvement-loop/scripts/loop.py:*)`. If the file does not
+   `Bash(python3 /.../evidence-loop/scripts/loop.py:*)`. If the file does not
    exist, create it; if it does, append to the array without deleting anything.
    `loop.py lint` will say which gate command is not covered.
    **Never `Bash(python3:*)`** — that grants every program typed on the command
    line, `python3 -c "..."` included, and `lint` now rejects it here and in the
    skill's own `allowed-tools`. Same for any other interpreter: allow the PATH,
    not the name. The skill expects
-   itself at `.claude/skills/improvement-loop` or
-   `~/.claude/skills/improvement-loop` — that is how the status block in
+   itself at `.claude/skills/evidence-loop` or
+   `~/.claude/skills/evidence-loop` — that is how the status block in
    SKILL.md finds it; fix that line for another path.
 4. **History.** If there were earlier rounds whose records cannot be recovered,
    say so in `LOOP.md` ("What to trust with care") and start numbering at `1`
@@ -66,9 +66,9 @@ has to be decided at setup, and in what order.
    set.
 7. **`loop.py lint`** green. A commit marked `setup` in the body, with no round
    file.
-8. **Scheduled runs** (Claude Code): `/loop /improvement-loop` with no interval —
+8. **Scheduled runs** (Claude Code): `/loop /evidence-loop` with no interval —
    Claude picks the pause between rounds from what it saw; or
-   `/loop 45m /improvement-loop` with an interval longer than a typical round. A
+   `/loop 45m /evidence-loop` with an interval longer than a typical round. A
    round cancels the job itself on "Stop: YES". The alternative is `/goal`: keep
    working until `loop.py status` says "Stop: YES".
 

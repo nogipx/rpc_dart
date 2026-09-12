@@ -1,10 +1,10 @@
 ---
-name: improvement-loop
-description: One round of a measured find-and-fix loop — pick a lens, take a probe, measure in numbers, fix, check the fix with a canary, run the gate, write it into the journal. Use it when asked to hunt bugs, leaks, security holes, hangs or performance problems; to continue or resume the improvement loop; to run a round, including on a schedule from /loop; to report the loop's status or where it stopped; to re-measure an earlier finding, deferral or "checked" mark; to derive or maintain the lens set; to lay the loop out in a new repository. It also fires without the word "loop" — on any "find what is broken" request about code.
-allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete, Bash(python3 .claude/skills/improvement-loop/scripts/loop.py:*), Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
+name: evidence-loop
+description: One round of a find-and-fix loop where nothing counts without confirmed evidence — pick a lens, take a probe, confirm it with a control, fix, canary the fix, run the gate, write it into the journal. Use it when asked to hunt bugs, leaks, security holes, hangs or performance problems; to continue or resume the loop; to run a round, including on a schedule from /loop; to report the loop's status or where it stopped; to re-measure an earlier finding, deferral or "checked" mark; to derive or maintain the lens set; to lay the loop out in a new repository. It also fires without the word "loop" — on any "find what is broken" request about code.
+allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete, Bash(python3 .claude/skills/evidence-loop/scripts/loop.py:*), Bash(git status:*), Bash(git log:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*)
 ---
 
-# The improvement loop
+# The evidence loop
 
 One defect per round, start to finish. **A claim with no CONFIRMED evidence is
 not a finding. The bookkeeping is checked by a script, not by memory.**
@@ -46,7 +46,7 @@ means a **round**.
 
 ## The state at invocation time
 
-!`python3 .claude/skills/improvement-loop/scripts/loop.py status 2>/dev/null || python3 ~/.claude/skills/improvement-loop/scripts/loop.py status 2>/dev/null || echo "loop.py not found in .claude/skills/improvement-loop or ~/.claude/skills/improvement-loop — run status by hand from the skill's path"`
+!`python3 .claude/skills/evidence-loop/scripts/loop.py status 2>/dev/null || python3 ~/.claude/skills/evidence-loop/scripts/loop.py status 2>/dev/null || echo "loop.py not found in .claude/skills/evidence-loop or ~/.claude/skills/evidence-loop — run status by hand from the skill's path"`
 
 If the above says "no .claude/loop", the mode is `setup`. If it says "no lens
 set", do `lenses` mode first. If it says **"Stop: YES"**, do not start a round:

@@ -1,7 +1,7 @@
 # Lessons
 
 What a lesson is and how it is promoted into the skill — [../LOOP.md](../LOOP.md).
-The record format — `../../skills/improvement-loop/specs/lesson.md`.
+The record format — `../../skills/evidence-loop/specs/lesson.md`.
 
 The lessons of rounds 1-205 live in private memory and in the skill's methods,
 not here. They cannot be filed after the fact — a lesson must have a cost in

@@ -3,7 +3,7 @@
 The way into this data: what lives where, how it is linked, and where to go
 with a particular question.
 
-**Navigation only.** The rules live in `../skills/improvement-loop/`: the
+**Navigation only.** The rules live in `../skills/evidence-loop/`: the
 process in `SKILL.md`, the file schemas in `specs/`, the working methods in
 `methods/`, the universal defect shapes in `catalog/`.
 

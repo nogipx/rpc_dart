@@ -1,7 +1,7 @@
 # Benches
 
 What a bench is and when it counts as valid — [../LOOP.md](../LOOP.md). The
-record format — `../../skills/improvement-loop/specs/probe.md`.
+record format — `../../skills/evidence-loop/specs/probe.md`.
 
 Rounds 201-205 worked with one-off probes: bench registration appeared in the
 skill after them, so nothing before 206 has a record here.

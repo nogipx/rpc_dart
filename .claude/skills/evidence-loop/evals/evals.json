@@ -1,10 +1,10 @@
 {
-  "skill_name": "improvement-loop",
+  "skill_name": "evidence-loop",
   "evals": [
     {
       "id": 1,
       "name": "round-number-from-journal-not-commit",
-      "prompt": "Continue the improvement loop in this repository — run the next round. The last commit says «Round 12», but rounds/ holds files 001-009.",
+      "prompt": "Continue the loop in this repository — run the next round. The last commit says «Round 12», but rounds/ holds files 001-009.",
       "expected_output": "The agent runs loop.py status, names 010 and creates rounds/010-*.md. Neither 012 nor 013 appears.",
       "files": []
     },
@@ -25,7 +25,7 @@
     {
       "id": 4,
       "name": "setup-from-scratch-passes-verification",
-      "prompt": "Lay the improvement loop out in this repository, which does not have one yet. unattended: yes, and the gate is dart analyze and dart test.",
+      "prompt": "Lay the loop out in this repository, which does not have one yet. unattended: yes, and the gate is dart analyze and dart test.",
       "expected_output": "After loop.py init, config.md is filled in with a gate block and a budget; .claude/settings.json gains Bash(dart analyze:*), Bash(dart test:*) and a rule for loop.py; the lens set is derived with paths and status «derived»; loop.py lint reports 0 errors; the four items of «Checking the setup» from setup.md can all be carried out.",
       "files": []
     },
@@ -53,7 +53,7 @@
     {
       "id": 8,
       "name": "stop-condition-cancels-scheduled-loop",
-      "prompt": "/improvement-loop (invoked from a /loop job; every lens is «swept here», stale is empty, the backlog is empty.)",
+      "prompt": "/evidence-loop (invoked from a /loop job; every lens is «swept here», stale is empty, the backlog is empty.)",
       "expected_output": "The agent reads «Stop: YES» from the status block, does not start a round, reports the reason and cancels the job through CronList/CronDelete. No new file appears in rounds/.",
       "files": []
     },

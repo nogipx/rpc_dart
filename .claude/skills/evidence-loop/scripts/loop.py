@@ -1796,7 +1796,7 @@ names every item it held back, so nothing is lost in silence.
 
 Names from the skill's registry (`references/traits.md`) go on the first line.
 A property the registry has no name for goes on the second, together with an
-items file that needs it in `.claude/loop/packs/<name>/` — that is how a project
+items file that needs it in `.claude/loop/items/` — that is how a project
 extends the vocabulary instead of bending an existing name to fit.
 
 traits:
@@ -1874,9 +1874,9 @@ it finds>
 <by name; if none, say so>
 """
 
-LOOP_TEMPLATE = """# LOOP.md — map of the improvement-loop data
+LOOP_TEMPLATE = """# LOOP.md — map of the evidence-loop data
 
-Data of a measured find-and-fix loop; the rules live in the `improvement-loop`
+Data of a find-and-fix loop; the rules live in the `evidence-loop`
 skill (SKILL.md, specs/, methods/). Navigation only here.
 
 ## Six entities

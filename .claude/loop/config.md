@@ -1,7 +1,7 @@
 # Loop settings — rpc_dart
 
 Only what is bound to this repository. The process lives in
-`.claude/skills/improvement-loop/`. Package layout, commit conventions and
+`.claude/skills/evidence-loop/`. Package layout, commit conventions and
 style live in the root `CLAUDE.md` and are not duplicated here.
 
 ## Mode

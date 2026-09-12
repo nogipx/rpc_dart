@@ -16,7 +16,7 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
 SPDX-License-Identifier = "MIT"
 
-# Agent tooling: the improvement-loop skill, the journal it writes, and Serena's
+# Agent tooling: the evidence-loop skill, the journal it writes, and Serena's
 # project config. Covered WHOLESALE here, and `license:annotate` is told to skip
 # the tree — see the note on that script in the root pubspec.
 #

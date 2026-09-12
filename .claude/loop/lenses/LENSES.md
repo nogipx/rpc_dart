@@ -1,7 +1,7 @@
 # Lens set — rpc_dart
 
 What a lens is and how it links to the rest — [../LOOP.md](../LOOP.md). The
-field format — `../../skills/improvement-loop/specs/lens.md`.
+field format — `../../skills/evidence-loop/specs/lens.md`.
 
 **The order below is the rank**, re-derived in the curate pass after round 220:
 a sweep whose paths have moved comes first (it is due a re-measurement), then

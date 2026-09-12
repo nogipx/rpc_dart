@@ -1,7 +1,7 @@
 # Round journal
 
 What a round is and how it links to the rest — [../LOOP.md](../LOOP.md). The
-record format — `../../skills/improvement-loop/specs/round.md`.
+record format — `../../skills/evidence-loop/specs/round.md`.
 
 **The next round's number is the highest here plus one.** That is the only
 source: not memory, not a commit message, not the user's words.
