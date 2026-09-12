@@ -2037,10 +2037,16 @@ def eval_fixture(dest: Path, scenario: dict) -> Path:
     if scenario.get("project"):
         for f in sorted((SKILL_ROOT / "evals" / "project").glob("*.py")):
             shutil.copy(f, dest / f.name)
-        scenario.setdefault("fixture", {}).setdefault("config.md", PROJECT_CONFIG)
     loop = dest / ".claude" / "loop"
-    if scenario.get("fixture") is not None:
-        build_fixture(loop, **scenario["fixture"])
+    # `"fixture": null` means NO journal: the scenario is about laying one out,
+    # so the agent must run `init` itself. Distinct from an absent key, which
+    # means the scenario is not wired, and from `{}`, which is the default
+    # journal. Only the last two get a config written for them.
+    if "fixture" not in scenario or scenario["fixture"] is not None:
+        overrides = dict(scenario.get("fixture") or {})
+        if scenario.get("project"):
+            overrides.setdefault("config.md", PROJECT_CONFIG)
+        build_fixture(loop, **overrides)
     (dest / ".claude" / "settings.json").write_text(json.dumps(
         {"permissions": {"allow": [
             f"Bash(python3 {skill_dst / 'scripts' / 'loop.py'}:*)",
@@ -2124,7 +2130,15 @@ def cmd_evals(root: Path, loop: Path) -> int:
     for e in runnable:
         tmp = Path(tempfile.mkdtemp(prefix=f"eval-{e['id']}-"))
         try:
-            fl = eval_fixture(tmp, e)
+            # One broken scenario must not take the suite with it. A crash
+            # here once ended a fifteen-scenario run at the fourth, and the
+            # eleven after it reported nothing at all.
+            try:
+                fl = eval_fixture(tmp, e)
+            except Exception as exc:
+                failed.append((e, f"the fixture could not be built: {exc!r}"))
+                print(f"\n=== {e['id']} {e['name']}\n  ERROR  fixture: {exc!r}")
+                continue
             before = {p.name for p in (fl / "rounds").glob("*.md")}
             print(f"\n=== {e['id']} {e['name']}")
             ok, out = run_claude(e["prompt"], tmp, e.get("timeout", 600))
@@ -2521,6 +2535,36 @@ def cmd_selftest(root: Path, loop: Path) -> int:
     got = lens_verdicts(fixture)
     check("lens_verdicts counts declared rounds", got.get("RPC-3") == ["FIXED", "CLEAN"])
     check("lens_verdicts ignores a field with prose in it", len(got) == 1)
+
+    # --- the eval fixture builder, over the three shapes a scenario can take.
+    # `"fixture": null` with `project` crashed the runner and, with it, the
+    # eleven scenarios queued behind the one that hit it.
+    tmp4 = Path(tempfile.mkdtemp(prefix="loop-evalfix-"))
+    try:
+        for name, scen, want_journal, want_project in (
+                ("default journal", {"fixture": {}}, True, False),
+                ("journal and project", {"fixture": {}, "project": True}, True, True),
+                ("project, no journal", {"fixture": None, "project": True}, False, True),
+                ("overrides only", {"fixture": {"LOOP.md": "# x\n"}}, True, False)):
+            d = tmp4 / name.replace(" ", "-").replace(",", "")
+            d.mkdir(parents=True)
+            try:
+                lp = eval_fixture(d, dict(scen))
+                built = True
+            except Exception as exc:
+                built, lp = False, None
+                check(f"eval fixture builds: {name}", False, repr(exc))
+            if not built:
+                continue
+            check(f"eval fixture builds: {name}", True)
+            check(f"eval fixture journal present: {name}",
+                  (lp / "config.md").exists() == want_journal)
+            check(f"eval fixture project present: {name}",
+                  (d / "router.py").exists() == want_project)
+            check(f"eval fixture writes a settings rule: {name}",
+                  "loop.py" in (d / ".claude" / "settings.json").read_text())
+    finally:
+        shutil.rmtree(tmp4, ignore_errors=True)
 
     # --- lint, against a fixture journal that is mutated one rule at a time.
     # Without this every `rep.error` in cmd_lint is a branch nobody has seen

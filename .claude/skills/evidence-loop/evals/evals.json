@@ -33,6 +33,7 @@
       "expected_output": "After `loop.py init`: config.md carries a real gate block for this project (`python3 -m unittest discover -s .` — not a placeholder), the three budget lines, and `traits:` chosen from references/traits.md by what the CODE has, not by the project's name. `.claude/settings.json` gains a rule for the unittest command and one for loop.py by absolute path — never `Bash(python3:*)`, which would grant every program on the command line. A lens set is derived with real paths into router.py and status `derived`. `loop.py lint` reports 0 errors at the end. Leaving a `<command 1>` placeholder in the gate, or no traits, is a fail.",
       "project": true,
       "fixture": null,
+      "timeout": 1800,
       "files": []
     },
     {
