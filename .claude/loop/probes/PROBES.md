@@ -38,6 +38,11 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-46](P-46-drain-in-peer-mode.md)** valid (round 354), websocket server and
+  core endpoints — does a graceful drain see a peer-mode call. Reads
+  `activeResponders` off the endpoint's own `collectEndpointMetrics()`, the same
+  map the drain polls, so the column says what the DRAIN saw; `null` rather than
+  `0` is what identifies an absent key from an idle server
 - **[P-45](P-45-text-frame-blast-radius.md)** valid (round 353), websocket and
   core transports — what one stray frame costs the calls already in flight. Its
   `connection alive` column is the instructive part: it reads the same in every

@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336]
-status: confirmed (round 308)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354]
+status: confirmed (round 354)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -318,3 +318,42 @@ The caller waits for a response that never comes. `UnaryResponder`'s own
 > **A comment that says "the others already do this" is a claim about the
 > others, and it names them. Re-read it as a CHECKLIST: every shape it does not
 > name is a shape nobody checked.**
+
+## Round 354 — the divergence can be a MAP KEY
+
+Every instance above is a method. This one is a dictionary.
+`RpcResponderEndpoint` and `RpcPeerEndpoint` are sibling subclasses over the
+same `RpcResponderPipelineMixin`, and both override `collectEndpointMetrics`.
+The responder's override computed five metrics about responder streams INLINE —
+`metadataStreams`, `bufferedMessages`, `clientStreamBuffers`,
+`activeResponders`, `contractKeys` — all of them from `_respStreams`, which the
+mixin owns and both siblings have. The peer's override called the shared
+`collectResponderMetrics()` and stopped.
+
+`RpcWebSocketServer._inFlightCalls()` polls `activeResponders` to decide whether
+a graceful drain is done:
+
+    arm         activeResponders  stop waited   the in-flight call
+    responder   1                 1746ms        returned "finished"
+    peer        null              1ms           status 14            <- before
+
+> **`null`, not `0`, and `?? 0` erased the difference.** A missing key and an
+> idle server are not the same fact; the fallback made them indistinguishable at
+> the one call site that had to tell them apart. When a consumer reads a map with
+> `as int?` and a default, ask which producers publish that key — the type
+> system will not.
+
+> **The sibling comparison here is not between two implementations but between
+> an override and the mixin it extends.** The detector's "find a field every
+> sibling declares, then read the methods around it" still finds it, provided the
+> reading includes what each override adds ON TOP of the shared call — that
+> addition IS the divergence.
+
+Fixed by moving all five into `collectResponderMetrics()`, so the metrics about
+responder streams live with the streams. The canary — removing the key from the
+mixin — fails the peer witness AND the responder-mode test that predates it,
+which is the evidence that there is one home now rather than two copies.
+`../probes/P-46-drain-in-peer-mode.md`,
+`../rounds/354-the-drain-that-polled-a-key-nobody-published.md`. The getter half
+of the same divergence is a breaking interface change and is
+`../backlog/B-37-endpoints-getter-excludes-peers.md`.

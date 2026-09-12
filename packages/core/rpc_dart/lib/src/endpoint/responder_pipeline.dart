@@ -503,6 +503,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   }
 
   /// Collects responder-specific metrics.
+  ///
+  /// Everything about responder streams belongs HERE, not in one endpoint
+  /// subclass: both [RpcResponderEndpoint] and [RpcPeerEndpoint] serve calls
+  /// through this mixin, and a server's graceful drain polls `activeResponders`
+  /// to decide whether anything is still running. Published by the responder
+  /// alone, that poll read null for a peer endpoint and shut the server down on
+  /// top of live calls.
   Map<String, Object?> collectResponderMetrics() {
     return {
       'registeredContracts': _respRegistry.contracts.length,
@@ -514,6 +521,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       // between calls; a number that only ever climbs means the budget is not
       // being released and legitimate calls will start being refused.
       'preMethodBufferedBytes': _respPreMethodBytes,
+      'metadataStreams': _respStreams.values
+          .where((state) => state.hasMetadata)
+          .length,
+      'bufferedMessages': _respStreams.values
+          .where((state) => state.lastPayloadMessage != null)
+          .length,
+      'clientStreamBuffers': _respStreams.values
+          .where((state) => state.hasBufferedClientMessages)
+          .length,
+      'activeResponders': _respStreams.values
+          .where((state) => state.hasResponder)
+          .length,
+      if (_respRegistry.contracts.isNotEmpty)
+        'contractKeys': List<String>.unmodifiable(_respRegistry.contracts.keys),
     };
   }
 
