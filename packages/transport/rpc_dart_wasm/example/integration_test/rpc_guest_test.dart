@@ -106,6 +106,54 @@ void main() {
     timeout: const Timeout(Duration(minutes: 8)),
   );
 
+  // WITNESS: a boot that fails must reach the guest author as the error that
+  // failed it.
+  //
+  // `RpcWasm.run` boots inside `runZonedGuarded`, and a SYNCHRONOUS throw out
+  // of a zone body goes to the zone handler, not to the caller — so run()
+  // returned through a `late final` that was never assigned:
+  //
+  //   before : LateInitializationError: Field 'result' has not been initialized
+  //   after  : StateError: Bad state: configure exploded on purpose
+  //
+  // The guest's main() fails one boot on purpose and records what it caught;
+  // this reads it back. It has to run HERE, on a device: `rpc_wasm.dart` is
+  // `dart:js_interop` and never executes on the VM, so `test:wasm` cannot see
+  // this line at all.
+  //
+  // That the rest of this suite passes is the other half: `_boot` closes the
+  // endpoint and clears `_initialized` on the way out, so the failed boot left
+  // nothing behind for the real one.
+  testWidgets(
+    'a boot failure reaches the caller as itself',
+    (_) async {
+      final c = await _connect();
+
+      final r = await c.caller
+          .unaryRequest<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'BootFailure',
+            request: ''.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      expect(
+        r.value,
+        contains('configure exploded on purpose'),
+        reason:
+            'the zone swallowed the synchronous throw and run() failed on its '
+            'own uninitialised field instead',
+      );
+      expect(r.value, startsWith('StateError'));
+
+      await c.caller.close();
+      await c.bridge.close();
+    },
+    timeout: const Timeout(Duration(minutes: 5)),
+  );
+
   testWidgets(
     'a unary call reaches a real guest and comes back',
     (_) async {

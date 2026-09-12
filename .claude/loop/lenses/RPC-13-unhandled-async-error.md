@@ -1,10 +1,10 @@
 ---
 refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
-applies: there are paths that run user code outside a guarded zone
+applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347]
-status: confirmed (round 242)
+applied: [222, 225, 242, 330, 346, 347, 356]
+status: confirmed (round 356)
 ---
 
 # RPC-13 — An unhandled async error is fatal to the isolate
@@ -71,3 +71,44 @@ that says nothing about what the callback inside it does.
 > production replicas, and deleting it changes nothing any test can see. Ask of
 > every guard this lens confirms: what would notice if somebody removed it?
 > `../backlog/B-20-detached-guard-has-no-witness.md`.
+
+## Round 356 — the same lens from the CATCHING side
+
+Every instance above is an error with nowhere to go. This one had somewhere to
+go and a zone took it instead. `runZonedGuarded` routes a SYNCHRONOUS throw from
+its body to its handler and returns normally, so `RpcWasm.run`'s
+
+```dart
+late final RpcPeerEndpoint result;
+runZonedGuarded(() => result = _boot(...), (e, s) => _consoleError(...));
+return result;
+```
+
+failed on its own uninitialised variable whenever `configure` or
+`endpoint.start()` threw:
+
+    arm                witness
+    before             LateError: LateInitializationError: Local 'result' ...
+    after              StateError: Bad state: configure exploded on purpose
+
+> **The measurement checklist already had the rule** — D2, *a guarded zone
+> catches only its own side's errors; check whose code threw*. Read it as
+> applying to the zone's OWN body too, not only to callbacks: boot errors belong
+> to the caller and guest errors belong to the zone, and one `runZonedGuarded`
+> was covering both.
+
+> **`runZonedGuarded` appears exactly once in the whole workspace's `lib/`.** A
+> one-member class is worth saying out loud: the sweep took a grep, and the
+> value was in knowing there was nothing else rather than in what it found.
+
+> **A recovery path nobody had ever taken.** `_boot`'s catch sets
+> `_initialized = false`, which invites a retry — and the retry was broken:
+> `endpoint.close()` reaches the bridge only after several awaits, while the
+> retry installs its own `rpcWasmReceiveBytes` synchronously, so the late close
+> deleted the LIVE handler. Found only because the witness had to boot twice.
+> U-15's "drive the lifecycle twice", arrived at by necessity rather than by
+> choice.
+
+Bench `../probes/P-48-boot-failure-on-a-real-guest.md` — the only bench in the
+journal that can see `rpc_wasm.dart` at all, since it is `dart:js_interop` and
+runs on no VM. `../rounds/356-the-zone-ate-the-reason.md`.

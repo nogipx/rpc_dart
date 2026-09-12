@@ -18,6 +18,16 @@ const _codec = RpcCodec(RpcString.fromJson);
 /// Items the Firehose handler has yielded, readable over RPC.
 int _produced = 0;
 
+/// What a caller of [RpcWasm.run] sees when `configure` throws.
+///
+/// The boot runs inside `runZonedGuarded`, and a SYNCHRONOUS throw out of a
+/// zone body goes to the zone handler rather than to the caller — so `run`
+/// returned through a `late final` that was never assigned and raised
+/// `LateInitializationError`, hiding the real cause. Recorded here on the way
+/// past and read back over RPC by the integration test, because this is the
+/// only place the real dart2wasm boot path actually runs.
+String _bootFailureSeen = 'not attempted';
+
 final class _EchoService extends RpcResponderContract {
   _EchoService() : super('Echo');
 
@@ -81,6 +91,13 @@ final class _EchoService extends RpcResponderContract {
       handler: (request, {RpcContext? context}) async => '$_produced'.rpc,
     );
 
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'BootFailure',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async => _bootFailureSeen.rpc,
+    );
+
     addClientStreamMethod<RpcString, RpcString>(
       methodName: 'Collect',
       requestCodec: _codec,
@@ -120,6 +137,18 @@ final class _EchoService extends RpcResponderContract {
 }
 
 void main() {
+  // Deliberately fail the boot once, and record what the caller was given.
+  // `_boot` closes the endpoint and clears `_initialized` on the way out, so
+  // the real boot below is unaffected — which the whole suite then proves.
+  try {
+    RpcWasm.run(
+      configure: (_) => throw StateError('configure exploded on purpose'),
+    );
+    _bootFailureSeen = 'no throw at all';
+  } catch (error) {
+    _bootFailureSeen = '${error.runtimeType}: $error';
+  }
+
   RpcWasm.run(
     configure: (endpoint) {
       endpoint.registerServiceContract(_EchoService());

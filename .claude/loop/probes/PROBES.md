@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-48](P-48-boot-failure-on-a-real-guest.md)** valid (round 356), rpc_dart_wasm
+  — what a failed boot hands back, inside a REAL dart2wasm guest on a device.
+  **The only bench that can see `rpc_wasm.dart` at all**: it is
+  `dart:js_interop`, so no VM runs it and `test:wasm`/`test:web` cannot reach a
+  line. Its control is the suite's other nine guest tests, which exercise the
+  second, successful boot over the same JS globals — so an ablation that breaks
+  the retry is told apart from one that corrupts the error
 - **[P-47](P-47-native-text-encoding.md)** valid (round 355), rpc_dart_wasm —
   what reaches Dart when native sends non-ASCII text, in characters sent against
   characters arrived WITH the byte count beside them: on a byte-per-character

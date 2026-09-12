@@ -72,20 +72,44 @@ abstract final class RpcWasm {
     // An operator filtering the console stream for errors saw nothing at all
     // when a handler inside the sandbox failed. The zone also carries the
     // stack, which print alone did not.
+    // A SYNCHRONOUS throw out of the zone body goes to the handler above, not
+    // to the caller: runZonedGuarded returns null and `result` is never
+    // assigned, so `return result` raised a LateInitializationError and a
+    // failing `configure` or `start()` reached the guest author as a message
+    // about an uninitialised field. Caught here and rethrown after the zone
+    // closes, so the boot error surfaces as itself.
     late final RpcPeerEndpoint result;
+    Object? bootError;
+    StackTrace? bootStack;
     runZonedGuarded(
-      () => result = _boot(
-        configure: configure,
-        isClient: isClient,
-        policy: policy,
-        debugLabel: debugLabel,
-        compressionEnabled: compressionEnabled,
-        logController: logController,
-      ),
+      () {
+        try {
+          result = _boot(
+            configure: configure,
+            isClient: isClient,
+            policy: policy,
+            debugLabel: debugLabel,
+            compressionEnabled: compressionEnabled,
+            logController: logController,
+          );
+        } catch (error, stack) {
+          bootError = error;
+          bootStack = stack;
+        }
+      },
       (error, stack) {
         _consoleError('Unhandled error in WASM guest: $error\n$stack'.toJS);
       },
     );
+    final failure = bootError;
+    if (failure != null) {
+      // Reported as well as rethrown. An exception escaping the guest's `main`
+      // is printed by dart2wasm's own uncaught handler at INFO level, which is
+      // the very thing the zone was added to fix -- an operator filtering the
+      // console for errors would see nothing for a runtime that never booted.
+      _consoleError('WASM guest failed to boot: $failure\n$bootStack'.toJS);
+      Error.throwWithStackTrace(failure, bootStack ?? StackTrace.current);
+    }
     return result;
   }
 
@@ -116,6 +140,15 @@ abstract final class RpcWasm {
       _activeEndpoint = endpoint;
       return endpoint;
     } catch (error, stackTrace) {
+      // Clearing `_initialized` invites a retry, so the failed boot has to
+      // leave NOTHING behind. Closing the endpoint alone does not: it reaches
+      // the bridge only after several awaits, while a retry installs its own
+      // `rpcWasmReceiveBytes` synchronously — so the late close deleted the
+      // LIVE handler and every host-to-guest byte went nowhere.
+      //
+      // `_RpcWasmBridge.close()` releases the JS global before its first await,
+      // so calling it here frees the name while this call still owns it.
+      unawaited(bridge.close());
       unawaited(endpoint.close());
       _initialized = false;
       _activeEndpoint = null;
