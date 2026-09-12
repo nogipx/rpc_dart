@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: everywhere.
 breaks: data loss, acting on the wrong object.
-status: confirmed
 ---
 
 # U-18 — Silent acceptance of a programmer error

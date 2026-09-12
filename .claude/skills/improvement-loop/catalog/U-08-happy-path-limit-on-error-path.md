@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: there are limits on the size of incoming data.
 breaks: "information loss, the wrong error class: a repeatable error becomes unrepeatable."
-status: confirmed
 ---
 
 # U-08 — A happy-path limit on the error path

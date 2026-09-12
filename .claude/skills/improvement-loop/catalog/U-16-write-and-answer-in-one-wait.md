@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: "a bidirectional channel with a bound on bytes in flight: networks, pipes to a subprocess, actor queues, database cursors."
 breaks: a hang that never ends, with a dead deadline.
-status: confirmed
 ---
 
 # U-16 — The write and the answer in one wait

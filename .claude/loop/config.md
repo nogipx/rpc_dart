@@ -11,11 +11,21 @@ unattended: yes
 The loop runs with nobody at the keyboard, so rule zero applies in full: no
 command that could raise a permission prompt.
 
-packs: core, dart, async-io, server, refactor
+traits: dart, dart2js, isolates, native-plugin, public-package, two-sided-protocol, byte-limits, long-lived-process
 
-`crdt` is not enabled — there are no replicas and no coordination-free merge in
-this project. `flutter-ui` is not enabled — the only Flutter package is a plugin
-with no screens, navigation or input.
+Traits say what this project IS; every items file whose `needs:` they satisfy is
+merged into `loop.py brief`. They replaced `packs:`, which switched bundles on
+and off — a bundle mixed a language, an architecture and a deployment shape as
+if they were one axis, and taking one item out of a pack meant taking all of it.
+
+Not declared, and why: `several-replicas` — no replicas and no coordination-free
+merge here. `screens` — the only Flutter package is a plugin with no navigation
+or input. `persistent-storage` — the data packages have it, but no item asks for
+it yet; declare it when one is written.
+
+A doc-audit or public-surface round is an ordinary round taking U-22 or U-23,
+whose `applies:` says when they bite. It records `bench: none — <why no bench
+was possible>`, like any round whose evidence is not a quantity.
 
 ## Language
 

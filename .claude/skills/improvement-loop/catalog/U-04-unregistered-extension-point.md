@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: there is a wrapper around a third-party library.
 breaks: a hang, a leak, data loss.
-status: confirmed
 ---
 
 # U-04 — An unregistered extension point of a dependency

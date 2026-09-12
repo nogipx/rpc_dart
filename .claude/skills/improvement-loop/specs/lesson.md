@@ -2,7 +2,7 @@
 
 > [Schemas](SPECS.md) · promoted into the skill by
 > [methods/curate.md](../methods/curate.md), where it becomes a
-> [catalog](../catalog/CATALOG.md) shape or a [pack](../packs/PACKS.md) item
+> [catalog](../catalog/CATALOG.md) shape or a trait-gated [item](../items/ITEMS.md)
 
 Path: `.claude/loop/lessons/L-N-slug.md`. Plus a line in `lessons/LESSONS.md`.
 

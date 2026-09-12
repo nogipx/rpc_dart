@@ -9,29 +9,40 @@
 
 ## The four checks, cheapest first
 
-1. **`loop.py lint`** — the project's data against the schemas, the skill's own
-   link graph (every file reachable from `SKILL.md`, no dangling link, no step
-   named by number), the gate covered by `permissions.allow`, `evals.json`
-   well-formed, and **`loop.py` itself parsed for names it reads but never
-   binds**. That last one exists because Python resolves a global when the line
-   executes: a name deleted from under a caller survives the diff, the import
-   and every command that does not reach that branch. Two such crashes shipped
-   in one commit — `cmd_stale` reading a `res` that had gone with
-   `run_detector`, and `cmd_init` calling three deleted templates, which left
-   `setup` mode dead on its first command. Canaried: renaming
-   `CONFIG_TEMPLATE`'s definition produces "`cmd_init` reads `CONFIG_TEMPLATE`,
-   which nothing in the file binds".
-2. **Run every command** — `status`, `next`, `stale`, `catalog`, `review`,
-   `yield` — against the live journal. Check 1 now catches the deleted-name
-   class statically; running catches what it cannot see: a wrong assumption
-   about the data's shape, a branch that only fires on real records, output that
-   contradicts what the docs say the command does.
-3. **`init` in a scratch root**, then `status`, `next` and `lint` there:
-   `python3 loop.py --root /tmp/x --loop /tmp/x/.claude/loop init`. This is the
-   only way to exercise `setup` mode — the live repository already has a
-   `.claude/loop/`, so `init` refuses, and its whole path stays untested. Expect
-   `lint` to report exactly the gate placeholders that "Fill in `config.md`" in
-   [methods/setup.md](../methods/setup.md) replaces.
+1. **`loop.py selftest`** — this file's own assertions against a fixture, with
+   no `.claude/loop/` needed, so it also runs in a repository that has not been
+   set up. It covers what has actually broken here: names a function reads but
+   nothing binds, which surfaces as a NameError mid-round; the anchored
+   `round_key` grammar; the permission prefix matching rule zero stands on;
+   `init` in a temp root,
+   including its refusal to lay out on top of data — the one path a live
+   repository can never exercise; that what `init` writes satisfies what `lint`
+   demands; that traits admit and hold back the right items; and that every path
+   `brief` and `review` concatenate exists and is non-empty.
+
+   It also checks the MIRROR of the unbound-name rule — **a function defined and
+   never read**. That one earned its place immediately: it found `resolve_script`,
+   left behind by the detector scripts deleted in September 2026 and still
+   taking a `packs` dict in a shape the traits redesign had replaced, and then
+   `_overlap`, dead since the selector stopped ranking. Neither is a crash,
+   which is exactly why nothing noticed them.
+
+   It is a subcommand rather than a `tests/` directory with its own runner
+   because of rule zero: the allowlist grants `python3 <path to loop.py>`, so a
+   second script would need a second permission rule in every repository, for a
+   command only whoever edits the skill ever runs.
+2. **`loop.py lint`** — the project's data against the schemas, the skill's own
+   link graph (every file reachable from `SKILL.md`, no dangling link), the gate
+   covered by `permissions.allow`, and `evals.json` well-formed. Needs a real
+   journal, which is why it comes after selftest.
+3. **Run every command** — `status`, `next`, `brief`, `stale`, `catalog`,
+   `review`, `yield` — against the live journal. Checks 1 and 2 catch the
+   deleted-name and dangling-link classes statically; running catches what they
+   cannot see: a wrong assumption about the data's shape, a branch that only
+   fires on real records, output that contradicts what the docs say the command
+   does. For `brief` and `review`, read the OUTPUT: the failure mode of
+   concatenation is a half that silently did not arrive, and a checklist missing
+   its trait-gated items still looks like a checklist.
 4. **The scenarios below** — the judgement half, which no script can check.
 
 Checks 1-3 are mechanical and take a minute; the crashes they catch are the ones
@@ -40,12 +51,14 @@ the agent still does the wrong thing.
 
 ## The scenarios
 
-`evals.json` holds twelve, each derived either from a rule the methods mark as
+`evals.json` holds fifteen, each derived either from a rule the methods mark as
 paid for by a mistake, or from machinery the skill added (the verdict check,
-benches, lessons, stopping from `/loop`, packs, continuations, `next` reporting
-state and deciding nothing). Run them through skill-creator or by hand: give an
-agent the skill and a fixture repository, and compare against `expected_output`.
-The skill counts as regressed if even one scenario produces a different outcome.
+benches, lessons, stopping from `/loop`, traits selecting items, a project
+extending the trait vocabulary, continuations, `next` reporting state and
+deciding nothing, `brief` replacing the reading list, `selftest` guarding edits
+to the script). Run them through skill-creator or by hand: give an agent the
+skill and a fixture repository, and compare against `expected_output`. The skill
+counts as regressed if even one scenario produces a different outcome.
 
 **Run them on a smaller model too.** Most of this skill is inferential — weigh
 damage against reachability, decide what is worth finishing, tell a witness from

@@ -2,7 +2,7 @@
 
 > [Methods](METHODS.md) · `curate` mode, once every ten rounds · what a promoted
 > lesson becomes: a [catalog](../catalog/CATALOG.md) shape or a
-> [pack](../packs/PACKS.md) item · the lesson schema:
+> [trait-gated item](../items/ITEMS.md) · the lesson schema:
 > [specs/lesson.md](../specs/lesson.md)
 
 Once every ten rounds, or on request. It measures nothing and fixes nothing: it
@@ -42,6 +42,24 @@ separate commit marked `curate` in the body, with no round file.
    missing from `../catalog/` is a candidate for it, by the same test: does it
    hold outside this code?
 9. `loop.py lint` again, then commit.
+
+## If a curate pass does edit the skill
+
+The checklists `loop.py brief` prints — `methods/measurement.md`,
+`canary.md`, `tests.md` and every `items/<key>-<slug>.md` — **hold items and
+nothing else**. A story, a heading, a breadcrumb
+or a justification added to one of them goes straight into the middle of the
+checklist a round reads, or into the middle of a prompt a model answers.
+
+What paid for an item goes in the `-why` file beside it, which the script never
+opens. This is the one rule of the split that no check can enforce: "is this
+line an item or a story" cannot be decided mechanically without guessing at
+prose, and guessing is exactly what this skill's script does not do. It holds
+because whoever edits these files reads this paragraph.
+
+Before the split, the three universal checklists were 980 words of items inside
+4020 words of prose, re-read every round. Adding one story back is how that
+returns.
 
 ## What curate does not do
 

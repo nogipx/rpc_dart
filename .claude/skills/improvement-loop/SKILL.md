@@ -6,10 +6,25 @@ allowed-tools: Read, Edit, Write, Glob, Grep, Agent, Task, CronList, CronDelete,
 
 # The improvement loop
 
-One defect per round, start to finish. **A claim with no number is not a
-finding. The bookkeeping is checked by a script, not by memory.** Everything
-bound to the repository lives in `.claude/loop/`; this file knows nothing about
-any particular project.
+One defect per round, start to finish. **A claim with no CONFIRMED evidence is
+not a finding. The bookkeeping is checked by a script, not by memory.**
+
+Confirmed means something was varied and the outcome changed: a control with the
+mechanism removed, an ablation that kills a guard, a witness that fails with a
+real message. A number is the usual form of that and the sharpest one — reach
+for it first, and it is the only evidence that compares across rounds — but it
+is not the only admissible one, and a round whose evidence is a clean ablation
+is not a weaker round. What is never a finding is a claim nothing was varied
+against.
+
+**Which is why the canary is not negotiable, and least of all on a round with no
+number.** Switching the fix off in place and watching the witness fail IS the
+variation; where there is no quantity it is the only confirmation the round has.
+`## Canary` empty on a FIXED round is an error, not a warning, and that has not
+moved.
+
+Everything bound to the repository lives in `.claude/loop/`; this file knows
+nothing about any particular project.
 
 ## Arguments and modes
 
@@ -24,7 +39,7 @@ means a **round**.
   negative, a sweep or a bench. A full round, with the lens that produced the
   record.
 - **lenses** — derive or extend the lens set: `methods/lens-derivation.md`;
-  `loop.py catalog` gives the catalog shapes for the enabled packs.
+  `loop.py catalog` gives every catalog shape — nothing filters that list.
 - **curate** — maintain the data: `methods/curate.md`. Once every ten rounds.
 - **setup** — lay the loop out where there is no `.claude/loop/`:
   `methods/setup.md`.
@@ -42,18 +57,26 @@ report the reason and, if the call came from `/loop`, cancel the job
 
 1. `python3 <skill>/scripts/loop.py next` — the lens set with its statuses and
    `applied:` history, what git says moved under a swept lens, the open leads,
-   the valid benches, the budget, the reading list. **The round number is the one
-   the script named.** Not from memory, not from a commit, not from the user.
+   the valid benches, what each lens has ever produced, the budget. **The round
+   number is the one the script named.** Not from memory, not from a commit, not
+   from the user.
 2. `next` reports FACTS, not a recommendation — the script computes what memory
    gets wrong (what git says moved, what is unreferenced, what was applied when)
    and stops there. Weighing severity, reachability and what is worth finishing
    is yours. **The one thing it still decides is the round cap**, because an
    unattended agent asked "should we continue?" always says yes.
-3. Read `config.md`, `LOOP.md` and `lessons/LESSONS.md` in full; the entity
-   files as needed. The indexes exist so you can choose, not so you can know.
-   **In `methods/`, read the checklist at the top of each file** — the stories
-   below it explain what each item cost and are worth reading once, not once per
-   round.
+3. `python3 <skill>/scripts/loop.py brief` — the three checklists a round works
+   from (Bench, Witness and canary, the regression test), each printed with this
+   project's domain items already merged into it — whichever the `traits:` in
+   `config.md` admit. **One command, not eight files**, and the domain half can
+   no longer arrive without its universal half. What paid for an item is in the
+   `-why` file beside each checklist: open one when that item is the one biting,
+   not once per round. **Read what it says it held back**: an item waiting on a
+   trait the project has not declared is knowledge that exists and did not
+   arrive, and a short checklist looks exactly like a complete one.
+4. Read `config.md` and `lessons/LESSONS.md` in full; `LOOP.md` for navigation
+   and for its "What to trust with care"; the entity files as needed. The
+   indexes exist so you can choose, not so you can know.
 
 ## Rule zero — a command must never ask for permission
 
@@ -104,11 +127,15 @@ measurement someone took, on a tree that has since moved, and nothing checks it.
 2. **Bench.** `probes/` first — a valid bench along the same paths is reused,
    not rebuilt. A new bench counts as a bench once a control with the mechanism
    removed has shown it can see the defect; then it is registered as `P-N`
-   (`specs/probe.md`). The checklists are the universal
-   `methods/measurement.md` plus the packs' items from `next`'s reading list.
+   (`specs/probe.md`). The checklist is what `loop.py brief` printed under
+   `measure`, universal items and this project's packs' together.
    **A bench that could not see the defect makes the verdict INCONCLUSIVE, not
    CLEAN** — however many times it was rebuilt.
-3. **Measure in numbers.** No numbers, no defect.
+3. **Measure.** In numbers wherever a number exists — they are the sharpest
+   evidence and the only kind that compares across rounds. Where the finding is
+   not a quantity, the evidence is still something VARIED whose outcome changed:
+   an ablation, a witness, a sweep that names every site. No confirmation, no
+   defect.
 4. **Fix.** Minimal in DEPTH, complete in BREADTH — and those are different
    axes. Minimal means one mechanism, at the point that renders the wrong
    verdict; it does NOT mean a convenient subset of the instances.
@@ -131,7 +158,7 @@ measurement someone took, on a tree that has since moved, and nothing checks it.
    witness, no fix**: if the fix cannot be switched off and shown to break
    something, it is not proven.
 7. **Check the verdict.** Answer what `loop.py review` prints — seven questions
-   plus the enabled packs' — in writing, against your own record, probe and
+   plus the domain ones the traits admit — in writing, against your own record, probe and
    control; any "no" sends you back to **Bench**. Q2 — *did the control show the
    bench can SEE the defect* — is the one that catches things. (This once
    demanded "a clean context" and a `review:` key; 39 of 39 rounds wrote
@@ -176,29 +203,43 @@ here or on a dangling link.
   one file per record type, opened when writing that record: the verdicts and
   what each changes are in [round.md](specs/round.md); the others are
   `specs/lens.md`, `probe.md`, `backlog-item.md`, `checked-item.md`,
-  `lesson.md`, `config.md`, `pack.md`.
-- **[methods/](methods/METHODS.md)** — how to do the work. **Checklist at the
-  top of each file; the stories below it are read once, not once per round.**
-  The three read every round are linked here directly rather than through the
-  index, because a file reached through two hops tends to get previewed instead
-  of read: [measurement.md](methods/measurement.md) (the Bench step),
-  [canary.md](methods/canary.md) (Witness and canary),
-  [tests.md](methods/tests.md) (writing the regression test).
-- **[catalog/](catalog/CATALOG.md)** — defect shapes by pack, one file per
+  `lesson.md`, `config.md`.
+- **[methods/](methods/METHODS.md)** — how to do the work. The three checklists
+  a round uses are **not read as files**: `loop.py brief` prints them with the
+  packs merged in. Each holds items and nothing else
+  ([measurement.md](methods/measurement.md), [canary.md](methods/canary.md),
+  [tests.md](methods/tests.md)); what paid for each item is beside it
+  ([measurement-why.md](methods/measurement-why.md),
+  [canary-why.md](methods/canary-why.md),
+  [tests-why.md](methods/tests-why.md)), read when an item bites. The rest of
+  the methods — [reporting.md](methods/reporting.md),
+  [lens-derivation.md](methods/lens-derivation.md),
+  [curate.md](methods/curate.md), [setup.md](methods/setup.md) — are opened for
+  the step or the mode that needs them.
+- **[catalog/](catalog/CATALOG.md)** — defect shapes, one file per
   shape, consulted BY ID when a lens names one in `refines:`. Open it directly
   (`catalog/U-07-*.md`) or search across them rather than reading the index
   first: `grep -rl "abort" catalog/`.
-- **[packs/](packs/PACKS.md)** — knowledge by domain and language; the `packs:`
-  line in `config.md` selects them, and `loop.py next` names the exact pack
-  files for the round. Schema: [specs/pack.md](specs/pack.md).
+- **[items/](items/ITEMS.md)** — checklist lines that only apply to some
+  projects. Each declares the [traits](references/traits.md) it needs, the
+  project declares the traits it has, and `loop.py brief` merges what matches
+  and **names what it held back**. A project extends the vocabulary with
+  `local traits:` and its own `.claude/loop/items/`.
 - **[references/](references/REFERENCES.md)** —
   [model.md](references/model.md) (terms),
   [rule-zero.md](references/rule-zero.md),
-  [review.md](references/review.md) (the seven questions).
+  [review.md](references/review.md) (the seven questions — the whole file is the
+  prompt `loop.py review` prints; the reasoning behind it is
+  [review-why.md](references/review-why.md)).
 - **[evals/](evals/EVALS.md)** — scenarios that check the skill itself. Run them
-  after changing this file or `methods/`.
-- **`scripts/loop.py`** — `init`, `status`, `next`, `lint`, `stale`, `catalog`,
-  `review`, `yield`. **Every one reports facts; only the round cap decides.**
+  after changing this file or `methods/`; `loop.py selftest` covers the
+  mechanical half first.
+- **`scripts/loop.py`** — `init`, `status`, `next`, `brief`, `lint`, `stale`,
+  `catalog`, `review`, `yield`, `selftest`. **Every one reports facts; only the
+  round cap decides.** And **none of them guesses at prose**: every value comes
+  from a place a schema declares — a frontmatter key, a fenced `gate` block, a
+  file name held in a constant. A check that needed to interpret a sentence was
+  removed rather than approximated.
 
-**Refer to a step by NAME, never by number** — the numbering moves, and `lint`
-rejects `step <N>` everywhere but here.
+**Refer to a step by NAME, never by number** — the numbering here moves whenever
+a step is added, so cite the bold name.

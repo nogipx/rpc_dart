@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: there are asymmetric role pairs.
 breaks: anything; the two sides are usually written by different people at different times.
-status: confirmed
 ---
 
 # U-13 — The mirror of a battery that paid off

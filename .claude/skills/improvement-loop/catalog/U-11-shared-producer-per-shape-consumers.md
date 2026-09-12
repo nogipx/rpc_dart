@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: one shared layer serves several call shapes or client types.
 breaks: silence instead of an error.
-status: confirmed
 ---
 
 # U-11 — A shared producer with per-shape consumers

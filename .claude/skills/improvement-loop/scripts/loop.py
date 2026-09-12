@@ -4,43 +4,55 @@
 # SPDX-License-Identifier: MIT
 """Improvement-loop bookkeeping: .claude/loop/ is checked by a script, not by memory.
 
-EVERY COMMAND REPORTS FACTS. The only judgement left in here is the round cap,
-kept because an unattended agent asked "should we continue?" always says yes.
-Ranking targets used to live here too, and it cost five rounds of opening new
-threads while a started one sat unfinished — the agent decides now.
+EVERY COMMAND REPORTS FACTS. The only judgement in here is the round cap, kept
+because an unattended agent asked "should we continue?" always says yes.
+Choosing what to work on is the agent's.
 
     loop.py init     lay out .claude/loop/ (refuses if it already exists)
     loop.py status   next round number, last round, leads, owner decisions,
                      lenses, benches, lessons, and whether the cap is reached
     loop.py next     the state a round chooses FROM, in no order and naming no
-                     target: lenses with status and `applied:` history, swept
-                     lenses whose files have moved, open leads and their
-                     reasons, valid benches, the reading list
+                     target: lenses with status, `applied:` history and what
+                     each has ever produced, swept lenses whose files have
+                     moved, open leads and their reasons, valid benches
+    loop.py brief    the three per-round checklists — measurement, canary,
+                     tests — each with this project's trait-gated items merged
+                     in, and every item it held back named
     loop.py lint     data integrity per specs/: fields, links in both
                      directions, indexes, round commits, gate permissions;
                      and the skill's OWN graph — every file reachable from
-                     SKILL.md, no dangling link, no step named by number
+                     SKILL.md, no dangling link
     loop.py stale    what has aged against the code: sweeps, negatives, leads,
                      benches and lessons, by their sha and paths; plus
                      directories no lens covers
     loop.py yield    rounds taken and rounds FIXED, per lens — so curate ranks
                      the set on evidence instead of on feel
-    loop.py catalog  catalog shapes for the enabled packs (lenses mode)
-    loop.py review   the seven verdict questions, plus the enabled packs'
+    loop.py catalog  every defect shape, with what each applies to (lenses mode)
+    loop.py review   the seven verdict questions, plus the trait-gated ones
+    loop.py selftest this file's own checks, against a fixture in a temp dir
+
+NOTHING HERE GUESSES AT PROSE. Every value this file reads comes from a place a
+schema declares: a frontmatter key, a fenced `gate` block, a file name listed in
+a constant. Where a regex appears it parses a DECLARED field by an anchored
+grammar; it never searches a document for something that looks like an answer.
 
 Standard library only. Run from the repository root, or pass --root.
-lint exit code: 0 clean, 1 errors found.
+lint and selftest exit code: 0 clean, 1 errors found.
 """
 from __future__ import annotations
 
 import argparse
 import ast
 import builtins
+import contextlib
 import fnmatch
+import io
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 DIRS = {
@@ -53,30 +65,22 @@ DIRS = {
 }
 VERDICTS = ("FIXED", "CLEAN", "DEFERRED", "INCONCLUSIVE", "RETRACTED")
 
-# The skill's own directories, each with an index named after it: SKILL.md links
-# the indexes, an index lists its files, and the walk from SKILL.md must reach
-# everything. `packs/` is two levels — `packs/<name>/PACK.md` indexes its own
-# directory and is itself listed by `packs/PACKS.md`.
-#
-# Measured before this was written: 41 of 45 files had zero outbound links,
-# `evals/` was reachable from nothing, and two of seven method cross-references
-# pointed at a step of SKILL.md that had moved.
+# Each skill directory has an index named after it. SKILL.md links the indexes,
+# an index lists its files, and the walk from SKILL.md must reach everything.
 SKILL_DIRS = {
     "catalog": "CATALOG.md",
     "methods": "METHODS.md",
     "specs": "SPECS.md",
     "references": "REFERENCES.md",
     "evals": "EVALS.md",
-    "packs": "PACKS.md",
+    "items": "ITEMS.md",
 }
 
 # Machine fields live in frontmatter, prose in `## Section` blocks. Frontmatter
 # keys and section headings are compared lower-cased.
 ROUND_FRONT = ["round", "verdict", "packages", "lens", "bench", "commit"]
-# Tolerated on rounds written before these were dropped, required on none.
-# `review:` said "self" in 39 of 39 rounds -- a step satisfied nominally every
-# time is worse than no step. `budget:` was self-reported from memory and
-# validated by nothing.
+# Accepted on old records, required on none. A step satisfied nominally every
+# time is worse than no step, and a budget reported from memory is not evidence.
 ROUND_OPTIONAL = ["budget", "review"]
 ROUND_SECTIONS = ["target", "hypothesis", "before", "mechanism", "after",
                   "canary", "gate", "not fixed", "links"]
@@ -95,20 +99,38 @@ PROBE_FRONT = ["file", "round", "commit", "paths", "status"]
 PROBE_SECTIONS = ["measures", "control"]
 LESSON_FRONT = ["round", "class", "cost", "paths", "commit", "status"]
 LESSON_SECTIONS: list[str] = []
-PACK_FRONT = ["applies", "damage classes", "shapes", "contains"]
-CATALOG_FRONT = ["pack", "applies", "breaks", "status"]
+# A shape says WHEN it bites and WHAT it breaks. `lenses` mode reads both to
+# decide whether to instantiate it; nothing else about a shape is used.
+CATALOG_FRONT = ["applies", "breaks"]
 SKILL_ROOT = Path(__file__).resolve().parent.parent
+
+# The checklists a round reads, keyed by the name a pack gives its own half.
+# DECLARED, not discovered: `brief` and `review` open exactly these paths and
+# concatenate them WHOLE. There is no extraction step, so there is nothing for a
+# heading or a fence to get wrong.
+#
+# The design this replaced cut the operative part out of a longer document with
+# `re.search(r"```\n(.*?)```")` -- the FIRST fence in the file. One example block
+# added above the questions would have made `review` print the example instead,
+# and the output would still have looked like a prompt, so nothing downstream
+# could have noticed. The files now hold items and nothing else, and what paid
+# for each item lives in the `-why` file beside it.
+BRIEF_PARTS = (
+    ("measure", "methods/measurement.md"),
+    ("canary", "methods/canary.md"),
+    ("tests", "methods/tests.md"),
+)
+REVIEW_PART = ("review", "references/review.md")
 
 ID_RE = re.compile(r"^([A-Z]+-\d+)-[^/]+\.md$")
 ROUND_FILE_RE = re.compile(r"^(\d+)-[^/]+\.md$")
 ROUND_H1_RE = re.compile(r"^# Round (\d+) — (.+)$")
-ANY_ID_RE = re.compile(r"\b([A-Z]+-\d+)\b")
-# For a field that must hold an ID and nothing else. `ANY_ID_RE.search` on such
-# a field silently accepts trailing prose and takes the first ID it meets.
+# Fullmatch it: the field holds an ID and nothing else. Searching would take the
+# first ID out of any prose someone wrote there.
 ONLY_ID_RE = re.compile(r"([A-Z]+-\d+)")
 # `commit:` on a lead, negative, bench or lesson holds a sha and nothing else,
-# so it is fullmatch-ed. The unanchored `\b[0-9a-f]{7,40}\b` that used to be
-# searched for here would take the first hex-looking run out of any sentence.
+# so it is fullmatch-ed: searching would take the first hex-looking run out of
+# any sentence.
 ONLY_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
 # `off-journal` — a round that happened but whose record does not exist:
 # setup.md allows starting the journal partway. Such a reference is not checked
@@ -127,13 +149,11 @@ PROBE_STATUS_RE = re.compile(r"^(valid|stale \([0-9a-f]{7,40}\)|broken \(round \
 LESSON_STATUS_RE = re.compile(r"^(active|promoted to skill \([^)]+\)|obsolete \(round \d+\))")
 LESSON_CLASSES = ("bench", "toolchain", "fixture", "metric", "process")
 BUDGET_RE = re.compile(r"probes (\d+)/(\d+), canaries (\d+)/(\d+)")
-BENCH_RE = re.compile(r"^(none|(P-\d+) — (reused|new))")
+# `none` may carry a reason after an em dash; on a FIXED round it must, because
+# a round with no bench cannot answer Q2 of the verdict check.
+# Named groups, so adding an alternative cannot shift what `group(n)` means.
+BENCH_RE = re.compile(r"^(?:none(?P<reason> — .+)?|(?P<probe>P-\d+) — (?:reused|new))$")
 MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-# A cross-reference to a numbered step of SKILL.md. The numbering moves whenever
-# a step is added, and nothing notices: `methods/canary.md` said "before step 5"
-# while the canary was step 6, and `methods/reporting.md` said "at step 7" while
-# the report was step 8. Name the step instead.
-STEP_NUM_RE = re.compile(r"\bstep \d", re.IGNORECASE)
 REVIEW_RE = re.compile(r"^(subagent|self|claude -p)\b")
 EMPTY = {"", "—", "-", "n/a", "none"}
 
@@ -190,16 +210,8 @@ def round_key(value: object) -> str | None:
         off-journal 77      a real round from before the journal; no file
         —                   genuinely unknown
 
-    This used to be `re.search(r"\\d+")` over the whole field -- "find a digit
-    anywhere and hope it is the round". Two things came of that. It demanded a
-    file for any number it found, so 21 of 30 negatives were flattened to
-    "— (not re-measured)" to keep it quiet, losing a fact each. And on
-    `round: 213 measured, 214 accepted` it silently took 213 and dropped 214,
-    with nothing to say a second number had been ignored.
-
-    Anchoring is the whole fix: the number is where the grammar says it is, or
-    the field does not parse. Commentary after it is free text and is never
-    read.
+    Anchored, so the number is where the grammar says it is or the field does
+    not parse. Anything after it is free text and is never read.
     """
     m = ROUND_FIELD_RE.match(str(value).strip())
     if not m or not m.group("n"):
@@ -315,6 +327,22 @@ def split_list(value: str) -> list[str]:
     return [v.strip() for v in re.split(r"[,;]\s*", value) if v.strip()]
 
 
+def front_list(front: dict, key: str) -> list[str]:
+    """A declared key's value as a list, from the frontmatter and only there.
+
+    Use this, not `["fields"]`: `parse_doc` merges frontmatter with `## Section`
+    headings, so a `## Damage classes` section would answer for a
+    `damage classes:` key and the section's prose would win.
+
+    Handles both spellings of a value — `needs: a, b` and a `- ` block list —
+    which arrive from `parse_doc` as a string and as a list.
+    """
+    value = front.get(key, "")
+    if isinstance(value, list):
+        return [v.strip() for v in value if v.strip() and v.strip() not in EMPTY]
+    return split_list(value)
+
+
 def round_numbers(loop: Path) -> list[int]:
     nums = []
     for p in entity_files(loop / "rounds", DIRS["rounds"]):
@@ -325,7 +353,8 @@ def round_numbers(loop: Path) -> list[int]:
 
 
 def parse_config(loop: Path) -> dict:
-    cfg = {"unattended": None, "gate": [], "budget": {}, "packs": ["core"],
+    cfg = {"unattended": None, "gate": [], "budget": {}, "packs": [],
+           "traits": [], "local_traits": [],
            "classes": [], "after_commit": [], "commit_lang": "English",
            "reply_lang": "English"}
     path = loop / "config.md"
@@ -343,11 +372,13 @@ def parse_config(loop: Path) -> dict:
         km = re.search(rf"^{key}:\s*(\d+)\s*$", text, re.M | re.I)
         if km:
             cfg["budget"][key] = int(km.group(1))
+    for key, dest in (("traits", "traits"), ("local traits", "local_traits")):
+        m = re.search(rf"^{key}:[ \t]*(.*)$", text, re.M | re.I)
+        if m and m.group(1).strip():
+            cfg[dest] = split_list(m.group(1))
     m = re.search(r"^packs:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["packs"] = split_list(m.group(1))
-        if "core" not in cfg["packs"]:
-            cfg["packs"].insert(0, "core")
     m = re.search(r"^damage classes:[ \t]*(.*)$", text, re.M | re.I)
     if m and m.group(1).strip():
         cfg["classes"] = split_list(m.group(1))
@@ -364,45 +395,120 @@ def parse_config(loop: Path) -> dict:
     return cfg
 
 
-def load_packs(loop: Path, cfg: dict) -> tuple[dict, list[str]]:
-    """Enabled packs: the skill's first, then private ones in .claude/loop/packs/."""
-    packs: dict[str, dict] = {}
-    missing: list[str] = []
-    for name in cfg["packs"]:
-        found = None
-        for base in (SKILL_ROOT / "packs", loop / "packs"):
-            if (base / name / "PACK.md").exists():
-                found = base / name
-                break
-        if not found:
-            missing.append(name)
+def body(text: str) -> str:
+    """A document without its frontmatter.
+
+    The `---` fence on line 1 is a structural delimiter the schema declares, the
+    same one `parse_doc` reads; stripping it is not an interpretation of the
+    content. Everything after it is concatenated verbatim.
+    """
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return text.rstrip("\n")
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return "\n".join(lines[i + 1:]).strip("\n")
+    return text.rstrip("\n")
+
+
+def registry_traits() -> list[str]:
+    """The shared trait vocabulary, from the skill's own registry.
+
+    Its only job is to catch a TYPO. A project may use any name it likes, but a
+    name outside this list has to be declared as `local traits:` on purpose,
+    which is the difference between "I meant a new trait" and "I mistyped one".
+    """
+    p = SKILL_ROOT / "references" / "traits.md"
+    if not p.exists():
+        return []
+    return front_list(parse_doc(p.read_text())["front"], "traits")
+
+
+def effective_traits(cfg: dict) -> set[str]:
+    return set(cfg["traits"]) | set(cfg["local_traits"])
+
+
+def item_files(loop: Path) -> list[tuple[str, Path]]:
+    """(key, path) for every items file, in the skill and in the project.
+
+    An items file is `items/<key>-<slug>.md`. The key names the checklist it
+    extends and comes from the file NAME, which is the declaration. A `-why.md`
+    is a story, never an item.
+    """
+    out: list[tuple[str, Path]] = []
+    for base in (SKILL_ROOT / "items", loop / "items"):
+        if not base.is_dir():
             continue
-        fields = parse_doc((found / "PACK.md").read_text())["fields"]
-        packs[name] = {"path": found, "fields": fields,
-                       "files": {k: found / f"{k}.md" for k in ("measure", "canary", "tests", "review")
-                                 if (found / f"{k}.md").exists()},
-                       "detectors": sorted((found / "detectors").glob("*")) if (found / "detectors").is_dir() else []}
-    return packs, missing
+        for key in ("measure", "canary", "tests", "review"):
+            for f in sorted(base.glob(f"{key}-*.md")):
+                if not f.name.endswith("-why.md"):
+                    out.append((key, f))
+    return out
 
 
-def damage_classes(packs: dict, cfg: dict) -> list[str]:
-    out: list[str] = []
-    for pk in packs.values():
-        out += split_list(pk["fields"].get("damage classes", ""))
+def load_items(loop: Path, cfg: dict) -> tuple[dict, list[dict]]:
+    """Items the project's TRAITS admit, and the ones they do not.
+
+    Per FILE, not per item: the file is concatenated whole, so nothing here
+    parses the body. A file whose items would need different traits is SPLIT --
+    `tests-dart.md` and `tests-dart2js.md` -- and both are found by the glob.
+
+    Returns (included, skipped). `skipped` is not a detail: an item that
+    silently fails to arrive is the failure mode of this whole design, so every
+    caller prints it.
+    """
+    have = effective_traits(cfg)
+    included: dict[str, list[dict]] = {k: [] for k in ("measure", "canary", "tests", "review")}
+    skipped: list[dict] = []
+    for key, f in item_files(loop):
+        needs = front_list(parse_doc(f.read_text())["front"], "needs")
+        rec = {"key": key, "path": f, "needs": needs,
+               "missing": [n for n in needs if n not in have]}
+        (skipped if rec["missing"] else included[key]).append(rec)
+    return included, skipped
+
+
+def declared_needs(loop: Path) -> set[str]:
+    """Every trait any items file asks for — so lint can find one nobody defines."""
+    out: set[str] = set()
+    for _, f in item_files(loop):
+        out |= set(front_list(parse_doc(f.read_text())["front"], "needs"))
+    return out
+
+
+def damage_classes(loop: Path, cfg: dict) -> list[str]:
+    """A vocabulary for a lens's `breaks:`, from the trait registry.
+
+    Nothing reads these mechanically. They are words for whoever writes a lens,
+    and for the severity bar in `config.md` that decides what a round may take.
+    """
+    p = SKILL_ROOT / "references" / "traits.md"
+    out = front_list(parse_doc(p.read_text())["front"], "damage classes") if p.exists() else []
     out += cfg["classes"]
-    return [c for c in out if c not in EMPTY]
+    seen: list[str] = []
+    for c in out:
+        if c not in EMPTY and c not in seen:
+            seen.append(c)
+    return seen
 
 
-def catalog_forms(loop: Path, packs: dict) -> list[tuple[str, str, Path]]:
-    """(ID, pack, file) for the skill's catalog shapes and private packs' ones."""
-    out = []
-    dirs = [SKILL_ROOT / "catalog"] + [pk["path"] / "catalog" for pk in packs.values()
-                                       if (pk["path"] / "catalog").is_dir()]
-    for d in dirs:
+def catalog_forms(loop: Path) -> list[dict]:
+    """EVERY catalog shape. Nothing filters this list, and nothing should.
+
+    Which shapes are worth instantiating is `lenses` mode's judgement, taken
+    from each shape's `applies:`. The script carries no key to make it with,
+    because a filter here can only subtract.
+    """
+    out: list[dict] = []
+    for d in (SKILL_ROOT / "catalog", loop / "catalog"):
+        if not d.is_dir():
+            continue
         for f in sorted(d.glob("U-*.md")):
-            fields = parse_doc(f.read_text())["fields"]
-            out.append((f.name[:4] if f.name[4] == "-" else f.name.split("-")[0] + "-" + f.name.split("-")[1],
-                        (fields.get("pack") or "core").strip(), f))
+            text = f.read_text()
+            m = ID_RE.match(f.name)
+            out.append({"id": m.group(1) if m else f.stem,
+                        "applies": str(parse_doc(text)["front"].get("applies", "")).strip(),
+                        "title": h1(text)[2:], "path": f})
     return out
 
 
@@ -465,17 +571,6 @@ def load(loop: Path) -> dict:
     return data
 
 
-def resolve_script(loop: Path, packs: dict, rel: str) -> Path | None:
-    """Detector script path: relative to the skill, .claude/loop/, a pack or the root."""
-    cands = [SKILL_ROOT / rel, loop / rel, loop.parent.parent / rel]
-    for pk in packs.values():
-        cands.append(pk["path"] / rel)
-    for c in cands:
-        if c.exists():
-            return c
-    return None
-
-
 # ---------------------------------------------------------------- lint
 
 def skill_index_for(p: Path) -> Path | None:
@@ -484,12 +579,6 @@ def skill_index_for(p: Path) -> Path | None:
     parts = rel.parts
     if len(parts) == 1:
         return None                                  # SKILL.md is the root
-    if parts[0] == "packs":
-        if len(parts) == 2:                          # packs/PACKS.md
-            return SKILL_ROOT / "SKILL.md"
-        if rel.name == "PACK.md":                    # packs/<name>/PACK.md
-            return SKILL_ROOT / "packs" / "PACKS.md"
-        return SKILL_ROOT / "packs" / parts[1] / "PACK.md"
     index = SKILL_DIRS.get(parts[0])
     if index is None:
         return None
@@ -507,11 +596,9 @@ INTERPRETERS = ("python3", "python", "node", "dart", "perl", "ruby", "bash", "sh
 def bare_interpreters(rules: list[str], where: str, rep: "Report") -> None:
     """Reject `Bash(python3:*)` and friends: they permit `python3 -c "..."`.
 
-    Measured: with the bare rule in the skill's own `allowed-tools` an agent ran
-    inline Python about fifteen times in one session and was never prompted --
-    in a repository whose settings.json had carried the narrow path rule from
-    the start. A rule that reads like "the script may run" and means "any
-    program may run" is worse than no rule, because everyone believes it.
+    Such a rule reads like "the script may run" and means "any program may
+    run", which is worse than no rule because everyone believes it. Allow the
+    interpreter by PATH, never by name.
     """
     for rule in rules:
         m = re.fullmatch(r"Bash\(([^\s:)]+)\s*:\s*\*\)", rule.strip())
@@ -527,16 +614,12 @@ def script_names(rep: "Report") -> None:
 
     Python resolves a global when the line executes, so a name deleted from
     under a caller survives the diff, the import, `lint` and every command that
-    does not reach that branch. It shipped twice in one commit: `res` in
-    cmd_stale, left behind when `run_detector` went, and three templates in
-    cmd_init -- which took `setup` mode, the entry point for a new repository,
-    from working to NameError on its first command.
+    does not reach that branch. It surfaces as a NameError mid-round.
 
     Deliberately conservative about what counts as bound: every Store name
     anywhere inside a function counts as that function's local, nested scopes
-    included. That under-reports (a name bound only on one branch reads as
-    bound) and never invents a defect, which is the trade a checker in a gate
-    wants -- a false error gets the whole check muted.
+    included. That under-reports and never invents a defect, which is the trade
+    a checker in a gate wants -- a false error gets the whole check muted.
     """
     src = (SKILL_ROOT / "scripts" / "loop.py").read_text()
     try:
@@ -575,6 +658,40 @@ def script_names(rep: "Report") -> None:
             if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load) and n.id not in known:
                 rep.error(f"skill scripts/loop.py:{n.lineno}: `{fn.name}` reads `{n.id}`, "
                           "which nothing in the file binds — NameError when that line runs")
+
+    # The MIRROR of the check above, and it found one the moment it was written:
+    # `resolve_script` had outlived the detector scripts deleted in September
+    # 2026, and it still took a `packs` dict in a shape the traits redesign had
+    # replaced. A dead function is not a crash, which is exactly why nothing
+    # notices it -- and one that takes an obsolete shape is a trap for whoever
+    # calls it next believing it current.
+    #
+    # Top-level functions only, and only at zero Load references: a method, a
+    # nested helper or anything reached dynamically is out of scope. It
+    # under-reports by design, because a false error here gets the whole check
+    # muted.
+    used: set[str] = set()
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+            used.add(n.id)
+        elif isinstance(n, ast.Attribute):
+            used.add(n.attr)
+    for stmt in tree.body:
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.name not in used:
+            rep.error(f"skill scripts/loop.py:{stmt.lineno}: `{stmt.name}` is defined and "
+                      "never read — delete it, or it rots into a trap for whoever "
+                      "calls it next believing it current")
+        # Constants too, and that gap was not hypothetical: `CATALOG_FRONT` --
+        # the schema for the 23 files the whole catalog is made of -- sat here
+        # declared and enforced by nothing, and the function-only version of
+        # this check walked straight past it.
+        elif isinstance(stmt, ast.Assign):
+            for t in stmt.targets:
+                if (isinstance(t, ast.Name) and t.id.isupper() and len(t.id) > 2
+                        and t.id not in used):
+                    rep.error(f"skill scripts/loop.py:{stmt.lineno}: `{t.id}` is defined "
+                              "and never read — a schema nothing enforces is worse "
+                              "than no schema, because everyone believes it")
 
 
 def skill_graph(rep: "Report") -> None:
@@ -651,14 +768,18 @@ def skill_graph(rep: "Report") -> None:
         if p not in seen:
             rep.error(f"skill {p.relative_to(SKILL_ROOT)}: unreachable from SKILL.md")
 
-    for p in files:
-        if p == root_md:
-            continue                                 # SKILL.md owns the numbering
-        for n, line in enumerate(p.read_text().splitlines(), 1):
-            if STEP_NUM_RE.search(line):
-                rep.error(f"skill {p.relative_to(SKILL_ROOT)}:{n}: a step named by NUMBER — "
-                          "the numbering in SKILL.md drifts and nothing notices; "
-                          "name the step instead")
+    # Every path `brief` and `review` will concatenate exists and has content.
+    # The concatenation is by DECLARED path, so its only failure mode is a file
+    # renamed or emptied under it -- and that failure is silent at the point it
+    # matters, because a missing pack half just makes the checklist look short.
+    for key, rel in (*BRIEF_PARTS, REVIEW_PART):
+        p = SKILL_ROOT / rel
+        if not p.exists():
+            rep.error(f"skill {rel}: declared in BRIEF_PARTS/REVIEW_PART for "
+                      f"`{key}`, but the file does not exist — `loop.py "
+                      f"{'review' if key == 'review' else 'brief'}` would print a gap")
+        elif not p.read_text().strip():
+            rep.error(f"skill {rel}: empty — the `{key}` checklist would print nothing")
 
     # The evaluations are the skill's source of truth for whether it works, and
     # there is no runner for them, so the least they must be is well-formed and
@@ -688,26 +809,37 @@ def skill_graph(rep: "Report") -> None:
         seen_ids.add(eid)
 
 
-def cmd_yield(root: Path, loop: Path) -> int:
-    """What each lens has actually produced. A FACT, decided by nobody.
+def lens_verdicts(data: dict) -> dict[str, list[str]]:
+    """lens ID -> the verdict of every round that declared it. One home.
 
-    `curate` used to re-rank the set by feel. This counts: how many rounds took
-    a lens, and how many of those ended FIXED. The first run of it made the
-    single most useful observation in the project's history -- the lenses mined
-    out of existing history found a defect on FIRST application three times out
-    of three, while several derived ones had been applied twice for nothing.
-    Rank on that, not on which shape feels clever.
+    `next` and `yield` both report from this, so they cannot disagree about what
+    a lens has produced -- which they could while `next` printed only `applied:`
+    and the counts lived one command away.
+
+    `fullmatch`, not `search`: `lens:` holds one ID and nothing else, and lint
+    enforces exactly that. Searching would have quietly taken the first ID out
+    of any sentence somebody wrote in the field.
+    """
+    took: dict[str, list[str]] = {}
+    for ent in data["rounds"].values():
+        f = ent["fields"]
+        m = ONLY_ID_RE.fullmatch(f.get("lens", "").strip())
+        if m:
+            took.setdefault(m.group(1), []).append(f.get("verdict", "").strip())
+    return took
+
+
+def cmd_yield(root: Path, loop: Path) -> int:
+    """What each lens has produced: rounds taken, and how many ended FIXED.
+
+    A fact, decided by nobody. Rank the set on it rather than on which shape
+    feels clever.
     """
     if not loop.is_dir():
         print(f"no {loop} — data not laid out: setup mode (loop.py init)")
         return 1
     data = load(loop)
-    took: dict[str, list[str]] = {}
-    for ent in data["rounds"].values():
-        f = ent["fields"]
-        m = ANY_ID_RE.search(f.get("lens", ""))
-        if m:
-            took.setdefault(m.group(0), []).append(f.get("verdict", "").strip())
+    took = lens_verdicts(data)
 
     rows = []
     for lid in data["lenses"]:
@@ -732,13 +864,8 @@ def cmd_yield(root: Path, loop: Path) -> int:
 def journal_commit_sprawl(root: Path, loop: Path, rep: "Report") -> None:
     """Consecutive commits that touch ONLY the journal: a round committing as it goes.
 
-    One commit per round is the rule (methods/reporting.md); prose alone did not
-    hold it. Measured on this repository the day the rule was written: one lead
-    took four commits, two of them a note and a correction to that note fifteen
-    minutes apart, and an amend collapsed only the pair whose message was broken.
-
-    Only the LAST few commits are checked, because history before the rule
-    existed is not a defect anyone can act on.
+    One commit per round (methods/reporting.md). Only the last few commits are
+    checked; nobody can act on older ones.
     """
     rel = loop.relative_to(root) if loop.is_relative_to(root) else loop
     out = git(root, "log", "-6", "--format=%h\t%s", "--name-only")
@@ -782,16 +909,68 @@ def journal_commit_sprawl(root: Path, loop: Path, rep: "Report") -> None:
             return
 
 
+def round_rigour(rep: "Report", pname: str, verdict: str, bench: "re.Match | None",
+                 sections: dict) -> None:
+    """The questions the verdict check asks, applied to the NEWEST round only.
+
+    A round with no bench cannot answer Q2 -- *did a control show the bench can
+    SEE the defect* -- so `bench: none` has to say why none was possible.
+
+    Newest round only: a lint that opens with dozens of errors about finished
+    work is a lint everybody learns to pipe away, and nobody can act on those
+    anyway. On the round being written, these arrive while the answer can still
+    change.
+
+    Nothing here reads prose. "Is there a digit in this section" and "does the
+    bench field carry a reason" are both facts about a declared place.
+    """
+    if verdict != "FIXED":
+        return
+    if bench is not None and not bench.group("probe") and not bench.group("reason"):
+        rep.error(
+            f"rounds/{pname}: FIXED with `bench: none` and no reason. A round with "
+            "no bench cannot answer Q2 of the verdict check — did a control show "
+            "the bench can SEE the defect. Either name the bench, or write "
+            "`none — <why a bench was not possible here>` (a grep detector with an "
+            "ablation, a doc-audit count, a refactor round)")
+    for name in ("before", "after"):
+        sec = sections.get(name, "")
+        if sec and not re.search(r"\d", sec):
+            rep.warn(
+                f"rounds/{pname}: `## {name.capitalize()}` holds no number. A number "
+                "is the usual form of evidence and the sharpest one, but it is not "
+                "the only one: an ablation that kills a guard, a witness failing "
+                "with a real message, a sweep that names every site can each carry "
+                "a finding. What the bar demands is evidence that is CONFIRMED — "
+                "something was varied and the outcome changed. A warning, because "
+                "whether this record clears that bar is a judgement and the script "
+                "does not make judgements")
+
+
 def cmd_lint(root: Path, loop: Path) -> int:
-    rep = Report()
     if not loop.is_dir():
         print(f"no {loop} — setup mode: loop.py init")
         return 1
+    return lint_report(root, loop).dump()
+
+
+def lint_report(root: Path, loop: Path, skill: bool = True) -> "Report":
+    """Every check, as a Report the caller can read instead of print.
+
+    `selftest` reads it: a rule whose failure nobody has ever seen is a rule
+    nobody knows is wired up. With `skill=False` the skill's own graph and this
+    file's AST are skipped, so a fixture journal is judged on its own data.
+    """
+    rep = Report()
     for name in ("LOOP.md", "config.md"):
         if not (loop / name).exists():
             rep.error(f"{name}: missing")
 
     data = load(loop)
+    # Numeric keys only. `load` keys a round file whose name is off the schema
+    # by its FILE NAME, so `min`/`max` with `key=int` meet "one.md" and raise --
+    # lint would crash on the very file it is there to report.
+    numbered = [k for k in data["rounds"] if k.isdigit()]
     cfg = parse_config(loop)
     if cfg["unattended"] is None:
         rep.error("config.md: no `unattended: yes|no` line")
@@ -803,14 +982,69 @@ def cmd_lint(root: Path, loop: Path) -> int:
     for key in ("probes", "canaries", "round cap"):
         if key not in cfg["budget"]:
             rep.error(f"config.md: no `{key}: N` line under «Round budget»")
-    packs, missing = load_packs(loop, cfg)
-    for name in missing:
-        rep.error(f"config.md: pack «{name}» found neither in {SKILL_ROOT / 'packs'} nor in {loop / 'packs'}")
-    for name, pk in packs.items():
-        for fld in PACK_FRONT:
-            if fld not in pk["fields"]:
-                rep.error(f"packs/{name}/PACK.md: no `{fld}:` key in the frontmatter")
-    classes = damage_classes(packs, cfg)
+    # --- traits: three set operations, no interpretation of anything
+    if cfg["packs"]:
+        rep.error("config.md: `packs:` is gone — a project declares what it IS "
+                  "(`traits:`), not which bundles to switch on. Replace it with "
+                  "`traits:` and, for a name the skill's registry does not have, "
+                  "`local traits:`. See specs/config.md")
+    registry = set(registry_traits())
+    have = effective_traits(cfg)
+    if not have:
+        rep.error("config.md: no `traits:` line — with none declared, `brief` prints "
+                  "only the universal items and every domain item is held back")
+    for t in cfg["traits"]:
+        if registry and t not in registry:
+            rep.error(f"config.md: `traits:` names «{t}», which is not in the skill's "
+                      "registry (references/traits.md). If it is deliberate, move it to "
+                      "`local traits:`; that line is what tells a new trait from a typo")
+    for t in cfg["local_traits"]:
+        if t in registry:
+            rep.error(f"config.md: `local traits:` names «{t}», which the registry "
+                      "already defines — use `traits:` so the name means the same "
+                      "thing here as everywhere else")
+    asked = declared_needs(loop)
+    for t in sorted(have - asked):
+        rep.info(f"trait «{t}» is declared but no items file needs it — it buys "
+                 "nothing until an item asks for it")
+    for name in sorted(asked - have - registry):
+        rep.warn(f"an items file needs «{name}», which is in no registry and in no "
+                 "config — nothing can ever satisfy it")
+    # `front`, not `fields`: `parse_doc` merges frontmatter with `## Section`
+    # headings, so a `## Needs` section would answer for a `needs:` key.
+    for s in catalog_forms(loop):
+        front = parse_doc(s["path"].read_text())["front"]
+        for fld in CATALOG_FRONT:
+            if fld not in front:
+                rep.error(f"catalog/{s['path'].name}: no `{fld}:` key — a shape says "
+                          "WHEN it bites and WHAT it breaks, and `lenses` mode reads "
+                          "both to decide whether to instantiate it")
+        for fld in front:
+            if fld not in CATALOG_FRONT:
+                rep.error(f"catalog/{s['path'].name}: `{fld}:` is not in the schema "
+                          f"({', '.join(CATALOG_FRONT)}) — nothing reads it, so it "
+                          "will go stale unnoticed")
+        # The ID in the HEADING against the ID in the file name. Comparing the
+        # name against an id parsed out of that same name can only ever agree.
+        h = h1(s["path"].read_text())
+        if not h.startswith(f"# {s['id']} — "):
+            rep.error(f"catalog/{s['path'].name}: heading must start with "
+                      f"`# {s['id']} — `, not «{h[:40]}»")
+
+    for key, f in item_files(loop):
+        front = parse_doc(f.read_text())["front"]
+        if "needs" not in front:
+            rep.warn(f"items/{f.name}: no `needs:` key — it will be merged into the "
+                     f"`{key}` checklist of EVERY project. If that is right, say so "
+                     "with `needs:` and an empty value")
+        # The BODY, not the raw text: the frontmatter is stripped before the
+        # file is concatenated, so a heading below it still lands in the
+        # checklist while `text.lstrip()` sees only `---`.
+        text = body(f.read_text())
+        if text.lstrip().startswith("#") or "](" in text:
+            rep.error(f"items/{f.name}: holds a heading or a link — an items file is "
+                      "concatenated whole into a checklist or a prompt, so it holds "
+                      "items and nothing else. Move the prose to its `-why` file")
 
     # --- names, headings, indexes
     for kind, index_name in DIRS.items():
@@ -885,12 +1119,9 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.error(f"lenses/{ent['path'].name}: status «{st}» is off the lens.md schema")
         if f.get("paths", "").strip() in EMPTY:
             rep.error(f"lenses/{ent['path'].name}: `paths:` empty — the sweep cannot be aged")
-        brk = f.get("breaks", "").lower()
-        if brk and classes and not any(c.lower() in brk for c in classes):
-            rep.warn(f"lenses/{ent['path'].name}: `breaks:` «{f['breaks'][:60]}» names no damage class "
-                     f"of the enabled packs ({', '.join(classes)}) — add the class to config.md "
-                     "(`damage classes:`) or rephrase")
-        first_round = min(data["rounds"], key=int, default=None)
+        # `breaks:` is free text and nothing checks it: matching a damage-class
+        # vocabulary against it would be a guess about prose.
+        first_round = min(numbered, key=int, default=None)
 
         def check_round(num: str, marked: bool, where: str) -> None:
             if num in data["rounds"]:
@@ -904,12 +1135,18 @@ def cmd_lint(root: Path, loop: Path) -> int:
 
         applied = set()
         for tok in split_list(f.get("applied", "")):
-            rk = round_key(tok)
-            if rk is None:
+            # `off-journal 77` is valid here, as it is in `status:`: a lens can
+            # have been applied in a round that predates the journal. Read both
+            # halves from the declared grammar rather than testing `round_key`
+            # alone, which returns None for the off-journal form.
+            m_tok = ROUND_FIELD_RE.match(tok.strip())
+            if not m_tok or not m_tok.group("n"):
                 rep.error(f"lenses/{ent['path'].name}: `applied:` holds a non-round: «{tok}»")
                 continue
-            applied.add(rk)
-            check_round(rk, "off-journal" in tok, "`applied:`")
+            num, marked = m_tok.group("n"), bool(m_tok.group("off"))
+            if not marked:
+                applied.add(num)
+            check_round(num, marked, "`applied:`")
         lens_rounds[lid] = applied
         m = re.search(r"round (\d+)", st)
         if m:
@@ -918,6 +1155,7 @@ def cmd_lint(root: Path, loop: Path) -> int:
             rep.error(f"lenses/{ent['path'].name}: confirmed, but `## Evidence` is empty")
 
     have_git = git(root, "rev-parse", "--git-dir") is not None
+    newest = max(numbered, key=int, default=None)
     for rn, ent in data["rounds"].items():
         f = ent["fields"]
         pname = ent["path"].name
@@ -930,6 +1168,12 @@ def cmd_lint(root: Path, loop: Path) -> int:
         if verdict == "FIXED" and commit != "yes":
             rep.error(f"rounds/{pname}: FIXED, but `commit:` is not `yes`")
         if verdict == "FIXED":
+            # `## Canary` stays an ERROR, and the softening of the number rule is
+            # exactly why. Switching the fix off in place and watching the
+            # witness fail IS the variation that makes evidence confirmed; on a
+            # round whose finding is not a quantity it is the ONLY confirmation
+            # there is. Relaxing the number and the canary together would have
+            # left "FIXED" meaning nothing was checked at all.
             for name in ("after", "canary", "gate"):
                 if f.get(name, "").strip().lower() in EMPTY:
                     rep.error(f"rounds/{pname}: FIXED, but `## {name.capitalize()}` is empty or n/a")
@@ -953,9 +1197,12 @@ def cmd_lint(root: Path, loop: Path) -> int:
                 rep.error(f"rounds/{pname}: budget exceeded ({f['budget']}) with verdict {verdict}, not INCONCLUSIVE")
         sm_ = BENCH_RE.match(f.get("bench", "").strip())
         if f.get("bench") and not sm_:
-            rep.error(f"rounds/{pname}: `bench:` must be `P-N — reused`, `P-N — new` or `none`")
-        elif sm_ and sm_.group(2) and sm_.group(2) not in data["probes"]:
-            rep.error(f"rounds/{pname}: bench {sm_.group(2)} not found in probes/")
+            rep.error(f"rounds/{pname}: `bench:` must be `P-N — reused`, `P-N — new`, "
+                      "`none` or `none — <why no bench was possible>`")
+        elif sm_ and sm_.group("probe") and sm_.group("probe") not in data["probes"]:
+            rep.error(f"rounds/{pname}: bench {sm_.group('probe')} not found in probes/")
+        if newest is not None and rn == newest:
+            round_rigour(rep, pname, verdict, sm_, ent["sections"])
         if f.get("review") and not REVIEW_RE.match(f["review"].strip()):
             rep.error(f"rounds/{pname}: `review:` must start with `subagent`, `self` or `claude -p`")
         if commit == "yes" and have_git:
@@ -1107,11 +1354,11 @@ def cmd_lint(root: Path, loop: Path) -> int:
                      "status/lint/stale/next will ask for permission")
     bare_interpreters(rules, ".claude/settings.json", rep)
 
-    # --- the skill's own graph, and its own script
-    skill_graph(rep)
-    script_names(rep)
-    journal_commit_sprawl(root, loop, rep)
-    return rep.dump()
+    if skill:
+        skill_graph(rep)
+        script_names(rep)
+        journal_commit_sprawl(root, loop, rep)
+    return rep
 
 
 # ---------------------------------------------------------------- selection
@@ -1154,27 +1401,16 @@ def backlog_rank(loop: Path, data: dict) -> list[str]:
 def pending_decisions(loop: Path, data: dict) -> list[str]:
     """Leads the owner has answered and no round has carried out yet.
 
-    NOT just `awaiting owner`. Writing the decision is what ENDS that status, so
-    matching it alone meant a lead dropped out of the priority slot at the exact
-    moment it became actionable, and fell to the bottom of the rank behind every
-    lens. Measured at round 224: B-17 — a data loss with a decision, a bench and
-    a reproduction — was the one thing `next` could never point at.
+    The STATUS decides, not the section. `decided by owner` means answered and
+    not yet carried out; `awaiting owner` means still waiting, whatever the
+    section holds. A decision stays outstanding until the lead is `closed`.
 
-    A decision stays outstanding until the lead is `closed`. `decided by owner`
-    therefore means "answered, not yet carried out"; a lead whose work shipped is
-    `closed (round N)` like any other.
+    `## Owner decision` is an archive, not the signal: a lead whose decision
+    turned out unbuildable keeps the old text under a "superseded" note, because
+    the reasoning is still worth reading. Matching on "the section is non-empty"
+    would read a retired decision as a live one.
 
     Ranked by BACKLOG.md, per the rule that order lives in the index.
-
-    The STATUS decides, not the section. `## Owner decision` is an archive: a
-    lead whose decision was measured unbuildable keeps the old text with a
-    "superseded" note above it, because the reasoning is still worth reading.
-    Matching on "the section is non-empty" therefore reads a retired decision as
-    a live one -- B-17 was named as the round's first target five rounds running
-    while its decision was known impossible, and B-22 repeated it at round 232.
-
-    So: `decided by owner` means answered and not yet carried out;
-    `awaiting owner` means waiting, whatever the section still holds.
     """
     out = []
     for bid in backlog_rank(loop, data):
@@ -1188,13 +1424,11 @@ def pending_decisions(loop: Path, data: dict) -> list[str]:
 
 
 def stop_condition(root: Path, loop: Path, data: dict, cfg: dict) -> tuple[bool, str]:
-    """The ONLY thing the script still decides, and only because unattended runs
-    need it: an agent asked "should we continue?" always says yes.
+    """The ONLY thing the script decides, and only because unattended runs need
+    it: an agent asked "should we continue?" always says yes.
 
-    Everything else that used to stop or steer a round -- ranking targets,
-    "every lens is swept so the work is done" -- was judgement wearing a
-    script's authority, and it cost five rounds of opening new threads while a
-    started one sat unfinished. Facts belong here; choices do not.
+    Everything else is a fact for the round to weigh. Facts belong here;
+    choices do not.
 
     The cap is a round NUMBER, not a file count. Comparing it against the count
     made it unreachable for a journal that starts partway -- 30 files numbered
@@ -1312,11 +1546,18 @@ def cmd_next(root: Path, loop: Path) -> int:
             print(f"  {d} — {data['backlog'][d]['h1'][2:]}")
         print("")
 
-    print("LENSES — status, and the rounds that applied them:")
+    # The counts are here because the decision they inform is made here: a lens
+    # applied three times for nothing and a lens never applied read identically
+    # from `applied:` alone.
+    took = lens_verdicts(data)
+    print("LENSES — status, the rounds that applied them, and what they produced:")
     for lid in sorted(data["lenses"]):
         f = data["lenses"][lid]["fields"]
         ap = split_list(f.get("applied", ""))
-        print(f"  {lid:8} {f.get('status', ''):34} applied: {', '.join(ap) if ap else 'never'}")
+        vs = took.get(lid, [])
+        fixed = sum(1 for v in vs if v == "FIXED")
+        print(f"  {lid:8} {f.get('status', ''):34} {len(vs)} round(s), {fixed} FIXED"
+              f"   applied: {', '.join(ap) if ap else 'never'}")
 
     aged = []
     for lid in sorted(data["lenses"]):
@@ -1348,41 +1589,23 @@ def cmd_next(root: Path, loop: Path) -> int:
     b = cfg["budget"]
     print(f"Budget (count them yourself; past either one the verdict is INCONCLUSIVE): "
           f"{b.get('probes', '?')} bench rebuilds, {b.get('canaries', '?')} canary attempts")
-    packs, missing = load_packs(loop, cfg)
-    print("Packs: " + ", ".join(packs) + (f" (not found: {', '.join(missing)})" if missing else ""))
+    included, skipped = load_items(loop, cfg)
+    print("Traits: " + (", ".join(sorted(effective_traits(cfg))) or "none declared"))
+    if skipped:
+        print(f"Items held back for a trait this project does not declare: {len(skipped)}"
+              " — `loop.py brief` names them")
     print(f"Commit language: {cfg['commit_lang']}")
     print(f"Reply language: {cfg['reply_lang']}")
-    # THE CHECKLISTS, not the files. Each of these opens with the operative list
-    # and then spends most of its words on the stories that paid for each item.
-    # The stories are why the rules stick and are worth reading once; re-reading
-    # ~2400 words of them to reach ~600 words of checklist, every round, is the
-    # largest recurring cost in the loop. Read the checklist; open the story
-    # behind an item when that item is the one biting.
-    reading = ["methods/measurement.md — the checklist at the top",
-               "methods/canary.md — the checklist at the top",
-               "methods/tests.md — the checklist at the top",
-               "specs/round.md (the record's shape)"]
-    for name, pk in packs.items():
-        for k in ("measure", "canary", "tests"):
-            if k in pk["files"]:
-                reading.append(str(pk["files"][k].relative_to(SKILL_ROOT)) if SKILL_ROOT in pk["files"][k].parents
-                               else str(pk["files"][k]))
-    reading.append("`loop.py review` — the verdict check, with the packs' questions")
-    # No per-lens reading here: the detector, the paths and the refined catalog
-    # shape all live in the lens's own file, and naming one would be choosing.
-    reading.append("the chosen lens's file, and the `refines:` shape it names")
+    # No per-lens reading named here: the detector, the paths and the refined
+    # catalog shape all live in the lens's own file, and naming one would be
+    # choosing.
     active = [l for l, e in data["lessons"].items() if e["fields"].get("status", "").startswith("active")]
     if active:
         print(f"Lessons in force ({len(active)}): lessons/LESSONS.md")
-    print("Read: " + "; ".join(reading))
+    print("Read: `loop.py brief` — the three checklists with this project's items "
+          "merged in; specs/round.md (the record's shape); the chosen lens's file "
+          "and the `refines:` shape it names. At the verdict, `loop.py review`.")
     return 0
-
-
-def _overlap(a: str, b: str) -> bool:
-    """Rough overlap of two globs: the first two path segments in common."""
-    sa = [s for s in a.split("/") if s and s not in ("**", "*")][:2]
-    sb = [s for s in b.split("/") if s and s not in ("**", "*")][:2]
-    return bool(sa) and bool(sb) and sa[: len(sb)] == sb[: len(sa)]
 
 
 # ---------------------------------------------------------------- stale
@@ -1466,70 +1689,122 @@ def cmd_stale(root: Path, loop: Path) -> int:
 
 def cmd_catalog(root: Path, loop: Path) -> int:
     cfg = parse_config(loop)
-    packs, missing = load_packs(loop, cfg)
-    if missing:
-        print(f"packs not found: {', '.join(missing)}")
-    print("Packs: " + ", ".join(packs))
-    print("Damage classes: " + ", ".join(damage_classes(packs, cfg)))
-    forms = catalog_forms(loop, packs)
-    enabled = [(uid, pk, f) for uid, pk, f in forms if pk in packs]
-    skipped = [(uid, pk) for uid, pk, f in forms if pk not in packs]
-    print(f"Shapes to instantiate ({len(enabled)}):")
-    for uid, pk, f in enabled:
-        h = h1(f.read_text())[2:]
-        print(f"  {h}  [{pk}]  {f}")
-    if skipped:
-        print("Outside the enabled packs: " + ", ".join(f"{u} ({p})" for u, p in skipped))
+    have = effective_traits(cfg)
+    print("Traits: " + (", ".join(sorted(have)) or "none declared"))
+    print("Damage classes (a vocabulary for `breaks:`; nothing reads them): "
+          + ", ".join(damage_classes(loop, cfg)))
+    forms = catalog_forms(loop)
+    print(f"Shapes ({len(forms)}) — ALL of them; nothing here is hidden from you.")
+    print("Weigh each shape's `applies:` against this project and instantiate the")
+    print("ones that fit. That judgement is yours; the script holds no key to make it.")
+    for s in forms:
+        print(f"  {s['title']}")
+        print(f"      applies: {s['applies']}")
+        print(f"      {s['path']}")
     return 0
 
 
-def fenced(text: str) -> str:
-    m = re.search(r"```\n(.*?)```", text, re.S)
-    return m.group(1) if m else ""
+def assemble(key: str, rel: str, included: dict) -> str:
+    """The universal half of a checklist, then every items file the traits admit.
+
+    Whole files, concatenated in a declared order, minus their frontmatter. The
+    only thing this knows about a document is its PATH; it never looks inside
+    one to decide what part of it to take, because an extraction step that goes
+    wrong still produces output that LOOKS right.
+    """
+    core = SKILL_ROOT / rel
+    out = [body(core.read_text())] if core.exists() else []
+    for rec in included.get(key, []):
+        text = body(rec["path"].read_text()).strip()
+        if text:
+            out.append(text)
+    return "\n".join(x for x in out if x.strip()) + "\n"
+
+
+def report_skipped(skipped: list[dict], keys: tuple[str, ...]) -> None:
+    """What did NOT print, and which trait would have let it.
+
+    An item that silently fails to arrive is the failure mode of the trait
+    design -- a shorter checklist looks exactly like a complete one. So this is
+    never optional output, and it names the trait rather than the pack: the
+    trait is the thing a project can decide to declare.
+    """
+    rows = [s for s in skipped if s["key"] in keys]
+    if not rows:
+        return
+    print("")
+    print(f"Held back ({len(rows)}), each waiting on a trait this project does not declare:")
+    for s in sorted(rows, key=lambda r: (r["key"], r["pack"])):
+        print(f"  {s['key']:8} {s['pack']}/{s['path'].name} — needs {', '.join(s['missing'])}")
+    print("If one of those traits does describe this project, add it to `traits:` "
+          "in config.md (or to `local traits:` if the skill's registry has no "
+          "name for it) — the item is written and waiting.")
+
+
+def cmd_brief(root: Path, loop: Path) -> int:
+    """The per-round checklists, universal plus this project's, in ONE read.
+
+    One command instead of eight file opens, and the domain half cannot arrive
+    without its universal half.
+    """
+    cfg = parse_config(loop)
+    included, skipped = load_items(loop, cfg)
+    have = sorted(effective_traits(cfg))
+    print("Traits: " + (", ".join(have) if have
+                        else "NONE declared — only the universal items print. "
+                             "If that is wrong, config.md is not finished."))
+    print("")
+    for key, rel in BRIEF_PARTS:
+        print(f"===== {key} =====")
+        print(assemble(key, rel, included).rstrip("\n"))
+        print("")
+    whys = ", ".join(rel[:-3] + "-why.md" for _, rel in BRIEF_PARTS)
+    print("What paid for each item — open one when that item is the one biting, "
+          f"not once per round: {whys}, and the same names beside each pack item.")
+    report_skipped(skipped, tuple(k for k, _ in BRIEF_PARTS))
+    return 0
 
 
 def cmd_review(root: Path, loop: Path) -> int:
     cfg = parse_config(loop)
-    packs, _ = load_packs(loop, cfg)
-    core = fenced((SKILL_ROOT / "references" / "review.md").read_text())
-    extra = []
-    for name, pk in packs.items():
-        if "review" in pk["files"]:
-            block = fenced(pk["files"]["review"].read_text()).strip()
-            if block:
-                extra.append(f"# {name}\n{block}")
-    if extra:
-        lines = core.rstrip("\n").splitlines()
-        idx = next((i for i, l in enumerate(lines) if l.startswith("Bottom line")), len(lines))
-        lines[idx:idx] = ["", *extra, ""]
-        core = "\n".join(lines) + "\n"
-    print(core, end="")
+    included, skipped = load_items(loop, cfg)
+    print(assemble(REVIEW_PART[0], REVIEW_PART[1], included), end="")
+    report_skipped(skipped, (REVIEW_PART[0],))
     return 0
 
 
 
 
-# What `init` writes into a fresh `.claude/loop/`. Deleted by accident in the
-# September 2026 cut, which left cmd_init calling three names that no longer
-# existed: `setup` mode raised NameError on its very first command.
+# What `init` writes into a fresh `.claude/loop/`. Must satisfy what `lint`
+# demands, or `setup` mode hands a new repository a config that is red on sight.
 CONFIG_TEMPLATE = """# Loop settings
 
 Schema — `specs/config.md` in the skill. The places below are read by
-`loop.py` and their format is exact: the `unattended:` line, the ```gate block,
-the `commit language:` and `reply language:` lines, and the three
-«Round budget» lines.
+`loop.py` and their format is exact: the `unattended:` line, `traits:`,
+`local traits:`, the ```gate block, the `commit language:` and
+`reply language:` lines, and the three «Round budget» lines.
 
 ## Mode
 
 unattended: no
 
-## Packs
+## Traits
 
-Enabled knowledge packs from the skill's `packs/` or from
-`.claude/loop/packs/`; `core` is always on. Own damage classes — comma
-separated, optional.
+What this project IS. Every items file under a pack directory declares the
+traits it needs, and `loop.py brief` merges the ones this list covers; it then
+names every item it held back, so nothing is lost in silence.
 
-packs: core
+Names from the skill's registry (`references/traits.md`) go on the first line.
+A property the registry has no name for goes on the second, together with an
+items file that needs it in `.claude/loop/packs/<name>/` — that is how a project
+extends the vocabulary instead of bending an existing name to fit.
+
+traits:
+local traits:
+
+Own damage classes — comma separated, optional, read by nobody; they are a
+vocabulary for whoever writes a lens's `breaks:`.
+
 damage classes:
 
 ## Language
@@ -1674,20 +1949,615 @@ def cmd_init(root: Path, loop: Path) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- selftest
+
+FIXTURE = {
+    "config.md": (
+        "unattended: no\ntraits: dart\n"
+        "commit language: English\nreply language: English\n"
+        "```gate\ntrue\n```\n"
+        "```after-commit\n```\n"
+        "probes: 3\ncanaries: 2\nround cap: 50\n"),
+    "LOOP.md": "# LOOP.md\n\nfixture\n",
+    "lenses/LENSES.md": "# Lenses\n\n[../LOOP.md](../LOOP.md)\n\n"
+                        "**[X-1](X-1-fix.md)** derived\n",
+    "lenses/X-1-fix.md": (
+        "---\nrefines: U-01\npaths: lib/**\napplies: always\nbreaks: a crash\n"
+        "applied: 1\nstatus: derived\n---\n\n# X-1 — fixture\n\n"
+        "## Shape\n\ns\n\n## Detector\n\nd\n\n## Ask\n\na\n\n## Evidence\n\ne\n"),
+    "rounds/ROUNDS.md": "# Rounds\n\n[../LOOP.md](../LOOP.md)\n\n"
+                        "**[1](1-one.md)** FIXED\n",
+    "rounds/1-one.md": (
+        "---\nround: 1\nverdict: FIXED\npackages: p\nlens: X-1\n"
+        "bench: P-1 — reused\ncommit: yes\n---\n\n# Round 1 — fixture\n\n"
+        "## Target\n\nt\n\n## Hypothesis\n\nh\n\n## Before\n\n```\n41 MiB\n```\n\n"
+        "## Mechanism\n\nm\n\n## After\n\n4 MiB\n\n## Canary\n\nfailed: boom\n\n"
+        "## Gate\n\ngreen\n\n## Not fixed\n\n—\n\n## Links\n\nX-1\n"),
+    "backlog/BACKLOG.md": "# Leads\n\n[../LOOP.md](../LOOP.md)\n\n"
+                          "**[B-1](B-1-lead.md)** open\n",
+    "backlog/B-1-lead.md": (
+        "---\nstatus: open\nround: 1\ncommit: abc1234\npaths: lib/**\n"
+        "probe: none\nreason: cost\n---\n\n# B-1 — fixture\n\n"
+        "## Owner decision\n\n—\n"),
+    "checked/CHECKED.md": "# Negatives\n\n[../LOOP.md](../LOOP.md)\n\n"
+                          "**[C-1](C-1-clean.md)** clean\n",
+    "checked/C-1-clean.md": (
+        "---\nround: 1\ncommit: abc1234\npaths: lib/**\nscope: all\n---\n\n"
+        "# C-1 — fixture\n\n## Control\n\nmechanism removed, number differed\n"),
+    "probes/PROBES.md": "# Benches\n\n[../LOOP.md](../LOOP.md)\n\n"
+                        "**[P-1](P-1-bench.md)** valid\n",
+    "probes/P-1-bench.md": (
+        "---\nfile: tool/p.dart\nround: 1\ncommit: abc1234\npaths: lib/**\n"
+        "status: valid\n---\n\n# P-1 — fixture\n\n## Measures\n\nbytes\n\n"
+        "## Control\n\nmechanism removed\n"),
+    "lessons/LESSONS.md": "# Lessons\n\n[../LOOP.md](../LOOP.md)\n\n"
+                          "**[L-1](L-1-lesson.md)** active\n",
+    "lessons/L-1-lesson.md": (
+        "---\nround: 1\nclass: bench\ncost: 2 rebuilds\npaths: lib/**\n"
+        "commit: abc1234\nstatus: active\n---\n\n# L-1 — fixture\n"),
+}
+
+
+def build_fixture(loop: Path, **override: str) -> None:
+    """A journal that lints clean, with named files replaced or deleted.
+
+    `override` takes `path=text`, or `path=None` to leave the file out.
+    """
+    for rel, text in {**FIXTURE, **override}.items():
+        p = loop / rel
+        if text is None:
+            continue
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+
+
+def cmd_selftest(root: Path, loop: Path) -> int:
+    """This file's own checks, against a fixture — NOT against the live journal.
+
+    It is a subcommand rather than a `tests/` directory with its own runner for
+    one reason, and it is rule zero: the allowlist grants `python3 <path to
+    loop.py>`, so a second script would need a second permission rule in every
+    repository, for a command only whoever edits the skill ever runs. Reachable
+    through the one allowed entry point, it costs nothing to keep runnable.
+
+    What it covers is what has actually broken here: names deleted from under a
+    caller (twice in one commit, one of which killed `setup` mode on its first
+    command), a field parsed by looking for a digit anywhere in it, and now the
+    declared paths `brief` and `review` concatenate. It needs no `.claude/loop/`,
+    so a fresh repository can check the skill before laying anything out.
+    """
+    failures: list[str] = []
+    checks = 0
+
+    def check(name: str, ok: bool, detail: str = "") -> None:
+        nonlocal checks
+        checks += 1
+        if not ok:
+            failures.append(f"{name}{': ' + detail if detail else ''}")
+
+    # --- round_key: an anchored grammar, not "a digit somewhere in the field"
+    check("round_key plain", round_key("234") == "234")
+    check("round_key with commentary", round_key("234 — measured, then accepted") == "234")
+    check("round_key off-journal", round_key("off-journal 77") is None)
+    check("round_key unknown", round_key("—") is None)
+    check("round_key not re-measured", round_key("— (not re-measured)") is None)
+    # The case the old `re.search(r"\d+")` got wrong in silence.
+    check("round_key ignores a trailing second number",
+          round_key("213 measured, 214 accepted") == "213")
+    check("round_key refuses a leading word", round_key("see 234") is None)
+
+    # --- frontmatter and sections
+    doc = parse_doc("---\nstatus: open\npaths: [a/**, b/**]\nlist:\n- one\n- two\n"
+                    "---\n\n# T — x\n\n## Owner decision\n\ntext here\n")
+    check("parse_doc scalar", doc["front"].get("status") == "open")
+    check("parse_doc inline list", doc["front"].get("paths") == ["a/**", "b/**"])
+    check("parse_doc block list", doc["front"].get("list") == ["one", "two"])
+    check("parse_doc section", doc["sections"].get("owner decision") == "text here")
+    check("parse_doc has_front", doc["has_front"] is True)
+    check("parse_doc no front", parse_doc("# T\n")["has_front"] is False)
+
+    # --- permission prefix matching, the thing rule zero stands on
+    check("covered prefix", covered("melos run analyze", ["Bash(melos run:*)"]))
+    check("covered rejects a different command",
+          not covered("rm -rf /", ["Bash(melos run:*)"]))
+    check("covered exact", covered("uptime", ["Bash(uptime)"]))
+    check("covered bare Bash", covered("anything at all", ["Bash"]))
+    rep = Report()
+    bare_interpreters(["Bash(python3:*)"], "fixture", rep)
+    check("bare_interpreters rejects the name", len(rep.errors) == 1)
+    rep = Report()
+    bare_interpreters([f"Bash(python3 {SKILL_ROOT}/scripts/loop.py:*)"], "fixture", rep)
+    check("bare_interpreters accepts the path", not rep.errors)
+
+    # --- globs used for ageing
+    check("glob_match nested", glob_match("a/b/c/d.dart", "a/**/*.dart"))
+    check("glob_match single segment", not glob_match("a/b/c.dart", "a/*.dart"))
+    check("glob_match exact", glob_match("a/b.dart", "a/b.dart"))
+
+    # --- the documented status grammars
+    check("lens status derived", bool(LENS_STATUS_RE.match("derived")))
+    check("lens status swept", bool(LENS_STATUS_RE.match("swept here (round 12, a1b2c3d)")))
+    check("lens status rejects prose", not LENS_STATUS_RE.match("probably clean"))
+    check("bench none", bool(BENCH_RE.match("none")))
+    check("bench reused", bool(BENCH_RE.match("P-12 — reused")))
+    check("bench none with a reason", bool(BENCH_RE.match("none — the detector is a grep")))
+    check("bench rejects prose", not BENCH_RE.match("the one from last time"))
+    check("bench rejects a trailing sentence", not BENCH_RE.match("P-12 — reused, mostly"))
+
+    # --- round_rigour: each rule canaried, because a check nobody has seen fail
+    # is a check nobody knows is wired up. This is the same demand the skill
+    # makes of a fix -- no failing witness, no fix.
+    def rigour(verdict: str, bench_field: str, before: str, after: str) -> list[str]:
+        r = Report()
+        round_rigour(r, "f.md", verdict, BENCH_RE.match(bench_field),
+                     {"before": before, "after": after})
+        return r.errors
+
+    check("rigour passes a proper FIXED round",
+          not rigour("FIXED", "P-1 — reused", "41 MiB", "4.4 MiB"))
+    check("rigour passes `none` with a reason",
+          not rigour("FIXED", "none — a grep detector with an ablation", "12 sites", "0 sites"))
+    check("rigour catches bare `none` on FIXED",
+          len(rigour("FIXED", "none", "12 sites", "0 sites")) == 1)
+    check("rigour does not ERROR on a numberless Before",
+          not rigour("FIXED", "P-1 — reused", "it grew", "4.4 MiB"),
+          "a number is the usual evidence, not the only admissible one")
+    check("rigour ignores a CLEAN round",
+          not rigour("CLEAN", "none", "no number", "no number"))
+    check("rigour ignores DEFERRED",
+          not rigour("DEFERRED", "none", "no number", "no number"))
+
+    def rigour_warns(verdict: str, bench_field: str, before: str, after: str) -> list[str]:
+        r = Report()
+        round_rigour(r, "f.md", verdict, BENCH_RE.match(bench_field),
+                     {"before": before, "after": after})
+        return r.warnings
+
+    check("rigour still FLAGS a numberless Before",
+          any("Before" in w for w in rigour_warns("FIXED", "P-1 — reused", "it grew", "4.4 MiB")))
+    check("rigour is quiet when both sections carry numbers",
+          not rigour_warns("FIXED", "P-1 — reused", "41 MiB", "4.4 MiB"))
+    check("backlog status", bool(BACKLOG_STATUS_RE.match("decided by owner (round 9)")))
+    check("probe status", bool(PROBE_STATUS_RE.match("stale (a1b2c3d)")))
+    check("lesson status", bool(LESSON_STATUS_RE.match("active")))
+
+    # --- config parsing, on a fixture rather than on this repository's file
+    tmp = Path(tempfile.mkdtemp(prefix="loop-selftest-"))
+    try:
+        cfgdir = tmp / "cfg"
+        cfgdir.mkdir()
+        (cfgdir / "config.md").write_text(
+            "unattended: yes\npacks: dart, async-io\n"
+            "commit language: English\nreply language: Russian\n"
+            "```gate\nmelos run analyze\nmelos run test\n```\n"
+            "probes: 3\ncanaries: 2\nround cap: 40\n")
+        cfg = parse_config(cfgdir)
+        check("config unattended", cfg["unattended"] is True)
+        check("config gate", cfg["gate"] == ["melos run analyze", "melos run test"])
+        check("config budget", cfg["budget"] == {"probes": 3, "canaries": 2, "round cap": 40})
+        check("config reply language", cfg["reply_lang"] == "Russian")
+
+        # --- traits: declared, merged, and never interpreted
+        (cfgdir / "config.md").write_text(
+            "unattended: no\ntraits: dart, dart2js\nlocal traits: grpc-wire-compat\n"
+            "```gate\ntrue\n```\n"
+            "probes: 1\ncanaries: 1\nround cap: 5\n")
+        tcfg = parse_config(cfgdir)
+        check("config traits", tcfg["traits"] == ["dart", "dart2js"])
+        check("config local traits", tcfg["local_traits"] == ["grpc-wire-compat"])
+        check("config knows no `mandate:`", "mandate" not in tcfg,
+              "a key parsed, printed, and read by nothing that decides")
+        check("effective traits merge both lines",
+              effective_traits(tcfg) == {"dart", "dart2js", "grpc-wire-compat"})
+        check("a project can extend the vocabulary",
+              "grpc-wire-compat" in effective_traits(tcfg)
+              and "grpc-wire-compat" not in registry_traits())
+
+        # --- init, the path a live repository can never exercise
+        newroot = tmp / "repo"
+        newroot.mkdir()
+        newloop = newroot / ".claude" / "loop"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cmd_init(newroot, newloop)
+        check("init returns 0", rc == 0, f"returned {rc}")
+        check("init writes LOOP.md", (newloop / "LOOP.md").exists())
+        check("init writes config.md", (newloop / "config.md").exists())
+        for kind, index_name in DIRS.items():
+            check(f"init writes {kind}/{index_name}", (newloop / kind / index_name).exists())
+        # What `init` writes must satisfy what `lint` demands, or `setup` mode
+        # hands a new repository a config that is red on its first check. The
+        # template carried `packs: core` for one commit after the traits
+        # redesign, which lint had just been taught to refuse.
+        fresh = parse_config(newloop)
+        check("the init template declares no `packs:`", not fresh["packs"],
+              "setup would write a config lint rejects on sight")
+        check("the init template has the traits keys",
+              "traits:" in (newloop / "config.md").read_text()
+              and "local traits:" in (newloop / "config.md").read_text())
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cmd_init(newroot, newloop)
+        check("init refuses to overwrite", rc == 1, f"returned {rc}")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cmd_status(newroot, newloop)
+        check("status on a fresh layout", rc == 0 and "Next round: 1" in buf.getvalue())
+
+        # --- next, past the two early returns that a finished loop cannot get
+        # past. In a repository at its round cap `next` stops before it prints
+        # anything about lenses, so the table -- including the per-lens counts
+        # that moved here from `yield` -- has no live exercise at all. A fixture
+        # under the cap is the only place that branch runs.
+        (newloop / "config.md").write_text(
+            "unattended: no\npacks: core\n```gate\ntrue\n```\n"
+            "probes: 3\ncanaries: 2\nround cap: 40\n")
+        (newloop / "lenses" / "X-1-fixture.md").write_text(
+            "---\nrefines: U-01\npaths: lib/**\napplies: always\n"
+            "breaks: a crash\napplied: 1\nstatus: derived\n---\n\n"
+            "# X-1 — fixture\n\n## Shape\n\ns\n\n## Detector\n\nd\n\n"
+            "## Ask\n\na\n\n## Evidence\n\ne\n")
+        (newloop / "rounds" / "1-fixture.md").write_text(
+            "---\nround: 1\nverdict: FIXED\npackages: p\nlens: X-1\n"
+            "bench: none\ncommit: yes\n---\n\n# Round 1 — fixture\n\n"
+            "## Target\n\nt\n\n## Hypothesis\n\nh\n\n## Before\n\nb\n\n"
+            "## Mechanism\n\nm\n\n## After\n\na\n\n## Canary\n\nc\n\n"
+            "## Gate\n\ng\n\n## Not fixed\n\n—\n\n## Links\n\n—\n")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            rc = cmd_next(newroot, newloop)
+        out = buf.getvalue()
+        check("next runs below the cap", rc == 0, f"returned {rc}")
+        check("next prints the lens table", "LENSES" in out)
+        check("next carries the per-lens counts", "1 round(s), 1 FIXED" in out,
+              "the counts that moved here from `yield` did not print")
+        check("next names brief rather than a reading list", "loop.py brief" in out)
+        check("next still chooses nothing", "THE SCRIPT DOES NOT CHOOSE" in out)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    # --- the declared paths brief and review concatenate
+    for key, rel in (*BRIEF_PARTS, REVIEW_PART):
+        p = SKILL_ROOT / rel
+        check(f"declared path {rel} exists", p.exists())
+        check(f"declared path {rel} is not empty", p.exists() and bool(p.read_text().strip()))
+        why = SKILL_ROOT / (rel[:-3] + "-why.md")
+        if key != "review":
+            check(f"{rel} has its -why beside it", why.exists())
+    core_only = assemble(BRIEF_PARTS[0][0], BRIEF_PARTS[0][1], {})
+    check("assemble with no items returns the core",
+          core_only.strip().startswith("# Measurement"))
+    fake = {"measure": [{"path": SKILL_ROOT / "items" / "measure-dart.md"}]}
+    merged = assemble(BRIEF_PARTS[0][0], BRIEF_PARTS[0][1], fake)
+    check("assemble appends an items file", len(merged) > len(core_only))
+    check("assemble strips the items file's frontmatter",
+          "needs:" not in merged and "D1." in merged,
+          "the `needs:` key leaked into the checklist a round reads")
+
+    # --- trait filtering: an item arrives iff every trait it needs is declared
+    tmp2 = Path(tempfile.mkdtemp(prefix="loop-traits-"))
+    try:
+        inc, skip = load_items(tmp2, {"traits": ["dart"], "local_traits": [],
+                                      "packs": []})
+        names = [r["path"].name for r in inc["tests"]]
+        check("an item whose trait is declared arrives", "tests-dart.md" in names)
+        check("an item whose trait is missing does NOT arrive",
+              "tests-dart2js.md" not in names)
+        check("a held-back item is reported, never dropped in silence",
+              any(r["path"].name == "tests-dart2js.md" and r["missing"] == ["dart2js"]
+                  for r in skip))
+        inc2, _ = load_items(tmp2, {"traits": ["dart", "dart2js"], "local_traits": [],
+                                    "packs": []})
+        check("declaring the trait lets the item through",
+              "tests-dart2js.md" in [r["path"].name for r in inc2["tests"]])
+        check("a -why file is never concatenated",
+              not any(r["path"].name.endswith("-why.md")
+                      for k in inc2 for r in inc2[k]))
+    finally:
+        shutil.rmtree(tmp2, ignore_errors=True)
+
+    # --- the catalog is not gated, and a shape carries only what it is for
+    forms = catalog_forms(SKILL_ROOT / "nonexistent")
+    check("catalog lists every shape", len(forms) >= 23, f"{len(forms)} shapes")
+    check("every shape says when it applies",
+          all(s["applies"] for s in forms),
+          "a shape with no `applies:` cannot be weighed by lenses mode")
+    for s in forms:
+        front = parse_doc(s["path"].read_text())["front"]
+        check(f"{s['id']} declares only schema keys",
+              set(front) <= set(CATALOG_FRONT),
+              f"extra: {sorted(set(front) - set(CATALOG_FRONT))}")
+
+    for key, f in item_files(SKILL_ROOT / "nonexistent"):
+        front = parse_doc(f.read_text())["front"]
+        check(f"{f.name} declares needs", "needs" in front)
+        text = f.read_text()
+        check(f"{f.name} holds items and nothing else",
+              not text.lstrip().startswith("#") and "](" not in text,
+              "a heading or a link would land inside a checklist or a prompt")
+    keys = {k for k, _ in item_files(SKILL_ROOT / "nonexistent")}
+    check("items exist for every checklist key",
+          keys == {"measure", "canary", "tests", "review"}, str(sorted(keys)))
+    check("damage classes come from the trait registry",
+          "frame jank" in damage_classes(SKILL_ROOT / "nonexistent",
+                                         {"classes": []}),
+          "the vocabulary lost its one home")
+    # A `## Section` whose heading matches a frontmatter key: read through
+    # `fields` it returns the section's prose instead of the declared value.
+    collide = parse_doc("---\ndamage classes: crash, hang\n---\n\n"
+                        "## Damage classes\n\nsome prose about them\n")
+    check("a section heading does not shadow a frontmatter key in `front`",
+          front_list(collide["front"], "damage classes") == ["crash", "hang"])
+    check("`fields` DOES merge the two — which is why declared keys use `front`",
+          "prose" in collide["fields"]["damage classes"])
+    # The other half: a value may be inline or a block list, and `front` hands
+    # back a string for one and a list for the other.
+    inline = parse_doc("---\nneeds: dart, dart2js\n---\n")["front"]
+    block = parse_doc("---\nneeds:\n- dart\n- dart2js\n---\n")["front"]
+    check("front_list reads the inline form", front_list(inline, "needs") == ["dart", "dart2js"])
+    check("front_list reads the block form", front_list(block, "needs") == ["dart", "dart2js"])
+    check("front_list on a missing key is empty", front_list({}, "needs") == [])
+
+    # --- lens -> verdicts, read from the declared field only
+    fixture = {"rounds": {
+        "1": {"fields": {"lens": "RPC-3", "verdict": "FIXED"}},
+        "2": {"fields": {"lens": "RPC-3", "verdict": "CLEAN"}},
+        "3": {"fields": {"lens": "RPC-3 because the migration is its own record",
+                         "verdict": "FIXED"}}}}
+    got = lens_verdicts(fixture)
+    check("lens_verdicts counts declared rounds", got.get("RPC-3") == ["FIXED", "CLEAN"])
+    check("lens_verdicts ignores a field with prose in it", len(got) == 1)
+
+    # --- lint, against a fixture journal that is mutated one rule at a time.
+    # Without this every `rep.error` in cmd_lint is a branch nobody has seen
+    # taken: the live journal is green, so the error paths never run.
+    tmp3 = Path(tempfile.mkdtemp(prefix="loop-lint-"))
+    try:
+        def errs(**override: str) -> list[str]:
+            d = tmp3 / f"j{len(list(tmp3.iterdir()))}"
+            build_fixture(d, **override)
+            return lint_report(d.parent, d, skill=False).errors
+
+        base = errs()
+        check("the fixture journal lints clean", not base, "; ".join(base[:4]))
+
+        def catches(name: str, needle: str, **override: str) -> None:
+            found = errs(**override)
+            check(f"lint catches {name}", any(needle in e for e in found),
+                  f"got: {'; '.join(found[:3]) or 'nothing'}")
+
+        catches("a verdict off the list", "is not one of",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("verdict: FIXED", "verdict: PROBABLY")})
+        catches("FIXED without commit: yes", "`commit:` is not `yes`",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("commit: yes", "commit: no")})
+        catches("FIXED with an empty canary", "`## Canary` is empty",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("## Canary\n\nfailed: boom", "## Canary\n\nn/a")})
+        catches("FIXED with a bare `bench: none`", "and no reason",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("bench: P-1 — reused", "bench: none")})
+        catches("a bench that is not in probes/", "not found in probes/",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("bench: P-1 — reused", "bench: P-9 — reused")})
+        catches("a lens the set does not hold", "not found in lenses/",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("lens: X-1", "lens: X-9")})
+        catches("`lens:` with prose after the ID", "must be exactly one ID",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("lens: X-1", "lens: X-1 because it fit")})
+        catches("a lens missing the round from `applied:`", "does not list it",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("applied: 1", "applied:")})
+        catches("a lens status off schema", "off the lens.md schema",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("status: derived", "status: probably fine")})
+        catches("empty `paths:`", "`paths:` empty",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("paths: lib/**", "paths: —")})
+        catches("a file with no line in its index", "with no line in",
+                **{"probes/PROBES.md": "# Benches\n\n[../LOOP.md](../LOOP.md)\n"})
+        catches("an index line with no file", "with no file",
+                **{"probes/PROBES.md": FIXTURE["probes/PROBES.md"]
+                   + "**[P-2](P-2-gone.md)** valid\n"})
+        catches("a negative with no control", "hope, not a negative",
+                **{"checked/C-1-clean.md": FIXTURE["checked/C-1-clean.md"]
+                   .replace("mechanism removed, number differed", "—")})
+        catches("a bench with no control", "not valid",
+                **{"probes/P-1-bench.md": FIXTURE["probes/P-1-bench.md"]
+                   .replace("## Control\n\nmechanism removed", "## Control\n\n—")})
+        catches("a lesson with no price", "no number",
+                **{"lessons/L-1-lesson.md": FIXTURE["lessons/L-1-lesson.md"]
+                   .replace("cost: 2 rebuilds", "cost: some effort")})
+        catches("a lesson class off the list", "`class:` is not one of",
+                **{"lessons/L-1-lesson.md": FIXTURE["lessons/L-1-lesson.md"]
+                   .replace("class: bench", "class: vibes")})
+        catches("`commit:` that is not a sha", "must be exactly a sha",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("commit: abc1234", "commit: the one with the fix")})
+        catches("`continuation: yes` on a closed lead", "only an OPEN lead",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("status: open", "status: closed (round 1)")
+                   .replace("reason: cost", "reason: cost\ncontinuation: yes")})
+        catches("an empty `reason:`", "`reason:` is empty",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("reason: cost", "reason:")})
+        catches("a placeholder left in the gate", "placeholder",
+                **{"config.md": FIXTURE["config.md"]
+                   .replace("```gate\ntrue\n```", "```gate\n<command 1>\n```")})
+        catches("a missing gate block", "no ```gate block",
+                **{"config.md": FIXTURE["config.md"]
+                   .replace("```gate\ntrue\n```", "")})
+        catches("no traits declared", "no `traits:` line",
+                **{"config.md": FIXTURE["config.md"].replace("traits: dart", "")})
+        catches("a trait outside the registry", "not in the skill's registry",
+                **{"config.md": FIXTURE["config.md"]
+                   .replace("traits: dart", "traits: dart, wobbly")})
+        catches("a local trait the registry already defines", "already defines",
+                **{"config.md": FIXTURE["config.md"]
+                   .replace("traits: dart", "traits: dart\nlocal traits: dart2js")})
+        catches("a `packs:` line", "`packs:` is gone",
+                **{"config.md": FIXTURE["config.md"] + "packs: core\n"})
+        catches("a budget line missing", "under «Round budget»",
+                **{"config.md": FIXTURE["config.md"].replace("canaries: 2", "")})
+        catches("a round file off the naming schema", "name off schema",
+                **{"rounds/one.md": FIXTURE["rounds/1-one.md"]})
+        catches("a heading that disagrees with the file name", "!=",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("# Round 1 — fixture", "# Round 2 — fixture")})
+        catches("a missing frontmatter block", "no frontmatter",
+                **{"lessons/L-1-lesson.md": "# L-1 — fixture\n"})
+        catches("an index with no link to LOOP.md", "no link to ../LOOP.md",
+                **{"lessons/LESSONS.md": "# Lessons\n\n**[L-1](L-1-lesson.md)** active\n"})
+
+        # --- the rest of the branches, one case each
+        catches("a missing LOOP.md", "LOOP.md: missing", **{"LOOP.md": None})
+        catches("a missing config.md", "config.md: missing", **{"config.md": None})
+        catches("no `unattended:` line", "no `unattended: yes|no` line",
+                **{"config.md": FIXTURE["config.md"].replace("unattended: no", "")})
+        catches("a whole directory gone", "directory missing",
+                **{"probes/PROBES.md": None, "probes/P-1-bench.md": None})
+        catches("a missing index", "index missing",
+                **{"lessons/LESSONS.md": None})
+        catches("an index keeping a next free number", "next free number",
+                **{"lessons/LESSONS.md": FIXTURE["lessons/LESSONS.md"]
+                   + "\nNext free number: 2\n"})
+        catches("an index line pointing at the wrong file", "points at",
+                **{"lessons/L-1-lesson.md": None,
+                   "lessons/L-1-renamed.md": FIXTURE["lessons/L-1-lesson.md"]})
+        catches("a round heading off the form", "heading is not",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("# Round 1 — fixture", "# Fixture round")})
+        catches("`round:` disagreeing with the file name", "does not match the number",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("round: 1\n", "round: 2\n")})
+        catches("an entity heading without its ID", "heading must start with",
+                **{"lessons/L-1-lesson.md": FIXTURE["lessons/L-1-lesson.md"]
+                   .replace("# L-1 — fixture", "# a lesson")})
+        catches("`commit:` that is neither yes nor no", "must be `yes` or `no`",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("commit: yes", "commit: abc1234")})
+        catches("a malformed `bench:`", "`bench:` must be",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("bench: P-1 — reused", "bench: the one from last time")})
+        catches("`budget:` off its form", "`budget:` off the form",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("commit: yes", "commit: yes\nbudget: lots")})
+        catches("a budget exceeded on a FIXED round", "budget exceeded",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("commit: yes",
+                            "commit: yes\nbudget: probes 9/3, canaries 1/2")})
+        catches("`review:` off its form", "`review:` must start with",
+                **{"rounds/1-one.md": FIXTURE["rounds/1-one.md"]
+                   .replace("commit: yes", "commit: yes\nreview: a subagent did it")})
+        catches("`applied:` holding a non-round", "holds a non-round",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("applied: 1", "applied: last tuesday")})
+        catches("`applied:` naming a round with no file", "no file",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("applied: 1", "applied: 1, 7")})
+        catches("an off-journal mark above the journal's start", "not history",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("applied: 1", "applied: 1, off-journal 9")})
+        catches("confirmed with no evidence", "`## Evidence` is empty",
+                **{"lenses/X-1-fix.md": FIXTURE["lenses/X-1-fix.md"]
+                   .replace("status: derived", "status: confirmed (round 1)")
+                   .replace("## Evidence\n\ne", "## Evidence\n\n—")})
+        catches("a lead status off schema", "off schema",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("status: open", "status: maybe later")})
+        catches("`continuation:` that is not yes/no", "is not yes/no",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("reason: cost", "reason: cost\ncontinuation: perhaps")})
+        catches("a lead naming a round with no file", "no round file",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("round: 1", "round: 9")})
+        catches("a lead with an unparseable round", "needs a round number",
+                **{"backlog/B-1-lead.md": FIXTURE["backlog/B-1-lead.md"]
+                   .replace("round: 1", "round: unknown")})
+        catches("a bench status off schema", "off the probe.md schema",
+                **{"probes/P-1-bench.md": FIXTURE["probes/P-1-bench.md"]
+                   .replace("status: valid", "status: probably fine")})
+        catches("a bench with no file named", "`file:` is empty",
+                **{"probes/P-1-bench.md": FIXTURE["probes/P-1-bench.md"]
+                   .replace("file: tool/p.dart", "file:")})
+        catches("a lesson status off schema", "off the lesson.md schema",
+                **{"lessons/L-1-lesson.md": FIXTURE["lessons/L-1-lesson.md"]
+                   .replace("status: active", "status: still true")})
+        catches("a lesson with no round", "was not paid for",
+                **{"lessons/L-1-lesson.md": FIXTURE["lessons/L-1-lesson.md"]
+                   .replace("round: 1", "round: —")})
+        catches("a shape missing a schema key", "a shape says",
+                **{"catalog/U-90-fixture.md":
+                   "---\napplies: everywhere\n---\n\n# U-90 — fixture\n"})
+        catches("a shape carrying a key outside the schema", "not in the schema",
+                **{"catalog/U-91-fixture.md":
+                   "---\napplies: everywhere\nbreaks: a crash\npack: core\n---\n\n"
+                   "# U-91 — fixture\n"})
+        catches("a shape whose heading disagrees with its file name",
+                "heading must start with",
+                **{"catalog/U-92-other.md":
+                   "---\napplies: everywhere\nbreaks: a crash\n---\n\n"
+                   "# U-93 — fixture\n"})
+        catches("an items file holding a heading below its frontmatter",
+                "holds a heading or a link",
+                **{"items/measure-fix.md": "---\nneeds: dart\n---\n\n# Title\n\nF1. x\n"})
+        catches("an items file holding a link", "holds a heading or a link",
+                **{"items/measure-fix.md":
+                   "---\nneeds: dart\n---\n\nF1. see [here](x.md)\n"})
+
+        def warns(**override: str) -> list[str]:
+            d = tmp3 / f"w{len(list(tmp3.iterdir()))}"
+            build_fixture(d, **override)
+            return lint_report(d.parent, d, skill=False).warnings
+
+        check("lint warns on an items file with no `needs:`",
+              any("will be merged into" in w
+                  for w in warns(**{"items/measure-fix.md": "F1. no precondition\n"})),
+              "an unconditional item is a warning, not an error")
+        catches("an uncovered gate command under unattended", "permissions.allow",
+                **{"config.md": FIXTURE["config.md"]
+                   .replace("unattended: no", "unattended: yes")})
+    finally:
+        shutil.rmtree(tmp3, ignore_errors=True)
+
+    # --- this file, parsed for names it reads but never binds
+    rep = Report()
+    script_names(rep)
+    check("loop.py binds every name it reads", not rep.errors,
+          "; ".join(rep.errors[:3]))
+
+    # --- the skill's own link graph, without needing any project data
+    rep = Report()
+    skill_graph(rep)
+    check("the skill's link graph is whole", not rep.errors,
+          "; ".join(rep.errors[:3]))
+
+    for f in failures:
+        print(f"FAIL  {f}")
+    print(f"selftest: {checks - len(failures)}/{checks} passed")
+    return 1 if failures else 0
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["init", "status", "next", "lint", "stale", "catalog", "review", "yield"])
+    ap.add_argument("command", choices=["init", "status", "next", "brief", "lint",
+                                        "stale", "catalog", "review", "yield", "selftest"])
     ap.add_argument("arg", nargs="?", help=argparse.SUPPRESS)
     ap.add_argument("--root", default=".", help="repository root (the current directory by default)")
     ap.add_argument("--loop", default=".claude/loop", help="path to the loop data relative to the root")
     a = ap.parse_args(argv)
     root = Path(a.root).resolve()
     loop = (root / a.loop).resolve()
-    return {"init": cmd_init, "status": cmd_status, "next": cmd_next, "lint": cmd_lint,
-            "stale": cmd_stale, "catalog": cmd_catalog, "yield": cmd_yield, "review": cmd_review}[a.command](root, loop)
+    return {"init": cmd_init, "status": cmd_status, "next": cmd_next, "brief": cmd_brief,
+            "lint": cmd_lint, "stale": cmd_stale, "catalog": cmd_catalog,
+            "yield": cmd_yield, "review": cmd_review,
+            "selftest": cmd_selftest}[a.command](root, loop)
 
 
 if __name__ == "__main__":

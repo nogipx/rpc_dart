@@ -19,12 +19,25 @@ has to be decided at setup, and in what order.
    has nothing to do with the loop data; do not create it by accident.
 2. **Fill in `config.md`** per `../specs/config.md`. Everything listed there is
    decided by the owner or by an agent that has read the repository; the
-   machine-read places (`unattended:`, `packs:`, the `gate` and `after-commit`
+   machine-read places (`unattended:`, `traits:`, the `gate` and `after-commit`
    blocks, the round budget) use the exact format. Do not duplicate the
-   repository's `CLAUDE.md`: link to it. **Packs** — by the `applies:` of each
-   `packs/*/PACK.md` against what the repository actually has: the language, two
-   sides and limits, screens, replicas, a service. Enable them by properties of
-   the code, not by the project's name.
+   repository's `CLAUDE.md`: link to it.
+
+   **Traits** — go through [references/traits.md](../references/traits.md) and
+   declare the ones this repository actually has, by properties of the CODE and
+   not by the project's name. A property the registry has no name for goes in
+   `local traits:`, and the item that needs it goes in
+   `.claude/loop/items/` — that is how a project extends the vocabulary
+   rather than bending an existing name to fit.
+
+   Declaring a trait no item needs yet is fine and `lint` will say so: it marks
+   a property whose knowledge nobody has written down. Declaring one the project
+   does NOT have is the expensive mistake — it merges items that will send
+   rounds looking for defects the code cannot have.
+
+   **Then run `loop.py brief` once and read what it held back.** That list is
+   the set of items this project just declined, and it is the cheapest possible
+   check on whether the traits are right.
 3. **Permissions** (when `unattended: yes`). In `.claude/settings.json`, under
    `permissions.allow`, one prefix rule per toolchain and gate command —
    `Bash(dart test:*)`, `Bash(dart analyze:*)` — plus a rule for the script with

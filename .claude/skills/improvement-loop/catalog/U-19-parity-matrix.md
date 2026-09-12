@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: there is more than one axis of variation.
 breaks: anything.
-status: confirmed
 ---
 
 # U-19 — The parity matrix

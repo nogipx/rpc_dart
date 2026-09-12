@@ -44,11 +44,9 @@ bench, a new or edited lead, an owner decision captured mid-round, a correction
 to a note the round itself wrote ten minutes earlier. A round does not commit as
 it goes.
 
-Measured on round 247, which shipped five separate `docs(loop)` commits — the
-record, the decisions, a status fix, a note, and a correction to that note. Four
-of them were the same round still thinking. The journal reads as one commit per
-round or it stops being a journal, and a reader diffing "what did round 247
-learn" should get one diff.
+The journal reads as one commit per round or it stops being a journal: a reader
+diffing "what did round N learn" should get one diff, not the round's thinking
+spread over five.
 
 Two consequences worth naming:
 
@@ -75,9 +73,7 @@ watching them fail:
 
 **RUN `lint` AFTER THE COMMIT, NOT BEFORE.** The commit-sprawl check compares
 the commit that just landed against the one before it, so a `lint && git commit`
-chain always passes: it is measuring the state that no longer exists. Three
-consecutive rounds shipped a violation this way — the check was correct, the
-command ran green, and the pair was found only when the owner pointed at it. The
+chain always passes: it measures the pair before the one you just made. The
 ordering is `git commit` then `lint`, and a red lint afterwards means squash and
 recommit.
 

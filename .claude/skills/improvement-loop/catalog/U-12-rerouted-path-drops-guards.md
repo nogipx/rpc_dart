@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: anywhere there are idempotent wrappers around ordinary operations.
 breaks: a doubled action, a broken invariant.
-status: confirmed
 ---
 
 # U-12 — A rerouted path drops the old one's guards

@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: there are decorators, proxies or adapters around the main type.
 breaks: a silent disabling of a protection — the worst kind, because the tests stay green.
-status: confirmed
 ---
 
 # U-05 — A capability hidden by a wrapper

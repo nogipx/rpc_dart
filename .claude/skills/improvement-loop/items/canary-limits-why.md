@@ -1,17 +1,8 @@
-# async-io: canaries
+# What paid for the byte-limits canary items
 
-> [async-io](PACK.md) · appended to the universal
-> [methods/canary.md](../../methods/canary.md) by `loop.py next`
-
-Items for the `methods/canary.md` checklist.
-
-A1. For a new limit, both neighbours of the right charge point are usually
-    wrong — canary those too. The tests must fail DIFFERENTLY for each wrong
-    choice.
-A2. The bound and the release are canaried separately: a bound that is never
-    released still stops the attack, and the attack witness stays green.
-
-Below is what paid for each item.
+> [Items](ITEMS.md) · the operative list is
+> [canary-limits.md](canary-limits.md), printed by `loop.py brief` after the
+> universal [methods/canary.md](../methods/canary.md)
 
 ## A new limit raises the question "WHEN do I charge?"
 

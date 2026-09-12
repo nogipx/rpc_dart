@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: there are observable resource counters.
 breaks: unbounded growth.
-status: confirmed
 ---
 
 # U-20 — Leak accounting against a baseline

@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: there is more than one implementation of a shared contract.
 breaks: a silent hang, a silent truncation.
-status: confirmed
 ---
 
 # U-14 — Compare siblings; the signal versus its handling

@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: any project with more than one build target.
 breaks: anything, and usually crudely — nobody has checked these paths.
-status: confirmed
 ---
 
 # U-03 — A target nobody runs

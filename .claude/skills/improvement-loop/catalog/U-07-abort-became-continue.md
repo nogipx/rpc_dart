@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: there is accounting of resources released when an operation completes.
 breaks: a hang, unbounded growth, DoS.
-status: confirmed
 ---
 
 # U-07 — "Abort" became "continue"

@@ -40,7 +40,7 @@
       "id": 6,
       "name": "verdict-check-catches-shared-policy-object",
       "prompt": "Run a round. (In the fixture the probe shows a 180x gap under a flood, but the bench gives both sides one policy object and no control was built.)",
-      "expected_output": "The verdict check answers «no» in writing to Q1, Q2 and Q4 (and to A1 from the async-io pack); the agent returns to the Bench step, splits the two sides' configs and repeats the measurement; the verdict is not FIXED on the first number. The record carries no score for the check itself — «## Before» shows the rebuilt control instead.",
+      "expected_output": "The verdict check answers «no» in writing to Q1, Q2 and Q4 (and to A1 from review-async.md, merged by the two-sided-protocol trait); the agent returns to the Bench step, splits the two sides' configs and repeats the measurement; the verdict is not FIXED on the first number. The record carries no score for the check itself — «## Before» shows the rebuilt control instead.",
       "files": []
     },
     {
@@ -66,9 +66,16 @@
     },
     {
       "id": 10,
-      "name": "packs-shape-catalog-and-review",
-      "prompt": "Lay the loop out in this Flutter app and derive the lens set. (The repository has screens and navigation, and no network layer with its own limits.)",
-      "expected_output": "config.md says `packs: core, dart, flutter-ui` with no async-io; lenses mode instantiates only the shapes from `loop.py catalog` (core), not U-07/U-16; the lenses' `breaks:` uses classes from flutter-ui or core; `loop.py review` prints the prompt without questions A1-A3.",
+      "name": "traits-select-items-and-never-hide-shapes",
+      "prompt": "Lay the loop out in this Flutter app and derive the lens set. (The repository has screens and navigation, is compiled to JavaScript, and has no network layer with its own limits.)",
+      "expected_output": "config.md says `traits: dart, dart2js, screens` — not `packs:`, which lint refuses. `loop.py brief` merges the dart and dart2js items and holds back every async-io item, NAMING each one and the trait it waits on. `loop.py review` prints the core questions without A1-A2. But `loop.py catalog` still lists all 23 shapes including U-07 and U-16: the agent weighs them and declines the ones that do not apply, rather than never seeing them. A round that reports `packs:` as the mechanism, or that treats the short checklist as the complete one without reading the held-back list, is wrong.",
+      "files": []
+    },
+    {
+      "id": 16,
+      "name": "a-project-extends-the-trait-vocabulary",
+      "prompt": "Every round keeps rediscovering that our wire format has to stay readable by a real gRPC client, and the checklists say nothing about it. Make that part of the loop.",
+      "expected_output": "The agent adds `local traits: grpc-wire-compat` to config.md — NOT `traits:`, which lint refuses for a name outside references/traits.md — and writes the items into `.claude/loop/items/measure-grpc.md` with `needs: grpc-wire-compat` in its frontmatter. `loop.py brief` then merges those items with the universal checklist. It does not edit methods/measurement.md, which is universal, and it does not put the story beside the items: that goes in the `-why` file. lint is green and reports no unsatisfiable need.",
       "files": []
     },
     {
@@ -83,6 +90,20 @@
       "name": "next-reports-state-and-decides-nothing",
       "prompt": "Run a round. (`loop.py next` output includes a swept lens whose paths have changed, a never-applied lens, and an open lead.)",
       "expected_output": "No line of the output ranks or recommends. The round picks one and `## Target` carries the reasoning, weighed against the alternatives the output showed. The only decision the script still makes is the round cap: at or past it, `status` says «Stop: YES» and the round does not start.",
+      "files": []
+    },
+    {
+      "id": 14,
+      "name": "brief-replaces-reading-the-method-files",
+      "prompt": "Run a round in a repository whose config.md says `packs: core, dart, async-io`.",
+      "expected_output": "The agent runs `loop.py brief` once and does not open methods/measurement.md, methods/canary.md or methods/tests.md as files. The measure checklist it works from contains the universal items 1-10 AND the trait-gated items D1-D2 and A1-A3 — a round that measures without A3 (separate policy objects for attacker and victim) has read only half the checklist. The `-why` files are opened only if a specific item is in dispute, and never all three.",
+      "files": []
+    },
+    {
+      "id": 15,
+      "name": "editing-the-script-runs-selftest",
+      "prompt": "Add a `loop.py` command that lists every lens whose paths overlap a given directory.",
+      "expected_output": "`loop.py selftest` is run after the edit and reports N/N passed; if the edit deleted or renamed a name another function still reads, selftest fails on «loop.py binds every name it reads» and the edit is corrected before anything else. A new command that reads a value the agent invented a regex for — scanning prose for something that looks like an answer rather than reading a field a schema declares — is rejected: the constraint is in the module docstring.",
       "files": []
     }
   ]

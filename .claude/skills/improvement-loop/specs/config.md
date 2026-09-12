@@ -2,23 +2,50 @@
 
 > [Schemas](SPECS.md) · written by [methods/setup.md](../methods/setup.md) ·
 > the gate block must satisfy
-> [references/rule-zero.md](../references/rule-zero.md) · the packs it enables:
-> [packs/](../packs/PACKS.md)
+> [references/rule-zero.md](../references/rule-zero.md) · the vocabulary
+> `traits:` draws on: [references/traits.md](../references/traits.md)
 
 Path: `.claude/loop/config.md`. The only loop file written by hand, and rarely.
-The machine-read places — `unattended:`, `packs:`, `damage classes:`,
-`commit language:`, the ```gate and ```after-commit blocks, and the three budget
-lines — use an exact format; the rest is prose for the agent.
+The machine-read places — `unattended:`, `traits:`, `local traits:`,
+`damage classes:`, `commit language:`, the ```gate and ```after-commit blocks,
+and the three budget lines — use an exact format; the rest is prose for the
+agent.
 
 The mandatory sections, in this order:
 
 - **Mode** — the line `unattended: yes` or `unattended: no`. It decides whether
   rule zero applies in full. With `no`, interactivity is allowed, but the
   requirement to read and edit files with Read/Edit/Write stands.
-- **Packs** — the line `packs: core, async-io, dart` — which knowledge packs are
-  enabled (the skill's `packs/` or `.claude/loop/packs/`); `core` always is. The
-  optional `damage classes:` line adds project classes to the packs'; `lint`
-  checks the lenses' `breaks:` against the union.
+- **Traits** — the line `traits: dart, dart2js, two-sided-protocol`: what this
+  project IS. Every file in `items/` declares `needs:`, and
+  `loop.py brief` merges the ones whose needs the traits cover. Matched by set
+  membership on identifiers — never by meaning.
+
+  **The vocabulary is open and a project extends it.** Names from
+  [references/traits.md](../references/traits.md) go in `traits:`; names only
+  this repository needs go in `local traits: grpc-wire-compat, wasm-bridge`,
+  together with items that ask for them in `.claude/loop/items/`. `lint`
+  refuses a registry name in `local traits:` and a non-registry name in
+  `traits:` — that one rule is the whole difference between inventing a trait
+  and mistyping one.
+
+  A trait nobody's item needs is reported as buying nothing. That is
+  information, not an error: it marks a property of the project whose knowledge
+  has not been written down.
+
+  This replaced `packs: core, async-io, dart`, which switched bundles on and
+  off. A bundle mixed a language, an architecture and a deployment shape as
+  though they were one axis; enabling `dart` for a VM-only project handed it the
+  dart2js rules, and there was no way to take one item without the rest. `lint`
+  refuses a `packs:` line so the old form cannot sit there looking effective.
+
+  The optional `damage classes:` line adds project nouns to the vocabulary
+  offered for a lens's `breaks:`. **Nothing reads them mechanically** — matching
+  a vocabulary against free text would be a guess about prose.
+  A round whose target is the shape of the code rather than a defect in it — a
+  doc audit, a public-surface sweep — is an ordinary round taking an ordinary
+  shape. It records `bench: none — <reason>` like any round whose evidence is
+  not a quantity. There is no setting for it.
 - **Language** — two optional lines, each **English** without it:
   `commit language: <language>` governs the round commit's subject and body,
   and `reply language: <language>` governs the round report in chat. They are

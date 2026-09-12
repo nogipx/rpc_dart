@@ -1,7 +1,9 @@
 # Schema: a bench
 
-> [Schemas](SPECS.md) · a probe becomes a bench once a control validates it:
-> [methods/measurement.md](../methods/measurement.md)
+> [Schemas](SPECS.md) · a probe becomes a bench once a control validates it —
+> the checklist is [methods/measurement.md](../methods/measurement.md) (printed
+> by `loop.py brief`), what controls have cost is
+> [methods/measurement-why.md](../methods/measurement-why.md)
 
 Path: `.claude/loop/probes/P-N-slug.md`. Plus a line in `probes/PROBES.md`.
 

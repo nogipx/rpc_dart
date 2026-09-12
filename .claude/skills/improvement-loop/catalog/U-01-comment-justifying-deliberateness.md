@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: anywhere comments outlive refactorings.
 breaks: anything, usually silently — the justification also shields the ordinary path.
-status: confirmed
 ---
 
 # U-01 — A comment justifying deliberateness

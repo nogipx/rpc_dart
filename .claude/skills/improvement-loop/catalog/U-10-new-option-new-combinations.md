@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: there are two sides configured independently.
 breaks: a hang, silence instead of a reply.
-status: confirmed
 ---
 
 # U-10 — A new option means new combinations

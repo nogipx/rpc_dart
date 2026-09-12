@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: there are objects with an explicit lifecycle.
 breaks: a leak, a hang, an orphaned resource.
-status: confirmed
 ---
 
 # U-15 — Drive the lifecycle twice

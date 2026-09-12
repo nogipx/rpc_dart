@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: from about a dozen rounds on.
 breaks: anything — a real defect hides behind a deferral.
-status: confirmed
 ---
 
 # U-21 — Re-measure your own deferrals

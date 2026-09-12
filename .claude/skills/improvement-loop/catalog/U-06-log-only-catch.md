@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: everywhere.
 breaks: silent data loss.
-status: confirmed
 ---
 
 # U-06 — A log-only `catch` on the path to success

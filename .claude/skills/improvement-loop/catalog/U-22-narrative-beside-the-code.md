@@ -1,8 +1,6 @@
 ---
-pack: refactor
 applies: the code carries comments written by whoever investigated it.
 breaks: "wrong result: the comment reads as current when it records one moment, and what a caller needs is buried in it."
-status: confirmed
 ---
 
 # U-22 — The narrative beside the code

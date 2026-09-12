@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: always, from the second round on.
 breaks: a security hole, unbounded growth.
-status: confirmed
 ---
 
 # U-02 — Attack your own fix

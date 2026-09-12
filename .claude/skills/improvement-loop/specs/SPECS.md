@@ -20,8 +20,10 @@ decoration.
 - **[index.md](index.md)** — a directory index, `<DIR>/<DIR>.md`
 - **[map.md](map.md)** — the data map, `LOOP.md`
 - **[config.md](config.md)** — the project's settings, `config.md`
-- **[pack.md](pack.md)** — a knowledge pack, `packs/<name>/` in the skill or in
-  the project
+
+A checklist item is not a loop entity and has no schema here: it declares the
+[traits](../references/traits.md) it needs and lives in
+[items/](../items/ITEMS.md), which is its own schema.
 
 ## Rules common to every schema
 
@@ -32,12 +34,11 @@ decoration.
   record and every reference to it.
 
   **Numbers are not padded.** `RPC-8` and `RPC-08` are both fine, `7-slug.md`
-  is a round file like any other, and nothing computes a width. What the
-  padding used to buy was lexicographic `ls` order; the indexes and
-  `loop.py status` are what the journal is actually read through, so the cost
-  was a rule to remember for a benefit nobody used. Two consequences worth
-  knowing: `ls` shows `10-` before `2-`, and `grep "B-1"` also matches `B-10`
-  — use `grep -w` or the file name when a reference has to be exact.
+  is a round file like any other, and nothing computes a width. The journal is
+  read through the indexes and `loop.py status`, not through `ls`. Two
+  consequences worth knowing: `ls` shows `10-` before `2-`, and `grep "B-1"`
+  also matches `B-10` — use `grep -w` or the file name when a reference has to
+  be exact.
 
   `loop.py` normalises a round number before comparing (`round_key`), so `007`,
   `7` and `round 7` are one round and a cross-reference cannot silently point
@@ -45,8 +46,8 @@ decoration.
   `applied: [007]` against `7-seven.md` reports "no file" and the round's
   back-reference check fails too.
 
-  **Padding is no longer required, not forbidden.** A journal written under the
-  old rule keeps reading: `001-one.md` with an index line `[001]`, an
+  **Padding is accepted, not required.** A padded journal keeps reading:
+  `001-one.md` with an index line `[001]`, an
   `applied: [001, 002]`, a `status: confirmed (round 002)` and a
   `round: 001` all resolve. The index links are normalised for the same reason
   the file keys are — measured on a padded fixture, without that step every old

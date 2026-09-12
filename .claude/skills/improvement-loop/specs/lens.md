@@ -59,9 +59,11 @@ On individual keys:
 
 - **`paths`** — `stale` uses them to tell whether the code changed since the
   last sweep: `[lib/src/transport/**, lib/src/flow/*.dart]`.
-- **`breaks`** — a damage class from the enabled packs and the config's
-  `damage classes:` (`loop.py catalog` prints the union); `lint` warns about a
-  class outside that vocabulary.
+- **`breaks`** — what goes wrong, in the project's own words. `loop.py catalog`
+  prints a vocabulary to draw on (the reachable packs' classes plus the config's
+  `damage classes:`), but **nothing checks this field**: matching a vocabulary
+  against free text would be a guess about prose. It is read by whoever picks
+  the round's target.
 - **`applied`** — the back-reference to a round's `lens:` key; `lint` reconciles
   them, and the **Target** step uses the number of entries to pick the
   least-explored one.

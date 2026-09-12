@@ -47,10 +47,15 @@ check the evidence; the evidence yields a verdict; the verdict decides what is r
 and where; what is recorded ages and comes back in a later round; the price of a
 mistake becomes a lesson.**
 
-A **pack** is not a loop entity but a unit of knowledge: a damage vocabulary,
-domain checklist items, questions for the verdict check, detectors. It lives in the skill
-(`packs/`) or in the project (`.claude/loop/packs/`), is enabled by the config
-and assembled by the script. The schema is `specs/pack.md`.
+A **trait** is not a loop entity but a fact about the project: a plain
+identifier it declares in `config.md`, matched by set membership and never by
+meaning. An **item** is a checklist line gated on traits — it lives in the
+skill (`items/`) or in the project (`.claude/loop/items/`), and `loop.py brief`
+merges the ones the traits admit and names the ones it held back. The vocabulary
+is `references/traits.md`; the file schema is `items/ITEMS.md`.
+
+Traits are orthogonal: a project has one language, several architectures and
+zero or one framework, and each item names exactly the properties it needs.
 
 **The one-home rule.** Every fact has exactly one home; everywhere else there is
 a link. A detector sweep lives on the lens; a negative outside any shape lives

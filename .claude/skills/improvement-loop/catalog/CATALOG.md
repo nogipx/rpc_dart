@@ -1,11 +1,15 @@
 # Universal catalog of shapes
 
 > Back to [SKILL.md](../SKILL.md) · the packs that make a shape available:
-> [packs/PACKS.md](../packs/PACKS.md) · how a shape becomes a lens:
+> [items/ITEMS.md](../items/ITEMS.md) · how a shape becomes a lens:
 > [methods/lens-derivation.md](../methods/lens-derivation.md)
 
-Defect shapes by pack. The `pack:` key says which enabled pack makes a shape
-available to `lenses` mode (`loop.py catalog`). The field schema is
+Defect shapes. **`loop.py catalog` prints all of them and hides none** — the
+`pack:` key is provenance, a note of which body of work paid for the shape, and
+it stopped being a filter when gating proved able only to subtract. A shape may
+also carry `needs:`, naming the [traits](../references/traits.md) it bites on;
+that is advice, weighed by `lenses` mode rather than by the script. The field
+schema is
 `../specs/lens.md`; a catalog shape has no `paths:` and no `applied:` — those
 appear when it is instantiated into a project's set, together with a real
 detector.
@@ -41,8 +45,8 @@ at the least-explored surface first.
 - **[U-19](U-19-parity-matrix.md)** — the parity matrix: holes live in combinations
 - **[U-20](U-20-leak-accounting-to-baseline.md)** — leak accounting against a baseline; wait for the rise first
 - **[U-21](U-21-remeasure-own-deferrals.md)** — re-measure your own deferrals and "checked" marks
-- **[U-22](U-22-narrative-beside-the-code.md)** *(refactor)* — a doc comment carrying the SEARCH that produced the code rather than what to pass; a comment cannot be aged, so it must not carry what ages
-- **[U-23](U-23-public-by-omission.md)** *(refactor)* — the public surface is whatever nobody underscored; check first whether the implementation imports its own public barrel, because nothing can be narrowed until that stops
+- **[U-22](U-22-narrative-beside-the-code.md)** — a doc comment carrying the SEARCH that produced the code rather than what to pass; a comment cannot be aged, so it must not carry what ages
+- **[U-23](U-23-public-by-omission.md)** — the public surface is whatever nobody underscored; check first whether the implementation imports its own public barrel, because nothing can be narrowed until that stops
 
 ## async-io — two sides, a channel, limits, waits
 

@@ -1,16 +1,8 @@
-# dart: measurements and forensics
+# What paid for the dart measurement items
 
-> [dart](PACK.md) · appended to the universal
-> [methods/measurement.md](../../methods/measurement.md) by `loop.py next`
-
-Dart runtime idioms for the `methods/measurement.md` checklist.
-
-D1. An unhandled error with an empty stack did not come from a throw but from
-    `completeError`/`addError` with no stack — look for the completion site.
-D2. A guarded zone (`runZonedGuarded`) catches only its own side's errors —
-    check whose code threw.
-
-Below is what paid for each item.
+> [Items](ITEMS.md) · the operative list is [measure-dart.md](measure-dart.md),
+> printed by `loop.py brief` after the universal
+> [methods/measurement.md](../methods/measurement.md)
 
 ## Forensics that narrowed the search fast
 

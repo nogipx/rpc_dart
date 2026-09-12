@@ -1,8 +1,6 @@
 ---
-pack: core
 applies: anywhere there is asynchronous cleanup.
 breaks: a hang, a resource leak.
-status: confirmed
 ---
 
 # U-17 — An unbounded wait and abandoned work

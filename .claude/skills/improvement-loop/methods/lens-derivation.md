@@ -21,13 +21,11 @@ The lens schema — `../specs/lens.md`. The universal shapes —
 
 ## Pick a lens from the data, not from a feeling
 
-`loop.py next` prints the data and names nothing. **It used to rank, and the
-ranking was the problem**: over rounds 234-238 it named a never-applied lens
-five times running, every answer defensible on its own, while a migration
-opened at 234 sat unfinished — and nothing in the output showed what was being
-passed over. The facts it computes are still worth having, because they are the
-ones memory gets wrong: what git says moved under a swept lens, when each lens
-was last applied, which leads are unfinished rather than blocked.
+`loop.py next` prints the data and names nothing. **A ranking would hide what it
+passed over**, and each individual answer can be defensible while the sequence
+leaves started work unfinished. The facts it computes are the ones memory gets
+wrong: what git says moved under a swept lens, when each lens was last applied,
+which leads are unfinished rather than blocked, what each lens has produced.
 
 What to weigh, none of it mechanical:
 
@@ -62,11 +60,10 @@ starter set of hypotheses, each with status `derived`.
    - shared code with different consumers — one producer, many delivery shapes;
    - dependency extension points — callbacks and setters of a foreign API;
    - layers outside the main language, and targets outside the main gate.
-3. **Run the catalog for applicability.** `loop.py catalog` gives the shape list
-   for the enabled packs and the damage-class vocabulary; a shape from a
-   disabled pack is not offered — if it is clearly needed, enable the pack in
-   `config.md` first. For each shape: its `applies` against the project's
-   properties. Instantiate an applicable one — rewrite the detector in terms of
+3. **Run the catalog for applicability.** `loop.py catalog` gives **every**
+   shape and the damage-class vocabulary. Nothing is hidden from you, because a
+   filter here can only subtract. Weigh each shape's `applies:` against the
+   project's properties yourself — that is this step's job. Instantiate an applicable one — rewrite the detector in terms of
    this code, with real symbols, paths and globs in `paths:`, and set
    `refines: <U-ID>`. **A shape that is not instantiated does not enter the
    set.**

@@ -21,7 +21,7 @@ round: N
 verdict: FIXED | CLEAN | DEFERRED | INCONCLUSIVE | RETRACTED
 packages: [<the packages touched>]
 lens: <ID from the project's set>
-bench: P-N — reused | P-N — new | none
+bench: P-N — reused | P-N — new | none | none — <why no bench was possible>
 commit: yes | no
 ---
 
@@ -79,6 +79,35 @@ for chat from the frontmatter.
 **A missing section is a sign of an unfinished round, not an abbreviation.** For
 rounds with no fix, "After", "Canary" and "Gate" read as `n/a`, and "Before"
 holds the negative result or a description of the bench that produced no number.
+
+## What lint demands of a FIXED round, and why only of the newest one
+
+Three things, checked on the round being written and on no earlier one:
+
+- `## Before` and `## After` each hold a number — **a warning, not an error**.
+  A number is the usual evidence and the sharpest, and it is the only kind that
+  compares across rounds, so reach for it first. But the bar is evidence that is
+  CONFIRMED — something varied, the outcome changed — and an ablation that kills
+  a guard or a witness failing with a real message clears it without a quantity.
+  Whether a particular record clears it is a judgement, and the script does not
+  make judgements; it says what it sees and leaves the call to the round.
+- `bench:` is either a `P-N`, or `none — <reason>`. **Bare `none` is refused.**
+- `## After`, `## Canary` and `## Gate` are non-empty (this one is older).
+
+A round with no bench cannot answer Q2 of the verdict check — *did a control
+show the bench can SEE the defect* — which is the question the check exists for.
+Leaving the absence unexplained makes the verdict check unanswerable and costs
+nothing, which is why the reason is demanded here rather than left to the round.
+
+`none — <reason>` is not a loophole, it is the honest form of a real case: a
+grep detector whose instrument is an ablation, a doc-audit count, a
+public-surface sweep whose two numbers need no probe. What it forbids is leaving the absence
+unexplained.
+
+**Only the newest round** is checked, for the same reason `journal_commit_sprawl`
+reads six commits and no further: history written before a rule existed is not a
+defect anyone can act on, and a lint that opens with 45 errors about finished
+work is a lint everybody learns to pipe away.
 
 
 **Commit is `yes` or `no`, not a sha.** The round file rides in the same commit

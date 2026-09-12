@@ -1,8 +1,6 @@
 ---
-pack: refactor
 applies: the package's public surface comes from a barrel that re-exports wholesale.
 breaks: "a type nobody meant to publish becomes a compatibility promise, and the implementation starts depending on its own public API."
-status: confirmed
 ---
 
 # U-23 — Public by omission

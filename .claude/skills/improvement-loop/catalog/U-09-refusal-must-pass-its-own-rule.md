@@ -1,8 +1,6 @@
 ---
-pack: async-io
 applies: outbound data is validated by the same policy as inbound.
 breaks: the reply is silently swallowed in exactly the strict configurations — the only ones where the path runs at all.
-status: confirmed
 ---
 
 # U-09 — A refusal must pass the rule it enforced
