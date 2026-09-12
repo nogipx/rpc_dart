@@ -91,6 +91,7 @@
       "name": "a-project-extends-the-trait-vocabulary",
       "prompt": "Every round here keeps rediscovering the same thing: a probe must import `router` from the repository root, or it silently measures nothing. The checklists say nothing about it. Make that part of the loop.",
       "project": true,
+      "timeout": 1200,
       "expected_output": "The agent adds a name to `local traits:` in config.md — NOT to `traits:`, which lint refuses for a name outside references/traits.md — and writes the item into `.claude/loop/items/measure-<slug>.md` with a matching `needs:` in its frontmatter. `loop.py brief` then prints that item merged into the measurement checklist; that is the proof it worked. It must NOT edit methods/measurement.md, which is universal and travels to other projects, and it must not put the story beside the item — that belongs in a `-why` file. `lint` green at the end, with no unsatisfiable need reported.",
       "files": []
     },

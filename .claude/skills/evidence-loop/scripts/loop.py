@@ -1752,8 +1752,8 @@ def report_skipped(skipped: list[dict], keys: tuple[str, ...]) -> None:
         return
     print("")
     print(f"Held back ({len(rows)}), each waiting on a trait this project does not declare:")
-    for s in sorted(rows, key=lambda r: (r["key"], r["pack"])):
-        print(f"  {s['key']:8} {s['pack']}/{s['path'].name} — needs {', '.join(s['missing'])}")
+    for s in sorted(rows, key=lambda r: (r["key"], r["path"].name)):
+        print(f"  {s['key']:8} {s['path'].name} — needs {', '.join(s['missing'])}")
     print("If one of those traits does describe this project, add it to `traits:` "
           "in config.md (or to `local traits:` if the skill's registry has no "
           "name for it) — the item is written and waiting.")
@@ -2121,9 +2121,13 @@ def cmd_evals(root: Path, loop: Path) -> int:
     runnable = [e for e in items if wired(e)]
     skipped = [e for e in items if not wired(e)]
 
+    # A failure nobody can read is a failure nobody can act on: the console
+    # line is a summary, and the whole exchange goes here.
+    out_dir = Path(tempfile.mkdtemp(prefix="eval-report-"))
     print(f"{len(runnable)} scenario(s) to run, {len(skipped)} without a fixture.")
     print("Each run is two real agent invocations in a throwaway repo in a "
           "temporary directory, with permissions bypassed there.")
+    print(f"Full transcripts and verdicts: {out_dir}")
     if not runnable:
         print("Nothing to run. Add a `fixture` to a scenario to make it runnable.")
     passed, failed = [], []
@@ -2154,16 +2158,23 @@ def cmd_evals(root: Path, loop: Path) -> int:
                 failed.append((e, f"the judge did not run: {verdict}"))
                 print(f"  ERROR  {verdict[:200]}")
                 continue
+            report = out_dir / f"{e['id']}-{e['name']}.md"
+            report.write_text(
+                f"# {e['id']} {e['name']}\n\n## Asked\n\n{e['prompt']}\n\n"
+                f"## Expected\n\n{e['expected_output']}\n\n"
+                f"## Disk\n\n```\n{disk_facts(fl, before)}\n```\n\n"
+                f"## The agent said\n\n{out}\n\n## The judge said\n\n{verdict}\n")
             marks = VERDICT_RE.findall(verdict)
             if not marks:
-                failed.append((e, f"the judge wrote no VERDICT line: {verdict.strip()[:200]}"))
+                failed.append((e, "the judge wrote no VERDICT line"))
                 print("  FAIL   no verdict line — counted as a failure, not a pass")
             elif marks[-1] == "PASS":
                 passed.append(e)
                 print("  PASS")
             else:
-                failed.append((e, verdict.strip()))
-                print(f"  FAIL   {verdict.strip()[:300]}")
+                reason = VERDICT_RE.split(verdict)[0].strip()
+                failed.append((e, reason))
+                print(f"  FAIL   {report.name}")
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -2172,7 +2183,12 @@ def cmd_evals(root: Path, loop: Path) -> int:
     for e in skipped:
         print(f"  skipped  {e['id']} {e['name']}")
     for e, why in failed:
-        print(f"  FAILED   {e['id']} {e['name']}: {why.splitlines()[0][:160]}")
+        print(f"\n  FAILED  {e['id']} {e['name']}")
+        for line in why.splitlines():
+            if line.strip():
+                print(f"    {line}")
+    if failed:
+        print(f"\nFull transcripts: {out_dir}")
     return 1 if failed else 0
 
 
@@ -2474,6 +2490,23 @@ def cmd_selftest(root: Path, loop: Path) -> int:
         check("a held-back item is reported, never dropped in silence",
               any(r["path"].name == "tests-dart2js.md" and r["missing"] == ["dart2js"]
                   for r in skip))
+        # `report_skipped` must survive being given real held-back rows. It read
+        # a `pack` key that `load_items` stopped producing, so `brief` crashed
+        # for every project that does not declare every trait -- which is every
+        # project but this one, which is why nothing here ever saw it.
+        buf2 = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf2):
+                report_skipped(skip, ("measure", "canary", "tests"))
+            printed = buf2.getvalue()
+        except Exception as exc:
+            printed = ""
+            check("report_skipped survives held-back rows", False, repr(exc))
+        else:
+            check("report_skipped survives held-back rows", True)
+            check("report_skipped names the file and the trait",
+                  "tests-dart2js.md" in printed and "dart2js" in printed,
+                  printed[:120])
         inc2, _ = load_items(tmp2, {"traits": ["dart", "dart2js"], "local_traits": [],
                                     "packs": []})
         check("declaring the trait lets the item through",
