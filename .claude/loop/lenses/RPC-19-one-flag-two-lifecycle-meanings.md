@@ -1,10 +1,10 @@
 ---
 refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
-applies: one object models both "the caller shut me down" and "the connection is gone"
-breaks: a hang.
-applied: [238, 268, 324]
-status: swept here (round 324, 4b5727a5)
+applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
+breaks: a hang; or every in-flight call answered by something that concerned one of them.
+applied: [238, 268, 324, 353]
+status: confirmed (round 353)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -119,5 +119,39 @@ extra writers harmless.
 > recovery path RESETS.
 > `../rounds/324-the-flag-was-never-the-risk.md`,
 > pinned by `resume_after_giving_up_test.dart`.
+
+## Round 353 — the object need not be a flag
+
+The three instances above are booleans. The fourth is an ERROR STREAM, and it is
+the same shape: `RpcChannelTransport`'s channel subscription carries both *the
+connection is gone* and *the peer sent one frame we could not use*, and it reads
+both in the first sense — answering every per-stream controller, deliberately,
+because *"a connection-level failure is the answer to every call in flight"*.
+
+`RpcWebSocketChannel` sent a plain `RpcException` for a discarded TEXT frame.
+Two unary calls parked in a handler, one text frame from the server:
+
+    arm          two in-flight calls
+    no text      ok, ok                        connection alive
+    text frame   RpcException, RpcException    connection alive   <- before
+
+> **The comment was half true and the suite checked that half.** *"Reported
+> rather than fatal, so the connection stays usable"* — and the connection WAS
+> usable, in both arms. `non_binary_frame_test.dart` asserts on the channel and
+> stops there, so every assertion in it passed while one keepalive from a proxy
+> killed every call on the connection. When a comment says "not fatal", ask
+> *fatal to what*; the thing it names is rarely the only thing at stake.
+
+The detector extends the same way. For a flag: list the WRITERS and ask whether
+they mean the same thing. For a signal: **list what can be put on it and ask
+whether the reader's single interpretation is right for each.** Every `addError`
+reaching that subscription was enumerated — seven sites across core and five
+transports — and exactly one meant something other than "the connection is
+gone".
+
+Fixed with `IRpcAdvisoryChannelError`, a marker checked at the one place that
+amplifies; the report still reaches `incomingMessages`, where both pipelines log
+it, so nothing is dropped. Bench `../probes/P-45-text-frame-blast-radius.md`,
+round `../rounds/353-reported-not-fatal-was-half-true.md`.
 
 Imported from private memory in the curate pass after round 234.

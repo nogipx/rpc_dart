@@ -260,10 +260,16 @@ class RpcChannelTransport
         // explained -- and UNAVAILABLE is RETRYABLE, so clients then retry
         // deterministic failures that can never succeed.
         //
+        // Unless the channel said it is NOT one: an observation about a single
+        // stray frame would otherwise fail every live call over a connection
+        // that keeps working. See [IRpcAdvisoryChannelError].
+        //
         // Snapshot the values: addError can make a subscriber cancel, whose
         // onCancel removes the entry, which would be a concurrent modification.
-        for (final ctl in List.of(_streamControllers.values)) {
-          if (!ctl.isClosed) ctl.addError(e);
+        if (e is! IRpcAdvisoryChannelError) {
+          for (final ctl in List.of(_streamControllers.values)) {
+            if (!ctl.isClosed) ctl.addError(e);
+          }
         }
         _incoming.addError(e);
       },

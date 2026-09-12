@@ -38,6 +38,11 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-45](P-45-text-frame-blast-radius.md)** valid (round 353), websocket and
+  core transports — what one stray frame costs the calls already in flight. Its
+  `connection alive` column is the instructive part: it reads the same in every
+  arm, which is exactly what the channel-level suite was asserting while every
+  call on the connection died
 - **[P-44](P-44-capabilities-through-the-proxy.md)** valid (round 352), core
   resilience and endpoint — what the layers above lose to a transport wrapper,
   in EFFECT rather than in `is`: the largest response the caller's parser takes,

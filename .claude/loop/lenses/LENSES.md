@@ -117,7 +117,7 @@ exclusions with reasons.
 
 ## Swept and fresh
 
-- **[RPC-19](RPC-19-one-flag-two-lifecycle-meanings.md)** swept here (238) — one boolean meaning both "the caller closed us" and "the connection is gone"; no third instance, because a flag conflates two meanings only where two exist. The give-away is a recovery API that works exactly once; refines U-18
+- **[RPC-19](RPC-19-one-flag-two-lifecycle-meanings.md)** confirmed (round 353) — one signal meaning both "this is terminal" and "this is recoverable, or local". Rounds 238/324 swept the BOOLEAN form — the give-away is a recovery API that works exactly once — and found no third instance, because a flag conflates two meanings only where two exist. Round 353 widened it past flags: the object can be an ERROR STREAM, and `RpcChannelTransport`'s carried both "the connection is gone" and "the peer sent one unusable frame", answering every in-flight call with the second. The detector extends the same way — for a flag list the writers, for a signal list what can be PUT on it; refines U-18
 
 - **[RPC-14](RPC-14-timeout-abandons-work.md)** swept here (246) — a timeout drops the wait but not the work; the isolate exception (B-04) swept and closed, all four sites guarded, none witnessed (L-04). Re-swept at 246 over the diff since 223: no new timeout sites at all; refines U-17
 - **[RPC-13](RPC-13-unhandled-async-error.md)** confirmed (round 242) — an abandoned future running user code kills the isolate; ~85 sites guarded at 222, and the re-sweep at 242 found the thrower rather than the site: a user `onStateChanged` inside an unhandled `.then()`, unhandled 1 -> 0 and transports built 0 -> 2. The load-bearing guard still has no witness (B-20); refines U-17

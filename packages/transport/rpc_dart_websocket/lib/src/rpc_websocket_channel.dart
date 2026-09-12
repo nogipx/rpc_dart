@@ -36,6 +36,24 @@ int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
   _ => RpcStatus.unknown,
 };
 
+/// A non-binary frame on a binary-only protocol.
+///
+/// Advisory: it says one frame was discarded, not that the connection is gone.
+/// Without the marker `RpcChannelTransport` answers it into every per-stream
+/// controller, so a single app-level keepalive from a proxy failed every call
+/// in flight — with a non-retryable [RpcException], over a connection that was
+/// still working.
+class RpcWebSocketNonBinaryFrame extends RpcException
+    implements IRpcAdvisoryChannelError {
+  /// Creates the report for a frame of type [runtimeTypeName].
+  RpcWebSocketNonBinaryFrame(String runtimeTypeName)
+    : super(
+        'RpcWebSocketChannel: expected a binary WebSocket message, got '
+        '$runtimeTypeName. This transport is binary-only; a text frame cannot '
+        'carry an RPC frame and was discarded.',
+      );
+}
+
 /// [IRpcChannel] over a [WebSocketChannel]: the WebSocket message stream as a
 /// raw byte pipe.
 ///
@@ -65,19 +83,17 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
         } else {
           // Not binary -- in practice a TEXT frame, arriving as a String. This
           // protocol is binary-only, so it is a peer error, and it must not be
-          // dropped silently: with no error and no close, a call over this
-          // connection hangs to its deadline with nothing in a log and nothing
-          // on the wire.
+          // dropped silently: with no error and no close, nothing anywhere says
+          // the peer is misconfigured.
           //
-          // Reported rather than fatal, so the connection stays usable for the
-          // binary frames around it: closing would turn one stray frame -- an
-          // app-level keepalive from a proxy, say -- into a dropped connection.
+          // ADVISORY, which is what makes "reported rather than fatal" true.
+          // The plain RpcException this used to send is what a dead connection
+          // sends, and RpcChannelTransport answers that into every per-stream
+          // controller -- so one keepalive from a proxy failed every call in
+          // flight. The marker stops it at the connection stream, where both
+          // endpoints log it.
           _incoming.addError(
-            RpcException(
-              'RpcWebSocketChannel: expected a binary WebSocket message, got '
-              '${data.runtimeType}. This transport is binary-only; a text '
-              'frame cannot carry an RPC frame and was discarded.',
-            ),
+            RpcWebSocketNonBinaryFrame(data.runtimeType.toString()),
           );
         }
       },

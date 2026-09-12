@@ -16,7 +16,12 @@ library;
 // `grpcStatusFromHttpStatus`, is private to that package for the same reason.
 //
 // The package's own code and tests import the file directly.
-export 'src/rpc_websocket_channel.dart' show RpcWebSocketChannel;
+// `RpcWebSocketNonBinaryFrame` IS exported: it is what arrives on
+// `incomingMessages` when a peer sends a text frame, so an application that
+// wants to tell that apart from a connection failure needs the type. Core's
+// `IRpcAdvisoryChannelError` is the general contract; this is the instance.
+export 'src/rpc_websocket_channel.dart'
+    show RpcWebSocketChannel, RpcWebSocketNonBinaryFrame;
 export 'src/rpc_websocket_server.dart';
 export 'src/websocket_caller_transport.dart';
 export 'src/websocket_responder_transport.dart';

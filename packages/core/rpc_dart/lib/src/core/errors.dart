@@ -22,6 +22,19 @@ class RpcException implements Exception {
   String toString() => 'RpcException: $message';
 }
 
+/// Marks a channel error that does NOT mean the connection is gone.
+///
+/// `RpcChannelTransport` answers a channel error into EVERY per-stream
+/// controller, because a connection-level failure is the answer to every call
+/// in flight. An observation about one stray frame is not that: amplifying it
+/// fails every live call while the connection keeps working, and the calls it
+/// fails were never waiting on the frame in question.
+///
+/// Such an error still reaches the transport's `incomingMessages`, where both
+/// endpoints log it — which is the whole point of reporting rather than
+/// dropping. It just stops there.
+abstract interface class IRpcAdvisoryChannelError {}
+
 /// An exception thrown from an RPC handler to return a specific gRPC status
 /// code to the caller.
 ///
