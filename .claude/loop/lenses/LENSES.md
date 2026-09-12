@@ -128,12 +128,17 @@ exclusions with reasons.
 - **[RPC-07](RPC-07-web-as-separate-runtime.md)** confirmed (219) — green on the VM, broken on dart2js; the gate is a census, nine of twelve packages get a build-and-construct check (B-18); refines U-03
 - **[RPC-08](RPC-08-policy-field-single-transport.md)** confirmed (119, off-journal), applied in 205 — a policy field inert at a neighbouring transport; refines U-19
 
+- **[RPC-06](RPC-06-native-plugin-layers.md)** confirmed (round 355) — a defect in Swift or Kotlin, where Dart greps never look, AND in the contract across that boundary, which is neither language. Round 348 took it for the first time after 168 rounds of nobody having the toolchains, ran both gates and came back CLEAN — ablating each language separately first, because two scripts in two languages say nothing about each other. Round 355 drew the corollary: there is a place in NEITHER, and no single-language gate reaches it — both plugins encode text as UTF-8 and Dart read it with `String.fromCharCodes`, so every non-ASCII diagnostic arrived as one mojibake character per byte while `analyze:native`, `dart analyze` and the whole suite passed; refines U-14, U-03
+- **[RPC-10](RPC-10-shared-layer-blast-radius.md)** confirmed (round 343) — a shared-layer fix's blast radius is overstated, and the question turned around is the productive one: what does a transport that BYPASSES the shared layer have to re-implement, and did it? Applied in 340-343, three defects; the vein runs out where the hand-rolled transport does not face the same threat. Listed here for years as "nobody has taken this, it is methodological and below the bar" — which was true of the original framing and not of this one; refines U-11
+
 ## Nobody has taken these, and why
 
-- **[RPC-06](RPC-06-native-plugin-layers.md)** confirmed (180, off-journal), `applied: []` — a defect in Swift or Kotlin, where Dart greps never look; refines U-14, U-03.
-  **Not taken because it needs toolchains this environment may not have**: `analyze:native` wants Xcode for the Swift half and a kotlinc plus an Android SDK for the Kotlin half, and `test:wasm:device` wants a booted simulator or emulator. `analyze:native` exits 2 when nothing was checked, so a run that verifies nothing cannot read as a pass — which is right, and also why the lens cannot be closed by running it blind.
-- **[RPC-10](RPC-10-shared-layer-blast-radius.md)** confirmed (150, off-journal), `applied: []` — a shared-layer fix's blast radius is overstated; refines U-11.
-  **Not taken because it is methodological**: its damage is a wrong claim in a commit message rather than a defect in the code, so it sits below the severity bar the config sets from round 191 on. Worth applying if the bar is ever lowered, or as part of a `curate`.
+Empty. Both former entries — RPC-06 and RPC-10 — have since been applied, and
+the reasons given for not taking them turned out to be about the ORIGINAL
+framing rather than the lens: RPC-06's toolchains did eventually exist, and
+RPC-10 became a defect-finder the moment the question was asked in the other
+direction. **A "nobody takes this" note ages like any other record.** Both sat
+here stale for several rounds after the lens had paid.
 
 ## Retracted
 

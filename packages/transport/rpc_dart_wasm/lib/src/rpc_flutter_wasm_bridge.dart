@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -110,7 +111,7 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
         message.offsetInBytes,
         message.lengthInBytes,
       );
-      final text = String.fromCharCodes(bytes);
+      final text = _decodeNativeText(bytes);
       for (final line in text.split('\n')) {
         if (line.isNotEmpty && !_console.isClosed) _console.add(line);
       }
@@ -185,9 +186,24 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   /// Whether the runtime died on its own rather than being closed by the host.
   bool get isDead => _dead;
 
+  /// Decodes text both plugins encode as UTF-8 — `data(using: .utf8)` on iOS,
+  /// `toByteArray(Charsets.UTF_8)` on Android.
+  ///
+  /// `String.fromCharCodes` is a byte-per-character reinterpretation, so every
+  /// non-ASCII character arrived as one mojibake character per byte. It cannot
+  /// throw, which is why nothing noticed.
+  ///
+  /// `allowMalformed`, because both call sites are diagnostics: the console
+  /// handler runs inside a platform message handler and `_reasonOf` inside the
+  /// death report. A decoder that threw there would turn a truncated log line
+  /// into a crash, or lose the death notice that is the whole point of the
+  /// channel.
+  static String _decodeNativeText(Uint8List bytes) =>
+      utf8.decode(bytes, allowMalformed: true);
+
   static String _reasonOf(ByteData? message) {
     if (message == null || message.lengthInBytes == 0) return 'runtime died';
-    return String.fromCharCodes(
+    return _decodeNativeText(
       Uint8List.view(
         message.buffer,
         message.offsetInBytes,

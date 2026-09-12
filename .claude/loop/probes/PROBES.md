@@ -38,6 +38,11 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-47](P-47-native-text-encoding.md)** valid (round 355), rpc_dart_wasm —
+  what reaches Dart when native sends non-ASCII text, in characters sent against
+  characters arrived WITH the byte count beside them: on a byte-per-character
+  read the arrived count equals the byte count, so the pair names the failure
+  mode. Its ASCII arm is the control and is also the reason the defect shipped
 - **[P-46](P-46-drain-in-peer-mode.md)** valid (round 354), websocket server and
   core endpoints — does a graceful drain see a peer-mode call. Reads
   `activeResponders` off the endpoint's own `collectEndpointMetrics()`, the same
