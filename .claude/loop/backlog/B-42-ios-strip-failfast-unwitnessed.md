@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 365)
 round: 363
 commit: b1053a84
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
@@ -8,6 +8,22 @@ reason: "the iOS half of round 363's fix is compiled but not run: no simulator c
 ---
 
 # B-42 — the module-syntax fail-fast is unwitnessed on iOS
+
+## CLOSED, round 365
+
+A simulator came up and the suite ran on it: **all five witnesses pass on iOS**
+(`+26`, iOS 18.6), unchanged. The check fires correctly there and the control —
+the real glue still booting — holds, so the false-positive risk the Android
+ablation priced does not materialise on the other engine either.
+
+The argument below for shipping it unwitnessed turned out to be right, which is
+worth recording precisely because it might not have been. What remains
+unmeasured is the second paragraph of "What is still unknown": nobody ablated
+the check ON IOS to confirm the 30 s watchdog is what it replaces there. That is
+a question about the OLD behaviour, not about the fix, and it is not worth a
+device run of its own.
+
+---
 
 ## What shipped
 

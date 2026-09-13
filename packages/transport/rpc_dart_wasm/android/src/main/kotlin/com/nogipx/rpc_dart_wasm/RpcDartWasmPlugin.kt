@@ -201,6 +201,21 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
               _rpcConsoleLog = [];
               return out;
             }
+            // dart2wasm's glue calls `performance.now()` for Stopwatch and for
+            // anything else on the high-resolution clock. JavaScriptSandbox is
+            // a bare V8 isolate with no `performance` global, so a guest that
+            // used a Stopwatch died here with an opaque "Internal server error"
+            // -- while the SAME guest worked on iOS, where WKWebView supplies
+            // the real thing. Measured: Timer(1ms..1000ms) reported lag on iOS
+            // and threw on Android.
+            //
+            // Date.now() is millisecond-resolution where the real API is
+            // microsecond, so a guest measuring sub-millisecond intervals sees
+            // 0 rather than a wrong number. That is the honest floor available
+            // in this sandbox.
+            if (typeof performance === 'undefined') {
+              var performance = { now: function() { return Date.now(); } };
+            }
             function setTimeout(fn, ms) {
               var id = ++_timerId;
               _timers[id] = { fn: fn, interval: false, ms: ms || 0, next: Date.now() + (ms || 0) };

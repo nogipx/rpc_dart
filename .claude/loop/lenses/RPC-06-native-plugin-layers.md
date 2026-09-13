@@ -3,8 +3,8 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355, 357, 362, 363]
-status: confirmed (round 363)
+applied: [348, 355, 357, 362, 363, 365]
+status: confirmed (round 365)
 ---
 
 # RPC-06 — The plugin's native layers
@@ -191,3 +191,42 @@ today. Mutating the REAL glue, on Android:
 
 `../probes/P-54-unstripped-module-syntax.md`,
 `../rounds/363-the-check-that-would-have-refused-everything.md`.
+
+## Round 365 — both platforms at once, which is when parity becomes visible
+
+The first two-platform device gate of the session: Android `+24 ~2` and iOS
+`+26`. Running the SAME guest on both is what turned three open questions into
+one defect.
+
+The round was sent to measure whether an offscreen WKWebView throttles guest
+timers. It does not — iOS median lag is 0-1 ms up to a 100 ms delay, ~99 ms on a
+1 s timer; Android is a flat 3-7 ms. The finding was the other arm:
+
+    platform: android    RpcStatusException(13): Internal server error
+
+The identical guest, the identical call. dart2wasm's glue calls
+`performance.now()` (`guest.mjs:123`); a WKWebView is a full browser environment
+and supplies it, `JavaScriptSandbox` is a bare V8 isolate and does not. So any
+guest using `Stopwatch` crashed on Android and worked on iOS.
+
+> **Ablating each language separately (round 348) is not the same as running the
+> same code on both.** 348's rule catches a fix ported to one platform and not
+> the other. This is the opposite shape: nothing was ported anywhere, and the
+> gap is in what the two HOST ENVIRONMENTS provide for free. Add to the
+> detector: list the JS globals each boot script assumes, and ask which of them
+> the other sandbox does not have. A WKWebView gives you a browser; a
+> JavaScriptSandbox gives you V8.
+
+> **A bench built for one question found the defect.** The timer probe was the
+> first guest code in the repository to use a `Stopwatch`, which is why six
+> rounds of device work had not hit it. When a platform pair looks equivalent,
+> the fastest way to find where it is not is to run code that exercises
+> something new.
+
+Its canary is also the field symptom: disabling the shim reproduces exactly the
+`Internal server error` a user would see, which is what makes the message worth
+recording rather than just the assertion.
+
+`../probes/P-56-guest-timer-lag.md`,
+`../probes/P-57-guest-to-host-frame-order.md`,
+`../rounds/365-the-clock-one-sandbox-does-not-have.md`.

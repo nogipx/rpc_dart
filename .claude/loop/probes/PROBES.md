@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-57](P-57-guest-to-host-frame-order.md)** valid (round 365), rpc_dart_wasm
+  — do 10k guest frames arrive in order, compared against the generated sequence
+  so a swap, a duplicate and a gap all fail the same assertion. Its iOS row is
+  the first measurement that the undocumented WebKit FIFO convention actually
+  holds rather than being assumed
+- **[P-56](P-56-guest-timer-lag.md)** valid (round 365), rpc_dart_wasm — how late
+  a guest `Timer` is, clocked INSIDE the guest because a bridge round trip costs
+  more than the delays under test. Each platform is the other's control, and
+  building it is what found the `performance.now()` gap: the Android arm threw
+  where iOS reported numbers
 - **[P-55](P-55-what-a-wasm-call-costs.md)** valid (round 364), rpc_dart_wasm —
   what one call over the bridge costs, p50/p95/p99 at four payload sizes, with a
   discarded warm-up. **Its empty-unary row is the control for every other row**:

@@ -91,6 +91,37 @@ final class _EchoService extends RpcResponderContract {
       handler: (request, {RpcContext? context}) async => '$_produced'.rpc,
     );
 
+    // How long a guest Timer ACTUALLY takes, measured inside the guest.
+    //
+    // The host cannot measure this: a round trip through the bridge costs more
+    // than the delays being measured, so timing it from outside reports the
+    // transport rather than the timer. The guest clocks its own sleep and
+    // returns the error in microseconds.
+    //
+    // The point is the WKWebView on iOS. It is never added to a view hierarchy,
+    // so the page is permanently hidden, and WebKit throttles timers in hidden
+    // pages. A guest whose Timers are delayed by seconds is a different product
+    // from one whose Timers are accurate, and nothing in this repository has
+    // ever measured which one this is.
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'TimerLag',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async {
+        final wanted = int.parse(request.value);
+        final samples = <int>[];
+        for (var i = 0; i < 10; i++) {
+          final clock = Stopwatch()..start();
+          await Future<void>.delayed(Duration(milliseconds: wanted));
+          samples.add(clock.elapsedMicroseconds - wanted * 1000);
+        }
+        samples.sort();
+        return '${samples.first},${samples[samples.length ~/ 2]},'
+                '${samples.last}'
+            .rpc;
+      },
+    );
+
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'BootFailure',
       requestCodec: _codec,
