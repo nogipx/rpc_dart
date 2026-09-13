@@ -279,11 +279,18 @@ class RpcWebSocketCallerTransport
   }
 
   @override
+  /// Guarded like its two siblings, though nothing in the library routes here:
+  /// [supportsZeroCopy] is false, so the caller pipeline refuses a codec-free
+  /// call before the transport is reached, and the frame channel underneath
+  /// would raise `UnsupportedError` anyway. The guard is for consistency, not
+  /// for a reachable failure.
+  @override
   Future<void> sendDirectObject(
     int streamId,
     Object object, {
     bool endStream = false,
   }) async {
+    _ensureUsable();
     if (!_idsOnThisConnection.contains(streamId)) return;
     return _inner.sendDirectObject(streamId, object, endStream: endStream);
   }
@@ -371,6 +378,14 @@ class RpcWebSocketCallerTransport
       final idCursor = _inner.lastIssuedStreamId;
       await _fwdSub?.cancel();
       await _inner.close();
+      // From here until `_attach` there is no socket, and saying so is the
+      // point of [_disconnected]. Set only in the catch below, it was false for
+      // the whole factory await -- a handshake, tens to hundreds of ms -- so
+      // `_ensureUsable` passed and work went into the CLOSED inner: sends
+      // accepted and dropped silently, and `getMessagesForStream` answering a
+      // synthetic UNAVAILABLE, which is RETRYABLE and so invites the caller to
+      // do it again.
+      _disconnected = true;
       final ws = await _reconnectFactory();
 
       // Re-checked AFTER the factory. The guard at the top of this method runs

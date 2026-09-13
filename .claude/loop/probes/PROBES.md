@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-50](P-50-calls-inside-the-reconnect-window.md)** valid (round 359),
+  rpc_dart_websocket — six transport methods against three transport states, as
+  a table. **Two of the three arms ARE the controls**: `healthy` and
+  `disconnected` are the states the code means to have, so a correct transport
+  makes the third column equal one of them. Its `finishSending` row returning in
+  every arm is load-bearing rather than noise — that method runs from `finally`
+  blocks, so a fix that made it throw would be worse than the defect
 - **[P-49](P-49-send-into-a-dead-socket.md)** valid (round 358), rpc_dart_websocket
   — does a websocket send throw when the socket is already gone, one arm per way
   it can be dead. **Each arm prints its sampled flags BEFORE the send**, because

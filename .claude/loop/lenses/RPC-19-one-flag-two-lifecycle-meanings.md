@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353]
-status: confirmed (round 353)
+applied: [238, 268, 324, 353, 359]
+status: confirmed (round 359)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -153,5 +153,43 @@ Fixed with `IRpcAdvisoryChannelError`, a marker checked at the one place that
 amplifies; the report still reaches `incomingMessages`, where both pipelines log
 it, so nothing is dropped. Bench `../probes/P-45-text-frame-blast-radius.md`,
 round `../rounds/353-reported-not-fatal-was-half-true.md`.
+
+## Round 359 — the THIRD state, which the flag has no value for
+
+Back on a flag, and the defect is neither of its two meanings. `_disconnected`
+on the websocket caller distinguishes "closed for good" from "no connection,
+recovery expected" — and `_reconnectOnce` closes `_inner`, then awaits the
+factory for a whole handshake, setting the flag only on the OUTCOME:
+`false` on success, `true` in the catch. Nothing describes the DURATION.
+
+The bench is a method-by-state matrix, and the two states the code MEANS to have
+are the controls:
+
+    method                 healthy     in-window               disconnected
+    createStream           id=3        id=3                    StateError
+    sendMessage            returned    returned                StateError
+    getMessagesForStream   HUNG        RpcStatusException(14)  StateError
+
+> **The in-window column should equal one of the controls, and it equals
+> neither.** That is the whole finding, and it is visible only because both
+> control columns are in the table. A bench with one control could have read the
+> `returned`s as correct.
+
+> **Extend the detector from WRITERS to DURATIONS.** The existing recipe lists
+> who writes the flag and asks whether they mean the same thing; here all the
+> writers agree and the gap is between them. For every flag on a recovery path,
+> ask what it says while the recovery is RUNNING — a flag written from a `catch`
+> describes an outcome, and an outcome is not a state.
+
+> **A quiet close is what hides it.** `RpcChannelTransport` answers a closed
+> transport with `if (_closed) return;`, so sends into the corpse are accepted
+> and dropped and nothing upstream notices — the same quiet-close property this
+> lens already records two sections above, biting a second time.
+
+Fixed by one line, `_disconnected = true` immediately after `_inner.close()`.
+The GUARD that earns its place is **the window ENDS**: a transport that refused
+forever passes both witnesses and is worse than the defect.
+`../probes/P-50-calls-inside-the-reconnect-window.md`,
+`../rounds/359-the-state-nobody-named.md`.
 
 Imported from private memory in the curate pass after round 234.
