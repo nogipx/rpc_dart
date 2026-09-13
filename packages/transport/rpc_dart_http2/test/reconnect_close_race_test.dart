@@ -106,13 +106,23 @@ final class _StallingProxy {
         try {
           upstream = await Socket.connect('127.0.0.1', _targetPort);
           _live.add(upstream!);
+          client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+          await client.flush();
+          // The pipe is attached only now, and the order is load-bearing.
+          // `flush()` BINDS the sink until it completes, so a `client.add`
+          // inside that window throws `StreamSink is bound to a stream` -- from
+          // a stream callback, in the ROOT zone, where neither this try nor the
+          // subscription's onError sees it. The server writes its SETTINGS
+          // frame the moment it accepts, so that chunk is usually already
+          // waiting when the listener attaches: whether it lands before or
+          // inside the flush is pure scheduling, and on a machine running the
+          // whole workspace it lands inside. The throw also DROPS the chunk,
+          // which then reads as a connection that never closes.
           upstream!.listen(
             client.add,
             onError: (Object _) {},
             onDone: () => client.destroy(),
           );
-          client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-          await client.flush();
         } catch (_) {
           // The client vanished during the stall, or the target is gone. Either
           // way `resume()` below still has to run: it is what delivers onDone,

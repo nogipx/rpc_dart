@@ -73,13 +73,17 @@ Future<ServerSocket> startStallingProxy(int targetPort, Duration delay) async {
         sub.pause();
         await Future<void>.delayed(delay);
         upstream = await Socket.connect('127.0.0.1', targetPort);
+        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        await client.flush();
+        // Attached after the flush, for the reason spelled out in
+        // reconnect_close_race_test.dart: `flush()` binds the sink, and a
+        // `client.add` from this listener inside that window throws into the
+        // root zone and drops the chunk.
         upstream!.listen(
           client.add,
           onError: (Object _) {},
           onDone: () => client.destroy(),
         );
-        client.write('HTTP/1.1 200 Connection Established\r\n\r\n');
-        await client.flush();
         sub.resume();
       },
       onError: (Object _) {},
