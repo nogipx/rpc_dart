@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:web_socket_channel/io.dart';
@@ -25,6 +26,14 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// client RSS. A client that never offers it cannot be flooded that way. Turn
 /// it on only against servers you control and trust.
 ///
+/// [headers] go on the upgrade REQUEST, which is the only place a websocket
+/// client can authenticate: there is no second round trip to attach a token to.
+///
+/// [connectTimeout] bounds the whole open — TCP connect, HTTP upgrade and
+/// `ready`. Without it a peer that accepts the connection and never answers
+/// holds the caller until the OS gives up, which on a black hole (a firewall
+/// that DROPs, a balancer with no backend) is minutes.
+///
 /// The raw dart:io WebSocket is opened here rather than through
 /// [IOWebSocketChannel.connect], which passes no compression argument and so
 /// always takes dart:io's default (ON).
@@ -33,16 +42,48 @@ Future<WebSocketChannel> openWebSocket(
   Iterable<String>? protocols,
   Duration? pingInterval,
   bool enableCompression = false,
+  Map<String, Object>? headers,
+  Duration? connectTimeout,
 }) async {
-  final webSocket = await WebSocket.connect(
-    uri.toString(),
-    protocols: protocols,
-    compression: enableCompression
-        ? CompressionOptions.compressionDefault
-        : CompressionOptions.compressionOff,
+  Future<WebSocketChannel> open() async {
+    final webSocket = await WebSocket.connect(
+      uri.toString(),
+      protocols: protocols,
+      headers: headers,
+      compression: enableCompression
+          ? CompressionOptions.compressionDefault
+          : CompressionOptions.compressionOff,
+    );
+    webSocket.pingInterval = pingInterval;
+    final channel = IOWebSocketChannel(webSocket);
+    await channel.ready;
+    return channel;
+  }
+
+  if (connectTimeout == null) return open();
+
+  // `Future.timeout` abandons the AWAIT, not the WORK: the socket keeps opening
+  // and, on a merely slow peer, arrives afterwards with nobody holding it. Core
+  // learned this on RpcClientConnection's connectTimeout -- an abandoned connect
+  // that later succeeds is a live socket nothing can close. So the late arrival
+  // is closed here rather than dropped.
+  var timedOut = false;
+  final opening = open();
+  unawaited(
+    opening
+        .then((channel) {
+          if (timedOut) unawaited(channel.sink.close().catchError((_) {}));
+        })
+        .catchError((Object _) {}),
   );
-  webSocket.pingInterval = pingInterval;
-  final channel = IOWebSocketChannel(webSocket);
-  await channel.ready;
-  return channel;
+  return opening.timeout(
+    connectTimeout,
+    onTimeout: () {
+      timedOut = true;
+      throw TimeoutException(
+        'WebSocket connect to $uri timed out',
+        connectTimeout,
+      );
+    },
+  );
 }

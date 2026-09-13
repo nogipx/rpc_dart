@@ -115,17 +115,35 @@ class RpcWebSocketCallerTransport
   /// Accepted and IGNORED on the web: browsers run ping/pong inside the
   /// WebSocket implementation and expose no API for it. A web client is not
   /// unprotected, but it cannot be tuned here.
+  ///
+  /// [headers] go on the upgrade REQUEST — the only place a websocket client
+  /// can authenticate, since there is no second round trip to attach a token
+  /// to. **VM only**: the browser WebSocket API takes no request headers, so a
+  /// web client uses a cookie, a `Sec-WebSocket-Protocol` value or a query
+  /// parameter. They are ignored there rather than rejected, so one piece of
+  /// cross-platform code can pass a token without branching on the platform.
+  ///
+  /// [connectTimeout] bounds the whole open, on both platforms. Without it a
+  /// peer that accepts the connection and never completes the upgrade holds the
+  /// caller until the OS gives up — measured on a black hole that accepts TCP
+  /// and answers nothing, `connect()` was still hanging at 10 s. Null by
+  /// default, which keeps the OS behaviour for anyone who wants it.
   static Future<RpcWebSocketCallerTransport> connect(
     Uri uri, {
     Iterable<String>? protocols,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration? pingInterval,
     bool enableCompression = false,
+    Map<String, Object>? headers,
+    Duration? connectTimeout,
   }) async {
-    // The reconnect factory carries the SAME keepalive and the SAME compression
-    // choice, or a reconnected socket comes back with different settings: blind
-    // again after the first drop, and silently re-offering an extension the
-    // default deliberately declines.
+    // The reconnect factory carries the SAME keepalive, compression choice,
+    // HEADERS and timeout, or a reconnected socket comes back with different
+    // settings: blind again after the first drop, silently re-offering an
+    // extension the default deliberately declines, and -- the one that fails
+    // outright -- UNAUTHENTICATED, because the token went only on the first
+    // upgrade. A reconnect that cannot authenticate is a transport that works
+    // exactly once.
     //
     // enableCompression is false so the client does not OFFER
     // permessage-deflate, which a hostile or compromised server could otherwise
@@ -138,6 +156,8 @@ class RpcWebSocketCallerTransport
       protocols: protocols,
       pingInterval: pingInterval,
       enableCompression: enableCompression,
+      headers: headers,
+      connectTimeout: connectTimeout,
     );
 
     return RpcWebSocketCallerTransport(

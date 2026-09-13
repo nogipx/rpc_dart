@@ -3,8 +3,8 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276, 277, 283, 284, 287, 288]
-status: confirmed (round 276)
+applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361]
+status: confirmed (round 361)
 ---
 
 # RPC-22 — The path a peer reaches without being accepted
@@ -132,6 +132,39 @@ And note where it is reachable: only when `allowedOrigins` or `allowUpgrade` is
 configured. **Turning the security control on is what opened the path.** Round
 `../rounds/276-the-same-defect-in-the-sibling.md`, bench
 `../probes/P-26-refused-upgrade-has-no-deadline.md`.
+
+## Round 361 — the same stage from the CLIENT's side
+
+Rounds 274-275 established that a connection-oriented peer has a stage BEFORE
+the protocol starts, and that the stage needs a deadline. The mirror: the side
+DOING the connecting sits in that same stage, and `connect()` bounded nothing.
+
+    arm                     elapsed   outcome
+    no connectTimeout       10016ms   STILL HANGING at the probe bound
+    connectTimeout: 800ms   806ms     TimeoutException
+
+The `10016ms` is the probe's own bound, not a measurement of how long dart:io
+waits — the point is that nothing in the library stopped it. A firewall that
+DROPs or a balancer with no backend accepts TCP and answers nothing, which is
+exactly `prefaceTimeout`'s scenario seen from the other end.
+
+> **The pre-protocol stage is also where a client AUTHENTICATES**, and that is
+> the half filed as hygiene which was not. A websocket client has exactly one
+> place to put a token — the upgrade request — because there is no second round
+> trip. `openWebSocket` forwarded no headers, so an authenticating server could
+> not be reached through this API at all. When this lens finds a stage, ask what
+> each side must accomplish IN it, not only what it must be protected from.
+
+> **A new parameter has to reach the RECONNECT factory too** (U-10). `connect()`
+> builds the factory that carries the keepalive and the compression choice; a
+> token that goes only on the first upgrade authenticates exactly once. The
+> bench therefore drives `reconnect()` rather than stopping at the first
+> handshake — and because there is ONE `openChannel` closure serving both, the
+> two header canaries fail identically, which is the honest result rather than a
+> flaw in them.
+
+`../probes/P-52-connect-headers-and-timeout.md`,
+`../rounds/361-the-only-place-to-authenticate.md`.
 
 **Round 277 aimed it at the canonical instance and came back CLEAN.** HTTP/2
 Rapid Reset (CVE-2023-44487) is this shape exactly — a stream opened and reset

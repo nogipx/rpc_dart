@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-52](P-52-connect-headers-and-timeout.md)** valid (round 361),
+  rpc_dart_websocket — what `connect()` can and cannot express. **The headers
+  half is read on the SERVER side**, off a recording `HttpServer`, so the number
+  is what crossed the wire rather than what the client believes it set. Its
+  `after reconnect()` row is what decides whether the feature is usable: a token
+  that goes only on the first upgrade authenticates exactly once
 - **[P-51](P-51-three-core-diagnostics.md)** valid (round 360), core — three
   places the library answers wrongly rather than failing, in one file. **Each
   section's control is the SIBLING that gets the same question right**, which is
