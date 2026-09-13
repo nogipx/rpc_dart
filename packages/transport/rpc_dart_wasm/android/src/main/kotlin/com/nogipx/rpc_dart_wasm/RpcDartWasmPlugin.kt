@@ -149,13 +149,28 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             return mapOf("error" to "Named data API not supported")
         }
 
+        // Checked BEFORE anything is allocated: the isolate, its channel and
+        // the named data would all have to be torn down again, and the answer
+        // does not depend on any of them.
+        val plainJs = stripModuleSyntax(mjsCode)
+        val leftover = unstrippedModuleSyntax(plainJs)
+        if (leftover != null) {
+            return mapOf(
+                "runtimeId" to null,
+                "error" to "The dart2wasm glue uses module syntax this plugin " +
+                    "does not strip, so it cannot run as a classic script: " +
+                    "\"$leftover\". The strip handles `export async function`, " +
+                    "`export const`, `export function` and `export class`; " +
+                    "a newer Dart SDK emitting another form needs " +
+                    "stripModuleSyntax updated.",
+            )
+        }
+
         val runtimeId = UUID.randomUUID().toString()
         val isolate = sb.createIsolate()
         runtimes[runtimeId] = isolate
         registerByteChannel(runtimeId)
         isolate.provideNamedData("rpc_wasm_module", wasmBytes)
-
-        val plainJs = stripModuleSyntax(mjsCode)
         val bootScript = """
             var globalThis = this;
             var _microtaskQueue = [];
@@ -566,4 +581,27 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         .replace("export const ", "const ")
         .replace("export function ", "function ")
         .replace("export class ", "class ")
+
+    /// The first line of module syntax [stripModuleSyntax] did not handle, or
+    /// null when the glue is now a classic script.
+    ///
+    /// The strip is four literal prefixes pinned to what dart2wasm emits today.
+    /// `export let`, `export default`, a trailing `export {a, b}` or any
+    /// `import` would all survive it and reach the engine as module syntax
+    /// inside a classic script.
+    ///
+    /// LINE-ANCHORED, and that is the whole design. The words appear 19 times
+    /// in the real glue and only 4 at statement position: `dartInstance.exports`,
+    /// `importObjectPromise` and a comment naming the `'import'` API are the
+    /// rest, so a `contains` check would refuse every working boot -- a far
+    /// worse failure than the one it is meant to diagnose.
+    ///
+    /// Deliberately not a regex: the same check runs in Swift, and hasPrefix on
+    /// a trimmed line means the same thing in both languages, which no two
+    /// regex engines guarantee.
+    private fun unstrippedModuleSyntax(code: String): String? =
+        code.lineSequence().firstOrNull { line ->
+            val t = line.trimStart()
+            t.startsWith("export ") || t.startsWith("import ")
+        }?.trim()
 }

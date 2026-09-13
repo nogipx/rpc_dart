@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-54](P-54-unstripped-module-syntax.md)** valid (round 363), rpc_dart_wasm —
+  what a caller is told when the dart2wasm glue uses a module form the plugin
+  does not strip, by mutating the REAL glue one way per arm. **Its control is
+  the finding**: swapping the line-anchored check for a `contains` takes the
+  device suite from `+21 ~2` to `+3 ~2 -13`, because `export`/`import` appear 19
+  times in the glue and only 4 at statement position
 - **[P-53](P-53-android-main-thread-during-transfer.md)** **broken** (round 362),
   rpc_dart_wasm android — platform-channel round-trip latency as a direct read of
   Android main-thread availability, with an idle control in the same run. It

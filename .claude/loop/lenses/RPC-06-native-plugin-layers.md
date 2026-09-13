@@ -3,8 +3,8 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355, 357, 362]
-status: confirmed (round 355)
+applied: [348, 355, 357, 362, 363]
+status: confirmed (round 363)
 ---
 
 # RPC-06 — The plugin's native layers
@@ -153,3 +153,41 @@ Reverted, not shipped. `../probes/P-53-android-main-thread-during-transfer.md`
 (`broken` by its own ablation),
 `../backlog/B-41-android-base64-on-the-main-thread.md`,
 `../rounds/362-the-thread-was-not-the-cost.md`.
+
+## Round 363 — one platform answers the Ask and the other cannot
+
+`stripModuleSyntax` is four literal `replace` calls in each plugin with no check
+that they accomplished anything, pinned to the module forms dart2wasm emits
+today. Mutating the REAL glue, on Android:
+
+    arm                   before                        after
+    unmutated (control)   booted                        booted
+    export let            SyntaxError: Unexpected       the plugin names the
+    export default        token 'export' ...            construct and says
+    a leading import      Cannot use import statement   stripModuleSyntax
+
+> **The review item's premise held on one platform and not the other.** It
+> predicted `compile is not defined`; Android's message already named the token,
+> because `evaluateJavaScriptAsync` rejects on the syntax error. The confusing
+> symptom is iOS's, where a SyntaxError kills the whole `<script>` tag — which
+> the Swift source says two comments away and which nobody has run. **A
+> cross-platform claim needs a per-platform measurement, and the platform you
+> can reach may be the one where it is false.**
+
+> **The control was the finding.** Swapping the line-anchored rule for
+> `contains("export")` took the device suite from `+21 ~2` to **`+3 ~2 -13`** —
+> every guest boot in the repository. `export`/`import` appear 19 times in the
+> real glue and only 4 at statement position; the rest are
+> `dartInstance.exports`, `importObjectPromise` and a comment. When a fix is a
+> new REFUSAL, the arm that must keep working is worth more than the arms that
+> must now fail.
+
+> **Write the shared rule so two languages cannot disagree.** The same check
+> runs in Kotlin and Swift; a trimmed `hasPrefix` means the same thing in both,
+> which no two regex engines guarantee. That is what let the Android measurement
+> carry any weight at all for the unrun Swift half — an argument recorded as
+> `../backlog/B-42-ios-strip-failfast-unwitnessed.md` rather than passed off as
+> evidence.
+
+`../probes/P-54-unstripped-module-syntax.md`,
+`../rounds/363-the-check-that-would-have-refused-everything.md`.

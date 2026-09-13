@@ -95,6 +95,23 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             return
         }
 
+        // Checked BEFORE anything is allocated: the web view, its handlers and
+        // the byte channel would all have to be torn down again, and the answer
+        // does not depend on any of them.
+        let plainJs = stripModuleSyntax(mjsCode)
+        if let leftover = unstrippedModuleSyntax(plainJs) {
+            result([
+                "runtimeId": nil,
+                "error": "The dart2wasm glue uses module syntax this plugin "
+                    + "does not strip, so it cannot run as a classic script: "
+                    + "\"\(leftover)\". The strip handles `export async function`, "
+                    + "`export const`, `export function` and `export class`; "
+                    + "a newer Dart SDK emitting another form needs "
+                    + "stripModuleSyntax updated.",
+            ] as [String: Any?])
+            return
+        }
+
         let runtimeId = UUID().uuidString
         let runtime = WasmRuntime(
             runtimeId: runtimeId,
@@ -104,8 +121,6 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         )
         runtimes[runtimeId] = runtime
         registerByteChannel(runtimeId: runtimeId)
-
-        let plainJs = stripModuleSyntax(mjsCode)
 
         let bootHtml = """
         <!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
@@ -333,6 +348,34 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             .replacingOccurrences(of: "export const ", with: "const ")
             .replacingOccurrences(of: "export function ", with: "function ")
             .replacingOccurrences(of: "export class ", with: "class ")
+    }
+
+    /// The first line of module syntax `stripModuleSyntax` did not handle, or
+    /// nil when the glue is now a classic script.
+    ///
+    /// The strip is four literal prefixes pinned to what dart2wasm emits today.
+    /// `export let`, `export default`, a trailing `export {a, b}` or any
+    /// `import` would all survive it. On this platform that is worse than on
+    /// Android: a SyntaxError kills the whole `<script>` tag, so the IIFE below
+    /// never defines `compile` and the failure surfaces as the watchdog, 30 s
+    /// later, blaming something else.
+    ///
+    /// LINE-ANCHORED, and that is the whole design. The words appear 19 times
+    /// in the real glue and only 4 at statement position -- `dartInstance.exports`,
+    /// `importObjectPromise` and a comment naming the `'import'` API are the
+    /// rest -- so a `contains` check would refuse every working boot.
+    ///
+    /// Deliberately not NSRegularExpression: the same check runs in Kotlin, and
+    /// a trimmed hasPrefix means the same thing in both languages, which no two
+    /// regex engines guarantee.
+    private func unstrippedModuleSyntax(_ code: String) -> String? {
+        for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
+            let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
+            if trimmed.hasPrefix("export ") || trimmed.hasPrefix("import ") {
+                return trimmed.trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return nil
     }
 
     private func runtimeTxChannel(_ runtimeId: String) -> String {
