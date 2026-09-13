@@ -229,8 +229,15 @@ final class RpcMessageParser {
             _state.clear();
             _state.reset();
             if (e is RpcException) rethrow;
+            // NOT "exceeds the limit". A decompressor throws for the bomb it
+            // was asked to stop AND for input that is malformed, truncated or
+            // not compressed at all, and this catch cannot tell them apart --
+            // so naming one of them told a peer with a corrupt frame to send
+            // less, which cannot help. State the fact and leave the cause to
+            // the two possibilities that produce it.
             throw RpcException(
-              'Decompressed gRPC payload exceeds the configured limit '
+              'Compressed gRPC payload could not be decompressed: it is '
+              'malformed, or it expands beyond the configured limit '
               '(max: $_maxMessageLength)',
             );
           }

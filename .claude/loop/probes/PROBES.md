@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-51](P-51-three-core-diagnostics.md)** valid (round 360), core — three
+  places the library answers wrongly rather than failing, in one file. **Each
+  section's control is the SIBLING that gets the same question right**, which is
+  what makes each defect legible rather than merely surprising. Its section (b)
+  came back CLEAN and is kept for that reason: the negative is the result, and
+  deleting the arm would leave the next round re-deriving it
 - **[P-50](P-50-calls-inside-the-reconnect-window.md)** valid (round 359),
   rpc_dart_websocket — six transport methods against three transport states, as
   a table. **Two of the three arms ARE the controls**: `healthy` and

@@ -352,20 +352,30 @@ final class RpcStreamIdManager {
   /// [customMaxId] Optional custom upper bound (tests, specialized transports).
   /// [resumeAfter] Continue an existing sequence instead of starting over —
   ///   pass a previous manager's [lastIssuedId]. Values below the natural start
-  ///   are ignored, so `resumeAfter: -1` and `resumeAfter: null` behave alike,
-  ///   and a value of the wrong parity cannot be produced by [lastIssuedId].
+  ///   are ignored, so `resumeAfter: -1` and `resumeAfter: null` behave alike.
+  ///   Parity is aligned exactly as [resumeAfter] does it: a cursor of the
+  ///   wrong parity for this role is rounded UP, so a client keeps issuing odd
+  ///   ids whatever it is handed. Taken raw, `resumeAfter: 4` made a CLIENT
+  ///   issue 6, 8, 10 — the server's half of the id space.
   RpcStreamIdManager({
     required this.isClient,
     int? customMaxId,
     int? resumeAfter,
-  }) : _lastId = (resumeAfter != null && resumeAfter > (isClient ? -1 : 0))
-           ? resumeAfter
-           : (isClient ? -1 : 0),
+  }) : _lastId = _alignedStart(isClient: isClient, resumeAfter: resumeAfter),
        _firstAssignableId = isClient ? 1 : 2,
        _maxAssignableId = _computeMaxAssignableId(
          isClient: isClient,
          maxIdOverride: customMaxId,
        );
+
+  /// The starting cursor for [resumeAfter], with the same parity rule the
+  /// [resumeAfter] method applies. One home for the alignment, or the two
+  /// routes into the same concept drift — and they had.
+  static int _alignedStart({required bool isClient, int? resumeAfter}) {
+    final natural = isClient ? -1 : 0;
+    if (resumeAfter == null || resumeAfter <= natural) return natural;
+    return resumeAfter.isOdd == isClient ? resumeAfter : resumeAfter + 1;
+  }
 
   /// Computes the upper ID bound respecting parity.
   static int _computeMaxAssignableId({

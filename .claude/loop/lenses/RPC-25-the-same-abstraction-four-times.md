@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354]
-status: confirmed (round 354)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360]
+status: confirmed (round 360)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -357,3 +357,36 @@ which is the evidence that there is one home now rather than two copies.
 `../rounds/354-the-drain-that-polled-a-key-nobody-published.md`. The getter half
 of the same divergence is a breaking interface change and is
 `../backlog/B-37-endpoints-getter-excludes-peers.md`.
+
+## Round 360 — a CONSTRUCTOR and a METHOD are two implementations
+
+The smallest pair yet, and both are on one class. `RpcStreamIdManager` takes a
+cursor two ways: `resumeAfter:` in the constructor, and `resumeAfter()` as a
+method. The method aligns parity and documents it — *"a value of the wrong
+parity for this role is rounded UP"* — and the constructor's initialiser took
+the value raw:
+
+    route                       resumeAfter  first three ids
+    method resumeAfter(4)       4            7, 9, 11
+    constructor resumeAfter: 4  4            6, 8, 10   <- a CLIENT
+
+A client issuing even ids mints the SERVER's half of one shared space, and
+everything downstream is keyed on the id alone.
+
+> **Two ways to set the same field are two implementations.** The detector's
+> "find a field every sibling declares, then read the methods around it" points
+> at classes; point it at FIELDS too. `_lastId` has two writers, one in an
+> initialiser list where no method body is there to read.
+
+> **An initialiser list hides the drift especially well.** It cannot call an
+> instance method, so the shared rule has to be a static — which is exactly the
+> step somebody skips when the expression looks short enough to inline.
+
+Same round, same shape, DECLINED: `_methodPathFromKey` cannot round-trip a
+dotted service name that its sibling `_parseMethodPath` explicitly admits — real
+drift, in one file, and the ordinary path measured clean, so it is
+`../backlog/B-40-method-path-from-key-drops-dots.md` rather than a fix. **Drift
+is not automatically a defect; it is a defect where something reaches it.**
+
+`../probes/P-51-three-core-diagnostics.md`,
+`../rounds/360-two-routes-into-one-concept.md`.
