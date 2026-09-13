@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-55](P-55-what-a-wasm-call-costs.md)** valid (round 364), rpc_dart_wasm —
+  what one call over the bridge costs, p50/p95/p99 at four payload sizes, with a
+  discarded warm-up. **Its empty-unary row is the control for every other row**:
+  that an empty call and a 1 KiB call cost the same is the finding — the price is
+  the round trip, not the bytes. Published in the README with its hardware named,
+  because an emulator is a floor and not a prediction
 - **[P-54](P-54-unstripped-module-syntax.md)** valid (round 363), rpc_dart_wasm —
   what a caller is told when the dart2wasm glue uses a module form the plugin
   does not strip, by mutating the REAL glue one way per arm. **Its control is

@@ -64,3 +64,26 @@ final server = RpcWebSocketServer(
   connection, and its contracts, forever.
 - `compression` — permessage-deflate, OFF by default because it is an unbounded
   decompression bomb from an unauthenticated peer.
+
+## Deploy behind a proxy that bounds the frame
+
+`RpcSecurityPolicy.maxMessageLengthBytes` is enforced by rpc_dart's frame layer,
+which runs **after** the WebSocket implementation has assembled the message.
+`dart:io` buffers a whole message before the frame layer sees its first byte, so
+the ceiling refuses the message only once the memory has already been spent.
+Measured: a peer sending **96 MiB in one WebSocket message** delivers it as a
+single 96 MiB chunk, whatever `maxMessageLengthBytes` says.
+
+That is the wrong order for an unauthenticated peer, and rpc_dart cannot fix it
+from inside: the bytes are in the socket layer's buffer before any of this
+package's code runs.
+
+So put a frame or message size limit in the proxy in front of the server —
+nginx's `client_max_body_size` / a WebSocket-aware `proxy_*` bound, Envoy's
+`max_request_bytes`, an ALB rule — set at or below your
+`maxMessageLengthBytes`. The policy then becomes a second line of defence rather
+than the only one.
+
+There is also **no limit on the number of connections**. `RpcWebSocketServer`
+builds one endpoint per accepted socket and keeps it until the socket closes or
+the keepalive reclaims it; bound the count upstream if the server is exposed.

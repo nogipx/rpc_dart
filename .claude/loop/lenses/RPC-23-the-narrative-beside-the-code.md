@@ -3,8 +3,8 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337]
-status: confirmed (round 293)
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364]
+status: confirmed (round 364)
 ---
 
 # RPC-23 — The narrative beside the code
@@ -228,3 +228,38 @@ calls and zero guards.
 > about history; "zero cost" told every author not to guard, and they did not.
 > When a comment makes a performance or safety claim, measure it or delete the
 > claim — do not carry it forward because it is short.
+
+## Round 364 — prose that names a component which cannot do the job
+
+The strongest form of this shape found so far, and the cheapest to detect.
+`rpc_dart_wasm`'s README said the iOS backend was **JavaScriptCore**, twice.
+JSC has no WebAssembly, so if it were true the package could not run a
+dart2wasm guest on iOS at all — and it does, through an offscreen `WKWebView`
+with a custom scheme handler.
+
+> **Some stale prose is not merely out of date, it is IMPOSSIBLE.** A claim you
+> can refute from the component's own capabilities needs no diff archaeology:
+> ask what the named thing can do, and whether the package works. Faster than
+> comparing against the code, and it caught both mentions at once — a search for
+> the component NAME finds them where a read-through does not.
+
+> **Write the reason next to the correction or it comes back.** The fix says
+> "JSC has no WebAssembly, so it cannot run a dart2wasm guest at all", not just
+> "WKWebView". A bare correction invites the next reader to swap it back.
+
+Same round, the inverse duty: a README is also where a missing measurement does
+damage. The item asked for the price of a frame, the README gave none, so it was
+measured — `p50 12.9 ms` for an empty unary on an Android emulator, flat to
+1 KiB because the price is the boundary rather than the payload. Published with
+the hardware named and the shape explained, since an emulator is a floor and not
+a prediction.
+
+> **And a claim written INTO prose must be verified before it ships, even when
+> its source is the repository's own comment.** The websocket note about
+> `dart:io` buffering a whole message came from a source comment — exactly what
+> this lens says not to trust. Running the existing probe turned it into
+> `96 MiB sent -> 1 chunk -> 96 MiB` before it reached a README people deploy
+> from.
+
+Bench `../probes/P-55-what-a-wasm-call-costs.md`,
+`../rounds/364-the-readme-named-an-engine-that-cannot-run-it.md`.
