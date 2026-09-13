@@ -4,6 +4,27 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.5.0
+
+### Added
+
+- **`connect()` takes `headers` and `connectTimeout`.** Neither had any way
+  through: an auth header could not be attached to the handshake at all, and a
+  server that accepted the TCP connection and then never completed the upgrade
+  hung the caller forever. Both are re-applied on reconnect.
+- **`RpcWebSocketNonBinaryFrame`** — the error raised for a TEXT frame on a
+  binary channel, marked `IRpcAdvisoryChannelError` so it stops at the
+  connection instead of failing every call in flight.
+
+### Fixed
+
+- **A call landing inside a reconnect is refused rather than served by a dead
+  socket.** `send`, reads and `sendDirectObject` all now see the window.
+
+### Changed
+
+- **Requires rpc_dart 6.1**, for `IRpcAdvisoryChannelError`.
+
 ## 0.4.0
 
 ### Breaking

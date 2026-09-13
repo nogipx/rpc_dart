@@ -4,6 +4,35 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.2.1
+
+The first release whose device gate ran on BOTH platforms in the same session,
+which is what made the parity defects visible: the two host environments do not
+provide the same things, and nothing that reads or compiles one half can say so.
+
+### Fixed
+
+- **Android**: a guest using `Stopwatch` — or anything else on the
+  high-resolution clock — died with an opaque `Internal server error`.
+  dart2wasm's glue calls `performance.now()`; a WKWebView is a browser and
+  supplies it, `JavaScriptSandbox` is a bare V8 isolate and does not. Shimmed
+  from `Date.now()`, and only when the real global is absent.
+- **Text from the native side is decoded as UTF-8.** Both plugins encode UTF-8
+  and the Dart side read one character per byte, so anything above ASCII arrived
+  mangled — 17 Cyrillic characters became 30. Every test passed because they all
+  sent ASCII, where the two readings agree exactly.
+- **A boot that throws synchronously is surfaced**, instead of reaching the
+  caller later as a `LateInitializationError` about an unrelated field.
+- **Glue the stripper cannot handle is named on the spot**, rather than failing
+  later as a `SyntaxError` that on iOS kills the whole script tag.
+
+### Docs
+
+- The iOS backend is an offscreen WKWebView, not JavaScriptCore, and the README
+  now says why (JSC has no WebAssembly). Adds measured per-call costs for both
+  platforms, guest timer lag, and a note that `Stopwatch` is millisecond-grained
+  on Android.
+
 ## 0.2.0
 
 The release where the native halves were compiled and then actually RUN. The

@@ -4,7 +4,7 @@
 
 name: rpc_dart_log
 description: Real-time remote log collector for rpc_dart. Collect logs from mobile/server apps over WebSocket.
-version: 0.3.0
+version: 0.3.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -24,7 +24,7 @@ resolution: workspace
 
 dependencies:
   rpc_dart: '>=6.0.0 <7.0.0'
-  rpc_dart_websocket: ^0.4.0
+  rpc_dart_websocket: '>=0.4.0 <0.6.0'
   args: ^2.6.0
   web_socket_channel: ^3.0.3
   stream_channel: ^2.1.0

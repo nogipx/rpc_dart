@@ -4,6 +4,44 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 6.1.0
+
+Six defects from a review of 6.0.0, each closed against a failing witness. The
+theme is a wrapper or a marker that quietly answers for something it does not
+own.
+
+### Added
+
+- **`IRpcAdvisoryChannelError`** — a marker for a channel-level error worth
+  reporting that must not fail the calls in flight. A channel error is fanned
+  out to every per-stream controller; one carrying this marker stops at the
+  connection.
+
+### Fixed
+
+- **`RpcClientConnection` forwards the transport's capabilities.** The
+  reconnecting proxy it builds declared only `IRpcStreamReset`, and every
+  capability is discovered by an `is` check with a SILENT fallback — so behind
+  it a configured 64 MiB policy became `const RpcSecurityPolicy()` and refused a
+  20 MiB message at 16777221 bytes, a flow-controlled transport credited on
+  arrival instead of on consumption, and `supportsZeroCopy` read a literal
+  `false` over a transport whose `sendDirectObject` the proxy had always
+  delegated. The policy and the zero-copy answer are also remembered across a
+  reconnect gap, because the pipeline's limit caches are `??=` and a read
+  landing in that gap would pin the defaults for the endpoint's whole life.
+- **One unparseable frame no longer answers every call in flight.** A websocket
+  TEXT frame arriving on a binary channel failed every open stream on the
+  connection; it is now advisory and stops at the connection.
+- **A cancelled probe releases the circuit breaker's gate.** A streaming probe
+  the consumer cancelled left the half-open gate held, so the breaker never
+  probed again and never closed.
+- **Responder-stream metrics are published from the mixin**, so every responder
+  reports them rather than one subclass.
+- **Stream ids resume on the parity they were issued on** — in the constructor
+  as well as in `resumeAfter`.
+- **A decompression failure says what it knows**: malformed input and a payload
+  that expands past the configured limit are no longer one opaque message.
+
 ## 6.0.0
 
 The theme is what a peer can make this side hold, and what leaves it without

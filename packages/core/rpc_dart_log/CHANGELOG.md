@@ -4,6 +4,13 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.3.1
+
+### Changed
+
+- Accepts `rpc_dart_websocket` 0.5.x as well as 0.4.x. Nothing here uses the
+  APIs 0.5.0 adds, so the constraint is widened rather than moved.
+
 ## 0.3.0
 
 ### Fixed
