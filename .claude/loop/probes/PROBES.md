@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-53](P-53-android-main-thread-during-transfer.md)** **broken** (round 362),
+  rpc_dart_wasm android — platform-channel round-trip latency as a direct read of
+  Android main-thread availability, with an idle control in the same run. It
+  resolves THAT the byte path occupies the main thread and not BY WHAT: its own
+  ablation (Base64 back on Main) reads no worse than the fix. Kept because the
+  negative is the result, and because the design — measure the thread, not frame
+  timings two layers away — is the reusable part
 - **[P-52](P-52-connect-headers-and-timeout.md)** valid (round 361),
   rpc_dart_websocket — what `connect()` can and cannot express. **The headers
   half is read on the SERVER side**, off a recording `HttpServer`, so the number

@@ -3,7 +3,7 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355, 357]
+applied: [348, 355, 357, 362]
 status: confirmed (round 355)
 ---
 
@@ -117,3 +117,39 @@ Chrome. One had booted earlier in the same session.
 > already priced that.** Two green lines from a gate never shown to fail; here
 > the gate was shown to fail (348 ablated both languages) and still says nothing
 > about whether the loop recovers.
+
+## Round 362 — running it answered a question nobody asked
+
+An Android emulator came online mid-session, so the Ask got its other answer:
+the code was RUN, five times, and it disagreed with the hypothesis under test.
+
+The claim was that Base64 on `Dispatchers.Main` janks the app. The code fact is
+certain — `CoroutineScope(Dispatchers.Main)`, with `Base64.decode` over batches
+of up to 4 MiB per drain — and the measurement says it is not the cost:
+
+    run  state        payload  idle worst  busy worst
+    1    before fix   4 MiB    22ms        59ms
+    4    after fix    12 MiB   12ms        70ms
+    5    ABLATED      12 MiB   39ms        38ms
+
+> **A green native gate plus a green device suite still says nothing about a
+> PERFORMANCE claim.** Both passed in every arm above. This lens's levels —
+> reading < compiling < running — need a fourth for this class: running is not
+> measuring. A suite that exercises the path proves the path works, not that the
+> work is where you think it is.
+
+> **Measure the thread, not a consequence two layers away.** Frame timings are
+> the obvious instrument and the wrong one here: Flutter's UI thread is separate
+> from the Android main thread, and an idle test app renders nothing to be
+> janked. A platform-channel round trip is dispatched ON the main thread, so its
+> latency IS the observable.
+
+> **On an emulator the baseline can exceed the criterion.** The review asked for
+> "no frames >16 ms"; the IDLE control alone reached 39 ms with no transfer
+> running. When a target threshold sits inside the noise floor, no fix can be
+> shown to meet it — say so rather than reporting whichever run looked best.
+
+Reverted, not shipped. `../probes/P-53-android-main-thread-during-transfer.md`
+(`broken` by its own ablation),
+`../backlog/B-41-android-base64-on-the-main-thread.md`,
+`../rounds/362-the-thread-was-not-the-cost.md`.
