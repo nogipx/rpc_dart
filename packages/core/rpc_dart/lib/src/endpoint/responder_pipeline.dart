@@ -570,6 +570,24 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // Every inbound message, at the pipeline's front door.
+    //
+    // This is the boundary the field defect is measured across: a caller
+    // reports a request sent, the handler is never given it, and nothing in
+    // between says a word. A line here splits the remaining space in two — a
+    // message that appears and never reaches the handler is this pipeline's
+    // fault, one that never appears was lost below it, in the transport, the
+    // parser or the wire.
+    if (_log.isDebug) {
+      _log.debug(
+        'inbound [streamId: ${message.streamId}] '
+        'method=${message.methodPath ?? '-'} '
+        'metadata=${message.metadata != null} '
+        'payload=${message.payload?.length ?? 0} '
+        'endOfStream=${message.isEndOfStream}',
+      );
+    }
+
     // During drain, reject new streams but allow messages for existing ones.
     if (_respIsDraining && _respStreams[message.streamId] == null) {
       _detached(
