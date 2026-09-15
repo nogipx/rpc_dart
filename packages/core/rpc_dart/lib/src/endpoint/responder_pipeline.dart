@@ -79,6 +79,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   late final RpcResponderPingHandler _respPingHandler;
   StreamSubscription<RpcTransportMessage>? _respIncomingSub;
   bool _respIsListening = false;
+
+  /// The filter the live subscription was started with, so a later call asking
+  /// for a different one can be told its filter is being ignored.
+  bool Function(RpcTransportMessage)? _respMessageFilter;
   bool _respIsDraining = false;
 
   /// The drain currently in progress, shared by every concurrent caller.
@@ -357,9 +361,27 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     bool Function(RpcTransportMessage)? messageFilter,
   }) async {
     if (_respIsListening) {
-      _log.warning('Already listening for incoming requests');
+      // Starting twice is ORDINARY, not a mistake: `RpcWebSocketServer` calls
+      // `onEndpointCreated` and then `start()`, and the framework's callback
+      // registers the contracts and starts it too — so every connection took
+      // this branch. Measured on a consumer's two replicas: 704 and 698 of
+      // these warnings in 24 h, against 6 and 34 lines of real error, which is
+      // the ratio that makes a log unreadable during an incident.
+      //
+      // What IS a mistake is a second call asking for a DIFFERENT filter: the
+      // first one stays, so the caller silently does not get the filtering it
+      // asked for. That keeps the warning; the redundant call loses it.
+      if (messageFilter != _respMessageFilter) {
+        _log.warning(
+          'Already listening for incoming requests, and this call asks for a '
+          'different messageFilter — the first one stays in effect',
+        );
+      } else {
+        _log.internal('Already listening for incoming requests');
+      }
       return;
     }
+    _respMessageFilter = messageFilter;
     // Claimed BEFORE the first await, not after the subscribe below. `start()`
     // returns void and nobody awaits it, so two synchronous calls otherwise
     // both pass the guard, both suspend on the cancel below, and both
