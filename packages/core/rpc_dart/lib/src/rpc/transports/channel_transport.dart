@@ -497,13 +497,34 @@ class RpcChannelTransport
     return _idManager.releaseId(streamId);
   }
 
+  /// Refuses a WRITE on a closed transport.
+  ///
+  /// These three used to `return`, so a caller awaiting a send was told the
+  /// bytes went out while nothing reached the wire. On a client-stream that is
+  /// not a lost frame but a lost MESSAGE: the peer's handler is given a shorter
+  /// sequence than the caller sent and answers normally, so both sides report
+  /// success over different data.
+  ///
+  /// UNAVAILABLE rather than a bare `StateError`: it is retryable, it is
+  /// classifiable by the caller, and it survives the wire if it ever crosses
+  /// one. `_isTransportClosed` in the stream processors accepts both spellings,
+  /// so a responder still skips a response nobody can receive.
+  ///
+  /// READS and teardown stay lenient: [finishSending] and [releaseStreamId] run
+  /// from `finally` blocks, where a throw masks the error that got there.
+  void _refuseIfClosed() {
+    if (_closed) {
+      throw RpcStatusException(RpcStatus.unavailable, 'Transport is closed');
+    }
+  }
+
   @override
   Future<void> sendMetadata(
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
   }) async {
-    if (_closed) return;
+    _refuseIfClosed();
     _policy.validateMetadata(metadata);
     await _channel.send(
       RpcTransportMessage.withMetadata(
@@ -522,14 +543,16 @@ class RpcChannelTransport
     Uint8List data, {
     bool endStream = false,
   }) async {
-    if (_closed) return;
+    _refuseIfClosed();
     // Fast path FIRST, synchronously: with flow control off, or with credit in
     // hand, this must not introduce an `await`. An unconditional await adds a
     // microtask hop to every send even when the window is disabled, which
     // reorders frames on a path that was synchronous.
     if (!_fcTryConsume(streamId, data.length)) {
       await _fcAwaitCredit(streamId, data.length);
-      if (_closed) return;
+      // Closed WHILE parked for credit — the reachable half, and the one that
+      // loses a message on a live call rather than a dead one.
+      _refuseIfClosed();
     }
     await _channel.send(
       RpcTransportMessage.withPayload(
@@ -553,7 +576,7 @@ class RpcChannelTransport
         'Use sendMessage() with serialization or a zero-copy channel.',
       );
     }
-    if (_closed) return;
+    _refuseIfClosed();
     await _channel.send(
       RpcTransportMessage.withDirectObject(
         directPayload: object,

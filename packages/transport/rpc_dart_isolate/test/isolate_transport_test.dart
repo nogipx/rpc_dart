@@ -500,11 +500,14 @@ void main() {
         // Проверяем, что после закрытия нельзя отправлять сообщения
         final streamId = transport.createStream();
 
-        // Попытка отправить сообщение после закрытия не должна вызывать исключение,
-        // но сообщение не должно быть доставлено
-        await transport.sendMessage(
-          streamId,
-          Uint8List.fromList('test'.codeUnits),
+        // Отправка после закрытия ОТКЛОНЯЕТСЯ: тихий возврат сообщал
+        // вызывающему, что сообщение ушло, хотя до провода оно не доходило.
+        await expectLater(
+          transport.sendMessage(
+            streamId,
+            Uint8List.fromList('test'.codeUnits),
+          ),
+          throwsA(isA<RpcStatusException>()),
         );
 
         // Cleanup

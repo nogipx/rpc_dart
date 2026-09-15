@@ -305,9 +305,13 @@ void main() {
         await transport2.close();
 
         final streamId = transport1.createStream();
-        await transport1.sendMessage(
-          streamId,
-          Uint8List.fromList('test'.codeUnits),
+        await expectLater(
+          transport1.sendMessage(
+            streamId,
+            Uint8List.fromList('test'.codeUnits),
+          ),
+          throwsA(isA<RpcStatusException>()),
+          reason: 'a send with nowhere to go is refused, not reported sent',
         );
 
         expect(receivedMessages, isEmpty);

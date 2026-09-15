@@ -12,7 +12,13 @@ part of '_index.dart';
 /// `toString().contains('closed')`, which would swallow unrelated errors whose
 /// text merely mentions "closed".
 bool _isTransportClosed(Object error) {
-  return error is StateError && error.message == 'Transport is closed';
+  // Both spellings: transports raised a bare StateError before the channel one
+  // moved to a retryable status, and a responder must skip a response nobody
+  // can receive either way.
+  if (error is StateError && error.message == 'Transport is closed') return true;
+  return error is RpcStatusException &&
+      error.statusCode == RpcStatus.unavailable &&
+      error.message == 'Transport is closed';
 }
 
 /// Compresses [serialized] with [encoding] (null or `identity` = no
@@ -1612,8 +1618,15 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Sends a request to the server.
   Future<void> send(TRequest request) async {
     if (!_isActive) {
+      // Returning here reported success for a request that was never sent, and
+      // the caller's own `await send(...)` could not tell the difference. On a
+      // client-stream the peer then answers over a shorter sequence than the
+      // caller handed over, and both sides call it a success.
       _logger.warning('Attempted to send request on inactive processor');
-      return;
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'Request not sent: the call is no longer active',
+      );
     }
 
     if (!_requestController.isClosed) {

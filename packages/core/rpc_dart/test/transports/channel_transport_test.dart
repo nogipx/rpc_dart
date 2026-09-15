@@ -299,7 +299,7 @@ void main() {
         await server.close();
       });
 
-      test('does not send after close', () async {
+      test('refuses to send after close', () async {
         final (client, server) = RpcChannelTransport.pair();
         final received = <RpcTransportMessage>[];
         server.incomingMessages.listen(received.add);
@@ -307,10 +307,22 @@ void main() {
         final streamId = client.createStream();
         await client.close();
 
-        await client.sendMessage(streamId, Uint8List.fromList([1]));
+        // A send that does not send must not report success: the caller has
+        // no other way to tell, and on a client-stream the peer then answers
+        // over a shorter sequence than the caller handed it.
+        await expectLater(
+          client.sendMessage(streamId, Uint8List.fromList([1])),
+          throwsA(
+            isA<RpcStatusException>().having(
+              (e) => e.statusCode,
+              'statusCode',
+              RpcStatus.unavailable,
+            ),
+          ),
+        );
         await Future<void>.delayed(Duration(milliseconds: 10));
 
-        expect(received, isEmpty);
+        expect(received, isEmpty, reason: 'and still nothing is delivered');
 
         await server.close();
       });

@@ -131,9 +131,11 @@ void main() {
     await server.close();
   });
 
-  group('GUARD: the documented leniency after close is unchanged', () {
-    // These pin the contract the obvious fix would have broken -- adding
-    // `if (_closed) throw` to createStream(), as the HTTP callers do.
+  group('GUARD: reads stay lenient after close, WRITES do not', () {
+    // createStream() and releaseStreamId() stay lenient — both run from
+    // teardown paths where a throw masks the error that got there. The three
+    // SEND methods no longer do: a write that does not reach the wire must not
+    // be reported as sent, which is the whole of the defect below.
     late RpcChannelTransport transport;
 
     setUp(() async {
@@ -147,15 +149,23 @@ void main() {
       expect(transport.createStream, returnsNormally);
     });
 
-    test('sending after close completes rather than throwing', () async {
+    test('sending after close is REFUSED, with a retryable status', () async {
       final streamId = transport.createStream();
-      await expectLater(
-        transport.sendDirectObject(streamId, 'PING'),
-        completes,
+      Matcher refused() => throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.unavailable,
+        ),
       );
+      await expectLater(transport.sendDirectObject(streamId, 'PING'), refused());
       await expectLater(
         transport.sendMetadata(streamId, RpcMetadata([])),
-        completes,
+        refused(),
+      );
+      await expectLater(
+        transport.sendMessage(streamId, Uint8List.fromList([1])),
+        refused(),
       );
     });
 

@@ -161,9 +161,20 @@ void main() {
       // Проверяем наблюдаемое поведение - состояние после закрытия
       expect(processor.isActive, isFalse);
 
-      // Проверяем, что дальнейшие операции игнорируются
-      await processor.send('should not work'.rpc);
-      // Операция должна завершиться без ошибки, но ничего не делать
+      // A request handed to a closed processor is REFUSED. Returning quietly
+      // told the caller it had been sent, which is how a client-stream came to
+      // deliver fewer messages than were written to it with both sides
+      // reporting success.
+      await expectLater(
+        processor.send('should not work'.rpc),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unavailable,
+          ),
+        ),
+      );
     });
 
     test('handles errors gracefully in response stream', () async {

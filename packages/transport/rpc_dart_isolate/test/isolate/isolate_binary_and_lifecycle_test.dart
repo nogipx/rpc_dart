@@ -175,7 +175,7 @@ void main() {
       expect(Isolate.current.hashCode, equals(mainIsolate));
     });
 
-    test('use after close fails cleanly (no throw, no delivery)', () async {
+    test('use after close fails cleanly (refused, no delivery)', () async {
       final spawned = await RpcIsolateTransport.spawn(
         entrypoint: pingServer,
         customParams: const {},
@@ -185,11 +185,20 @@ void main() {
       await spawned.transport.close();
       expect(spawned.transport.isClosed, isTrue);
 
-      // Sending after close must not throw; the message is silently dropped.
+      // Sending after close is REFUSED. It used to return quietly, which told
+      // the caller its message had gone out — on a client-stream that is a
+      // request the peer's handler never sees, with both sides reporting
+      // success.
       final streamId = spawned.transport.createStream();
       await expectLater(
         spawned.transport.sendDirectObject(streamId, 'PING'),
-        completes,
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unavailable,
+          ),
+        ),
       );
       // releaseStreamId on a closed transport must not throw.
       expect(
