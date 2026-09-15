@@ -133,6 +133,11 @@ void main() {
     await requests.close();
 
     expect(await answer, '4');
-    expect(service.seen.map((s) => s.substring(0, 2)), ['m0', 'm1', 'm2', 'm3']);
+    expect(service.seen.map((s) => s.substring(0, 2)), [
+      'm0',
+      'm1',
+      'm2',
+      'm3',
+    ]);
   });
 }

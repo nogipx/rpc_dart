@@ -37,6 +37,18 @@ class RpcChannelTransport
   /// `first` is the oldest entry.
   final Set<int> _finishedStreams = {};
 
+  /// A send on this stream that is PARKED for flow-control credit.
+  ///
+  /// [finishSending] waits for it, so an end-of-stream — which carries no
+  /// payload and is therefore never metered — cannot overtake a message that is
+  /// still waiting for the window. That overtake is what handed a peer a blob
+  /// short of its frames while the sender believed it had sent them all.
+  ///
+  /// Only parked sends are recorded. The unparked path stays synchronous on
+  /// purpose: an unconditional await here adds a microtask hop to every send,
+  /// and that hop reordered frames on a path that had none.
+  final Map<int, Completer<void>> _parkedSends = {};
+
   /// Upper bound on [_finishedStreams]. Matches the responder pipeline's
   /// `_maxRememberedClosedStreams`.
   ///
@@ -549,10 +561,31 @@ class RpcChannelTransport
     // microtask hop to every send even when the window is disabled, which
     // reorders frames on a path that was synchronous.
     if (!_fcTryConsume(streamId, data.length)) {
-      await _fcAwaitCredit(streamId, data.length);
-      // Closed WHILE parked for credit — the reachable half, and the one that
-      // loses a message on a live call rather than a dead one.
-      _refuseIfClosed();
+      final parked = Completer<void>();
+      _parkedSends[streamId] = parked;
+      try {
+        await _fcAwaitCredit(streamId, data.length);
+        // Closed WHILE parked for credit — the reachable half, and the one that
+        // loses a message on a live call rather than a dead one.
+        _refuseIfClosed();
+        await _channel.send(
+          RpcTransportMessage.withPayload(
+            payload: data,
+            isEndOfStream: endStream,
+            streamId: streamId,
+          ),
+        );
+        if (endStream) _markFinished(streamId);
+      } finally {
+        // Cleared whether the send went out or was refused: either way nothing
+        // is waiting on the window any more, and `finishSending` must not be
+        // held by a ghost.
+        if (identical(_parkedSends[streamId], parked)) {
+          _parkedSends.remove(streamId);
+        }
+        parked.complete();
+      }
+      return;
     }
     await _channel.send(
       RpcTransportMessage.withPayload(
@@ -594,7 +627,25 @@ class RpcChannelTransport
     // end-of-stream is a protocol violation on a transport with real stream
     // state.
     if (_finishedStreams.contains(streamId)) return;
+    // Marked BEFORE the wait, and the wait comes before the end goes out.
+    //
+    // A message parked for credit is still this stream's, and an end-of-stream
+    // carries no payload, so nothing meters it — without this it sails past the
+    // message and the peer counts a blob short of its frames while the sender
+    // believes it sent them all.
+    //
+    // A sender still parked when the transport is torn down is refused by
+    // [_refuseIfClosed] on its way out of the wait, so the wait below cannot
+    // outlive the call: there is no second refusal here, because a canary
+    // showed one would carry no weight of its own.
     _rememberFinished(streamId);
+    final parked = _parkedSends[streamId];
+    if (parked != null) {
+      try {
+        await parked.future;
+      } catch (_) {}
+    }
+    if (_closed) return;
     await _channel.send(
       RpcTransportMessage(
         metadata: RpcMetadata([]),

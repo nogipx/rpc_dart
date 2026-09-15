@@ -90,38 +90,48 @@ Future<({String answer, int seen, Object? error})> _run({
 }
 
 void main() {
-  test('a client-stream past the per-stream bound keeps every message', () async {
-    // 24 messages of 1 MB against a 16 MB bound: over it by half, and the
-    // field's own shape — 17 frames of ~936 KB is 15.9 MB on one call.
-    final r = await _run(count: 24, bytes: 1024 * 1024);
+  test(
+    'a client-stream past the per-stream bound keeps every message',
+    () async {
+      // 24 messages of 1 MB against a 16 MB bound: over it by half, and the
+      // field's own shape — 17 frames of ~936 KB is 15.9 MB on one call.
+      final r = await _run(count: 24, bytes: 1024 * 1024);
 
-    expect(
-      r.seen,
-      24,
-      reason: 'the handler was fed ${r.seen} of 24 — '
-          'answer=${r.answer} error=${r.error}',
-    );
-  }, timeout: const Timeout(Duration(minutes: 2)));
-
-  test('and it is never silent about losing one', () async {
-    // Tightened hard, so the bound is crossed on the third message. Whatever
-    // the transport decides to do, the caller must not be told the call
-    // succeeded over data the handler never saw.
-    final r = await _run(
-      count: 8,
-      bytes: 512 * 1024,
-      policy: const RpcSecurityPolicy(maxBufferedBytes: 1024 * 1024),
-    );
-
-    if (r.error == null) {
       expect(
         r.seen,
-        8,
-        reason: 'a successful call must mean the handler got everything; '
-            'it got ${r.seen} of 8',
+        24,
+        reason:
+            'the handler was fed ${r.seen} of 24 — '
+            'answer=${r.answer} error=${r.error}',
       );
-    }
-  }, timeout: const Timeout(Duration(minutes: 2)));
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
+
+  test(
+    'and it is never silent about losing one',
+    () async {
+      // Tightened hard, so the bound is crossed on the third message. Whatever
+      // the transport decides to do, the caller must not be told the call
+      // succeeded over data the handler never saw.
+      final r = await _run(
+        count: 8,
+        bytes: 512 * 1024,
+        policy: const RpcSecurityPolicy(maxBufferedBytes: 1024 * 1024),
+      );
+
+      if (r.error == null) {
+        expect(
+          r.seen,
+          8,
+          reason:
+              'a successful call must mean the handler got everything; '
+              'it got ${r.seen} of 8',
+        );
+      }
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   test('CONTROL: a small client-stream is unaffected', () async {
     final r = await _run(count: 8, bytes: 1024);

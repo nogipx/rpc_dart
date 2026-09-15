@@ -15,7 +15,8 @@ bool _isTransportClosed(Object error) {
   // Both spellings: transports raised a bare StateError before the channel one
   // moved to a retryable status, and a responder must skip a response nobody
   // can receive either way.
-  if (error is StateError && error.message == 'Transport is closed') return true;
+  if (error is StateError && error.message == 'Transport is closed')
+    return true;
   return error is RpcStatusException &&
       error.statusCode == RpcStatus.unavailable &&
       error.message == 'Transport is closed';

@@ -158,7 +158,10 @@ void main() {
           RpcStatus.unavailable,
         ),
       );
-      await expectLater(transport.sendDirectObject(streamId, 'PING'), refused());
+      await expectLater(
+        transport.sendDirectObject(streamId, 'PING'),
+        refused(),
+      );
       await expectLater(
         transport.sendMetadata(streamId, RpcMetadata([])),
         refused(),

@@ -112,7 +112,9 @@ void main() {
 
   test('GUARD: a redundant start does not double-deliver', () async {
     var handlerCalls = 0;
-    endpoint.registerServiceContract(_EchoContract(onCall: () => handlerCalls++));
+    endpoint.registerServiceContract(
+      _EchoContract(onCall: () => handlerCalls++),
+    );
     endpoint.start();
     endpoint.start();
 

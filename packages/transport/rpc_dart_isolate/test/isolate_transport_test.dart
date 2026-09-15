@@ -503,10 +503,7 @@ void main() {
         // Отправка после закрытия ОТКЛОНЯЕТСЯ: тихий возврат сообщал
         // вызывающему, что сообщение ушло, хотя до провода оно не доходило.
         await expectLater(
-          transport.sendMessage(
-            streamId,
-            Uint8List.fromList('test'.codeUnits),
-          ),
+          transport.sendMessage(streamId, Uint8List.fromList('test'.codeUnits)),
           throwsA(isA<RpcStatusException>()),
         );
 
