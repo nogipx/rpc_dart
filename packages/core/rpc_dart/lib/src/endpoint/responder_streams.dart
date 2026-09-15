@@ -153,9 +153,20 @@ final class RpcResponderStreamState {
   }
 
   /// Forwards a request [message] to the bound responder.
+  /// Counts requests this state discarded because the sink was gone or closed.
+  ///
+  /// Zero on every healthy call. The pipeline reads it when the call ends, so a
+  /// handler that was fed less than the peer sent cannot finish quietly.
+  int droppedRequests = 0;
+
+  /// Forwards a request [message] to the bound responder, counting it as
+  /// dropped when there is nothing to forward it to.
   void pushRequest(RpcTransportMessage message) {
     final sink = _requestSink;
-    if (sink == null || sink.isClosed) return;
+    if (sink == null || sink.isClosed) {
+      droppedRequests++;
+      return;
+    }
     sink.add(message);
     // A frame may carry both the last payload and the half-close.
     if (message.isEndOfStream) {

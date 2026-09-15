@@ -940,6 +940,30 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.pushRequest(message);
       return;
     }
+
+    // A client-stream payload with nowhere to go is only safe when the buffer
+    // above took it — `storePayload` buffers while the stream is not yet bound,
+    // and the bind replays what it took. Bound with no sink is a DIFFERENT
+    // state: `detachRequestSink` clears the sink and leaves the flag set, so
+    // nothing buffered this message and nothing will deliver it.
+    //
+    // Silence here is the worst outcome the pipeline has. The peer is told the
+    // call succeeded over a request the handler never saw, and both sides
+    // report success over different data — which is exactly how a consumer's
+    // upload came to acknowledge 16 of the 17 messages it was sent, with no
+    // error anywhere. Say it, with everything needed to find it.
+    if (binding.type == RpcMethodType.clientStream &&
+        state.isBoundToMessageStream) {
+      state.droppedRequests++;
+      _log.error(
+        'Request message DROPPED for $methodKey [streamId: ${state.id}]: the '
+        'responder is bound but its request sink is gone, so the message was '
+        'neither buffered nor delivered '
+        '(payload: ${message.payload?.length ?? 0} bytes, '
+        'endOfStream: ${message.isEndOfStream})',
+      );
+    }
+
     _detachedDispatch(_ensureResponder(state, binding), state);
   }
 

@@ -1256,7 +1256,28 @@ class RpcChannelTransport
 
     // Per-stream controllers are single-subscription and buffer until their
     // consumer binds, so route there directly.
-    final ctl = _streamControllers[message.streamId];
+    //
+    // NOT when a higher layer has claimed the metering. A client-stream
+    // responder is fed by the pipeline (`_pipelineFedRequestStream`), which
+    // deliberately does not subscribe to `getMessagesForStream` — so for those
+    // streams this controller has NO consumer, and routing through it is not
+    // merely wasted:
+    //
+    //   * `_admitToStreamBuffer` charges every message against the bound and
+    //     the charge is released only by `_fcMetered`, which is that same
+    //     unsubscribed path, so it only ever grows;
+    //   * over the bound the message is REFUSED, and the refusal returns before
+    //     `_incoming.add` — so the pipeline never sees the message either;
+    //   * the error it raises goes into that unread controller.
+    //
+    // A request then vanishes between two peers that both report success,
+    // which is what a consumer measured: 17 messages handed to `send()`, 16
+    // given to the handler, no error on either side. A stream whose credit is
+    // deferred takes the branch below instead, where it is accounted for and
+    // dispatched.
+    final ctl = _fcDeferred.contains(message.streamId)
+        ? null
+        : _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) {
       // Credited by _fcMetered when the consumer takes it; outstanding against
       // the connection pool until then, and repaid if it never does.
