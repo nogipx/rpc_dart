@@ -19,6 +19,35 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart/src/rpc/transports/flow_controller.dart';
 import 'package:test/test.dart';
 
+/// A scope that counts what reached it, for the guard witness below.
+///
+/// The record stream cannot see a guard: the controller discards a filtered
+/// record either way, so both arms look identical from there. What differs is
+/// whether [internal] is CALLED at all — and it is called only after its
+/// argument has been built, which is exactly the cost `isInternal` exists to
+/// avoid. So count the calls, not the records.
+final class _CountingScope extends LogScope {
+  _CountingScope(LogController controller) : super(controller, 'Fc');
+
+  /// Times the call site asked whether internal passes the filter.
+  int guardReads = 0;
+
+  /// Times a message was actually built and handed over.
+  int internalCalls = 0;
+
+  @override
+  bool get isInternal {
+    guardReads++;
+    return super.isInternal;
+  }
+
+  @override
+  void internal(String message, {Map<String, Object>? data}) {
+    internalCalls++;
+    super.internal(message, data: data);
+  }
+}
+
 final class _Capture {
   _Capture({RpcLogLevel minLevel = RpcLogLevel.internal})
     : controller = LogController(minLevel: minLevel) {
@@ -184,14 +213,8 @@ void main() {
     });
 
     test('nothing is emitted when the filter discards internal', () async {
-      // This pins the FILTER, not the `isInternal` guard beside these calls --
-      // measured: removing the guard leaves all ten tests here green, because
-      // the controller discards the record either way. What the guard saves is
-      // building the string, and nothing on the record stream can see that.
-      //
-      // So it is held by convention and review, not by this file. Said out
-      // loud because a test named for a guard it does not reach is worse than
-      // no test: it retires the question.
+      // Note this pins the FILTER, not the guard. The guard has its own witness
+      // below, because the record stream cannot tell the two arms apart.
       final quiet = _Capture(minLevel: RpcLogLevel.warning);
       final fc = build(bare, logger: quiet.scope);
       fc.handleInbound(_grant(1, '1000'));
@@ -201,6 +224,54 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(quiet.at(RpcLogLevel.internal), isEmpty);
+      fc.close();
+    });
+
+    test(
+      'WITNESS: the message is not BUILT when internal is filtered out',
+      () async {
+        // `LogScope.internal` takes a String, so reaching the call at all means
+        // the interpolation already ran. An unguarded site therefore builds a
+        // string per park and throws it away, on the hot path.
+        final controller = LogController(minLevel: RpcLogLevel.warning);
+        final scope = _CountingScope(controller);
+        final fc = build(bare, logger: scope);
+        fc.handleInbound(_grant(1, '1000'));
+        expect(fc.tryConsume(1, 1000), isTrue);
+
+        unawaited(fc.awaitCredit(1, 10));
+        await Future<void>.delayed(Duration.zero);
+
+        // The COST first, so an unguarded site fails on what it actually costs
+        // rather than on the mechanism it skipped.
+        expect(
+          scope.internalCalls,
+          0,
+          reason: 'reaching internal() means the string was already built',
+        );
+        expect(
+          scope.guardReads,
+          greaterThan(0),
+          reason: 'the call site must ASK before building',
+        );
+        fc.close();
+      },
+    );
+
+    test('GUARD: with internal enabled the message IS built', () async {
+      // The other arm, without which the witness above passes on a site that
+      // simply never logs. The two must differ in exactly this.
+      final controller = LogController(minLevel: RpcLogLevel.internal);
+      final scope = _CountingScope(controller);
+      final fc = build(bare, logger: scope);
+      fc.handleInbound(_grant(1, '1000'));
+      expect(fc.tryConsume(1, 1000), isTrue);
+
+      unawaited(fc.awaitCredit(1, 10));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(scope.guardReads, greaterThan(0));
+      expect(scope.internalCalls, greaterThan(0));
       fc.close();
     });
   });

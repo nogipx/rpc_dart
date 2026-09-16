@@ -42,15 +42,19 @@ final class RpcFlowController {
     required RpcFlowControlSend send,
     required RpcFlowStreamLiveness isStreamLive,
     LogScope? logger,
-  }) : _policy = policy,
+  }) : // Non-nullable, resolved once. `LogScope.noop` exists for exactly this,
+       // and it is what lets every call site below read `_log.isInternal`
+       // rather than `_log?.isInternal ?? false` -- the form the rest of core
+       // uses (parser, responder registry).
+       _policy = policy,
        _send = send,
        _isStreamLive = isStreamLive,
-       _log = logger;
+       _log = logger ?? LogScope.noop;
 
   final RpcSecurityPolicy _policy;
   final RpcFlowControlSend _send;
   final RpcFlowStreamLiveness _isStreamLive;
-  final LogScope? _log;
+  final LogScope _log;
 
   /// Whether the "a peer grant was clamped" notice has gone out, per level.
   ///
@@ -167,7 +171,7 @@ final class RpcFlowController {
     // never become streams.
     if (!_capWarned) {
       _capWarned = true;
-      _log?.warning(
+      _log.warning(
         'Flow-control tracking is at its cap of $_trackCap streams; further '
         'streams get no window until it drains',
       );
@@ -222,16 +226,16 @@ final class RpcFlowController {
       if (tryConsume(streamId, bytes)) {
         // Only the sends that actually waited are reported, and only at
         // internal: the unparked path is the hot one and must stay silent.
-        if (parks > 0 && (_log?.isInternal ?? false)) {
-          _log?.internal(
+        if (parks > 0 && _log.isInternal) {
+          _log.internal(
             'Stream $streamId sent $bytes bytes after $parks park(s); '
             'stream credit ${creditFor(streamId)}, pool $_connCredit',
           );
         }
         return;
       }
-      if (parks == 0 && (_log?.isInternal ?? false)) {
-        _log?.internal(
+      if (parks == 0 && _log.isInternal) {
+        _log.internal(
           'Stream $streamId parked on $bytes bytes; stream credit '
           '${creditFor(streamId)}, pool $_connCredit',
         );
@@ -271,7 +275,7 @@ final class RpcFlowController {
       if (!_connPeerGranted) {
         _connAssumedLegacy = true;
         _connCredit = null;
-        _log?.warning(
+        _log.warning(
           'No connection-level grant within $grace; treating the peer as not '
           'doing flow control and dropping the initial send window',
         );
@@ -279,7 +283,7 @@ final class RpcFlowController {
       if (!_streamPeerGranted) {
         _streamAssumedLegacy = true;
         _sendCredit.clear();
-        _log?.warning(
+        _log.warning(
           'No per-stream grant within $grace; treating the peer as not doing '
           'flow control and dropping the initial send window',
         );
@@ -354,8 +358,8 @@ final class RpcFlowController {
     // is ordinary rather than hostile. Put back, the entry is never removed
     // again: one per abandoned call, linear.
     if (!_sendCredit.containsKey(streamId) && !_isStreamLive(streamId)) {
-      if (_log?.isInternal ?? false) {
-        _log?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'Grant of $bytes for stream $streamId ignored: the call has ended',
         );
       }
@@ -364,7 +368,7 @@ final class RpcFlowController {
     final granted = bytes > window ? window : bytes;
     if (granted != bytes && !_clampWarned) {
       _clampWarned = true;
-      _log?.warning(
+      _log.warning(
         'Peer granted $bytes on stream $streamId, above our window of $window; '
         'clamping. A peer can slow this side down, never speed it up',
       );
@@ -523,7 +527,7 @@ final class RpcFlowController {
         final granted = parsed > window ? window : parsed;
         if (granted != parsed && !_connClampWarned) {
           _connClampWarned = true;
-          _log?.warning(
+          _log.warning(
             'Peer granted $parsed at connection level, above our pool of '
             '$window; clamping',
           );

@@ -94,7 +94,7 @@ class RpcChannelTransport
   /// Credit accounting for both levels. See [RpcFlowController].
   late final RpcFlowController _fc;
 
-  final LogScope? _log;
+  final LogScope _log;
 
   /// Streams whose peer has sent a gRPC status. Used on the CLIENT side to tell
   /// a completed response from a truncated one at end-of-stream; cleared there.
@@ -140,7 +140,7 @@ class RpcChannelTransport
          resumeAfter: resumeStreamIdsAfter,
        ),
        _policy = policy,
-       _log = logger?.child('ChannelTransport') {
+       _log = logger?.child('ChannelTransport') ?? LogScope.noop {
     _fc = RpcFlowController(
       policy: policy,
       send: (streamId, metadata) => _channel.send(
@@ -150,7 +150,7 @@ class RpcChannelTransport
         ),
       ),
       isStreamLive: _isStreamLive,
-      logger: _log?.child('FlowControl'),
+      logger: _log.child('FlowControl'),
     );
     // Advertise the connection window NOW, not on the first inbound frame.
     // Waiting costs a round trip during which the peer is unbounded, and with
@@ -349,7 +349,7 @@ class RpcChannelTransport
         // The consumer gets the error; without this the OPERATOR gets nothing,
         // which is what the http2 responder already avoids for its own version
         // of this bound.
-        _log?.warning(
+        _log.warning(
           'Stream $streamId buffered more than ${_buffers.limitBytes} bytes '
           'un-consumed; failing the stream',
         );
