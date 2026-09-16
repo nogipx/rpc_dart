@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../../core/_index.dart';
+import '../../logger/_index.dart';
 import 'direct_multiplexed_channel.dart';
 import 'flow_controller.dart';
 import 'frame_multiplexed_channel.dart';
@@ -93,6 +94,8 @@ class RpcChannelTransport
   /// Credit accounting for both levels. See [RpcFlowController].
   late final RpcFlowController _fc;
 
+  final LogScope? _log;
+
   /// Streams whose peer has sent a gRPC status. Used on the CLIENT side to tell
   /// a completed response from a truncated one at end-of-stream; cleared there.
   final Set<int> _statusSeen = {};
@@ -130,12 +133,14 @@ class RpcChannelTransport
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? resumeStreamIdsAfter,
+    LogScope? logger,
   }) : _channel = channel,
        _idManager = RpcStreamIdManager(
          isClient: isClient,
          resumeAfter: resumeStreamIdsAfter,
        ),
-       _policy = policy {
+       _policy = policy,
+       _log = logger?.child('ChannelTransport') {
     _fc = RpcFlowController(
       policy: policy,
       send: (streamId, metadata) => _channel.send(
@@ -145,6 +150,7 @@ class RpcChannelTransport
         ),
       ),
       isStreamLive: _isStreamLive,
+      logger: _log?.child('FlowControl'),
     );
     // Advertise the connection window NOW, not on the first inbound frame.
     // Waiting costs a round trip during which the peer is unbounded, and with
@@ -193,6 +199,7 @@ class RpcChannelTransport
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? resumeStreamIdsAfter,
+    LogScope? logger,
   }) {
     return RpcChannelTransport(
       channel: RpcFrameMultiplexedChannel(
@@ -208,6 +215,7 @@ class RpcChannelTransport
       isClient: isClient,
       policy: policy,
       resumeStreamIdsAfter: resumeStreamIdsAfter,
+      logger: logger,
     );
   }
 
@@ -338,6 +346,13 @@ class RpcChannelTransport
       case RpcBufferAdmission.refused:
         return false;
       case RpcBufferAdmission.overflowed:
+        // The consumer gets the error; without this the OPERATOR gets nothing,
+        // which is what the http2 responder already avoids for its own version
+        // of this bound.
+        _log?.warning(
+          'Stream $streamId buffered more than ${_buffers.limitBytes} bytes '
+          'un-consumed; failing the stream',
+        );
         ctl.addError(
           RpcStatusException(
             RpcStatus.resourceExhausted,

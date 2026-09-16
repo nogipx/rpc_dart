@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import '../../core/_index.dart';
+import '../../logger/_index.dart';
 
 /// Sends a bare control frame carrying [metadata] on [streamId].
 typedef RpcFlowControlSend =
@@ -40,13 +41,26 @@ final class RpcFlowController {
     required RpcSecurityPolicy policy,
     required RpcFlowControlSend send,
     required RpcFlowStreamLiveness isStreamLive,
+    LogScope? logger,
   }) : _policy = policy,
        _send = send,
-       _isStreamLive = isStreamLive;
+       _isStreamLive = isStreamLive,
+       _log = logger;
 
   final RpcSecurityPolicy _policy;
   final RpcFlowControlSend _send;
   final RpcFlowStreamLiveness _isStreamLive;
+  final LogScope? _log;
+
+  /// Whether the "a peer grant was clamped" notice has gone out, per level.
+  ///
+  /// Once each. A peer that over-grants does so on every frame, so an ungated
+  /// warning is a flood — and the interesting fact is that it happens at all.
+  bool _clampWarned = false;
+  bool _connClampWarned = false;
+
+  /// Whether the "tracking cap is full" notice has gone out.
+  bool _capWarned = false;
 
   /// Stream id reserved for connection-level control frames; never a call.
   static const int connectionStreamId = 0;
@@ -113,6 +127,15 @@ final class RpcFlowController {
   /// not advertised a connection window.
   int? get connectionCredit => _connCredit;
 
+  /// Send credit left on [streamId], or null when this side is unbounded there.
+  ///
+  /// Null and zero mean opposite things — "no window applies" against "no room"
+  /// — and every indirect observable collapses them, because a sender behaves
+  /// identically until the next message. Read directly for that reason, like
+  /// [connectionCredit].
+  int? creditFor(int streamId) =>
+      _window == null ? null : _sendCredit[streamId];
+
   /// Sizes of the per-stream maps, for diagnostics and tests.
   ///
   /// Exposed because these are keyed by PEER-CHOSEN stream ids, so their growth
@@ -136,8 +159,21 @@ final class RpcFlowController {
   /// leaves it unbounded rather than stalled — failing open on liveness.
   int get _trackCap => _policy.maxActiveStreams;
 
-  bool _canTrack(Map<int, Object?> map, int streamId) =>
-      map.containsKey(streamId) || map.length < _trackCap;
+  bool _canTrack(Map<int, Object?> map, int streamId) {
+    if (map.containsKey(streamId) || map.length < _trackCap) return true;
+    // Said once, and worth saying: past the cap a new stream gets NO
+    // flow-control state, so the initial send window stops applying to it and
+    // that direction is unbounded. The usual cause is a peer naming ids that
+    // never become streams.
+    if (!_capWarned) {
+      _capWarned = true;
+      _log?.warning(
+        'Flow-control tracking is at its cap of $_trackCap streams; further '
+        'streams get no window until it drains',
+      );
+    }
+    return false;
+  }
 
   // ── Sending ────────────────────────────────────────────────────────────────
 
@@ -181,8 +217,26 @@ final class RpcFlowController {
 
   /// Parks the caller until [bytes] of send credit are available.
   Future<void> awaitCredit(int streamId, int bytes) async {
+    var parks = 0;
     while (!_closed) {
-      if (tryConsume(streamId, bytes)) return;
+      if (tryConsume(streamId, bytes)) {
+        // Only the sends that actually waited are reported, and only at
+        // internal: the unparked path is the hot one and must stay silent.
+        if (parks > 0 && (_log?.isInternal ?? false)) {
+          _log?.internal(
+            'Stream $streamId sent $bytes bytes after $parks park(s); '
+            'stream credit ${creditFor(streamId)}, pool $_connCredit',
+          );
+        }
+        return;
+      }
+      if (parks == 0 && (_log?.isInternal ?? false)) {
+        _log?.internal(
+          'Stream $streamId parked on $bytes bytes; stream credit '
+          '${creditFor(streamId)}, pool $_connCredit',
+        );
+      }
+      parks++;
       _armLegacyGrace();
       final waiter = Completer<void>();
       (_sendWaiters[streamId] ??= []).add(waiter);
@@ -210,13 +264,25 @@ final class RpcFlowController {
       // Per level: nothing granted at a level means every entry there is seeded
       // credit, so dropping it restores "unbounded until a grant arrives" for
       // that level alone. A level the peer HAS granted on keeps its window.
+      // WARNING, not internal: this turns the bound OFF for the rest of the
+      // connection, and it is the one flow-control event an operator cannot
+      // infer from anything else — a peer that simply never grants looks
+      // exactly like a fast one.
       if (!_connPeerGranted) {
         _connAssumedLegacy = true;
         _connCredit = null;
+        _log?.warning(
+          'No connection-level grant within $grace; treating the peer as not '
+          'doing flow control and dropping the initial send window',
+        );
       }
       if (!_streamPeerGranted) {
         _streamAssumedLegacy = true;
         _sendCredit.clear();
+        _log?.warning(
+          'No per-stream grant within $grace; treating the peer as not doing '
+          'flow control and dropping the initial send window',
+        );
       }
       wakeAll();
     });
@@ -287,8 +353,22 @@ final class RpcFlowController {
     // [forget] drops the entry when the call ends, and a late grant for that id
     // is ordinary rather than hostile. Put back, the entry is never removed
     // again: one per abandoned call, linear.
-    if (!_sendCredit.containsKey(streamId) && !_isStreamLive(streamId)) return;
+    if (!_sendCredit.containsKey(streamId) && !_isStreamLive(streamId)) {
+      if (_log?.isInternal ?? false) {
+        _log?.internal(
+          'Grant of $bytes for stream $streamId ignored: the call has ended',
+        );
+      }
+      return;
+    }
     final granted = bytes > window ? window : bytes;
+    if (granted != bytes && !_clampWarned) {
+      _clampWarned = true;
+      _log?.warning(
+        'Peer granted $bytes on stream $streamId, above our window of $window; '
+        'clamping. A peer can slow this side down, never speed it up',
+      );
+    }
     final next = (_sendCredit[streamId] ?? 0) + granted;
     _sendCredit[streamId] = next > window ? window : next;
     _wake(streamId);
@@ -441,6 +521,13 @@ final class RpcFlowController {
         // Clamped like the per-stream grant: a peer must not be able to raise
         // our ceiling, and clamping first keeps the sum from overflowing.
         final granted = parsed > window ? window : parsed;
+        if (granted != parsed && !_connClampWarned) {
+          _connClampWarned = true;
+          _log?.warning(
+            'Peer granted $parsed at connection level, above our pool of '
+            '$window; clamping',
+          );
+        }
         final next = (_connCredit ?? 0) + granted;
         _connCredit = next > window ? window : next;
         wakeAll();
