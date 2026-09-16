@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
 // Many client-streams on one connection, several at a time — in dart2js.
 //
 // The VM does this cleanly (120 calls, 4 concurrent, nothing lost). Production

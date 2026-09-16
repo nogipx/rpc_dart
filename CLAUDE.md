@@ -248,3 +248,37 @@ accident into an unrelated change.
 - No emoji anywhere (code, comments, commits, docs).
 - Never add `Co-Authored-By` or self-references to commits.
 - English for code, comments, and logs.
+
+### Logging — one shape, everywhere
+
+**Hold a non-nullable `LogScope`, resolved once in the initialiser list:**
+
+```dart
+final LogScope _log;
+MyThing({LogScope? logger}) : _log = logger ?? LogScope.noop;
+```
+
+`LogScope.noop` exists for exactly this. A nullable field spreads `?.` and
+`?? false` across every call site and makes the guard below read differently in
+every file.
+
+**Guard every INTERPOLATING `internal` / `trace` / `debug` call:**
+
+```dart
+if (_log.isInternal) {
+  _log.internal('Registering method: $methodKey');
+}
+```
+
+These take a `String`, so an unguarded call builds the message and hands it to a
+logger that throws it away — the guard is a bool read. `warning`/`error` are not
+guarded: they are rare by construction and there is no `isWarning`.
+
+**A warning that a peer can trigger repeatedly fires ONCE**, behind a bool. A
+misbehaving peer misbehaves on every frame, and the interesting fact is that it
+happened at all, not how often.
+
+Both halves are witnessable and should be tested that way —
+`test/transports/flow_controller_logging_test.dart` is the worked example. Note
+the guard cannot be seen from the record stream (a filtered record is discarded
+either way); count calls into a `LogScope` subclass instead.
