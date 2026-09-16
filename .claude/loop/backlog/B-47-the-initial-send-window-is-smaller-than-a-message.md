@@ -1,9 +1,9 @@
 ---
-lead: B-47
-title: The initial send window is smaller than a message anyone sends
-opened: round 366
-lens: RPC-01
 status: open
+round: 366
+commit: b17af71c
+paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
+probe: P-58
 reason: a policy default change with a compatibility surface — the owner asks to be consulted before trades of that kind
 ---
 
@@ -15,9 +15,10 @@ reason: a policy default change with a compatibility surface — the owner asks 
 A downstream consumer chunks blobs at **256 KiB** a frame — four times the
 window. Measured over a real socket in P-58:
 
-| frames | 6.0.0 defaults | 5.0.1 shape |
-|---|---|---|
-| 2, 3, 8 | parks ~1×RTT | never parks |
+```
+frames     6.0.0 defaults   5.0.1 shape
+2, 3, 8    parks ~1xRTT     never parks
+```
 
 ## What the park buys
 
@@ -47,3 +48,12 @@ numbers to decide on are above.
 An owner decision, plus a bench showing what the chosen default costs on a link
 with a round trip — P-58 is the harness, and it already reports park duration
 per policy.
+
+## Owner decision
+
+None yet. What is being asked: whether to change a shipped default — raise it
+above any plausible single message, derive it from `maxMessageSize`, or admit on
+"does it fit" — accepting that every peer's behaviour changes with it, against
+leaving a parked sender on the second frame of every stream over any link with a
+round trip. Round 366 fixed the defect that lived in that state; the state
+itself is what this lead is about.

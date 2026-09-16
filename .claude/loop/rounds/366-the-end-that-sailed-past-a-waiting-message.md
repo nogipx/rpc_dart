@@ -40,9 +40,10 @@ the defect.
 **The version delta — P-58.** Over a real socket through a delaying relay, at
 256 KiB a frame:
 
-| frames | 6.0.0 defaults | 5.0.1 shape |
-|---|---|---|
-| 2, 3, 8 | parks ~1×RTT | never parks |
+```
+frames     6.0.0 defaults   5.0.1 shape
+2, 3, 8    parks ~1xRTT     never parks
+```
 
 Park duration tracks RTT exactly (20/40/200 ms), so it is the wait for the
 peer's first grant. `initialSendWindowBytes` did not exist in 5.0.1. The parked

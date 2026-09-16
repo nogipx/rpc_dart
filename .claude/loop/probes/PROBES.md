@@ -38,6 +38,18 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-58](P-58-does-a-sender-park-over-a-real-socket.md)** valid (round 366),
+  rpc_dart + rpc_dart_websocket — does a sender actually park on the flow-control
+  window, over a real WebSocket through a TCP relay that delays every chunk by a
+  fixed amount in both directions. **Exists because the obvious harness lies**:
+  `RpcChannelTransport.pair()` reports "never parks" in every row, including the
+  ones a real socket parks in, so every flow-control question answered against
+  the in-process pair is answered about a system nobody runs. Its control is the
+  5.0.1 shape (`initialSendWindowBytes: null`), which never parks where 6.0.0
+  does. Park duration tracks RTT exactly — 20/40/200 ms — so it measures the wait
+  for the peer's first grant rather than congestion. Reports peak
+  `flowControlStateSizes['waiters']` per policy, which is what B-47 needs to be
+  decided
 - **[P-57](P-57-guest-to-host-frame-order.md)** valid (round 365), rpc_dart_wasm
   — do 10k guest frames arrive in order, compared against the generated sequence
   so a swap, a duplicate and a gap all fail the same assertion. Its iOS row is

@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367]
 status: confirmed (round 360)
 ---
 
@@ -288,6 +288,41 @@ than a rebuilt bench.
 > the rule it was extracted to hold. After an extraction, ask what test
 > exercises the NEW unit. Round 308 created this class; nothing tested it until
 > `test/core/stream_router_test.dart` in 332.
+
+### Round 367 — the coverage criterion applied and coming back NEGATIVE
+
+331 and 332 are both cases where the criterion said *merge*. 367 is the first
+where it said *leave it*, and recording that is the point — the owner asked for
+a flow-control refactor, so the silence would otherwise read as an oversight.
+
+Three copies of flow-control accounting: core's credit-and-grants scheme, and
+the un-consumed budget written twice in http2. The same rule ablated in each,
+against each package's own suite:
+
+    http2 responder _fcOnDelivered    +218       -> +212 -6
+    http2 caller    _fcOnDelivered    +218       -> +217 -1
+    core _fcTryConsume                +1485 ~1   -> +1484 ~1 -1
+
+331's bar is one copy watched and one **not**. 6/1/1 is unequal in degree and
+not in kind, so the extraction inherits coverage that already exists.
+
+> **"Unequally covered" means one copy at ZERO, not one copy at fewer.** A
+> spread of 6 to 1 is what different call shapes and different blast radii
+> produce on their own; reading it as a coverage gap would make the criterion
+> fire on every duplication that exists, which is the bar this lens spent
+> rounds 316-318 refusing to lower.
+
+Step 3 also found real drift and it was declined on 360's rule: `close()` clears
+`_fcDeferred` + `_fcOutstanding` on the responder, neither on the caller, all of
+them in core — three answers, and nothing reaches any of them, because after
+close every write is refused by `isClosed` and a reconnect builds a new
+transport rather than reusing this one.
+
+And the extraction the request actually named — `RpcFlowController` out of
+`RpcChannelTransport` — is not a candidate for this lens at all: **one** copy of
+that mechanism, so there is no sibling to compare it against. A lens that needs
+siblings cannot judge a single implementation, and saying so is cheaper than
+inventing a second criterion for it. `../checked/C-39-the-flow-control-copies-are-all-watched.md`.
 
 ## The siblings can be two branches of one `if` (rounds 334, 336)
 

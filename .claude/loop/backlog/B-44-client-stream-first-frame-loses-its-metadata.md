@@ -1,6 +1,6 @@
 ---
 status: open
-round: — (opened from a consumer's production incident, 2026-09-15)
+round: 366
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/rpc/streams/client/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: —

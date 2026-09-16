@@ -1,10 +1,10 @@
 ---
-status: closed (2026-09-15) — the redundant call is silent, the disagreeing one still warns
-round: — (found in a consumer's production logs, 2026-09-15)
+status: closed (round 366)
+round: 366
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/core/rpc_dart_framework/lib/src/rpc_app.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: —
-reason: —
+reason: owner decision — the log-noise half was fixed and the lead closed with it; the lifecycle half, who OWNS starting an endpoint, is a design call and now costs nothing to leave open
 ---
 
 # B-45 — the server and the framework both start every endpoint, and say so 700 times a day

@@ -1,9 +1,8 @@
 ---
-round: — (2026-09-15, from a consumer's incident rather than a round)
+round: 366
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-probe: packages/core/rpc_dart/.dart_tool/probes/probe_send_after_close.dart
-status: measured
+scope: [rpc_dart]
 ---
 
 # C-38 — the lenient send after close does not cost a client-stream a message
@@ -58,3 +57,29 @@ returns" is a drift someone will find again): raise
 `RpcStatusException(RpcStatus.unavailable, 'Transport is closed')` rather than
 `StateError`, widen `_isTransportClosed` to match it, and rewrite the guard
 rather than deleting it.
+
+## It WAS taken up — noted in round 367
+
+`2ec53853 fix(rpc_dart)!: a send that does not send must not report success`
+did exactly that, by the recipe above: `_refuseIfClosed()` now guards the three
+send methods and raises `RpcStatusException(RpcStatus.unavailable)`, and
+`_isTransportClosed` accepts both spellings. So the paragraph "Reverted; the
+transport is untouched" describes a tree that no longer exists.
+
+What this negative still establishes is the part that did not change: **the
+lenient send was not the consumer's lost message.** That measurement stands on
+its own and is why B-44 eliminated this candidate.
+
+## Control
+
+`CONTROL` is the row: the same call on a transport that was NOT closed first,
+which returns and delivers one message to the peer. Against it, `CLOSED-FIRST`
+returns identically while the peer receives nothing — so the probe can
+distinguish a silent send from a working one, and the silence is real.
+
+The row that decides the negative is `CLIENT-STREAM`, and its control is the
+same: four messages across a close, two after it. A short answer would have
+shown as a peer completing normally on two messages. It did not — the call
+failed `RpcStatusException(14)`, because the response travels the read side of
+the same dead transport. That is the outcome the field symptom requires and does
+not produce.

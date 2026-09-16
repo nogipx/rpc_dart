@@ -1,10 +1,10 @@
 ---
 status: open
-round: — (2026-09-15, looking for a consumer's silent blob loss)
+round: 366
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/blob/rpc_blob/lib/src/client/blob_repository_client.dart, packages/blob/rpc_blob/lib/src/adapters/in_memory_blob_repository.dart, packages/blob/rpc_blob_minio/lib/src/adapters/s3_blob_storage_adapter.dart]
 probe: packages/blob/rpc_blob/.dart_tool/probes/probe_empty_id_substitution.dart
-reason: —
+reason: owner decision — `packages/blob` is outside the scope the owner set for refactoring work (see B-33, B-10), so the substitution is filed rather than changed
 ---
 
 # B-46 — an empty blob id is silently replaced by a generated one
