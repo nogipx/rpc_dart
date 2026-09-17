@@ -169,99 +169,20 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     }
 
     _subscription = _transport.incomingMessages.listen(
+      // An `async` listen callback nobody awaits: a throw reaches the zone, and
+      // a server with no zone handler exits on that. Reachable through
+      // handleMessage, whose own error path answers the peer over a transport
+      // that may already be gone.
       (message) async {
-        final streamId = message.streamId;
-
-        // If responder id is 0 (default), accept any messages (useful for tests).
-        if (id != 0 && streamId != id) {
-          return;
-        }
-
-        // For metadata, ensure it targets this method.
-        if (message.isMetadataOnly && message.metadata != null) {
-          final state = _stateFor(streamId);
-          if (message.methodPath == _methodPath) {
-            state.belongsToThisMethod = true;
-            if (_logger.isInternal) {
-              _logger.internal(
-                'Unary server: stream $streamId bound to method $_methodPath',
-              );
-            }
-          }
-          // Capture client's grpc-accept-encoding for response compression.
-          final accept = message.metadata!.getHeaderValue(
-            RpcHeaders.grpcAcceptEncoding,
-          );
-          if (accept != null) {
-            state.clientAcceptEncoding = accept;
-          }
-          // Capture client's grpc-encoding to decompress incoming requests.
-          final requestEnc = message.metadata!.getHeaderValue(
-            RpcHeaders.grpcEncoding,
-          );
-          if (requestEnc != null && requestEnc != RpcGrpcCompression.identity) {
-            state.clientRequestEncoding = requestEnc;
-          }
-          return; // Register metadata only.
-        }
-
-        // For data messages, ensure they belong to this method.
-        if (_streamStates[streamId]?.belongsToThisMethod != true) {
-          return; // Not for this responder.
-        }
-
-        if (_streamStates[streamId]?.requestHandled == true) {
-          // Ignore additional messages after first request handled.
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Ignoring extra message for stream $streamId (request already handled)',
-            );
-          }
-          return;
-        }
-
-        // Check cancellation before processing.
         try {
-          _checkCancellation();
-        } catch (e) {
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Message skipped due to cancellation [streamId: $streamId]',
-            );
-          }
-          return;
-        }
-
-        if (message.isDirect && message.directPayload != null) {
-          // Zero-copy: handle object directly.
-          await handleDirectMessage(message);
-        } else if (!message.isMetadataOnly && message.payload != null) {
-          await handleMessage(message);
-        }
-
-        // If the client closed the stream without sending data.
-        final eosState = _streamStates[streamId];
-        if (message.isEndOfStream &&
-            eosState?.belongsToThisMethod == true &&
-            eosState?.requestHandled != true) {
-          eosState!.requestHandled = true;
-          _logger.warning(
-            'Client closed stream without sending data [streamId: $streamId]',
+          await _onIncomingMessage(message);
+        } catch (e, stackTrace) {
+          _logger.error(
+            'Failed to process incoming message for $_methodPath '
+            '[streamId: ${message.streamId}]',
+            error: e,
+            stackTrace: stackTrace,
           );
-
-          // Send an error trailer.
-          await _transport.sendMetadata(
-            streamId,
-            RpcMetadata.forTrailer(
-              RpcStatus.invalidArgument,
-              message: 'Request not received: stream closed without data',
-              maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
-            ),
-            endStream: true,
-          );
-
-          // Clear state for this stream.
-          _streamStates.remove(streamId);
         }
       },
       onError: (Object error, StackTrace stackTrace) async {
@@ -304,6 +225,103 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         }
       },
     );
+  }
+
+  /// Routes one inbound transport message; the listener above owns the guard.
+  Future<void> _onIncomingMessage(RpcTransportMessage message) async {
+    final streamId = message.streamId;
+
+    // If responder id is 0 (default), accept any messages (useful for tests).
+    if (id != 0 && streamId != id) {
+      return;
+    }
+
+    // For metadata, ensure it targets this method.
+    if (message.isMetadataOnly && message.metadata != null) {
+      final state = _stateFor(streamId);
+      if (message.methodPath == _methodPath) {
+        state.belongsToThisMethod = true;
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Unary server: stream $streamId bound to method $_methodPath',
+          );
+        }
+      }
+      // Capture client's grpc-accept-encoding for response compression.
+      final accept = message.metadata!.getHeaderValue(
+        RpcHeaders.grpcAcceptEncoding,
+      );
+      if (accept != null) {
+        state.clientAcceptEncoding = accept;
+      }
+      // Capture client's grpc-encoding to decompress incoming requests.
+      final requestEnc = message.metadata!.getHeaderValue(
+        RpcHeaders.grpcEncoding,
+      );
+      if (requestEnc != null && requestEnc != RpcGrpcCompression.identity) {
+        state.clientRequestEncoding = requestEnc;
+      }
+      return; // Register metadata only.
+    }
+
+    // For data messages, ensure they belong to this method.
+    if (_streamStates[streamId]?.belongsToThisMethod != true) {
+      return; // Not for this responder.
+    }
+
+    if (_streamStates[streamId]?.requestHandled == true) {
+      // Ignore additional messages after first request handled.
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Ignoring extra message for stream $streamId (request already handled)',
+        );
+      }
+      return;
+    }
+
+    // Check cancellation before processing.
+    try {
+      _checkCancellation();
+    } catch (e) {
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Message skipped due to cancellation [streamId: $streamId]',
+        );
+      }
+      return;
+    }
+
+    if (message.isDirect && message.directPayload != null) {
+      // Zero-copy: handle object directly.
+      await handleDirectMessage(message);
+    } else if (!message.isMetadataOnly && message.payload != null) {
+      await handleMessage(message);
+    }
+
+    // If the client closed the stream without sending data.
+    final eosState = _streamStates[streamId];
+    if (message.isEndOfStream &&
+        eosState?.belongsToThisMethod == true &&
+        eosState?.requestHandled != true) {
+      eosState!.requestHandled = true;
+      _logger.warning(
+        'Client closed stream without sending data [streamId: $streamId]',
+      );
+
+      // Send an error trailer.
+      await _transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(
+          RpcStatus.invalidArgument,
+          message: 'Request not received: stream closed without data',
+          maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
+        ),
+        endStream: true,
+      );
+
+      // Clear state for this stream.
+      _streamStates.remove(streamId);
+    }
   }
 
   /// Handles a payload message (can be called for pre-received messages).

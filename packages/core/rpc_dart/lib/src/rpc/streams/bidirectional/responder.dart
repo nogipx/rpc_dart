@@ -123,7 +123,17 @@ final class BidirectionalStreamResponder<
         if (_logger.isInternal) {
           _logger.internal('Response stream completed [id: $id]');
         }
-        await finishReceiving();
+        // Guarded for the same reason as the onData above it: an `async`
+        // listen callback nobody awaits sends its throw to the zone.
+        try {
+          await finishReceiving();
+        } catch (e, stackTrace) {
+          _logger.error(
+            'Failed to finish responses via responseSink [id: $id]',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        }
       },
       onError: (Object error, StackTrace stackTrace) {
         _logger.error(

@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358]
-status: confirmed (round 356)
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368]
+status: confirmed (round 368)
 ---
 
 # RPC-13 — An unhandled async error is fatal to the isolate
@@ -22,6 +22,13 @@ kills the whole isolate.
 
 Calls that spawn a future without `await` and without `.catchError`, on paths
 that run user code: dispatch, lifecycle callbacks, connection accept loops.
+
+**And `async` callbacks handed to `Stream.listen`** — `onData`, `onDone`,
+`onError` alike. Nothing awaits the future such a callback returns, so it is an
+`unawaited` that does not look like one and no grep for `unawaited(` finds it.
+Round 368 added this arm: `grep -n "async {" ` over the shapes found 11, five
+guarded and six not. The `onError` parameter is not a guard for the callback's
+own throw; it only receives errors from the stream.
 
 ## Ask
 
@@ -150,3 +157,36 @@ RpcWebSocketChannel.send
 DEFERRED to `../backlog/B-39-websocket-send-throws-into-the-root-zone.md`, the
 sibling of B-35 one dependency over. Bench
 `../probes/P-49-send-into-a-dead-socket.md`.
+
+## Round 368 — the callback that is an `unawaited` without saying so
+
+Rounds 222 and 242 swept `unawaited(...)` and concluded the paths were guarded.
+They were, and the sweep missed a whole syntactic form: an `async` callback
+passed to `Stream.listen` returns a future nobody holds. Across the four call
+shapes, **11 of them, 5 with a try/catch and 6 without**.
+
+The reachable one needs no misbehaving peer. `CallProcessor.send` throws
+`RpcStatusException(14)` by design once a call is inactive (round 330, so a
+caller cannot be told a request went out when it did not), and
+`BidirectionalStreamCaller.requestSink` awaited that throw in an unguarded
+`async` callback. A cancelled call whose producer has not noticed — the sink is
+still open, so the push is legal — reaches it:
+
+    arm                                   uncaught
+    bidi requestSink, before                  1
+    bidi requestSink, after                   0
+    ClientStreamCaller.call(Stream)           0    <- the sibling, already guarded
+    control: listen((_) async { throw })       1
+
+> **The sibling IS the control when the same job is written twice.** Two APIs
+> that both let the library drive an application's producer; one wraps its send
+> in `.catchError` and one did not. Nothing else had to be arranged.
+
+> **A zero needs its own control here**, because the observable is "how many
+> errors reached a zone handler" and a 0 reads the same whether nothing threw or
+> nothing was watching. The probe ends with a deliberate throw that must report
+> 1, and it still reported 1 after the fix.
+
+Bench `../probes/P-59-the-four-shapes-under-the-same-edge-case.md`, whose other
+four cells came back identical on all four shapes — `../checked/C-40-the-four-shapes-agree-on-the-ordinary-edge-cases.md`.
+`../rounds/368-the-callback-that-could-kill-the-process.md`.

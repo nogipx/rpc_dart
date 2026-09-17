@@ -38,6 +38,17 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-59](P-59-the-four-shapes-under-the-same-edge-case.md)** valid (round 368),
+  rpc_dart — the same edge case asked of all four call shapes at once, reporting
+  three things per cell: payloads the consumer received, the exception type that
+  ended the call, and errors that reached the zone. **The third has the teeth** —
+  a clean `DONE` where the handler failed is silent truncation, an `uncaught` is
+  exit 255. Ends with a deliberate `listen((_) async { throw ... })` that must
+  report `+1`, because otherwise a `0` cannot be told from "nothing was
+  watching"; it stayed at +1 after round 368's fix. Trap: cancelling the call
+  with `close()` closes the producer's sink too, so the later `add` is API misuse
+  rather than the case under test — the route that leaves the sink open is the
+  cancellation token
 - **[P-58](P-58-does-a-sender-park-over-a-real-socket.md)** valid (round 366),
   rpc_dart + rpc_dart_websocket — does a sender actually park on the flow-control
   window, over a real WebSocket through a TCP relay that delays every chunk by a

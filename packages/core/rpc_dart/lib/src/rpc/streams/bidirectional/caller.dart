@@ -136,17 +136,38 @@ final class BidirectionalStreamCaller<
     if (_requestSink == null) {
       final controller = StreamController<TRequest>();
       controller.stream.listen(
+        // Both callbacks are `async` with nothing awaiting them, so anything
+        // they throw goes to the zone -- exit 255 in a server process. `send`
+        // throws by design once the call is no longer active, which a producer
+        // that has not yet noticed a cancellation reaches on its next push.
+        // The consumer already has the real cause on `responses`.
         (request) async {
           if (_logger.isInternal) {
             _logger.internal(
               'Sending request in bidirectional stream: $request',
             );
           }
-          await send(request);
+          try {
+            await send(request);
+          } catch (e, stackTrace) {
+            _logger.error(
+              'Failed to send request via requestSink',
+              error: e,
+              stackTrace: stackTrace,
+            );
+          }
         },
         onDone: () async {
           _logger.internal('Request stream completed');
-          await finishSending();
+          try {
+            await finishSending();
+          } catch (e, stackTrace) {
+            _logger.error(
+              'Failed to half-close via requestSink',
+              error: e,
+              stackTrace: stackTrace,
+            );
+          }
         },
         onError: (Object error, StackTrace stackTrace) {
           _logger.error(
