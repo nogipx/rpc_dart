@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-68](P-68-backpressure-through-toxiproxy.md)** valid (round 378),
+  rpc_dart + rpc_dart_websocket — back-pressure over a link with a real RTT, via
+  **toxiproxy** (its own container, not the one another project is using) with a
+  50 ms latency toxic on each stream. **Its ablation runs THROUGH the proxy**,
+  not beside it, which is what makes the latency rig demonstrably sensitive
+  rather than merely slower. Answers the question P-58 raised and comes out the
+  other way: latency does NOT change this result. Trap: reach a docker-published
+  port over IPv4 explicitly — `localhost` resolves to `::1` first and returns
+  `000`. Has bandwidth, jitter and slicing available and used none of them
 - **[P-67](P-67-the-subscription-on-real-transports.md)** valid (round 377),
   websocket + http2 + isolate — three files, one per package, real servers on
   loopback and a real spawned isolate, no fakes. **Its evidence is the
