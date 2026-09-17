@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-62](P-62-does-the-handler-run-ahead-of-the-wire.md)** valid (round 371),
+  rpc_dart — the mirror of P-61 on the RESPONSE side: how many messages the
+  library pulls out of the HANDLER's producer while the consumer is not reading,
+  counted inside that producer. Control is `ServerStreamResponder`, which
+  already forwards pause through `relay.onPause`, on the same rig in the same
+  run; it lands on the window and reports the same number before and after, so
+  the reading is of the mechanism and not the timing. `responseSink` is only
+  reachable on the responder class, so that arm builds it directly
 - **[P-61](P-61-does-the-producer-run-ahead-of-the-transport.md)** valid (round 370),
   rpc_dart — how many messages the library pulls out of an application's
   producer while the handler is stalled, counted INSIDE the producer's own

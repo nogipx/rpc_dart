@@ -102,24 +102,42 @@ final class BidirectionalStreamResponder<
   void _initResponseForwarding() {
     if (_responseSubscription != null) return;
 
-    _responseSubscription = _responseController.stream.listen(
-      (response) async {
-        try {
-          await _processor.send(
-            response,
-          ); // Use processor directly to avoid cyclic dependency.
-          if (_logger.isInternal) {
-            _logger.internal('Response sent via responseSink [id: $id]');
-          }
-        } catch (e, stackTrace) {
-          _logger.error(
-            'Failed to send response via responseSink [id: $id]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
+    var finished = false;
+    late final StreamSubscription<void> sub;
+    sub = _responseController.stream.listen(
+      // Pausing for the duration of each send is what bounds the handler:
+      // `addStream` stops pulling while this subscription is paused, so a
+      // handler producing faster than the wire drains holds one message instead
+      // of however many it can generate. ServerStreamResponder keeps the same
+      // bound through `relay.onPause`.
+      //
+      // Not awaited, and the failure is caught rather than raised: a throw from
+      // a listen callback has nothing awaiting it and would reach the zone.
+      (response) {
+        sub.pause();
+        unawaited(
+          // The processor directly, to avoid a cyclic dependency.
+          _processor
+              .send(response)
+              .then((_) {
+                if (_logger.isInternal) {
+                  _logger.internal('Response sent via responseSink [id: $id]');
+                }
+              })
+              .catchError((Object e, StackTrace stackTrace) {
+                _logger.error(
+                  'Failed to send response via responseSink [id: $id]',
+                  error: e,
+                  stackTrace: stackTrace,
+                );
+              })
+              .whenComplete(() {
+                if (!finished) sub.resume();
+              }),
+        );
       },
       onDone: () async {
+        finished = true;
         if (_logger.isInternal) {
           _logger.internal('Response stream completed [id: $id]');
         }
@@ -143,6 +161,7 @@ final class BidirectionalStreamResponder<
         );
       },
     );
+    _responseSubscription = sub;
   }
 
   /// Binds the responder to the endpoint message stream.
