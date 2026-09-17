@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-67](P-67-the-subscription-on-real-transports.md)** valid (round 377),
+  websocket + http2 + isolate — three files, one per package, real servers on
+  loopback and a real spawned isolate, no fakes. **Its evidence is the
+  ablation**: removing round 373's dispatch from CORE (which all three resolve
+  from local source through the pub workspace) collapses every `silent` arm to
+  0 HANG while every `control` survives, on all three. Loopback only, which is
+  adequate for this question and NOT for a flow-control one (P-58)
 - **[P-66](P-66-does-the-subscription-reach-every-wiring.md)** valid (round 376),
   rpc_dart — asks round 373's question of the wirings 373 never ran: the peer
   endpoint, the zero-copy branch, and eight concurrent calls. **Its evidence is
