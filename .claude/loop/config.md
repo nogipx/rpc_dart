@@ -151,22 +151,6 @@ individual findings live in `backlog/`.
 - **No emoji** anywhere: code, comments, commits, documentation.
 - **No mention of the assistant in commits** (`Co-Authored-By` and the like).
 
-## Severity bar and cap
-
-From round 191 on, only **very critical** things are taken: data loss, a crash,
-a hang, a security hole, an unbounded leak. Not taken: sharper diagnostics, a
-doc comment, coverage for coverage's sake.
-
-The cap is **round 260**, raised from 230 by the owner after round 230 with the
-instruction "разбирать беклог" — work the backlog. That is a cap, not a target.
-
-**Rounds 231-260 are backlog-clearing**, and that changes what a round may
-target though not what it may ship. The bar above still governs what counts as a
-finding worth fixing; it does not stop a round TAKING a lead whose product is a
-bench, a rescan, or a filing — B-06, B-09 and B-11 are exactly that, and they
-are why the backlog stopped shrinking. A round on one of those ends CLEAN or
-with a new lead, and that is the expected outcome.
-
 ## Round budget
 
 Exhausted means the verdict is INCONCLUSIVE, not CLEAN: a bench that could not
@@ -174,7 +158,7 @@ see the defect does not prove its absence.
 
 probes: 3
 canaries: 3
-round cap: 370
+round cap: 390
 
 ## Out of scope
 
