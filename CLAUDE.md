@@ -153,11 +153,8 @@ on `Version X already exists`, after the other packages have gone out.
    calls an API added this cycle analyses and tests green while still declaring
    `rpc_dart: '>=5.0.0 <6.0.0'` — and a user who resolves the old core gets a
    compile error the moment they add the new transport.
-   Currently OUTSTANDING (core APIs added after 5.0.1, already used):
-   `IRpcStreamIdSequence` in `rpc_dart_websocket`, `rpc_dart_http2` and
-   `rpc_dart_http`; `RpcChannelTransport.resumeStreamIdsAfter` /
-   `lastIssuedStreamId` and `RpcStreamIdManager.resumeAfter` / `lastIssuedId` in
-   `rpc_dart_websocket` and `rpc_dart_http`.
+   The check needs no network: `git show <release-tag>:<core file>` is the
+   published source, so grep it for the symbols the dependent uses.
 2. Commit the release (just commits; tags are created at publish): `git push`.
 3. `melos run publish:dry` — must validate with 0 warnings (a dirty git tree
    shows up as a warning here, so commit first).
