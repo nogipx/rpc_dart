@@ -4,6 +4,68 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 6.2.0
+
+A downstream consumer met all of this as one symptom: the same blob refused over
+and over, with nothing in either peer's logs to explain it. Three of the changes
+below are paths that lose a message while BOTH sides report success; the rest is
+why the logs could not show which one.
+
+### Changed
+
+- **A send that does not send no longer reports success.** `sendMessage`,
+  `sendMetadata` and `sendDirectObject` on `RpcChannelTransport` opened with
+  `if (_closed) return;`, and `CallProcessor.send` logged a warning and returned
+  on an inactive processor. Each of those means "your message was not sent", and
+  each now raises `RpcStatusException(RpcStatus.unavailable)` — retryable,
+  classifiable, and it survives the wire, which a bare `StateError` does not.
+  Measured in the field as a caller handing 17 messages to `send()` while the
+  peer's handler was given 16, no error on either side, and a success response
+  over the missing one. **If you relied on the old leniency, this is a
+  behaviour change.** Reads and teardown are deliberately untouched:
+  `createStream`, `releaseStreamId` and `finishSending` still do not throw,
+  because they run from `finally` blocks where a throw masks the error that got
+  there.
+
+### Fixed
+
+- **An end-of-stream no longer overtakes a message parked for flow-control
+  credit.** A send with no credit parks; the end-of-stream that follows carries
+  no payload, so nothing metered it and it went straight out. The peer saw a
+  finished stream, counted what had arrived and refused the short blob, while
+  the sender was told nothing — the parked send was never woken either.
+  `finishSending` now waits for a parked send on its stream, and credit is taken
+  before the finished mark is read, so a grant landing during the wait still
+  puts the message ahead of the end. The unparked path stays synchronous.
+- **A client-stream's request is no longer routed through a controller nobody
+  reads.** A client-stream responder is fed by the pipeline and deliberately
+  does not subscribe to `getMessagesForStream`, but inbound dispatch still
+  preferred the per-stream controller when one existed for that id. Nothing
+  consumed it, so every message was charged against `effectiveMaxBufferedBytes`
+  and never released; past the bound the message was refused before it reached
+  the pipeline, and the refusal error went into that same unread controller.
+  The handler was simply given less than the peer sent.
+- **The ordinary second start is no longer a warning.** Starting an endpoint
+  twice is ordinary — a server's `onEndpointCreated` and an application's own
+  callback both start it, once per connection — and it produced 704 and 698
+  `Already listening for incoming requests` lines in 24 h against 6 and 34 lines
+  of real error. It is now internal-level. A second call asking for a DIFFERENT
+  `messageFilter` is still a warning: the first one silently remains in effect,
+  so the caller does not get the filtering it asked for.
+
+### Added
+
+- **`LogScope? logger` on `RpcChannelTransport` and `.fromChannel`.** The whole
+  channel-transport family — websocket, isolate, wasm — was silent about flow
+  control while the http2 sibling already reported its own refusals. It now
+  reports a dropped initial window, a clamped peer grant, a full tracking cap
+  and a stream failed for buffering past the bound. Additive and optional; no
+  caller changes.
+- **Every inbound message is logged at the pipeline's front door** at debug
+  level. A message that appears there and never reaches the handler is the
+  pipeline's fault; one that never appears was lost below it, in the transport,
+  the parser or the wire.
+
 ## 6.1.0
 
 Six defects from a review of 6.0.0, each closed against a failing witness. The
