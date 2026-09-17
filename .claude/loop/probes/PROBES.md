@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-63](P-63-what-survives-a-bidi-call.md)** valid (round 372), rpc_dart —
+  eleven counters read after a bidi call settles, across seven ways of ending
+  it, at three scales on ONE connection. **Its evidence is the ablation, not the
+  zeros**: every cell is 0, and a zero cannot be told from a blind instrument, so
+  removing the bidi responder's cleanup is what shows the same counters climbing
+  5 / 25 / 85. Unary rides along as the control shape. Says nothing about RSS,
+  about latency-shaped endings, or about duplex semantics
 - **[P-62](P-62-does-the-handler-run-ahead-of-the-wire.md)** valid (round 371),
   rpc_dart — the mirror of P-61 on the RESPONSE side: how many messages the
   library pulls out of the HANDLER's producer while the consumer is not reading,
