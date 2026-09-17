@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 379)
 round: 368
 commit: e897128e
 paths: [packages/transport/rpc_dart_isolate/test/**, pubspec.yaml]
@@ -48,6 +48,30 @@ the lead becomes a harness question about that package alone — it is the only
 one whose Chrome arm compiles a Web Worker entry point
 (`test/web_worker/echo_worker.dart.js`) before the suite, which is the one thing
 its Chrome invocation does that no other package's does.
+
+## Closed — round 379
+
+**The file does not exist.** `packages/transport/rpc_dart_isolate/test/` holds no
+`web_smoke_test.dart`, and the `test:web` script named it anyway. `dart test`
+answers a missing path by building a load suite for it and starting a browser
+that then has nothing to connect to — so the failure surfaces as
+`BrowserManager._start` timing out, **which is exactly the cold-start flake the
+comment three lines above it describes**. Every retry and every raised timeout
+read as confirmation of the wrong theory, which is why it survived this filing,
+round 377's work in the same package, and two deliberate re-runs.
+
+Both theories in the record above were wrong: not Chrome (websocket's arm passes
+on the same machine), and not round 378's IPv4 trap. The question this record
+left open — whether it pre-dates round 368 — is answered by the cause: the path
+was wrong for as long as it has been in the script, independent of any round.
+
+Path removed, comment added saying the package has no such file. `test:web` is
+green end to end.
+
+**Left open, deliberately**: no `web_smoke_test.dart` was written for this
+package. Every other web-tested package has one, so its absence may be an
+oversight — but writing one is adding coverage, a different job from repairing a
+gate, and inventing it here would have hidden the question.
 
 ## Owner decision
 
