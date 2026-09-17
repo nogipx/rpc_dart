@@ -1,5 +1,5 @@
 ---
-status: awaiting owner (round 365)
+status: decided by owner (round 379)
 round: 366
 commit: b17af71c
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -51,9 +51,26 @@ per policy.
 
 ## Owner decision
 
-None yet. What is being asked: whether to change a shipped default — raise it
-above any plausible single message, derive it from `maxMessageSize`, or admit on
-"does it fit" — accepting that every peer's behaviour changes with it, against
-leaving a parked sender on the second frame of every stream over any link with a
-round trip. Round 366 fixed the defect that lived in that state; the state
-itself is what this lead is about.
+**Taken (after round 379): derive the initial window from `maxMessageSize`.**
+
+Of the three, this is the one that does not invent a number. A fixed default
+raised "above any plausible single message" is a guess that goes stale the day
+someone sends a bigger one; admitting on "does it fit" changes the gate's rule
+rather than its value, which is a wider change than the defect needs. Deriving
+it ties the window to the limit an operator already tunes, so the two cannot
+disagree — and disagreeing is the whole defect: a 256 KiB frame against a 64 KiB
+window parks for one round trip and bounds nothing, because the gate admits on
+`credit > 0` and the balance simply goes negative.
+
+Accepted with it: every peer's behaviour changes. That is the point — the parked
+state arrived in 6.0.0 and buys nothing that can be named.
+
+What the round carrying this out must still decide, because the decision does
+not settle it: the exact relation (equal to `maxMessageSize`? a multiple?) and
+what happens when `maxMessageSize` itself is large. Measure with P-58, which
+already reports park duration per policy.
+
+The original question, for the record: whether to change a shipped default —
+raise it above any plausible single message, derive it from `maxMessageSize`, or
+admit on "does it fit" — against leaving a parked sender on the second frame of
+every stream over any link with a round trip.

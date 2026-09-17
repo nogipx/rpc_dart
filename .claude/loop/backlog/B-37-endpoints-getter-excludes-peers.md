@@ -1,5 +1,5 @@
 ---
-status: awaiting owner (round 354)
+status: decided by owner (round 379)
 round: 354
 commit: 3a827426
 paths: [packages/core/rpc_dart/lib/src/integration/rpc_server_interface.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
@@ -47,8 +47,23 @@ that covers both.
 
 ## Owner decision
 
-**Not yet taken, and one is needed before anything is built.** Three options,
-and they differ in what the API promises callers rather than in any number:
+**Taken (after round 379): option 3 — leave the getter, document what it means.**
+
+Breaking a published interface across three packages, for a getter whose only
+in-repo readers are tests, is a bad trade; and a second getter would leave
+`endpoints` quietly lying in one of the two modes, which is the defect rather
+than a fix for it. What is left is a promise nobody wrote down, and writing it
+down closes exactly that.
+
+To carry out: say on `IRpcServer.endpoints` that it lists RESPONDER-mode
+endpoints and is empty in peer mode, and point a caller that wants both at
+whatever the peer server exposes. Doc only — no signature moves.
+
+Worth keeping in view: the thing this defect actually broke, the graceful drain,
+was fixed in round 354 and does not use this getter. So the remaining damage is
+a caller reading `endpoints` in peer mode and believing the emptiness.
+
+The three options, for the record:
 
 1. Widen `IRpcServer.endpoints` to `List<RpcEndpointBase>` — honest, breaking
    for any external implementor or caller, and it makes every caller handle a

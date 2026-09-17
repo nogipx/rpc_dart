@@ -1,5 +1,5 @@
 ---
-status: awaiting owner (round 366)
+status: closed (round 379)
 round: 365
 commit: 760511a5
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
@@ -67,7 +67,23 @@ that shape, so the round asked instead of shipping.
 
 ## Owner decision
 
-Three options, and the numbers above are what to decide on rather than a worry:
+**Taken (after round 379): option 1 — leave it.**
+
+The chain buys a contractual guarantee by removing exactly the pipelining the
+measured figures rest on, and the convention it would replace was checked rather
+than assumed: 10000 frames in order on both platforms. `guest_to_host_order_test`
+is in the suite and fires if a future WebKit changes the dispatch order, so the
+assumption is watched rather than trusted.
+
+What this does NOT say: that the ordering is contractual. It is not, and the
+record above explains why that matters here specifically — the channel
+reassembles a byte STREAM, so two swapped frames are corruption. Re-open if the
+witness ever fires, or if iOS traffic grows enough that "10000 frames held" stops
+being a comfortable margin.
+
+Nothing to carry out, so this closes rather than waiting for a round.
+
+The three options, for the record:
 
 1. **Leave it.** The convention holds over 10k frames today, and the
    `guest_to_host_order_test` in the suite is a regression witness that fires if
