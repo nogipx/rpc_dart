@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 379)
+status: closed (round 381)
 round: 354
 commit: 3a827426
 paths: [packages/core/rpc_dart/lib/src/integration/rpc_server_interface.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]

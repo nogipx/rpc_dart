@@ -16,7 +16,18 @@ abstract interface class IRpcServer {
   /// Whether the server is running.
   bool get isRunning;
 
-  /// Active RPC endpoints.
+  /// Active RESPONDER endpoints, and only those.
+  ///
+  /// **Empty on a server running in peer mode**, where each connection gets an
+  /// [RpcPeerEndpoint] instead — that type serves calls too, but it is not an
+  /// [RpcResponderEndpoint] and cannot appear here. So an empty list means
+  /// "none of this kind", never "no connections": do not read it as a liveness
+  /// or connection count.
+  ///
+  /// The type is deliberate rather than an oversight. Widening it would break
+  /// every external implementor and hand callers something that may not serve
+  /// calls at all, and a second getter would leave this one quietly lying in
+  /// one of the two modes. A server that needs both exposes them itself.
   List<RpcResponderEndpoint> get endpoints;
 
   /// Starts the server.

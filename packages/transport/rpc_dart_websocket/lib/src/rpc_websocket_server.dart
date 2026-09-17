@@ -85,6 +85,10 @@ class RpcWebSocketServer implements IRpcServer {
     );
   }
 
+  /// Responder endpoints only — **empty in peer mode**, where every connection
+  /// is an [RpcPeerEndpoint]. See [IRpcServer.endpoints]. The internal list
+  /// holds both kinds, which is what `stop()` and the drain walk; this getter
+  /// is the narrow public view of it.
   @override
   List<RpcResponderEndpoint> get endpoints =>
       List.unmodifiable(_endpoints.whereType<RpcResponderEndpoint>());
