@@ -37,10 +37,15 @@ stalled proxy  90          0          —
 direct         390         5          [1], [2], [2], [2] (two predate the ordinal)
 ```
 
-The stall is what `concurrent_reconnect_test` uses to widen the race, and it
-produces NOTHING here — so this is not the concurrent-overlap defect that test
-already pins. The rate is ~1.3% on the direct path, which is why it only ever
-appears in a full-suite run.
+The rate is ~1.3% on the direct path, which is why it only ever appears in a
+full-suite run.
+
+**The proxy arm is underpowered too, and must not be read as clearing that
+path.** `0 in 90` at 1.3% has probability `0.987^90 = 0.31` — expected in one
+run out of three at an identical rate. And every CI occurrence of this defect is
+ON the proxy path, since `concurrent_reconnect_test`'s `connect()` passes
+`proxyUri`. So this pair of arms separates nothing; comparing them needs the
+same power the fix verdict does.
 
 **Underpowered for verdicts about a FIX.** At 1.3%, 150 iterations expect two
 orphans, so "0 in 150" is not evidence. Round 241's candidate fix measured 1 in

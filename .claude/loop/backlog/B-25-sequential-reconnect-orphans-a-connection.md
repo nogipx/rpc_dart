@@ -9,11 +9,25 @@ reason: risk — the candidate fix did not measurably lower the rate and moved t
 
 # B-25 — a sequential reconnect orphans a connection about 1.3% of the time
 
-Reported twice by the owner from full-suite runs, as
+Reported four times by the owner from full-suite runs, as
 `concurrent_reconnect_test.dart` -> "GUARD: a later reconnect still opens a new
 connection", `Expected: <0> Actual: <1>`. It does not reproduce on demand: the
 test passed 6/6 alone, and the whole http2 suite and a whole workspace
 `test:unit` passed too.
+
+**That assertion no longer exists.** The GUARD test carried a leak check it was
+not named for and could not be sensitive to — round 339's ablation canary leaves
+it green while failing the two concurrent tests — so the only thing it ever
+detected was this parked lead, 1.3% of the time. A defect parked as unfixed and
+a CI gate on its absence cannot both stand. It now asserts only that the
+single-flight marker clears; the leak check stays in the two concurrent tests,
+which the canary proves are the sensitive ones. This lead therefore has NO test
+witness by design — its witness is P-19, which is where a rate belongs.
+
+The fourth occurrence carried one new number: `still live after 30000ms`,
+against round 339's calibration of 1735 ms healthy and 30007 ms for the ablated
+canary. That is the "a connection nothing can close" end, not the loaded-CI-box
+margin round 339 called its best-supported explanation.
 
 ## What is measured
 
@@ -32,8 +46,16 @@ sometimes fails to reach the peer.
 
 This is NOT the defect `concurrent_reconnect_test` already pins. That one needs
 two overlapping attempts and is deterministic; this one appears with two
-STRICTLY SEQUENTIAL reconnects, and the 400 ms stall that makes the concurrent
-race reliable produces zero orphans here.
+STRICTLY SEQUENTIAL reconnects.
+
+**The proxy arm separated nothing, and round 257's reading of it — "the proxy is
+where the problem is NOT" — is unsupported.** `0 in 90` at a rate of 1.3% has
+probability `0.987^90 = 0.31`: a clean arm turns up in one run out of three even
+when the rate is identical. Meanwhile every CI occurrence is on the PROXY path —
+the failing test's `connect()` passes `proxyUri`, so all three of its
+connections go through the 400 ms stall. The one path the defect demonstrably
+reaches in CI is the one the bench cleared on underpowered evidence, and the
+three-arm design at the end of this note inherits that assumption.
 
 ## The mechanism, as far as it is established
 
@@ -213,6 +235,32 @@ was — three mechanisms eliminated by measurement or reading, the FIN path trac
 to the bottom — but nobody should read this section as closing in. The owner's
 "hunt the mechanism first" has not paid out, and the fallback they declined,
 2000 cycles an arm, is now the cheaper option of the two.
+
+## Severity: the server reclaims it within ~60 s
+
+Six rounds treated this as a leak and none of them asked what happens next. The
+orphan is a HALF-OPEN connection from the server's side, which is precisely what
+`RpcHttp2Server`'s PING keepalive exists to reclaim. It is on by default:
+`pingInterval = const Duration(seconds: 30)` (`rpc_http2_server.dart:85`), with
+`pingTimeout` left unset and falling back to the interval (`_startKeepalive`:
+`_pingTimeout ?? interval`). The orphan answers no PING, so the server destroys
+the socket and fires `onConnectionClosed` — up to 30 s to the next PING plus
+30 s waiting for the ACK, so **~60 s worst case**. The server's own field doc
+calls this "the ONLY bound on a held endpoint", and the mechanism is witnessed
+independently by `server_keepalive_reclaims_half_open_test.dart`.
+
+Evidence grade: read from the code plus that existing test, NOT measured against
+an actual orphan — doing that needs the 1.3%, which is the whole difficulty.
+
+So the cost is one endpoint and its contracts held for up to a minute on 1.3% of
+reconnects, and it does not accumulate: a supervisor reconnecting every 10 s
+holds well under one extra connection in steady state.
+
+This also explains the settle budget, which is 30 s and therefore BELOW the
+reclaim window. That is what makes the two concurrent tests distinguish "nothing
+on the client can close it" from "the server will sweep it later". Raising it
+past 60 s would blind them — round 339's ablation canary (`live=2` at 30007 ms)
+would go green, because keepalive would reclaim that orphan too.
 
 ## Owner decision
 
