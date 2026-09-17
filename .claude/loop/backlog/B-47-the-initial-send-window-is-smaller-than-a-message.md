@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 379)
+status: closed (round 380)
 round: 366
 commit: b17af71c
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -50,6 +50,40 @@ with a round trip — P-58 is the harness, and it already reports park duration
 per policy.
 
 ## Owner decision
+
+**RETRACTED (round 380): the premise is wrong, so the decision below is not
+carried out.**
+
+**This lead's premise is wrong, and the decision below was taken on it.** Round
+380 measured the claim before carrying the decision out, over a real socket at
+50 ms RTT with a handler that never reads:
+
+```
+policy                            frames      MiB
+no initial window (5.0.1 shape)    40000   156.25
+64 KiB (shipped default)            1039     4.06
+= maxMessageSize (16 MiB)           5108    19.95
+```
+
+The window buys a factor of **38**, and the decided fix would have weakened it
+**fivefold**. Both halves of the contradiction are true of different things: for
+ONE message larger than the window the park really does buy nothing (the gate
+admits on `credit > 0`, not on fit), and for a BURST the window is the only
+bound a sender has before its first grant. Round 366 measured 2, 3 and 8 frames
+and generalised from that; it never ran a flood.
+
+The defect 366 actually found — `finishSending` overtaking a parked send — is
+fixed. A park of one round trip is not a defect; it is flow control working.
+
+Pinned by
+`packages/transport/rpc_dart_websocket/test/initial_window_bounds_a_flood_test.dart`
+so the claim cannot be made again unmeasured. Bench P-69.
+
+**Where the owner's need goes instead**: raise the window in the CONSUMER's
+policy, where the chunk size is known. The library keeps a safe default; the
+application that knows its own traffic tunes it.
+
+## The decision this retracts
 
 **Taken (after round 379): derive the initial window from `maxMessageSize`.**
 

@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-69](P-69-what-the-initial-window-buys.md)** valid (round 380),
+  rpc_dart_websocket — how many frames a caller gets out BEFORE the first grant
+  can throttle it, through toxiproxy at 50 ms RTT with a handler that never
+  reads. **The RTT is not optional**: credit exists only once a grant arrives,
+  so on an in-process pair the field looks inert — which is how round 366 came
+  to call it useless. The `null` arm is the control that matters, running the
+  producer to exhaustion (40000 frames, 156.25 MiB), so every other row is a
+  real bound rather than a slow producer. Reproduces the field's own doc comment
+  to within 0.01 MiB, which is a second control from a different session
 - **[P-68](P-68-backpressure-through-toxiproxy.md)** valid (round 378),
   rpc_dart + rpc_dart_websocket — back-pressure over a link with a real RTT, via
   **toxiproxy** (its own container, not the one another project is using) with a
