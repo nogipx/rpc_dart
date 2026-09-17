@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-61](P-61-does-the-producer-run-ahead-of-the-transport.md)** valid (round 370),
+  rpc_dart — how many messages the library pulls out of an application's
+  producer while the handler is stalled, counted INSIDE the producer's own
+  generator so it measures demand the library created. **The control is the
+  sibling and it lands ON the window** (66 x 16 KiB = 1.03 MB against a 1 MB
+  window), which is what makes the reading a measurement rather than "fewer".
+  Exists because B-49 deliberately refused to borrow the sibling's own 32.8 MB
+  figure, taken on a different API
 - **[P-60](P-60-what-the-caller-is-told-about-a-short-read.md)** valid (round 369),
   rpc_dart — can a caller tell that the other side read everything it sent? Both
   numbers are taken where an APPLICATION reads them (what the handler was given,

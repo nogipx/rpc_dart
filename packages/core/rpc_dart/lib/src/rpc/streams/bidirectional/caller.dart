@@ -135,29 +135,43 @@ final class BidirectionalStreamCaller<
   StreamSink<TRequest> get requestSink {
     if (_requestSink == null) {
       final controller = StreamController<TRequest>();
-      controller.stream.listen(
-        // Both callbacks are `async` with nothing awaiting them, so anything
-        // they throw goes to the zone -- exit 255 in a server process. `send`
-        // throws by design once the call is no longer active, which a producer
-        // that has not yet noticed a cancellation reaches on its next push.
-        // The consumer already has the real cause on `responses`.
-        (request) async {
+      var finished = false;
+      late final StreamSubscription<TRequest> sub;
+      sub = controller.stream.listen(
+        // Pausing for the duration of each send is what bounds the producer:
+        // `addStream` stops pulling while this subscription is paused, so the
+        // caller holds one message instead of however many the producer can
+        // offer. Without it _sendSequence is an unbounded queue in front of the
+        // transport -- the same bound ClientStreamCaller.call() keeps.
+        //
+        // Not awaited, and the failure is caught rather than raised: a throw
+        // from a listen callback has nothing awaiting it and would reach the
+        // zone, which is exit 255 in a server process. `send` throws by design
+        // once the call is no longer active, and the consumer already has the
+        // real cause on `responses`.
+        (request) {
           if (_logger.isInternal) {
             _logger.internal(
               'Sending request in bidirectional stream: $request',
             );
           }
-          try {
-            await send(request);
-          } catch (e, stackTrace) {
-            _logger.error(
-              'Failed to send request via requestSink',
-              error: e,
-              stackTrace: stackTrace,
-            );
-          }
+          sub.pause();
+          unawaited(
+            send(request)
+                .catchError((Object e, StackTrace stackTrace) {
+                  _logger.error(
+                    'Failed to send request via requestSink',
+                    error: e,
+                    stackTrace: stackTrace,
+                  );
+                })
+                .whenComplete(() {
+                  if (!finished) sub.resume();
+                }),
+          );
         },
         onDone: () async {
+          finished = true;
           _logger.internal('Request stream completed');
           try {
             await finishSending();

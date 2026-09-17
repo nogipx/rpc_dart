@@ -1,9 +1,9 @@
 ---
-status: open
+status: closed (round 370)
 round: 368
 commit: e897128e
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart]
-probe: —
+probe: P-61
 reason: bench — the sibling's own number was taken on a different API and does not transfer; this needs a stalled-handler run against requestSink itself
 ---
 
@@ -42,6 +42,30 @@ same pause/resume the sibling already has.
 Note the endpoint's own bidi bridge (`_buildBidirectionalStream`) does NOT use
 `requestSink`; it drives its own subscription. So the exposure is an application
 holding `BidirectionalStreamCaller` directly, which is public API.
+
+## Fixed — round 370
+
+The number this record refused to borrow, taken on the API in question (P-61):
+a stalled handler, a 1 MB window, 16 KiB messages, counted inside the
+application's own producer.
+
+```
+                 pulled of 2000      MB
+requestSink        2000            31.3     <- before
+requestSink          68             1.1     <- after
+call(Stream)         66             1.0     <- control, both runs
+```
+
+2000 was the probe's ceiling, not a plateau — the producer was exhausted. The
+sibling's pause was copied: pause before the send, resume on completion, behind
+a `finished` flag so a resume cannot land on a cancelled subscription.
+
+Canary, `pause()` off in place: `Actual: <2000>` — 31.3 MB — with the delivery
+GUARD green on both sides.
+
+Narrower than it sounds, and said in the round: a direct `sink.add()` is still
+unbounded, because that is the `StreamSink` contract. The bound reaches
+producers driven through `addStream`, which is what an upload uses.
 
 ## Owner decision
 
