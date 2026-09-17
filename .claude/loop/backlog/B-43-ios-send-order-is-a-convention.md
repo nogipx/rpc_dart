@@ -1,5 +1,5 @@
 ---
-status: open
+status: awaiting owner (round 366)
 round: 365
 commit: 760511a5
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
