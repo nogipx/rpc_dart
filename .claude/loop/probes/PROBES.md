@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-64](P-64-are-the-two-directions-independent.md)** valid (round 373),
+  rpc_dart — with one direction of a bidi call idle, finished or busy, what does
+  the OTHER side observe? **The control is one line of the caller's own code**:
+  the same handler driven with `Stream.empty()` instead of a request stream that
+  never closes, `5 DONE` against `0 HANG`, which named the trigger as the
+  half-close rather than the payload. Carries a HOP CHECK that samples the
+  server mid-call, because "the caller got nothing" cannot separate *the
+  responder never heard of this call* from *the answer was lost* — that is what
+  found the second hop instead of assuming it (L-07)
 - **[P-63](P-63-what-survives-a-bidi-call.md)** valid (round 372), rpc_dart —
   eleven counters read after a bidi call settles, across seven ways of ending
   it, at three scales on ONE connection. **Its evidence is the ablation, not the

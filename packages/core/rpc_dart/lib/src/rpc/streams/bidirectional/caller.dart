@@ -65,6 +65,17 @@ final class BidirectionalStreamCaller<
       context: context,
       logger: _logger,
     );
+
+    // Announce the call NOW, not on the first request.
+    //
+    // Bidirectional is the one shape whose caller may legitimately stay silent
+    // indefinitely -- a subscription opens the channel and listens. Initial
+    // metadata is otherwise sent by the first request or by the half-close, so
+    // such a call never reached the responder at all: measured with a handler
+    // that pushes five messages, the server reported openStreams=0,
+    // activeResponders=0 and the caller hung. Sending zero messages AND
+    // half-closing already worked; holding the request stream open did not.
+    _processor._queueInitialMetadataIfUnsent();
   }
 
   /// Sends a request to the server (can be called multiple times).

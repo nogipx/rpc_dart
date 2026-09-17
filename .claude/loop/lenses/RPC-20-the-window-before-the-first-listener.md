@@ -3,8 +3,8 @@ refines: —
 paths: [packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart, packages/transport/*/lib/**]
 applies: a producer starts before the consumer subscribes, and the carrier in between drops rather than buffers
 breaks: broken delivery.
-applied: [240, 250]
-status: confirmed (round 240)
+applied: [240, 250, 373]
+status: confirmed (round 373)
 ---
 
 # RPC-20 — The window before the first listener

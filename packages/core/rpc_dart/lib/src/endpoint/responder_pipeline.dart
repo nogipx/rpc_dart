@@ -864,6 +864,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         _handleEndOfStream(state);
       }
     }
+
+    // Bidirectional dispatches on the METADATA frame, because for this shape
+    // there may never be another one: a subscription opens the channel, listens,
+    // and neither sends a request nor half-closes. Every other shape is started
+    // by a request frame or by the half-close, both of which it is guaranteed to
+    // send. Without this the responder was never created and the caller waited
+    // out its own deadline against a server holding stream state for it.
+    //
+    // Last, so a replayed frame above dispatches first; _ensureResponder is
+    // idempotent and reaches its assignment with no await.
+    if (binding.type == RpcMethodType.bidirectionalStream &&
+        state.responder == null) {
+      _detachedDispatch(_ensureResponder(state, binding), state);
+    }
   }
 
   void _handleDataMessage(
