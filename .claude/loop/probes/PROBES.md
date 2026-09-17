@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-71](P-71-the-first-chunk-under-slicing.md)** valid (round 383),
+  rpc_dart_websocket — B-44's shape (17 chunks, ids on the first only) through
+  toxiproxy's `slicer`. **Every field is a function of the index**, so lost,
+  reordered, duplicated and mis-decoded are four distinguishable outcomes rather
+  than one. **Its control is recorded as WEAK and that is what made round 383
+  inconclusive**: the ablation was meant to drop frame 0 and print the
+  consumer's symptom, and instead removed the responder's dispatch, proving only
+  that the probe separates delivered from not-delivered. Sharper control named
+  in the record. Runs on the VM, so it tests the wire and not the runtime
 - **[P-70](P-70-the-request-direction.md)** valid (round 382), rpc_dart — how
   many messages the library pulls from the CALLER's producer while a handler
   that read one stalls. Two controls: a draining handler that pulls the producer

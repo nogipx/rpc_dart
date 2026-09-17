@@ -152,6 +152,18 @@ final class RpcResponderStreamState {
     _boundToMessageStream = true;
   }
 
+  /// Request payload frames the pipeline ACCEPTED for this stream.
+  ///
+  /// Paired with [deliveredRequests] so a call can be asked, as it ends,
+  /// whether the handler was given everything the peer sent. They are counted
+  /// separately because the GAP between them is the one failure that cannot be
+  /// seen from either side alone: the caller knows what it sent, the handler
+  /// knows what it read, and nobody compares the two.
+  int acceptedRequests = 0;
+
+  /// Request payload frames actually handed to the handler.
+  int deliveredRequests = 0;
+
   /// Requests this state discarded because the sink was gone or closed.
   ///
   /// **Nothing reads it.** It is diagnostic only, and it does not make a call
@@ -169,6 +181,7 @@ final class RpcResponderStreamState {
       droppedRequests++;
       return;
     }
+    if (message.payload != null || message.isDirect) deliveredRequests++;
     sink.add(message);
     // A frame may carry both the last payload and the half-close.
     if (message.isEndOfStream) {

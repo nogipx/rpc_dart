@@ -953,6 +953,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // Counted HERE, where the frame is accepted for delivery — after the
+    // method is known and the binding found, so a frame refused above was
+    // never ours to deliver and must not read as lost.
+    if (binding.type == RpcMethodType.clientStream) {
+      state.acceptedRequests++;
+    }
+
     state.storePayload(
       message,
       bufferForClientStream: binding.type == RpcMethodType.clientStream,
@@ -1723,6 +1730,26 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final state = _respStreams.take(streamId);
     if (state == null) return;
+
+    // The one check that can see a request vanishing between the peer and the
+    // handler. Both sides otherwise report success over different data: the
+    // caller knows what it sent, the handler knows what it read, and until here
+    // nothing compares the two — which is why a consumer's upload could
+    // acknowledge 16 of 17 messages with no error anywhere.
+    //
+    // Reported, never raised: by this point the call has answered and there is
+    // no one left to fail. What it buys is that the next occurrence is one grep
+    // away instead of unfalsifiable.
+    final lost = state.acceptedRequests - state.deliveredRequests;
+    if (lost > 0) {
+      _log.error(
+        'Request messages LOST for ${state.methodKey ?? "?"} '
+        '[streamId: $streamId]: the pipeline accepted '
+        '${state.acceptedRequests} and the handler was given '
+        '${state.deliveredRequests} — $lost never arrived '
+        '(dropped: ${state.droppedRequests})',
+      );
+    }
     // A stream torn down while still holding pre-method frames must return its
     // share of the connection budget, or the ceiling ratchets down over time.
     _releasePreMethodBytes(state);
