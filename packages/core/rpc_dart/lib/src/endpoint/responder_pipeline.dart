@@ -1608,8 +1608,21 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       },
     );
 
+    // Hand the `await for` below's demand back to the handler. Without it the
+    // relay is an unbounded buffer between the two: the loop pauses the relay
+    // while a send is in flight and an `async*` handler keeps allocating
+    // regardless. ServerStreamResponder keeps the same bound the same way.
+    var torn = false;
+    relay.onPause = () {
+      if (!torn) handlerSub.pause();
+    };
+    relay.onResume = () {
+      if (!torn) handlerSub.resume();
+    };
+
     _detached(
       responder.done.whenComplete(() {
+        torn = true;
         unawaited(handlerSub.cancel().catchError((_) {}));
         if (!relay.isClosed) relay.close();
       }),
