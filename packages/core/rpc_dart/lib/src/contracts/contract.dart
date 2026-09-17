@@ -271,6 +271,19 @@ abstract class RpcResponderContract implements IRpcContract {
   /// `listen((_) {})` with no `onError` kills the process on the first cancel,
   /// while the same handler with one logs it and the caller still gets its
   /// `RpcCancelledException` in 6 ms.
+  ///
+  /// **A handler that stops reading early still answers `grpc-status 0`**, and
+  /// that answer is indistinguishable from one given over the whole stream:
+  /// measured at 17 sent, 3 given to the handler, caller told OK. Nothing is
+  /// logged either. The early answer is deliberate — gRPC allows it, and it is
+  /// useful ("I already have this chunk, stop sending") — but the caller cannot
+  /// tell the two apart.
+  ///
+  /// So do NOT use this shape for a transfer that must be resumable. The count
+  /// the library could report is what it HANDED the handler, never what the
+  /// handler made durable, and resumption needs to know WHICH pieces landed.
+  /// Use [addBidirectionalMethod] and acknowledge each message on the response
+  /// stream as it is committed.
   void
   addClientStreamMethod<TRequest extends Object, TResponse extends Object>({
     required String methodName,

@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 375)
 round: 369
 commit: 5a22ff67
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/core/headers.dart]
@@ -74,3 +74,71 @@ messages than the peer sent should stay indistinguishable from a full read.
 Options, in the order this record argues them: a consumed-count trailer surfaced
 to the caller (does not break early answers); a non-OK status (breaks them); or
 leave the behaviour and delete the false promise on `droppedRequests`.
+
+## Consumer evidence, from rhyolite (not a round)
+
+Filed by the rhyolite side while migrating its blob upload off client-stream, at
+the owner's request. Not measured here — this is which way a real consumer of
+this exact use case went, as input to the decision above.
+
+**The upload named in "why it matters here specifically" no longer uses
+client-stream.** It is now a bidirectional call: the client opens with the ids it
+holds, the server answers with the ones it lacks, and each blob is acknowledged
+on the response stream as it is durably written. The legacy client-stream method
+is kept, unchanged, only so deployed clients keep working.
+
+That lands on this record's own analysis rather than on its proposed fix:
+
+* *"only the handler knows what is durable"* — so the ack is emitted by the
+  handler after the write returns, which a bidirectional response stream can do
+  while the request is still arriving and a single client-stream response cannot.
+* *"an early answer is USEFUL mid-upload — I already have this chunk, stop
+  sending"* — that is exactly the opening offer/needed exchange, and having it as
+  a MESSAGE rather than a trailer means it arrives before the bytes rather than
+  after them.
+
+So for this consumer, `x-rpc-requests-consumed` would arrive too late to be the
+thing it needed: a count at the end still cannot say WHICH chunks are durable,
+and that is the question a resumable upload has to answer. The per-message ack is
+what resumption actually needs, and it is available today without a wire change.
+
+What this does NOT argue: the honesty problem is real for anyone still on
+client-stream, and a consumer choosing a different method is not a fix for them.
+It narrows the damage rather than closing it — the file transfer this record was
+written about is no longer exposed.
+
+The `droppedRequests` half is untouched by any of this.
+
+## Decided — round 375
+
+**The trailer count is rejected, and the consumer evidence above is what decided
+it — not on cost, but because it answers the wrong question.** A count at the end
+reports what the library HANDED the handler; resumption needs to know WHICH
+pieces are durable, and a handler can be given 17, commit 3 and fail. Round 369
+optimised "tell a full read from a partial one"; the real question is "where do
+I resume", and the first does not yield the second. The per-message ack on a
+bidirectional response stream answers both and needs no wire change.
+
+**No cheaper mechanism exists.** The caller knows what it sent, only the peer
+knows what was read, and closing that gap means changing the wire. So the
+behaviour stands and the round makes sure nobody arrives at it by accident:
+`addClientStreamMethod` now states the measured behaviour (17 sent, 3 read,
+caller told OK), says the early answer is deliberate, and routes a resumable
+transfer to `addBidirectionalMethod` with a per-message ack — which is the path
+this consumer took.
+
+**The `droppedRequests` half is closed by measurement.** Four paths were driven
+at it across rounds 369 and 375 — `shortRead`, `shortHold`, `short`,
+`neverReads` — and none arrived (0 `DROPPED` records on every one). Reading the
+code for why: `pushRequest`'s increment needs `sink.isClosed`, i.e. a peer
+sending past its own half-close, which is a protocol violation; the other needs
+`detachRequestSink`, which fires from the controller's `onCancel` and did not on
+any measured path. The comment claiming the pipeline reads it is corrected to
+say what is true: nothing does, it does not fail the call, and it is diagnostic
+only.
+
+One note back to the consumer: the shape they moved to depends on a bidirectional
+call reaching the server, and **round 373 fixed a case where it did not** — a
+caller that sends nothing and does not half-close never announced itself. Their
+exchange opens with ids, so it most likely never hit it; the path they chose is
+nonetheless more reliable as of that round.

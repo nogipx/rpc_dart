@@ -152,11 +152,13 @@ final class RpcResponderStreamState {
     _boundToMessageStream = true;
   }
 
-  /// Forwards a request [message] to the bound responder.
-  /// Counts requests this state discarded because the sink was gone or closed.
+  /// Requests this state discarded because the sink was gone or closed.
   ///
-  /// Zero on every healthy call. The pipeline reads it when the call ends, so a
-  /// handler that was fed less than the peer sent cannot finish quietly.
+  /// **Nothing reads it.** It is diagnostic only, and it does not make a call
+  /// that was fed less than the peer sent fail — the peer is still told
+  /// `grpc-status 0`. Four paths were driven at it and none arrived (round 375);
+  /// what remains reachable is a peer that keeps sending after its own
+  /// half-close, which is a protocol violation rather than an ordinary call.
   int droppedRequests = 0;
 
   /// Forwards a request [message] to the bound responder, counting it as
