@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-70](P-70-the-request-direction.md)** valid (round 382), rpc_dart — how
+  many messages the library pulls from the CALLER's producer while a handler
+  that read one stalls. Two controls: a draining handler that pulls the producer
+  dry (so a low number is a bound, not a slow producer), and an ablation of
+  `deferFlowCredit`. **The ablation did more than confirm sensitivity — it
+  corrected attribution**, moving the arm the lead did NOT name and leaving the
+  one it did, which is how `_pipelineFedRequestStream` was identified as the
+  CLIENT-STREAM path rather than bidi's
 - **[P-69](P-69-what-the-initial-window-buys.md)** valid (round 380),
   rpc_dart_websocket — how many frames a caller gets out BEFORE the first grant
   can throttle it, through toxiproxy at 50 ms RTT with a handler that never

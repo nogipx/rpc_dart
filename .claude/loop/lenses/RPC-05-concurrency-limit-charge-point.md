@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something caps concurrency by HOLDING state that must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372]
+applied: [214, 215, 245, 266, 271, 351, 372, 382]
 status: confirmed (round 351)
 ---
 

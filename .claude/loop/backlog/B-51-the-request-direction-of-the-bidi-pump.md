@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 382)
 round: (not re-measured)
 commit: 34aeff10
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -66,6 +66,25 @@ pair.
 Not a claim that it is broken — nobody has looked. Three sibling mechanisms in
 the same file family were all found unbounded, which is a reason to measure and
 not a measurement.
+
+## Measured — round 382: bounded, and the path was misattributed
+
+```
+arm             pulled of 2000      MB
+bidi-stall            66           1.0
+bidi-drain          2000          31.3     <- control: the rig CAN pull it dry
+client-stall          66           1.0     <- control
+```
+
+Bounded at the window. **And the ablation corrected this record's premise**:
+removing `deferFlowCredit` from `_pipelineFedRequestStream` moved `client-stall`
+to 2000 and left `bidi-stall` at 66. That method is the CLIENT-STREAM path —
+`_ensureBidirectionalResponder` binds through `_stateBoundStream`, so a bidi
+handler is fed by the transport's own per-stream metering instead.
+
+So there are two request paths, both bounded, by two different mechanisms. The
+answer the consumer wanted is unchanged: their upload is a bidirectional
+handler, and that path is bounded.
 
 ## Owner decision
 
