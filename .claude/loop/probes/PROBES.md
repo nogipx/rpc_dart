@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-66](P-66-does-the-subscription-reach-every-wiring.md)** valid (round 376),
+  rpc_dart — asks round 373's question of the wirings 373 never ran: the peer
+  endpoint, the zero-copy branch, and eight concurrent calls. **Its evidence is
+  the ablation, not the good values** — removing 373's dispatch collapses every
+  `silent` arm to 0 HANG while every `control` survives, which says the probe
+  sees the defect AND that it was present on all three. Trap: the zero-copy arm
+  first failed in both columns, which is a broken rig rather than a finding
+  (measurement item 4) — that branch needs `RpcInMemoryTransport.pair()`
 - **[P-65](P-65-the-third-copy-of-the-same-pause.md)** valid (round 374),
   rpc_dart — the same back-pressure question as P-61 and P-62, asked of the
   THIRD copy: the endpoint's own `_pumpBidirectionalResponses`. **The one an
