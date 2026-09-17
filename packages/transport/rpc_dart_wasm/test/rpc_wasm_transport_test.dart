@@ -157,7 +157,7 @@ void main() {
       await server.close();
     });
 
-    test('send after close does not deliver to peer', () async {
+    test('send after close fails cleanly (refused, no delivery)', () async {
       final pair = FakeWasmBridge.pair();
       final client = RpcWasmTransport.fromBridge(
         bridge: pair.client,
@@ -174,8 +174,18 @@ void main() {
       await client.close();
       expect(client.isClosed, isTrue);
 
-      // Must not throw and must not be delivered.
-      await client.sendMessage(streamId, RpcMessageFrame.encode(Uint8List(1)));
+      // Sending after close is REFUSED. It used to return quietly, which told
+      // the caller its message had gone out while nothing reached the bridge.
+      await expectLater(
+        client.sendMessage(streamId, RpcMessageFrame.encode(Uint8List(1))),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unavailable,
+          ),
+        ),
+      );
       await Future<void>.delayed(Duration.zero);
       expect(received, isEmpty);
 
