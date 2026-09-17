@@ -294,3 +294,38 @@ close fail to reach the peer, since that is the difference between the 98.7% and
 the 1.3%. Failing that, a rate measurement powered enough to separate 1.3% from
 0.65%: roughly 2000 cycles an arm, about 75 minutes each, which is the cost this
 lead is deferred on.
+
+## Fifth occurrence, and it is not on the test 1f448150 ungated
+
+Observed from outside the loop (rhyolite, while auditing its own exposure), on
+the run that followed `1f448150`:
+
+```
+test/concurrent_reconnect_test.dart: it does not scale with the number of callers
+  Expected: <0>  Actual: <1>
+  three concurrent reconnects orphaned a connection: opened=2 closed=1,
+  still live after 30001ms
+```
+
+`opened=2` is the FIXED value — the single-flight held, three callers joined one
+attempt. What failed is `expectNothingLive`, and 30001 ms is round 339's
+"nothing on the client can close it" end, not the loaded-box margin. So this is
+this lead's orphan, at this lead's rate, surfacing on a different test.
+
+**Which leaves 1f448150's stated goal unmet.** That commit removed
+`expectNothingLive` from the GUARD test on the argument that the two concurrent
+tests are the ones sensitive to the single-flight defect — true, and a different
+question from susceptibility to THIS one. `expectNothingLive` fails on
+`opened - closed > 0` whatever caused it, and both concurrent tests still carry
+it. So "a defect parked as unfixed and a CI gate on its absence cannot both
+stand" is still standing on both sides: the gate simply moved from one file to
+another.
+
+Not arguing for a fix — round 262's risk reasoning is untouched by this. The
+choice is between the leak check living somewhere CI does not gate on, and the
+lead being unparked; it is currently neither.
+
+No exposure downstream: rhyolite does not depend on `rpc_dart_http2` at all, and
+`RpcClientConnection` — which it does use — has zero `.reconnect()` call sites,
+replacing the transport wholesale through its factory instead. The defect class
+lives in the `reconnect()` primitive, which nothing on that path reaches.
