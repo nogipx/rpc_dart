@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-60](P-60-what-the-caller-is-told-about-a-short-read.md)** valid (round 369),
+  rpc_dart — can a caller tell that the other side read everything it sent? Both
+  numbers are taken where an APPLICATION reads them (what the handler was given,
+  what the caller was told), never from a private field. **Three controls in the
+  same run**: `fullRead` differs by exactly one line of handler code, `throws`
+  proves a non-OK ending is readable on this path at all, and the server-stream
+  mirror answers differently — so an `OK` is the call being reported successful
+  rather than the bench being blunt. Does NOT establish whether
+  `droppedRequests` is reachable by any path: two were tried, neither reached it,
+  and the probe budget was spent
 - **[P-59](P-59-the-four-shapes-under-the-same-edge-case.md)** valid (round 368),
   rpc_dart — the same edge case asked of all four call shapes at once, reporting
   three things per cell: payloads the consumer received, the exception type that
