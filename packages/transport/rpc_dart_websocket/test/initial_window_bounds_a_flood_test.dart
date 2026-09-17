@@ -61,7 +61,19 @@ final class _Deaf extends RpcResponderContract {
 }
 
 /// How many frames the caller got out before it was throttled.
-Future<int> _flood(int port, RpcSecurityPolicy policy) async {
+///
+/// [until] is polled rather than slept to: this suite runs a thousand tests in
+/// parallel, and counting after a fixed sleep measures how busy the machine was
+/// — the unbounded arm once reported 16342 of 40000 in two seconds and failed
+/// its own "is this rig reaching the regime" check. The BOUNDED arm still needs
+/// a settling window, because there the property is that the number stops
+/// rising; it gets one bounded by [settle].
+Future<int> _flood(
+  int port,
+  RpcSecurityPolicy policy, {
+  bool Function(int sent)? until,
+  Duration settle = const Duration(seconds: 2),
+}) async {
   var sent = 0;
   final body = 'x' * _frame;
   Stream<RpcString> produce() async* {
@@ -87,7 +99,15 @@ Future<int> _flood(int port, RpcSecurityPolicy policy) async {
         .catchError((Object _) => 'x'.rpc),
   );
 
-  await Future<void>.delayed(const Duration(seconds: 2));
+  if (until == null) {
+    await Future<void>.delayed(settle);
+  } else {
+    // Generous: the question is whether it EVER runs away, not how fast.
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (DateTime.now().isBefore(deadline) && !until(sent)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
   await caller.close().catchError((_) {});
   await client.close();
   return sent;
@@ -115,14 +135,25 @@ void main() {
     // Both arms on one server, one after the other, compared against each other
     // ONLY through the absolute bound below — tests.md item 3.
     final bounded = await _flood(http.port, const RpcSecurityPolicy());
+    // Polled to the threshold: this arm only has to show it RUNS AWAY, and how
+    // long that takes is the machine's business, not the library's.
+    //
+    // The threshold is 8000 frames (31 MiB) and NOT half the offered 40000,
+    // because there is a SECOND ceiling above this one: with the initial window
+    // off, the sender still stops at the connection window
+    // (`flowControlConnectionWindowBytes`, 64 MiB by default) — observed at
+    // exactly 16342 frames, 63.8 MiB, identical across runs and unchanged by
+    // polling for twenty seconds. A threshold above that is unreachable by
+    // construction, which reads as a flake and is not one.
     final unbounded = await _flood(
       http.port,
       const RpcSecurityPolicy(initialSendWindowBytes: null),
+      until: (sent) => sent > 8000,
     );
 
     expect(
       unbounded,
-      greaterThan(_offered ~/ 2),
+      greaterThan(8000),
       reason:
           'with no initial window the caller should run away before the first '
           'grant; it sent only $unbounded of $_offered, so this rig is not '

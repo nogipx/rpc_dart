@@ -93,6 +93,34 @@ absolute bound rather than against each other as a ratio (tests.md item 3).
 The arm that would have been the fix is its own control: 16 MiB let 5108 frames
 out where 64 KiB let 1039.
 
+## The witness had a second ceiling in it, found when the gate went red
+
+The test shipped by this round failed in the workspace run: the unbounded arm
+reported **16342 of 40000** against a threshold of 20000, with its own message —
+*"this rig is not reaching the regime"* — which is the check working.
+
+First reading was that the machine was busy under a thousand parallel tests, and
+the fix was to poll to the threshold instead of counting after a fixed sleep
+(`tests.md` item 1, quoted in that very file and not applied). **It changed
+nothing: still exactly 16342, after polling twenty seconds.** An identical number
+is not a slow machine.
+
+16342 x 4 KiB is 63.8 MiB, and the connection window
+(`flowControlConnectionWindowBytes`) defaults to 64 MiB. **With the initial
+window off, the sender is still bounded — by the next window up.** A threshold
+above that is unreachable by construction.
+
+So the arm named "no initial window (5.0.1 shape)" in the table above is
+unbounded only with respect to THIS window, and P-69's 156.25 MiB was measured
+where the connection window was not the binding constraint. The round's
+conclusion is untouched — 4.06 against 63.8 MiB is the same factor of 15 in the
+same direction — but the word "unbounded" was doing more work than the
+measurement supports, and the threshold now sits at 8000 frames with the ceiling
+written down beside it.
+
+**A number identical across runs is a ceiling, not a flake**, and the remedy
+that fits a flake — waiting longer — is what tells them apart.
+
 ## Gate
 
 `fvm dart test` in the changed package green (the two new tests plus the
