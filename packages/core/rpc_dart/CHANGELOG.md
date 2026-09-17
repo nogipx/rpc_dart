@@ -4,6 +4,47 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 6.3.0
+
+**A bidirectional subscription now reaches the server.** A caller that opens the
+channel, listens and sends nothing — the natural shape of a subscription — never
+announced itself: initial metadata went out with the first request or the
+half-close, and the responder was dispatched by one of those two, so a silent
+caller got neither. The call did not exist for the server and the caller waited
+out its own deadline. The caller now announces on construction and the pipeline
+dispatches a bidirectional responder on the metadata frame. Confirmed over real
+websocket, HTTP/2 and isolate transports, in peer mode, on the zero-copy branch
+and with concurrent calls.
+
+**A server that finishes a bidirectional call first no longer hangs its caller.**
+Same cause.
+
+**Back-pressure reaches three paths that lacked it.** `requestSink`,
+`responseSink` and the endpoint's own bidirectional pump each drained their
+producer without pausing: against a stalled peer and a 1 MB window they pulled
+2000 messages (31.3 MB) where the bound is 68 (1.1 MB). Ordering was never at
+risk; memory was. Verified over a link with a real round trip as well as
+in-process.
+
+**An `async` callback handed to `Stream.listen` no longer takes the process
+down.** Eleven such callbacks exist across the four call shapes and six had no
+guard; anything they threw reached the zone, which for a server with no zone
+handler is exit 255. Reached by nothing worse than a cancelled call whose
+producer pushed once more.
+
+**A request lost between the peer and the handler is now named.** The pipeline
+compares what it accepted with what it delivered as a call ends and reports the
+gap at `error` with both counts. It does not fail the call — by then the answer
+has gone out — and it is silent on every ordinary ending, including a handler
+that deliberately stops reading early.
+
+**Documentation:** `IRpcServer.endpoints` now states that it lists responder
+endpoints only and is empty in peer mode, so an empty list is not a connection
+count. `addClientStreamMethod` states that a handler which stops reading early
+still answers `grpc-status 0`, and points resumable transfers at
+`addBidirectionalMethod` with a per-message acknowledgement — the library knows
+what it handed over, never what the handler made durable.
+
 ## 6.2.0
 
 A downstream consumer met all of this as one symptom: the same blob refused over
