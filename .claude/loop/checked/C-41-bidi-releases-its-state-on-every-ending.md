@@ -7,6 +7,17 @@ scope: [rpc_dart]
 
 # C-41 — a bidi call releases its state on every ending
 
+> **The `deadline` row is FALSIFIED — round 384.** P-63 re-run unchanged reads
+> **5 / 20 / 27**, and the reason is not a regression: before round 373 a bidi
+> caller holding its request stream open never sent initial metadata, so this
+> arm measured a call **the server had never heard of**. 373 made the call
+> arrive and nobody re-ran the bench. What the row now shows is bounded
+> retention that clears at ~2.2 s — `_reclaimGrace`, the documented backstop for
+> a handler that ignores its cancellation token; a cooperative handler clears at
+> once (`bidi_deadline_timeline.dart`). The other six rows re-measured at zero
+> and stand. **A bench arm whose subject never reaches the code under test
+> reports the same zero as a clean one.**
+
 Seven ways of ending a bidirectional call, three scales, one connection
 throughout (P-63). Every cell is the residue AFTER the call settled.
 
@@ -17,7 +28,7 @@ normal                0         0         0
 consumerCancel        0         0         0
 tokenCancel           0         0         0
 handlerThrows         0         0         0
-deadline              0         0         0
+deadline              0         0         0    <- falsified, see above
 neverFinish           0         0         0
 ```
 
@@ -50,5 +61,7 @@ and the run.
   unmeasured.
 - Duplex SEMANTICS — whether the two directions behave independently. That is a
   different question and not settled here.
+- Real transports. Round 384 asked the same seven of a real websocket, with and
+  without a round trip, and of both directions saturated at once — [C-44](C-44-bidi-over-a-real-socket-and-a-round-trip.md).
 
 Re-run when a bidi teardown path changes, not on a schedule.

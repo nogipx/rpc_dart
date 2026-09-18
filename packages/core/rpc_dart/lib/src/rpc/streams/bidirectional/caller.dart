@@ -94,11 +94,12 @@ final class BidirectionalStreamCaller<
   /// Tells the server this call is being abandoned locally, so its handler
   /// stops waiting on a request stream that will never produce again.
   ///
-  /// [finishSending] is the healthy counterpart: it half-closes, and the
-  /// handler's `await for` ends on its own. A request stream that ERRORS has no
-  /// such signal, and the bridge's cancellation-token notice is only wired to
-  /// consumer cancellation -- so that path told the server nothing and parked
-  /// its handler for good.
+  /// [finishSending] is the healthy counterpart: it half-closes and the
+  /// handler's `await for` ends on its own. Abandoning is not half-closing, and
+  /// the handler has to be able to tell them apart.
+  ///
+  /// [requestSink] calls this itself when its producer errors; a caller driving
+  /// [send] by hand owns the same duty.
   ///
   /// Never throws.
   Future<void> abort(String reason) => _processor.notifyPeerOfAbort(reason);
@@ -147,6 +148,7 @@ final class BidirectionalStreamCaller<
     if (_requestSink == null) {
       final controller = StreamController<TRequest>();
       var finished = false;
+      var aborted = false;
       late final StreamSubscription<TRequest> sub;
       sub = controller.stream.listen(
         // Pausing for the duration of each send is what bounds the producer:
@@ -194,12 +196,23 @@ final class BidirectionalStreamCaller<
             );
           }
         },
+        // Tell the peer and END the call, the way ClientStreamCaller does on
+        // the same path. Without the notice the handler sits in `await for
+        // (requests)` forever holding its stream state, responder and admission
+        // slot; without the close the call stays half-alive and the peer keeps
+        // answering a stream this side has already reset -- which on HTTP/2
+        // destroys the whole connection, every other call on it included.
+        // Half-closing instead of aborting would be wrong either way: the
+        // handler would see a request stream that ended successfully.
         onError: (Object error, StackTrace stackTrace) {
           _logger.error(
             'Error in request stream',
             error: error,
             stackTrace: stackTrace,
           );
+          if (aborted || finished) return;
+          aborted = true;
+          unawaited(abort('request stream failed: $error').whenComplete(close));
         },
       );
       _requestSink = controller.sink;

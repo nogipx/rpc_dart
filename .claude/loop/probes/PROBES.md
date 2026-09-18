@@ -38,6 +38,29 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-75](P-75-both-directions-saturated.md)** valid (round 384),
+  rpc_dart_websocket + core — both directions of ONE bidi call past the
+  flow-control window at the same time, the only configuration in which one can
+  hold the other. Its two SINGLE-direction arms are the control that makes the
+  stall readable: each runs flat out, so the stall in the mirror arm is the
+  handler's coupling and not the library's, and the resume proves back-pressure
+  rather than deadlock
+- **[P-74](P-74-the-endings-over-a-real-socket.md)** valid (round 384),
+  rpc_dart_websocket + core — C-41's seven endings over a real socket and over a
+  Dart TCP relay with a 50 ms round trip. Two things P-63 lacks: **a unary call
+  after every scale**, because an ending that WEDGES a connection leaves every
+  counter at zero, and the duplex cases. Its sensitivity proof is the `deadline`
+  row, the one arm that reads non-zero
+- **[P-73](P-73-does-an-abort-kill-the-http2-connection.md)** valid (round 384),
+  rpc_dart_http2 — a control MATRIX rather than a number: eight arms differing
+  one variable at a time, which is what eliminated the await and the sink path
+  and left *responses in flight at the instant of the reset* as the only thing
+  every dead arm shares. B-53
+- **[P-72](P-72-a-request-sink-that-errors.md)** valid (round 384), rpc_dart —
+  what the server keeps when a bidi request sink errors: 1 / 6 / 26 and
+  permanent, against a half-close and an explicit `abort()` at 0. The **paced**
+  arm is the one that earns its place — it separates *the fix drops a message*
+  from *the abort raced a message still in flight*
 - **[P-71](P-71-the-first-chunk-under-slicing.md)** valid (round 383),
   rpc_dart_websocket — B-44's shape (17 chunks, ids on the first only) through
   toxiproxy's `slicer`. **Every field is a function of the index**, so lost,
