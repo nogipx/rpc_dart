@@ -231,6 +231,21 @@ final class BidirectionalStreamCaller<
           );
         },
       );
+      // Stop PULLING once the call is over. Nothing sent after that can arrive,
+      // and without this an endless producer -- a chat, a sensor feed -- is fed
+      // to a dead stream one logged failure at a time, for as long as it runs.
+      // ClientStreamCaller races its request stream against the response for
+      // the same reason.
+      unawaited(
+        _processor.done
+            .then((_) async {
+              if (finished) return;
+              finished = true;
+              await sub.cancel();
+            })
+            .catchError((Object _) {}),
+      );
+
       _requestSub = sub;
       _requestSink = controller.sink;
     }

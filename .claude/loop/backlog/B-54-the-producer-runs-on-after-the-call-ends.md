@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 390) — the signal existed and was not exposed
 round: 386
 commit: 2a5514ad
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
@@ -8,6 +8,18 @@ reason: cost — the only signal that the call ended is the response stream comp
 ---
 
 # B-54 — a bidi producer keeps running after the call has ended
+
+> **CLOSED in round 390.** The signal was already there and nothing exposed it:
+> **every ending closes `_responseController`** — END_STREAM, a non-OK trailer,
+> a deadline, cancellation, the scope's disposal — so that controller's own
+> `done` future covers all of them. `CallProcessor` now exposes
+> `Future<void> get done`, and `requestSink` cancels its subscription on it.
+> **11 -> 32 became 2 -> 2.**
+>
+> Which is why the two candidates below failed: both asked the wrong object.
+> `send()` never throws (C-35) and `isActive` describes the processor rather
+> than the call. `ClientStreamCaller.call(Stream)` has raced its request stream
+> against the response with `Future.any` all along — the sibling, again.
 
 Reported by the owner from a reading, measured in round 386. When the server
 ends the call — a trailer, an error, a deadline — the caller's `requestSink`

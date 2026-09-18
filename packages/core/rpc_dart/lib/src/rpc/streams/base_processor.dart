@@ -1031,6 +1031,18 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Whether processor is active.
   bool get isActive => _isActive;
 
+  /// Completes when the call is over, however it ended.
+  ///
+  /// Every ending closes the response controller — END_STREAM, a non-OK
+  /// trailer, a deadline, cancellation, the scope's disposal — so this is the
+  /// one signal that covers them all. [isActive] does not: it stays true after
+  /// a server-ended call, which is why a producer feeding [requestSink] could
+  /// not tell that its call had finished.
+  ///
+  /// Completes only once something has listened to [responses]; a call nobody
+  /// reads has nothing to stop for.
+  Future<void> get done => _responseController.done;
+
   /// Stream ID.
   int get streamId => _streamId;
 

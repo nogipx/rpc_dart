@@ -44,6 +44,16 @@ final class _Contract extends RpcResponderContract {
       requestCodec: _codec,
       responseCodec: _codec,
     );
+
+    // Answers once and ends: the call is over while the producer runs on.
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'oneThenDone',
+      handler: (requests, {RpcContext? context}) async* {
+        yield 'only'.rpc;
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
   }
 }
 
@@ -138,6 +148,54 @@ void main() {
       );
     },
   );
+
+  test('WITNESS: the producer stops once the call has ended', () async {
+    // The server answers once and finishes. Everything the producer offers
+    // after that goes nowhere: `send` neither throws (C-35) nor is refused by
+    // `isActive`, which stays true — so before the fix this ran to the end of
+    // the source, one logged failure per message.
+    final rig = _connect();
+    final caller = BidirectionalStreamCaller<RpcString, RpcString>(
+      transport: rig.client,
+      serviceName: 'Svc',
+      methodName: 'oneThenDone',
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+    caller.responses.listen((_) {}, onError: (Object _) {});
+
+    var produced = 0;
+    final source = () async* {
+      while (produced < 60) {
+        produced++;
+        yield 'm$produced'.rpc;
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }();
+    unawaited(caller.requestSink.addStream(source).catchError((_) {}));
+
+    // Let the call end, then watch whether the producer keeps going.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    final atEnd = produced;
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+
+    expect(
+      produced,
+      atEnd,
+      reason:
+          'the producer kept running after the call ended '
+          '(was $atEnd, now $produced)',
+    );
+    expect(
+      atEnd,
+      lessThan(60),
+      reason:
+          'the source drained before the call ended; the arm proves nothing',
+    );
+
+    await caller.close().catchError((_) {});
+    await _teardown(rig);
+  });
 
   test('GUARD: close() with no addStream running still works', () async {
     final rig = _connect();
