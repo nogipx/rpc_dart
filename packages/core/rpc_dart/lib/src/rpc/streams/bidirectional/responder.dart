@@ -153,11 +153,26 @@ final class BidirectionalStreamResponder<
           );
         }
       },
+      // END the call, the way ServerStreamResponder does when its handler
+      // throws. `addStream` does NOT close the controller, so a source that
+      // fails never reaches the `onDone` above: without this the client keeps
+      // the payloads that did arrive and gets no ending at all -- measured as
+      // `2 payloads, NEVER ENDED`.
       onError: (Object error, StackTrace stackTrace) {
         _logger.error(
           'Error in response stream [id: $id]',
           error: error,
           stackTrace: stackTrace,
+        );
+        if (finished) return;
+        finished = true;
+        final wire = wireStatusFor(error);
+        unawaited(
+          sendError(
+            wire.status,
+            wire.message,
+            statusDetailsBin: wire.detailsBin,
+          ).catchError((Object _) {}),
         );
       },
     );

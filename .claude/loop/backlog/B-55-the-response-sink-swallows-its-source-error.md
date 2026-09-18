@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 389) — measured, and the consequence was worse than the reading
 round: 386
 commit: 2a5514ad
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart]
@@ -8,6 +8,23 @@ reason: bench — established by reading only. The probe written for it hangs be
 ---
 
 # B-55 — the responder's responseSink turns a source error into an OK
+
+> **CLOSED in round 389, and the title is wrong.** Measured on a rig that works
+> (P-80): the client is not told OK, it is told **nothing, for ever** —
+> `2 payloads, NEVER ENDED`. `addStream` does not close its target controller,
+> so a failing source reaches `onError` (which only logged) and the controller
+> stays open: `onDone` never runs, `finishReceiving()` is never called, no
+> trailer is sent. The caller holds an open call and its state for the life of
+> the process.
+>
+> Fixed by ending the call the way `ServerStreamResponder` already does —
+> `wireStatusFor(error)` then `sendError(...)`. `NEVER ENDED` → `status 13`,
+> with the clean-finish and explicit-`sendError` arms unchanged.
+>
+> **A note the round paid for**: the first witness asserted only
+> `isNot(contains('ended OK'))` and PASSED against the unfixed tree, because
+> "never ended" is also not "ended OK". It would have recorded a fix for a
+> defect that was never there. The assertion is the exact string now.
 
 Round 384's defect, mirrored onto the server. Reported by the owner from a
 reading; **not measured**.

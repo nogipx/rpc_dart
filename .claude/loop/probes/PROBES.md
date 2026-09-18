@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-80](P-80-what-the-client-is-told-when-the-handler-fails.md)** valid (round
+  389), rpc_dart — what the client is told when a bidi handler's source fails.
+  **Measures with an OVERALL deadline, not a per-event `Stream.timeout`**, which
+  is the only reason it can see this defect: the answer was *never ended*, and a
+  per-event timeout re-arms on every payload. Its first witness asserted only
+  `isNot(contains('ended OK'))` and passed on the broken tree
 - **[P-79](P-79-close-during-an-add-stream.md)** valid (round 386), rpc_dart —
   `close()` while an `addStream` runs, inside `runZonedGuarded` so an unhandled
   async error is COUNTED rather than killing the probe. **Its control is the
