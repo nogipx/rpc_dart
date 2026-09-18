@@ -3,7 +3,7 @@ refines: —
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237]
+applied: [237, 387]
 status: confirmed (round 237)
 ---
 

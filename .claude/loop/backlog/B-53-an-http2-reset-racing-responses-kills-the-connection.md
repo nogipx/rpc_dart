@@ -46,6 +46,39 @@ reason: owner decision — the fix that removes the leak makes this reachable au
 > request sink or an explicit `abort()`; this needs an ordinary consumer and a
 > network.
 
+> **Round 387 proved the trigger and killed the two cheap guards.**
+> `stream.terminate()` removed from `resetStream`, nothing else changed:
+> the `50 ms / let go at the last payload` arm goes **DEAD from call 2 -> 5 of 5
+> clean**, the other three arms unchanged. So the RST_STREAM is what costs the
+> connection and nothing else in the teardown does.
+>
+> Dead ends, measured so nobody pays twice: gating the reset on
+> `_statusReceived` never fires, because that set is filled when *rpc_dart*
+> parses the trailer and in this race it has not; and round 385's outgoing-pump
+> candidate was already refuted.
+>
+> **The dependency's own code says this should be harmless**, which is why it
+> needed an ablation. In `http2-2.3.1`: `_terminateStream`
+> (`stream_handler.dart:406`) writes RST_STREAM only for a stream in an open-ish
+> state, so terminating a closed one is a no-op; and an incoming `RstStreamFrame`
+> for an unknown stream is a connection error **only if idle**
+> (`streamId > lastRemoteStreamId`), which this is not — the comment there reads
+> *"RstFrames for already dead (known as 'closed') streams should be ignored"*.
+> Both guards read correct and the connection still dies, so what remains is
+> between them and inside `package:http2`.
+>
+> **Why the obvious fix is a trade.** Suppressing the reset for a stream we have
+> already half-closed fixes this and breaks what cancellation is FOR: a client
+> that half-closes at once and then abandons a long server-stream download needs
+> that reset to stop the server. Both are `HalfClosedLocal` plus a cancel, and
+> rpc_dart cannot tell them apart without knowing the peer has finished — which
+> is exactly what it learns too late.
+>
+> Two routes that are NOT trades: ask `package:http2` for the stream state
+> before terminating (its public API does not expose it — a small upstream
+> feature request), or report it upstream, where the reproduction is now four
+> arms and one ablated statement.
+
 On HTTP/2 `_notifyPeerOfCancellation` goes out as RST_STREAM
 (`IRpcStreamReset.resetStream` -> `stream.terminate()`). When it lands while the
 server is still writing responses for that stream, the **whole connection**
