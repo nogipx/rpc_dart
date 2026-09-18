@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-79](P-79-close-during-an-add-stream.md)** valid (round 386), rpc_dart —
+  `close()` while an `addStream` runs, inside `runZonedGuarded` so an unhandled
+  async error is COUNTED rather than killing the probe. **Its control is the
+  PRODUCER SHAPE**: the identical path reads 1 zone error with a source that
+  survives its own error and 0 with an `async*` that ends at its throw — which
+  is exactly why round 384's witness passed. B-54's arm lives here too
 - **[P-78](P-78-cancel-before-the-trailer.md)** valid (round 385),
   rpc_dart_http2 — four arms differing by ONE thing each, the link and the
   instant the consumer lets go, which is what turned "the connection sometimes

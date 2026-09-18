@@ -143,6 +143,10 @@ final class BidirectionalStreamCaller<
   /// Request sink for sending to the server (zero-copy friendly).
   StreamSink<TRequest>? _requestSink;
 
+  /// Drives [requestSink]. Held as a field so [close] can cancel it FIRST —
+  /// see the note there.
+  StreamSubscription<TRequest>? _requestSub;
+
   /// Sink used to send requests to the server.
   StreamSink<TRequest> get requestSink {
     if (_requestSink == null) {
@@ -212,9 +216,22 @@ final class BidirectionalStreamCaller<
           );
           if (aborted || finished) return;
           aborted = true;
-          unawaited(abort('request stream failed: $error').whenComplete(close));
+          // Nothing here may reach the zone: this whole chain is unawaited, and
+          // an unhandled async error is exit 255 in a server process.
+          unawaited(
+            abort(
+              'request stream failed: $error',
+            ).whenComplete(close).catchError((Object e, StackTrace st) {
+              _logger.error(
+                'Teardown after a failed request stream',
+                error: e,
+                stackTrace: st,
+              );
+            }),
+          );
         },
       );
+      _requestSub = sub;
       _requestSink = controller.sink;
     }
     return _requestSink!;
@@ -223,8 +240,15 @@ final class BidirectionalStreamCaller<
   /// Closes the stream and releases resources.
   Future<void> close() async {
     _logger.internal('Closing BidirectionalStreamCaller');
+    // Cancel BEFORE closing the sink, the order BidirectionalStreamResponder
+    // already uses. `StreamController.close()` THROWS while an `addStream` is
+    // still running, and that throw escapes this method synchronously, leaving
+    // `_processor.close()` below unreachable and the call's scope open.
+    // Cancelling ends the addStream and its source with it.
+    await _requestSub?.cancel();
+    _requestSub = null;
     if (_requestSink != null) {
-      unawaited(_requestSink!.close());
+      unawaited(_requestSink!.close().catchError((Object _) {}));
     }
     await _processor.close();
   }

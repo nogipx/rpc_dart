@@ -108,7 +108,11 @@ void main() {
           'ClientStreamCaller.call(Stream) does',
     );
 
-    await caller.close().catchError((_) {});
+    // NOT swallowed. This closes while `addStream(produce())` is still pulling
+    // -- the producer is deliberately stalled -- and `StreamController.close()`
+    // throws StateError in that state. A `.catchError((_) {})` here hid that
+    // for as long as it was written.
+    await caller.close();
     await responder.close();
     await client.close();
     await server.close();
