@@ -144,6 +144,39 @@ void main() {
       await _teardown(rig);
     });
 
+    test(
+      'WITNESS: close() returns with the handler parked on an await',
+      () async {
+        // The responder's mirror of the caller's hazard: awaiting the cancel of
+        // an `async*` suspended at an `await` never returns, because the VM's
+        // cancellation future completes only when the generator body does.
+        final rig = _pair();
+        rig.caller.responses.listen((_) {}, onError: (Object _) {});
+
+        await rig.caller.send('start'.rpc);
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        unawaited(
+          rig.responder.responseSink
+              .addStream(() async* {
+                yield 'x'.rpc;
+                await Completer<void>().future;
+              }())
+              .catchError((_) {}),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        await expectLater(
+          rig.responder.close().timeout(const Duration(seconds: 5)),
+          completes,
+          reason: 'close() awaited a cancel a parked generator never completes',
+        );
+
+        await rig.caller.close().catchError((_) {});
+        await rig.rawClient.close();
+        await rig.rawServer.close();
+      },
+    );
+
     test('GUARD: an explicit sendError still reaches the client', () async {
       // The path that already worked, so the fix cannot be credited with it.
       final rig = _pair();

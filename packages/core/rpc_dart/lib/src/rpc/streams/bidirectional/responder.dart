@@ -243,7 +243,11 @@ final class BidirectionalStreamResponder<
     if (!_isActive) return;
 
     _isActive = false;
-    await _responseSubscription?.cancel();
+    // NOT awaited: a handler's `responseSink.addStream(source)` whose source is
+    // an `async*` suspended at an `await` never completes its cancellation, and
+    // teardown must not hang on it. The add-stream state is cleared
+    // synchronously, so the close below still does not throw.
+    unawaited(_responseSubscription?.cancel().catchError((Object _) {}));
     if (!_responseController.isClosed) {
       unawaited(_responseController.close());
     }

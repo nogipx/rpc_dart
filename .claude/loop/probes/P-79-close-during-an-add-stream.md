@@ -27,6 +27,15 @@ COUNTED rather than killing the probe:
 
 ## Control
 
+> **Round 391 added the arm that was missing, and it is the same lesson again.**
+> Both sources below cancel PROMPTLY — an `async*` parked on a yield is woken by
+> cancel, a `StreamController`'s cancel is immediate — so neither could express
+> a generator suspended at an `await`, whose cancellation future never
+> completes. Round 386's fix awaited that cancel and hung; all three witnesses
+> stayed green. The fourth arm is
+> `() async* { yield x; await Completer<void>().future; }()`, and the
+> responder's test carries its mirror.
+
 **The sharpest control here is the PRODUCER SHAPE, and it is the whole point.**
 Two arms run the identical code path and differ only in whether the source
 survives its own error:

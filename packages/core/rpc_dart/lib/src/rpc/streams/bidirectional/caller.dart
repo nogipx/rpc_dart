@@ -255,12 +255,18 @@ final class BidirectionalStreamCaller<
   /// Closes the stream and releases resources.
   Future<void> close() async {
     _logger.internal('Closing BidirectionalStreamCaller');
-    // Cancel BEFORE closing the sink, the order BidirectionalStreamResponder
-    // already uses. `StreamController.close()` THROWS while an `addStream` is
-    // still running, and that throw escapes this method synchronously, leaving
-    // `_processor.close()` below unreachable and the call's scope open.
-    // Cancelling ends the addStream and its source with it.
-    await _requestSub?.cancel();
+    // Cancel BEFORE closing the sink: `StreamController.close()` THROWS while
+    // an `addStream` is still running, and that throw escapes this method
+    // synchronously, leaving `_processor.close()` below unreachable.
+    //
+    // NOT awaited, for the reason ClientStreamCaller and ServerStreamResponder
+    // both give: cancelling a stalled producer can block for ever. An `async*`
+    // suspended at an `await` never completes its cancellation future, so
+    // awaiting here traded the throw for a hang on the commonest bidi shape of
+    // all -- a chat pumping an idle input stream. Dropping the await is safe
+    // because `_recordCancel` clears the add-stream state SYNCHRONOUSLY, before
+    // the future it returns.
+    unawaited(_requestSub?.cancel().catchError((Object _) {}));
     _requestSub = null;
     if (_requestSink != null) {
       unawaited(_requestSink!.close().catchError((Object _) {}));
