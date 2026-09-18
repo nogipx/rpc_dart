@@ -1,5 +1,5 @@
 ---
-status: open
+status: open — the ordinary half FIXED in round 388, the not-half-closed half remains
 round: 384
 commit: 69d24a76
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
@@ -8,6 +8,36 @@ reason: owner decision — the fix that removes the leak makes this reachable au
 ---
 
 # B-53 — an HTTP/2 stream reset that races in-flight responses kills the connection
+
+> **Round 388 fixed the ordinary half and, in doing so, separated the two.**
+> `package:http2` ALREADY sends the reset itself — `stream_handler.dart:332`,
+> `streamQueueIn.onCancel` enqueues a `ResetStreamMessage` when the state is
+> `HalfClosedLocal`, and `resetStream` cancelling our incoming subscription is
+> what runs it. That one goes through the stream's **outgoing queue**, in order.
+> `terminate()` then wrote a SECOND one directly, out of band, and the server
+> answers a double reset with GOAWAY `errorCode: 1` (PROTOCOL_ERROR). The guard
+> is the one `releaseStreamId` has used all along, 130 lines up: terminate only
+> a stream we have not half-closed. No grace, no timer, no trade.
+>
+> ```
+> link     consumer lets go at   before             after
+> 50 ms    the last payload      DEAD from call 2   5 of 5 clean
+> ```
+>
+> And HTTP/2's duplex column — `fullDuplex`, `concurrent`, `sequential` — is
+> clean on both links, where round 385 read eight MISMATCHes and a dead
+> connection.
+>
+> **What remains is the case where the stream was never half-closed**: the
+> request producer ERRORS instead of completing, so the dependency sends
+> nothing and rpc_dart's own RST_STREAM is the only thing that stops the
+> handler. Sent while the server is mid-response it still costs the connection.
+> Round 384's http2 witness is skipped again, naming that narrower reason.
+>
+> Closing it needs what round 387 identified: knowing the peer has finished
+> before resetting, which `package:http2` does not expose. The upstream request
+> is now precise — a stream-state getter, or an ordered reset for a stream that
+> is not half-closed.
 
 > **Round 385 widened this and answered its first question.** The trigger needs
 > no `abort()` and no erroring sink. **A consumer that stops reading as soon as

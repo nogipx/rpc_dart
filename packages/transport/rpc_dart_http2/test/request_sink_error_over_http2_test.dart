@@ -142,13 +142,14 @@ void main() {
       }
       await expectNoneLive();
     },
-    // B-53, not this fix: on HTTP/2 the notice is RST_STREAM, and a reset that
-    // races responses still in flight destroys the connection -- so under load
-    // this fails on the transport rather than on what it measures. The public
-    // abort() does the same with none of the fix in the path. Passes when run
-    // alone. Unskip when B-53 is decided.
-    skip:
-        'B-53: an http2 reset racing in-flight responses kills the connection',
+    // B-53's REMAINING half, and round 388 sharpened which one. 388 fixed the
+    // ordinary case — a consumer letting go after the half-close, with the
+    // trailer in flight — by leaving that reset to package:http2's own ordered
+    // one. This path is the other case: the producer ERRORS, so the stream was
+    // never half-closed, http2 sends nothing, and rpc_dart's own RST_STREAM is
+    // the only signal that stops the handler. Sent while the server is
+    // mid-response it still costs the connection. Unskip when that half lands.
+    skip: 'B-53: an abort on a stream we have not half-closed, mid-response',
   );
 
   test('GUARD: the healthy half-close is unchanged', () async {

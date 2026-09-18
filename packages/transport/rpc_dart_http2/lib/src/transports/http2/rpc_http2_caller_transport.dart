@@ -920,6 +920,9 @@ class RpcHttp2CallerTransport
       _resetStreams.remove(_resetStreams.first);
     }
 
+    // Read BEFORE the cleanup below drops it.
+    final halfClosed = _halfClosedLocal.contains(streamId);
+
     await _streamSubscriptions.remove(streamId)?.cancel();
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
@@ -931,7 +934,20 @@ class RpcHttp2CallerTransport
       unawaited(controller.close());
     }
 
-    stream.terminate();
+    // Same guard `releaseStreamId` uses, for the same reason one file over.
+    //
+    // On a stream we have already half-closed, package:http2 sends the
+    // RST_STREAM itself: cancelling the incoming subscription above runs its
+    // `streamQueueIn.onCancel`, which enqueues a ResetStreamMessage when the
+    // state is HalfClosedLocal. That one goes through the stream's OUTGOING
+    // QUEUE, in order behind our own frames. `terminate()` instead writes the
+    // frame immediately, and doing both is what costs the connection: measured
+    // over a 50 ms link, a consumer letting go one event before the trailer
+    // took the whole connection down from the second call, and does not with
+    // this guard. A stream we have NOT half-closed is one the caller abandoned
+    // mid-request, where http2 sends nothing and RST_STREAM is the only signal
+    // that stops the handler.
+    if (!halfClosed) stream.terminate();
     return true;
   }
 
