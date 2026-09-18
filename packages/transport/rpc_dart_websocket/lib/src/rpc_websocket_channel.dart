@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -165,21 +166,42 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   /// The reason string is for a human; nothing keys off it.
   static const int _protocolErrorCloseCode = 4400;
 
+  /// A close frame caps its reason at 123 UTF-8 BYTES, and the messages that
+  /// reach here carry peer-controlled text — `validateMetadata` quotes the
+  /// header name it rejected, and a name is usually invalid for being non-ASCII.
+  /// Counting characters lets 84 of them weigh 138 bytes.
+  static const int _maxCloseReasonBytes = 120;
+
+  /// Cuts [reason] to [_maxCloseReasonBytes], never mid-code-point.
+  static String _trimCloseReason(String reason) {
+    final bytes = utf8.encode(reason);
+    if (bytes.length <= _maxCloseReasonBytes) return reason;
+    var end = _maxCloseReasonBytes;
+    // 10xxxxxx is a continuation byte: walk back to the start of its sequence.
+    while (end > 0 && (bytes[end] & 0xC0) == 0x80) {
+      end--;
+    }
+    return utf8.decode(bytes.sublist(0, end), allowMalformed: true);
+  }
+
   @override
   Future<void> closeForProtocolError(String reason) async {
     if (_closed) return;
     _closed = true;
     await _sub.cancel();
     try {
-      // WebSocket caps the close reason at 123 BYTES and dart:io throws past
-      // that, turning a tidy protocol close into an exception on the teardown
-      // path. Frame-exception messages carry byte counts and limits, so they
-      // run past it easily.
-      final trimmed = reason.length > 100
-          ? '${reason.substring(0, 97)}...'
-          : reason;
-      await _ws.sink.close(_protocolErrorCloseCode, trimmed);
-    } catch (_) {}
+      await _ws.sink.close(_protocolErrorCloseCode, _trimCloseReason(reason));
+    } catch (_) {
+      // The reason is a courtesy; the CLOSE is the contract. `_closed` is
+      // already true above, so a throw here would leave the socket open with no
+      // second chance: the peer never learns it violated the policy and never
+      // stops resending. Not reachable from the VM test beside this -- the trim
+      // keeps it under the cap -- and kept for the platform where close()
+      // rejects a reason this one would accept.
+      try {
+        await _ws.sink.close(_protocolErrorCloseCode);
+      } catch (_) {}
+    }
     if (!_incoming.isClosed) unawaited(_incoming.close());
   }
 

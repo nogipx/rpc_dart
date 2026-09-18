@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-81](P-81-a-close-reason-in-bytes.md)** valid (round 392),
+  rpc_dart_websocket — does a protocol close survive a non-ASCII reason? **Its
+  fixture IS the design**: 84 characters and 138 bytes, both bounds asserted in
+  the test, because the arm only isolates the byte-vs-character bug if it clears
+  the byte cap AND sits under the old character trim. A first version used 140
+  characters and failed its own second assertion
 - **[P-80](P-80-what-the-client-is-told-when-the-handler-fails.md)** valid (round
   389), rpc_dart — what the client is told when a bidi handler's source fails.
   **Measures with an OVERALL deadline, not a per-event `Stream.timeout`**, which
