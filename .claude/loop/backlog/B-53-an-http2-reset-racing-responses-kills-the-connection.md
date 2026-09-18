@@ -9,6 +9,43 @@ reason: owner decision — the fix that removes the leak makes this reachable au
 
 # B-53 — an HTTP/2 stream reset that races in-flight responses kills the connection
 
+> **Round 385 widened this and answered its first question.** The trigger needs
+> no `abort()` and no erroring sink. **A consumer that stops reading as soon as
+> it has the messages it wanted** — `.take(n)`, a `firstWhere`, a `break` out of
+> `await for`, a UI closing a subscription — cancels while the server's trailer
+> is still on the wire, and over a link with any round trip that costs the whole
+> connection. P-78, five mirror calls of 12 messages, pinging after each:
+>
+> ```
+> link     consumer lets go at   result
+> direct   the last payload      5 of 5 clean
+> direct   onDone (the trailer)  5 of 5 clean
+> 50 ms    the last payload      DEAD from call 2   <- the SERVER closed
+> 50 ms    onDone (the trailer)  5 of 5 clean
+> ```
+>
+> **Which side: the server**, per the relay's own attribution. **And rpc_dart
+> logs nothing** — with a `LogController` attached, the direct arm prints five
+> handled cancellations (`peer sent RST_STREAM (errorCode: 8)`) and survives,
+> while the latent arm prints nothing at warning or above and dies. So the
+> cause is below rpc_dart, inside `package:http2`'s server connection — B-12's
+> address.
+>
+> Sequence: the server sends its trailer and closes its side; the client, which
+> has not yet seen that trailer, cancels and sends RST_STREAM; the reset lands
+> on a stream that is closed server-side. Resetting a stream whose END_STREAM
+> has not been received is legal for a client (RFC 9113), so tolerating it is
+> the server's job.
+>
+> One candidate was tried and refuted: `RpcHttp2OutgoingPump` leaves its
+> `addStream` future unhandled unless `_finish()` runs, and a stream reset
+> before END_STREAM never reaches it — handling it at construction changed
+> nothing. Reverted.
+>
+> This raises the severity a long way. The original entry needed an erroring
+> request sink or an explicit `abort()`; this needs an ordinary consumer and a
+> network.
+
 On HTTP/2 `_notifyPeerOfCancellation` goes out as RST_STREAM
 (`IRpcStreamReset.resetStream` -> `stream.terminate()`). When it lands while the
 server is still writing responses for that stream, the **whole connection**

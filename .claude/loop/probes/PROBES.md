@@ -38,6 +38,22 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-78](P-78-cancel-before-the-trailer.md)** valid (round 385),
+  rpc_dart_http2 — four arms differing by ONE thing each, the link and the
+  instant the consumer lets go, which is what turned "the connection sometimes
+  dies" into `50 ms + cancel before the trailer`. Its relay also ATTRIBUTES the
+  hangup (labelled pipes) and a `LogController` on the server says rpc_dart
+  never sees it — two instruments, not one. B-53
+- **[P-77](P-77-the-endings-over-http2.md)** valid (round 385), rpc_dart_http2 —
+  C-41's endings over real HTTP/2 on both links. Worth reading for how a
+  useless reading became a usable one: a fresh connection per duplex case (the
+  death FOLLOWS a call that succeeded) and a SEQUENTIAL arm beside the
+  concurrent one (concurrency is not the variable)
+- **[P-76](P-76-the-endings-over-an-isolate.md)** valid (round 385),
+  rpc_dart_isolate — the same matrix over a real isolate, serialized AND
+  zero-copy, the codec-less branch no endings matrix had ever run. Counters come
+  back OVER THE WIRE from the worker, so the baseline is 1 and the unary arm is
+  what fixes it
 - **[P-75](P-75-both-directions-saturated.md)** valid (round 384),
   rpc_dart_websocket + core — both directions of ONE bidi call past the
   flow-control window at the same time, the only configuration in which one can

@@ -3,7 +3,7 @@ refines: U-11
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: several transports share parts of one layer
 breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
-applied: [340, 341, 342, 343, 377]
+applied: [340, 341, 342, 343, 377, 385]
 status: confirmed (round 150, off-journal)
 ---
 
