@@ -38,11 +38,16 @@ class NotifySubscriber implements INotifySubscriber {
   @override
   Stream<NotifyEvent> subscribe(String topic, {RpcContext? context}) {
     final existing = _subscriptions[topic];
+    // Not a duplicate pair: the two branches are mutually exclusive and say
+    // different things. Guarded, which they were not — an interpolating debug
+    // call builds its message and hands it to a logger that may discard it.
     if (existing != null) {
-      _log.debug('subscribe topic=$topic (reusing existing stream)');
+      if (_log.isDebug) {
+        _log.debug('subscribe topic=$topic (reusing existing stream)');
+      }
       return existing.stream;
     }
-    _log.debug('subscribe topic=$topic');
+    if (_log.isDebug) _log.debug('subscribe topic=$topic');
 
     final controller = StreamController<NotifyEvent>.broadcast(
       onCancel: () => _subscriptions.remove(topic),

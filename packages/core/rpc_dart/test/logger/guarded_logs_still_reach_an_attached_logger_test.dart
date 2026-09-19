@@ -119,12 +119,16 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // Three phases of the responder's request handling. Ablate any guard to
-      // `if (false)` and the matching row disappears while the call still
-      // succeeds -- which is exactly the failure this test exists to make loud.
-      expectLine('Handling request for /Svc/echo', 'unary/responder.dart');
-      expectLine('Serializing response', 'unary/responder.dart');
-      expectLine('Sending success trailer', 'unary/responder.dart');
+      // The responder's served-call record. Ablate its guard to `if (false)`
+      // and this row disappears while the call still succeeds -- which is
+      // exactly the failure this test exists to make loud.
+      //
+      // It used to check three rows here, because the method wrote EIGHT:
+      // deserializing, handling, handled, serializing, serialized, sending,
+      // sending trailer, sent. They are one record now, so there is one row to
+      // anchor on — and it carries the payload size, which none of the eight
+      // did.
+      expectLine('Served /Svc/echo', 'unary/responder.dart');
 
       // Round 334 guarded the caller and the frame parser too.
       expectLine('Unary call /Svc/echo started', 'unary/caller.dart');
@@ -172,7 +176,9 @@ void main() {
     // they are where the volume was, and before this round not one of their
     // guards existed, so not one of them was watched.
     expectLine('Creating Serialized ServerStreamResponder', 'server/responder');
-    expectLine('Invoking request handler', 'server/responder.dart');
+    // Was 'Invoking request handler'. Three records bracketed one synchronous
+    // call that cannot fail between them; they are one now.
+    expectLine('Request handler returned a stream', 'server/responder.dart');
     expectLine('Creating Serialized ServerStreamCaller', 'server/caller.dart');
     expectLine('Creating Serialized ClientStreamResponder', 'client/responder');
     expectLine('Sending request to client stream', 'client/caller.dart');

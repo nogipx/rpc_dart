@@ -432,36 +432,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         );
       }
 
-      if (_logger.isInternal) {
-        _logger.internal('Deserializing request [streamId: $streamId]');
-      }
       final request = _requestSerializer.deserialize(messages.first);
-
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Handling request for $_methodPath [streamId: $streamId]',
-        );
-      }
 
       // Handle request.
       final response = await _handler(request);
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Request handled, preparing response [streamId: $streamId]',
-        );
-      }
 
       // Serialize and optionally compress response.
-      if (_logger.isInternal) {
-        _logger.internal('Serializing response [streamId: $streamId]');
-      }
       final serializedResponse = _responseSerializer.serialize(response);
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Response serialized, size: ${serializedResponse.length} bytes '
-          '[streamId: $streamId]',
-        );
-      }
       final useCompression = responseEncoding != null;
       final payload = useCompression
           ? RpcGrpcCompression.compress(
@@ -473,24 +450,27 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         payload,
         compressed: useCompression,
       );
-      if (_logger.isInternal) {
-        _logger.internal('Sending response [streamId: $streamId]');
-      }
       await _transport.sendMessage(streamId, framedResponse);
 
       // Send success trailer.
-      if (_logger.isInternal) {
-        _logger.internal('Sending success trailer [streamId: $streamId]');
-      }
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
+      // ONE record for one served call, written where every fact exists.
+      //
+      // This method narrated itself in EIGHT records -- deserializing,
+      // handling, handled, serializing, serialized, sending, sending trailer,
+      // sent -- around six lines that cannot fail between them. What survives
+      // is what the code does not already say: the payload size, and whether
+      // it went out compressed.
       if (_logger.isInternal) {
         _logger.internal(
-          'Response sent for $_methodPath [streamId: $streamId]',
+          'Served $_methodPath [streamId: $streamId] '
+          '${serializedResponse.length}B'
+          '${useCompression ? ' compressed as $responseEncoding' : ''}',
         );
       }
     } catch (e, stackTrace) {
@@ -599,58 +579,36 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       // Zero-copy: get object directly without deserialization.
-      if (_logger.isInternal) {
-        _logger.internal('Zero-copy object access [streamId: $streamId]');
-      }
       final request = message.directPayload as TRequest;
-
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Zero-copy request handling for $_methodPath [streamId: $streamId]',
-        );
-      }
 
       // Handle request.
       final response = await _handler(request);
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Zero-copy request completed, preparing response [streamId: $streamId]',
-        );
-      }
 
       // Zero-copy: send response directly if supported.
-      if (_transport.supportsZeroCopy) {
-        if (_logger.isInternal) {
-          _logger.internal('Zero-copy response sending [streamId: $streamId]');
-        }
+      final direct = _transport.supportsZeroCopy;
+      if (direct) {
         await _transport.sendDirectObject(streamId, response as Object);
       } else {
         // Fallback to standard serialization for other transports.
-        if (_logger.isInternal) {
-          _logger.internal(
-            'Fallback response serialization [streamId: $streamId]',
-          );
-        }
         final serializedResponse = _responseSerializer.serialize(response);
         final framedResponse = RpcMessageFrame.encode(serializedResponse);
         await _transport.sendMessage(streamId, framedResponse);
       }
 
       // Send success trailer.
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Zero-copy sending success trailer [streamId: $streamId]',
-        );
-      }
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(RpcStatus.ok),
         endStream: true,
       );
 
+      // ONE record, and the branch it names is the only thing here the code
+      // does not make obvious: whether the transport took the object directly
+      // or fell back to serializing it. Seven records said the rest.
       if (_logger.isInternal) {
         _logger.internal(
-          'Zero-copy response completed for $_methodPath [streamId: $streamId]',
+          'Served $_methodPath zero-copy [streamId: $streamId] '
+          '${direct ? 'sent directly' : 'fell back to serialization'}',
         );
       }
     } catch (e, stackTrace) {
@@ -704,11 +662,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Closes the responder; transport remains open.
   @override
   Future<void> close() async {
-    if (_logger.isInternal) {
-      _logger.internal('Closing unary server $_methodPath');
-    }
     await _subscription?.cancel();
     await _cancellationSubscription?.cancel();
-    _logger.internal('All subscriptions cancelled');
+    if (_logger.isInternal) {
+      _logger.internal('Closed unary server $_methodPath');
+    }
   }
 }

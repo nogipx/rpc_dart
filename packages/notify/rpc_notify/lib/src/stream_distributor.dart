@@ -302,14 +302,21 @@ class StreamDistributor<T extends IRpcSerializable> {
     }
 
     // Пропускаем сообщения, если клиент на паузе
+    // Взаимоисключающие ветки, не дубль — но обе интерполируют, а значит
+    // строили сообщение и при выключенном логгере. На горячем пути доставки
+    // это делалось для каждого события каждого клиента.
     if (wrapper.isPaused) {
-      _logger.internal('Клиент $clientId на паузе, сообщение пропущено');
+      if (_logger.isInternal) {
+        _logger.internal('Клиент $clientId на паузе, сообщение пропущено');
+      }
       return;
     }
 
     // Проверяем, относится ли сообщение к этому клиенту
     if (!_isMessageForClient(clientId, wrappedEvent)) {
-      _logger.internal('Сообщение не предназначено для клиента $clientId');
+      if (_logger.isInternal) {
+        _logger.internal('Сообщение не предназначено для клиента $clientId');
+      }
       return;
     }
 
@@ -581,13 +588,9 @@ class StreamDistributor<T extends IRpcSerializable> {
     );
 
     _cleanupTimer = Timer.periodic(_config.cleanupInterval, (_) async {
-      if (_isDisposed) {
-        _logger.internal('Дистрибьютор закрыт, очистка отменена');
-        return;
-      }
+      if (_isDisposed) return;
 
       try {
-        _logger.internal('Запуск периодической очистки неактивных стримов');
         final removedCount = await closeInactiveStreams(
           _config.inactivityThreshold,
         );
@@ -636,13 +639,19 @@ class StreamDistributor<T extends IRpcSerializable> {
     // Закрываем все клиентские контроллеры
     final clientCount = _clientStreams.length;
     await closeAllClientStreams();
-    _logger.internal('Закрыты все клиентские стримы ($clientCount)');
 
     // Закрываем основной контроллер
     try {
       if (!_mainController.isClosed) {
         await _mainController.close();
-        _logger.internal('Основной контроллер закрыт');
+      }
+      // ОДНА запись на всё закрытие: две прежние описывали шаги, которые
+      // видны в коде, и разделяли один try/catch пополам.
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Дистрибьютор закрыт: клиентских стримов $clientCount, '
+          'основной контроллер закрыт',
+        );
       }
     } catch (e, stackTrace) {
       _logger.error(

@@ -362,9 +362,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       }
       try {
         if (_isZeroCopy) {
-          if (_logger.isInternal) {
-            _logger.internal('Zero-copy send [streamId: $_streamId]');
-          }
+          // One record after the send, not one on each side of it.
           await _transport.sendDirectObject(_streamId, response);
           if (_logger.isInternal) {
             _logger.internal(
@@ -1117,9 +1115,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         }
 
         if (_isZeroCopy) {
-          if (_logger.isInternal) {
-            _logger.internal('Zero-copy request send [streamId: $_streamId]');
-          }
+          // One record after the send, not one on each side of it.
           await _transport.sendDirectObject(_streamId, request);
           if (_logger.isInternal) {
             _logger.internal(

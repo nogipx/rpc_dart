@@ -138,17 +138,13 @@ final class ServerStreamResponder<
           _requestHandled = true;
 
           try {
-            if (_logger.isInternal) {
-              _logger.internal('Invoking request handler [id: $id]');
-            }
             final handlerStream = handler(request);
+            // ONE record for one event. This was three -- "Invoking request
+            // handler", "Handler invoked, response stream received",
+            // "Processing response stream from handler" -- around a single
+            // synchronous call that cannot fail between them.
             if (_logger.isInternal) {
-              _logger.internal(
-                'Handler invoked, response stream received [id: $id]',
-              );
-              _logger.internal(
-                'Processing response stream from handler [id: $id]',
-              );
+              _logger.internal('Request handler returned a stream [id: $id]');
             }
 
             // Relay the handler stream through a controller we own, so close()

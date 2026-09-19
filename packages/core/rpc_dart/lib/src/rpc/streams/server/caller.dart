@@ -104,20 +104,21 @@ final class ServerStreamCaller<
 
   /// Convenience helper to send a request and yield responses.
   Stream<TResponse> call(TRequest request) async* {
-    _logger.internal('Executing server stream call');
-
     try {
       // Send request.
       await send(request);
 
-      _logger.internal('Request sent, awaiting response stream');
+      // ONE record where the call actually begins. "Executing server stream
+      // call" and "Request sent, awaiting response stream" bracketed a single
+      // await and said the same thing twice; the per-response line below said
+      // it again for every payload.
+      if (_logger.isInternal) {
+        _logger.internal('Server stream call sent, awaiting responses');
+      }
 
       // Process response stream.
       await for (final response in responses) {
         if (response.payload != null) {
-          if (_logger.isInternal) {
-            _logger.internal('Received response from server');
-          }
           yield response.payload!;
         }
 

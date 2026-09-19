@@ -58,14 +58,16 @@ final class RpcTransportRouter implements IRpcTransport {
     _routingRules.addAll(routingRules);
     _routingRules.sort((a, b) => b.priority.compareTo(a.priority));
 
-    _logger.internal(
-      'Transport Router initialized with ${_routingRules.length} rules:',
-    );
-    for (int i = 0; i < _routingRules.length; i++) {
-      final rule = _routingRules[i];
-      _logger.internal('  ${i + 1}. [P${rule.priority}] ${rule.description}');
+    if (_logger.isInternal) {
+      // One record, not one per rule plus two. The loop was the worst of it:
+      // a router with 40 rules wrote 42 lines nobody reads in order, and
+      // built every one of them even with logging off.
+      _logger.internal(
+        'Transport Router initialized (client-side) with '
+        '${_routingRules.length} rule(s): '
+        '${_routingRules.map((r) => '[P${r.priority}] ${r.description}').join('; ')}',
+      );
     }
-    _logger.internal('  - Role: client (router is always client-side)');
   }
 
   final int _maxActiveStreams;
@@ -146,15 +148,13 @@ final class RpcTransportRouter implements IRpcTransport {
     if (!_streamTransports.containsKey(clientStreamId) &&
         !_clientToServerStreamMapping.containsKey(clientStreamId) &&
         !_responseSubscriptions.containsKey(clientStreamId)) {
-      _logger.debug(
-        'Cleanup skipped: client stream [$clientStreamId] already cleaned',
-      );
+      if (_logger.isDebug) {
+        _logger.debug(
+          'Cleanup skipped: client stream [$clientStreamId] already cleaned',
+        );
+      }
       return false;
     }
-
-    _logger.internal(
-      'Starting cleanup: client[$clientStreamId] -> server[$serverStreamId]',
-    );
 
     var clientIdReleased = false;
     try {
@@ -198,16 +198,17 @@ final class RpcTransportRouter implements IRpcTransport {
     _clientToServerStreamMapping.remove(clientStreamId);
 
     final subscription = _responseSubscriptions.remove(clientStreamId);
-    if (subscription != null) {
-      _logger.internal(
-        'Cancelling response subscription for client[$clientStreamId]',
-      );
-      subscription.cancel();
-    }
+    subscription?.cancel();
 
-    _logger.internal(
-      'Cleanup completed for stream: client[$clientStreamId] -> server[$serverStreamId]',
-    );
+    // ONE record for the whole cleanup, and it carries what the three said
+    // between them: which ids, and which of the two were actually released.
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Cleaned up client[$clientStreamId] -> server[$serverStreamId] '
+        '(released client=$clientIdReleased server=$serverIdReleased, '
+        'subscription=${subscription != null})',
+      );
+    }
 
     return clientIdReleased || serverIdReleased;
   }
@@ -270,20 +271,25 @@ final class RpcTransportRouter implements IRpcTransport {
         _serviceNameFromMethodPath(methodPath) ??
         context?.getHeader('x-route-service');
 
-    _logger.internal(
-      'Routing for service="${_truncateForLog(serviceName)}", '
-      'method="${_truncateForLog(methodPath)}"',
-    );
-    _logger.internal('Routing context: ${_summarizeHeadersForLog(context)}');
+    // Guarded, and it is not a formality here: `_truncateForLog` and
+    // `_summarizeHeadersForLog` are real calls that ran on every routed
+    // message whether or not anything was listening.
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Routing service="${_truncateForLog(serviceName)}" '
+        'method="${_truncateForLog(methodPath)}" '
+        'context=${_summarizeHeadersForLog(context)}',
+      );
+    }
 
     // Evaluate rules in descending priority.
     for (final rule in _routingRules) {
-      _logger.debug('Checking rule [P${rule.priority}]: ${rule.description}');
-
       if (rule.matches(serviceName, methodPath, context)) {
-        _logger.internal(
-          'Matched rule [P${rule.priority}]: ${rule.description}',
-        );
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Matched rule [P${rule.priority}]: ${rule.description}',
+          );
+        }
         return rule.transport;
       }
     }
@@ -338,14 +344,6 @@ final class RpcTransportRouter implements IRpcTransport {
       );
     }
 
-    _logger.internal(
-      'Sending metadata: streamId=$streamId, endStream=$endStream',
-    );
-    _logger.internal(
-      'Metadata method path: ${_truncateForLog(metadata.methodPath)}',
-    );
-    _logger.internal('Metadata: ${_summarizeMetadataForLog(metadata)}');
-
     // Build a temporary message for routing.
     final routingMessage = RpcTransportMessage(
       metadata: metadata,
@@ -354,35 +352,38 @@ final class RpcTransportRouter implements IRpcTransport {
       isEndOfStream: endStream,
     );
 
-    _logger.internal('Selecting transport for routing...');
-
     // Select transport.
     final transport = _selectTransport(routingMessage);
 
-    _logger.internal('Selected transport: $transport');
-
     // Create a new stream ID on the target transport.
     final serverStreamId = transport.createStream();
-
-    _logger.internal(
-      'Created stream IDs: client[$streamId] -> server[$serverStreamId]',
-    );
 
     // Store all mappings.
     _streamTransports[streamId] = transport;
     _clientToServerStreamMapping[streamId] = serverStreamId;
 
-    _logger.internal(
-      'Stream ID mapping: client[$streamId] -> server[$serverStreamId]',
-    );
-
     // Subscribe to responses for this stream.
-    _logger.internal('Creating response subscription...');
     _subscribeToResponsesForStream(streamId, serverStreamId, transport);
+
+    // ONE record for the whole route, written once the facts exist.
+    //
+    // This was nine calls narrating the method step by step -- "Selecting
+    // transport for routing...", "Creating response subscription...",
+    // "sendMetadata completed successfully". A reader who has the code does
+    // not need it, and a reader who does not cannot use it; what is worth
+    // recording is the mapping the call established, which no single one of
+    // the nine carried.
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Routed client[$streamId] -> server[$serverStreamId] via $transport '
+        '(endStream=$endStream, '
+        'method=${_truncateForLog(metadata.methodPath)}, '
+        'metadata=${_summarizeMetadataForLog(metadata)})',
+      );
+    }
 
     // Forward the call using the new stream ID. If the send fails, roll back
     // ALL state registered above so the stream slot does not leak.
-    _logger.internal('Sending metadata to target transport...');
     try {
       await transport.sendMetadata(
         serverStreamId,
@@ -390,7 +391,12 @@ final class RpcTransportRouter implements IRpcTransport {
         endStream: endStream,
       );
     } catch (e) {
-      _logger.internal('sendMetadata failed, rolling back stream state: $e');
+      // KEPT, and it is the one that earns its place: a failure here rolls
+      // back five pieces of state, and the rollback is invisible otherwise.
+      _logger.warning(
+        'sendMetadata failed for client[$streamId] -> server[$serverStreamId], '
+        'rolling back stream state: $e',
+      );
       _streamTransports.remove(streamId);
       _clientToServerStreamMapping.remove(streamId);
       final subscription = _responseSubscriptions.remove(streamId);
@@ -398,8 +404,6 @@ final class RpcTransportRouter implements IRpcTransport {
       transport.releaseStreamId(serverStreamId);
       rethrow;
     }
-
-    _logger.internal('sendMetadata completed successfully');
   }
 
   @override
