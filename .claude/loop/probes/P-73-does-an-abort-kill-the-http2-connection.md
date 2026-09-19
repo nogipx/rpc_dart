@@ -1,12 +1,27 @@
 ---
 file: packages/transport/rpc_dart_http2/.dart_tool/probe/abort_kills_the_connection.dart
-round: 384
+round: 398
 commit: 69d24a76
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**]
 status: valid
 ---
 
 # P-73 — does aborting a bidi call kill the HTTP/2 connection?
+
+> **Round 398 reused it unchanged to settle B-53, with the DEPENDENCY VERSION as
+> the only variable.** Same source both sides, `http2` pinned:
+>
+> ```
+> arm                                 2.3.1         3.1.0
+> abort racing responses, awaited     5 of 5 DEAD   5 of 5 pong
+> abort racing responses, unawaited   5 of 5 DEAD   5 of 5 pong
+> the six other arms                  clean         clean
+> ```
+>
+> That is what this probe is FOR, and round 398 reached for a skipped test
+> first — five green runs that could not see the defect, because the test only
+> ever failed under workspace load while these arms are deterministic (L-17).
+> A probe built for one question answers it on a machine at any load.
 
 ## Why it exists
 

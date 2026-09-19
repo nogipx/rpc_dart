@@ -130,27 +130,21 @@ void main() {
     fail('$last handlers are still waiting on request streams that ended');
   }
 
-  test(
-    'WITNESS: an erroring request sink stops the handler',
-    () async {
-      for (var i = 0; i < calls; i++) {
-        final c = open();
-        await c.requestSink
-            .addStream(_twoThenError())
-            .catchError((Object _) {});
-        await Future<void>.delayed(const Duration(milliseconds: 30));
-      }
-      await expectNoneLive();
-    },
-    // B-53's REMAINING half, and round 388 sharpened which one. 388 fixed the
-    // ordinary case — a consumer letting go after the half-close, with the
-    // trailer in flight — by leaving that reset to package:http2's own ordered
-    // one. This path is the other case: the producer ERRORS, so the stream was
-    // never half-closed, http2 sends nothing, and rpc_dart's own RST_STREAM is
-    // the only signal that stops the handler. Sent while the server is
-    // mid-response it still costs the connection. Unskip when that half lands.
-    skip: 'B-53: an abort on a stream we have not half-closed, mid-response',
-  );
+  // Skipped for B-53 until http2 3.1.0, whose "gracefully handle receiving
+  // headers on a stream that the client has canceled" is this exact race: the
+  // producer ERRORS, so the stream was never half-closed, and rpc_dart's own
+  // RST_STREAM lands while the server is writing. Note this test only ever
+  // failed under the workspace gate's load — the deterministic arm is
+  // `.dart_tool/probe/abort_kills_the_connection.dart`, 10 of 10 DEAD on 2.3.1
+  // against 10 of 10 clean on 3.1.0.
+  test('WITNESS: an erroring request sink stops the handler', () async {
+    for (var i = 0; i < calls; i++) {
+      final c = open();
+      await c.requestSink.addStream(_twoThenError()).catchError((Object _) {});
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+    await expectNoneLive();
+  });
 
   test('GUARD: the healthy half-close is unchanged', () async {
     for (var i = 0; i < calls; i++) {

@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398]
 status: confirmed (round 211)
 ---
 
@@ -56,6 +56,23 @@ at `client_connection.dart:432`.
 > ranks by age, so a claim made four rounds ago and acted on three times is
 > invisible to it. Ask instead which record has been the most EXPENSIVE, and
 > whether anyone tested it.
+
+**Round 398 adds the cheapest trigger of all: a DEPENDENCY released.** B-53's
+blocker was not a deferral of taste, it was a statement about someone else's
+code — *"needs a stream-state getter package:http2 does not expose"* — and that
+class of blocker expires without anyone here doing anything. `http2: 3.1.0`
+closed it outright, P-73 reading 10 of 10 DEAD against 10 of 10 clean with the
+version as the only variable.
+
+> **Re-measure a lead whose blocker names a THIRD PARTY whenever that party
+> ships.** `loop.py stale` cannot see this: it ages a record against paths in
+> this repository, and the thing that changed is in `.pub-cache`. The changelog
+> is the detector.
+
+And the round's own failure is the warning attached to it: re-measuring means
+reproducing the record's CONDITIONS, not just re-running its artefact. Five
+green runs of the skipped witness said "no change" because every one was the
+arm the record itself says passes anyway (L-17).
 
 Round 321 is that note one level out, and it says the detector is not only
 `stale`. A record can be a COMMENT a previous round wrote to explain its own

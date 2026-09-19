@@ -1,5 +1,5 @@
 ---
-status: open — the ordinary half FIXED in round 388, the not-half-closed half remains
+status: closed (round 398) — the ordinary half fixed in 388, the rest by http2 3.1.0
 round: 384
 commit: 69d24a76
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
@@ -8,6 +8,31 @@ reason: owner decision — the fix that removes the leak makes this reachable au
 ---
 
 # B-53 — an HTTP/2 stream reset that races in-flight responses kills the connection
+
+> **CLOSED in round 398 by `http2: ^3.1.0`.** Its changelog's first line —
+> *"Gracefully handle receiving headers on a stream that the client has canceled
+> (#1799)"* — is the mechanism this lead spent three rounds narrowing to: the
+> SERVER writing a response to a stream the client has just reset. P-73 reused
+> unchanged, the resolved version the only variable:
+>
+> ```
+> arm                                 2.3.1         3.1.0
+> abort racing responses, awaited     5 of 5 DEAD   5 of 5 pong
+> abort racing responses, unawaited   5 of 5 DEAD   5 of 5 pong
+> the six arms that were already clean unchanged on both
+> ```
+>
+> So the "two routes that are NOT trades" below resolved themselves: the
+> upstream fix landed. The owner's decision was never needed, and neither
+> behaviour trade was made. Guarded now by
+> `test/abort_racing_responses_keeps_the_connection_test.dart`, which fails on
+> 2.3.1, and `request_sink_error_over_http2_test.dart` is unskipped.
+>
+> **How the round nearly missed it, recorded as L-17**: the skipped witness was
+> run ALONE, which the paragraph headed "Why it is filed rather than fixed"
+> below says is exactly the condition under which it passes anyway. Five green
+> runs and a wrong conclusion before the owner asked whether the test was the
+> problem. The deterministic answer was in this file's own `probe:` field.
 
 > **Round 388 fixed the ordinary half and, in doing so, separated the two.**
 > `package:http2` ALREADY sends the reset itself — `stream_handler.dart:332`,

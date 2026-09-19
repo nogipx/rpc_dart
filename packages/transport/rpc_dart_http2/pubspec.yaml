@@ -21,7 +21,7 @@ topics:
 
 dependencies:
   rpc_dart: '>=6.0.0 <7.0.0'
-  http2: ^2.3.1
+  http2: ^3.1.0
   universal_io: ^2.3.1
 
 dev_dependencies:

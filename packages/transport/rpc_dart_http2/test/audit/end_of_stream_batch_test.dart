@@ -119,7 +119,7 @@ class _FakeServerConnection implements http2.ServerTransportConnection {
   }
 
   @override
-  Future<void> terminate([int? errorCode]) async {
+  Future<void> terminate([int? errorCode, String? message]) async {
     if (!_incoming.isClosed) await _incoming.close();
   }
 
