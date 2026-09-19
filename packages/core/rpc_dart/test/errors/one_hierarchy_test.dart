@@ -124,6 +124,57 @@ void main() {
       expect(c.statusCode, RpcStatus.notFound);
     });
 
+    // WITNESS: validateMetadata threw a bare ArgumentError for UNTRUSTED PEER
+    // input, and five decision points read `is ArgumentError` to mean "the peer
+    // is at fault" — two of them deciding whether to END A CONNECTION. So any
+    // ArgumentError raised anywhere on that path was charged to the peer's
+    // 256-strike budget as if it were hostile.
+    //
+    // The type must keep BOTH properties, and the pair is the whole point.
+    test('a metadata violation is an ArgumentError AND an RpcException', () {
+      const policy = RpcSecurityPolicy(maxHeaders: 2);
+      Object? thrown;
+      try {
+        policy.validateMetadata(
+          RpcMetadata([
+            RpcHeader('a', '1'),
+            RpcHeader('b', '2'),
+            RpcHeader('c', '3'),
+          ]),
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(thrown, isA<RpcMetadataViolation>());
+      expect(
+        thrown,
+        isA<ArgumentError>(),
+        reason:
+            'five sites discriminate on `is ArgumentError`; dropping the '
+            'interface silently disarms two connection-closing backstops',
+      );
+      expect(
+        thrown,
+        isA<RpcException>(),
+        reason: 'and it must be findable by the one catch that means rpc_dart',
+      );
+      expect(
+        (thrown! as RpcStatusException).statusCode,
+        RpcStatus.invalidArgument,
+      );
+    });
+
+    // GUARD: the narrowing is only worth anything if a FOREIGN ArgumentError is
+    // now distinguishable. This is the distinction the backstops were given.
+    test('a foreign ArgumentError is not a metadata violation', () {
+      expect(
+        ArgumentError('some ordinary bug'),
+        isNot(isA<RpcMetadataViolation>()),
+      );
+      expect(ArgumentError('some ordinary bug'), isNot(isA<RpcException>()));
+    });
+
     // WITNESS: every frame failure reached a peer as INTERNAL, because
     // RpcFrameException extended RpcException and wireStatusFor's second branch
     // hardcodes INTERNAL. The three kinds are not one answer — and the split is

@@ -3,6 +3,9 @@
 //
 // SPDX-License-Identifier: MIT
 
+// For RpcMetadataViolation: peer metadata failing this policy is a wire fact,
+// not a caller's programming mistake, and the type says which.
+import 'channel_frame.dart';
 import 'metadata.dart';
 import 'protocol.dart';
 
@@ -334,27 +337,45 @@ final class RpcSecurityPolicy {
     return true;
   }
 
-  /// Best-effort metadata validation. Throws [ArgumentError] on violations.
+  /// Best-effort metadata validation.
+  ///
+  /// Throws [RpcMetadataViolation], which IS an [ArgumentError] — every
+  /// existing `is ArgumentError` check and `catch` keeps working. What changes
+  /// is that the thrown thing can now be told apart from an ordinary
+  /// programming mistake raised elsewhere on the same path, and that it carries
+  /// INVALID_ARGUMENT instead of being redacted to INTERNAL on the way out.
   void validateMetadata(RpcMetadata metadata) {
     if (metadata.headers.length > maxHeaders) {
-      throw ArgumentError(
+      throw RpcMetadataViolation(
         'Too many metadata headers: ${metadata.headers.length} > $maxHeaders',
+        name: 'metadata.headers',
+        invalidValue: metadata.headers.length,
       );
     }
     for (final header in metadata.headers) {
       if (!isValidHeaderName(header.name)) {
-        throw ArgumentError('Invalid metadata header name: ${header.name}');
+        throw RpcMetadataViolation(
+          'Invalid metadata header name: ${header.name}',
+          name: 'metadata.headers.name',
+          invalidValue: header.name,
+        );
       }
       if (!isValidHeaderValue(header.value)) {
-        throw ArgumentError(
+        throw RpcMetadataViolation(
           'Invalid metadata header value for: ${header.name}',
+          name: 'metadata.headers.value',
+          invalidValue: header.name,
         );
       }
     }
 
     final methodPath = metadata.methodPath;
     if (!isValidMethodPath(methodPath)) {
-      throw ArgumentError('Invalid methodPath in metadata: $methodPath');
+      throw RpcMetadataViolation(
+        'Invalid methodPath in metadata: $methodPath',
+        name: 'metadata.methodPath',
+        invalidValue: methodPath,
+      );
     }
   }
 }

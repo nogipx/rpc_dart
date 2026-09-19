@@ -352,6 +352,43 @@ class RpcFrameException extends RpcStatusException {
     : super(RpcStatus.invalidArgument, message);
 }
 
+/// A peer's metadata failed [RpcSecurityPolicy.validateMetadata].
+///
+/// **Implements [ArgumentError] on purpose.** That is what `validateMetadata`
+/// threw, and five decision points read `is ArgumentError` to mean "the peer is
+/// at fault" — including whether to charge the 256-violation backstop that ends
+/// a connection. Keeping the interface keeps every one of them working, and
+/// keeps any caller's `catch` working too.
+///
+/// What it adds is the thing `ArgumentError` cannot say. `ArgumentError` means
+/// a CALLER passed a bad argument — a programming mistake — so using it for
+/// untrusted peer input left those five sites unable to tell a hostile peer
+/// from an ordinary bug raised anywhere else on the same path. Narrowing a site
+/// to `is RpcMetadataViolation` makes that distinction available; this type
+/// exists so it can be made.
+///
+/// And it is in the hierarchy, so a peer is told INVALID_ARGUMENT with the
+/// diagnostic rather than a redacted INTERNAL.
+class RpcMetadataViolation extends RpcStatusException implements ArgumentError {
+  /// The offending value, when there is a single one worth naming.
+  @override
+  final dynamic invalidValue;
+
+  /// The parameter-style name of what was rejected, e.g. `metadata.headers`.
+  @override
+  final String? name;
+
+  /// Creates a violation describing [message].
+  RpcMetadataViolation(String message, {this.invalidValue, this.name})
+    : super(RpcStatus.invalidArgument, message);
+
+  @override
+  StackTrace? get stackTrace => null;
+
+  @override
+  String toString() => 'Invalid argument: $message';
+}
+
 /// A decoded multiplexed frame.
 class RpcDecodedFrame {
   /// The stream ID this frame belongs to.

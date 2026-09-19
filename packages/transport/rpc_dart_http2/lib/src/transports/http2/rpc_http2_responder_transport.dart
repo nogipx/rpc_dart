@@ -515,7 +515,14 @@ class RpcHttp2ResponderTransport
         // Answered FIRST, then closed: the peer has to learn it was its own
         // fault, or a plain disconnect reads as UNAVAILABLE and is retried.
         // Same order as the channel transport's protocol close.
-        if (error is ArgumentError &&
+        //
+        // `RpcMetadataViolation`, not `ArgumentError`. This decides whether to
+        // END A CONNECTION, and `ArgumentError` means "a caller passed a bad
+        // argument" — a programming mistake. Any such error raised anywhere on
+        // this path was being charged to the peer's 256-strike budget as if it
+        // were hostile. The narrower type is the one `validateMetadata` throws,
+        // and it still IS an ArgumentError, so nothing else had to change.
+        if (error is RpcMetadataViolation &&
             (_policy.closeOnProtocolError ||
                 ++_policyViolations > _maxPolicyViolations)) {
           await _closeForProtocolError();

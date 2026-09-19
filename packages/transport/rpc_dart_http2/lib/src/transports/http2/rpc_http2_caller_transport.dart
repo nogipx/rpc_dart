@@ -1218,7 +1218,13 @@ class RpcHttp2CallerTransport
       // because the other in-flight calls die with it (see
       // `closeOnOversizedFrame: !isClient`). A peer that has done it 256 times
       // is no longer one bad frame.
-      if (e is ArgumentError && ++_policyViolations > _maxPolicyViolations) {
+      //
+      // `RpcMetadataViolation`, not `ArgumentError`: this closes a connection,
+      // and ArgumentError means a programming mistake, so any of those raised
+      // on this path was being charged to the peer's budget. See the same
+      // narrowing on the responder.
+      if (e is RpcMetadataViolation &&
+          ++_policyViolations > _maxPolicyViolations) {
         _logger?.warning(
           'Peer sent $_policyViolations policy violations; closing',
         );
