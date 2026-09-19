@@ -964,6 +964,11 @@ class RpcHttp2ResponderTransport
     'incomingStreams': _incomingStreams.length,
     'streamSubscriptions': _streamSubscriptions.length,
     'streamParsers': _streamParsers.length,
+    // The per-stream collection that had no observable. It holds a writer
+    // parked on the peer's window, so it is the one whose growth costs most,
+    // and its pruning could only be argued from sharing a line with
+    // `_incomingStreams` in releaseStreamId.
+    'outgoingPumps': _outgoingPumps.length,
     'messageControllerClosed': _messageController.isClosed,
   };
 

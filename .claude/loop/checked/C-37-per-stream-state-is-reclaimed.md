@@ -7,6 +7,17 @@ paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_ht
 
 # C-37 — the hand-rolled transports reclaim their per-stream state
 
+> **Round 396 closed the one gap in this record's own evidence.** The
+> collections were read from each transport's `health()` — and the http2
+> responder's did not expose `_outgoingPumps`, so for that one the claim rested
+> on a READING (it shares a line with `_incomingStreams` in `releaseStreamId`)
+> rather than on a count. The field exists now, and the collection was watched
+> across four endings on one connection: served, refused by the transport,
+> refused by the pipeline, and abandoned before any answer — **0 pumps on all
+> four**, against **200** on an arm of server-streams parked mid-answer, which
+> is what proves the counter can report retention. The pump is the one of these
+> worth watching hardest: what it holds is a writer parked on the peer's window.
+
 ## The detector, and why it was worth running
 
 Round 342's keeper: a field enumeration is blind to mechanisms that have no
