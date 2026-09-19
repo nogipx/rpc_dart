@@ -14,7 +14,6 @@ import '../_internal.dart'
         IRpcSerializable,
         RpcCallerEndpoint,
         RpcPeerEndpoint,
-        RpcException,
         RpcStatus,
         RpcStatusException,
         RpcLongTimer,

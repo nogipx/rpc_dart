@@ -47,7 +47,8 @@ void main() {
           await cb.interceptUnary<String, String>(
             callContext,
             'req',
-            (ctx, req) async => throw RpcException('fail'),
+            (ctx, req) async =>
+                throw RpcStatusException(RpcStatus.internal, 'fail'),
           );
         } on RpcException {
           // expected
@@ -69,7 +70,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('fail'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'fail'),
         );
       } on RpcException {
         // expected
@@ -101,7 +103,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('fail'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'fail'),
         );
       } on RpcException {
         // expected
@@ -133,7 +136,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('fail'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'fail'),
         );
       } on RpcException {
         // expected
@@ -146,7 +150,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('still failing'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'still failing'),
         );
       } on RpcException {
         // expected
@@ -164,7 +169,8 @@ void main() {
           await cb.interceptUnary<String, String>(
             callContext,
             'req',
-            (ctx, req) async => throw RpcException('fail'),
+            (ctx, req) async =>
+                throw RpcStatusException(RpcStatus.internal, 'fail'),
           );
         } on RpcException {
           // expected
@@ -210,7 +216,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('minor'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'minor'),
         );
       } on RpcException {
         // expected
@@ -222,7 +229,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('critical'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'critical'),
         );
       } on RpcException {
         // expected
@@ -237,7 +245,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('fail'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'fail'),
         );
       } on RpcException {
         // expected

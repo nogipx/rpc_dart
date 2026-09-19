@@ -63,11 +63,17 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     final binding = _respRegistry.lookup(methodKey);
 
     if (binding == null) {
-      throw RpcException('Method $methodKey is not registered');
+      // UNIMPLEMENTED is gRPC's answer for a method the server does not have.
+      throw RpcStatusException(
+        RpcStatus.unimplemented,
+        'Method $methodKey is not registered',
+      );
     }
 
     if (binding.type != expectedType) {
-      throw RpcException(
+      // INTERNAL: the method exists, this side wired it up as the wrong shape.
+      throw RpcStatusException(
+        RpcStatus.internal,
         'Method $methodKey is registered as ${binding.type.name}, '
         'but expected ${expectedType.name}',
       );

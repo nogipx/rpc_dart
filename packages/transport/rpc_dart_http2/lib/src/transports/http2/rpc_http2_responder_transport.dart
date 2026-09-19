@@ -611,7 +611,11 @@ class RpcHttp2ResponderTransport
     try {
       if (_streamParsers.length >= _policy.maxActiveStreams &&
           !_streamParsers.containsKey(streamId)) {
-        throw RpcException(
+        // RESOURCE_EXHAUSTED: a limit that frees up. It reaches the peer
+        // through _answerFramingViolation, which now takes the status from the
+        // error rather than guessing from the base class.
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
           'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
         );
       }
@@ -683,20 +687,26 @@ class RpcHttp2ResponderTransport
   /// will call [releaseStreamId]. Whether the peer half-closed is the peer's
   /// choice, and that is not a choice the server's bookkeeping may depend on.
   void _answerFramingViolation(int streamId, Object error) {
-    // Every RpcException RpcMessageParser raises is a RESOURCE LIMIT, and all
-    // four read as RESOURCE_EXHAUSTED to a gRPC peer:
-    //   'gRPC frame buffer overflow: N (max: M)'
-    //   'gRPC frame payload is too large: N (max: M)'
-    //   'Decompressed gRPC payload is too large: N (max: M)'
-    //   'Too many gRPC messages in a single chunk: N (max: M)'
-    // Anything else reaching here is malformed framing, which is INTERNAL.
+    // The status comes from the ERROR, because the error knows.
     //
-    // Matched on the TYPE, never on message text: a text match for 'too large'
-    // misses the buffer-overflow wording and the refusal comes back as
-    // Internal.
-    final status = error is RpcException
-        ? RpcStatus.resourceExhausted
-        : RpcStatus.internal;
+    // This used to read `error is RpcException ? resourceExhausted : internal`
+    // and enumerate the parser's four limits by hand. The intent was right and
+    // the discriminator could not express it: `RpcException` is the BASE of the
+    // hierarchy, so `RpcMessageFrame.parseHeader`'s MALFORMED-framing throws —
+    // raised on this very path — matched it too. Measured, one prefix apart:
+    //
+    //   limit      grpc-status 8  "payload is too large: 33554432 (max: ...)"
+    //   malformed  grpc-status 8  "Invalid compression flag in gRPC message: 2"
+    //
+    // and RESOURCE_EXHAUSTED is retryable, so a corrupt frame was answered
+    // "try again". The parser now carries its own status, so asking
+    // wireStatusFor is both correct and shorter.
+    //
+    // It also closes a leak the old code had: the message below was `'$error'`
+    // UNCONDITIONALLY, so a foreign error's text went to the peer. wireStatusFor
+    // is default-deny and redacts anything that is not ours.
+    final wire = wireStatusFor(error);
+    final status = wire.status;
 
     unawaited(() async {
       try {
@@ -707,7 +717,7 @@ class RpcHttp2ResponderTransport
         // could have corrected. Trimmed rather than risked.
         final trailers = RpcMetadata.forTrailer(
           status,
-          message: '$error',
+          message: wire.message,
           maxMessageLength: _policy.maxHeaderValueBytes,
         );
         await sendMetadata(streamId, trailers, endStream: true);

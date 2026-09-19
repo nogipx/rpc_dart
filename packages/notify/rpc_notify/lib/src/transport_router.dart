@@ -288,7 +288,10 @@ final class RpcTransportRouter implements IRpcTransport {
       }
     }
 
-    throw RpcException(
+    // UNIMPLEMENTED: from a caller's point of view this service/method is not
+    // served here, which is exactly what that status means.
+    throw RpcStatusException(
+      RpcStatus.unimplemented,
       'No transport found for routing: service="$serviceName", method="$methodPath". '
       'Add a matching routing rule.',
     );
@@ -329,7 +332,8 @@ final class RpcTransportRouter implements IRpcTransport {
     if (_closed) throw StateError('TransportRouter is closed');
     if (_streamTransports.length >= _maxActiveStreams &&
         !_streamTransports.containsKey(streamId)) {
-      throw RpcException(
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'TransportRouter activeStreams limit reached: $_maxActiveStreams',
       );
     }

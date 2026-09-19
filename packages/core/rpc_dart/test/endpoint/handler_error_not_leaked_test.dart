@@ -263,8 +263,10 @@ void main() {
     // library-authored, carry no user data, and are exactly what a peer needs
     // in order to correct itself -- redacting them would make an oversized
     // message unexplainable.
+    // NOT an RpcStatusException: this asserts wireStatusFor's second branch,
+    // the one for library-authored errors that carry no status of their own.
     final framing = wireStatusFor(
-      RpcException('gRPC frame payload is too large: 42 (max: 16)'),
+      _LibraryAuthored('gRPC frame payload is too large: 42 (max: 16)'),
     );
     expect(framing.status, RpcStatus.internal);
     expect(framing.message, contains('max: 16'));
@@ -317,4 +319,11 @@ void main() {
     expect(plain.message, kInternalErrorWireMessage);
     expect(plain.detailsBin, isNull);
   });
+}
+
+/// An [RpcException] that is NOT an [RpcStatusException] — what wireStatusFor's
+/// second branch looks like from outside core, where `RpcDataError` and
+/// `RpcWebSocketNonBinaryFrame` are the real ones.
+class _LibraryAuthored extends RpcException {
+  _LibraryAuthored(super.message);
 }

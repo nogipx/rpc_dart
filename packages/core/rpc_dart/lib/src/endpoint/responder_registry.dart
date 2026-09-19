@@ -99,7 +99,10 @@ final class RpcResponderMethodRegistry {
     final serviceName = contract.serviceName;
 
     if (_contracts.containsKey(serviceName)) {
-      throw RpcException(
+      // Registration-time mistakes, all four of them: this side wired itself up
+      // wrongly and no peer is involved, so INTERNAL is the honest status.
+      throw RpcStatusException(
+        RpcStatus.internal,
         'Contract for service $serviceName is already registered',
       );
     }
@@ -128,7 +131,10 @@ final class RpcResponderMethodRegistry {
       final methodKey = '$serviceName.$methodName';
 
       if (_methods.containsKey(methodKey)) {
-        throw RpcException('Method $methodKey is already registered');
+        throw RpcStatusException(
+          RpcStatus.internal,
+          'Method $methodKey is already registered',
+        );
       }
 
       if (_log.isInternal) {
@@ -151,7 +157,8 @@ final class RpcResponderMethodRegistry {
       final methodKey = '$serviceName.$methodName';
 
       if (_methods.containsKey(methodKey)) {
-        throw RpcException(
+        throw RpcStatusException(
+          RpcStatus.internal,
           'Method $methodKey is already registered (zero-copy conflict)',
         );
       }
@@ -186,7 +193,10 @@ final class RpcResponderMethodRegistry {
     final contract = _contracts.remove(serviceName);
 
     if (contract == null) {
-      throw RpcException('Contract for service $serviceName is not registered');
+      throw RpcStatusException(
+        RpcStatus.internal,
+        'Contract for service $serviceName is not registered',
+      );
     }
 
     if (_log.isInternal) {

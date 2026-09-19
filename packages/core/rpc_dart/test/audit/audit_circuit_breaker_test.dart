@@ -46,7 +46,9 @@ void main() {
           callContext,
           'req',
           // next() returns a cold stream that errors when listened to.
-          (ctx, req) => Stream<String>.error(RpcException('stream failure')),
+          (ctx, req) => Stream<String>.error(
+            RpcStatusException(RpcStatus.internal, 'stream failure'),
+          ),
         );
 
         // Consume the stream; the error surfaces here.
@@ -77,7 +79,9 @@ void main() {
         final stream = await cb.interceptBidirectionalStream<String, String>(
           callContext,
           const Stream<String>.empty(),
-          (ctx, reqs) => Stream<String>.error(RpcException('bidi failure')),
+          (ctx, reqs) => Stream<String>.error(
+            RpcStatusException(RpcStatus.internal, 'bidi failure'),
+          ),
         );
         try {
           await stream.toList();

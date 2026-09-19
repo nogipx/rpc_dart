@@ -13,7 +13,11 @@ import 'package:rpc_dart/rpc_dart.dart';
 ///
 /// ```dart
 /// final faults = RpcFaultInjector()
-///   ..failMethod('UserService', 'getUser', RpcException('not found'))
+///   ..failMethod(
+///     'UserService',
+///     'getUser',
+///     RpcStatusException(RpcStatus.notFound, 'not found'),
+///   )
 ///   ..delayMethod('OrderService', 'createOrder', Duration(milliseconds: 200));
 ///
 /// final app = await RpcTestApp.start(

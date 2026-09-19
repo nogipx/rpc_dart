@@ -74,7 +74,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcException('app error');
+            throw RpcStatusException(RpcStatus.internal, 'app error');
           },
         );
         fail('Should have thrown');
@@ -220,7 +220,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcException('do-not-retry');
+            throw RpcStatusException(RpcStatus.internal, 'do-not-retry');
           },
         );
         fail('Should have thrown');
@@ -237,7 +237,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcException('retry-me');
+            throw RpcStatusException(RpcStatus.internal, 'retry-me');
           },
         );
         fail('Should have thrown');
@@ -265,7 +265,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcException('fail');
+            throw RpcStatusException(RpcStatus.internal, 'fail');
           },
         );
         fail('Should have thrown');
@@ -355,7 +355,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcException('fail');
+            throw RpcStatusException(RpcStatus.internal, 'fail');
           },
         );
         fail('Should have thrown');

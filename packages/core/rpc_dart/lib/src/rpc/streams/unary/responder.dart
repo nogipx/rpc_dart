@@ -85,7 +85,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
               state.clientRequestEncoding ??
               _context?.getHeader(RpcHeaders.grpcEncoding);
           if (encoding == null || encoding == RpcGrpcCompression.identity) {
-            throw RpcException(
+            // INTERNAL: the peer set the compressed bit and named no encoding,
+            // which is a protocol violation no retry can fix.
+            throw RpcStatusException(
+              RpcStatus.internal,
               'Compressed gRPC payload received without grpc-encoding',
             );
           }
@@ -423,7 +426,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         _logger.error(
           'Failed to extract message from payload [streamId: $streamId]',
         );
-        throw RpcException('Failed to extract message from payload');
+        throw RpcStatusException(
+          RpcStatus.internal,
+          'Failed to extract message from payload',
+        );
       }
 
       if (_logger.isInternal) {

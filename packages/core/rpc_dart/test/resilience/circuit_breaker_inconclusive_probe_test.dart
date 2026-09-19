@@ -35,7 +35,8 @@ void main() {
         cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('fail'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'fail'),
         ),
         throwsA(isA<RpcException>()),
       );
@@ -87,7 +88,10 @@ void main() {
         cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('ignored-by-predicate'),
+          (ctx, req) async => throw RpcStatusException(
+            RpcStatus.internal,
+            'ignored-by-predicate',
+          ),
         ),
         throwsA(isA<RpcException>()),
       );

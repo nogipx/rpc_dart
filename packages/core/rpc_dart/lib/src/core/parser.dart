@@ -147,7 +147,13 @@ final class RpcMessageParser {
       final buffered = _state.available;
       _state.clear();
       _state.reset();
-      throw RpcException(
+      // RESOURCE_EXHAUSTED on the TYPE, not inferred downstream. The http2
+      // responder used to read `error is RpcException` to mean "a resource
+      // limit" and enumerate these four by hand in a comment — but that is the
+      // BASE of the whole hierarchy, so malformed framing raised on the same
+      // path matched it too and a corrupt frame came back retryable.
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'gRPC frame buffer overflow: $buffered bytes (max: $_maxBufferedBytes)',
       );
     }
@@ -175,7 +181,8 @@ final class RpcMessageParser {
             final length = _state.expectedMessageLength!;
             _state.clear();
             _state.reset();
-            throw RpcException(
+            throw RpcStatusException(
+              RpcStatus.resourceExhausted,
               'gRPC frame payload is too large: $length bytes (max: $_maxMessageLength)',
             );
           }
@@ -235,7 +242,14 @@ final class RpcMessageParser {
             // so naming one of them told a peer with a corrupt frame to send
             // less, which cannot help. State the fact and leave the cause to
             // the two possibilities that produce it.
-            throw RpcException(
+            //
+            // INTERNAL, not RESOURCE_EXHAUSTED, for the reason above: the
+            // status is a claim about the CAUSE and this site has two. grpc-go
+            // answers a decompression failure INTERNAL ("failed to decompress
+            // the received message") and keeps RESOURCE_EXHAUSTED for the sizes
+            // it can actually measure, which is the split used here.
+            throw RpcStatusException(
+              RpcStatus.internal,
               'Compressed gRPC payload could not be decompressed: it is '
               'malformed, or it expands beyond the configured limit '
               '(max: $_maxMessageLength)',
@@ -245,7 +259,8 @@ final class RpcMessageParser {
             final length = payload.length;
             _state.clear();
             _state.reset();
-            throw RpcException(
+            throw RpcStatusException(
+              RpcStatus.resourceExhausted,
               'Decompressed gRPC payload is too large: $length bytes (max: $_maxMessageLength)',
             );
           }
@@ -255,7 +270,8 @@ final class RpcMessageParser {
       if (result.length > _maxMessagesPerChunk) {
         _state.clear();
         _state.reset();
-        throw RpcException(
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
           'Too many gRPC messages in a single chunk: ${result.length} (max: $_maxMessagesPerChunk)',
         );
       }

@@ -109,7 +109,10 @@ abstract class RpcResponderContract implements IRpcContract {
   void _rejectDuplicate(String methodName) {
     if (_methods.containsKey(methodName) ||
         _zeroCopyMethods.containsKey(methodName)) {
-      throw RpcException(
+      // INTERNAL: a setup mistake on this side, never a peer's doing — the doc
+      // three lines up says this is not reachable from peer input.
+      throw RpcStatusException(
+        RpcStatus.internal,
         'Method $_baseServiceName.$methodName is already registered on this '
         'contract. Each method name may be registered once; a second '
         'registration used to silently replace the first.',

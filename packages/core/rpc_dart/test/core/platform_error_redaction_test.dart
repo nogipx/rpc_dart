@@ -99,8 +99,13 @@ void main() {
       // library-authored, carry no user data, and are what a peer needs to
       // correct itself. Redacting them makes an oversized message
       // unexplainable.
+      // A subclass that is NOT an RpcStatusException, because this asserts
+      // wireStatusFor's SECOND branch — "rpc_dart's own RpcException hierarchy"
+      // — and every core subclass now carries a status and takes the first.
+      // The branch stays reachable from other packages (RpcDataError,
+      // RpcWebSocketNonBinaryFrame), so it still has to work.
       final wire = wireStatusFor(
-        RpcException('gRPC frame payload is too large: 100 (max: 10)'),
+        _LibraryAuthored('gRPC frame payload is too large: 100 (max: 10)'),
       );
       expect(wire.status, RpcStatus.internal);
       expect(wire.message, contains('too large'));
@@ -113,4 +118,13 @@ void main() {
       );
     });
   });
+}
+
+/// An [RpcException] that is NOT an [RpcStatusException].
+///
+/// `RpcException` is abstract, and every core subclass now carries a status, so
+/// this is what wireStatusFor's second branch looks like from outside core —
+/// `RpcDataError` and `RpcWebSocketNonBinaryFrame` are the real ones.
+class _LibraryAuthored extends RpcException {
+  _LibraryAuthored(super.message);
 }

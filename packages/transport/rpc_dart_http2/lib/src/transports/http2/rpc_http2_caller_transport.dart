@@ -1361,7 +1361,9 @@ class RpcHttp2CallerTransport
       // One parser per stream, created on first data.
       if (_streamParsers.length >= _policy.maxActiveStreams &&
           !_streamParsers.containsKey(streamId)) {
-        throw RpcException(
+        // RESOURCE_EXHAUSTED: a limit that frees up as streams finish.
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
           'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
         );
       }

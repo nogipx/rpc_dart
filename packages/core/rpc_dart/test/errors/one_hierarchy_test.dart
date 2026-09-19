@@ -39,7 +39,7 @@ void main() {
           const Duration(seconds: 1),
         ),
         const CircuitBreakerOpenException(),
-        RpcException('base'),
+        _LibraryAuthored('a subclass carrying no status of its own'),
         RpcStatusException(RpcStatus.notFound, 'missing'),
       ];
 
@@ -231,5 +231,33 @@ void main() {
         'CircuitBreakerOpenException: circuit is open',
       );
     });
+
+    // WITNESS for the base going abstract: a bare `RpcException(msg)` was the
+    // lazy path, and wireStatusFor had to answer it INTERNAL — so any site that
+    // did not classify itself became INTERNAL on the wire, including limits a
+    // peer could correct and methods that do not exist. It cannot be
+    // constructed now; a subclass must choose.
+    test('the base cannot be thrown without choosing a kind', () {
+      // Still the type to CATCH — that half must not have been lost.
+      expect(
+        _LibraryAuthored('x'),
+        isA<RpcException>(),
+        reason:
+            'abstract must not stop `e is RpcException` from meaning "ours"',
+      );
+      // And the second wireStatusFor branch still serves such a subclass.
+      final wire = wireStatusFor(_LibraryAuthored('a library diagnostic'));
+      expect(wire.status, RpcStatus.internal);
+      expect(wire.message, contains('a library diagnostic'));
+    });
   });
+}
+
+/// An [RpcException] that is NOT an [RpcStatusException].
+///
+/// Every subclass inside core now carries a status, so this stands in for the
+/// ones outside it — `RpcDataError`, `RpcWebSocketNonBinaryFrame` — which keep
+/// wireStatusFor's second branch reachable.
+class _LibraryAuthored extends RpcException {
+  _LibraryAuthored(super.message);
 }

@@ -164,7 +164,10 @@ void _reportTransferModeMismatch(
   int streamId,
   String direction,
 ) {
-  final error = RpcException(
+  // INTERNAL: the two ends were configured with different transfer modes, which
+  // is a wiring mistake rather than anything the peer did wrong at call time.
+  final error = RpcStatusException(
+    RpcStatus.internal,
     'Transfer-mode mismatch on $methodPath: a serialized $direction arrived '
     'for a method registered as zero-copy. Both ends take the mode from their '
     'own contract, so give them the same RpcDataTransferMode (or codecs on '
@@ -1135,7 +1138,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           if (requestEncoding != null &&
               requestEncoding != RpcGrpcCompression.identity &&
               !RpcGrpcCompression.isSupported(requestEncoding)) {
-            throw RpcException(
+            // UNIMPLEMENTED is what the gRPC spec prescribes for a compression
+            // algorithm the receiver does not support, alongside
+            // grpc-accept-encoding. Not INTERNAL: the peer can pick another.
+            throw RpcStatusException(
+              RpcStatus.unimplemented,
               'Unsupported grpc-encoding: $requestEncoding. '
               'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
               'On web/dart2js the built-in gzip is unavailable; register a '

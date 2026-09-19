@@ -10,6 +10,9 @@ import 'dart:typed_data';
 import 'errors.dart';
 import 'health.dart';
 import 'metadata.dart';
+// For RpcStatus: stream-id exhaustion is RESOURCE_EXHAUSTED, not a nameless
+// framework error.
+import 'protocol.dart';
 import 'security_policy.dart';
 
 /// Transport-layer message with Stream ID support.
@@ -421,7 +424,10 @@ final class RpcStreamIdManager {
 
     final recycledId = _findReusableId();
     if (recycledId == null) {
-      throw RpcException(
+      // RESOURCE_EXHAUSTED: a limit that frees up, which is what gRPC answers
+      // for stream exhaustion and what makes it retryable.
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'All $_sideLabel Stream IDs are in use. '
         'Wait for active streams to finish or establish a new connection.',
       );

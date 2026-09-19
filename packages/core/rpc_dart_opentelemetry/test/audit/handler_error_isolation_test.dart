@@ -109,8 +109,10 @@ final class _ThrowingContract extends RpcResponderContract {
   void setup() {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'BoomRpc',
-      handler: (request, {context}) async =>
-          throw RpcException('boom: plain rpc exception'),
+      handler: (request, {context}) async => throw RpcStatusException(
+        RpcStatus.internal,
+        'boom: plain rpc exception',
+      ),
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );

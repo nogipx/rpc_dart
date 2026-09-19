@@ -46,7 +46,8 @@ void main() {
         cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('trip'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'trip'),
         ),
         throwsA(isA<RpcException>()),
       );
@@ -149,7 +150,9 @@ void main() {
       final probe = await cb.interceptServerStream<String, String>(
         callContext,
         'req',
-        (ctx, req) async => Stream<String>.error(RpcException('probe failed')),
+        (ctx, req) async => Stream<String>.error(
+          RpcStatusException(RpcStatus.internal, 'probe failed'),
+        ),
       );
       await expectLater(probe.first, throwsA(isA<RpcException>()));
       expect(cb.state, CircuitBreakerState.open);

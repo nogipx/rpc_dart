@@ -109,16 +109,29 @@ abstract interface class RpcMessageFrame {
 
   /// Reads compression and length out of a 5-byte gRPC prefix.
   ///
-  /// Throws [RpcException] if [headerBytes] is short or the flag is not 0 or 1.
+  /// Throws [RpcStatusException] with INTERNAL if [headerBytes] is short or the
+  /// flag is not 0 or 1.
+  ///
+  /// INTERNAL and not RESOURCE_EXHAUSTED, and the two are raised on the same
+  /// path so the distinction has to live on the TYPE: these are MALFORMED
+  /// framing, which no amount of sending less will fix, where the parser's
+  /// limits are a size the peer can correct. Both used to be a bare
+  /// `RpcException` and the http2 responder read that base class as "a resource
+  /// limit", so a corrupt frame came back retryable — measured, `grpc-status 8`
+  /// for a compression flag of 2.
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
     if (headerBytes.length < RpcConstants.messagePrefixSize) {
-      throw RpcException('Invalid gRPC message header length');
+      throw RpcStatusException(
+        RpcStatus.internal,
+        'Invalid gRPC message header length',
+      );
     }
 
     final compressionFlag = headerBytes[RpcConstants.compressionFlagIndex];
     if (compressionFlag != RpcConstants.noCompression &&
         compressionFlag != RpcConstants.compressed) {
-      throw RpcException(
+      throw RpcStatusException(
+        RpcStatus.internal,
         'Invalid compression flag in gRPC message: $compressionFlag',
       );
     }

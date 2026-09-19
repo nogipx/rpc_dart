@@ -44,7 +44,8 @@ void main() {
         await cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw RpcException('fail'),
+          (ctx, req) async =>
+              throw RpcStatusException(RpcStatus.internal, 'fail'),
         );
       } on RpcException {
         // expected
@@ -110,7 +111,9 @@ void main() {
       final probeStream = await cb.interceptServerStream<String, String>(
         callContext,
         'req',
-        (ctx, req) => Stream<String>.error(RpcException('probe failure')),
+        (ctx, req) => Stream<String>.error(
+          RpcStatusException(RpcStatus.internal, 'probe failure'),
+        ),
       );
       // Do not listen.
       expect(cb.state, CircuitBreakerState.halfOpen);

@@ -49,7 +49,8 @@ void main() {
             await cb.interceptUnary<String, String>(
               ctx,
               'req',
-              (c, r) async => throw RpcException('fail'),
+              (c, r) async =>
+                  throw RpcStatusException(RpcStatus.internal, 'fail'),
             );
           } on RpcException {
             // expected

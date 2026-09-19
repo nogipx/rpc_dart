@@ -160,8 +160,11 @@ final class RpcEndpointPingExchange {
               _log.warning(
                 'Ping failed: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
               );
+              // Carry the peer's OWN status through rather than flattening it:
+              // the ping failed for whatever reason the trailer named.
               completeError(
-                RpcException(
+                RpcStatusException(
+                  statusCode,
                   'Ping failed with status $statusCode: $decodedMessage',
                 ),
               );

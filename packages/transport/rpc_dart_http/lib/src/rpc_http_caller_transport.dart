@@ -231,7 +231,10 @@ class RpcHttpCallerTransport
     await for (final chunk in response.stream) {
       builder.add(chunk);
       if (builder.length > limit) {
-        throw RpcException(
+        // RESOURCE_EXHAUSTED: a size limit, the same answer grpc-go gives for
+        // a message larger than the maximum.
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
           'HTTP response body exceeds the configured limit of $limit bytes '
           '(stream $streamId, method ${response.request?.url.path}). Raise '
           'RpcSecurityPolicy.maxMessageLengthBytes if this is expected.',

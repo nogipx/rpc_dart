@@ -9,9 +9,22 @@ import 'error_details.dart';
 
 /// Base exception for the RPC core.
 ///
-/// Signals framework-level issues such as depleted Stream IDs or invalid
-/// configuration.
-class RpcException implements Exception {
+/// **Abstract, and that is the point.** A bare `RpcException` said only "some
+/// rpc_dart error", and `wireStatusFor` had to answer it with INTERNAL — so
+/// every throw site that did not bother to classify itself became INTERNAL on
+/// the wire, including limits a peer could have corrected and methods that do
+/// not exist. Worse, `RpcException` is the BASE, so any `is RpcException` check
+/// meant to identify a KIND matched everything: the http2 responder read it as
+/// "a resource limit" and answered a corrupt frame RESOURCE_EXHAUSTED, which is
+/// retryable.
+///
+/// Throw [RpcStatusException] with the status that fits, or a subclass that
+/// picks one for you ([RpcFrameException], [RpcMetadataViolation],
+/// [RpcCancelledException], [RpcDeadlineExceededException]).
+///
+/// Still the type to CATCH: `e is RpcException` remains the one check that
+/// means "this came from rpc_dart".
+abstract class RpcException implements Exception {
   /// Human-readable description of the error.
   final String message;
 
