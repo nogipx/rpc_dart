@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: closed (round 414) — markDraining() added and called; 1347 admitted became 3
 round: 403
 commit: b968f337
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -77,7 +77,12 @@ authority.
 
 ## Owner decision
 
-Needed: should `RpcEndpointBase` expose "reject new streams" separately from
-"cancel the active ones"? Every graceful drain wants the first without the
+**Answered: yes, split them.** `RpcEndpointBase` gains a `markDraining()` that
+sets only the reject-new-streams flag; `drain()` keeps both halves for the
+callers that want them. The websocket server's `_drain` calls it on every
+endpoint before polling, which is the GOAWAY it has no protocol equivalent for.
+
+The question as put was whether to expose "reject new streams" separately from
+"cancel the active ones". Every graceful drain wants the first without the
 second, and today only `rpc_app.dart` uses `drain()` at all — the two servers
 each hand-rolled their own polling loop instead.

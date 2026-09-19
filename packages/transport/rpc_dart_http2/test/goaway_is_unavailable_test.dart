@@ -164,14 +164,30 @@ void main() {
     await drain();
     attempts = 0;
 
-    await callAndCatch(caller);
+    final afterDrain = await callAndCatch(caller);
     expect(
       attempts,
-      3,
+      greaterThan(1),
       reason:
           'RpcRetryInterceptor retries UNAVAILABLE and its doc says "a lost '
           'connection becomes UNAVAILABLE"; a StateError is not a status, so '
           'a routine load-balancer drain got exactly one attempt',
+    );
+    // The promise in this test's name, made real by B-61. `drain()` sends
+    // GOAWAY on ONE connection and leaves the listener up — the canonical
+    // load-balancer case — so a retry that reconnects RECOVERS.
+    //
+    // This used to assert `attempts == 3`, counting failures as a proxy for
+    // "a retry happened". The proxy was only meaningful while every attempt
+    // went back to the same dead connection and none could pass; now the
+    // second one succeeds, and asserting three failures would pin the
+    // hollow version of the promise.
+    expect(
+      afterDrain,
+      isNull,
+      reason:
+          'the retry reconnects, so a drained connection recovers instead of '
+          'spending the whole budget to reach the same failure',
     );
   });
 

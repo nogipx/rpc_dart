@@ -198,8 +198,32 @@ class RpcWebSocketServer implements IRpcServer {
   /// COUNT. `activeResponders` counts live responder streams, so a handler that
   /// outlives its stream is not counted — the same caveat gRPC's own drain
   /// carries.
-  Future<void> _drain(Duration budget) =>
-      drainUntilIdle(pending: _inFlightCalls, budget: budget, logger: _logger);
+  ///
+  /// STOP ADMITTING FIRST, which is what makes this a drain rather than a wait.
+  /// Accepting has already stopped by the time this runs, but an existing
+  /// CONNECTION can still open new streams, and WebSocket has no GOAWAY to
+  /// forbid it with — so the endpoints are told directly. Measured against
+  /// http2, which does send GOAWAY, both spending their whole budget:
+  ///
+  ///     websocket  1347 calls admitted after shutdown began
+  ///     http2         4
+  ///
+  /// The damage is not the waiting. Endpoints close when the budget expires, so
+  /// a call admitted at 2.9 s of a 3 s drain is killed at 3.0 — the calls most
+  /// likely to be cut are the ones accepted after the decision to shut down.
+  ///
+  /// [RpcEndpointBase.markDraining] and not `drain()`: the latter also cancels
+  /// every active context, which is the opposite of what this promises.
+  Future<void> _drain(Duration budget) {
+    for (final endpoint in _endpoints) {
+      endpoint.markDraining();
+    }
+    return drainUntilIdle(
+      pending: _inFlightCalls,
+      budget: budget,
+      logger: _logger,
+    );
+  }
 
   /// Live responder streams across every endpoint this server owns.
   ///

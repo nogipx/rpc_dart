@@ -1,5 +1,5 @@
 ---
-status: awaiting owner — premise corrected in round 406; the type is unified, the behaviour is not
+status: closed (round 414) — the retry reconnects; a drained connection now recovers on attempt 2
 round: 405
 commit: 866623d3
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
@@ -69,7 +69,14 @@ status whose remedy does not exist there.
 
 ## Owner decision
 
-Which retry semantics win for a connection that is gone?
+**Answered: the third option — teach `RpcRetryInterceptor` to call
+`reconnect()`.** It is the only one that overturns neither transport's tested
+decision: UNAVAILABLE becomes honest on a bare transport, so http2's
+`a drained connection is retried as the retry doc promises` starts meaning what
+it says, and websocket's non-retryable refusal for the reconnect WINDOW is
+untouched.
+
+The question as put, and the three options weighed:
 
 ```
 option                          consequence

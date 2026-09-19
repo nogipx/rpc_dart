@@ -122,10 +122,41 @@ class RpcRetryInterceptor extends IRpcInterceptor {
         }
 
         await Future<void>.delayed(delay);
+        await _reconnectIfConnectionIsGone(e, call);
       }
     }
 
     Error.throwWithStackTrace(lastError!, lastStack!);
+  }
+
+  /// Re-establishes the connection before an UNAVAILABLE retry.
+  ///
+  /// Without this the retry promise was hollow on a bare transport: UNAVAILABLE
+  /// is the framework's "the connection is gone", and every attempt went back
+  /// to the SAME dead transport, so the budget burned and no attempt could
+  /// possibly pass. A retry that cannot succeed is worse than no retry — it
+  /// spends the caller's deadline to reach the same failure.
+  ///
+  /// UNAVAILABLE only. RESOURCE_EXHAUSTED means the peer is overloaded, and its
+  /// connection is fine; reconnecting would drop a working one and add load to
+  /// a server already asking for less.
+  ///
+  /// Best-effort by construction. A transport that cannot reconnect ANSWERS —
+  /// `RpcChannelTransport` returns `degraded / supported: false` rather than
+  /// throwing — and a failed attempt leaves a recoverable transport, so the
+  /// next attempt is still worth making. Either way the original error is what
+  /// the caller sees.
+  Future<void> _reconnectIfConnectionIsGone(
+    Object error,
+    RpcMiddlewareContext call,
+  ) async {
+    if (error is! RpcStatusException) return;
+    if (error.statusCode != RpcStatus.unavailable) return;
+    try {
+      await call.endpoint.transport.reconnect();
+    } catch (_) {
+      // Nothing to do: the attempt below will fail the same way and report it.
+    }
   }
 
   bool _shouldRetry(Object error, RpcContext context) {
