@@ -677,7 +677,7 @@ class RpcChannelTransport
       _policy.validateMetadata(metadata);
       return true;
     } on ArgumentError catch (error) {
-      final violation = RpcFrameException(
+      final violation = RpcFrameException.policy(
         'Inbound metadata violates the security policy on stream '
         '$streamId: ${error.message}',
       );

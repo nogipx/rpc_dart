@@ -380,7 +380,7 @@ class RpcFrameMultiplexedChannel
     final incoming = _bufLen + data.length;
     if (incoming > _maxBufferedFrameBytes) {
       _failChannel(
-        RpcFrameException(
+        RpcFrameException.limit(
           'Incoming frame buffer overflow: $incoming bytes '
           '(max: $_maxBufferedFrameBytes)',
         ),
@@ -420,7 +420,7 @@ class RpcFrameMultiplexedChannel
       // A peer past the cap is not a peer with a bug. Fail here, once decodeAll
       // has finished with the buffer.
       _failChannel(
-        RpcFrameException(
+        RpcFrameException.limit(
           'Too many undecodable metadata frames '
           '(over $_maxMalformedMetadataFrames on this connection)',
         ),

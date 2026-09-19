@@ -7,6 +7,9 @@ import 'dart:typed_data';
 
 import 'errors.dart';
 import 'metadata.dart';
+// For RpcStatus: RpcFrameException carries the status for its kind, so the
+// three kinds stop collapsing into INTERNAL on the wire.
+import 'protocol.dart';
 
 /// Multiplexed frame format for [IRpcChannel]-based transports.
 ///
@@ -102,7 +105,7 @@ abstract final class RpcChannelFrame {
     final payloadLen = view.getUint32(offset + 5);
 
     if (maxPayloadLen != null && payloadLen > maxPayloadLen) {
-      throw RpcFrameException(
+      throw RpcFrameException.limit(
         'Incoming frame payload too large: $payloadLen bytes '
         '(max: $maxPayloadLen)',
       );
@@ -124,7 +127,7 @@ abstract final class RpcChannelFrame {
     // payload: 64KB against 16MB by default. Checked before decoding, so a
     // huge header blob is rejected without being parsed.
     if (isMetadata && maxMetadataLen != null && payloadLen > maxMetadataLen) {
-      throw RpcFrameException(
+      throw RpcFrameException.limit(
         'Incoming metadata frame too large: $payloadLen bytes '
         '(max: $maxMetadataLen)',
       );
@@ -318,9 +321,35 @@ abstract final class RpcChannelFrame {
 ///
 /// Surfaced as a handled, typed error on the incoming stream rather than an
 /// uncaught throw into the receive loop's zone.
-class RpcFrameException extends RpcException {
-  /// Creates an [RpcFrameException] with [message].
-  RpcFrameException(super.message);
+/// Carries the gRPC status for its KIND, because the three kinds are not one
+/// answer. Untyped, every frame failure reached a peer as INTERNAL — including
+/// the limits, where INTERNAL is final and RESOURCE_EXHAUSTED is retryable, so
+/// a sender that could have corrected itself was told never to try again.
+///
+/// The split is not invented here; it is the one the http2 responder already
+/// makes in `_answerFramingViolation` and the one the channel transport already
+/// sends as a trailer for a policy violation.
+class RpcFrameException extends RpcStatusException {
+  /// Malformed framing — bad UTF-8, bad JSON, the wrong shape.
+  ///
+  /// INTERNAL, matching `_answerFramingViolation`'s "anything else reaching
+  /// here is malformed framing, which is INTERNAL". The default, so the six
+  /// sites of this kind are unchanged.
+  RpcFrameException(String message) : super(RpcStatus.internal, message);
+
+  /// A limit the peer can correct by sending less.
+  ///
+  /// RESOURCE_EXHAUSTED, which grpc-go and grpc-java both answer and which
+  /// `RpcRetryInterceptor` treats as transient where INTERNAL is final.
+  RpcFrameException.limit(String message)
+    : super(RpcStatus.resourceExhausted, message);
+
+  /// The peer's metadata failed the configured policy.
+  ///
+  /// INVALID_ARGUMENT — deterministic, so it should be retried never, and it is
+  /// already the trailer `RpcChannelTransport._validateInbound` sends.
+  RpcFrameException.policy(String message)
+    : super(RpcStatus.invalidArgument, message);
 }
 
 /// A decoded multiplexed frame.

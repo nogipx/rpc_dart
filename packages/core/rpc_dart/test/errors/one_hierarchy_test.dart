@@ -124,6 +124,44 @@ void main() {
       expect(c.statusCode, RpcStatus.notFound);
     });
 
+    // WITNESS: every frame failure reached a peer as INTERNAL, because
+    // RpcFrameException extended RpcException and wireStatusFor's second branch
+    // hardcodes INTERNAL. The three kinds are not one answer — and the split is
+    // not invented here, it is the one `_answerFramingViolation` already makes.
+    test('a frame failure carries the status for its KIND', () {
+      // A limit the peer can correct by sending less. RESOURCE_EXHAUSTED is
+      // retryable where INTERNAL is final, so this inverts retry semantics for
+      // the four sites that use it.
+      expect(
+        RpcFrameException.limit('payload too large: 9 (max: 4)').statusCode,
+        RpcStatus.resourceExhausted,
+      );
+      // Deterministic, so it must be retried never.
+      expect(
+        RpcFrameException.policy('metadata violates the policy').statusCode,
+        RpcStatus.invalidArgument,
+      );
+      // The DEFAULT, and it must stay INTERNAL: six malformed-framing sites use
+      // it, and platform_error_redaction_test pins that its message is
+      // forwarded rather than redacted.
+      expect(
+        RpcFrameException('bad frame header').statusCode,
+        RpcStatus.internal,
+      );
+    });
+
+    // GUARD: a frame failure is still library-authored, so its diagnostic still
+    // reaches the peer. That is what lets a sender correct itself, and it is
+    // the reason these types are in the hierarchy at all.
+    test('a frame failure still forwards its message', () {
+      final limit = wireStatusFor(
+        RpcFrameException.limit('payload too large: 9 (max: 4)'),
+      );
+      expect(limit.status, RpcStatus.resourceExhausted);
+      expect(limit.message, contains('max: 4'));
+      expect(limit.message, isNot(kInternalErrorWireMessage));
+    });
+
     // GUARD: the rendered text is unchanged, so logs and golden output do not
     // move. The breaker keeps its retryAfter in toString() for this reason.
     test('toString is unchanged', () {
