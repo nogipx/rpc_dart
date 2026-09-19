@@ -3,8 +3,8 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**]
 applies: an object has start/stop/close/reconnect and a suite that builds a fresh one per test
 breaks: a connection leak.
-applied: [241]
-status: confirmed (round 241)
+applied: [241, 401]
+status: confirmed (round 401)
 ---
 
 # RPC-21 — Drive the lifecycle twice
@@ -113,6 +113,38 @@ a 1.3% defect has no deterministic witness to canary.
 > was not the concurrent defect already pinned by a test in the same file.
 
 The clean half of the same sweep is `../checked/C-06-lifecycle-apis-twice.md`.
+
+## Round 401 — drive the REMEDY the second call prescribes
+
+The second call does not always leak or throw silently. Sometimes it throws a
+good error that tells the operator what to do — and then the thing to drive is
+the instruction, not the API.
+
+`RpcWebSocketServer.start()` refuses to restart over a single-subscription
+connections stream and names two remedies. One works and one cannot:
+
+```
+arm            first     restart      isRunning   then
+single         served    StateError   false       -
+broadcast      served    ok           true        served
+fresh server   served    StateError   false       -
+```
+
+"Construct a new `RpcWebSocketServer`" fails identically, because the obstacle
+is the STREAM and not the server object — and over the same `HttpServer` there
+is no fresh stream to be had either, `HttpServer` being single-subscription and
+already listened to.
+
+> **An error message that prescribes is an API surface, and the lens covers it.**
+> Nothing type-checks prose. Drive each remedy it names the way a reader would:
+> literally, changing only what the sentence says to change.
+
+And the remedy that works is worth driving one step further, because a restart
+has a WINDOW. While the server is stopped the socket underneath keeps accepting
+and upgrading, and a broadcast stream with no listener drops the event: the peer
+completes its handshake, is never answered and never closed, and waits on its
+own deadline. B-59. `../probes/P-87-restart-the-way-the-error-says.md`,
+`../rounds/401-the-remedy-that-was-not-one.md`.
 
 Imported from private memory in the curate pass after round 234, which is also
 what C-06 had been asking for: it recorded shape U-15 as having no lens.

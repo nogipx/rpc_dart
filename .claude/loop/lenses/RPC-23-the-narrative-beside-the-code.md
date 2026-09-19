@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401]
 status: confirmed (round 375)
 ---
 
@@ -263,3 +263,25 @@ a prediction.
 
 Bench `../probes/P-55-what-a-wasm-call-costs.md`,
 `../rounds/364-the-readme-named-an-engine-that-cannot-run-it.md`.
+
+## Round 401 — the prose that is thrown, not written
+
+Round 364's form is a README naming a component that cannot do the job. Round
+401's is the same defect in the one place prose is reached at RUNTIME, by a
+reader who is already in trouble: an **error message that prescribes**.
+
+`RpcWebSocketServer.start()` refuses to restart over a single-subscription
+stream and names two remedies. Driven literally, "construct a new
+`RpcWebSocketServer`" throws the identical error — the obstacle is the STREAM,
+and over the same `HttpServer` there is no fresh one to be had. And the remedy
+that does work has a window the message did not mention, in which a peer is
+accepted and abandoned.
+
+> **A message that tells the user what to do is a promise the compiler cannot
+> check, read at the worst possible moment.** Grep for the imperative voice in
+> `throw` arguments — "pass", "use", "construct", "call X first" — and drive
+> each one the way a reader would: change only what the sentence says to change.
+
+`../rounds/401-the-remedy-that-was-not-one.md`, and the bench is RPC-21's
+`../probes/P-87-restart-the-way-the-error-says.md`, because driving the remedy
+IS driving the lifecycle twice.

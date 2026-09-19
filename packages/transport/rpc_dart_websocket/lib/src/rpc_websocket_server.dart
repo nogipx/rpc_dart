@@ -131,12 +131,20 @@ class RpcWebSocketServer implements IRpcServer {
       // does not own its connections stream, so unlike RpcHttp2Server -- which
       // rebinds its own socket -- it cannot restart on a single-subscription
       // source.
+      //
+      // Name the STREAM as the thing to change, not the server. A new
+      // RpcWebSocketServer over the same stream fails identically, and so does
+      // a second `rpcWebSocketConnections(http)` -- HttpServer is
+      // single-subscription too and the first call already listened to it.
       throw StateError(
         'RpcWebSocketServer cannot be restarted: its `connections` stream has '
         'already been listened to. stop() cancels the subscription, and a '
-        'single-subscription stream cannot be listened to again. Pass a '
-        'broadcast stream (Stream.asBroadcastStream()) if the server must '
-        'restart, or construct a new RpcWebSocketServer. Original: $error',
+        'single-subscription stream cannot be listened to again. Building a '
+        'new RpcWebSocketServer over the SAME stream does not help. Either '
+        'pass a broadcast stream (Stream.asBroadcastStream()) -- note that '
+        'while the server is stopped a peer can still complete the WebSocket '
+        'handshake and will then be dropped with no answer and no close -- or '
+        'bind a new HttpServer for the new stream. Original: $error',
       );
     }
 

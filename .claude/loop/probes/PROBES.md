@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-87](P-87-restart-the-way-the-error-says.md)** valid (round 401),
+  rpc_dart_websocket — restart the server the way its own `StateError` says to,
+  one arm per remedy the message names. The arms differ ONLY in how the
+  connections stream was built, so a difference is attributable to that.
+  Contaminated observable, caught and recorded: the abandoned-socket flag was
+  first read after the arm's own `sink.close()` and reported `closed` — its own
+  teardown, the same trap as P-84's first rebuild
 - **[P-86](P-86-a-peer-that-never-reads.md)** valid (round 400),
   rpc_dart_http2 — what a peer that never reads its own refusals costs the
   server. "Never reads" is a RELAY whose server-to-peer subscription is paused,
