@@ -58,8 +58,15 @@ never reached the path it names must not be able to read as a clean one.
   the policy-violation backstop at 256. Only `:method != POST` was driven.
   `_answerFramingViolation` was the fourth of these and is now covered by round
   397, which found it broken.
-- A peer that refuses to READ its own refusal: the trailer goes out through the
-  outgoing pump, which waits on the peer's window. Not measured here.
+- ~~A peer that refuses to READ its own refusal: the trailer goes out through
+  the outgoing pump, which waits on the peer's window. Not measured here.~~
+  **Driven in round 400, and the premise was wrong twice over**: the refusal is
+  a trailers-only HEADERS frame, so the peer's WINDOW is irrelevant (round 396),
+  and `package:http2` queues it rather than blocking on the socket, so TCP
+  backpressure does not park it either. `pumps` reads 0 on every arm, so the
+  send never reaches the pump's wait at all. 20000 refused streams against a
+  peer reading nothing leave a plateau of 394, identical twelve seconds later.
+  P-86.
 - Anything about the pipeline's own limits; `maxActiveStreams` and
   `halfOpenStreamTimeout` are its, and C-29 settles their scope.
 

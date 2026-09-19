@@ -4,8 +4,30 @@ round: 397
 commit: d9d96cd2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
 probe: P-84 measures the release half; the COST of a per-connection grind — one stream, N refused frames — has no number
-reason: behaviour decision — one catch covers a resource limit the sender can retry and a malformed frame it cannot, and counting both closes connections on legitimate clients that merely misjudged a size limit
+reason: owner decision — the COST half is answered (round 399: a refusal flood costs the server LESS than the same volume of honest calls, so no backstop is justified on cost); what remains is whether `closeOnProtocolError` should mean malformed framing, which is a question about the field's contract
 ---
+
+> **Round 399 answered the cost half and it argues AGAINST the backstop.** P-85,
+> 2000 operations each on one connection through a byte-counting relay:
+>
+> ```
+> arm            ops     ms    up B/op  down B/op   amp    status
+> served        2000    873      164.3      128.0   0.78x   0
+> framing       2000    548      134.0      216.0   1.61x   8
+> :method GET    300     66      133.0      162.5   1.22x   3
+> ```
+>
+> The server does LESS work per refusal than per honest call, so grinding
+> refused frames is a worse attack than simply calling. `:method GET` is the
+> sibling site with its backstop, closing the connection after the 256th
+> violation — which is what the framing site is missing, and what nothing now
+> shows a need for.
+>
+> The one axis where the refusal is worse is amplification: 1.61x, the only path
+> here writing more than it reads. Ablated — `maxHeaderValueBytes: 24`, same
+> site (`grpc-status 8`), **216 B down becomes 131 and the amplification goes** —
+> so the cause is the parser's diagnostic text, which is the thing that lets a
+> client fix its own request. Recorded, not changed.
 
 # B-58 — a framing violation counts toward nothing
 
@@ -45,10 +67,9 @@ framing at all is a decision about what that knob means, which is the owner's.
 
 ## What a round taking this would measure
 
-The cost side has no number yet. P-84's hostile arm is five bytes per stream;
-the question here is the per-CONNECTION grind — one stream, N refused frames —
-and what it costs the server now that each refusal also tears the call down and
-releases. Measure that before deciding the backstop is needed.
+~~The cost side has no number yet.~~ **Done in round 399 — see the note at the
+top. The answer is that no backstop is justified on cost**, so what is left
+below is only the contract question.
 
 ## Owner decision
 

@@ -38,6 +38,25 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-86](P-86-a-peer-that-never-reads.md)** valid (round 400),
+  rpc_dart_http2 — what a peer that never reads its own refusals costs the
+  server. "Never reads" is a RELAY whose server-to-peer subscription is paused,
+  not a peer that skips `listen`: dart:io drains into its own buffer, so that
+  version applies no pressure at all. Two controls, and the second is the
+  unusual one — the counters are read TWICE, twelve seconds apart, because one
+  sample cannot separate a plateau from a slow climb and that distinction is the
+  whole verdict. Its RSS column decides nothing and says so: the process holds
+  both peers and two of three arms read NEGATIVE
+- **[P-85](P-85-what-a-refusal-grind-costs.md)** valid (round 399),
+  rpc_dart_http2 — what a refusal grind costs, **against a served-call control**,
+  which is the whole point: RPC-22's question is comparative and an absolute
+  refusal cost means nothing. Bytes come from a RELAY between peer and server,
+  because neither endpoint can report both directions without the other's
+  cooperation. Two columns earn their place — `ops`, because the
+  backstop-bearing arm stops part-way and dividing by the attempt count would
+  understate it 6x; and `grpc-status`, which caught this round's first ablation
+  arm measuring the wrong site (`maxHeaderValueBytes: 8` refuses the request's
+  own `content-type`, so it never reached the framing path)
 - **[P-84](P-84-what-a-refused-stream-leaves.md)** valid (round 397),
   rpc_dart_http2 — what a refused stream leaves on the responder. **Two rebuilds
   worth reading**: it first read the counters after `conn.terminate()`, which

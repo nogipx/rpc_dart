@@ -3,7 +3,7 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397]
+applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397, 399, 400]
 status: confirmed (round 397)
 ---
 
@@ -38,6 +38,49 @@ work an unauthenticated peer commands directly.
 
 Which is cheaper for an attacker — being accepted, or being refused? If the
 answer is "refused", the refusal path is the attack surface.
+
+**Round 399 added the second clause, because the first alone gives a false
+positive.** "Cheaper for the attacker" is only half a comparison: what matters
+is cheaper for the attacker AND dearer for the server. Measured on the
+http2 framing refusal against a served-call control, 2000 operations each:
+
+```
+arm        ops     ms    up B/op  down B/op   amp
+served    2000    873      164.3      128.0   0.78x
+framing   2000    548      134.0      216.0   1.61x
+```
+
+The peer does pay less (134 against 164 B/op), which trips the Ask as written —
+and the SERVER also does less (548 ms against 873), so a refusal flood is
+strictly less damaging than the same volume of honest calls, which nothing
+bounds either. B-58's backstop is not justified on cost.
+
+> **Ask both sides, or a cheap refusal that is also a cheap ANSWER reads as a
+> finding.** Every earlier application of this lens happened to have a server
+> cost — an unbounded drain, a built endpoint, a parked handler — so the
+> question was never asked in two parts.
+
+The one axis where a refusal can be worse is amplification: it was the only path
+here writing more than it read, and the ablation names the cause — trimming
+`maxHeaderValueBytes` to 24 takes it from 216 bytes down to 131 at the same
+site, so the diagnostic message is the amplifier. 1.61x, and TCP will not carry
+a spoofed source, so it is recorded rather than fixed.
+`../probes/P-85-what-a-refusal-grind-costs.md`.
+
+**Round 400 asked the third question in the series — who pays for the ANSWER?**
+A refusal is a write, so a peer that provokes one and then reads nothing is
+making the server hold it. Here it turned out the server does not: 20000 refused
+streams against a peer reading nothing leave a plateau of 394, twelve seconds
+apart identical, because `package:http2` queues the trailers-only HEADERS frame
+instead of blocking, and its own read backpressure then stops it admitting more.
+
+> **Producing "the peer does not read" is harder than it looks.** A peer that
+> never calls `listen` applies no pressure — dart:io drains into its own buffer.
+> It takes a relay whose upstream subscription is PAUSED before TCP
+> backpressure reaches the far end. An arm that gets this wrong measures a
+> perfectly healthy server and reads as a clean result.
+
+`../probes/P-86-a-peer-that-never-reads.md`.
 
 ## Evidence
 
