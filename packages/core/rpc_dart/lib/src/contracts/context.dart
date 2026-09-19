@@ -453,19 +453,34 @@ final class RpcCancellationToken {
 }
 
 /// Operation cancellation exception.
-final class RpcCancelledException implements Exception {
-  /// Reason the operation was cancelled.
-  final String message;
-
+///
+/// An [RpcStatusException] carrying CANCELLED, and that is load-bearing rather
+/// than decorative. `wireStatusFor` is DEFAULT DENY — only this hierarchy
+/// reaches a peer intact — so while this implemented `Exception` directly a
+/// handler throwing it was indistinguishable from a foreign `StateError`:
+/// both came back INTERNAL(13) "Internal server error".
+final class RpcCancelledException extends RpcStatusException {
   /// Creates an [RpcCancelledException] with the given [message].
-  const RpcCancelledException(this.message);
+  const RpcCancelledException(String message)
+    : super(RpcStatus.cancelled, message);
+
+  /// Reason the operation was cancelled.
+  String get reason => message;
 
   @override
   String toString() => 'RpcCancelledException: $message';
 }
 
 /// Deadline-exceeded exception.
-final class RpcDeadlineExceededException implements Exception {
+///
+/// See [RpcCancelledException] for why this carries a status: untyped, a
+/// handler throwing it told the peer INTERNAL rather than DEADLINE_EXCEEDED.
+///
+/// NOT const, unlike its sibling: the wire message interpolates [deadline], and
+/// a const constructor cannot. Nothing is lost — [DateTime] has no const
+/// constructor, so `const RpcDeadlineExceededException(...)` was never
+/// constructible in the first place.
+final class RpcDeadlineExceededException extends RpcStatusException {
   /// The deadline that was exceeded.
   final DateTime deadline;
 
@@ -473,11 +488,14 @@ final class RpcDeadlineExceededException implements Exception {
   final Duration timeout;
 
   /// Creates an [RpcDeadlineExceededException] with [deadline] and [timeout].
-  const RpcDeadlineExceededException(this.deadline, this.timeout);
+  RpcDeadlineExceededException(this.deadline, this.timeout)
+    : super(
+        RpcStatus.deadlineExceeded,
+        'Deadline $deadline exceeded (timeout: $timeout)',
+      );
 
   @override
-  String toString() =>
-      'RpcDeadlineExceededException: Deadline $deadline exceeded (timeout: $timeout)';
+  String toString() => 'RpcDeadlineExceededException: $message';
 }
 
 /// Utilities for working with the context.

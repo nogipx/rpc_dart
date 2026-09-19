@@ -38,6 +38,21 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-92](P-92-what-the-peer-is-told-per-type.md)** valid (round 408),
+  rpc_dart — what a handler's error TYPE costs the peer. **Three of its five
+  arms are controls and they are the whole design**: a type inside the
+  hierarchy, the supported `RpcStatusException`, and a foreign `StateError`.
+  Without them "the subjects come back INTERNAL" and "everything comes back
+  INTERNAL" are the same output. The foreign arm doubles as the standing GUARD:
+  `wireStatusFor` is default-deny, so if it ever stops being redacted the deny
+  has been broken by whatever widened the hierarchy
+- **[P-91](P-91-what-a-dead-worker-looks-like.md)** valid (round 407),
+  rpc_dart_isolate — the isolate's row in P-90's table, for a transport with
+  neither `_disconnected` nor `reconnect()`. Its arms come from READING
+  `spawn()` — an errorPort and an exitPort that after startup do the same thing
+  — rather than from guessing, and `kill()` is the control on both, since it
+  reaches neither port. All three deaths answer UNAVAILABLE, including an
+  uncaught throw from a timer after the handler's frame is gone
 - **[P-90](P-90-which-type-escapes-when-disconnected.md)** valid (round 405),
   websocket and http2 — which type escapes a disconnected transport. **Its
   design IS its control**: each arm polls the transport's own `health()` until

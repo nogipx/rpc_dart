@@ -16,7 +16,11 @@ class RpcException implements Exception {
   final String message;
 
   /// Creates an [RpcException] with the given [message].
-  RpcException(this.message);
+  ///
+  /// `const` so subclasses that were const before joining this hierarchy stay
+  /// const. Widening a constructor to const is additive: every existing
+  /// non-const invocation keeps working.
+  const RpcException(this.message);
 
   @override
   String toString() => 'RpcException: $message';
@@ -73,8 +77,11 @@ class RpcStatusException extends RpcException {
   /// [statusCode] gRPC status code.
   /// [message] Human-readable error message.
   /// [details] Optional structured details (field violations, retry info, etc.)
-  RpcStatusException(this.statusCode, String message, {this.details = const []})
-    : super(message);
+  const RpcStatusException(
+    this.statusCode,
+    String message, {
+    this.details = const [],
+  }) : super(message);
 
   /// Encodes [details] into a `google.rpc.Status` binary for the
   /// `grpc-status-details-bin` trailer. Returns null if no details.

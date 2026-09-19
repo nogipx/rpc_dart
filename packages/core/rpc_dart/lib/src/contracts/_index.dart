@@ -15,6 +15,8 @@ import '../_internal.dart'
         RpcCallerEndpoint,
         RpcPeerEndpoint,
         RpcException,
+        RpcStatus,
+        RpcStatusException,
         RpcLongTimer,
         LogScope;
 

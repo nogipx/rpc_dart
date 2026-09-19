@@ -49,6 +49,24 @@ nothing in flight is simply gone. health()'s three branches distinguish cases
 for the MESSAGE, not for liveness, and one of them is load-bearing for retry
 semantics.
 
+## The third transport's row (round 407, P-91)
+
+Measured, not argued, and it decides nothing here:
+
+```
+transport   isClosed   a later call
+websocket   false      RpcStatusException(9)    FAILED_PRECONDITION
+http2       false      RpcStatusException(14)   UNAVAILABLE
+isolate     true       RpcStatusException(14)   UNAVAILABLE
+```
+
+The isolate answers UNAVAILABLE on all three ways of dying — an uncaught throw,
+a self-kill, and the host's own `kill()` — and closes, which is right for it:
+a killed isolate is terminal and the remedy is to spawn another, not to
+reconnect. So it has no `reconnect()` for a "call reconnect()" message to point
+at, and the option below that unifies on FAILED_PRECONDITION would give it a
+status whose remedy does not exist there.
+
 ## Owner decision
 
 Which retry semantics win for a connection that is gone?
