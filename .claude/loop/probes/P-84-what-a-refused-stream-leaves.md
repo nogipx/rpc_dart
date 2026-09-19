@@ -1,6 +1,6 @@
 ---
 file: packages/transport/rpc_dart_http2/.dart_tool/probe/refused_streams_are_released.dart
-round: 395
+round: 397
 commit: 8e47a55b
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
 status: valid
@@ -16,13 +16,15 @@ pipeline makes for streams the pipeline knows about.
 
 ## Measures
 
-`incomingStreams`, `streamSubscriptions` and `streamParsers` from the server
-transport's own `health()`, after 200 requests on ONE connection — and the
-`grpc-status` the peer was told, per arm.
+`incomingStreams`, `streamSubscriptions`, `streamParsers` and `outgoingPumps`
+from the server transport's own `health()`, plus `activeResponders` from the
+endpoint's metrics, after 200 requests on ONE connection — and the `grpc-status`
+the peer was told, per arm.
 
 Drives the peer with `package:http2` directly rather than through
 `RpcHttp2CallerTransport`, because the arms need malformed requests
-(`:method: GET`) that a well-behaved caller will not send.
+(`:method: GET`, a gRPC prefix declaring 32 MiB) that a well-behaved caller will
+not send.
 
 ## Two rebuilds, both worth keeping
 
@@ -43,22 +45,41 @@ stay live, and reading **200 / 200** is what proves these counters report
 retention at all. Every other arm's zero is meaningless without it
 (measurement.md item 8).
 
-## The numbers (round 395)
+`streaming, mid-answer` (round 396) is the same job for the pump column: 200
+server-streams that answered once and parked, so their writers are live and it
+reads 200.
+
+## The numbers (round 397)
+
+Before the framing-violation site released its stream:
 
 ```
-arm                      incomingStreams  streamSubscriptions  peer saw
-open, never ended              200                200          -
-half-closed, no body             0                  0          grpc-status 3
-refused (:method GET)            0                  0          grpc-status 3
+arm                      incoming  subs  parsers  pumps  responders  peer saw
+streaming, mid-answer       200      0      0      200      200      (mid-response)
+open, never ended           200    200      0        0        0      -
+served (grpc-status 0)        0      0      0        0        0      grpc-status 0
+half-closed, no body          0      0      0        0        0      grpc-status 3
+refused (:method GET)         0      0      0        0        0      grpc-status 3
+bad frame, half-closed        0      0      0        0        0      grpc-status 8
+bad frame, still open       200    200    200      200        0      grpc-status 8
+bad frame mid-upload          1      1      1        1        1      grpc-status 8
 ```
+
+After: the last two arms read all zeros, every other arm unchanged.
+
+**The PAIR is the measurement, not either row.** `bad frame, half-closed` and
+`bad frame, still open` differ in one bit — whether the peer set END_STREAM —
+and the server answers both identically. An arm on its own would have said
+"refusals are clean" or "refusals leak" depending on which one was written.
 
 ## What it establishes, and what it does not
 
 Establishes: a stream refused before the pipeline sees it releases its transport
-state anyway.
+state — at both refusal sites, and on whichever of the four endings the peer
+chooses.
 
-Does NOT count `_outgoingPumps` — `health()` does not expose it, so the pump's
-fate is inferred from `releaseStreamId` removing it on the same line as
-`_incomingStreams`, not measured. Nor does it drive the other refusal sites
-(`validateMetadata`, content-type, the 256-violation backstop), nor a peer that
-refuses to read its own refusal.
+Does NOT drive the remaining refusal triggers (`validateMetadata`,
+content-type, the 256-violation backstop), nor a peer that refuses to read its
+own refusal. On that last one: the refusal is a trailers-only HEADERS frame and
+HTTP/2 flow control covers DATA only, so a zero receive window will not park it
+— that needs TCP-level backpressure.

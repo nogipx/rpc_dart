@@ -3,8 +3,8 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395]
-status: confirmed (round 361)
+applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397]
+status: confirmed (round 397)
 ---
 
 # RPC-22 — The path a peer reaches without being accepted
@@ -165,6 +165,39 @@ exactly `prefaceTimeout`'s scenario seen from the other end.
 
 `../probes/P-52-connect-headers-and-timeout.md`,
 `../rounds/361-the-only-place-to-authenticate.md`.
+
+## Round 397 — enumerate the sites, then drive EACH one
+
+The detector says "enumerate the rejection exits". Round 395 did that for the
+http2 responder, drove one of them, measured it clean, and wrote the rest into
+the negative's own "does not cover" list. Two rounds later the next one down was
+broken.
+
+`_answerRejectedStream` (refused in the HEADERS) releases the stream in a
+`finally` after answering. `_answerFramingViolation` (refused in a DATA frame)
+did not, so reclaiming the stream depended on the PEER setting END_STREAM:
+
+```
+arm                     incoming  subs  parsers  pumps  peer saw
+refused (:method GET)         0      0      0        0  grpc-status 8
+bad frame, half-closed        0      0      0        0  grpc-status 8
+bad frame, still open       200    200    200      200  grpc-status 8
+```
+
+> **Two refusal exits in one file are two measurements, not one.** They are
+> siblings — same duty, 200 lines apart — and the reading that establishes one
+> says nothing about the other. Every zero above comes from a site that calls
+> `releaseStreamId`; the 200s come from the one that does not.
+
+> **The arms must be a PAIR that differs by one bit.** Half-closed against not,
+> same five bytes, same answer. A single arm reads as "refusals are clean" or
+> "refusals leak" depending on which one gets written, and both readings are
+> defensible from one row.
+
+The refusal is also where a running call has to be ENDED, not only where state
+is released: the parse error reaches an upload handler's request stream but
+nothing closes it, so the handler sat in its `await for` with the stream already
+answered. `../rounds/397-the-refusal-that-kept-the-stream.md`, `../probes/P-84`.
 
 **Round 277 aimed it at the canonical instance and came back CLEAN.** HTTP/2
 Rapid Reset (CVE-2023-44487) is this shape exactly — a stream opened and reset

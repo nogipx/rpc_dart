@@ -669,6 +669,12 @@ class RpcHttp2ResponderTransport
   ///
   /// Best-effort: if the stream is already gone, or headers cannot be sent,
   /// there is nothing further to do and the local error above still stands.
+  ///
+  /// Released afterwards, for the reason [_answerRejectedStream] gives: the
+  /// refusal is the last thing this stream will ever carry, and a frame that
+  /// fails the parser leaves the pipeline nothing to reply with, so nobody else
+  /// will call [releaseStreamId]. Whether the peer half-closed is the peer's
+  /// choice, and that is not a choice the server's bookkeeping may depend on.
   void _answerFramingViolation(int streamId, Object error) {
     // Every RpcException RpcMessageParser raises is a RESOURCE LIMIT, and all
     // four read as RESOURCE_EXHAUSTED to a gRPC peer:
@@ -685,23 +691,39 @@ class RpcHttp2ResponderTransport
         ? RpcStatus.resourceExhausted
         : RpcStatus.internal;
 
-    try {
-      // The parser messages carry byte counts and limits ("gRPC frame payload
-      // is too large: 2097160 bytes (max: 262144)"), so they run past a tight
-      // `maxHeaderValueBytes` easily -- and the `catchError` below would then
-      // swallow the answer entirely, leaving the peer with nothing for a
-      // failure it could have corrected. Trimmed rather than risked.
-      final trailers = RpcMetadata.forTrailer(
-        status,
-        message: '$error',
-        maxMessageLength: _policy.maxHeaderValueBytes,
-      );
-      unawaited(
-        sendMetadata(streamId, trailers, endStream: true).catchError((_) {}),
-      );
-    } catch (_) {
-      // The stream may already be closed; the emitted error covers our side.
-    }
+    unawaited(() async {
+      try {
+        // The parser messages carry byte counts and limits ("gRPC frame payload
+        // is too large: 2097160 bytes (max: 262144)"), so they run past a tight
+        // `maxHeaderValueBytes` easily -- and the catch below would then swallow
+        // the answer entirely, leaving the peer with nothing for a failure it
+        // could have corrected. Trimmed rather than risked.
+        final trailers = RpcMetadata.forTrailer(
+          status,
+          message: '$error',
+          maxMessageLength: _policy.maxHeaderValueBytes,
+        );
+        await sendMetadata(streamId, trailers, endStream: true);
+      } catch (_) {
+        // The stream may already be closed; the emitted error covers our side.
+      } finally {
+        // A handler already running on this id has to stop, the way
+        // [_fcRefuseOverrun] stops one: the error above reaches its request
+        // stream, but nothing CLOSES that stream, so an upload handler sits in
+        // its `await for` forever. Independently load-bearing — ablating this
+        // alone leaves the counters at zero and the handler live.
+        _emit(
+          RpcTransportMessage.withMetadata(
+            streamId: streamId,
+            metadata: RpcMetadata([
+              RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+              RpcHeader(RpcHeaders.xCancellationReason, 'frame refused'),
+            ]),
+          ),
+        );
+        releaseStreamId(streamId);
+      }
+    }());
   }
 
   @override

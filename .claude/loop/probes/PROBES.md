@@ -38,14 +38,18 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
-- **[P-84](P-84-what-a-refused-stream-leaves.md)** valid (round 395),
+- **[P-84](P-84-what-a-refused-stream-leaves.md)** valid (round 397),
   rpc_dart_http2 — what a refused stream leaves on the responder. **Two rebuilds
   worth reading**: it first read the counters after `conn.terminate()`, which
   runs `close()` and clears every map, so both arms said 0 and it measured its
   own teardown; and its first control was a POST with no body, which the
   pipeline refuses for its own reason, so there was no served arm at all. Every
   arm now reports the `grpc-status` the peer saw. Control is `open, never
-  ended`, reading 200/200
+  ended`, reading 200/200. Grown twice since: round 396 added the pump column
+  and a `streaming, mid-answer` arm (200 live writers, the retention control for
+  it), round 397 the framing-violation arms and `activeResponders` — and there
+  the PAIR is the measurement, one refusal driven with a half-close and one
+  without, since that is the only difference between 0 and 200
 - **[P-83](P-83-the-flood-on-each-construction-path.md)** valid (round 394),
   rpc_dart_http2 — the same CONTINUATION flood against three construction paths,
   the server being the control. **Its number is FRAMES ACCEPTED, not RSS**: the
