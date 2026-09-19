@@ -3,7 +3,7 @@ refines: U-23
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a package's public surface comes from a barrel that re-exports wholesale
 breaks: "wrong result: a type nobody meant to publish becomes a compatibility promise, and the implementation starts depending on its own public API."
-applied: [289, 290, 291, 292, 307]
+applied: [289, 290, 291, 292, 307, 409]
 status: confirmed (round 291)
 ---
 
