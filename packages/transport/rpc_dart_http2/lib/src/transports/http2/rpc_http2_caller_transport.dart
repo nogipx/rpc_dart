@@ -195,7 +195,13 @@ class RpcHttp2CallerTransport
   void _ensureUsable() {
     if (_isClosed) throw StateError('Transport is closed');
     if (_disconnected) {
-      throw StateError(
+      // Same type and code as the websocket sibling, deliberately: this state
+      // used to surface as StateError there and RpcStatusException here, so no
+      // single `catch` covered both. NOT UNAVAILABLE — `RpcRetryInterceptor`
+      // retries that and never calls `reconnect()`, so the retries spin against
+      // the same dead connection.
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Transport is disconnected and has no connection; call reconnect(). '
         'A failed reconnect leaves the transport recoverable, not closed.',
       );
@@ -1585,6 +1591,14 @@ class RpcHttp2CallerTransport
     // PEER dies on its own -- that path runs no code here at all -- so health()
     // reported "transport ready" with the server gone. A supervisor that polls
     // health to decide whether to reconnect would never reconnect.
+    //
+    // Note this is the REPORT, not a refusal: a dead or drained connection
+    // answers UNAVAILABLE from the send path and stays retryable, which two
+    // tests pin deliberately ("a drained connection is retried as the retry doc
+    // promises", "a dead connection is UNAVAILABLE (reconnect), not
+    // saturated"). `_ensureUsable` is NOT wired to this on purpose — routing it
+    // here turns both of those retries into a FAILED_PRECONDITION nobody
+    // retries.
     //
     // Measured: server stopped, then
     //   isClosed        : false

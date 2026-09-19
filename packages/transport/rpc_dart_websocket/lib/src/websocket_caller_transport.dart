@@ -77,7 +77,15 @@ class RpcWebSocketCallerTransport
   void _ensureUsable() {
     if (_closed) throw StateError('Transport is closed');
     if (_disconnected) {
-      throw StateError(
+      // FAILED_PRECONDITION, and the code is the load-bearing part. It has to
+      // be an RpcStatusException so transport-agnostic error handling catches
+      // it — the same state on http2 used to come back as one, so a caller
+      // could not write a single `catch` for both. And it must NOT be
+      // UNAVAILABLE: `RpcRetryInterceptor._shouldRetry` retries that and never
+      // calls `reconnect()`, so every attempt hits the same dead transport and
+      // the caller is invited to try the thing that cannot work.
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Transport is disconnected and has no socket; call reconnect(). '
         'A failed reconnect leaves the transport recoverable, not closed.',
       );

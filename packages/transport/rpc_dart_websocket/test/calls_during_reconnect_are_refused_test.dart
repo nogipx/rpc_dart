@@ -29,6 +29,27 @@ import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+/// What the reconnect window must answer with, asserted as a PAIR.
+///
+/// The type changed from `StateError` when the owner asked for one refusal
+/// shape across every transport: the same state came back as `StateError` here
+/// and `RpcStatusException` on http2, so no single `catch` covered both. The
+/// original argument is unchanged and is the second half of this matcher — a
+/// synthetic UNAVAILABLE is RETRYABLE and invites the caller to repeat what
+/// cannot work, and `RpcRetryInterceptor._shouldRetry` takes only UNAVAILABLE
+/// and RESOURCE_EXHAUSTED. FAILED_PRECONDITION is catchable as the library's
+/// own error type AND is not retried.
+///
+/// Asserting the type alone would let the code regress to UNAVAILABLE and stay
+/// green, which is the defect this file was written for.
+final Matcher _refusedNotRetryable = throwsA(
+  isA<RpcStatusException>().having(
+    (e) => e.statusCode,
+    'statusCode',
+    RpcStatus.failedPrecondition,
+  ),
+);
+
 typedef _Rig = ({
   RpcWebSocketCallerTransport transport,
   int streamId,
@@ -78,12 +99,12 @@ void main() {
 
     await expectLater(
       rig.transport.sendMessage(rig.streamId, Uint8List.fromList([1, 2, 3])),
-      throwsA(isA<StateError>()),
+      _refusedNotRetryable,
       reason:
           'the send returned normally and the closed inner dropped it, so the '
           'call waited out a deadline for a frame that was never sent',
     );
-    expect(() => rig.transport.createStream(), throwsA(isA<StateError>()));
+    expect(() => rig.transport.createStream(), _refusedNotRetryable);
 
     await reconnecting.timeout(const Duration(seconds: 8));
   });
@@ -100,7 +121,7 @@ void main() {
 
       expect(
         () => rig.transport.getMessagesForStream(rig.streamId),
-        throwsA(isA<StateError>()),
+        _refusedNotRetryable,
         reason: 'a synthetic UNAVAILABLE from the closed inner is retryable',
       );
 
@@ -134,7 +155,7 @@ void main() {
 
       await expectLater(
         rig.transport.sendDirectObject(rig.streamId, 'an object'),
-        throwsA(isA<StateError>()),
+        _refusedNotRetryable,
       );
 
       await reconnecting.timeout(const Duration(seconds: 8));

@@ -1,85 +1,73 @@
 ---
-status: open
+status: open — premise corrected in round 406; the type is unified, the behaviour is not
 round: 405
-commit: baa8f457
+commit: 866623d3
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 probe: packages/transport/rpc_dart_http2/.dart_tool/probe/which_type_escapes_when_disconnected.dart, with the websocket half in that package's copy
-reason: behaviour decision — setting the flag changes what a dead http2 connection does to every in-flight and subsequent call, and the sibling's choice of type here was itself a deliberate decision by an earlier round
+reason: owner decision — two tested, deliberate contracts disagree about whether a dead connection is worth RETRYING, and unifying the behaviour means overturning one of them
 ---
 
-# B-61 — the http2 caller never notices it is disconnected
+# B-61 — the two transports disagree about a dead connection
 
-`RpcHttp2CallerTransport._ensureUsable` exists to "refuse work the transport
-genuinely cannot do, naming which state it is in", and its message prescribes
-the remedy: *"Transport is disconnected and has no connection; call
-reconnect()."*
+> **Round 406 corrected this lead's premise.** It was filed as "the http2
+> caller never notices it is disconnected", which read as a gap. It is not one.
+> http2 notices and deliberately answers **UNAVAILABLE and retryable**;
+> websocket deliberately refuses **non-retryably**. Two rounds, two defensible
+> choices, each pinned by a test that states its argument. The guard's
+> unreachability on http2 is the visible edge of that disagreement, not a bug.
 
-With the server gone it never fires. Measured, both transports driven the same
-way, each gated on its own `health()` report first so neither arm can be
-accused of racing a dying socket:
+## What round 406 shipped
+
+The TYPE, which the owner chose: both `_ensureUsable` implementations now throw
+`RpcStatusException(RpcStatus.failedPrecondition, ...)` instead of one throwing
+`StateError`. One `catch` now covers every transport, and FAILED_PRECONDITION is
+not retried — `RpcRetryInterceptor._shouldRetry` takes only UNAVAILABLE and
+RESOURCE_EXHAUSTED — so the earlier round's argument survives the type change.
+
+## What it could not ship, and why
+
+Making the http2 guard fire on a dead connection broke two tests, both
+deliberate:
 
 ```
-transport   health     createStream()   a unary call          isClosed
-websocket   degraded   StateError       StateError            false
-http2       degraded   no throw         RpcStatusException    false
+test                                                   asserts
+goaway_is_unavailable_test:
+  "a drained connection is retried as the retry         UNAVAILABLE, RETRYABLE
+   doc promises"
+max_concurrent_streams_saturation_test:
+  "GUARD: a genuinely dead connection still reports     createStream() SUCCEEDS,
+   UNAVAILABLE and down"                                then UNAVAILABLE
 ```
 
-Both report `degraded`, so both reached the state. Only one guard fires.
+The second is exactly the ending this lead named — an abruptly killed socket —
+and it requires `createStream()` to hand out an id and the send to answer
+UNAVAILABLE. Reverted.
 
-## Why
-
-`_disconnected` is set in exactly two places on http2:
-
-```
-line 285   the KEEPALIVE failure path
-line 1805  the catch in reconnect()
-```
-
-There is no connection-lost path. `pingInterval` is opt-in, so on a default
-http2 caller a server that goes away leaves `_disconnected` false forever: the
-guard never runs, the prescriptive message is never shown, and `createStream()`
-hands out ids on a dead connection.
-
-The websocket sibling sets it from the channel's `onDone`, with a comment that
-names this exact case — *"Reached by any server restart or dropped network, with
-no reconnect call involved."*
-
-RPC-19: a flag with no value for a third state. Here the third state is "the
-connection died and nobody was pinging".
-
-## What it costs
-
-Not a hang and not a leak — each call still fails, with a status. What is lost
-is the fail-fast and the instruction: the user is never told the transport is
-disconnected or that `reconnect()` is the way out, and every call pays a full
-round trip to discover individually what the transport already knew.
-
-And the same failure is classified differently per transport.
-`RpcRetryInterceptor._shouldRetry` retries only `RpcStatusException` with
-UNAVAILABLE or RESOURCE_EXHAUSTED, so on http2 a dead-connection call may be
-retried and on websocket it never is.
-
-## Why it is filed rather than fixed
-
-**The websocket side's type is a deliberate decision by an earlier round**, and
-its test states the argument in a table: during the reconnect window a read used
-to answer "a synthetic UNAVAILABLE — which is RETRYABLE, so the caller is
-invited to try the thing that cannot work", and `StateError` replaced it on
-purpose. That argument applies here too, which means http2's `RpcStatusException`
-may be the wrong one of the pair rather than the right one — and picking a side
-is a contract decision across two published transports.
-
-Setting `_disconnected` on connection loss is also not cosmetic: `createStream()`
-would start throwing where it currently returns an id, which is the failure mode
-existing http2 tests were written against.
+A first attempt was worse and is worth not repeating: it dropped the GOAWAY
+exemption from the predicate, on the reasoning that a drained connection with
+nothing in flight is simply gone. health()'s three branches distinguish cases
+for the MESSAGE, not for liveness, and one of them is load-bearing for retry
+semantics.
 
 ## Owner decision
 
-Two, and the second depends on the first:
+Which retry semantics win for a connection that is gone?
 
-1. Should a dead connection put the http2 caller into `_disconnected`, the way a
-   dead socket does for websocket?
-2. If so, should the refusal be `StateError` (websocket's deliberate choice, not
-   retryable, names the remedy) or `RpcStatusException(UNAVAILABLE)` (gRPC's
-   semantics, retryable — and rpc_dart's retry interceptor does not call
-   `reconnect()`, so a retry would spin)?
+```
+option                          consequence
+UNAVAILABLE, retryable          http2's current behaviour everywhere. A retry
+  (gRPC semantics)              can succeed through a pool or a reconnecting
+                                proxy — but rpc_dart's own retry interceptor
+                                does not call reconnect(), so on a bare
+                                transport every attempt hits the same dead
+                                connection and the budget is burned.
+FAILED_PRECONDITION,            websocket's current behaviour everywhere. Fails
+  not retried                   fast and names the remedy; loses the retry that
+                                CAN work behind a pool.
+retry learns to reconnect()     resolves the conflict instead of picking a side,
+                                and is the largest of the three: it changes
+                                RpcRetryInterceptor, not a transport.
+```
+
+The third is the only one that makes UNAVAILABLE honest on a bare transport, and
+it is a core change rather than a transport one.
