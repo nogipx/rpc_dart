@@ -173,17 +173,16 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // a server with no zone handler exits on that. Reachable through
       // handleMessage, whose own error path answers the peer over a transport
       // that may already be gone.
-      (message) async {
-        try {
-          await _onIncomingMessage(message);
-        } catch (e, stackTrace) {
-          _logger.error(
-            'Failed to process incoming message for $_methodPath '
-            '[streamId: ${message.streamId}]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
+      // SYNCHRONOUS, and the filter is the first thing it does. This is a
+      // connection-wide broadcast and every live unary handler holds its own
+      // listener on it, so an `async` body allocates a Future and a microtask
+      // per frame per handler — even for a frame it immediately discards,
+      // because an `async` function returns a Future whatever it does. With 200
+      // parked handlers, 3000 upstream frames became 600 000 such allocations:
+      // 48 ms at one handler against 333 at two hundred.
+      (message) {
+        if (id != 0 && message.streamId != id) return;
+        unawaited(_guardedIncoming(message));
       },
       onError: (Object error, StackTrace stackTrace) async {
         _logger.error(
@@ -191,6 +190,15 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           error: error,
           stackTrace: stackTrace,
         );
+
+        // Unless the channel said this is an OBSERVATION, not a failure. An
+        // advisory error — a proxy's app-level keepalive arriving as a text
+        // frame — reports one discarded frame over a connection that still
+        // works, and answering it fails every call in flight for nothing.
+        // `RpcChannelTransport` already withholds these from its per-stream
+        // controllers for exactly this reason; this listener is on the
+        // connection-wide broadcast, where they still arrive.
+        if (error is IRpcAdvisoryChannelError) return;
 
         // ANSWER it. Logging alone leaves the caller waiting for a response
         // that will never come: it eventually reports UNAVAILABLE "Stream
@@ -225,6 +233,21 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         }
       },
     );
+  }
+
+  /// The listener's async half. Nothing may escape it: a throw from a listen
+  /// callback reaches the zone, and a server with no zone handler exits on it.
+  Future<void> _guardedIncoming(RpcTransportMessage message) async {
+    try {
+      await _onIncomingMessage(message);
+    } catch (e, stackTrace) {
+      _logger.error(
+        'Failed to process incoming message for $_methodPath '
+        '[streamId: ${message.streamId}]',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Routes one inbound transport message; the listener above owns the guard.

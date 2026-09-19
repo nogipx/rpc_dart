@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-82](P-82-what-n-handlers-cost-every-frame.md)** valid (round 393),
+  rpc_dart — what N live unary handlers cost every other frame. **Its first
+  version read a FLAT line and was wrong**: it pumped with a server-stream while
+  the parked responders sit on the server, whose broadcast carries inbound
+  frames only. Two planted counters said `3` listener entries for 3000 frames;
+  pumped upstream the same counter reads 600 400 at N=200. A flat line means
+  "no defect" and "cannot reach it" equally. Control is N=1
 - **[P-81](P-81-a-close-reason-in-bytes.md)** valid (round 392),
   rpc_dart_websocket — does a protocol close survive a non-ASCII reason? **Its
   fixture IS the design**: 84 characters and 138 bytes, both bounds asserted in

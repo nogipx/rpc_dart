@@ -1,5 +1,5 @@
 ---
-status: open
+status: open — the COST half fixed in round 393, the fan-out COUNT remains
 round: 392
 commit: a82bcf4c
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -58,19 +58,43 @@ controller AND to `_incoming`, and an advisory one only to `_incoming` — so th
 question is whether a non-advisory error ever arrives without the channel then
 closing.
 
-## A better fix than the one proposed
+## A better fix than the one proposed — WRONG, struck out in round 393
 
-Subscribe to **`getMessagesForStream(id)`** rather than to the broadcast, when
-`id != 0`. It fixes both halves of U1 at once and loses nothing:
+> The idea was: subscribe to `getMessagesForStream(id)` rather than to the
+> broadcast. **Reading the transport before building on it refutes that.**
+> `getMessagesForStream` CREATES a per-stream controller
+> (`channel_transport.dart:316-328`), and routing then takes a different branch:
+> `_admitToStreamBuffer` can refuse a frame and `return` at line 885 — *before*
+> the unconditional `_incoming.add(message)` at line 913. So a unary request
+> over the per-stream byte bound would be dropped from the PIPELINE too, by a
+> bound that does not apply to unary today. It also moves unary streams from
+> credit-on-arrival (`_fc.onConsumed`, the `else` branch at 904) to
+> owed-until-consumed. Not a free swap, and it would have shipped a silent
+> request-drop.
+>
+> Kept rather than deleted: a refuted direction is worth as much as a confirmed
+> one to whoever reads this next.
 
-- per-stream, so the O(N) fan-out is gone;
-- `channel_transport.dart:182` withholds `IRpcAdvisoryChannelError` from
-  per-stream controllers while still delivering real failures — which is exactly
-  the second half of the owner's report, the advisory error that wrongly fails a
-  unary call in the window between the constructor and `handleMessage`.
+## What round 393 did instead
 
-Check first that every transport's `getMessagesForStream` has the same
-semantics; http2's is the one to read.
+Made the listener SYNCHRONOUS with the id filter first, so a foreign frame costs
+a comparison rather than a Future. **48 / 126 / 333 ms -> 38 / 42 / 94** for
+3000 frames at 1 / 50 / 200 parked handlers (P-82). And added the
+`IRpcAdvisoryChannelError` check in `onError`, which is the second half.
+
+## What is still open
+
+**The fan-out COUNT.** 200 handlers still mean 200 listener invocations per
+frame; only the allocation behind each is gone. Removing the count needs the
+subscription itself to go, and the only per-stream route is the refuted one
+above. Options left:
+
+- have the PIPELINE deregister the responder's listener once it has fed the
+  request, since it owns both ends;
+- or give `UnaryResponder` a mode where the pipeline promises to feed it and no
+  subscription is made at all — which is what the owner originally proposed, and
+  which needs the `onError` answer path replaced rather than dropped, because
+  the pipeline's own `onError` logs only.
 
 ## Owner decision
 
