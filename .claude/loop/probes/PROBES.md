@@ -38,6 +38,33 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-90](P-90-which-type-escapes-when-disconnected.md)** valid (round 405),
+  websocket and http2 — which type escapes a disconnected transport. **Its
+  design IS its control**: each arm polls the transport's own `health()` until
+  it stops reporting healthy and PRINTS what it says, before touching the guard,
+  because otherwise "the two transports behave differently" and "one of them had
+  not noticed yet" are the same output. That gate is what turned a recorded
+  curiosity into B-61
+- **[P-89](P-89-drive-what-the-message-prescribes.md)** valid (round 404),
+  framework + websocket + http2 — do exactly what an error message says and
+  nothing else. Three files because the sites live in three packages. Two
+  design notes worth reusing: every arm carries its PRE-STATE (`first call:
+  served`), so an arm that never reached the state it names cannot read as
+  clean — P-84's `grpc-status` lesson in another currency; and a message with an
+  `and` in it is SPLIT into one arm per claim, because "a failed reconnect
+  leaves the transport recoverable" buys nothing if it only means
+  `isClosed == false`
+- **[P-88](P-88-does-the-drain-converge.md)** valid (round 403), websocket and
+  http2 — does a graceful drain converge or merely expire? **Broken in 402 and
+  repaired in 403, with both sets of numbers kept side by side**, which is the
+  reason to read it. Broken: the ordering between the transports REVERSED with
+  load (`112 ms / 70` against `8 ms / 6`, then the opposite at 64 lanes), because
+  `drainUntilIdle` samples an instantaneous count and 5 ms handlers always leave
+  a gap, so both exited on the first zero sample and admission never came into
+  it. Repaired by parking eight server-streams across the drain so the count
+  cannot read zero: `websocket 3006 ms / 1347 served after` against `http2
+  3016 ms / 4` — **337x**, direction independent of load. One load-shape change
+  between noise and three orders of magnitude
 - **[P-87](P-87-restart-the-way-the-error-says.md)** valid (round 401),
   rpc_dart_websocket — restart the server the way its own `StateError` says to,
   one arm per remedy the message names. The arms differ ONLY in how the

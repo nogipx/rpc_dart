@@ -3,7 +3,7 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359]
+applied: [238, 268, 324, 353, 359, 405]
 status: confirmed (round 359)
 ---
 
@@ -191,5 +191,37 @@ The GUARD that earns its place is **the window ENDS**: a transport that refused
 forever passes both witnesses and is worse than the defect.
 `../probes/P-50-calls-inside-the-reconnect-window.md`,
 `../rounds/359-the-state-nobody-named.md`.
+
+## Round 405 — list the WRITERS, then ask which endings reach none of them
+
+Round 359 found `_disconnected` written only from the OUTCOME of a reconnect.
+Round 405 is the same flag one transport over, and the detector that found it is
+mechanical: **enumerate every `_disconnected = true`, then enumerate the ways
+the connection can end, and cross them off.**
+
+On the http2 caller there are two writers — the keepalive failure path, and the
+catch inside `reconnect()`. `pingInterval` is opt-in. So the ordinary ending —
+the server goes away and nobody was pinging — reaches neither, and the flag
+stays false forever:
+
+```
+transport   health     createStream()   a unary call          isClosed
+websocket   degraded   StateError       StateError            false
+http2       degraded   no throw         RpcStatusException    false
+```
+
+`createStream()` is the decisive row: it calls `_ensureUsable` directly on both,
+and on http2 it hands out an id on a dead connection. The websocket sibling sets
+the flag from its channel's `onDone` and its comment names exactly this case.
+
+> **A flag whose writers are all on EXCEPTIONAL paths has no value for the
+> ordinary one.** Both of http2's are failure handlers — a ping that did not
+> come back, a reconnect that threw. Nothing writes it when things simply end.
+
+And the guard the probe needed, which generalises: **gate the arm on the
+object's own `health()` before testing what it does.** Without that, "the two
+transports behave differently" and "one of them had not noticed yet" are the
+same output. `../probes/P-90-which-type-escapes-when-disconnected.md`,
+`../rounds/405-the-guard-that-never-fires.md`, B-61.
 
 Imported from private memory in the curate pass after round 234.

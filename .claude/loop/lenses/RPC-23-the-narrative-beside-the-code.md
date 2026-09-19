@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404]
 status: confirmed (round 375)
 ---
 
@@ -285,3 +285,25 @@ accepted and abandoned.
 `../rounds/401-the-remedy-that-was-not-one.md`, and the bench is RPC-21's
 `../probes/P-87-restart-the-way-the-error-says.md`, because driving the remedy
 IS driving the lifecycle twice.
+
+**Round 404 counted the class and sharpened the detector, which is the more
+useful half.** 228 `throw` sites in the 22 packages' `lib/`; about 20 prescribe
+an action. Driving the three highest-risk members — `RpcApp`'s "create a new
+RpcApp to restart", and both copies of "call reconnect()" — found all three
+correct, including both halves of the two-claim sentence on both transports.
+
+> **The tell is not "a message that prescribes". It is a message that prescribes
+> rebuilding A when the state that blocks you is held by B.** `RpcApp` says
+> rebuild the thing that actually holds the single-shot state, and its factory
+> takes a server BUILDER, so the closure rebuilds what cannot be re-listened.
+> The websocket server said rebuild the server when the obstacle was the stream.
+> Rank the class by that question and the rest of it — `call X first` guards on
+> an object's own API, where the obstacle and the named object are the same
+> thing — drops to the bottom without needing to be driven.
+
+Second rule the arms earned: **split a sentence with an `and` in it.** "Call
+reconnect(), and a failed reconnect leaves the transport recoverable, not
+closed" is two assertions, and "recoverable" buys nothing if it only means
+`isClosed == false` — so the failing arm has to go on and try a LATER reconnect.
+Both did succeed. `../probes/P-89-drive-what-the-message-prescribes.md`,
+`../rounds/404-what-the-messages-promise.md`.
