@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-83](P-83-the-flood-on-each-construction-path.md)** valid (round 394),
+  rpc_dart_http2 — the same CONTINUATION flood against three construction paths,
+  the server being the control. **Its number is FRAMES ACCEPTED, not RSS**: the
+  unguarded arm read +178 MiB and +27 MiB across runs for identical input, while
+  65-against-4096 is deterministic. Recorded because RSS is the more quotable
+  figure and would have been the wrong one to quote
 - **[P-82](P-82-what-n-handlers-cost-every-frame.md)** valid (round 393),
   rpc_dart — what N live unary handlers cost every other frame. **Its first
   version read a FLAT line and was wrong**: it pumped with a server-stream while

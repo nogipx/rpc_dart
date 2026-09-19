@@ -8,7 +8,6 @@ import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
-import 'http2_header_block_guard.dart';
 import 'rpc_http2_common.dart';
 import 'rpc_http2_responder_transport.dart';
 
@@ -493,28 +492,6 @@ class RpcHttp2Server implements IRpcServer {
     _logger?.info('HTTP/2 server stopped');
   }
 
-  /// `maxActiveStreams` as an HTTP/2 SETTINGS value, clamped to what the field
-  /// can actually carry.
-  ///
-  /// SETTINGS_MAX_CONCURRENT_STREAMS is a uint32 and [RpcSecurityPolicy] has no
-  /// assertions, so the policy field can hold anything an operator types — and
-  /// unclamped, both ends of the range go ON THE WIRE inverted. A negative limit
-  /// wraps to 4294967295, announcing "unlimited" while the pipeline refuses
-  /// every stream; anything at or above 2^32 truncates to 0, announcing "open
-  /// nothing" while the server would happily serve billions.
-  ///
-  /// Clamping keeps the invariant that matters -- never announce MORE than will
-  /// be honoured -- at both ends. A non-positive limit announces 0, which is
-  /// exactly what "refuse everything" looks like on the wire; an over-large one
-  /// announces the maximum representable, HTTP/2's way of saying "no limit",
-  /// which is still less than what the pipeline would allow.
-  ///
-  /// Validating the field in `RpcSecurityPolicy` itself would be the other half
-  /// of this, and it is a core semantics decision (is `0` a legitimate way to
-  /// say "accept nothing"?), so it is left to the owner.
-  int get _advertisedStreamLimit =>
-      _securityPolicy.maxActiveStreams.clamp(0, 0xFFFFFFFF);
-
   /// Builds the transport, endpoint and lifecycle wiring for one connection.
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
@@ -544,62 +521,37 @@ class RpcHttp2Server implements IRpcServer {
     Timer? prefaceDeadline;
 
     try {
-      // The incoming byte stream is passed through a header-block guard before
-      // package:http2 sees it: that library concatenates a HEADERS frame and
-      // its CONTINUATION frames with no bound (and O(N^2) recopy), so a peer
-      // that opens a header block and never ends it floods the server's event
-      // loop below every rpc_dart limit. See http2_header_block_guard.dart.
-      // Outbound is the raw socket; only the read side is guarded.
-      final guardedIncoming = guardHttp2HeaderBlock(
-        socket,
-        maxHeaderBlockBytes: _securityPolicy.maxMetadataBytes,
-        onViolation: (observedBytes) {
-          _logger?.warning(
-            'HTTP/2 header-block cap exceeded from $clientAddress: '
-            '$observedBytes bytes (max: ${_securityPolicy.maxMetadataBytes}); '
-            'closing connection',
-          );
+      // ONE construction path, shared with anyone running their own accept
+      // loop. `overStreams` applies the header-block guard and the advertised
+      // MAX_CONCURRENT_STREAMS — the two parts of the policy that cannot be
+      // attached to a connection after it exists, and which this server used to
+      // be the only holder of.
+      final responderTransport = RpcHttp2ResponderTransport.overStreams(
+        incoming: socket,
+        outgoing: socket,
+        destroy: socket.destroy,
+        policy: _securityPolicy,
+        logger: _logger,
+        onHeaderBlockViolation: (observedBytes) {
           _notify(
             'onConnectionError',
             () => _onConnectionError?.call(
               StateError(
                 'HTTP/2 header block exceeded ${_securityPolicy.maxMetadataBytes} '
-                'bytes ($observedBytes observed): probable CONTINUATION flood',
+                'bytes ($observedBytes observed): probable CONTINUATION flood '
+                'from $clientAddress',
               ),
               StackTrace.current,
             ),
           );
-          socket.destroy();
         },
         onPrefaceComplete: () {
           prefaceDeadline?.cancel();
           prefaceDeadline = null;
         },
       );
-      final connection = http2.ServerTransportConnection.viaStreams(
-        guardedIncoming,
-        socket,
-        // Tell the peer the limit we will actually enforce. Pass no settings
-        // and every connection advertises package:http2's default
-        // MAX_CONCURRENT_STREAMS of 1000, whatever the policy says, which is
-        // wrong in both directions:
-        //
-        // Below 1000, a conforming client paces itself by the advertisement, so
-        // it opens streams it is then refused -- and RESOURCE_EXHAUSTED is
-        // retryable, so it re-sends against a server that told it there was
-        // room. Above 1000 the knob is DEAD, because package:http2 enforces its
-        // own advertisement, so `maxActiveStreams` would mean one thing here and
-        // another on websocket and isolate.
-        settings: http2.ServerSettings(
-          concurrentStreamLimit: _advertisedStreamLimit,
-        ),
-      );
-
-      IRpcTransport transport = RpcHttp2ResponderTransport(
-        connection: connection,
-        policy: _securityPolicy,
-        logger: _logger,
-      );
+      final connection = responderTransport.connection;
+      IRpcTransport transport = responderTransport;
 
       if (_transportWrapper != null) {
         final inner = transport;
