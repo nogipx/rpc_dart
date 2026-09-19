@@ -180,12 +180,28 @@ int unconsumedWindowFor(RpcSecurityPolicy policy) =>
 /// inner error only on the matching stream's subscriber. Connection-level fatal
 /// errors are added without an envelope and fan out to all subscribers, which
 /// is the correct behavior.
-class RpcHttp2StreamError {
+///
+/// **It carries the inner error's wire status, and that is not decoration.**
+/// The envelope used to be a plain class, so `wireStatusFor` — which is DEFAULT
+/// DENY — took its deny branch and told the peer INTERNAL "Internal server
+/// error" whatever [error] actually was. Every status the inner type had just
+/// been given was thrown away one layer out.
+///
+/// Deriving the status through [wireStatusFor] rather than copying it keeps the
+/// deny intact: a FOREIGN inner error is still redacted, because that function
+/// is the single place that decides what may leave this process.
+class RpcHttp2StreamError extends RpcStatusException {
+  /// The stream the error belongs to.
   final int streamId;
+
+  /// The error being carried, untouched, for anyone who unwraps.
   final Object error;
+
+  /// The stack the inner error arrived with, when there was one.
   final StackTrace? stackTrace;
 
-  const RpcHttp2StreamError(this.streamId, this.error, [this.stackTrace]);
+  RpcHttp2StreamError(this.streamId, this.error, [this.stackTrace])
+    : super(wireStatusFor(error).status, wireStatusFor(error).message);
 }
 
 /// Filters a broadcast transport stream down to a single [streamId].

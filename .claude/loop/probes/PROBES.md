@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-93](P-93-malformed-reads-as-a-limit.md)** valid (round 412),
+  rpc_dart_http2 — does malformed framing read as a resource limit? **The two
+  arms differ by FIVE BYTES and nothing else** — same connection, same headers,
+  one gRPC prefix apart — which is the entire design: with any other difference,
+  a difference in the answer would not be attributable to the classification.
+  `8` and `8` before, `8` and `13` after
 - **[P-92](P-92-what-the-peer-is-told-per-type.md)** valid (round 408),
   rpc_dart — what a handler's error TYPE costs the peer. **Three of its five
   arms are controls and they are the whole design**: a type inside the

@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 413) — the status half fixed; the unwrapper is routing only
 round: 409
 commit: fd70f59d
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
@@ -8,6 +8,23 @@ reason: bench — the reading is certain and the IMPACT is not, and the fix is a
 ---
 
 # B-62 — the envelope nobody unwraps
+
+> **Closed in round 413 by a third option neither of the two below describes.**
+> This lead weighed "restore `filterStreamEvents`" against "drop the envelope"
+> and called it even, because both are about ROUTING and the envelope is what
+> separates a per-stream error from a connection-fatal one.
+>
+> Round 412 then gave every library error the status that fits, and the envelope
+> — a plain class — started destroying all of it: `wireStatusFor` is default-deny,
+> so a wrapped `RESOURCE_EXHAUSTED` reached the peer as INTERNAL "Internal
+> server error". So it now `extends RpcStatusException`, deriving its status
+> THROUGH `wireStatusFor(error)` rather than copying the inner's fields — which
+> is what keeps a foreign inner redacted. `streamId` and `error` untouched, so
+> routing is unchanged, and no measurement was needed to choose.
+>
+> **What remains is only the missing call site**, and it is no longer urgent:
+> an envelope reaching a broadcast consumer is now classifiable, so the absent
+> unwrapper costs precision rather than correctness.
 
 `RpcHttp2StreamError` is not an error, it is an ENVELOPE. Its own doc says so:
 
