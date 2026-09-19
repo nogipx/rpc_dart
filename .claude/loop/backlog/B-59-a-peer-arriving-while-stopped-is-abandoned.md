@@ -1,5 +1,5 @@
 ---
-status: open
+status: awaiting owner
 round: 401
 commit: 762fa760
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]

@@ -1,5 +1,5 @@
 ---
-status: open
+status: awaiting owner
 round: 397
 commit: d9d96cd2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]

@@ -11,13 +11,15 @@ commit: yes
 
 ## Target
 
-B-61, which round 405 filed as an owner decision. The owner answered both
-questions: unify the type across every transport on
+An owner decision already given, carried out. Round 405 put two questions to the
+owner and both came back answered: unify the type across every transport on
 `RpcStatusException(FAILED_PRECONDITION)`, and make the http2 caller enter the
-disconnected state when its connection dies.
+disconnected state when its connection dies. This round executes that answer.
 
-The first shipped. **The second did not, and the reason is the round's main
-finding.**
+The first half shipped. **The second could not be carried out at all, and that
+is the round's finding** — so the lead goes back to the owner with a different
+question rather than the one it was answered on. L-13's shape: the round that
+executes a decision is the last point where a wrong premise is still cheap.
 
 ## Hypothesis
 

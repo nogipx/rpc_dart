@@ -1,5 +1,5 @@
 ---
-status: open
+status: awaiting owner
 round: 403
 commit: b968f337
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
