@@ -32,7 +32,7 @@ const String kAbsentTrailerMessage = 'Unknown error';
 ///
 /// Still the type to CATCH: `e is RpcException` remains the one check that
 /// means "this came from rpc_dart".
-abstract class RpcException implements Exception {
+class RpcException implements Exception {
   /// Human-readable description of the error.
   final String message;
 
