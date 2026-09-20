@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured) — filed from a READ sweep the owner handed in, re-verified against ff930001 before filing; no round took it
+status: closed (round 418)
+round: 418
 commit: ff930001
 paths: [packages/core/rpc_dart/lib/src/integration/rpc_server_interface.dart, packages/core/rpc_dart_framework/lib/src/rpc_app.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart]
 probe: none — READ, not measured
@@ -76,4 +76,24 @@ is about the code, not the release — see config's "Out of scope".
 
 ## Owner decision
 
-—
+**"Backward compatibility does not matter."** The interface widens.
+
+## Closed — round 418
+
+`IRpcServer.stop({Duration? drainTimeout})`. All three first-party servers
+already had the signature, so nothing changed there.
+
+**The real fix was the ORDER, not the parameter.** `RpcApp` now asks the SERVER
+to drain and does it FIRST — before `module.onStop()` — so a handler finishing
+in the window can still reach what its module owns. `_drainEndpoints` is gone
+with its two wrong-order problems: draining endpoints while the listener was
+still accepting, and using `RpcEndpointBase.drain`, which CANCELS active
+contexts.
+
+**The breaking cost, measured: six test fakes in `rpc_dart_framework`** implement
+`IRpcServer` and each needed the new parameter. Confined to one package.
+
+**A residual, stated rather than discovered later**: `RpcApp` no longer calls
+`endpoint.drain()` at all, so a third-party `IRpcServer` that accepts
+`drainTimeout` and ignores it now silently gets no drain, where the app used to
+compensate.

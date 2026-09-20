@@ -33,6 +33,20 @@ abstract interface class IRpcServer {
   /// Starts the server.
   Future<void> start();
 
-  /// Stops the server.
-  Future<void> stop();
+  /// Stops the server, optionally draining first.
+  ///
+  /// With a [drainTimeout] the server STOPS ADMITTING and lets what is in
+  /// flight finish, up to that budget, before closing. Without one it closes
+  /// immediately.
+  ///
+  /// **The parameter is on the interface because the drain cannot be done from
+  /// outside.** Two of the three first-party servers already took it and the
+  /// interface did not, so a caller holding an `IRpcServer` could only reach
+  /// the hard stop — and the one caller that wanted a graceful shutdown
+  /// compensated by draining the endpoints itself, which gets the order wrong
+  /// twice: nothing has stopped the LISTENER, so a connection arriving
+  /// mid-window gets an already-draining endpoint, and `RpcEndpointBase.drain`
+  /// is the heavier operation that CANCELS active contexts — the opposite of
+  /// letting in-flight work finish.
+  Future<void> stop({Duration? drainTimeout});
 }

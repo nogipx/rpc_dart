@@ -51,7 +51,7 @@ class _FakeServer implements IRpcServer {
   }
 
   @override
-  Future<void> stop() async {
+  Future<void> stop({Duration? drainTimeout}) async {
     _running = false;
   }
 }

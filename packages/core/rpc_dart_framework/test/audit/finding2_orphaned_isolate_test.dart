@@ -46,7 +46,7 @@ class _ThrowingServer implements IRpcServer {
   }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop({Duration? drainTimeout}) async {}
 }
 
 void main() {

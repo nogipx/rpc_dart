@@ -515,6 +515,12 @@ class RpcFrameMultiplexedChannel
   }
 
   /// Creates a paired client/server frame channel over in-memory byte streams.
+  ///
+  /// **The client half gets the CLIENT's [closeOnOversizedFrame].** Both used
+  /// to take the constructor default, which is the server's — so this harness,
+  /// the one path that exercises the real encoder and decoder, handed every
+  /// suite a "client" that killed its connection where a real one fails the
+  /// stream and leaves the other calls alone.
   static (RpcFrameMultiplexedChannel, RpcFrameMultiplexedChannel) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
@@ -525,7 +531,11 @@ class RpcFrameMultiplexedChannel
     final serverChannel = _PairedByteChannel(output: s2c, input: c2s.stream);
 
     return (
-      RpcFrameMultiplexedChannel(channel: clientChannel, policy: policy),
+      RpcFrameMultiplexedChannel(
+        channel: clientChannel,
+        policy: policy,
+        closeOnOversizedFrame: false,
+      ),
       RpcFrameMultiplexedChannel(channel: serverChannel, policy: policy),
     );
   }

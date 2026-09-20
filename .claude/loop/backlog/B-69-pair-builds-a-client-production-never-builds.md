@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured) — filed from a READ sweep the owner handed in, re-verified against ff930001 before filing; no round took it
+status: closed (round 418)
+round: 418
 commit: ff930001
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart]
 probe: none — READ, not measured
@@ -64,4 +64,25 @@ asserting the wrong half, and is the thing this lead is for.
 
 ## Owner decision
 
-—
+**"Backward compatibility does not matter."**
+
+## Closed — round 418
+
+`RpcFrameMultiplexedChannel.pair()` passes `closeOnOversizedFrame: false` to the
+client half, matching `fromChannel`'s side-dependent choice.
+
+**The suite was green before the fix and after, and that is the finding rather
+than a gap.** This lead predicted the blast radius: the flag reaches
+`_refusedFrameHeader` and `onMalformedMetadata`, both the refuse-the-stream
+half, and neither is reachable from a `pair()` client today. So no suite was
+asserting the wrong half YET. What the fix buys is that a future change breaking
+the client's "fail the stream, keep the connection" behaviour will be caught
+instead of passing.
+
+**The witness is a STATE assertion**, reading the flag off both halves. What the
+flag DOES is witnessed by `oversized_frame_is_per_call_test` — which builds its
+channel by hand and passes the client value explicitly, and that is exactly why
+this went unnoticed: the behaviour was covered through a channel nobody
+constructs that way in production, while the factory everything else uses set it
+the other way. Driving an oversized frame end to end through `pair()` would be
+stronger and was not written.

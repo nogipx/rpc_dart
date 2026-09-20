@@ -3,8 +3,8 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292, 334, 335, 352]
-status: confirmed (round 352)
+applied: [209, 289, 290, 291, 292, 334, 335, 352, 418]
+status: confirmed (round 418)
 ---
 
 # RPC-04 — Transport capabilities hidden by a wrapper

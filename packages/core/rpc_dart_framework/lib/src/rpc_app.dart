@@ -173,8 +173,19 @@ class RpcApp {
 
     _log?.info('RpcApp stopping');
 
-    // Drain in-flight streams first so handlers can still use module resources.
-    await _drainEndpoints();
+    // The SERVER drains, and it goes first so handlers can still reach module
+    // resources while they finish.
+    //
+    // This used to call `ep.drain()` on each endpoint and then `stop()` with no
+    // argument, which got the order wrong twice: nothing had stopped the
+    // LISTENER, so a connection arriving mid-window got an already-draining
+    // endpoint; and `RpcEndpointBase.drain` CANCELS active contexts, which is
+    // the opposite of letting in-flight work finish. The servers' own
+    // `stop(drainTimeout:)` stops admitting and waits, and it could not be
+    // reached from here because `IRpcServer.stop()` did not declare the
+    // parameter.
+    _log?.info('Stopping transport server');
+    await _server?.stop(drainTimeout: _config.drainTimeout);
 
     for (final module in _modules.reversed) {
       if (_log?.isDebug ?? false) {
@@ -197,8 +208,6 @@ class RpcApp {
       }
     }
 
-    _log?.info('Stopping transport server');
-    await _server?.stop();
     for (final module in _modules.reversed) {
       if (module is RpcIsolateModule) {
         if (_log?.isDebug ?? false) {
@@ -412,21 +421,5 @@ class RpcApp {
       }
     }
     endpoint.start();
-  }
-
-  Future<void> _drainEndpoints() async {
-    final endpoints = _server?.endpoints ?? [];
-    if (endpoints.isEmpty) return;
-
-    if (_log?.isDebug ?? false) {
-      _log?.debug(
-        'Draining in-flight streams (timeout: ${_config.drainTimeout.inSeconds}s)',
-      );
-    }
-
-    // Signal all endpoints to start draining (rejects new streams, cancels active contexts).
-    await Future.wait([
-      for (final ep in endpoints) ep.drain(timeout: _config.drainTimeout),
-    ]);
   }
 }

@@ -32,7 +32,7 @@ class _ServerWithUnhealthyEndpoint implements IRpcServer {
   @override
   Future<void> start() async {}
   @override
-  Future<void> stop() async {}
+  Future<void> stop({Duration? drainTimeout}) async {}
 }
 
 void main() {

@@ -1310,7 +1310,7 @@ class _NullServer implements IRpcServer {
   Future<void> start() async {}
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop({Duration? drainTimeout}) async {}
 
   @override
   bool get isRunning => false;
