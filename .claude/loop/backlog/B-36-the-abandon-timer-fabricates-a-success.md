@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 415)
-round: 351
+status: closed (round 420)
+round: 420
 commit: 2fca444c
 paths: [packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/cancelled_stream_probe_wedges.dart
@@ -71,3 +71,16 @@ So the new assertion is `halfOpen` **plus a following call that is admitted**.
 That checks the gate directly, where `closed` only checked a state a fabricated
 success also produces — which is how the wrong outcome passed for as long as it
 did.
+
+## Closed — round 420
+
+The abandon timer calls `resolveInconclusive()`, which already existed three
+lines above doing exactly this for the cancel path: release the gate, record no
+outcome. The breaker stays HALF-OPEN and the next call takes its turn as the
+probe, which is a real observation rather than an invented one.
+
+**The pinned test moved exactly as this record predicted**, and the replacement
+is the stronger claim: `halfOpen` PLUS a following call that is admitted. The
+old assertion's reason named the RELEASE while the assertion observed it through
+the CLOSE — and `closed` is also what a fabricated success produces, so it could
+not tell the two apart.

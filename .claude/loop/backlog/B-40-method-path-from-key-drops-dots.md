@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 415)
-round: 360
+status: closed (round 420)
+round: 420
 commit: 7a3c66d5
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/three_core_diagnostics.dart
@@ -81,3 +81,20 @@ and the single-dot form as the control that must keep working.
 The happy path stays measured-clean and does not need re-establishing: dotted
 names round-trip because `methodPath` rides on the frame, and the formatter is
 consulted only when both retained messages are null while `methodKey` is set.
+
+## Closed — round 420
+
+Split on the LAST dot, and the function MOVED: `rpcMethodPathFromKey` now lives
+in `metadata.dart` beside `parseRpcMethodPath`, which is its inverse.
+
+**Moving it was the fix, not a tidy-up.** The first witness reimplemented the
+rule and checked itself — it would have passed with the production code
+reverted — because the formatter was private on a mixin RPC-24 hides from the
+public surface. The test now asserts the PROPERTY against both real functions:
+the formatter rebuilds everything the parser admits.
+
+An inverse pair that cannot be read together is an inverse pair that drifts.
+
+Still not driven end to end: the formatter is reached only when both retained
+messages are null and `methodKey` is set, which is why this stood for two
+hundred rounds.

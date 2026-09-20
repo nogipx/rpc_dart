@@ -46,6 +46,27 @@ final RegExp kMethodTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
   return (parts[1], parts[2]);
 }
 
+/// Rebuilds `/Service/Method` from a `Service.Method` key.
+///
+/// The INVERSE of [parseRpcMethodPath], and it lives beside it because the two
+/// disagreed about what a name may contain: the parser admits a dotted service
+/// name (`myapp.v1.UserService`, the ordinary protobuf spelling) and the
+/// formatter split on EVERY dot and demanded exactly two parts, so
+/// `myapp.v1.UserService.Get` came back as `/UnknownService/UnknownMethod`.
+///
+/// Split on the LAST dot: a service name may contain them, a method name may
+/// not. Returns `/UnknownService/UnknownMethod` for a key that carries no
+/// usable split, which is what a diagnostic should say rather than inventing a
+/// malformed path.
+String rpcMethodPathFromKey(String methodKey) {
+  final lastDot = methodKey.lastIndexOf('.');
+  if (lastDot <= 0 || lastDot == methodKey.length - 1) {
+    return '/UnknownService/UnknownMethod';
+  }
+  return '/${methodKey.substring(0, lastDot)}/'
+      '${methodKey.substring(lastDot + 1)}';
+}
+
 /// Represents a single HTTP/2 header.
 ///
 /// HTTP/2 carries headers via HPACK-encoded binary, but at the API level they

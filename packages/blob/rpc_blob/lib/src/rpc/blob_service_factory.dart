@@ -190,6 +190,25 @@ class BlobServiceClient implements IBlobClient {
     int? expectedVersion,
     RpcContext? context,
   }) async {
+    // An EMPTY id is refused, not treated as "generate one for me".
+    //
+    // `null` already means generate, so an empty string is not a second way to
+    // ask — it is a caller whose id-building produced nothing, being answered
+    // as though it had made a request. For the content-addressed callers these
+    // packages exist for, the substituted id reads as "not stored" while the
+    // bytes sit orphaned under a name nothing references.
+    //
+    // The refusal belongs here and NOT on the wire: `BlobUploadChunk.blobId` is
+    // non-nullable, so empty-means-generate is the only encoding available
+    // there and is deliberate.
+    if (id != null && id.isEmpty) {
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'putBytes: blob id is empty. Pass null to have one generated, or a '
+        'non-empty id to choose it.',
+      );
+    }
+
     return putBlob(
       _chunkUpload(
         collection: collection,
@@ -457,6 +476,11 @@ abstract interface class IBlobClient {
     );
   }
 
+  /// Uploads [bytes] as one blob.
+  ///
+  /// [id] null means "generate one". An EMPTY id is refused with
+  /// INVALID_ARGUMENT rather than treated as a second way to ask for that —
+  /// it is a caller whose id-building produced nothing.
   Future<PutBlobResponse> putBytes({
     required String collection,
     String? id,

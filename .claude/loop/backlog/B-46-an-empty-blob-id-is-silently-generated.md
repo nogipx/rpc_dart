@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 415)
-round: 366
+status: closed (round 420)
+round: 420
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/blob/rpc_blob/lib/src/client/blob_repository_client.dart, packages/blob/rpc_blob/lib/src/adapters/in_memory_blob_repository.dart, packages/blob/rpc_blob_minio/lib/src/adapters/s3_blob_storage_adapter.dart]
 probe: packages/blob/rpc_blob/.dart_tool/probes/probe_empty_id_substitution.dart
@@ -73,3 +73,25 @@ measured (`asked="" got=18df18eedb93057e`).
 Check the same shape in `rpc_blob_sqlite` and `rpc_blob_webdav` while there —
 they were never looked at, and a refusal in one implementation of an
 interchangeable interface is B-33 all over again.
+
+## Closed — round 420
+
+`putBytes(id: '')` throws INVALID_ARGUMENT — not `ArgumentError`, because round
+416 made every error name its status, and this one is untrusted-caller input.
+**BOTH implementations of `IBlobClient`** got it, which is the half this record
+warned about: a refusal in one implementation of an interchangeable interface is
+B-33 all over again.
+
+The wire is unchanged, as decided: `BlobUploadChunk.blobId` is non-nullable, so
+empty-means-generate is the only encoding available there.
+
+**The adjacent check came back NEGATIVE and is recorded so nobody re-derives
+it.** `rpc_blob_sqlite` and `rpc_blob_webdav` are storage ADAPTERS; the
+empty-id substitution they perform (`first.blobId.isEmpty ? null : ...`) IS the
+deliberate wire encoding, so the shape is not there. Their `deleteBlob`
+disagreement is B-33 and still open.
+
+**Residual**: the two `putBytes` throw differently — `BlobServiceClient`'s is
+`async` so its refusal is asynchronous, `BlobRepositoryClient`'s is not. Every
+caller awaits, so both are caught the same way; a caller that does not await
+sees one and not the other.

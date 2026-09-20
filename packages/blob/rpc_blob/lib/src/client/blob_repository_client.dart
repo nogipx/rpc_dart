@@ -53,6 +53,17 @@ class BlobRepositoryClient implements IBlobClient {
     int? expectedVersion,
     RpcContext? context,
   }) {
+    // Same refusal as the other implementation of this interface. `null`
+    // already means "generate one"; an empty string is a caller whose
+    // id-building produced nothing, answered as though it had made a request.
+    if (id != null && id.isEmpty) {
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'putBytes: blob id is empty. Pass null to have one generated, or a '
+        'non-empty id to choose it.',
+      );
+    }
+
     return putBlob(
       _chunkUpload(
         collection: collection,

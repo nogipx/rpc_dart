@@ -154,12 +154,35 @@ void main() {
         expect(cb.state, CircuitBreakerState.halfOpen);
 
         // After the abandon timeout, the gate is force-released.
+        //
+        // HALF-OPEN, not closed. The reason on this assertion always named the
+        // RELEASE, and the assertion observed it through the CLOSE -- which
+        // came apart the moment the close became wrong. An unobserved probe is
+        // not evidence the peer recovered, and `closed` is also what a
+        // fabricated success produces, so it could not tell the two apart.
         await Future<void>.delayed(const Duration(milliseconds: 60));
         expect(
           cb.state,
-          CircuitBreakerState.closed,
+          CircuitBreakerState.halfOpen,
           reason: 'abandon safety timer must release a wedged half-open probe',
         );
+
+        // The gate itself, checked directly: the next call is ADMITTED and
+        // takes its turn as the probe. This is the half `closed` only implied.
+        var admitted = false;
+        await cb.interceptUnary<String, String>(callContext, 'req', (
+          ctx,
+          req,
+        ) async {
+          admitted = true;
+          return 'ok';
+        });
+        expect(
+          admitted,
+          isTrue,
+          reason: 'a released gate must let the next call probe for real',
+        );
+        expect(cb.state, CircuitBreakerState.closed, reason: 'that one passed');
 
         expect(probeStream, isA<Stream<String>>());
       },

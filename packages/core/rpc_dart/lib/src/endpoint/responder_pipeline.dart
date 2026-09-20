@@ -2103,11 +2103,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               : const RpcSecurityPolicy())
           .parseMethodPath(methodPath);
 
-  String _methodPathFromKey(String methodKey) {
-    final parts = methodKey.split('.');
-    if (parts.length != 2) return '/UnknownService/UnknownMethod';
-    return '/${parts[0]}/${parts[1]}';
-  }
+  /// The inverse of [_parseMethodPath]; both rules live in `metadata.dart`.
+  String _methodPathFromKey(String methodKey) =>
+      rpcMethodPathFromKey(methodKey);
 
   bool _isPingMethodKey(String methodKey) =>
       methodKey == RpcEndpointPingProtocol.methodKey;

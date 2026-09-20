@@ -275,9 +275,12 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     // the probe after a safety window so the breaker cannot stay stuck.
     abandonTimer = Timer(probeAbandonTimeout, () {
       if (resolved || listened) return;
-      // Treat an abandoned, never-completing probe as a success so the breaker
-      // can recover (close) rather than remaining wedged in half-open.
-      resolve(success: true);
+      // INCONCLUSIVE, not a success. Nobody observed this probe, so it is not
+      // evidence that the peer recovered -- and recording a success CLOSES the
+      // breaker on a result the code invented. The gate is released either way,
+      // so the breaker cannot stay wedged; it stays half-open and the next call
+      // takes its turn as the probe, which is a real observation.
+      resolveInconclusive();
       // Drop the dangling source subscription; nothing consumes it.
       sub.cancel();
     });
