@@ -97,12 +97,36 @@ void main() {
         onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
       );
 
-  // WITNESS for the message change. The behaviour below was always true; what
-  // was wrong is what the server TOLD an operator to do about it.
-  test('the restart error names the stream, not the server', () async {
+  // INVERTED with B-59: a restart over a SINGLE-subscription stream now works.
+  //
+  // What made it impossible was `stop()` CANCELLING the subscription, and that
+  // cancel is gone -- the server keeps it and refuses arriving peers instead.
+  // So the remedy the old error message argued about ("pass a broadcast
+  // stream") is no longer needed for restartability at all.
+  test('a single-subscription stream now restarts and serves', () async {
     final server = serverOver(rpcWebSocketConnections(http));
     await server.start();
+    expect(await _call(http.port), 'served');
+
     await server.stop();
+    await server.start();
+
+    expect(
+      await _call(http.port),
+      'served',
+      reason:
+          'the cancel was the only obstacle; holding the subscription is what '
+          'lets the server switch back on',
+    );
+    await server.dispose();
+  });
+
+  // GUARD: dispose IS terminal. It releases the subscription, so the thing
+  // stop() no longer does is still available when it is actually meant.
+  test('GUARD: after dispose() the server cannot restart', () async {
+    final server = serverOver(rpcWebSocketConnections(http));
+    await server.start();
+    await server.dispose();
 
     final error = await server.start().then<Object?>(
       (_) => null,
@@ -110,18 +134,9 @@ void main() {
     );
 
     expect(error, isA<RpcStatusException>());
-    final message = (error! as RpcStatusException).message;
     expect(
-      message,
+      (error! as RpcStatusException).message,
       contains('SAME stream does not help'),
-      reason:
-          'the old message offered "construct a new RpcWebSocketServer" as a '
-          'remedy, and that fails identically: "$message"',
-    );
-    expect(
-      message,
-      contains('no close'),
-      reason: 'the working remedy has a gap and the message must say so',
     );
   });
 
@@ -157,9 +172,11 @@ void main() {
     await server.stop();
   });
 
-  // B-59's baseline. A peer that arrives in the gap completes the handshake and
-  // is then held by nobody: nothing answers it and nothing closes it.
-  test('a peer arriving while stopped is accepted and abandoned', () async {
+  // B-59, INVERTED as its own baseline instructed. A peer that arrives in the
+  // gap is now REFUSED: the server keeps its subscription and closes what it
+  // cannot serve, instead of cancelling and letting the broadcast stream drop
+  // the event while the peer holds a socket nobody owns.
+  test('a peer arriving while stopped is refused, not abandoned', () async {
     final server = serverOver(
       rpcWebSocketConnections(http).asBroadcastStream(),
     );
@@ -186,10 +203,10 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 2));
     expect(
       closedAt.isCompleted,
-      isFalse,
+      isTrue,
       reason:
-          'if a stopped server now closes what it cannot serve, B-59 is fixed '
-          'and this expectation is the thing to invert',
+          'the peer completed a handshake the server will not serve, so it '
+          'must be told; nothing answered it and nothing closed it before',
     );
 
     await ws.sink.close().catchError((Object _) {});

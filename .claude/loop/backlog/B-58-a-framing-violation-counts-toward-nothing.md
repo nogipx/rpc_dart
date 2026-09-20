@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 415)
-round: 397
+status: closed (round 421)
+round: 421
 commit: d9d96cd2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
 probe: P-84 measures the release half; the COST of a per-connection grind — one stream, N refused frames — has no number
@@ -30,6 +30,23 @@ reason: decided — split the branches and make the malformed-framing one behave
 > client fix its own request. Recorded, not changed.
 
 # B-58 — a framing violation counts toward nothing
+
+> **Closed — round 421.** `_answerFramingViolation` counts against the 256
+> backstop and honours `closeOnProtocolError`, excluding RESOURCE_EXHAUSTED.
+>
+> **The discriminator this lead needed did not exist when it was filed.** It
+> reasons in terms of `RpcException`, which is the BASE of the hierarchy — so a
+> resource limit and malformed framing matched the same branch, one prefix apart
+> on the wire and indistinguishable in code. Round 412 gave them separate
+> statuses (8 and 13), and that is what makes "count the violations and not the
+> limits" expressible at all. The condition is on the STATUS, not the type.
+>
+> **No new witness of its own**: the counting is covered by the existing framing
+> suites staying green and by sharing the sibling site's tested code path, which
+> is an argument rather than a measurement. And a FOREIGN error on this path
+> would count, because `wireStatusFor` redacts it to INTERNAL — our own bug, 256
+> times, ends a connection. Judged acceptable against enumerating types again,
+> which is what 412 removed.
 
 Two refusal sites in one file answer a peer and then account for the refusal
 differently.

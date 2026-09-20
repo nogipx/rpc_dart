@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 415)
-round: 401
+status: closed (round 421)
+round: 421
 commit: 762fa760
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/restart_the_way_the_error_says.dart — baseline pinned in test/restart_needs_a_new_stream_test.dart
@@ -80,3 +80,32 @@ The round that carries it out has to measure it, and the claim to attack first
 is the one above: that refusing covers the leak the cancel was there for. The
 existing baseline is `restart_needs_a_new_stream_test.dart`, whose expectation
 carries its own inversion instruction.
+
+## Closed — round 421
+
+The refusing state, plus `dispose()` as the terminal step that releases the
+subscription. The claim held: refusing covers the leak, because a refused
+connection never reaches `_endpoints` at all.
+
+**The decision was incomplete in two ways a round had to find, not read.**
+
+1. **`start()` listened AGAIN.** Keeping the subscription means a restart added
+   a SECOND listener to a broadcast source — every connection handled twice,
+   two endpoints over one channel, and the call failed. `start()` now flips the
+   flag back on when a subscription already exists.
+2. **Close code 1001 is not sendable.** `package:web_socket` refuses anything
+   outside 1000 and 3000-4999; the reserved codes are the endpoint's own to
+   generate. "Going away" is the right meaning and the wrong mechanism, so the
+   reason string carries it.
+
+**Four existing tests inverted**, including this lead's own baseline. A restart
+over a single-subscription stream now WORKS, which is what cancelling had
+permanently prevented — so the three tests asserting a failed restart moved to
+asserting it after `dispose()`, where the failure genuinely lives now. Their
+real subject, that a throwing listen must not leave `isRunning` true, is
+unchanged.
+
+**Residual**: `dispose()` is new public API and nothing in the repo calls it.
+`RpcApp` goes through `IRpcServer.stop`, which is right — a server it may
+restart must keep its subscription — but an embedder that never disposes leaks
+the one subscription `stop()` used to release.

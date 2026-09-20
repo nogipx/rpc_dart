@@ -739,6 +739,27 @@ class RpcHttp2ResponderTransport
           ),
         );
         releaseStreamId(streamId);
+
+        // A frame this transport cannot DECODE is a protocol violation in the
+        // sense `closeOnProtocolError` documents, so it is accounted for the
+        // same way as its header-level sibling `_answerRejectedStream`.
+        //
+        // RESOURCE_EXHAUSTED is excluded and must stay excluded: that peer is
+        // not broken, it is misconfigured. A client with a larger send limit
+        // than the server's receive limit hits it on EVERY call, and it is told
+        // RESOURCE_EXHAUSTED precisely so it can correct itself and retry --
+        // counting it would end that client's connection every 256 calls.
+        //
+        // The status is the discriminator because round 412 made it one. This
+        // site used to read `error is RpcException`, which is the BASE of the
+        // hierarchy and matched both kinds; now a limit says 8 and malformed
+        // framing says 13, one prefix apart, and the two can finally be told
+        // apart at all.
+        if (status != RpcStatus.resourceExhausted &&
+            (_policy.closeOnProtocolError ||
+                ++_policyViolations > _maxPolicyViolations)) {
+          await _closeForProtocolError();
+        }
       }
     }());
   }

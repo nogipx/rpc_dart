@@ -64,11 +64,29 @@ void main() {
       addTearDown(source.close);
     });
 
+    // B-59 moved where the failure lives. `stop()` KEEPS the subscription now
+    // -- it refuses arriving peers instead of cancelling -- so a restart over a
+    // single-subscription source succeeds. `dispose()` is the terminal step
+    // that releases it, and a start after THAT is what cannot work.
+    test(
+      'start / stop / start now succeeds; it is dispose that is terminal',
+      () async {
+        await server.start();
+        expect(server.isRunning, isTrue);
+        await server.stop();
+        expect(server.isRunning, isFalse);
+
+        await expectLater(server.start(), completes);
+        expect(server.isRunning, isTrue);
+
+        await server.dispose();
+        await expectLater(server.start(), throwsA(isA<RpcStatusException>()));
+      },
+    );
+
     test('a failed restart leaves isRunning false', () async {
       await server.start();
-      expect(server.isRunning, isTrue);
-      await server.stop();
-      expect(server.isRunning, isFalse);
+      await server.dispose();
 
       await expectLater(server.start(), throwsA(isA<RpcStatusException>()));
 
@@ -83,7 +101,7 @@ void main() {
 
     test('the failure says what went wrong and what to do', () async {
       await server.start();
-      await server.stop();
+      await server.dispose();
 
       await expectLater(
         server.start(),
@@ -104,7 +122,7 @@ void main() {
 
     test('stop() after a failed restart is a safe no-op', () async {
       await server.start();
-      await server.stop();
+      await server.dispose();
       await expectLater(server.start(), throwsA(isA<RpcStatusException>()));
 
       // GUARD: with the flag left true, this used to walk the teardown path of

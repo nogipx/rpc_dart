@@ -100,6 +100,15 @@ class RpcWebSocketServer implements IRpcServer {
   Future<void> start() async {
     if (_isRunning) return;
 
+    // A subscription survives [stop], which is what makes a restart possible
+    // over a single-subscription stream. Listening again here would add a
+    // SECOND listener to a broadcast source, so every connection would be
+    // handled twice and get two endpoints over one channel.
+    if (_connectionsSub != null) {
+      _isRunning = true;
+      return;
+    }
+
     // `_isRunning = true` comes AFTER the listen, or a listen that throws
     // leaves the server claiming to run with no subscription at all -- reached
     // by start/stop/start over a single-subscription connections stream, which
@@ -169,18 +178,19 @@ class RpcWebSocketServer implements IRpcServer {
     if (!_isRunning) return;
     _isRunning = false;
 
-    // Stop ACCEPTING first. A connection arriving after the endpoints are
-    // closed still gets handled, and lands in `_endpoints` AFTER the clear
-    // below -- so nothing closes it and its contracts are never disposed.
-    // Draining while still accepting would not be a shutdown either.
-    try {
-      await _connectionsSub?.cancel();
-    } catch (e) {
-      _logger?.warning('Error cancelling connection subscription: $e');
-    } finally {
-      _connectionsSub = null;
-    }
-
+    // The subscription is KEPT, and `_isRunning = false` above is what stops
+    // the server: `_handleConnection` now refuses an arriving peer outright.
+    //
+    // Cancelling was protecting against a connection landing in `_endpoints`
+    // AFTER the clear below, with nothing to close it. Refusing covers that --
+    // the connection never reaches `_endpoints` at all -- and it also answers
+    // the peer, which cancelling could not: on a broadcast `connections`
+    // stream, an event with no listener is simply DROPPED, so the peer
+    // completed its handshake and held a socket nobody owned.
+    //
+    // Keeping it is also what makes a restart possible over a
+    // single-subscription stream, which cancelling permanently prevented. The
+    // subscription is released by [dispose], the final teardown.
     if (drainTimeout != null) await _drain(drainTimeout);
 
     for (final endpoint in List.of(_endpoints)) {
@@ -191,6 +201,23 @@ class RpcWebSocketServer implements IRpcServer {
       }
     }
     _endpoints.clear();
+  }
+
+  /// Stops the server and RELEASES its subscription to `connections`.
+  ///
+  /// The final teardown. [stop] deliberately keeps the subscription so a later
+  /// [start] can switch back on — over a single-subscription `connections`
+  /// stream that is the only way a restart is possible at all. Call this when
+  /// the server will not be started again; afterwards it cannot be.
+  Future<void> dispose({Duration? drainTimeout}) async {
+    await stop(drainTimeout: drainTimeout);
+    try {
+      await _connectionsSub?.cancel();
+    } catch (e) {
+      _logger?.warning('Error cancelling connection subscription: $e');
+    } finally {
+      _connectionsSub = null;
+    }
   }
 
   /// Waits, up to [budget], for in-flight calls to finish.
@@ -281,6 +308,38 @@ class RpcWebSocketServer implements IRpcServer {
   }
 
   void _handleConnection(WebSocketChannel channel, String clientLabel) {
+    // REFUSED, not dropped. The HttpServer underneath is not this server's to
+    // close, so it keeps accepting and `rpcWebSocketConnections` keeps
+    // upgrading -- and `stop()` used to cancel this subscription, which on the
+    // broadcast stream the class recommends for restartability meant the event
+    // was simply DROPPED. The peer completed its handshake, believed it had a
+    // connection, and held a socket nobody owned:
+    //
+    //     handshake in the gap   accepted
+    //     closed 3 s later       NOTHING
+    //     an RPC over it         HUNG
+    //
+    // Reachable by an ordinary rolling restart. Closing here answers the peer
+    // AND covers the leak the cancel was there for, because the connection
+    // never reaches `_endpoints` at all -- which is the third state the two
+    // halves could not be had without.
+    if (!_isRunning) {
+      _logger?.warning(
+        'Refusing connection $clientLabel: the server is stopped',
+      );
+      // 1000, not 1001 "going away": package:web_socket refuses to SEND any
+      // code outside 1000 and 3000-4999, because the reserved ones are the
+      // endpoint's own to generate. The reason string carries the meaning.
+      unawaited(
+        Future<void>.sync(
+          () => channel.sink.close(1000, 'server is not accepting'),
+        ).catchError((Object e) {
+          _logger?.warning('Error refusing connection $clientLabel: $e');
+        }),
+      );
+      return;
+    }
+
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
 
     // Remembered so the catch below can release it. The endpoint is registered
