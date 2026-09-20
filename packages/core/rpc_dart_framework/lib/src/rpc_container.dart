@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:rpc_dart/rpc_dart.dart';
+
 /// Lightweight type-keyed service container.
 ///
 /// Supports singletons (registered instances) and factories (created on demand).
@@ -69,7 +71,8 @@ class RpcContainer {
     final factory = _factories[T];
     if (factory != null) return factory(this) as T;
 
-    throw StateError(
+    throw RpcStatusException(
+      RpcStatus.failedPrecondition,
       'RpcContainer: no registration found for type $T. '
       'Call registerSingleton<$T>() or registerFactory<$T>() first.',
     );

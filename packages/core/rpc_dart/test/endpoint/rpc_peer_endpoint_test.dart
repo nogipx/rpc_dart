@@ -270,7 +270,7 @@ void main() {
     test('closed peerA throws on outgoing call', () async {
       await peerA.close();
       expect(peerA.isActive, isFalse);
-      expect(() => contractA.echo('x'), throwsA(isA<StateError>()));
+      expect(() => contractA.echo('x'), throwsA(isA<RpcClosedException>()));
     });
 
     test('double start is a no-op', () {

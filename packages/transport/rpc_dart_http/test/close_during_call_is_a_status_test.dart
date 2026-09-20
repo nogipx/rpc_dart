@@ -22,9 +22,12 @@
 // fourth behaviour. Switching all four to CANCELLED remains the maintainer's
 // call.
 //
-// The OTHER column is deliberately unchanged: a call made AFTER close still
-// throws StateError, on every transport. That is a programming error rather
-// than a lifecycle event, and retrying it is futile.
+// The OTHER column has since moved too, and the reasoning above is why it had
+// to: "retrying it is futile" is a statement about a STATUS, and StateError
+// carries none -- `wireStatusFor` is default-deny, so it reached a peer as
+// INTERNAL "Internal server error". A call made after close now throws
+// RpcClosedException, which is FAILED_PRECONDITION: classifiable, and not
+// retried, which is the property this comment was describing all along.
 @TestOn('vm')
 library;
 
@@ -120,11 +123,11 @@ void main() {
   );
 
   test(
-    'GUARD: a call made AFTER close still throws StateError',
+    'GUARD: a call made AFTER close is refused, and not retryably',
     () async {
-      // The other half of the round-68 split, deliberately left alone: this is
-      // a programming error, not a lifecycle event, and it must stay
-      // non-retryable.
+      // The other half of the round-68 split. It is still distinct from a call
+      // that was in flight, and it must stay non-retryable -- but it carries a
+      // status now, because "non-retryable" is a claim only a status can make.
       final server = await _startServer();
       addTearDown(() => server.stop());
 
@@ -133,7 +136,10 @@ void main() {
       );
       await transport.close();
 
-      expect(() => transport.createStream(), throwsA(isA<StateError>()));
+      expect(
+        () => transport.createStream(),
+        throwsA(isA<RpcClosedException>()),
+      );
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );

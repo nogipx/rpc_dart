@@ -9,6 +9,15 @@ commit: yes
 
 # Round 411 — a programming error doing wire duty
 
+> **Half of the classification below was RETRACTED by round 416**, on the
+> owner's call. Everything filed as *"programmer error, keep as-is"* — the
+> `StateError` column, including `"Endpoint is closed"`, `"Transport is closed"`
+> and the *"~60 more of the same shape"* — has been converted to
+> `RpcStatusException` / `RpcClosedException`. Two facts already in the tree
+> said the classification was wrong: `channel_transport.dart:437` had ALREADY
+> drifted to a status, and `_isTransportClosed` had to match message TEXT in two
+> spellings to cope. The `ArgumentError` half of this round stands unchanged.
+
 ## Target
 
 The goal's last piece: **83 raw `StateError` / `ArgumentError` sites** across

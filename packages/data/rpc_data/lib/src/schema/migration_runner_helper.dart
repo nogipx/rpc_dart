@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';
 
 /// Repository contract for running declarative migrations.
@@ -43,7 +44,8 @@ class MigrationRunnerHelper {
     final targetCollection = _migrations.first.collection;
     for (final migration in _migrations) {
       if (migration.collection != targetCollection) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.failedPrecondition,
           'Migration ${migration.migrationId} targets ${migration.collection} '
           'but runner is executing for $targetCollection',
         );

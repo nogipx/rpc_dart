@@ -120,6 +120,89 @@ void main() {
     });
   });
 
+  // `Future.timeout` arms a BARE Timer, so it reaches the same defect through a
+  // different door: four caller sites bounded a deadline with it, and a deadline
+  // is peer-settable (`grpc-timeout: 720H` is legal).
+  group('RpcLongTimer.timeout', () {
+    // WITNESS on the web: Future.timeout with this bound fired in 1 ms.
+    test('a bound past the JS ceiling does not fire early', () async {
+      var timedOut = false;
+      final pending = Completer<String>();
+      final bounded = RpcLongTimer.timeout(
+        pending.future,
+        _overCeiling,
+        onTimeout: () {
+          timedOut = true;
+          return 'timed out';
+        },
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(timedOut, isFalse);
+
+      pending.complete('answered');
+      expect(await bounded, 'answered');
+    });
+
+    // GUARD: an ordinary bound still fires, or the fix would be "never time out".
+    test('a short bound still fires', () async {
+      final value = await RpcLongTimer.timeout(
+        Completer<String>().future,
+        const Duration(milliseconds: 30),
+        onTimeout: () => 'timed out',
+      );
+
+      expect(value, 'timed out');
+    });
+
+    test('onTimeout may throw instead of returning', () async {
+      await expectLater(
+        RpcLongTimer.timeout<String>(
+          Completer<String>().future,
+          const Duration(milliseconds: 30),
+          onTimeout: () => throw TimeoutException('gone'),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('a source error passes through', () async {
+      final source = Completer<String>();
+      final bounded = RpcLongTimer.timeout(
+        source.future,
+        const Duration(seconds: 30),
+        onTimeout: () => 'not this',
+      );
+      source.completeError(StateError('from the source'));
+
+      await expectLater(bounded, throwsA(isA<StateError>()));
+    });
+
+    // GUARD: a source that loses the race must still be CONSUMED. Dropping it
+    // turns a late failure into an unhandled async error, which is fatal in the
+    // root zone -- RPC-13's whole subject.
+    test('a source that fails AFTER the timeout is not unhandled', () async {
+      final errors = <Object>[];
+
+      // The source is built INSIDE the zone: an unhandled error is reported to
+      // the zone the future was created in, so a completer made outside would
+      // land in the test's own zone and fail it for the wrong reason.
+      await runZonedGuarded(() async {
+        final source = Completer<String>();
+        final bounded = RpcLongTimer.timeout(
+          source.future,
+          const Duration(milliseconds: 20),
+          onTimeout: () => 'timed out',
+        );
+        expect(await bounded, 'timed out');
+        source.completeError(StateError('too late'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }, (error, stack) => errors.add(error))!;
+
+      expect(errors, isEmpty);
+    });
+  });
+
   group('deadlines built on it', () {
     // WITNESS on the web, end to end: this is what a peer could trigger.
     test('a 30-day call scope is not closed immediately', () async {

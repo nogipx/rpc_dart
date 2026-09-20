@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:redis/redis.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_notify/rpc_notify.dart';
 
 /// Redis Pub/Sub backed implementation of [INotifyRepository].
@@ -446,8 +447,9 @@ class RedisNotifyRepository implements INotifyRepository {
       // report `topics=2` while holding nothing — the subscriptions were
       // real, the bus behind them was gone. Refusing the call is the only
       // answer the caller can act on.
-      throw StateError(
-        'RedisNotifyRepository is disposed — cannot subscribe to "$topic"',
+      throw RpcClosedException(
+        'RedisNotifyRepository',
+        detail: 'cannot subscribe to "$topic"',
       );
     }
     final isFirstForTopic = !_subscribers.containsKey(topic);

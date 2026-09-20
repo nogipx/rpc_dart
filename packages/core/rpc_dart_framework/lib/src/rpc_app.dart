@@ -109,7 +109,8 @@ class RpcApp {
     // re-enter without throwing LateInitializationError and masking the real
     // failure. Fail loudly instead. To restart, create a new RpcApp.
     if (_startAttempted) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'RpcApp.start() can only be called once; create a new RpcApp to restart.',
       );
     }

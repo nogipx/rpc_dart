@@ -295,7 +295,10 @@ void main() {
       });
 
       test('requireCallScope throws when no scope is present', () {
-        expect(RpcContext.empty().requireCallScope, throwsStateError);
+        expect(
+          RpcContext.empty().requireCallScope,
+          throwsA(isA<RpcStatusException>()),
+        );
       });
     });
 

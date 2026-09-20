@@ -133,7 +133,10 @@ void main() {
       );
 
       await client.send('x'.rpc);
-      await expectLater(() => client.send('y'.rpc), throwsA(isA<StateError>()));
+      await expectLater(
+        () => client.send('y'.rpc),
+        throwsA(isA<RpcStatusException>()),
+      );
 
       await client.close();
       await server.close();
@@ -166,7 +169,10 @@ void main() {
       );
 
       await client.finishSending();
-      await expectLater(() => client.send('x'.rpc), throwsA(isA<StateError>()));
+      await expectLater(
+        () => client.send('x'.rpc),
+        throwsA(isA<RpcStatusException>()),
+      );
 
       await client.close();
       await server.close();
@@ -199,7 +205,10 @@ void main() {
       );
 
       await client.finishSending();
-      await expectLater(client.finishSending, throwsA(isA<StateError>()));
+      await expectLater(
+        client.finishSending,
+        throwsA(isA<RpcStatusException>()),
+      );
 
       await client.close();
       await server.close();

@@ -5,6 +5,7 @@
 
 import 'dart:convert';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';
 
 /// Persists and replays change events for [DataRepository.watch] cursors.
@@ -234,7 +235,10 @@ DataRecord? decodeRecordPayload(String? payload) {
   }
   final decoded = jsonDecode(payload);
   if (decoded is! Map<String, dynamic>) {
-    throw StateError('Invalid record payload stored in change journal');
+    throw RpcStatusException(
+      RpcStatus.dataLoss,
+      'Invalid record payload stored in change journal',
+    );
   }
   return DataRecord.fromJson(decoded);
 }

@@ -5,6 +5,8 @@
 import 'dart:async';
 import 'dart:collection';
 
+import '../../rpc_dart.dart';
+
 /// A broadcast stream controller that **retains events while it has no
 /// listener** and replays them, in arrival order, to the first subscriber.
 ///
@@ -209,8 +211,12 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
       final dropped = _droppedCount;
       _droppedCount = 0;
       _overflowed = false;
+      // DATA_LOSS, which is what this is and what a StateError could not say:
+      // the retained prefix is followed by a hole, and the consumer has to know
+      // that rather than infer it from message text.
       _controller.addError(
-        StateError(
+        RpcStatusException(
+          RpcStatus.dataLoss,
           'BufferedBroadcastController dropped $dropped event(s): more than '
           'maxPendingEvents ($maxPendingEvents) buffered before any listener '
           'attached. The stream is closed; re-establish the connection.',

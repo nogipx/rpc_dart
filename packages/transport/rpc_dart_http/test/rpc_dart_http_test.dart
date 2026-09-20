@@ -160,20 +160,29 @@ void main() {
       expect(id2, greaterThan(id1));
     });
 
-    test('sendMessage_before_sendMetadata_throws_StateError', () async {
+    test('sendMessage_before_sendMetadata_is_failed_precondition', () async {
       final streamId = clientTransport.createStream();
       final body = RpcMessageFrame.encode(Uint8List.fromList([1]));
 
       expect(
         () => clientTransport.sendMessage(streamId, body),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.failedPrecondition,
+          ),
+        ),
       );
     });
 
-    test('createStream_on_closed_transport_throws_StateError', () async {
+    test('createStream_on_closed_transport_is_refused', () async {
       await clientTransport.close();
 
-      expect(() => clientTransport.createStream(), throwsA(isA<StateError>()));
+      expect(
+        () => clientTransport.createStream(),
+        throwsA(isA<RpcClosedException>()),
+      );
     });
   });
 

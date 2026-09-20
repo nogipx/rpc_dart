@@ -130,7 +130,8 @@ final class RpcEndpointPingExchange {
             if (!headersMap.containsKey(RpcHeaders.grpcStatus)) {
               if (message.isEndOfStream) {
                 completeError(
-                  StateError(
+                  RpcStatusException(
+                    RpcStatus.unavailable,
                     'Ping stream ended without trailers [streamId: $streamId]',
                   ),
                 );
@@ -152,18 +153,13 @@ final class RpcEndpointPingExchange {
             final receivedAt = DateTime.now().toUtc();
 
             if (statusCode != RpcStatus.ok) {
-              // fromTrailer, like every other caller shape: it owns the
-              // precedence between the trailer message, the one inside
-              // grpc-status-details-bin and the placeholder. Building the
+              // The shared rule, like every other caller shape. Building the
               // exception here instead dropped the peer's details, and the
               // composed 'Ping failed with status N: ' prefix said nothing the
               // status did not already carry.
-              final error = RpcStatusException.fromTrailer(
+              final error = RpcCallerTrailer.errorOf(
+                message.metadata!,
                 statusCode,
-                RpcMetadata.decodeGrpcMessage(
-                  headersMap[RpcHeaders.grpcMessage] ?? '',
-                ),
-                detailsBin: message.metadata!.statusDetailsBin,
               );
               _log.warning(
                 'Ping failed: status=$statusCode, message=${error.message} [streamId: $streamId]',
@@ -210,7 +206,8 @@ final class RpcEndpointPingExchange {
           onDone: () {
             if (!completer.isCompleted) {
               completeError(
-                StateError(
+                RpcStatusException(
+                  RpcStatus.unavailable,
                   'Ping stream ended without trailers [streamId: $streamId]',
                 ),
               );
@@ -236,7 +233,10 @@ final class RpcEndpointPingExchange {
     Future<RpcEndpointPingResult> future = completer.future;
 
     if (timeout != null) {
-      future = future.timeout(
+      // RpcLongTimer.timeout, not Future.timeout: a bare Timer past the JS
+      // ceiling fires at once. See [RpcLongTimer].
+      future = RpcLongTimer.timeout(
+        future,
         timeout,
         onTimeout: () {
           _log.warning(

@@ -414,10 +414,13 @@ void main() {
     test('Создание стрима после dispose должно выбрасывать исключение', () {
       distributor.dispose();
 
-      expect(() => distributor.createClientStream(), throwsStateError);
+      expect(
+        () => distributor.createClientStream(),
+        throwsA(isA<RpcClosedException>()),
+      );
       expect(
         () => distributor.createClientStreamWithId('test'),
-        throwsStateError,
+        throwsA(isA<RpcClosedException>()),
       );
     });
   });

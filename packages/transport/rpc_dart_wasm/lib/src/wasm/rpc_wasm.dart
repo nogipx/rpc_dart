@@ -55,7 +55,10 @@ abstract final class RpcWasm {
     LogController? logController,
   }) {
     if (_initialized) {
-      throw StateError('RpcWasm.run() may only be called once per runtime');
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'RpcWasm.run() may only be called once per runtime',
+      );
     }
     _initialized = true;
 

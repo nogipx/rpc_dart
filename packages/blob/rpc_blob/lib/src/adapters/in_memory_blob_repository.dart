@@ -6,9 +6,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 
 import '../models.dart';
 import 'i_blob_storage_adapter.dart';
@@ -111,7 +111,8 @@ class InMemoryBlobRepository implements IBlobRepository {
     );
 
     if (_maxBlobBytes != null && payload.length > _maxBlobBytes) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Blob too large: ${payload.length} bytes exceeds $_maxBlobBytes',
       );
     }
@@ -133,7 +134,11 @@ class InMemoryBlobRepository implements IBlobRepository {
 
     if (existing == null) {
       if (request.expectedVersion != null) {
-        throw StateError(
+        // ABORTED: an optimistic-concurrency conflict, whose remedy is to
+        // re-read and retry. That is what gRPC's ABORTED means, and what a
+        // redacted INTERNAL could not convey.
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Expected version ${request.expectedVersion} for $id but blob is missing.',
         );
       }
@@ -143,7 +148,8 @@ class InMemoryBlobRepository implements IBlobRepository {
       final currentVersion = existing.descriptor.version;
       if (request.expectedVersion != null &&
           currentVersion != request.expectedVersion) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Expected version ${request.expectedVersion} for $id, '
           'found $currentVersion.',
         );
@@ -153,7 +159,8 @@ class InMemoryBlobRepository implements IBlobRepository {
       if (existingChecksum != null &&
           request.checksum != null &&
           existingChecksum != request.checksum) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.dataLoss,
           'Checksum mismatch for existing blob $id: stored=$existingChecksum new=${request.checksum}',
         );
       }
@@ -201,7 +208,8 @@ class InMemoryBlobRepository implements IBlobRepository {
     final existing = collectionMap[id];
     if (existing == null) {
       if (expectedVersion != null) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Expected version $expectedVersion for $id but blob is missing.',
         );
       }
@@ -210,7 +218,8 @@ class InMemoryBlobRepository implements IBlobRepository {
 
     if (expectedVersion != null &&
         existing.descriptor.version != expectedVersion) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.aborted,
         'Expected version $expectedVersion for $id but no rows deleted.',
       );
     }
@@ -377,7 +386,7 @@ class InMemoryBlobRepository implements IBlobRepository {
 
   void _ensureOpen() {
     if (_closed) {
-      throw StateError('Repository is closed');
+      throw RpcClosedException('Repository');
     }
   }
 
@@ -389,14 +398,16 @@ class InMemoryBlobRepository implements IBlobRepository {
     await for (final chunk in source) {
       builder.add(chunk);
       if (_maxBlobBytes != null && builder.length > _maxBlobBytes) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
           'Blob too large: ${builder.length} bytes exceeds $_maxBlobBytes',
         );
       }
     }
     final bytes = builder.takeBytes();
     if (declaredLength != null && declaredLength != bytes.length) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'Declared length $declaredLength does not match actual ${bytes.length}',
       );
     }
@@ -413,7 +424,10 @@ class InMemoryBlobRepository implements IBlobRepository {
       ChecksumAlgorithm.sha256 => sha256.convert(payload).toString(),
     };
     if (digest.toLowerCase() != checksumHex.toLowerCase()) {
-      throw StateError('Checksum mismatch for blob payload');
+      throw RpcStatusException(
+        RpcStatus.dataLoss,
+        'Checksum mismatch for blob payload',
+      );
     }
   }
 

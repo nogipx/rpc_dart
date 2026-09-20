@@ -80,11 +80,17 @@ class BlobRepositoryClient implements IBlobClient {
 
     final queue = StreamQueue<BlobUploadChunk>(chunks);
     if (!await queue.hasNext) {
-      throw StateError('Upload stream is empty');
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'Upload stream is empty',
+      );
     }
     final first = await queue.next;
     if (first.offset != 0) {
-      throw StateError('First chunk must start at offset 0.');
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'First chunk must start at offset 0.',
+      );
     }
     _assertChunkSize(first);
 
@@ -100,7 +106,8 @@ class BlobRepositoryClient implements IBlobClient {
       BlobUploadChunk current = first;
       while (true) {
         if (current.offset != expectedOffset) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.invalidArgument,
             'Non-contiguous upload: got offset ${current.offset}, '
             'expected $expectedOffset.',
           );
@@ -117,17 +124,22 @@ class BlobRepositoryClient implements IBlobClient {
           break;
         }
         if (current.last) {
-          throw StateError('Chunk marked last but stream continues.');
+          throw RpcStatusException(
+            RpcStatus.invalidArgument,
+            'Chunk marked last but stream continues.',
+          );
         }
         current = await queue.next;
       }
       if (!lastChunk.last) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Upload stream ended without last=true on the final chunk.',
         );
       }
       if (declaredLength != null && declaredLength != seen) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Declared length $declaredLength does not match received $seen bytes.',
         );
       }
@@ -349,7 +361,10 @@ class BlobRepositoryClient implements IBlobClient {
     while (await queue.hasNext) {
       final first = await queue.next;
       if (first.offset != 0) {
-        throw StateError('First chunk of a blob must start at offset 0.');
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
+          'First chunk of a blob must start at offset 0.',
+        );
       }
       descriptors.add(await _consumeAndStoreBlob(first, queue));
     }
@@ -384,7 +399,8 @@ class BlobRepositoryClient implements IBlobClient {
 
   void _assertChunkSize(BlobUploadChunk chunk) {
     if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Chunk size ${chunk.bytes.length} exceeds maxChunkBytes $_maxChunkBytes',
       );
     }
@@ -399,7 +415,10 @@ class BlobRepositoryClient implements IBlobClient {
       case ChecksumAlgorithm.sha256:
         final digest = sha256.convert(chunk.bytes).toString();
         if (digest.toLowerCase() != chunk.chunkChecksum!.toLowerCase()) {
-          throw StateError('Chunk checksum mismatch at offset ${chunk.offset}');
+          throw RpcStatusException(
+            RpcStatus.dataLoss,
+            'Chunk checksum mismatch at offset ${chunk.offset}',
+          );
         }
     }
   }
@@ -488,7 +507,8 @@ class BlobRepositoryClient implements IBlobClient {
     final chunks = <Uint8List>[];
     while (true) {
       if (current.offset != expectedOffset) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Non-contiguous upload: got offset ${current.offset}, '
           'expected $expectedOffset.',
         );
@@ -505,7 +525,8 @@ class BlobRepositoryClient implements IBlobClient {
         break;
       }
       if (!await queue.hasNext) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Upload stream ended without last=true on the final chunk.',
         );
       }
@@ -513,7 +534,8 @@ class BlobRepositoryClient implements IBlobClient {
     }
 
     if (declaredLength != null && declaredLength != seen) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'Declared length $declaredLength does not match received $seen bytes.',
       );
     }
@@ -537,7 +559,8 @@ class BlobRepositoryClient implements IBlobClient {
     if (shouldVerify) {
       final expectedHex = (first.checksum ?? first.blobId).toLowerCase();
       if (computedHex.toLowerCase() != expectedHex) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.dataLoss,
           'Checksum mismatch for blob ${first.blobId}: expected $expectedHex got $computedHex',
         );
       }

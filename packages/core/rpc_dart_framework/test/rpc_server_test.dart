@@ -128,7 +128,7 @@ void main() {
     test('throws when not registered', () {
       expect(
         () => RpcContainer().get<EchoService>(),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
     });
 
@@ -167,7 +167,7 @@ void main() {
     test('require throws on missing', () {
       expect(
         () => RpcEnvConfig.from({}).require('X'),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
     });
 
@@ -300,14 +300,14 @@ void main() {
         final a = _CircularA();
         final b = _CircularB();
         await RpcTestApp.start(modules: [a, b]);
-      }, throwsA(isA<StateError>()));
+      }, throwsA(isA<RpcStatusException>()));
     });
 
     test('unknown dependency throws', () {
       expect(() async {
         final m = _LogModule('X', [EchoService], null, depType: EchoService);
         await RpcTestApp.start(modules: [m]);
-      }, throwsA(isA<StateError>()));
+      }, throwsA(isA<RpcStatusException>()));
     });
   });
 

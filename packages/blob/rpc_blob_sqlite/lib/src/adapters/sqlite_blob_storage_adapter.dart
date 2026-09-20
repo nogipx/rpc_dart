@@ -5,10 +5,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:rpc_blob/rpc_blob.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
 import 'sql_cipher.dart';
@@ -223,7 +223,8 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       declaredLength: request.length,
     );
     if (_maxBlobBytes != null && payload.length > _maxBlobBytes) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Blob too large: ${payload.length} bytes exceeds $_maxBlobBytes',
       );
     }
@@ -246,7 +247,8 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       createIfMissing: true,
     );
     if (table == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.internal,
         'Failed to ensure collection table for ${request.collection}',
       );
     }
@@ -264,7 +266,8 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
 
       if (existing.isEmpty) {
         if (request.expectedVersion != null) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.aborted,
             'Expected version ${request.expectedVersion} for $id but blob is missing.',
           );
         }
@@ -294,7 +297,8 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
         final currentVersion = current['version'] as int;
         if (request.expectedVersion != null &&
             currentVersion != request.expectedVersion) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.aborted,
             'Expected version ${request.expectedVersion} for $id, '
             'found $currentVersion.',
           );
@@ -305,7 +309,8 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
         if (existingChecksum != null &&
             request.checksum != null &&
             existingChecksum != request.checksum) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.dataLoss,
             'Checksum mismatch for existing blob $id: stored=$existingChecksum new=${request.checksum}',
           );
         }
@@ -389,7 +394,8 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       }
       final count = changes.first['count'] as int? ?? 0;
       if (expectedVersion != null && count == 0) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Expected version $expectedVersion for $id but no rows deleted.',
         );
       }
@@ -603,7 +609,7 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
 
   void _ensureOpen() {
     if (_closed) {
-      throw StateError('Adapter is closed');
+      throw RpcClosedException('Adapter');
     }
   }
 
@@ -653,14 +659,16 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
     await for (final chunk in source) {
       builder.add(chunk);
       if (_maxBlobBytes != null && builder.length > _maxBlobBytes) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
           'Blob too large: ${builder.length} bytes exceeds $_maxBlobBytes',
         );
       }
     }
     final bytes = builder.takeBytes();
     if (declaredLength != null && declaredLength != bytes.length) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'Declared length $declaredLength does not match actual ${bytes.length}',
       );
     }
@@ -677,7 +685,10 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       ChecksumAlgorithm.sha256 => sha256.convert(payload).toString(),
     };
     if (digest.toLowerCase() != checksumHex.toLowerCase()) {
-      throw StateError('Checksum mismatch for blob payload');
+      throw RpcStatusException(
+        RpcStatus.dataLoss,
+        'Checksum mismatch for blob payload',
+      );
     }
   }
 

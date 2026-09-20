@@ -178,13 +178,7 @@ void main() {
       // the caller its message had gone out while nothing reached the bridge.
       await expectLater(
         client.sendMessage(streamId, RpcMessageFrame.encode(Uint8List(1))),
-        throwsA(
-          isA<RpcStatusException>().having(
-            (e) => e.statusCode,
-            'statusCode',
-            RpcStatus.unavailable,
-          ),
-        ),
+        throwsA(isA<RpcClosedException>()),
       );
       await Future<void>.delayed(Duration.zero);
       expect(received, isEmpty);

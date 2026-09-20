@@ -5,6 +5,7 @@
 
 import 'dart:async';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
 /// Minimal reimplementation of a sqlite3 executor.
@@ -113,7 +114,8 @@ class SqliteSelectQuery {
       return null;
     }
     if (rows.length > 1) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.internal,
         'Expected at most 1 row but query returned ${rows.length}.',
       );
     }
@@ -123,7 +125,10 @@ class SqliteSelectQuery {
   Future<sqlite.Row> getSingle() async {
     final row = await getSingleOrNull();
     if (row == null) {
-      throw StateError('Expected exactly 1 row but query returned 0.');
+      throw RpcStatusException(
+        RpcStatus.internal,
+        'Expected exactly 1 row but query returned 0.',
+      );
     }
     return row;
   }

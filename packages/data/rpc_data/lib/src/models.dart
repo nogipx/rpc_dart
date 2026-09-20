@@ -22,7 +22,10 @@ class RpcStreamIterator<T> implements StreamIterator<T> {
   @override
   T get current {
     if (_current == null && !_isDone) {
-      throw StateError('No current event available. Call moveNext() first.');
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'No current event available. Call moveNext() first.',
+      );
     }
     return _current as T;
   }

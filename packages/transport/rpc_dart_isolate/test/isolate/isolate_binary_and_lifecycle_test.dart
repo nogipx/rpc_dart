@@ -193,10 +193,10 @@ void main() {
       await expectLater(
         spawned.transport.sendDirectObject(streamId, 'PING'),
         throwsA(
-          isA<RpcStatusException>().having(
+          isA<RpcClosedException>().having(
             (e) => e.statusCode,
             'statusCode',
-            RpcStatus.unavailable,
+            RpcStatus.failedPrecondition,
           ),
         ),
       );
@@ -241,7 +241,7 @@ void main() {
           requestCodec: const RpcCodec<_Empty>(_Empty.fromJson),
           responseCodec: const RpcCodec<_Empty>(_Empty.fromJson),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcClosedException>()),
       );
 
       spawned.kill();

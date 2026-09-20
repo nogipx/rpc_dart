@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:rpc_dart/rpc_dart.dart';
+
 import 'migration_definition.dart';
 import 'schema_validation.dart';
 
@@ -44,13 +46,15 @@ class MigrationPlan {
     SchemaMigrationOptions options = const SchemaMigrationOptions(),
   }) {
     if (_definitions.isEmpty) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Call initial(...) before adding next() migrations for $collection',
       );
     }
     final prevTo = _definitions.last.toVersion;
     if (toVersion <= prevTo) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'toVersion $toVersion must be greater than previous $prevTo',
       );
     }
@@ -73,7 +77,8 @@ class MigrationPlan {
     final ids = <String>{};
     for (final m in _definitions) {
       if (!ids.add(m.migrationId)) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Duplicate migrationId ${m.migrationId} for $collection',
         );
       }

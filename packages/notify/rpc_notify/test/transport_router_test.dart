@@ -511,7 +511,10 @@ void main() {
           await router.close();
 
           // Act & Assert
-          expect(() => router.createStream(), throwsStateError);
+          expect(
+            () => router.createStream(),
+            throwsA(isA<RpcClosedException>()),
+          );
         },
       );
 
@@ -530,7 +533,10 @@ void main() {
           final streamId = router.createStream();
           final data = Uint8List.fromList('test data'.codeUnits);
 
-          expect(() => router.sendMessage(streamId, data), throwsStateError);
+          expect(
+            () => router.sendMessage(streamId, data),
+            throwsA(isA<RpcStatusException>()),
+          );
 
           await router.close();
         },
@@ -927,7 +933,7 @@ class _ReusableIdTestTransport implements IRpcTransport {
   @override
   int createStream() {
     if (_closed) {
-      throw StateError('Transport is closed');
+      throw RpcClosedException('Transport');
     }
 
     final reusedId = _recycledIds.isNotEmpty ? _recycledIds.first : null;

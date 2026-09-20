@@ -3,9 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:typed_data';
-
 import 'package:paseto_dart/paseto_dart.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:sqlite3/common.dart' as sqlite;
 
 /// SQLCipher-specific exception wrapper with optional underlying cause.
@@ -70,7 +69,10 @@ class SqlCipherKey {
     bool enforceMemorySecurity = true,
   }) {
     if (_consumed) {
-      throw StateError('SQLCipher key material has already been consumed.');
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'SQLCipher key material has already been consumed.',
+      );
     }
 
     try {

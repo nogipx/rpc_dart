@@ -75,15 +75,15 @@ class RpcWebSocketCallerTransport
   /// Closed is terminal; disconnected is not, and conflating them is what let a
   /// call reach a closed inner transport in the first place.
   void _ensureUsable() {
-    if (_closed) throw StateError('Transport is closed');
+    if (_closed) throw RpcClosedException('Transport');
     if (_disconnected) {
       // FAILED_PRECONDITION, and the code is the load-bearing part. It has to
       // be an RpcStatusException so transport-agnostic error handling catches
       // it — the same state on http2 used to come back as one, so a caller
       // could not write a single `catch` for both. And it must NOT be
-      // UNAVAILABLE: `RpcRetryInterceptor._shouldRetry` retries that and never
-      // calls `reconnect()`, so every attempt hits the same dead transport and
-      // the caller is invited to try the thing that cannot work.
+      // UNAVAILABLE, which is what the caller is told when the PEER is
+      // unreachable: this is a LOCAL refusal that names its own remedy, so the
+      // caller applies the remedy instead of retrying into it.
       throw RpcStatusException(
         RpcStatus.failedPrecondition,
         'Transport is disconnected and has no socket; call reconnect(). '

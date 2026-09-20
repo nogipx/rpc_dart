@@ -309,7 +309,8 @@ class RpcHttp2Server implements IRpcServer {
         _notify(
           'onConnectionError',
           () => _onConnectionError?.call(
-            StateError(
+            RpcStatusException(
+              RpcStatus.unavailable,
               'HTTP/2 keepalive: no PING ACK from $clientAddress within '
               '$timeout; the connection is half-open',
             ),
@@ -536,7 +537,8 @@ class RpcHttp2Server implements IRpcServer {
           _notify(
             'onConnectionError',
             () => _onConnectionError?.call(
-              StateError(
+              RpcStatusException(
+                RpcStatus.resourceExhausted,
                 'HTTP/2 header block exceeded ${_securityPolicy.maxMetadataBytes} '
                 'bytes ($observedBytes observed): probable CONTINUATION flood '
                 'from $clientAddress',

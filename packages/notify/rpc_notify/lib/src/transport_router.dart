@@ -315,7 +315,7 @@ final class RpcTransportRouter implements IRpcTransport {
 
   @override
   int createStream() {
-    if (_closed) throw StateError('TransportRouter is closed');
+    if (_closed) throw RpcClosedException('TransportRouter');
     return _idManager.generateId();
   }
 
@@ -335,7 +335,7 @@ final class RpcTransportRouter implements IRpcTransport {
     RpcMetadata metadata, {
     bool endStream = false,
   }) async {
-    if (_closed) throw StateError('TransportRouter is closed');
+    if (_closed) throw RpcClosedException('TransportRouter');
     if (_streamTransports.length >= _maxActiveStreams &&
         !_streamTransports.containsKey(streamId)) {
       throw RpcStatusException(
@@ -412,12 +412,13 @@ final class RpcTransportRouter implements IRpcTransport {
     Uint8List data, {
     bool endStream = false,
   }) async {
-    if (_closed) throw StateError('TransportRouter is closed');
+    if (_closed) throw RpcClosedException('TransportRouter');
 
     // Use the saved transport for this stream.
     final transport = _streamTransports[streamId];
     if (transport == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Transport not found for stream $streamId. Metadata likely was not sent first.',
       );
     }
@@ -425,7 +426,8 @@ final class RpcTransportRouter implements IRpcTransport {
     // Resolve server stream ID.
     final serverStreamId = _clientToServerStreamMapping[streamId];
     if (serverStreamId == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Server stream ID not found for client stream $streamId',
       );
     }
@@ -442,12 +444,13 @@ final class RpcTransportRouter implements IRpcTransport {
     Object object, {
     bool endStream = false,
   }) async {
-    if (_closed) throw StateError('TransportRouter is closed');
+    if (_closed) throw RpcClosedException('TransportRouter');
 
     // Use the saved transport for this stream.
     final transport = _streamTransports[streamId];
     if (transport == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Transport not found for stream $streamId. Metadata likely was not sent first.',
       );
     }
@@ -455,7 +458,8 @@ final class RpcTransportRouter implements IRpcTransport {
     // Resolve server stream ID.
     final serverStreamId = _clientToServerStreamMapping[streamId];
     if (serverStreamId == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Server stream ID not found for client stream $streamId',
       );
     }

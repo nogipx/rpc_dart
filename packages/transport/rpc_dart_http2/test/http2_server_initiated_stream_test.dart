@@ -57,7 +57,13 @@ void main() {
       final frame = ensureGrpcFrame(Uint8List.fromList([1, 2, 3]));
       expect(
         () => responder.sendMessage(serverStreamId, frame),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unimplemented,
+          ),
+        ),
       );
     });
 
@@ -68,7 +74,13 @@ void main() {
           serverStreamId,
           RpcMetadata.forServerInitialResponse(),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unimplemented,
+          ),
+        ),
       );
     });
 
@@ -77,7 +89,13 @@ void main() {
       final frame = ensureGrpcFrame(Uint8List.fromList([9]));
       expect(
         () => responder.sendMessage(99999, frame),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unimplemented,
+          ),
+        ),
       );
     });
 

@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:rpc_blob/rpc_blob.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -142,7 +142,7 @@ void main() {
             expectedVersion: 5,
           ),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
     });
 
@@ -175,7 +175,7 @@ void main() {
 
       expect(
         () => repository.deleteBlob('test', 'blob7', expectedVersion: 5),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
 
       final deleted = await repository.deleteBlob(
@@ -358,7 +358,7 @@ void main() {
             bytes: Stream.value(data),
           ),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
 
       await smallRepo.dispose();
@@ -378,7 +378,7 @@ void main() {
             checksumAlgorithm: ChecksumAlgorithm.sha256,
           ),
         ),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
     });
 
@@ -469,7 +469,7 @@ void main() {
 
       expect(
         () => repository.headBlob('test', 'blob'),
-        throwsA(isA<StateError>()),
+        throwsA(isA<RpcStatusException>()),
       );
     });
   });

@@ -213,7 +213,16 @@ void main() {
 
         client.createStream();
         client.createStream();
-        expect(() => client.createStream(), throwsStateError);
+        expect(
+          () => client.createStream(),
+          throwsA(
+            isA<RpcStatusException>().having(
+              (e) => e.statusCode,
+              'statusCode',
+              RpcStatus.resourceExhausted,
+            ),
+          ),
+        );
 
         client.close();
         server.close();
@@ -312,13 +321,7 @@ void main() {
         // over a shorter sequence than the caller handed it.
         await expectLater(
           client.sendMessage(streamId, Uint8List.fromList([1])),
-          throwsA(
-            isA<RpcStatusException>().having(
-              (e) => e.statusCode,
-              'statusCode',
-              RpcStatus.unavailable,
-            ),
-          ),
+          throwsA(isA<RpcClosedException>()),
         );
         await Future<void>.delayed(Duration(milliseconds: 10));
 

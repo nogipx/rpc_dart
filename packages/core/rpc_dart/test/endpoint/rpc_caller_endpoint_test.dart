@@ -297,7 +297,7 @@ void main() {
           responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
           request: TestRequest('Post-close request'),
         );
-      }, throwsA(isA<StateError>()));
+      }, throwsA(isA<RpcClosedException>()));
 
       // Выделяем время для завершения всех асинхронных операций
       await Future<void>.delayed(Duration(milliseconds: 1));

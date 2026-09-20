@@ -236,7 +236,10 @@ final class _ReconnectingTransportProxy
   IRpcTransport _require() {
     final inner = _inner;
     if (inner == null || inner.isClosed) {
-      throw StateError('RpcClientConnection: transport not connected');
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'RpcClientConnection: transport not connected; call connect() first.',
+      );
     }
     return inner;
   }

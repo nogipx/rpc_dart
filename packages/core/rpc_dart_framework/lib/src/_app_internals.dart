@@ -29,7 +29,8 @@ List<RpcModule> sortModulesByDependencies(List<RpcModule> modules) {
     for (final depType in m.dependencies) {
       final dep = byType[depType];
       if (dep == null) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.failedPrecondition,
           'Module "${m.name}" declares dependency on $depType '
           'but no module of that type is registered.',
         );
@@ -56,7 +57,10 @@ List<RpcModule> sortModulesByDependencies(List<RpcModule> modules) {
         .where((m) => !sorted.contains(m))
         .map((m) => m.name)
         .join(', ');
-    throw StateError('Circular dependency detected among modules: $unresolved');
+    throw RpcStatusException(
+      RpcStatus.failedPrecondition,
+      'Circular dependency detected among modules: $unresolved',
+    );
   }
 
   return sorted;

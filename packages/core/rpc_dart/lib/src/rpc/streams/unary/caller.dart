@@ -309,12 +309,9 @@ final class UnaryCaller<TRequest, TResponse> {
                 if (encoding != null) {
                   peerGrpcEncoding = encoding;
                 }
-                final statusCode = message.metadata!.getHeaderValue(
-                  RpcHeaders.grpcStatus,
-                );
+                final code = RpcCallerTrailer.statusOf(message.metadata!);
 
-                if (statusCode != null) {
-                  final code = int.tryParse(statusCode) ?? RpcStatus.unknown;
+                if (code != null && !completer.isCompleted) {
                   if (_logger.isInternal) {
                     _logger.internal(
                       'Completion status received: $code [streamId: $streamId]',
@@ -324,34 +321,29 @@ final class UnaryCaller<TRequest, TResponse> {
                   // gated on isEndOfStream: a peer that sends the status
                   // without it would otherwise leave the held response stuck
                   // until onDone turned a perfectly good answer into an error.
-                  if (code == RpcStatus.ok &&
-                      hasPendingResponse &&
-                      !completer.isCompleted) {
+                  if (code != RpcStatus.ok) {
+                    final error = RpcCallerTrailer.errorOf(
+                      message.metadata!,
+                      code,
+                    );
+                    _logger.error(
+                      'gRPC error: $code - ${error.message} '
+                      '[streamId: $streamId]',
+                    );
+                    completer.completeError(error);
+                  } else if (hasPendingResponse) {
                     if (_logger.isInternal) {
                       _logger.internal(
                         'Unary call $_methodPath completed [streamId: $streamId]',
                       );
                     }
                     completer.complete(pendingResponse as TResponse);
-                  } else if (code != RpcStatus.ok && !completer.isCompleted) {
-                    final errorMessage =
-                        message.metadata!.getHeaderValue(
-                          RpcHeaders.grpcMessage,
-                        ) ??
-                        '';
-                    final decodedMessage = RpcMetadata.decodeGrpcMessage(
-                      errorMessage,
-                    );
-                    _logger.error(
-                      'gRPC error: $code - $decodedMessage [streamId: $streamId]',
-                    );
-                    completer.completeError(
-                      RpcStatusException.fromTrailer(
-                        code,
-                        decodedMessage,
-                        detailsBin: message.metadata!.statusDetailsBin,
-                      ),
-                    );
+                  } else {
+                    // OK and nothing sent. Answered here rather than left to
+                    // onDone, which reports UNAVAILABLE -- retryable, and this
+                    // peer is not going to do better on the next attempt.
+                    _logger.warning('Status OK but no response payload');
+                    completer.completeError(RpcCallerTrailer.noPayload());
                   }
                 }
               }
@@ -382,17 +374,8 @@ final class UnaryCaller<TRequest, TResponse> {
                   '[streamId: $streamId]',
                 );
               }
-              // remainingTime, not isExpired: isExpired is strict and so is
-              // false at the instant the deadline lands, where a peer closing
-              // on its own copy of the same deadline arrives.
-              final deadline = _context?.deadline;
               completer.completeError(
-                deadline != null && _context?.remainingTime == Duration.zero
-                    ? RpcDeadlineExceededException(deadline, Duration.zero)
-                    : RpcStatusException(
-                        RpcStatus.unavailable,
-                        'Stream closed without receiving response',
-                      ),
+                RpcCallerTrailer.closedWithoutStatus(_context),
               );
             },
           );
@@ -476,7 +459,8 @@ final class UnaryCaller<TRequest, TResponse> {
             if (!completer.isCompleted) completer.completeError(error, stack);
           }),
         );
-        return await completer.future.timeout(
+        return await RpcLongTimer.timeout(
+          completer.future,
           effectiveTimeout,
           onTimeout: () {
             if (boundingDeadline != null) {
@@ -567,7 +551,11 @@ final class UnaryCaller<TRequest, TResponse> {
           'Response timeout set to $effectiveTimeout [streamId: $streamId]',
         );
       }
-      return await completer.future.timeout(
+      // RpcLongTimer.timeout, not Future.timeout: effectiveTimeout can come
+      // from a peer-set deadline, and a bare Timer past the JS ceiling fires
+      // immediately. See [RpcLongTimer].
+      return await RpcLongTimer.timeout(
+        completer.future,
         effectiveTimeout,
         onTimeout: () {
           _logger.error(

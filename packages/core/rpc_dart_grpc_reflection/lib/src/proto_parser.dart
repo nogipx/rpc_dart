@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:convert';
-import 'dart:typed_data';
+
+import 'package:rpc_dart/rpc_dart.dart';
 
 // Minimal protobuf binary parser — only the fields needed for gRPC reflection.
 //
@@ -313,7 +314,12 @@ class _ProtoReader {
       case _wireI32:
         _pos += 4;
       default:
-        throw StateError('Unknown wire type: $wireType at pos $_pos');
+        // INVALID_ARGUMENT: this parses a descriptor the PEER supplied, so a
+        // bad wire type is untrusted input rather than a bug here.
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
+          'Unknown wire type: $wireType at pos $_pos',
+        );
     }
   }
 }

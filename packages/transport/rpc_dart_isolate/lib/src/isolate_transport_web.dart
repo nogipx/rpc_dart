@@ -321,7 +321,8 @@ abstract interface class RpcIsolateTransport {
       await Future.any([
         future,
         workerFailed.future.then(
-          (reason) => throw StateError(
+          (reason) => throw RpcStatusException(
+            RpcStatus.unavailable,
             'RpcIsolateTransport.spawn: worker "$uri" failed during $phase: '
             '$reason',
           ),
@@ -389,7 +390,8 @@ abstract interface class RpcIsolateTransport {
       await Future.any([
         ready.future,
         workerFailed.future.then(
-          (reason) => throw StateError(
+          (reason) => throw RpcStatusException(
+            RpcStatus.unavailable,
             'RpcIsolateTransport.spawn: worker "$uri" failed before it was '
             'ready: $reason',
           ),
@@ -511,7 +513,14 @@ void runRpcIsolateManagerWorker(
 RpcMetadata _decodeMetadata(Map<String, Object?> raw) {
   final headersRaw = raw['headers'];
   if (headersRaw is! List) {
-    throw StateError('Invalid metadata headers: $raw');
+    // The TYPE, not the payload: this decodes a message that crossed a worker
+    // boundary, and the status now reaches a peer where a StateError was
+    // redacted to INTERNAL.
+    throw RpcStatusException(
+      RpcStatus.invalidArgument,
+      'Invalid metadata headers: expected a list, got '
+      '${headersRaw.runtimeType}',
+    );
   }
   final headers = headersRaw
       .whereType<Map<Object?, Object?>>()
@@ -545,7 +554,10 @@ Uint8List _materializeBytes(Object? raw) {
       raw.map((value) => (value as num).toInt()).toList(growable: false),
     );
   }
-  throw StateError('Unsupported binary payload: $raw');
+  throw RpcStatusException(
+    RpcStatus.invalidArgument,
+    'Unsupported binary payload: ${raw.runtimeType}',
+  );
 }
 
 List<int> _serializeBytes(Uint8List data) => data.toList(growable: false);

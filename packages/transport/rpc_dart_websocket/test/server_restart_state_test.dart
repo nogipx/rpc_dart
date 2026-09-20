@@ -70,7 +70,7 @@ void main() {
       await server.stop();
       expect(server.isRunning, isFalse);
 
-      await expectLater(server.start(), throwsStateError);
+      await expectLater(server.start(), throwsA(isA<RpcStatusException>()));
 
       expect(
         server.isRunning,
@@ -88,7 +88,7 @@ void main() {
       await expectLater(
         server.start(),
         throwsA(
-          isA<StateError>()
+          isA<RpcStatusException>()
               .having(
                 (e) => e.message,
                 'message',
@@ -105,7 +105,7 @@ void main() {
     test('stop() after a failed restart is a safe no-op', () async {
       await server.start();
       await server.stop();
-      await expectLater(server.start(), throwsStateError);
+      await expectLater(server.start(), throwsA(isA<RpcStatusException>()));
 
       // GUARD: with the flag left true, this used to walk the teardown path of
       // a server that had never started.

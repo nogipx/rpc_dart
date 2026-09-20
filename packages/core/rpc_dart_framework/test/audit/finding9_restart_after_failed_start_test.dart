@@ -44,7 +44,7 @@ class _FakeServer implements IRpcServer {
 }
 
 void main() {
-  test('start() after a failed start throws a clear StateError, '
+  test('start() after a failed start throws a clear status, '
       'never LateInitializationError', () async {
     final app = RpcApp.server(
       modules: [FailingModule()],
@@ -69,7 +69,7 @@ void main() {
       isNot('LateInitializationError'),
       reason: 'restart must not surface LateInitializationError',
     );
-    expect(thrown, isA<StateError>());
+    expect(thrown, isA<RpcStatusException>());
     expect(thrown.toString(), contains('can only be called once'));
   });
 }

@@ -160,6 +160,31 @@ final class RpcMessageHeader {
   RpcMessageHeader(this.isCompressed, this.messageLength);
 }
 
+/// A closed endpoint or transport was asked to do work.
+///
+/// **A TYPE, because the message was load-bearing and could not be.** Ten sites
+/// across four packages threw `StateError('Transport is closed')` and one threw
+/// `RpcStatusException(unavailable, 'Transport is closed')`, and the code that
+/// has to recognise an ordinary shutdown matched BOTH spellings by comparing
+/// the text — so the wording was a contract with no declaration, and the one
+/// site that drifted had already made a clean shutdown log as a real failure.
+///
+/// FAILED_PRECONDITION, not UNAVAILABLE: closed is terminal. UNAVAILABLE is
+/// retried, and neither the retry nor the `reconnect()` behind it can reopen
+/// something that was closed on purpose — so that spelling spent the caller's
+/// deadline to arrive back here.
+final class RpcClosedException extends RpcStatusException {
+  /// [what] names the thing, e.g. `'Transport'` or `'Endpoint'`.
+  RpcClosedException(this.what, {String? detail})
+    : super(
+        RpcStatus.failedPrecondition,
+        detail == null ? '$what is closed' : '$what is closed: $detail',
+      );
+
+  /// The thing that was closed, for a caller that wants to branch on it.
+  final String what;
+}
+
 /// The grpc-message sent for an error the handler did NOT describe itself.
 ///
 /// Deliberately says nothing about the cause. See [wireStatusFor]. Its

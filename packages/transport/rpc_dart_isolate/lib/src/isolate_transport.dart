@@ -376,7 +376,8 @@ abstract interface class RpcIsolateTransport {
       // The onError port delivers [errorString, stackTraceString].
       if (!ready.isCompleted) {
         abortStartup(
-          StateError(
+          RpcStatusException(
+            RpcStatus.unavailable,
             'RpcIsolateTransport.spawn: isolate "$name" threw before it was '
             'ready: ${describeError(errorData)}',
           ),
@@ -391,7 +392,8 @@ abstract interface class RpcIsolateTransport {
     exitSub = exitPort.listen((_) {
       if (!ready.isCompleted) {
         abortStartup(
-          StateError(
+          RpcStatusException(
+            RpcStatus.unavailable,
             'RpcIsolateTransport.spawn: isolate "$name" exited before it was '
             'ready.',
           ),
@@ -582,7 +584,8 @@ Uint8List _materializeBytes(dynamic data) {
   if (data is Uint8List) {
     return data;
   }
-  throw StateError(
+  throw RpcStatusException(
+    RpcStatus.invalidArgument,
     'Unsupported data type for isolate message payload: ${data.runtimeType}',
   );
 }

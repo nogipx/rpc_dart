@@ -249,7 +249,8 @@ class SqliteDataStorageAdapter
     final payloadJson = row.read<String>('payload');
     final decoded = jsonDecode(payloadJson);
     if (decoded is! Map<String, dynamic>) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.dataLoss,
         'Expected payload to be a Map, got ${decoded.runtimeType}',
       );
     }

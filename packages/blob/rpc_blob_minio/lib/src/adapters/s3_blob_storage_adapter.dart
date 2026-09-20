@@ -9,7 +9,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:minio/minio.dart';
@@ -17,6 +16,7 @@ import 'package:minio/minio.dart';
 // it plainly shadows dart:core's in every signature in this file.
 import 'package:minio/models.dart' as minio;
 import 'package:minio/src/minio_client.dart' as minio_internal;
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_blob/rpc_blob.dart';
 import 'package:xml/xml.dart' as xml;
 
@@ -394,14 +394,16 @@ class S3BlobRepository implements IBlobRepository {
         ? await headBlob(request.collection, id)
         : null;
     if (existing == null && request.expectedVersion != null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.aborted,
         'Expected version ${request.expectedVersion} for $id but blob is missing.',
       );
     }
     if (existing != null &&
         request.expectedVersion != null &&
         existing.version != request.expectedVersion) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.aborted,
         'Version mismatch for $id: expected ${request.expectedVersion}, '
         'actual ${existing.version}.',
       );
@@ -501,7 +503,8 @@ class S3BlobRepository implements IBlobRepository {
     final existing = await headBlob(collection, id);
     if (existing == null) return false;
     if (expectedVersion != null && existing.version != expectedVersion) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.aborted,
         'Version mismatch for $id: expected $expectedVersion, actual ${existing.version}.',
       );
     }
@@ -917,7 +920,8 @@ class S3BlobRepository implements IBlobRepository {
       chunks.addAll(chunk);
     }
     if (declaredLength != null && total != declaredLength) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'Length mismatch: declared=$declaredLength actual=$total bytes',
       );
     }
@@ -934,7 +938,8 @@ class S3BlobRepository implements IBlobRepository {
       case ChecksumAlgorithm.sha256:
         final digest = sha256.convert(bytes).toString();
         if (digest != expected.toLowerCase()) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.dataLoss,
             'Checksum mismatch: expected $expected actual $digest',
           );
         }

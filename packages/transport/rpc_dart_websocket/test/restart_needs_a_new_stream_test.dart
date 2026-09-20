@@ -109,8 +109,8 @@ void main() {
       onError: (Object e) => e,
     );
 
-    expect(error, isA<StateError>());
-    final message = (error! as StateError).message;
+    expect(error, isA<RpcStatusException>());
+    final message = (error! as RpcStatusException).message;
     expect(
       message,
       contains('SAME stream does not help'),
@@ -136,7 +136,7 @@ void main() {
     await first.stop();
 
     final second = serverOver(connections);
-    await expectLater(second.start(), throwsA(isA<StateError>()));
+    await expectLater(second.start(), throwsA(isA<RpcStatusException>()));
     expect(second.isRunning, isFalse);
   });
 

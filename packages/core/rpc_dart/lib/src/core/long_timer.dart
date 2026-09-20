@@ -50,6 +50,63 @@ class RpcLongTimer implements Timer {
       ? RpcLongTimer(duration, callback)
       : Timer(duration, callback);
 
+  /// `Future.timeout`, with [create]'s timer instead of a bare one.
+  ///
+  /// `Future.timeout` arms a plain [Timer], so on the web every bound above the
+  /// ceiling above fires at once — which is the same inversion this class
+  /// exists to stop, reached through a different door. Use this wherever the
+  /// bound can come from a deadline: a peer sets that, and `grpc-timeout: 720H`
+  /// is legal.
+  ///
+  /// Same contract as `Future.timeout`: [onTimeout] either returns a value or
+  /// throws, and whichever of the two settles first wins.
+  static Future<T> timeout<T>(
+    Future<T> future,
+    Duration duration, {
+    required FutureOr<T> Function() onTimeout,
+  }) {
+    final completer = Completer<T>();
+    final timer = create(duration, () {
+      if (completer.isCompleted) return;
+      try {
+        final replacement = onTimeout();
+        if (replacement is Future<T>) {
+          replacement.then(
+            completer.complete,
+            onError: completer.completeError,
+          );
+        } else {
+          completer.complete(replacement);
+        }
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    // Both branches are attached whatever the timer did, so a source that loses
+    // the race is still CONSUMED -- dropping it here would turn a late failure
+    // into an unhandled async error, which is isolate-fatal in the root zone.
+    //
+    // `then<void>`, not `then`: with T inferred, the onError callback has to
+    // return a T it does not have, and on the error path the DERIVED future
+    // then fails with a type error that nothing is listening to -- reintroducing
+    // the very unhandled error this consumption exists to prevent.
+    unawaited(
+      future.then<void>(
+        (value) {
+          timer.cancel();
+          if (!completer.isCompleted) completer.complete(value);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          timer.cancel();
+          if (!completer.isCompleted) {
+            completer.completeError(error, stackTrace);
+          }
+        },
+      ),
+    );
+    return completer.future;
+  }
+
   final void Function() _callback;
   Timer? _timer;
   bool _cancelled = false;

@@ -169,7 +169,10 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     final runtimeId = map['runtimeId'] as String?;
     final error = map['error'] as String?;
     if (runtimeId == null || error != null) {
-      throw StateError('Failed to load WASM runtime: ${error ?? "no id"}');
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'Failed to load WASM runtime: ${error ?? "no id"}',
+      );
     }
     return RpcFlutterWasmBridge._(
       runtimeId,

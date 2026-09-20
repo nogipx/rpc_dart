@@ -76,7 +76,13 @@ void main() {
           entrypoint: _unusedEntrypoint,
           workerUri: _missingWorker,
         ),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unavailable,
+          ),
+        ),
         reason:
             'nothing listened for the Worker error event, so both startup waits '
             'simply expired and spawn() handed back a transport wired to a '

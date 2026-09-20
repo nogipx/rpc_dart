@@ -185,13 +185,13 @@ class RpcHttp2CallerTransport
   /// Refuses work the transport genuinely cannot do, naming which state it is
   /// in, because the two are not recoverable in the same way.
   void _ensureUsable() {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
     if (_disconnected) {
       // Same type and code as the websocket sibling, deliberately: this state
       // used to surface as StateError there and RpcStatusException here, so no
-      // single `catch` covered both. NOT UNAVAILABLE — `RpcRetryInterceptor`
-      // retries that and never calls `reconnect()`, so the retries spin against
-      // the same dead connection.
+      // single `catch` covered both. NOT UNAVAILABLE, which is what the caller
+      // is told when the PEER is unreachable — this is a local refusal, and it
+      // names the remedy so the caller applies it rather than retrying into it.
       throw RpcStatusException(
         RpcStatus.failedPrecondition,
         'Transport is disconnected and has no connection; call reconnect(). '
@@ -387,7 +387,8 @@ class RpcHttp2CallerTransport
     );
     return RpcHttp2CallerTransport._(
       connection: connection,
-      connectionFactory: () => throw StateError(
+      connectionFactory: () => throw RpcStatusException(
+        RpcStatus.unimplemented,
         'RpcHttp2CallerTransport.viaSocket does not support reconnect: '
         'the originating socket cannot be recreated.',
       ),
@@ -722,7 +723,10 @@ class RpcHttp2CallerTransport
     // HTTP/2's own SETTINGS_MAX_CONCURRENT_STREAMS does not cover for it
     // either, because RpcHttp2Server never derives that from the policy.
     if (_reservedStreams.length >= _policy.maxActiveStreams) {
-      throw StateError(
+      // RESOURCE_EXHAUSTED, matching the channel transport: a transient limit
+      // the caller can back off from, not a mistake it made.
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Too many active streams: ${_reservedStreams.length} '
         '(max: ${_policy.maxActiveStreams})',
       );
@@ -959,7 +963,10 @@ class RpcHttp2CallerTransport
 
     final stream = _activeStreams[streamId];
     if (stream == null) {
-      throw StateError('Stream $streamId not found. Send metadata first.');
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'Stream $streamId not found. Send metadata first.',
+      );
     }
 
     assert(

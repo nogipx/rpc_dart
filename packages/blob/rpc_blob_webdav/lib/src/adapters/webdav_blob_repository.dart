@@ -5,11 +5,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:rpc_blob/rpc_blob.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:xml/xml.dart' as xml;
 
 import 'webdav_auth.dart';
@@ -110,7 +110,10 @@ class WebDavBlobRepository implements IBlobRepository {
     );
     if (resp.statusCode == 404 || resp.statusCode == 410) return null;
     if (resp.statusCode != 207) {
-      throw StateError(
+      // INTERNAL: the backing store failed in a way the caller cannot act on.
+      // The upstream code travels in the message so an operator can.
+      throw RpcStatusException(
+        RpcStatus.internal,
         'WebDAV PROPFIND ${resp.statusCode} for $collection/$id',
       );
     }
@@ -143,7 +146,8 @@ class WebDavBlobRepository implements IBlobRepository {
     );
     if (resp.statusCode == 404 || resp.statusCode == 410) return null;
     if (resp.statusCode != 200 && resp.statusCode != 206) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.internal,
         'WebDAV GET ${resp.statusCode} for '
         '${request.collection}/${request.id}',
       );
@@ -177,14 +181,16 @@ class WebDavBlobRepository implements IBlobRepository {
     if (_trackMetadata) {
       final existing = await headBlob(request.collection, id);
       if (existing == null && request.expectedVersion != null) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Expected version ${request.expectedVersion} for $id but blob is missing.',
         );
       }
       if (existing != null &&
           request.expectedVersion != null &&
           existing.version != request.expectedVersion) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Version mismatch for $id: expected ${request.expectedVersion}, '
           'actual ${existing.version}.',
         );
@@ -204,7 +210,8 @@ class WebDavBlobRepository implements IBlobRepository {
       },
     );
     if (!_isWriteOk(putResp.statusCode)) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.internal,
         'WebDAV PUT ${putResp.statusCode} for '
         '${request.collection}/$id',
       );
@@ -247,7 +254,8 @@ class WebDavBlobRepository implements IBlobRepository {
       final existing = await headBlob(collection, id);
       if (existing == null) return false;
       if (existing.version != expectedVersion) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.aborted,
           'Version mismatch for $id: expected $expectedVersion, '
           'actual ${existing.version}.',
         );
@@ -256,7 +264,10 @@ class WebDavBlobRepository implements IBlobRepository {
     final resp = await _send('DELETE', _objectUri(collection, id));
     if (resp.statusCode == 404 || resp.statusCode == 410) return false;
     if (resp.statusCode == 200 || resp.statusCode == 204) return true;
-    throw StateError('WebDAV DELETE ${resp.statusCode} for $collection/$id');
+    throw RpcStatusException(
+      RpcStatus.internal,
+      'WebDAV DELETE ${resp.statusCode} for $collection/$id',
+    );
   }
 
   @override
@@ -342,7 +353,8 @@ class WebDavBlobRepository implements IBlobRepository {
     final resp = await _send('DELETE', _dirUri(collection));
     if (resp.statusCode == 404 || resp.statusCode == 410) return false;
     if (resp.statusCode == 200 || resp.statusCode == 204) return true;
-    throw StateError(
+    throw RpcStatusException(
+      RpcStatus.internal,
       'WebDAV DELETE ${resp.statusCode} for collection '
       '$collection',
     );
@@ -388,7 +400,8 @@ class WebDavBlobRepository implements IBlobRepository {
       _ensured.add(collection);
       return;
     }
-    throw StateError(
+    throw RpcStatusException(
+      RpcStatus.internal,
       'WebDAV MKCOL ${resp.statusCode} for collection '
       '$collection',
     );
@@ -436,7 +449,10 @@ class WebDavBlobRepository implements IBlobRepository {
     );
     if (resp.statusCode == 404 || resp.statusCode == 410) return null;
     if (resp.statusCode != 207) {
-      throw StateError('WebDAV PROPFIND ${resp.statusCode} for $dirUri');
+      throw RpcStatusException(
+        RpcStatus.internal,
+        'WebDAV PROPFIND ${resp.statusCode} for $dirUri',
+      );
     }
     return _parseMultistatus(resp.body);
   }
@@ -620,7 +636,8 @@ class WebDavBlobRepository implements IBlobRepository {
     }
     final bytes = builder.takeBytes();
     if (declaredLength != null && declaredLength != bytes.length) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'Length mismatch: declared=$declaredLength actual=${bytes.length} bytes',
       );
     }
@@ -637,7 +654,8 @@ class WebDavBlobRepository implements IBlobRepository {
       case ChecksumAlgorithm.sha256:
         final digest = sha256.convert(bytes).toString();
         if (digest != expected.toLowerCase()) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.dataLoss,
             'Checksum mismatch: expected $expected actual $digest',
           );
         }

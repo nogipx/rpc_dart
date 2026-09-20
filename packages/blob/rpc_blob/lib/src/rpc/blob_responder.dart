@@ -33,11 +33,17 @@ class BlobServiceResponder extends BlobServiceContractResponder {
   }) async {
     final queue = StreamQueue<BlobUploadChunk>(chunks);
     if (!await queue.hasNext) {
-      throw StateError('Upload stream is empty');
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'Upload stream is empty',
+      );
     }
     final first = await queue.next;
     if (first.offset != 0) {
-      throw StateError('First chunk must start at offset 0.');
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'First chunk must start at offset 0.',
+      );
     }
     _assertChunkSize(first);
 
@@ -56,7 +62,8 @@ class BlobServiceResponder extends BlobServiceContractResponder {
       BlobUploadChunk current = first;
       while (true) {
         if (current.offset != expectedOffset) {
-          throw StateError(
+          throw RpcStatusException(
+            RpcStatus.invalidArgument,
             'Non-contiguous upload: got offset ${current.offset}, '
             'expected $expectedOffset.',
           );
@@ -74,17 +81,22 @@ class BlobServiceResponder extends BlobServiceContractResponder {
           break;
         }
         if (current.last) {
-          throw StateError('Chunk marked last but stream continues.');
+          throw RpcStatusException(
+            RpcStatus.invalidArgument,
+            'Chunk marked last but stream continues.',
+          );
         }
         current = await queue.next;
       }
       if (!lastChunk.last) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Upload stream ended without last=true on the final chunk.',
         );
       }
       if (declaredLength != null && declaredLength != seen) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Declared length $declaredLength does not match received $seen bytes.',
         );
       }
@@ -109,7 +121,12 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     if (shouldVerify) {
       final expectedHex = (first.checksum ?? first.blobId).toLowerCase();
       if (computedHex.toLowerCase() != expectedHex) {
-        throw StateError(
+        // DATA_LOSS: the bytes that arrived are not the bytes that were sent.
+        // As a StateError this reached the uploader as INTERNAL "Internal
+        // server error", so a corrupted upload was indistinguishable from a
+        // server bug and the client had no reason to resend.
+        throw RpcStatusException(
+          RpcStatus.dataLoss,
           'Checksum mismatch for blob ${first.blobId}: expected $expectedHex got $computedHex',
         );
       }
@@ -290,7 +307,10 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     while (await queue.hasNext) {
       final first = await queue.next;
       if (first.offset != 0) {
-        throw StateError('First chunk of a blob must start at offset 0.');
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
+          'First chunk of a blob must start at offset 0.',
+        );
       }
       descriptors.add(await _consumeAndStoreBlob(first, queue));
     }
@@ -299,7 +319,11 @@ class BlobServiceResponder extends BlobServiceContractResponder {
 
   void _assertChunkSize(BlobUploadChunk chunk) {
     if (_maxChunkBytes != null && chunk.bytes.length > _maxChunkBytes) {
-      throw StateError(
+      // RESOURCE_EXHAUSTED: the uploader is over a configured limit and can
+      // correct it by sending smaller chunks, which is precisely what a
+      // redacted INTERNAL could not tell it.
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Chunk size ${chunk.bytes.length} exceeds maxChunkBytes $_maxChunkBytes',
       );
     }
@@ -316,7 +340,10 @@ class BlobServiceResponder extends BlobServiceContractResponder {
       case ChecksumAlgorithm.sha256:
         final digest = sha256.convert(chunk.bytes).toString();
         if (digest.toLowerCase() != chunk.chunkChecksum!.toLowerCase()) {
-          throw StateError('Chunk checksum mismatch at offset ${chunk.offset}');
+          throw RpcStatusException(
+            RpcStatus.dataLoss,
+            'Chunk checksum mismatch at offset ${chunk.offset}',
+          );
         }
         return;
     }
@@ -341,7 +368,8 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     final chunks = <Uint8List>[];
     while (true) {
       if (current.offset != expectedOffset) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Non-contiguous upload: got offset ${current.offset}, '
           'expected $expectedOffset.',
         );
@@ -358,7 +386,8 @@ class BlobServiceResponder extends BlobServiceContractResponder {
         break;
       }
       if (!await queue.hasNext) {
-        throw StateError(
+        throw RpcStatusException(
+          RpcStatus.invalidArgument,
           'Upload stream ended without last=true on the final chunk.',
         );
       }
@@ -366,7 +395,8 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     }
 
     if (declaredLength != null && declaredLength != seen) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'Declared length $declaredLength does not match received $seen bytes.',
       );
     }
@@ -390,7 +420,12 @@ class BlobServiceResponder extends BlobServiceContractResponder {
     if (shouldVerify) {
       final expectedHex = (first.checksum ?? first.blobId).toLowerCase();
       if (computedHex.toLowerCase() != expectedHex) {
-        throw StateError(
+        // DATA_LOSS: the bytes that arrived are not the bytes that were sent.
+        // As a StateError this reached the uploader as INTERNAL "Internal
+        // server error", so a corrupted upload was indistinguishable from a
+        // server bug and the client had no reason to resend.
+        throw RpcStatusException(
+          RpcStatus.dataLoss,
           'Checksum mismatch for blob ${first.blobId}: expected $expectedHex got $computedHex',
         );
       }

@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:rpc_blob_webdav/rpc_blob_webdav.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 import 'package:xml/xml.dart' as xml;
 
@@ -109,7 +109,7 @@ void main() {
           expectedVersion: 1,
         ),
       ),
-      throwsA(isA<StateError>()),
+      throwsA(isA<RpcStatusException>()),
     );
   });
 
@@ -225,7 +225,7 @@ void main() {
           checksum: 'deadbeef',
         ),
       ),
-      throwsA(isA<StateError>()),
+      throwsA(isA<RpcStatusException>()),
     );
   });
 

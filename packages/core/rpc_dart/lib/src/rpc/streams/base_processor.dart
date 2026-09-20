@@ -7,21 +7,11 @@ part of '_index.dart';
 
 /// Returns true if [error] indicates the underlying transport is closed.
 ///
-/// Network transports signal this with `StateError('Transport is closed')`.
-/// Matched on exact type and message rather than a broad
-/// `toString().contains('closed')`, which would swallow unrelated errors whose
-/// text merely mentions "closed".
-bool _isTransportClosed(Object error) {
-  // Both spellings: transports raised a bare StateError before the channel one
-  // moved to a retryable status, and a responder must skip a response nobody
-  // can receive either way.
-  if (error is StateError && error.message == 'Transport is closed') {
-    return true;
-  }
-  return error is RpcStatusException &&
-      error.statusCode == RpcStatus.unavailable &&
-      error.message == 'Transport is closed';
-}
+/// One TYPE check. This used to compare the exception's MESSAGE text against a
+/// literal, in two spellings, because the transports disagreed on which to
+/// throw — so the wording was a contract that nothing declared and the compiler
+/// could not check.
+bool _isTransportClosed(Object error) => error is RpcClosedException;
 
 /// Compresses [serialized] with [encoding] (null or `identity` = no
 /// compression), wraps it in the gRPC 5-byte frame, and sends it on [streamId].

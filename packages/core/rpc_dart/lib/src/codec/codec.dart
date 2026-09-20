@@ -30,7 +30,8 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
   T deserialize(Uint8List bytes) {
     final decoder = _fromJson;
     if (decoder == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.internal,
         'RpcCodec cannot deserialize data without a fromJson function. '
         'Create an instance via RpcCodec.withDecoder or pass fromJson to the constructor.',
       );

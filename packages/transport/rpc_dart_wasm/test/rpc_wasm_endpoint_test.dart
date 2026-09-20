@@ -308,7 +308,7 @@ void main() {
       await host.close();
       // The closed endpoint rejects the call synchronously rather than
       // hanging on a bridge that will never reply.
-      expect(() => caller.echo('x'), throwsA(isA<StateError>()));
+      expect(() => caller.echo('x'), throwsA(isA<RpcClosedException>()));
     });
 
     test('closing the host closes its bridge', () async {

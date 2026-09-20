@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured) — filed from a READ sweep the owner handed in, re-verified against ff930001 before filing; no round took it
+status: closed (round 416)
+round: 416
 commit: ff930001
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/ping.dart, packages/core/rpc_dart/lib/src/core/errors.dart]
 probe: none — READ, not measured
@@ -137,3 +137,33 @@ Still open, and unmeasured: the `!= '0'` string comparison at
 the completion rule's fourth copy; the four bare `Future.timeout` sites where
 `RpcLongTimer` exists; the `Endpoint is closed` pre-flight covering three of
 five shapes.
+
+## Closed — round 416
+
+All five of the above, plus the missing witnesses.
+
+**`RpcCallerTrailer` owns the rule** (`contracts/caller_trailer.dart`) and every
+call shape asks it: `statusOf` parses the status as a NUMBER, `errorOf` builds
+the exception through `fromTrailer`, `noPayload()` is INTERNAL and
+`closedWithoutStatus()` is UNAVAILABLE-or-the-deadline.
+
+- **the `!= '0'`** is gone: one parse, so a peer spelling OK as `00` is a
+  success on every shape;
+- **"OK with no payload" is INTERNAL everywhere.** Not UNAVAILABLE: the peer
+  COMPLETED the call and broke the contract, so a retry reaches the same broken
+  peer and spends the caller's deadline. Unary used to fall through to `onDone`
+  and report UNAVAILABLE; it now answers at the trailer;
+- **the completion rule is one rule**: the STATUS completes the call on all
+  three, so `ClientStreamCaller` and `_executeUnaryCall` HOLD the payload
+  instead of completing on it. A payload followed by an error trailer was a
+  success to those two and an error to unary;
+- **`RpcLongTimer.timeout`** replaces the four bare `Future.timeout` deadline
+  bounds. Its GUARD found a real bug in the new helper before it shipped: a
+  source failing after the timeout was an unhandled async error;
+- **the pre-flight guard covers all five shapes** — in `clientStream`'s
+  returned CLOSURE, not beside the lazy builder, or it would test whether the
+  endpoint was open when the call was described.
+
+Witness `one_rule_for_every_caller_shape_test.dart`, against a hand-built peer:
+rpc_dart's own responder derives payload and status together, so these sequences
+only exist against a foreign gRPC peer.

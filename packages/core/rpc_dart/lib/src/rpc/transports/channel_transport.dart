@@ -393,7 +393,12 @@ class RpcChannelTransport
   @override
   int createStream() {
     if (_activeStreams.length >= _policy.maxActiveStreams) {
-      throw StateError(
+      // RESOURCE_EXHAUSTED, not a StateError: the caller has not made a
+      // mistake, it has hit a transient limit and can back off. As a StateError
+      // `wireStatusFor` redacted it to INTERNAL, so the one thing the caller
+      // needed to know -- wait and retry -- was the part that got destroyed.
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Too many active streams: ${_activeStreams.length} '
         '(max: ${_policy.maxActiveStreams})',
       );
@@ -425,17 +430,16 @@ class RpcChannelTransport
   /// sequence than the caller sent and answers normally, so both sides report
   /// success over different data.
   ///
-  /// UNAVAILABLE rather than a bare `StateError`: it is retryable, it is
-  /// classifiable by the caller, and it survives the wire if it ever crosses
-  /// one. `_isTransportClosed` in the stream processors accepts both spellings,
-  /// so a responder still skips a response nobody can receive.
+  /// [RpcClosedException] rather than a bare `StateError`: it is classifiable
+  /// by the caller and it survives the wire if it ever crosses one. This site
+  /// spelled it `RpcStatusException(unavailable, ...)` while ten siblings threw
+  /// `StateError`, and `_isTransportClosed` had to accept both by comparing
+  /// message text.
   ///
   /// READS and teardown stay lenient: [finishSending] and [releaseStreamId] run
   /// from `finally` blocks, where a throw masks the error that got there.
   void _refuseIfClosed() {
-    if (_closed) {
-      throw RpcStatusException(RpcStatus.unavailable, 'Transport is closed');
-    }
+    if (_closed) throw RpcClosedException('Transport');
   }
 
   @override

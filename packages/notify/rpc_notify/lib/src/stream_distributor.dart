@@ -616,7 +616,7 @@ class StreamDistributor<T extends IRpcSerializable> {
   /// Проверяет, что дистрибьютор не закрыт
   void _checkNotDisposed() {
     if (_isDisposed) {
-      throw StateError('StreamDistributor уже закрыт');
+      throw RpcClosedException('StreamDistributor');
     }
   }
 

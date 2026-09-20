@@ -75,7 +75,8 @@ abstract class RpcIsolateModule extends RpcServerModule {
   RpcCallerEndpoint get isolateCaller {
     final c = _isolateCaller;
     if (c == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'RpcIsolateModule "$name": isolate not started yet. '
         'This property is available only after RpcApp.start().',
       );

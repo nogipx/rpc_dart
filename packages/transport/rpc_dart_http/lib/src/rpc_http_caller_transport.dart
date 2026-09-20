@@ -271,7 +271,7 @@ class RpcHttpCallerTransport
 
   @override
   int createStream() {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
     return _idManager.generateId();
   }
 
@@ -287,7 +287,7 @@ class RpcHttpCallerTransport
     RpcMetadata metadata, {
     bool endStream = false,
   }) async {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
     // Enforce the metadata invariants (printable-ASCII header values, etc.)
     // on send, consistent with every other transport. HTTP/1.1 puts these on
     // the wire as headers, so non-ASCII / CR-LF would corrupt or inject.
@@ -308,10 +308,11 @@ class RpcHttpCallerTransport
     Uint8List data, {
     bool endStream = false,
   }) async {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
     final call = _pending[streamId];
     if (call == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'No pending call for stream $streamId. Call sendMetadata first.',
       );
     }
@@ -575,10 +576,11 @@ class RpcHttpCallerTransport
   /// call, as a one-line change per transport. Matching is the smaller move: it
   /// removes the unclassifiable error without inventing a fourth behaviour.
   ///
-  /// Deliberately NOT applied to a call made AFTER close: `createStream` keeps
-  /// throwing `StateError('Transport is closed')`, matching every sibling. That
-  /// is a programming error rather than a lifecycle event, and retrying it is
-  /// futile.
+  /// Deliberately DISTINCT from a call made after close, which is
+  /// [RpcClosedException] — FAILED_PRECONDITION, because closed is terminal and
+  /// retrying it is futile. The two are different events: this one names a call
+  /// that was already in flight, and that one a call that should never have
+  /// started.
   RpcStatusException _closedDuringCall() => RpcStatusException(
     RpcStatus.unavailable,
     'The transport was closed while this call was in flight',

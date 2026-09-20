@@ -119,11 +119,7 @@ void main() {
     );
     expect(
       caught,
-      isA<RpcStatusException>().having(
-        (e) => e.statusCode,
-        'statusCode',
-        RpcStatus.unavailable,
-      ),
+      isA<RpcClosedException>(),
       reason: 'the caller must still be told the call failed',
     );
 
@@ -149,28 +145,36 @@ void main() {
       expect(transport.createStream, returnsNormally);
     });
 
-    test('sending after close is REFUSED, with a retryable status', () async {
-      final streamId = transport.createStream();
-      Matcher refused() => throwsA(
-        isA<RpcStatusException>().having(
-          (e) => e.statusCode,
-          'statusCode',
-          RpcStatus.unavailable,
-        ),
-      );
-      await expectLater(
-        transport.sendDirectObject(streamId, 'PING'),
-        refused(),
-      );
-      await expectLater(
-        transport.sendMetadata(streamId, RpcMetadata([])),
-        refused(),
-      );
-      await expectLater(
-        transport.sendMessage(streamId, Uint8List.fromList([1])),
-        refused(),
-      );
-    });
+    // Was 'with a retryable status'. The refusal is the load-bearing half and
+    // is unchanged; the retryability was wrong and is now FAILED_PRECONDITION.
+    // Closed is terminal, so an UNAVAILABLE here invited a retry that reaches
+    // the same closed transport -- and since round 414 the retry calls
+    // reconnect() first, which a closed transport also refuses.
+    test(
+      'sending after close is REFUSED, and not as a retryable status',
+      () async {
+        final streamId = transport.createStream();
+        Matcher refused() => throwsA(
+          isA<RpcClosedException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.failedPrecondition,
+          ),
+        );
+        await expectLater(
+          transport.sendDirectObject(streamId, 'PING'),
+          refused(),
+        );
+        await expectLater(
+          transport.sendMetadata(streamId, RpcMetadata([])),
+          refused(),
+        );
+        await expectLater(
+          transport.sendMessage(streamId, Uint8List.fromList([1])),
+          refused(),
+        );
+      },
+    );
 
     test('releaseStreamId() does not throw', () {
       final streamId = transport.createStream();

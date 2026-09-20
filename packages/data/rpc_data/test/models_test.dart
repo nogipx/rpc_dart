@@ -5,6 +5,7 @@
 
 import 'dart:async';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/src/models.dart';
 import 'package:test/test.dart';
 
@@ -91,7 +92,7 @@ void main() {
       controller.add(1);
       controller.close();
 
-      expect(() => iterator.current, throwsStateError);
+      expect(() => iterator.current, throwsA(isA<RpcStatusException>()));
       expect(await iterator.moveNext(), isTrue);
       expect(iterator.current, 1);
       expect(await iterator.moveNext(), isFalse);

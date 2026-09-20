@@ -4,6 +4,8 @@
 
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
+
 /// Typed, read-only view over environment variables.
 ///
 /// Wraps [Platform.environment] (or a custom map for testing) and adds
@@ -38,7 +40,8 @@ class RpcEnvConfig {
   String require(String key) {
     final val = _env[key];
     if (val == null || val.isEmpty) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'RpcEnvConfig: required environment variable "$key" is not set.',
       );
     }

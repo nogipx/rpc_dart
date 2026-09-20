@@ -12,15 +12,18 @@
 //   if (e.toString().contains('Transport is closed') ||
 //       e.toString().contains('closed')) { ...return; }
 //
-// Fix: detect transport-closed by exception type + exact message
-// (StateError('Transport is closed')); everything else is logged at error
-// level (not swallowed).
+// First fix: detect it by exception type PLUS exact message text. That worked
+// and made the wording a contract nothing declared -- the transports disagreed
+// on which exception to throw, so the matcher had to accept two spellings, and
+// the one site that drifted stopped matching and logged clean shutdowns as real
+// failures.
+//
+// Now: one TYPE, `RpcClosedException`. The message is free to say anything.
 //
 // CONFIRMED-FIX if:
 //  - a non-closed error whose message contains "closed" is logged at error
 //    level (surfaced), and
-//  - the genuine StateError('Transport is closed') is NOT logged at error
-//    (swallowed as before).
+//  - a genuine RpcClosedException is NOT logged at error (swallowed as before).
 
 // Pipeline machinery is off the public barrel; tests reach it here.
 import 'package:rpc_dart/src/_internal.dart';
@@ -93,7 +96,7 @@ void main() {
       );
 
       test(
-        'genuine StateError("Transport is closed") is swallowed (no error log)',
+        'a genuine RpcClosedException is swallowed (no error log)',
         () async {
           final output = _CollectorOutput();
           final controller = LogController(
@@ -106,7 +109,7 @@ void main() {
           final transport = ThrowingTransport(rawServer)
             ..throwOnSendMessage = true
             ..throwOnSendMetadata = true
-            ..errorToThrow = StateError('Transport is closed');
+            ..errorToThrow = RpcClosedException('Transport');
 
           final processor = StreamProcessor<RpcString, RpcString>(
             transport: transport,

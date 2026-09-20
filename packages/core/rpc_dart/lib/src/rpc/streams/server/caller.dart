@@ -74,7 +74,8 @@ final class ServerStreamCaller<
   /// Sends the single request; may be called only once.
   Future<void> send(TRequest request) async {
     if (_requestSent) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'ServerStream allows only one request; it was already sent.',
       );
     }
@@ -124,27 +125,13 @@ final class ServerStreamCaller<
 
         // Inspect status in metadata.
         if (response.metadata != null) {
-          final statusStr = response.metadata!.getHeaderValue(
-            RpcHeaders.grpcStatus,
-          );
-          if (statusStr != null) {
-            final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
-            if (status != RpcStatus.ok) {
-              // EMPTY, not a placeholder: fromTrailer falls back to the message
-              // inside grpc-status-details-bin only when this is empty.
-              final message =
-                  response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
-                  '';
-              final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
-              _logger.error(
-                'Server stream ended with error: $status - $decodedMessage',
-              );
-              throw RpcStatusException.fromTrailer(
-                status,
-                decodedMessage,
-                detailsBin: response.metadata!.statusDetailsBin,
-              );
-            }
+          final status = RpcCallerTrailer.statusOf(response.metadata!);
+          if (status != null && status != RpcStatus.ok) {
+            final error = RpcCallerTrailer.errorOf(response.metadata!, status);
+            _logger.error(
+              'Server stream ended with error: $status - ${error.message}',
+            );
+            throw error;
           }
         }
       }
@@ -181,27 +168,16 @@ _grpcStatusErrorTransformer<T extends Object>(LogScope logger) {
 
       final metadata = response.metadata;
       if (metadata == null) return;
-      final statusStr = metadata.getHeaderValue(RpcHeaders.grpcStatus);
-      if (statusStr == null) return;
-      final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
-      if (status == RpcStatus.ok) return;
+      final status = RpcCallerTrailer.statusOf(metadata);
+      if (status == null || status == RpcStatus.ok) return;
 
-      // EMPTY, not a placeholder: fromTrailer falls back to the message inside
-      // grpc-status-details-bin only when this is empty.
-      final message = metadata.getHeaderValue(RpcHeaders.grpcMessage) ?? '';
-      final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
+      final error = RpcCallerTrailer.errorOf(metadata, status);
       if (logger.isInternal) {
         logger.internal(
-          'Raw responses saw error trailer: $status - $decodedMessage',
+          'Raw responses saw error trailer: $status - ${error.message}',
         );
       }
-      sink.addError(
-        RpcStatusException.fromTrailer(
-          status,
-          decodedMessage,
-          detailsBin: metadata.statusDetailsBin,
-        ),
-      );
+      sink.addError(error);
     },
   );
 }

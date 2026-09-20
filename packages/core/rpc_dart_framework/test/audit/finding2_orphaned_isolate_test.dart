@@ -61,7 +61,7 @@ void main() {
     // If it returns a live caller, the isolate is orphaned (CONFIRMED bug).
     expect(
       () => mod.isolateCaller,
-      throwsA(isA<StateError>()),
+      throwsA(isA<RpcStatusException>()),
       reason: 'isolate must be terminated after failed server start',
     );
 

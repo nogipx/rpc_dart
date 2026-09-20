@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415]
-status: confirmed (round 415)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416]
+status: confirmed (round 416)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -460,3 +460,34 @@ made on the wrong one.** Two of the five were not the edit the sweep described:
 > looked for it.
 
 `../rounds/415-five-duties-and-the-sibling-that-answered-each.md`.
+
+## Round 416 — when the copies agree and are all wrong together
+
+The widest application yet: one duty — *what does this library throw?* —
+answered 80 times across 17 packages, and the copies did NOT drift. They agreed
+on `StateError`, and agreeing is what hid it.
+
+> **A duty answered identically everywhere can still be answered wrongly
+> everywhere, and then the detector's own signal — divergence — is absent.**
+> What exposed it was not a diff between siblings but a diff between the answer
+> and what the SYSTEM does with it: `wireStatusFor` is default-deny, so every
+> `StateError` became INTERNAL "Internal server error" on the wire.
+
+The tell is in the catalogue already: "Identical copies can BOTH be wrong" is a
+section of this file. Round 416 is its largest instance, and it adds the
+question that finds them — **ask what consumes the answer, not only who
+produces it.** Two consumers gave it away:
+
+- `wireStatusFor`, which redacts anything outside the hierarchy;
+- `_isTransportClosed`, which had to compare message TEXT in two spellings
+  because the producers disagreed — and the site that had already drifted
+  (`channel_transport.dart:437`) was accommodated by widening the matcher rather
+  than by removing the drift.
+
+> **A consumer that matches on a MESSAGE is a contract with no declaration, and
+> it is evidence the type is carrying nothing.** Find the string comparison and
+> you have found the missing type. Here it became `RpcClosedException`, whose
+> `what` field then turned out to be the only way to tell an endpoint's refusal
+> from its transport's — which one of this round's canaries needed.
+
+`../rounds/416-every-error-names-its-status.md`.

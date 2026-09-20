@@ -745,7 +745,7 @@ class RpcHttp2ResponderTransport
 
   @override
   int createStream() {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
 
     final streamId = _nextStreamId;
     _nextStreamId += 2; // Server ids are even: 2, 4, 6, ...
@@ -776,7 +776,8 @@ class RpcHttp2ResponderTransport
   http2.ServerTransportStream _requireIncomingStream(int streamId, String op) {
     final incomingStream = _incomingStreams[streamId];
     if (incomingStream == null) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.unimplemented,
         'Cannot $op on stream $streamId: not a known incoming stream. '
         'Server-initiated streams are not supported on the HTTP/2 responder '
         '(server-push is unimplemented); responses must use the '
@@ -842,7 +843,7 @@ class RpcHttp2ResponderTransport
     RpcMetadata metadata, {
     bool endStream = false,
   }) async {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
 
     // The policy governs what we EMIT, not only what we accept. `_headerValue`
     // already rejects non-printable-ASCII, but that is a hardcoded rule, not
@@ -896,7 +897,7 @@ class RpcHttp2ResponderTransport
     Uint8List data, {
     bool endStream = false,
   }) async {
-    if (_isClosed) throw StateError('Transport is closed');
+    if (_isClosed) throw RpcClosedException('Transport');
 
     final incomingStream = _requireIncomingStream(streamId, 'send message');
 

@@ -75,7 +75,7 @@ final class ThrowingTransport implements IRpcTransport {
   bool throwOnSendMetadata = false;
   bool throwOnSendDirect = false;
   bool throwOnFinishSending = false;
-  Object errorToThrow = StateError('Transport is closed');
+  Object errorToThrow = RpcClosedException('Transport');
 
   ThrowingTransport(this._inner);
 

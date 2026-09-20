@@ -24,6 +24,13 @@ final class ClientStreamCaller<
   /// Marks send completion.
   bool _sendingFinished = false;
 
+  /// The payload, held until the status says what it means.
+  ///
+  /// gRPC's status is authoritative: a payload followed by an error trailer is
+  /// an error. Completing on the payload made it a success here while the unary
+  /// shape, which has always held it, reported the error.
+  TResponse? _pendingResponse;
+
   /// Call context, kept so the response wait can honour its deadline.
   ///
   /// Final: a non-final private field of this name would block type promotion
@@ -99,58 +106,45 @@ final class ClientStreamCaller<
           );
         }
 
-        // Check for errors in metadata/trailers.
+        // The STATUS completes the call, never the payload -- see
+        // [_pendingResponse]. Deliberately NOT gated on isEndOfStream: a peer
+        // that sends the status without it would otherwise leave the held
+        // response stuck until onDone turned a good answer into an error.
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
-          final statusCode = rpcMessage.metadata!.getHeaderValue(
-            RpcHeaders.grpcStatus,
-          );
+          final status = RpcCallerTrailer.statusOf(rpcMessage.metadata!);
           if (_logger.isInternal) {
-            _logger.internal('Status code from metadata: $statusCode');
+            _logger.internal('Status code from metadata: $status');
           }
+          if (status == null || _responseCompleter.isCompleted) return;
 
-          if (statusCode != null && statusCode != '0') {
-            final errorMessage =
-                rpcMessage.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
-                '';
-            final decodedMessage = RpcMetadata.decodeGrpcMessage(errorMessage);
-            _logger.error(
-              'Received error status code: $statusCode - $decodedMessage',
+          if (status != RpcStatus.ok) {
+            final error = RpcCallerTrailer.errorOf(
+              rpcMessage.metadata!,
+              status,
             );
-
-            if (!_responseCompleter.isCompleted) {
-              _responseCompleter.completeError(
-                RpcStatusException.fromTrailer(
-                  int.tryParse(statusCode) ?? RpcStatus.unknown,
-                  decodedMessage,
-                  detailsBin: rpcMessage.metadata!.statusDetailsBin,
-                ),
-              );
-            }
+            _logger.error('Received error status code: ${error.message}');
+            _responseCompleter.completeError(error);
             return;
           }
 
-          // If final status OK (0) but no payload, fail because data was expected.
-          if (statusCode == '0' &&
-              rpcMessage.isEndOfStream &&
-              !_responseCompleter.isCompleted) {
+          if (_pendingResponse != null) {
+            _responseCompleter.complete(_pendingResponse as TResponse);
+          } else {
             _logger.warning('Status OK but no response payload');
-            _responseCompleter.completeError(
-              RpcStatusException(
-                RpcStatus.internal,
-                'Stream closed without response payload',
-              ),
-            );
+            _responseCompleter.completeError(RpcCallerTrailer.noPayload());
           }
+          return;
         }
 
-        // Handle responses with payload.
+        // Held, not delivered: a payload followed by an error trailer is an
+        // ERROR, and completing here made it a success.
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
           if (_logger.isInternal) {
             _logger.internal('Received payload: ${rpcMessage.payload}');
           }
-          _responseCompleter.complete(rpcMessage.payload!);
+          _pendingResponse = rpcMessage.payload;
         }
       },
       onError: (Object error, StackTrace stackTrace) {
@@ -168,25 +162,8 @@ final class ClientStreamCaller<
         if (!_responseCompleter.isCompleted) {
           // Might be transport close; surface error if still pending.
           try {
-            // Our own deadline takes precedence over whatever the transport
-            // reports as it collapses. The server tears its stream down when
-            // the same deadline passes, which closes this stream at almost the
-            // same instant -- and reporting UNAVAILABLE for that is a race:
-            // whichever landed first decided the caller's exception type.
-            // If the deadline has passed, the deadline is why the call failed.
-            // Tested with remainingTime, not isExpired: isExpired is strict
-            // (`clock().isAfter(deadline)`) and so is FALSE at the instant the
-            // deadline lands, while remainingTime is already Duration.zero.
-            // The boundary is exactly where a peer closing on its own copy of
-            // the same deadline arrives.
-            final deadline = _context?.deadline;
             _responseCompleter.completeError(
-              deadline != null && _context?.remainingTime == Duration.zero
-                  ? RpcDeadlineExceededException(deadline, Duration.zero)
-                  : RpcStatusException(
-                      RpcStatus.unavailable,
-                      'Stream closed without receiving response',
-                    ),
+              RpcCallerTrailer.closedWithoutStatus(_context),
             );
           } catch (e) {
             // If completer already finished, ignore.
@@ -204,7 +181,8 @@ final class ClientStreamCaller<
   /// Sends a request into the stream. Safe to call multiple times until finishSending().
   Future<void> send(TRequest request) async {
     if (_sendingFinished) {
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'Sending already completed. Call finishSending() to get the response.',
       );
     }
@@ -230,7 +208,10 @@ final class ClientStreamCaller<
   /// 60s. A streaming upload given ten minutes died after one.
   Future<TResponse> finishSending() async {
     if (_sendingFinished) {
-      throw StateError('Sending was already completed earlier.');
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'Sending was already completed earlier.',
+      );
     }
 
     _sendingFinished = true;
@@ -245,8 +226,11 @@ final class ClientStreamCaller<
       final deadline = _context?.deadline;
       final wait = _context?.remainingTime ?? _noDeadlineFallback;
 
-      // Await single response with timeout.
-      return await _responseCompleter.future.timeout(
+      // RpcLongTimer.timeout, not Future.timeout: `wait` comes from a deadline,
+      // which a peer can set, and a bare Timer past the JS ceiling fires at
+      // once. See [RpcLongTimer].
+      return await RpcLongTimer.timeout(
+        _responseCompleter.future,
         wait,
         onTimeout: () {
           _logger.error('Response wait timed out after $wait');

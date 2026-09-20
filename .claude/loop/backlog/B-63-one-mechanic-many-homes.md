@@ -240,3 +240,29 @@ and it sits outside core+transports.
 ## Owner decision
 
 —
+
+## The largest item closed — round 416
+
+**`'Transport is closed'` is no longer a message.** `RpcClosedException` is a
+type carrying FAILED_PRECONDITION and a `what` field, and `_isTransportClosed`
+is one `is` check. The eleven production sites across four packages now throw
+it, and so do the five `'Endpoint is closed'` guards.
+
+The lead predicted this would fail silently when the wording moved. It had
+ALREADY failed: `channel_transport.dart:437` threw
+`RpcStatusException(unavailable, 'Transport is closed')` while ten siblings
+threw `StateError`, so `_isTransportClosed` had been widened to accept both
+spellings rather than the drift being removed. An ordinary shutdown on that one
+transport logged as a real failure until the matcher was patched.
+
+**Item (1) is closed too.** Both `_ensureUsable` copies justified
+FAILED_PRECONDITION with *"`RpcRetryInterceptor` retries that and never calls
+`reconnect()`"* — which round 414 made false. The status is unchanged and still
+right; the reasoning is rewritten to the one that survives: this is a LOCAL
+refusal that names its own remedy, so the caller applies the remedy instead of
+retrying into it.
+
+**Still open**: `_inFlightCalls()` (byte-identical in two servers, counting
+through a stringly-typed map), `_notify` (byte-identical, a process-death guard),
+`_startKeepalive` (twice in one package, already drifted by an `_isClosed`
+check the server half lacks), and the `wireStatusFor` → `sendError` quartet.

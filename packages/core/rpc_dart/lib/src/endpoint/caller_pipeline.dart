@@ -318,8 +318,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     Duration? timeout,
     RpcContext? context,
   }) async {
-    if (!isActive) throw StateError('Endpoint is closed');
-    if (transport.isClosed) throw StateError('Transport is closed');
+    if (!isActive) throw RpcClosedException('Endpoint');
+    if (transport.isClosed) throw RpcClosedException('Transport');
 
     final streamId = transport.createStream();
     try {
@@ -405,7 +405,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     /// low-level API keeps the fast path it has always had.
     RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
   }) {
-    if (!isActive) throw StateError('Endpoint is closed');
+    if (!isActive) throw RpcClosedException('Endpoint');
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
     if (isZeroCopy && !transport.supportsZeroCopy) {
@@ -470,7 +470,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
-    if (!isActive) throw StateError('Endpoint is closed');
+    if (!isActive) throw RpcClosedException('Endpoint');
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
     if (isZeroCopy && !transport.supportsZeroCopy) {
@@ -528,6 +528,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     RpcContext? context,
   }) {
     return (Stream<C> requests) async {
+      // In the closure, not beside the builder: the builder is lazy, so a guard
+      // out there would test whether the endpoint was open when the call was
+      // DESCRIBED rather than when it was made.
+      if (!isActive) throw RpcClosedException('Endpoint');
+
       final ctx = _prepareCallerContext(context, serviceName, methodName);
       // The builder is already lazy: this runs when the call is invoked.
       _trackCallerRequest(serviceName, methodName, ctx);
@@ -564,6 +569,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<R>? responseCodec,
     RpcContext? context,
   }) {
+    if (!isActive) throw RpcClosedException('Endpoint');
+
     final ctx = _prepareCallerContext(context, serviceName, methodName);
 
     final stream = handleBidirectionalStream<C, R>(
@@ -805,40 +812,29 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       await processor.send(request);
       await processor.finishSending();
 
-      await for (final response in processor.responses) {
-        if (response.payload != null) return response.payload!;
+      // Held, not returned: the STATUS completes the call, so a payload
+      // followed by an error trailer is an error. Returning on the payload made
+      // it a success here while the unary shape reported the error.
+      TResponse? pendingResponse;
 
-        if (response.metadata != null) {
-          final statusStr = response.metadata!.getHeaderValue(
-            RpcHeaders.grpcStatus,
-          );
-          if (statusStr != null) {
-            final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
-            if (status != RpcStatus.ok) {
-              // EMPTY, not a placeholder: fromTrailer falls back to the message
-              // inside grpc-status-details-bin only when this is empty.
-              final message =
-                  response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
-                  '';
-              // fromTrailer, so grpc-status-details-bin is decoded. Building
-              // the exception directly dropped an RpcStatusException's
-              // structured `details` on the floor: the responder had already
-              // put them on the wire, and every other call shape reads them
-              // back, but this one -- the zero-copy unary path -- did not.
-              // Measured with a handler throwing NOT_FOUND plus one detail:
-              // server, client and bidi all reported details=1, zero-copy
-              // unary reported details=0.
-              throw RpcStatusException.fromTrailer(
-                status,
-                RpcMetadata.decodeGrpcMessage(message),
-                detailsBin: response.metadata!.statusDetailsBin,
-              );
-            }
-          }
+      await for (final response in processor.responses) {
+        if (response.payload != null) {
+          pendingResponse = response.payload;
+          continue;
         }
+
+        if (response.metadata == null) continue;
+        final status = RpcCallerTrailer.statusOf(response.metadata!);
+        if (status == null) continue;
+
+        if (status != RpcStatus.ok) {
+          throw RpcCallerTrailer.errorOf(response.metadata!, status);
+        }
+        if (pendingResponse != null) return pendingResponse;
+        throw RpcCallerTrailer.noPayload();
       }
 
-      throw RpcStatusException(RpcStatus.unavailable, 'No response received');
+      throw RpcCallerTrailer.closedWithoutStatus(null);
     } finally {
       await processor.close();
     }

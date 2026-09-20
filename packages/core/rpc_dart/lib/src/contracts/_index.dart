@@ -14,6 +14,8 @@ import '../_internal.dart'
         IRpcSerializable,
         RpcCallerEndpoint,
         RpcPeerEndpoint,
+        RpcHeaders,
+        RpcMetadata,
         RpcStatus,
         RpcStatusException,
         RpcLongTimer,
@@ -25,6 +27,7 @@ export '../endpoint/_index.dart' show IRpcMiddleware;
 
 part 'annotations.dart';
 part 'call_scope.dart';
+part 'caller_trailer.dart';
 part 'context.dart';
 part 'contract.dart';
 part 'models.dart';

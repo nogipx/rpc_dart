@@ -7,7 +7,9 @@
 // stream error (not silently swallowed). The retained events are delivered
 // first, then the drop error.
 //
-// Fix: _flush emits a StateError reporting the dropped count after draining.
+// Fix: _flush emits a DATA_LOSS status reporting the dropped count after
+// draining. DATA_LOSS is what the event IS -- the retained prefix is followed
+// by a hole -- and a StateError could not say it.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -37,7 +39,14 @@ void main() {
     // The retained events still arrive in order...
     expect(received, [0, 1, 2, 3]);
     // ...the loss is reported (no longer silent)...
-    expect(streamError, isA<StateError>());
+    expect(
+      streamError,
+      isA<RpcStatusException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        RpcStatus.dataLoss,
+      ),
+    );
     expect(streamError.toString(), contains('dropped 6'));
     expect(overflowFired, 1);
     // ...and the stream is then closed (fatal): no gappy continuation.

@@ -136,7 +136,8 @@ class RpcWebSocketServer implements IRpcServer {
       // RpcWebSocketServer over the same stream fails identically, and so does
       // a second `rpcWebSocketConnections(http)` -- HttpServer is
       // single-subscription too and the first call already listened to it.
-      throw StateError(
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
         'RpcWebSocketServer cannot be restarted: its `connections` stream has '
         'already been listened to. stop() cancels the subscription, and a '
         'single-subscription stream cannot be listened to again. Building a '

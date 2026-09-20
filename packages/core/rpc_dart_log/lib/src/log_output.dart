@@ -145,7 +145,9 @@ class LogCollectorOutput extends LogOutput {
     if (record is LogSpanStart) return;
 
     final json = switch (record) {
-      LogSpanStart() => throw StateError('unreachable'),
+      LogSpanStart() => throw UnsupportedError(
+        'LogSpanStart is filtered out before this point',
+      ),
       final LogEvent event => event.toJson(),
       final LogSpan span => span.toJson(),
     };

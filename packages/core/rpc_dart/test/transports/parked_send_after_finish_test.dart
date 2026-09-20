@@ -109,11 +109,7 @@ void main() {
 
       expect(
         outcome,
-        isA<RpcStatusException>().having(
-          (e) => e.statusCode,
-          'statusCode',
-          RpcStatus.unavailable,
-        ),
+        isA<RpcClosedException>(),
         reason: 'the sender was told nothing: $outcome',
       );
       expect(

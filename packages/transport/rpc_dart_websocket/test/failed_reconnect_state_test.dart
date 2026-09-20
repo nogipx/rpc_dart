@@ -209,6 +209,6 @@ void main() {
 
     expect(client.isClosed, isTrue);
     expect((await client.health()).message, contains('closed'));
-    expect(() => client.createStream(), throwsStateError);
+    expect(() => client.createStream(), throwsA(isA<RpcClosedException>()));
   });
 }

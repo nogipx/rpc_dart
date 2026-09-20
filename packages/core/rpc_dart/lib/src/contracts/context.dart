@@ -295,10 +295,11 @@ final class RpcContext {
   ///
   /// Convenience for responder handlers, where a scope is always present, so you
   /// can skip the null-check: `context!.requireCallScope().onDispose(...)`.
-  /// Throws [StateError] on a client/caller or manually-built context.
+  /// Throws [RpcStatusException] on a client/caller or manually-built context.
   RpcCallScope requireCallScope() =>
       callScope ??
-      (throw StateError(
+      (throw RpcStatusException(
+        RpcStatus.internal,
         'requireCallScope: no RpcCallScope on this context. A scope is injected '
         'only for incoming server (responder) calls.',
       ));
