@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412]
-status: confirmed (round 393)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415]
+status: confirmed (round 415)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -425,3 +425,38 @@ is not automatically a defect; it is a defect where something reaches it.**
 
 `../probes/P-51-three-core-diagnostics.md`,
 `../rounds/360-two-routes-into-one-concept.md`.
+
+## Round 415 — five duties in one round, and what a copy costs to REACH
+
+Round 391 asked for this: stop applying the lens one copy per round. Five duties
+were taken at once, each read across every implementation, and the answer sat in
+a sibling every time — a caller that passed the trailer message through, a
+teardown that cancelled the token, a processor that gated its sends, a transport
+that bounded its shutdown, a header list written in constants.
+
+**The copy is cheap to fix and can be expensive to REACH, and the estimate is
+made on the wrong one.** Two of the five were not the edit the sweep described:
+
+- `ping.dart` was listed as one of seven sites substituting `'Unknown error'`,
+  and changing that literal would have made its message strictly worse — the
+  site does not call the shared factory AT ALL, so the placeholder was the only
+  message it had. Converting it to `fromTrailer` is what the duty required, and
+  that is a different edit from the one the sweep named.
+- Cancelling the token in `closeResponderResources` made a LATENT race in
+  `RpcCallScope.close()` reachable for the first time: the scope self-closes on
+  cancellation, so the teardown's own `close()` became the second call, and the
+  early return on `_isClosed` left the disposer loop running detached.
+
+> **A duplication sweep costs what the LAST copy costs, and the last copy is
+> usually the one that cannot simply be edited to match.** Both surprises here
+> were in the same place — the copy that had drifted furthest, which is the one
+> whose sibling's clause has nowhere to land.
+
+> **The second surprise is the one worth naming: unifying a duty can make a
+> dormant defect live.** The scope race had existed all along and nothing could
+> reach it, because nothing cancelled the token before tearing down. Ask what
+> the newly-correct copy now DOES that no copy did before, and run the suite
+> around it — an existing test caught this one, and no new test would have
+> looked for it.
+
+`../rounds/415-five-duties-and-the-sibling-that-answered-each.md`.

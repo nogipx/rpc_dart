@@ -162,7 +162,9 @@ final class RpcMessageHeader {
 
 /// The grpc-message sent for an error the handler did NOT describe itself.
 ///
-/// Deliberately says nothing about the cause. See [wireStatusFor].
+/// Deliberately says nothing about the cause. See [wireStatusFor]. Its
+/// receiving sibling is `kAbsentTrailerMessage` in `errors.dart`, which is what
+/// a caller shows when the peer's trailer carried no message at all.
 const String kInternalErrorWireMessage = 'Internal server error';
 
 /// Translates an error thrown by a handler into what may go on the wire.

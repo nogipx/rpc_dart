@@ -166,6 +166,56 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     _context?.cancellationToken?.throwIfCancelled();
   }
 
+  /// Whether the call ended while the handler was running.
+  ///
+  /// Checked AFTER `await _handler(...)`, which is the only part of a unary
+  /// call that takes time and so the only window in which a cancel, a deadline,
+  /// a `drain()` or an `endpoint.close()` can land. Without it this responder
+  /// answered anyway: a DATA frame and `grpc-status: 0` went out on a stream
+  /// the caller had already given up on, and a drain that exists to stop
+  /// exactly that reported success.
+  ///
+  /// One token covers all four — the deadline path and `drain()` both cancel it
+  /// (`responder_pipeline._onDeadlineExceeded`), and so does
+  /// `closeResponderResources`.
+  ///
+  /// This is what [StreamProcessor] gets from `_isActive`, which gates its
+  /// `send`, `sendError` and `finishSending`. The same handler registered as
+  /// any streaming shape, or served by the zero-copy unary branch on
+  /// [CallProcessor], was already suppressed here; only the codec unary path
+  /// was not.
+  bool get _callIsOver => _context?.cancellationToken?.isCancelled ?? false;
+
+  /// Drops a finished handler's answer and tells the caller the call ended.
+  ///
+  /// A status, not silence. Dropping the response and returning left the caller
+  /// with nothing at all — it waited out its own deadline for a call the server
+  /// had already finished with, which is worse than the wrong answer this
+  /// replaces. Same principle as the undelivered-response audit: a response
+  /// that did not reach the peer must not read as success, and must not vanish.
+  ///
+  /// Best-effort by construction. The reason the call ended is often that the
+  /// transport went away, so this send is expected to fail and its failure is
+  /// not news.
+  Future<void> _dropLateResponse(int streamId) async {
+    final reason = _context?.cancellationToken?.reason ?? 'call ended';
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Handler finished after the call ended; answering CANCELLED instead '
+        '[streamId: $streamId, reason: $reason]',
+      );
+    }
+    try {
+      await _transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(RpcStatus.cancelled, message: reason),
+        endStream: true,
+      );
+    } catch (_) {
+      // Nothing to report to: see above.
+    }
+  }
+
   void _setupRequestHandler() {
     if (_logger.isInternal) {
       _logger.internal('Configuring request handler for $_methodPath');
@@ -437,6 +487,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // Handle request.
       final response = await _handler(request);
 
+      // See [_callIsOver]: the handler is the only slow part of a unary call,
+      // so this is where a cancel, deadline, drain or close lands.
+      if (_callIsOver) {
+        await _dropLateResponse(streamId);
+        return;
+      }
+
       // Serialize and optionally compress response.
       final serializedResponse = _responseSerializer.serialize(response);
       final useCompression = responseEncoding != null;
@@ -583,6 +640,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Handle request.
       final response = await _handler(request);
+
+      // See [_callIsOver]. Same window as the codec branch.
+      if (_callIsOver) {
+        await _dropLateResponse(streamId);
+        return;
+      }
 
       // Zero-copy: send response directly if supported.
       final direct = _transport.supportsZeroCopy;

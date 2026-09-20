@@ -449,10 +449,21 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   }
 
   /// Stops listening and releases all responder resources.
+  ///
+  /// Cancels the tokens before tearing the streams down, like every other
+  /// teardown path here. Without it this was the ONE way a stream ended without
+  /// its handler being told: a handler that polls `cancellationToken` or awaits
+  /// `cancelled` kept running after `endpoint.close()` returned, against
+  /// controllers that were already gone.
   Future<void> closeResponderResources() async {
     await _respIncomingSub?.cancel();
     _respIncomingSub = null;
     _respIsListening = false;
+
+    for (final state in _respStreams.values) {
+      final token = state.cachedContext?.cancellationToken;
+      if (token != null && !token.isCancelled) token.cancel('endpoint closed');
+    }
 
     final activeStreamIds = _respStreams.values
         .map((s) => s.id)

@@ -5,22 +5,42 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:shelf/shelf.dart';
 
-/// gRPC headers that must always be exposed to the browser.
+/// Response headers that must always be exposed to the browser.
 ///
-/// Without these in `Access-Control-Expose-Headers`, browsers block them
-/// in cross-origin responses, breaking gRPC-over-HTTP on web clients.
+/// Membership rule: everything this library can WRITE on a response that a web
+/// client has to read. Without it in `Access-Control-Expose-Headers` the
+/// browser hides the header, and the failure is invisible server-side.
+///
+/// `grpc-status-details-bin` is here because [RpcMetadata.forTrailer] writes it
+/// whenever a status carries details, and it is the only place those details
+/// live on the wire.
 const _requiredGrpcExposedHeaders = [
-  'grpc-encoding',
-  'grpc-accept-encoding',
-  'grpc-status',
-  'grpc-message',
+  RpcHeaders.grpcEncoding,
+  RpcHeaders.grpcAcceptEncoding,
+  RpcHeaders.grpcStatus,
+  RpcHeaders.grpcMessage,
+  RpcHeaders.grpcStatusDetails,
 ];
 
-/// gRPC headers that must always be allowed in browser requests.
+/// Request headers that must always be allowed from the browser.
+///
+/// Membership rule: everything this library SENDS on a request. These are not
+/// the operator's to withhold — a custom [RpcHttpCorsPolicy.allowedHeaders]
+/// adds to this list, it does not replace it, so a call cannot be broken by
+/// configuring the policy.
+///
+/// `content-type` is `application/grpc`, which is not CORS-safelisted;
+/// `x-route-service` and `x-request-id` go out on every call
+/// (`caller_pipeline.dart` sets both, and `x-route-service` on pings too);
+/// `x-trace-id` goes out whenever the context carries one.
 const _requiredGrpcAllowedHeaders = [
-  'grpc-timeout',
-  'grpc-encoding',
-  'grpc-accept-encoding',
+  RpcHeaders.contentType,
+  RpcHeaders.grpcTimeout,
+  RpcHeaders.grpcEncoding,
+  RpcHeaders.grpcAcceptEncoding,
+  RpcHeaders.xRouteService,
+  RpcHeaders.xRequestId,
+  RpcHeaders.xTraceId,
 ];
 
 /// CORS policy for [RpcHttpResponderTransport].
@@ -28,8 +48,9 @@ const _requiredGrpcAllowedHeaders = [
 /// Controls which origins may call the RPC server from a browser and what
 /// headers they may send. Also handles `OPTIONS` preflight requests.
 ///
-/// The required gRPC headers (`grpc-encoding`, `grpc-status`, etc.) are always
-/// included in `Access-Control-Expose-Headers` regardless of [extraExposedHeaders].
+/// The required headers — everything this library sends or writes — are always
+/// included regardless of [allowedHeaders] and [extraExposedHeaders], which add
+/// to those lists rather than replacing them.
 ///
 /// Secure-by-default: [allowedOrigins] defaults to `const []` (CLOSED — no
 /// cross-origin access; same-origin requests, which carry no `Origin` header,

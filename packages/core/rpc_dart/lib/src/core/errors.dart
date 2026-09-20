@@ -7,6 +7,14 @@ import 'dart:typed_data';
 
 import 'error_details.dart';
 
+/// What a caller shows when the peer's trailer carried no message at all.
+///
+/// The RECEIVING sibling of `kInternalErrorWireMessage` in `protocol.dart`.
+/// It belongs to [RpcStatusException.fromTrailer] and nowhere else: substituted
+/// earlier, by a caller reading the header, it looks like a real message and
+/// suppresses the one inside `grpc-status-details-bin`.
+const String kAbsentTrailerMessage = 'Unknown error';
+
 /// Base exception for the RPC core.
 ///
 /// **Abstract, and that is the point.** A bare `RpcException` said only "some
@@ -106,28 +114,41 @@ class RpcStatusException extends RpcException {
   /// Reconstructs an [RpcStatusException] from wire data.
   ///
   /// [statusCode] gRPC status code from trailer.
-  /// [message] Decoded grpc-message.
+  /// [message] Decoded grpc-message — pass it THROUGH, empty and all.
   /// [detailsBin] Raw bytes from grpc-status-details-bin (already base64-decoded).
+  ///
+  /// **Callers must not substitute their own placeholder for an absent
+  /// `grpc-message`.** The precedence below is: the trailer message, then the
+  /// one inside `grpc-status-details-bin`, then [kAbsentTrailerMessage] — and a
+  /// placeholder passed in as [message] is indistinguishable from a real one,
+  /// so it suppresses the details message permanently. Five of the seven call
+  /// sites used to pass `'Unknown error'`, which is why a peer that puts its
+  /// detail in `google.rpc.Status` and omits `grpc-message` — legal, and what
+  /// that field is for — was readable on two call shapes and opaque on the
+  /// other five.
   factory RpcStatusException.fromTrailer(
     int statusCode,
     String message, {
     Uint8List? detailsBin,
   }) {
     if (detailsBin == null || detailsBin.isEmpty) {
-      return RpcStatusException(statusCode, message);
+      return RpcStatusException(statusCode, _orAbsent(message));
     }
     try {
       final status = decodeRpcStatus(detailsBin);
       return RpcStatusException(
         statusCode,
-        message.isNotEmpty ? message : status.message,
+        _orAbsent(message.isNotEmpty ? message : status.message),
         details: status.details,
       );
     } catch (_) {
       // Undecodable status-details payload: keep the plain code + message.
-      return RpcStatusException(statusCode, message);
+      return RpcStatusException(statusCode, _orAbsent(message));
     }
   }
+
+  static String _orAbsent(String message) =>
+      message.isNotEmpty ? message : kAbsentTrailerMessage;
 
   @override
   String toString() {

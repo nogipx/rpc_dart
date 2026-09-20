@@ -1,0 +1,91 @@
+---
+status: closed (round 415)
+round: 415
+commit: ff930001
+paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/rpc/base_processor.dart]
+probe: none — READ, not measured
+reason: cost — the guard exists and is applied on every send path but one; writing the witness is most of the work and it needs a transport that can observe the frame after the cancel
+---
+
+# B-65 — a cancelled or drained unary handler still answers
+
+`StreamProcessor` refuses to emit after the call is over: `send`, `sendError`
+and `finishSending` are all gated on `_isActive`
+(`base_processor.dart:682-715, 848-860`). `UnaryResponder` is not on that path
+and has no equivalent gate.
+
+Both of its handler branches — the codec one at `unary/responder.dart:438` and
+the zero-copy one at `:585` — do this:
+
+```dart
+final response = await _handler(request);
+...
+await _transport.sendMessage(streamId, framedResponse);
+await _transport.sendMetadata(streamId, RpcMetadata.forTrailer(RpcStatus.ok),
+                              endStream: true);
+```
+
+There is no check between the `await` and the two sends. Every cancellation
+check in the file sits BEFORE the handler runs (`:308`, `:357`, `:526`), and the
+cancellation monitor installed at `:139-155` only cancels the inbound
+subscription (`_subscription?.cancel()` at `:151`) — it does not mark the call
+dead for the outbound direction.
+
+So for the whole duration of the handler, which is the only part of a call that
+takes time, a cancel, a deadline expiry or an `endpoint.drain()` is not
+observed. When the handler returns, a DATA frame and `grpc-status: 0` go out on
+a stream the caller has already given up on.
+
+## Why it is worth an owner rather than a shrug
+
+**The same handler behaves differently depending on which shape serves it.**
+Register a method as unary and it answers after a drain; register the identical
+logic as any streaming shape, or route it through the zero-copy unary path on
+`CallProcessor`, and the answer is suppressed. That asymmetry is the finding —
+one of the two positions is wrong and the code does not say which.
+
+Drain is the case that matters most: `drain()` exists so a rolling deploy can
+stop cleanly, and a stream that reports itself finished with OK after the drain
+window is the one thing the window is meant to prevent.
+
+## What a round has to decide first
+
+Whether the correct behaviour is to suppress the send or to let it through. An
+argument exists for letting it through — the work is already done and the answer
+is valid — but it has to be made once, for all shapes, rather than being the
+accident of which branch the method landed in. If suppression is right, the gate
+belongs beside the two sends and the cancellation monitor has to set the flag it
+reads.
+
+## Where the witness goes
+
+`_isActive` in `base_processor.dart` is the model. The witness needs a transport
+that can see a frame arrive after the cancel rather than a handler that reports
+what it did — the whole point is that the handler believes it succeeded.
+
+## Owner decision
+
+—
+
+## Closed — round 415
+
+**Suppress, and say so.** `_callIsOver` is checked after `await _handler(...)`
+on BOTH branches of `UnaryResponder`, which is where a cancel, a deadline, a
+`drain()` or an `endpoint.close()` lands — the handler is the only slow part of
+a unary call. One token covers all four.
+
+Not silence: `_dropLateResponse` answers CANCELLED with the token's reason.
+Dropping the response and returning left the caller waiting out its own deadline
+for a call the server had finished with, which is worse than the wrong answer it
+replaces. Best-effort, since the usual reason the call ended is that the
+transport went away.
+
+The question this lead said had to be decided first — suppress or let through —
+was decided by the majority that already existed: every streaming shape
+suppresses via `_isActive`, so letting it through would have meant changing four
+shapes to match one.
+
+Witness `unary_handler_does_not_answer_after_the_call_ends_test.dart`; the
+ablation gives `Expected: not 'done anyway' / Actual: 'done anyway'` while the
+CONTROL (an undisturbed call is answered) and the GUARD (the caller is not left
+hanging) stay green.

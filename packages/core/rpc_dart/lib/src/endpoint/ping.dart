@@ -152,22 +152,23 @@ final class RpcEndpointPingExchange {
             final receivedAt = DateTime.now().toUtc();
 
             if (statusCode != RpcStatus.ok) {
-              final statusMessage =
-                  headersMap[RpcHeaders.grpcMessage] ?? 'Unknown error';
-              final decodedMessage = RpcMetadata.decodeGrpcMessage(
-                statusMessage,
+              // fromTrailer, like every other caller shape: it owns the
+              // precedence between the trailer message, the one inside
+              // grpc-status-details-bin and the placeholder. Building the
+              // exception here instead dropped the peer's details, and the
+              // composed 'Ping failed with status N: ' prefix said nothing the
+              // status did not already carry.
+              final error = RpcStatusException.fromTrailer(
+                statusCode,
+                RpcMetadata.decodeGrpcMessage(
+                  headersMap[RpcHeaders.grpcMessage] ?? '',
+                ),
+                detailsBin: message.metadata!.statusDetailsBin,
               );
               _log.warning(
-                'Ping failed: status=$statusCode, message=$decodedMessage [streamId: $streamId]',
+                'Ping failed: status=$statusCode, message=${error.message} [streamId: $streamId]',
               );
-              // Carry the peer's OWN status through rather than flattening it:
-              // the ping failed for whatever reason the trailer named.
-              completeError(
-                RpcStatusException(
-                  statusCode,
-                  'Ping failed with status $statusCode: $decodedMessage',
-                ),
-              );
+              completeError(error);
               return;
             }
 

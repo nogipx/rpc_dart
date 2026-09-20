@@ -1111,7 +1111,23 @@ class RpcHttp2ResponderTransport
 
     _streams.closeAll();
 
-    await _connection.finish();
+    // BOUNDED, then forceful -- see [kGracefulCloseTimeout], which the caller
+    // transport shares. This half was a bare `await _connection.finish()`,
+    // which is unbounded on a half-open path and, on a connection already dead,
+    // throws from package:http2 into the ROOT ZONE -- the one failure mode a
+    // server cannot absorb, since nothing above it is listening.
+    try {
+      await _connection.finish().timeout(kGracefulCloseTimeout);
+    } catch (e) {
+      _logger?.warning(
+        'Graceful HTTP/2 shutdown did not complete ($e); terminating',
+      );
+      try {
+        unawaited(_connection.terminate());
+      } catch (e2) {
+        _logger?.warning('Error closing the HTTP/2 connection: $e2');
+      }
+    }
 
     if (!_messageController.isClosed) {
       await _messageController.close();

@@ -173,7 +173,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     final token = context.cancellationToken ?? RpcCancellationToken();
 
     return context.withCancellation(token).withAdditionalHeaders({
-      'x-route-service': serviceName,
+      RpcHeaders.xRouteService: serviceName,
     });
   }
 
@@ -327,7 +327,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
       final baseContext = _ensureCallerContext(context);
       final routingContext = baseContext.withAdditionalHeaders({
-        'x-route-service': RpcEndpointPingProtocol.serviceName,
+        RpcHeaders.xRouteService: RpcEndpointPingProtocol.serviceName,
       });
 
       routingContext.cancellationToken?.throwIfCancelled();
@@ -815,9 +815,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           if (statusStr != null) {
             final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
             if (status != RpcStatus.ok) {
+              // EMPTY, not a placeholder: fromTrailer falls back to the message
+              // inside grpc-status-details-bin only when this is empty.
               final message =
                   response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
-                  'Unknown error';
+                  '';
               // fromTrailer, so grpc-status-details-bin is decoded. Building
               // the exception directly dropped an RpcStatusException's
               // structured `details` on the floor: the responder had already

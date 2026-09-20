@@ -122,9 +122,10 @@ final class BidirectionalStreamCaller<
         if (statusStr != null) {
           final status = int.tryParse(statusStr) ?? RpcStatus.unknown;
           if (status != RpcStatus.ok) {
+            // EMPTY, not a placeholder: fromTrailer falls back to the message
+            // inside grpc-status-details-bin only when this is empty.
             final message =
-                response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ??
-                'Unknown error';
+                response.metadata!.getHeaderValue(RpcHeaders.grpcMessage) ?? '';
             final decodedMessage = RpcMetadata.decodeGrpcMessage(message);
             _logger.error(
               'Bidirectional stream ended with error: $status - $decodedMessage',

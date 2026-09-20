@@ -194,8 +194,19 @@ final class RpcCallScope {
 
   /// Closes the scope and runs all disposers in reverse order.
   ///
-  /// Safe to call multiple times — subsequent calls are no-ops.
-  Future<void> close() async {
+  /// Safe to call multiple times, and a second call JOINS the first rather than
+  /// returning early. Returning early is what "idempotent" used to mean here,
+  /// and it was a race: the scope self-closes on cancellation and on deadline,
+  /// so a teardown that cancelled the token first then found `_isClosed` set
+  /// and continued — leaving the disposers running detached behind it, and
+  /// `RpcResponderEndpoint.close()` returning before the handler's cleanup had
+  /// finished. The disposer loop is bounded per disposer, so joining cannot
+  /// hang: see [disposerTimeout].
+  Future<void> close() => _closing ??= _close();
+
+  Future<void>? _closing;
+
+  Future<void> _close() async {
     if (_isClosed) return;
     _isClosed = true;
 

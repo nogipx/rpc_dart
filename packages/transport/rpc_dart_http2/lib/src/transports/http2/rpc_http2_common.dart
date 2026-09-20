@@ -12,6 +12,22 @@ import 'package:universal_io/io.dart';
 /// gRPC User-Agent header value.
 const String kGrpcUserAgent = 'rpc-dart/1.0.0';
 
+/// How long a graceful HTTP/2 shutdown may run before it is forced.
+///
+/// `finish()` sends GOAWAY and waits for open streams to drain, so over a
+/// HALF-OPEN path — where the peer drains nothing — it never completes, and an
+/// in-flight stream is the load-bearing condition: with none open it returns
+/// promptly even on a dead path. Timing out alone is not enough, because
+/// `Future.timeout` abandons the await and not the work; `terminate()` is what
+/// releases the connection, and is the right primitive on a dead one anyway —
+/// `finish()` on one throws from package:http2 into the root zone.
+///
+/// Short on purpose: close() has already RST'd every stream still open locally
+/// by the time it calls `finish()`, so a healthy connection finishes in
+/// milliseconds (measured: 104 ms end to end). The budget exists only so a peer
+/// that never answers cannot hold shutdown open forever.
+const Duration kGracefulCloseTimeout = Duration(seconds: 2);
+
 /// Turns Nagle's algorithm off on [socket], as every gRPC stack does.
 ///
 /// Nagle holds a small outbound segment while earlier data is still

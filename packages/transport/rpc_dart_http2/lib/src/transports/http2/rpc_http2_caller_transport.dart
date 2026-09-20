@@ -182,14 +182,6 @@ class RpcHttp2CallerTransport
   /// connection, so it must also replace this.
   Timer? _keepalive;
 
-  /// How long [close] lets the graceful HTTP/2 shutdown run before forcing it.
-  ///
-  /// Short on purpose: close() has already RST'd every stream still open
-  /// locally by the time it calls `finish()`, so a healthy connection finishes
-  /// in milliseconds (measured: 104 ms end to end). The budget exists only so a
-  /// peer that never answers cannot hold shutdown open forever.
-  static const Duration _gracefulCloseTimeout = Duration(seconds: 2);
-
   /// Refuses work the transport genuinely cannot do, naming which state it is
   /// in, because the two are not recoverable in the same way.
   void _ensureUsable() {
@@ -1929,19 +1921,10 @@ class RpcHttp2CallerTransport
       }
     }
 
-    // BOUNDED, then forceful. `finish()` is the graceful HTTP/2 shutdown: it
-    // sends GOAWAY and waits for open streams to drain. Over a HALF-OPEN path
-    // the peer drains nothing, so that await never completes and close() hangs
-    // forever -- with an in-flight stream as the load-bearing condition, since
-    // with none open finish() returns promptly even on a dead path.
-    //
-    // Timing out alone is not enough: Future.timeout abandons the await, not
-    // the work, so the connection would stay alive and unreferenced.
-    // terminate() is what releases it, and is the right primitive on a dead
-    // connection anyway -- finish() on one throws from package:http2 into the
-    // root zone.
+    // BOUNDED, then forceful -- see [kGracefulCloseTimeout], which the
+    // responder transport shares.
     try {
-      await _connection.finish().timeout(_gracefulCloseTimeout);
+      await _connection.finish().timeout(kGracefulCloseTimeout);
     } catch (e) {
       _logger?.warning(
         'Graceful HTTP/2 shutdown did not complete ($e); terminating',
