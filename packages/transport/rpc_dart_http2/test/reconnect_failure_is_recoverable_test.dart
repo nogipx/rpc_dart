@@ -60,16 +60,28 @@ Future<RpcHttp2Server> _startServer() async {
   return server;
 }
 
-/// A transport whose reconnect factory ALWAYS throws, by construction, over a
-/// connection that stays healthy. Isolates "the reconnect attempt failed" from
-/// "the connection died".
-Future<RpcHttp2CallerTransport> _viaSocketClient(RpcHttp2Server server) async {
+/// A transport whose reconnect factory ALWAYS throws, over a connection that
+/// stays healthy. Isolates "the reconnect attempt failed" from "the connection
+/// died".
+///
+/// The factory is now passed EXPLICITLY. It used to come free with `viaSocket`,
+/// whose factory was a closure that threw -- and that was its own defect: the
+/// only way to learn a transport could not reconnect was to call the factory,
+/// which `reconnect()` does LAST, after tearing the live connection down.
+/// `viaSocket` now carries no factory at all and refuses before the teardown,
+/// so "cannot reconnect" and "the attempt failed" are different events with
+/// different answers. This suite is about the second one.
+Future<RpcHttp2CallerTransport> _clientWhoseReconnectFails(
+  RpcHttp2Server server,
+) async {
   final socket = await Socket.connect('127.0.0.1', server.port);
   final client = RpcHttp2CallerTransport.viaSocket(
     socket,
     host: '127.0.0.1',
     port: server.port,
     scheme: 'http',
+    connectionFactory: () async =>
+        throw const SocketException('the peer is not answering'),
   );
   addTearDown(client.close);
   return client;
@@ -95,7 +107,7 @@ Future<String> _echo(RpcCallerEndpoint caller) async {
 void main() {
   test('a failed reconnect leaves the transport open, not closed', () async {
     final server = await _startServer();
-    final client = await _viaSocketClient(server);
+    final client = await _clientWhoseReconnectFails(server);
     final caller = RpcCallerEndpoint(transport: client);
     addTearDown(caller.close);
 
@@ -116,7 +128,7 @@ void main() {
 
   test('a failed reconnect still reports as recoverable', () async {
     final server = await _startServer();
-    final client = await _viaSocketClient(server);
+    final client = await _clientWhoseReconnectFails(server);
     addTearDown(client.close);
 
     await client.reconnect();
@@ -137,7 +149,7 @@ void main() {
     // attempt used to be refused outright by the post-factory re-check reading
     // the failure flag as "the caller closed us".
     final server = await _startServer();
-    final client = await _viaSocketClient(server);
+    final client = await _clientWhoseReconnectFails(server);
     addTearDown(client.close);
 
     await client.reconnect();
@@ -154,7 +166,7 @@ void main() {
 
   test('a disconnected transport says so, and says what to do', () async {
     final server = await _startServer();
-    final client = await _viaSocketClient(server);
+    final client = await _clientWhoseReconnectFails(server);
     final caller = RpcCallerEndpoint(transport: client);
     addTearDown(caller.close);
 
@@ -170,7 +182,7 @@ void main() {
     // 48847ffc -- a close during an in-flight reconnect still wins.
     test('close() closes, and reconnect refuses afterwards', () async {
       final server = await _startServer();
-      final client = await _viaSocketClient(server);
+      final client = await _clientWhoseReconnectFails(server);
 
       await client.close();
 

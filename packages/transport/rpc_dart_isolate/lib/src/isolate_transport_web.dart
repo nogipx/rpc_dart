@@ -13,6 +13,8 @@ import 'package:isolate_manager/src/isolate_manager_controller/web.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web/web.dart';
 
+import 'worker_policy.dart';
+
 typedef RpcIsolateEntrypoint =
     void Function(IRpcTransport transport, Map<String, dynamic> customParams);
 
@@ -264,7 +266,9 @@ abstract interface class RpcIsolateTransport {
     // in a worker. Keeping the parameter for API parity.
     final _ = entrypoint;
 
-    final uri = _resolveWorkerUri(workerUri);
+    // The policy rides on the URL: a Worker has no argument list, and the VM
+    // sibling ships it as args[4]. See [_policyQueryParam].
+    final uri = withWorkerPolicy(_resolveWorkerUri(workerUri), policy);
     final workerOptions = _buildWorkerOptions(debugName);
     final worker = workerOptions == null
         ? Worker(uri.toString().toJS)
@@ -428,11 +432,21 @@ abstract interface class RpcIsolateTransport {
 }
 
 /// Called from inside the worker entrypoint to wire up the RPC transport.
+/// [policy] OVERRIDES what the spawner sent; omit it to inherit.
+///
+/// Inheriting is the fix: this used to default to `const RpcSecurityPolicy()`
+/// with no way for `spawn(policy:)` to reach it, so the host ran at the
+/// caller's limits and the worker at the stock ones, silently. The spawner's
+/// policy now arrives on the worker URL — see [kWorkerPolicyQueryParam].
 void runRpcIsolateManagerWorker(
   RpcIsolateEntrypoint entrypoint, {
-  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  RpcSecurityPolicy? policy,
 }) {
   final scope = _workerSelf;
+  final effectivePolicy =
+      policy ??
+      policyFromWorkerUrl(scope.location.href) ??
+      const RpcSecurityPolicy();
 
   final controller = IsolateManagerControllerImpl<Object?, Object?>(
     scope,
@@ -459,7 +473,7 @@ void runRpcIsolateManagerWorker(
   final transport = RpcChannelTransport(
     channel: channel,
     isClient: false,
-    policy: policy,
+    policy: effectivePolicy,
   );
 
   // Signal ready state.

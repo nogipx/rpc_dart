@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http2/http2.dart' as http2;
+import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
@@ -59,8 +60,15 @@ class RpcHttp2CallerTransport
 
   http2.ClientTransportConnection _connection;
 
-  /// Rebuilds the connection on [reconnect].
-  final Future<http2.ClientTransportConnection> Function() _connectionFactory;
+  /// Rebuilds the connection on [reconnect], or null when it cannot be rebuilt.
+  ///
+  /// **Null, not a closure that throws.** `viaSocket` used to pass
+  /// `() => throw ...('does not support reconnect')`, so the only way to learn
+  /// a fact fixed at CONSTRUCTION was to call it — and [reconnect] calls it
+  /// last, after cancelling every subscription, disposing every pump and
+  /// clearing six per-stream maps. A working connection was destroyed to
+  /// discover it could not be replaced.
+  final Future<http2.ClientTransportConnection> Function()? _connectionFactory;
 
   final BufferedBroadcastController<RpcTransportMessage> _messageController =
       BufferedBroadcastController<RpcTransportMessage>(
@@ -206,7 +214,7 @@ class RpcHttp2CallerTransport
 
   RpcHttp2CallerTransport._({
     required http2.ClientTransportConnection connection,
-    required Future<http2.ClientTransportConnection> Function()
+    required Future<http2.ClientTransportConnection> Function()?
     connectionFactory,
     required String host,
     required int port,
@@ -366,6 +374,11 @@ class RpcHttp2CallerTransport
   /// the original socket), so a closed transport stays closed.
   ///
   /// [scheme] should be `https` for TLS sockets and `http` otherwise.
+  ///
+  /// [connectionFactory] is for TESTS that need a reconnect attempt to FAIL
+  /// over a connection that stays healthy — the two are different events and
+  /// `reconnect` answers them differently. Production callers leave it null,
+  /// which is what makes the refusal free of side effects.
   factory RpcHttp2CallerTransport.viaSocket(
     Socket socket, {
     required String host,
@@ -375,6 +388,8 @@ class RpcHttp2CallerTransport
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration? pingInterval,
     Duration? pingTimeout,
+    @visibleForTesting
+    Future<http2.ClientTransportConnection> Function()? connectionFactory,
   }) {
     final drainSignal = _DrainSignal();
     final connection = _guardedConnection(
@@ -387,11 +402,10 @@ class RpcHttp2CallerTransport
     );
     return RpcHttp2CallerTransport._(
       connection: connection,
-      connectionFactory: () => throw RpcStatusException(
-        RpcStatus.unimplemented,
-        'RpcHttp2CallerTransport.viaSocket does not support reconnect: '
-        'the originating socket cannot be recreated.',
-      ),
+      // NULL, not a throwing closure: the originating socket cannot be
+      // recreated, and that is known here rather than discovered by reconnect()
+      // after it has already torn the live connection down.
+      connectionFactory: connectionFactory,
       host: host,
       port: port,
       scheme: scheme,
@@ -1708,6 +1722,22 @@ class RpcHttp2CallerTransport
       );
     }
 
+    // BEFORE the teardown. Whether this transport can rebuild its connection is
+    // fixed at construction, and the teardown below is destructive: it cancels
+    // every subscription, disposes every pump and clears six per-stream maps.
+    // Answering here leaves the LIVE connection intact and every in-flight call
+    // with it.
+    final factory = _connectionFactory;
+    if (factory == null) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message:
+            'This transport was built over a socket it did not open, so the '
+            'connection cannot be recreated; build a new transport instead.',
+        details: {..._buildHealthDetails(), 'supported': false},
+      );
+    }
+
     _logger?.info('Reconnecting the HTTP/2 client to $_host:$_port');
 
     // terminate(), not finish(). finish() writes a GOAWAY, and reconnect is
@@ -1749,7 +1779,7 @@ class RpcHttp2CallerTransport
     _statusReceived.clear();
 
     try {
-      final connection = await _connectionFactory();
+      final connection = await factory();
 
       // Re-check AFTER the factory. The guard at the top of this method runs
       // before every await here, and opening a connection takes real time, so

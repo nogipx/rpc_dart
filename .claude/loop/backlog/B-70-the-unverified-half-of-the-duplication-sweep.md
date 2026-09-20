@@ -303,8 +303,24 @@ The rest is similarity.
   `'x-route-service'` literal where the constant existed; they name the constant
   now, which is the thing that stops the two sides drifting again.
 
-**19 items remain**: 5, 6, 7, 10, 11, 13, 14, 17, 18, 20, 21, 23, 24, 26, 29,
-31, 34, 36, and the sweep's own already-shared list. **34** (a web worker
-silently running at the DEFAULT security policy) and **23** (one `reconnect()`
-on a `viaSocket` transport destroying a working connection) are the two worth
-taking next — both are behavioural, and neither has a probe.
+## Two more closed — round 419
+
+**23** — `_connectionFactory` is nullable and null is checked BEFORE the
+teardown, so a refusal destroys nothing. Null rather than a throwing closure is
+the point: a fact fixed at construction is stored, not discovered by calling
+something. An existing suite used the old defect as a TOOL —
+`reconnect_failure_is_recoverable_test`'s helper is documented as *"a transport
+whose reconnect factory ALWAYS throws, by construction"* — so the answer was a
+SPLIT: `viaSocket` takes an `@visibleForTesting connectionFactory`, and "cannot
+reconnect" and "the attempt failed" are now covered separately.
+
+**34** — the spawner's policy rides on the worker URL, the one channel a
+`Worker` has at construction. `runRpcIsolateManagerWorker`'s `policy` is
+nullable and OVERRIDES what arrived; omitting it inherits. The two halves live
+outside the `dart:js_interop` file so they can be tested at all; what is NOT
+covered is that the two call sites actually call them, which is read by eye. A
+worker script built before this change still ignores the parameter.
+
+**17 items remain**: 5, 6, 7, 10, 11, 13, 14, 17, 18, 20, 21, 24, 26, 29, 31,
+36, and the sweep's own already-shared list. All of them are duplication whose
+copies currently AGREE — the behavioural half of this lead is now spent.
