@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 415)
 round: (not re-measured)
 commit: 2e1ec7c0
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/**, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -54,3 +54,18 @@ before a third.
 
 Taken: delete the test. Asked and answered on 2026-09-17, with the alternative
 (rewrite the wait as an event) on the table and declined.
+
+**Re-asked in the backlog review and answered the same way: the fix stays
+unguarded, and this lead closes.** The two-line L-11 repair was offered a second
+time, with the simpler unit-level alternative beside it, and both were declined.
+
+So this is now a recorded, accepted gap rather than an open question, and the
+record's value is what it says about the gap: the defect is real and FIXED
+(`opened=3 closed=2 live=1` before), the fix is in the code, and nothing watches
+it. A future change to `_connection` assignment will not be caught here.
+
+The distinction the test's own failure drew stays worth keeping: in isolation it
+passed in 7 s, and under parallel load it spent the FULL 30 s budget — which its
+own message calls the slow-teardown reading rather than the leak one. It failed
+for being written against a budget instead of an event, not for the thing it was
+guarding.

@@ -1,14 +1,39 @@
 ---
-status: open
+status: closed (round 415)
 round: 234 — measured in the curate pass after it
 commit: aba26aa3
 paths: [packages/**]
 probe: —
-reason: "cost: ~30 dossiers to compare file by file, and importing a claim with no number would pass a guess off as knowledge (the B-09 objection)"
-continuation: yes
+reason: closed by the owner — the architecture half is discharged in full; the six per-subsystem dossiers stay in private memory as reference the loop does not route to
+continuation: no
 ---
 
 # B-23 — The pre-201 knowledge that never entered the journal
+
+## Closed in the backlog review
+
+**The expensive half is done and the remaining half is a different bargain.**
+
+What this lead was really about — shapes and methods the loop could never route
+to — was discharged: two lenses in the curate after 234, six more records plus
+RPC-08's owner qualifier in the second pass, six more in round 239, and the
+whole architecture group across rounds 271-281. Along the way it shipped
+`docs/transports/grpc-compat.md`, repaired `docs/guides/diagnostics.md`, and
+merged the three-layer model into `docs/architecture.md`. The docs gap
+`core_types` left behind is closed too: `RpcPeerEndpoint` is in
+`docs/core-concepts.md`.
+
+What is left is 1653 lines of per-subsystem dossier, and its own sizing says the
+content is measurements and verified-clean lists whose numbers predate the
+flow-control work. Under this lead's own rule — nothing imported wholesale,
+every claim re-measured with today's sha or dropped — importing them costs about
+what measuring them from scratch costs, and buys a negative rather than a fix.
+
+They stay in private memory as reference. The loop does not route to them, which
+is the cost of this decision and is accepted: a dossier that would have to be
+re-measured to be trusted is not knowledge the loop is missing.
+
+`MEMORY.md`'s "Still to move" section is therefore no longer a queue, and says so.
 
 ## The measurement
 

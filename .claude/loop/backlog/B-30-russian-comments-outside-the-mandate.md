@@ -1,10 +1,10 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 303
 commit: 139bca2a
-paths: [packages/data/rpc_data/lib/**, packages/data/rpc_data_sqlite/lib/**, packages/blob/rpc_blob/lib/**, packages/notify/rpc_notify/lib/**]
+paths: [packages/core/*/test/**, packages/core/*/example/**, packages/transport/*/test/**, packages/transport/*/example/**, packages/data/rpc_data/lib/**, packages/data/rpc_data_sqlite/lib/**, packages/blob/rpc_blob/lib/**, packages/notify/rpc_notify/lib/**]
 probe: none
-reason: "scope — the owner's mandate names five packages in order (rpc_dart, websocket, http, isolate, http2) and these are none of them; sweeping 22 files in four unrelated packages is a different job from the one that was asked for"
+reason: decided — sweep the 47 test/ and example/ files inside core+transport first; the 23 lib/ files are all outside the mandate and wait
 ---
 
 # B-30 — Russian comments in packages outside the mandate
@@ -59,4 +59,28 @@ not a straight edit.
 
 ## Owner decision
 
-—
+**Taken: sweep the in-scope half first — the 47 `test/` and `example/` files in
+core and transport. The 23 `lib/` files wait.**
+
+Re-counted by hand in the backlog review, because both earlier numbers in this
+record had drifted:
+
+```
+lib/                       23   data/rpc_data 16, data/rpc_data_sqlite 3,
+                                blob/rpc_blob 3, notify/rpc_notify 1
+test/ + example/           47   core and transport
+```
+
+Two things that changes. **The three http2 files this record named are gone** —
+swept incidentally by rounds working in that package, so the `lib/` half is now
+entirely OUTSIDE the mandate. And the in-scope half is the larger one: 47
+against 23.
+
+`grep -rl "[а-яА-Я]" --include="*.dart"` is both the detector and the check.
+Translate rather than delete — several of these comments are the only
+description of the behaviour they sit on.
+
+The `lib/` remainder keeps its own reason and is not closed: 16 of its files are
+`rpc_data`'s `models.dart`, contract and repository interfaces, which is a
+PUBLISHED API surface that dartdoc renders. One is generated, so that one means
+finding the generator's source first.

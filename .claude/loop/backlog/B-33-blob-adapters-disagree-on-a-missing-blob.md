@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 318
 commit: 935d4bc3
 paths: [packages/blob/rpc_blob/lib/src/adapters/**, packages/blob/rpc_blob_webdav/lib/**, packages/blob/rpc_blob_minio/lib/**, packages/blob/rpc_blob_sqlite/lib/**]
@@ -63,6 +63,29 @@ written on the interface, the suite is mechanical.
 
 ## Owner decision
 
-**Out of scope for now (round 318).** Refactoring is core and transport only;
-`packages/blob` is neither. This sits with B-10, which keeps `data`, `blob` and
-`notify` deferred.
+~~**Out of scope for now (round 318).**~~ **Superseded in the backlog review:
+unify all four adapters.**
+
+The scope objection was answered by narrowing B-10 rather than by overruling it.
+That deferral covers going LOOKING in `data`, `notify` and `blob`; it does not
+cover a defect already measured there and already written down with a number.
+This one is, so it is in scope and the rest of those packages is not.
+
+The work, in order:
+
+1. **Measure the matrix first.** `in_memory` throws `StateError` and `webdav`
+   returns `false` on the same input; **minio and sqlite were never compared at
+   all**, so "which answer is right" is being decided on half the data. Take the
+   four-row table before writing anything.
+2. **Write the answer onto `IBlobRepository.deleteBlob`.** Today it promises
+   only "returns `true` when something was removed", which is silent on the
+   whole disagreement.
+3. Bring all four to it, one test per adapter.
+
+Aggravated by what the gate does not run: `*_minio` and `*_postgres` are
+excluded from `test:unit`, so the two least-exercised adapters are where this
+accumulates unseen. A round taking this needs those services up, or it is
+unifying two adapters and guessing about two.
+
+`IDataStorageAdapter` and `INotifyRepository` have the same structure and were
+never looked at. They stay out — that is LOOKING, which B-10 still defers.

@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 360
 commit: 7a3c66d5
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -66,7 +66,18 @@ method for another reason; not worth a round of its own.
 
 ## Owner decision
 
-None required. This is a bar judgement, not a trade: if the bar drops, or if a
-round touches `_methodPathFromKey` anyway, apply the four-line fix above with a
-unit test on the function. Recorded so the next reader does not re-derive that
-the happy path is fine.
+~~None required.~~ **Taken in the backlog review: apply it now.**
+
+The bar argument was about whether to go LOOKING for this, and it is sound — the
+damage is a wrong diagnostic string nothing routes on, reached only by a hostile
+peer. But the finding is already paid for and the fix is four lines that were
+written out two hundred rounds ago. Holding it until some round happens to touch
+`_methodPathFromKey` costs more in re-reading than in applying.
+
+Split on the LAST dot: a method name cannot contain one. Unit test on the
+function directly, with `myapp.v1.UserService.Get` as the case that fails today,
+and the single-dot form as the control that must keep working.
+
+The happy path stays measured-clean and does not need re-establishing: dotted
+names round-trip because `methodPath` rides on the frame, and the formatter is
+consulted only when both retained messages are null while `methodKey` is set.

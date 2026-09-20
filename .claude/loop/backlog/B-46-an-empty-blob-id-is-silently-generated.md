@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 366
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/blob/rpc_blob/lib/src/client/blob_repository_client.dart, packages/blob/rpc_blob/lib/src/adapters/in_memory_blob_repository.dart, packages/blob/rpc_blob_minio/lib/src/adapters/s3_blob_storage_adapter.dart]
@@ -52,4 +52,24 @@ were not looked at.
 
 ## Owner decision
 
-—
+**Taken: refuse it.** `putBytes(id: '')` throws `ArgumentError` rather than
+generating.
+
+The argument is that the API already has a way to ask for a generated id, and it
+is `null`. With `null` present, an empty string is not a second way to ask — it
+is a caller whose id-building produced nothing, being answered as though it had
+made a request. For a content-addressed caller, which is what these packages
+exist for, the substituted id reads as "not stored" while the bytes sit orphaned
+under a name nothing references.
+
+**The wire level does NOT change.** `BlobUploadChunk.blobId` is non-nullable, so
+empty-means-generate is the only encoding available there and is deliberate. The
+refusal belongs at `putBytes`, where `null` exists — not at the protocol, where
+it does not.
+
+In scope because B-10's deferral was narrowed to LOOKING; this defect is already
+measured (`asked="" got=18df18eedb93057e`).
+
+Check the same shape in `rpc_blob_sqlite` and `rpc_blob_webdav` while there —
+they were never looked at, and a refusal in one implementation of an
+interchangeable interface is B-33 all over again.

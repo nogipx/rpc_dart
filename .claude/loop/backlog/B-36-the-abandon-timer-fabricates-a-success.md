@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 351
 commit: 2fca444c
 paths: [packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart]
@@ -53,6 +53,21 @@ success also produces.
 
 ## Owner decision
 
-Whether an unobserved probe should close the breaker (today) or leave it
-half-open for the next caller (proposed). Round 351 recommends the latter: it is
-what every other inconclusive ending in this class already does.
+**Taken: leave it half-open.** `_releaseProbe()` instead of
+`resolve(success: true)`, so the next call takes its turn as the probe.
+
+An unobserved probe is not evidence of recovery, and treating it as one is the
+only ending in this class that invents a result rather than declining to state
+one.
+
+**The pinned test moves, and the replacement is the stronger claim.**
+`audit_circuit_breaker_abandoned_probe_test.dart:155` asserts `closed` under the
+reason *"abandon safety timer must release a wedged half-open probe"* — the
+reason names the RELEASE and the assertion observes it through the CLOSE. Those
+came apart the moment the close became wrong, and the reason is the half worth
+keeping.
+
+So the new assertion is `halfOpen` **plus a following call that is admitted**.
+That checks the gate directly, where `closed` only checked a state a fabricated
+success also produces — which is how the wrong outcome passed for as long as it
+did.

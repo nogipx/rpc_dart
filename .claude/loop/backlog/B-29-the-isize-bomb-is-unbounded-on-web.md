@@ -1,10 +1,10 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 285
 commit: 9b82b12a
 paths: [packages/core/rpc_dart_compression/lib/**, packages/core/rpc_dart_compression/test/audit/isize_wrap_bomb_test.dart]
 probe: packages/core/rpc_dart_compression/test/audit/isize_understates_on_web_test.dart
-reason: "owner decision (round 286 measured it: 12 ms on the VM against 15980 ms on dart2js) — no fix is worth proposing, because a compressed-size heuristic would refuse ordinary traffic and package:archive exposes no incremental inflater on web; what is left is what the library PROMISES"
+reason: decided — document the residual and change no behaviour; the limit stays, and what is written down is that on web it fires AFTER the allocation
 ---
 
 # B-29 — the ISIZE bomb's mitigation does not exist on web
@@ -89,4 +89,24 @@ a dependency decision. What is left is a choice about what the library promises.
 
 ## Owner decision
 
-—
+**Taken: document the residual. No behaviour changes.**
+
+The limit stays where it is and keeps firing on `result.length`. What gets
+written down is the thing a user cannot discover from the API: **on web the
+bound is enforced AFTER the output has been allocated**, so a hostile archive
+costs the memory and the event-loop time before it is refused — 15980 ms against
+the VM's 12 ms, off ~65 KiB of wire.
+
+Both alternatives were available and both were declined, which is worth
+recording so neither is re-proposed as new:
+
+- *fail closed on web* — refusing compressed input by default would break every
+  working deployment to protect against a peer that has to be hostile to reach
+  it;
+- *a lower web-only ceiling* — it does not remove the shape, only the size of
+  it, and it buys that by refusing large honest messages on the one platform
+  where the user cannot raise it back.
+
+The audit test stays as the record of the number. A round taking this writes the
+residual into the compression package's public documentation, next to the limit
+it qualifies — not into a changelog, which nobody reads while choosing a value.

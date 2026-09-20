@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 415)
 round: 362
 commit: 8a7e6097
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
@@ -114,3 +114,28 @@ is real and the change is cheap and safe; the impact is unproven and the one
 measurement available says the cost is somewhere else. Round 362 recommends
 taking option 3 only alongside option 1 or 2 — if a physical device ever runs
 this bench, the question answers itself in one run.
+
+**Taken in the backlog review: closed as unproven. Do not ship the move.**
+
+Moving work off a thread with no measurable improvement is a change nobody can
+defend later, and this one has five runs saying the fix is indistinguishable
+from its own ablation — 38 ms busy against 39 ms idle, against the fixed state's
+own 70 ms.
+
+**The negative is the deliverable and it belongs in `checked/`**, because it is
+worth more than the fix would have been. It carries three things a future round
+would otherwise pay for again:
+
+- the occupancy is REAL (busy clearly worse than control in 3 of 5 runs) and is
+  NOT Base64;
+- the remaining candidates cannot be moved — `evaluateJavaScriptAsync`
+  marshalling 4 MiB across Binder, and `messenger.send`, which must be on Main
+  by contract;
+- **the emulator cannot measure this at all.** Its idle worst-case is 12-39 ms,
+  the same magnitude as the effect, and the item's own criterion (no frames over
+  16 ms) is already violated by the IDLE control. Any re-run on an emulator will
+  reproduce this non-result.
+
+So reopening needs a physical device or in-plugin instrumentation timing both
+arms identically — not another emulator run. The written fix stays in the record
+for whoever has the hardware.

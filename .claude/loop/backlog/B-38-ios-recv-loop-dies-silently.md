@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 357
 commit: 0f05352a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
@@ -122,3 +122,17 @@ and the round finishes: reapply the four steps above, run
 `melos run test:wasm:device` for the witness, then two canaries (drop the retry,
 drop the report) which must fail differently. Run it on Android too, which this
 session never could: the emulator was offline the whole time.
+
+**Settled in the backlog review: the OWNER boots it.** `xcrun simctl` and
+`open -a Simulator` are outside the agent's allowlist and five
+`flutter emulators --launch` attempts registered nothing, so the blocker is not
+something a round can retry its way through.
+
+Shipping on `analyze:native` alone was offered and declined, which is the right
+way round — round 348 established what a gate never shown to fail is worth, and
+this is a native change on a path whose whole defect is that it fails silently.
+
+So this is `decided by owner` and waiting on one action, not on a judgement.
+When the simulator is up, the round runs BOTH platforms: the two boot scripts
+are separate strings in separate languages, so a fix to one is never a fix to
+the other.

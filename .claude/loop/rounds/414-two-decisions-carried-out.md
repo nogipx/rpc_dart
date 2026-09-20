@@ -131,6 +131,27 @@ promise this round exists to make real.
   non-transient error does neither. Without those, "reconnect on every retry"
   would pass the witness.
 
+**Ablated after the fact, which is the honest note here.** The round shipped
+without switching either fix off, and `loop.py review`'s question 5 — did the
+witness fail with a real MESSAGE rather than a timeout — was never asked of it.
+Both were then ablated and both fail loudly:
+
+```
+markDraining removed     Expected: a value less than <50>
+                         Actual: <4126>
+reconnect removed        an UNAVAILABLE retry reconnects first
+                           RpcStatusException(14): connection is gone
+                         a drained connection is retried as the retry doc promises
+                           Expected: null
+                           Actual: RpcStatusException(14): ... is draining
+                                   (the peer sent GOAWAY); reconnect rather
+                                   than retrying on this connection
+```
+
+The last line is the best of the three: the ablated transport states the remedy
+in its own error text while the retry declines to apply it, which is precisely
+the hollowness B-61 was filed for.
+
 ## Gate
 
 `melos run analyze` clean over 21 packages + wasm; `format:check` clean;

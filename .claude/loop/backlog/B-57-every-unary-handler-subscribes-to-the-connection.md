@@ -1,5 +1,5 @@
 ---
-status: open — the COST half fixed in round 393, the fan-out COUNT remains
+status: decided by owner (round 415)
 round: 392
 commit: a82bcf4c
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -98,5 +98,32 @@ above. Options left:
 
 ## Owner decision
 
-None needed. This is a bench problem: the fix direction is clear and the missing
-piece is a measurement of what the current `onError` actually saves.
+~~None needed.~~ **Taken: spend a round looking for a THIRD route** — one that
+removes the per-handler subscription while keeping an answer path for a
+transport error that does not close the stream.
+
+Both known routes are closed, and that is what makes this worth a search rather
+than an attempt:
+
+- **keep the subscription** — the fan-out stays O(N) per frame, 200 listener
+  invocations for 200 parked handlers, which round 393 made cheap but not
+  absent;
+- **`getMessagesForStream(id)`** — REFUTED in this record. It creates a
+  per-stream controller, and `_admitToStreamBuffer` can refuse a frame and
+  `return` before the unconditional `_incoming.add`, so a large unary request
+  would be dropped from the pipeline as well, by a bound that does not apply to
+  unary today.
+
+What the round must preserve is the reason the subscription cannot simply go:
+its `onError` answers waiting callers with a trailer, and the pipeline's own
+`onError` (`responder_pipeline.dart:403`) **logs only** — `onDone` is the only
+thing that aborts streams.
+
+**Producing that transport state is a legitimate way to finish this round, not a
+failure of it.** Nobody has yet made a transport error that does not close the
+stream, so "what the current `onError` actually saves" is unmeasured. If the
+search finds no third route, the number is the deliverable: either the loss is
+real and the subscription stays, or it is not and the subscription goes.
+
+Do not ship a removal that rests on the assumption alone — that is the shape
+this lead was filed to prevent.

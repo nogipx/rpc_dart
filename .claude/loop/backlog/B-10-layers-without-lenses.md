@@ -4,7 +4,7 @@ round: — (not re-measured)
 commit: 5bf4d34e
 paths: [packages/data/**, packages/notify/**, packages/blob/**]
 probe: —
-reason: deferred by owner (round 223) — not until core and transport have nothing left; the lens set was derived from a round history that is almost entirely core and transports
+reason: deferred by owner (223, narrowed in the backlog review) — the deferral covers SEARCHING those three packages, NOT fixing a defect already measured there; B-33 and B-46 are unblocked by that narrowing
 ---
 
 # B-10 — Three layers of the project have no lens at all
@@ -40,3 +40,19 @@ the largest unexamined surface in the repository and will keep looking like the
 obvious next thing; it is not, until the core and transport backlog is empty.
 `loop.py stale` will keep naming the three directories — that is expected, and
 not a signal to act.
+
+### Narrowed in the backlog review: this defers LOOKING, not FIXING
+
+The deferral covers the lens work — enumerating surfaces in packages nobody has
+swept. It does NOT cover a defect that has already been measured in one of those
+packages and written down with a number.
+
+Those are different costs. Sweeping 234 unexamined files is open-ended and
+competes with core and transport for the loop's attention, which is what 223
+weighed. Applying a fix to a defect already sitting in this backlog with its own
+measurement costs what that one fix costs, and leaving it unapplied is not
+saving the loop anything — the finding is already paid for.
+
+**B-33 and B-46 are unblocked by this.** Both are in `packages/blob`, both
+measured, and both had "blob is out of scope, see B-10" as their only reason.
+Nothing else changes: a round still may not go LOOKING in data, notify or blob.

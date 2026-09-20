@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 415)
 round: 316
 commit: 29acab93
 paths: [packages/core/rpc_dart/lib/src/contracts/models.dart, packages/core/rpc_dart/lib/src/contracts/contract.dart, packages/core/rpc_dart/lib/src/endpoint/responder_registry.dart]

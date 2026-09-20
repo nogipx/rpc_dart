@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 358
 commit: a0355bfc
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
@@ -96,6 +96,45 @@ which reach `RpcWebSocketChannel.close()` and set `_closed` first;
 holding the raw `WebSocket` it passed to `RpcWebSocketChannel` and closing that
 directly while a response is in flight — which is how round 353's fixture hit it
 by accident.
+
+## Owner decision — taken jointly with B-35
+
+**Zone-guard the construction, at the library's own entry points, and ROUTE what
+the zone catches rather than letting it swallow.**
+
+Applies here and in B-35 identically; the two were decided together because the
+mechanism is one mechanism.
+
+### Where
+
+Only where rpc_dart builds the socket itself — `connect()` and the server's
+accept path. **A user-supplied socket stays unguarded and that is documented**,
+not silently different: the construction zone is the only thing that catches
+this, and a socket we did not construct has none of ours.
+
+### The second half is what makes it a fix rather than a move
+
+A bare `runZonedGuarded` turns a process death into a silent disappearance,
+which is not obviously the better failure. So the handler does two things:
+
+- reports through the channel's `LogScope` — `error`, unguarded, since this is
+  rare by construction;
+- surfaces it as a transport error on the affected channel, so the layers that
+  classify failures (retry, circuit breaker, health) see it the way they see
+  every other transport error.
+
+**What is deliberately accepted:** this reroutes EVERY async error from that
+channel, not only send failures. That is the trade, and it is the reason the
+decision needed an owner — a genuine transport error that used to surface at an
+await now arrives through the handler instead.
+
+### Do not re-attempt the two call-site fixes
+
+Both were measured and neither works. `try { sink.add } catch (_) {}` changes
+nothing, and `runZonedGuarded` AT THE CALL SITE changes nothing either, because
+`WebSocketSink.add` queues into a `StreamController` and the real `sendBytes`
+runs a microtask later in the zone that CONTROLLER was built in. That is the
+whole reason the fix has to be at construction.
 
 ## Guarded by
 

@@ -1,10 +1,10 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 313
 commit: 6a35cb7a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart]
 probe: none
-reason: "owner decision — the only route to a witness widens a transport's surface (@visibleForTesting or a factory) for a platform the ordinary gate does not run; that is a trade about API shape, not a bug fix"
+reason: decided — take route 3, `@visibleForTesting` plus the ~40-line VM test; the surface widening is worth a real witness over the cheaper variant's weaker claim
 ---
 
 # B-31 — the isolate web channel has no reachable witness
@@ -69,4 +69,21 @@ The cheaper variant: ~15 lines, and a weaker claim.
 
 ## Owner decision
 
-—
+**Taken: route 3.** `@visibleForTesting`, and the test that actually drives the
+channel.
+
+The cheaper variant is declined on what it would witness. Extracting the policy
+proves the decision — "a non-cloneable payload must not close the channel" — and
+leaves untested the thing round 310 actually got wrong, which was where that
+decision is APPLIED: the `catch (_)` that swallowed the reason and the close
+that took every other in-flight call with it. A test that cannot see the other
+calls survive is not a witness for this fix.
+
+The cost is contained in a way that matters here: the test runs **on the VM**.
+Nothing in the failure path needs `dart:js_interop` — only the `_send` callback
+does, and the test supplies it — so this buys coverage of a web-only defect
+without adding anything to the browser gate.
+
+The witness must show both halves, since either alone passes on a wrong fix:
+the failing send reports a NAMED error, and a second call on the same channel
+still completes.

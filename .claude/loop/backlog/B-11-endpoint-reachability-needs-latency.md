@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 415)
 round: 206
 commit: c48a14d8
 paths: [packages/core/rpc_dart/lib/src/endpoint/**, packages/core/rpc_dart/lib/src/rpc/streams/**]
 probe: packages/core/rpc_dart/.dart_tool/probe/conn_window_cancel.dart
-reason: bench — three shapes could not produce a valid number; the gap is made of latency and an in-memory pair zeroes it out
+reason: closed by the owner — the transport-level defect this would have EXTENDED is fixed, three shapes could not reproduce it at the endpoint level, and the blocker lifting does not make the question worth a fourth attempt
 ---
 
 # B-11 — does an endpoint client reach the connection-pool wedge?
@@ -65,6 +65,31 @@ the send side. The endpoint-level drive on top is what round 206 described.
 Round 247 did not attempt it. Three shapes tried, none valid, a fourth
 identified and not yet built.
 
+## The blocker DID lift — and the answer is still no
+
+Round 247 re-checked and confirmed it: no latency helper existed in `lib/` or
+`test/`, so a fourth attempt had to build the link before it could build the
+bench.
+
+That is no longer true. P-78 carries a 50 ms TCP relay and P-85 a byte-counting
+one, both with the trap already paid for — `unawaited(socket.done.catchError(…))`
+on both sockets, without which the PROBE dies instead of the library. Building
+the link is now copying rather than inventing.
+
+**Recorded because a closed lead should say what changed, not only that it
+closed.** If this question ever comes back, the missing piece is no longer
+missing.
+
 ## Owner decision
 
-—
+**Closed.** The cost fell and the value did not rise with it.
+
+What this lead asked was whether an ordinary endpoint client reaches a wedge
+whose transport-level form round 206 already fixed. Three shapes were built and
+none could produce a valid number — and two of them failed in a way that says
+something: the producer-overrun arm read 0 BEFORE any cancels, because a
+saturated stream is already parked on its window at the moment of the pause.
+
+So this buys an extension to a fixed defect, on a path three attempts could not
+make leak. That is worth a bench when the bench is free and this one still is
+not — it is an endpoint-level drive on top of a relay, not the relay alone.

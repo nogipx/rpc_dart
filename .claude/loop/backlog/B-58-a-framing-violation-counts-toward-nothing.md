@@ -1,10 +1,10 @@
 ---
-status: awaiting owner
+status: decided by owner (round 415)
 round: 397
 commit: d9d96cd2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
 probe: P-84 measures the release half; the COST of a per-connection grind — one stream, N refused frames — has no number
-reason: owner decision — the COST half is answered (round 399: a refusal flood costs the server LESS than the same volume of honest calls, so no backstop is justified on cost); what remains is whether `closeOnProtocolError` should mean malformed framing, which is a question about the field's contract
+reason: decided — split the branches and make the malformed-framing one behave exactly like its header-level sibling; the resource-limit branch must never count
 ---
 
 > **Round 399 answered the cost half and it argues AGAINST the backstop.** P-85,
@@ -73,7 +73,20 @@ below is only the contract question.
 
 ## Owner decision
 
-Needed, and only on the second branch: should `closeOnProtocolError` fire for
-malformed framing? The field's own doc says "a protocol violation", and whether
-a frame this transport cannot decode counts as one is a contract question, not a
-measurement. The resource-limit branch needs no decision — it must not count.
+**Taken: yes — the framing branch behaves exactly like its header-level
+sibling.** A frame this transport cannot decode IS a protocol violation in the
+sense the field documents, so the malformed-framing branch increments
+`_policyViolations` against the 256 backstop and honours `closeOnProtocolError`.
+
+The resource-limit branch needs no decision and must never count: that peer is
+not broken, it is misconfigured, and it is told RESOURCE_EXHAUSTED precisely so
+it can correct itself and retry.
+
+`closeOnProtocolError` defaults to `false` (B-07), so nobody who did not opt in
+sees a behaviour change. What the opted-in caller gets is the knob meaning one
+thing at both sites instead of two.
+
+**Round 399's cost measurement does not argue against this and is not what it
+turns on.** The backstop was never a DoS defence here — the numbers say a
+refusal flood is cheaper for the server than the same volume of honest calls.
+It is a statement about a broken peer.

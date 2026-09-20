@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 415)
 round: 347
 commit: e78bd8e2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
@@ -71,6 +71,28 @@ between three, and none is a repair:
 
 Round 347 recommends (1) plus the characterisation test that is already in, and
 (3) if the owner wants it off the list permanently.
+
+## Owner decision — taken jointly with B-39
+
+**Zone-guard the connection's construction, and ROUTE what the zone catches.**
+The full statement of it lives in
+[B-39](B-39-websocket-send-throws-into-the-root-zone.md#owner-decision--taken-jointly-with-b-35);
+the two were decided together because it is one mechanism and one trade.
+
+Here it means guarding where `RpcHttp2CallerTransport` builds its
+`ClientTransportConnection`, so a `finish()` that throws AFTER its own future
+completed lands somewhere that can report it instead of in the root zone.
+
+**This lead keeps its own qualifier, and it is the reason it stayed a lead:**
+nothing has yet produced a user-visible failure through `close()`. Measured over
+connect / call / close / close-again inside `runZonedGuarded`, nothing escapes —
+`close()` RSTs every stream before calling `finish()`, and rounds 346-347 could
+not make it time out even with the budget forced to 1 ms and to zero.
+
+So the round carrying this is fixing a reachable-in-principle throw, not a
+reproduced failure. It must say so in its verdict rather than claiming a fix it
+cannot witness end to end, and the characterisation test stays as what it
+already is: the thing that closes this lead the day the dependency stops.
 
 ## Guarded by
 

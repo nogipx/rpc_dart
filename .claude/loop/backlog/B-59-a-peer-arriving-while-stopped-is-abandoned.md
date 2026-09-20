@@ -1,10 +1,10 @@
 ---
-status: awaiting owner
+status: decided by owner (round 415)
 round: 401
 commit: 762fa760
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/restart_the_way_the_error_says.dart — baseline pinned in test/restart_needs_a_new_stream_test.dart
-reason: behaviour decision — the fix changes what `stop()` OWNS, and the obvious shape of it (keep consuming the stream after stop, to close what arrives) is the very thing that makes a single-subscription stream unrestartable
+reason: decided — a refusing state, distinct from both serving and cancelled; the subscription survives `stop()` and is released only at final teardown
 ---
 
 # B-59 — a peer arriving while the server is stopped is accepted and abandoned
@@ -60,10 +60,23 @@ third state.
 
 ## Owner decision
 
-Needed. Should a stopped `RpcWebSocketServer` keep reading its connections
-stream in order to CLOSE what it cannot serve — accepting that "stopped" then
-means "refusing" rather than "not listening", and that restartability over a
-single-subscription stream is lost for good?
+**Taken: a refusing state, which is the third state this record says the two
+halves cannot be had without.**
 
-Round 401 changed the error message to say the gap exists, which is honest and
-is not a fix.
+`stop()` does not cancel `_connectionsSub`. It switches the server into a mode
+where an arriving connection is CLOSED immediately and never reaches
+`_endpoints`; the subscription is released only at final teardown, so `start()`
+has a live subscription to switch back.
+
+This is the shape the table above rules out under "keep consuming after stop",
+and the reason it is available is that the table conflates two things. What
+makes the stream unrestartable is CANCELLING the subscription, not holding it —
+and what the load-bearing comment protects against is a connection landing in
+`_endpoints` after the clear. A refusing mode never lets it land there at all,
+so the leak is covered by a different mechanism rather than by the cancel.
+
+**Proposed by the agent during the backlog review, not established by a round.**
+The round that carries it out has to measure it, and the claim to attack first
+is the one above: that refusing covers the leak the cancel was there for. The
+existing baseline is `restart_needs_a_new_stream_test.dart`, whose expectation
+carries its own inversion instruction.
