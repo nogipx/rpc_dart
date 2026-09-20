@@ -160,6 +160,44 @@ final class RpcMessageHeader {
   RpcMessageHeader(this.isCompressed, this.messageLength);
 }
 
+/// The gRPC status for a non-200 HTTP response, for every transport.
+///
+/// **One table, because two disagreed on six rows and one of them was
+/// retryability.** `RpcRetryInterceptor` retries `unavailable` and
+/// `resourceExhausted` and nothing else, so a gateway timeout used to be
+/// retried over HTTP/2 and final over HTTP/1.1 — same deployment, same proxy,
+/// same application code, and swapping the transport silently swapped the
+/// retry policy.
+///
+/// The base is grpc-go's `HTTPStatusConvTab`, which is what a gRPC peer and
+/// every gRPC gateway already assume.
+///
+/// **Anything not in the table is `unknown`, not `internal`**: the peer said
+/// something gRPC has no meaning for, and `unknown` is what that means. That
+/// rule is why the richer HTTP/1.1 table did not win wholesale — its `>=400 ->
+/// invalidArgument` default contradicted it, and rows like `409`, `410`, `412`
+/// and `501` map statuses no rpc_dart responder emits.
+///
+/// Two rows are kept beyond grpc-go's, each because something really produces
+/// it:
+///
+/// - **413**, because rpc_dart's OWN responders answer it for a body over
+///   `maxMessageLengthBytes`, and RESOURCE_EXHAUSTED is what tells the caller
+///   it hit a SIZE it can reduce rather than sent malformed arguments. The
+///   http2 sibling answers the same status for the same condition.
+/// - **499**, nginx's "client closed request", whose exact inverse in gRPC's
+///   own gateway mapping is CANCELLED.
+int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
+  400 => RpcStatus.internal,
+  401 => RpcStatus.unauthenticated,
+  403 => RpcStatus.permissionDenied,
+  404 => RpcStatus.unimplemented,
+  413 => RpcStatus.resourceExhausted,
+  499 => RpcStatus.cancelled,
+  429 || 502 || 503 || 504 => RpcStatus.unavailable,
+  _ => RpcStatus.unknown,
+};
+
 /// A closed endpoint or transport was asked to do work.
 ///
 /// **A TYPE, because the message was load-bearing and could not be.** Ten sites

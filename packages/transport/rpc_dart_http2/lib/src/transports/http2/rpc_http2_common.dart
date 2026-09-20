@@ -434,27 +434,6 @@ String? extractMethodPath(List<http2.Header> headers) {
   return null;
 }
 
-/// Maps a non-200 HTTP `:status` to the gRPC status code the spec prescribes.
-///
-/// The table is normative — gRPC's `doc/http-grpc-status-mapping.md`, and the
-/// same one grpc-go applies in `http2_client.operateHeaders` whenever `:status`
-/// is not 200. Clients key real behaviour off it: rpc_dart's own
-/// `RetryInterceptor` retries only `unavailable` and `resourceExhausted`, so
-/// collapsing everything to `internal` made the ordinary failure modes of a
-/// proxy or load balancer — 502, 503, 504, and 429 when it rate limits —
-/// permanently non-retryable, and hid 401/403/404 behind a generic INTERNAL.
-///
-/// Anything not in the table is `unknown`, not `internal`: the peer said
-/// something gRPC has no meaning for, and `unknown` is what that means.
-int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
-  400 => RpcStatus.internal,
-  401 => RpcStatus.unauthenticated,
-  403 => RpcStatus.permissionDenied,
-  404 => RpcStatus.unimplemented,
-  429 || 502 || 503 || 504 => RpcStatus.unavailable,
-  _ => RpcStatus.unknown,
-};
-
 /// gRPC status for an HTTP/2 stream that the peer RESET.
 ///
 /// The table is the one in gRPC's PROTOCOL-HTTP2.md, and the distinctions in

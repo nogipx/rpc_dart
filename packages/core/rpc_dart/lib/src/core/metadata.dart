@@ -9,6 +9,43 @@ import 'dart:typed_data';
 import 'compression.dart';
 import 'rpc_headers.dart';
 
+/// Default bound on a `/Service/Method` path, in characters.
+///
+/// One number. `RpcSecurityPolicy.maxMethodPathLength` defaults to it, and the
+/// outbound metadata constructors use it directly — they used to enforce 258
+/// while the responder pipeline enforced a hardcoded 512.
+const int kDefaultMaxMethodPathLength = 1024;
+
+/// Tokens allowed in a service or method name. A dot is legal, so a dotted
+/// service name survives.
+final RegExp kMethodTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
+
+/// Splits a valid `/Service/Method` into its two names, or returns null.
+///
+/// **The single implementation of the grammar.** It was written three times
+/// with three limits — a hardcoded 512 in the responder pipeline, the policy's
+/// 1024, and 258 here — and three different rules, so the layer an embedder
+/// could CONFIGURE was the loosest and the strictest had no configuration at
+/// all. Raising the policy's knob past 512 changed nothing, because the
+/// responder refused afterwards.
+(String service, String method)? parseRpcMethodPath(
+  String? methodPath, {
+  int maxLength = kDefaultMaxMethodPathLength,
+}) {
+  if (methodPath == null || methodPath.isEmpty) return null;
+  if (methodPath.length > maxLength) return null;
+  if (methodPath.contains('\r') || methodPath.contains('\n')) return null;
+
+  final parts = methodPath.split('/');
+  if (parts.length != 3 || parts[0].isNotEmpty) return null;
+  if (parts[1].isEmpty || parts[2].isEmpty) return null;
+  if (!kMethodTokenPattern.hasMatch(parts[1]) ||
+      !kMethodTokenPattern.hasMatch(parts[2])) {
+    return null;
+  }
+  return (parts[1], parts[2]);
+}
+
 /// Represents a single HTTP/2 header.
 ///
 /// HTTP/2 carries headers via HPACK-encoded binary, but at the API level they
@@ -411,16 +448,11 @@ final class RpcMetadata {
     }
   }
 
-  static bool _isValidMethodPath(String methodPath) {
-    if (methodPath.isEmpty ||
-        methodPath.length > (_maxMethodTokenLength * 2 + 2) ||
-        !methodPath.startsWith('/')) {
-      return false;
-    }
-    final parts = methodPath.substring(1).split('/');
-    if (parts.length != 2) return false;
-    if (parts[0].isEmpty || parts[1].isEmpty) return false;
-    return _methodTokenPattern.hasMatch(parts[0]) &&
-        _methodTokenPattern.hasMatch(parts[1]);
-  }
+  /// The same grammar the policy enforces, at the default limit.
+  ///
+  /// This was a third answer — `_maxMethodTokenLength * 2 + 2` = 258 — so a
+  /// client built through [forClientRequestWithPath] could never send a path
+  /// that the policy's own 1024 default describes.
+  static bool _isValidMethodPath(String methodPath) =>
+      parseRpcMethodPath(methodPath) != null;
 }

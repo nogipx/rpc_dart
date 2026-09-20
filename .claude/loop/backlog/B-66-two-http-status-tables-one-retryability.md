@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured) — filed from a READ sweep the owner handed in, re-verified against ff930001 before filing; no round took it
+status: closed (round 417)
+round: 417
 commit: ff930001
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
 probe: none — READ, not measured
@@ -69,4 +69,30 @@ The sweep that produced this also reported, and these were NOT re-checked at
 
 ## Owner decision
 
-—
+**"Backward compatibility does not matter, make it perfect."** That settles the
+rows on merit rather than on who breaks least.
+
+## Closed — round 417
+
+One table, `grpcStatusFromHttpStatus` in `protocol.dart` beside `wireStatusFor`,
+called by both transports.
+
+**The base is grpc-go's `HTTPStatusConvTab`** — the http2 table was already
+exactly that, and it is what a gRPC peer and every gateway assume. 504 is
+`unavailable` on both transports now, so the retry policy no longer depends on
+which transport is plugged in.
+
+**Two rows are kept beyond it, and an EXISTING test is why.** The plan was to
+adopt grpc-go's table wholesale; `oversized_request_is_resource_exhausted_test`
+failed and its header names its direction — rpc_dart's own responders answer
+**413** for a body over `maxMessageLengthBytes`, and RESOURCE_EXHAUSTED is what
+tells the caller it hit a SIZE it can reduce rather than sent malformed
+arguments. The argument for dropping it (RESOURCE_EXHAUSTED is retryable, and
+retrying an oversized body is futile) is the weaker one: the remedy is the
+caller sending less. **499** is kept on the same test — nginx emits it and
+CANCELLED is its exact inverse in gRPC's gateway mapping.
+
+Gone: 409, 410, 412, 415, 501 and the `>=400 -> invalidArgument` default. No
+rpc_dart responder emits those, and the `unknown` rule covers them.
+
+**The three "related, same seam" items are still unverified** and stay B-70's.

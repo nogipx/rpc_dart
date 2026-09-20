@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured) — filed from a READ sweep the owner handed in, re-verified against ff930001 before filing; no round took it
+status: closed (round 417)
+round: 417
 commit: ff930001
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/core/metadata.dart]
 probe: none — READ, not measured
@@ -74,4 +74,30 @@ filed in B-70 rather than here, because it was not re-checked at `ff930001`.
 
 ## Owner decision
 
-—
+**"Backward compatibility does not matter, make it perfect."**
+
+## Closed — round 417
+
+**The grammar lives in `parseRpcMethodPath` (`metadata.dart`) and the LIMIT is
+passed in.** That resolves the ownership question the lead asked without the
+risk it flagged: `RpcSecurityPolicy.parseMethodPath` supplies the configured
+length, and `_parseMethodPath` on the responder pipeline asks the transport's
+policy — so the pipeline still enforces the full grammar for transports that do
+not validate, rather than being reduced to a trusting split.
+
+`kDefaultMaxMethodPathLength = 1024` is the one number; the policy's default
+references it and the outbound constructors use it directly, so the 258 answer
+is gone.
+
+**The knob works in both directions now**, which is the witness: raising it past
+512 admits a 602-character path (the hardcoded copy refused it afterwards), and
+lowering it to 8 still refuses `/Service/Method`. The canary that restored the
+hardcoded 512 failed BOTH — with the number hardcoded the setting was ignored
+either way.
+
+**Stated as a loss rather than discovered later**: the per-token 128-character
+rule is gone, not merged. The unified grammar bounds the whole path, so a
+1000-character service name with a 20-character method now passes. Nothing
+covered it and no producer emits one.
+
+The adjacent `RpcContext._sanitizeHeaders` item is still B-70's (item 13).

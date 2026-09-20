@@ -2092,21 +2092,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   // Utility
   // ---------------------------------------------------------------------------
 
-  (String, String)? _parseMethodPath(String methodPath) {
-    if (methodPath.isEmpty || methodPath.length > 512) return null;
-    if (methodPath.contains('\r') || methodPath.contains('\n')) return null;
-
-    final parts = methodPath.split('/');
-    if (parts.length != 3 || parts[0].isNotEmpty) return null;
-    if (parts[1].isEmpty || parts[2].isEmpty) return null;
-
-    final tokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
-    if (!tokenPattern.hasMatch(parts[1]) || !tokenPattern.hasMatch(parts[2])) {
-      return null;
-    }
-
-    return (parts[1], parts[2]);
-  }
+  /// The transport's policy owns the grammar; this only asks it.
+  ///
+  /// It used to hold a fourth copy with a HARDCODED 512, which is what made
+  /// `maxMethodPathLength` monotone downward only: raise it past 512 and this
+  /// refused the path afterwards.
+  (String, String)? _parseMethodPath(String methodPath) =>
+      (transport is IRpcSecurityPolicyAware
+              ? (transport as IRpcSecurityPolicyAware).securityPolicy
+              : const RpcSecurityPolicy())
+          .parseMethodPath(methodPath);
 
   String _methodPathFromKey(String methodKey) {
     final parts = methodKey.split('.');

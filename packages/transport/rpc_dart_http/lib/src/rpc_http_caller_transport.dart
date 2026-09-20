@@ -55,48 +55,6 @@ String? _shortReason(Uint8List body) {
       : collapsed;
 }
 
-/// Maps an HTTP status code to a gRPC status int ([RpcStatus] constants).
-int _httpStatusToGrpcCode(int statusCode) {
-  switch (statusCode) {
-    case 400:
-      return RpcStatus.invalidArgument;
-    case 401:
-      return RpcStatus.unauthenticated;
-    case 403:
-      return RpcStatus.permissionDenied;
-    case 404:
-      return RpcStatus.unimplemented;
-    case 409:
-      return RpcStatus.aborted;
-    case 410:
-      return RpcStatus.notFound;
-    case 412:
-      return RpcStatus.failedPrecondition;
-    case 413:
-      return RpcStatus.resourceExhausted;
-    case 429:
-      return RpcStatus.resourceExhausted;
-    case 499: // Client Closed Request (nginx convention)
-      return RpcStatus.cancelled;
-    case 500:
-      return RpcStatus.internal;
-    case 501:
-      return RpcStatus.unimplemented;
-    case 502:
-      return RpcStatus.unavailable;
-    case 503:
-      return RpcStatus.unavailable;
-    case 504:
-      return RpcStatus.deadlineExceeded;
-    case 415:
-      return RpcStatus.invalidArgument;
-    default:
-      if (statusCode >= 500) return RpcStatus.internal;
-      if (statusCode >= 400) return RpcStatus.invalidArgument;
-      return RpcStatus.unknown;
-  }
-}
-
 /// HTTP/1.1 caller transport for rpc_dart.
 ///
 /// Maps each RPC stream to one HTTP POST request. Use it for UNARY calls.
@@ -368,7 +326,10 @@ class RpcHttpCallerTransport
         // dart:io tear the connection down, and package:http cannot reuse it.
         // Bounded by the same ceiling as a 200 body.
         final errorBody = await _readErrorBody(streamedResponse);
-        final grpcCode = _httpStatusToGrpcCode(streamedResponse.statusCode);
+        // Core's table, shared with HTTP/2. This transport used to keep its
+        // own, and the two disagreed on six rows -- including 504, where one
+        // was retryable and the other final.
+        final grpcCode = grpcStatusFromHttpStatus(streamedResponse.statusCode);
         // The reason travels. Discard the body and the responder's own
         // rejections -- "Request body exceeds limit of N bytes", a metadata
         // violation -- collapse into "HTTP 400 from /Svc/echo", which does not

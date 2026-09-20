@@ -198,7 +198,7 @@ final class RpcSecurityPolicy {
     this.maxHeaders = 128,
     this.maxHeaderNameBytes = 128,
     this.maxHeaderValueBytes = 8 * 1024,
-    this.maxMethodPathLength = 1024,
+    this.maxMethodPathLength = kDefaultMaxMethodPathLength,
     this.closeOnProtocolError = false,
     this.halfOpenStreamTimeout = const Duration(seconds: 60),
     this.flowControlWindowBytes = 4 * 1024 * 1024,
@@ -259,7 +259,10 @@ final class RpcSecurityPolicy {
       maxHeaders: readInt('maxHeaders', 128),
       maxHeaderNameBytes: readInt('maxHeaderNameBytes', 128),
       maxHeaderValueBytes: readInt('maxHeaderValueBytes', 8 * 1024),
-      maxMethodPathLength: readInt('maxMethodPathLength', 1024),
+      maxMethodPathLength: readInt(
+        'maxMethodPathLength',
+        kDefaultMaxMethodPathLength,
+      ),
       closeOnProtocolError: readBool('closeOnProtocolError', false),
       // Absent means the default; an explicit non-positive value disables it.
       halfOpenStreamTimeout: switch (map['halfOpenStreamTimeoutMs']) {
@@ -327,15 +330,20 @@ final class RpcSecurityPolicy {
     return true;
   }
 
-  /// Returns true if [methodPath] is within the allowed length and non-empty.
-  bool isValidMethodPath(String? methodPath) {
-    if (methodPath == null) return true;
-    if (methodPath.isEmpty) return false;
-    if (methodPath.length > maxMethodPathLength) return false;
-    if (!methodPath.startsWith('/')) return false;
-    if (methodPath.contains('\r') || methodPath.contains('\n')) return false;
-    return true;
-  }
+  /// Splits a valid `/Service/Method` into its two names, or null.
+  ///
+  /// The grammar lives in [parseRpcMethodPath]; this supplies the configured
+  /// length. [maxMethodPathLength] used to be monotone DOWNWARD only — raising
+  /// it past 512 changed nothing, because the responder pipeline held a fourth
+  /// copy with that number hardcoded and refused the path afterwards.
+  (String service, String method)? parseMethodPath(String? methodPath) =>
+      parseRpcMethodPath(methodPath, maxLength: maxMethodPathLength);
+
+  /// Returns true if [methodPath] is absent or matches [parseMethodPath].
+  ///
+  /// Null is allowed: not every frame carries a path.
+  bool isValidMethodPath(String? methodPath) =>
+      methodPath == null || parseMethodPath(methodPath) != null;
 
   /// Best-effort metadata validation.
   ///
