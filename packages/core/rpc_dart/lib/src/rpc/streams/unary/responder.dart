@@ -29,6 +29,25 @@ final class _UnaryStreamState {
 
 /// Unary responder with Stream ID support: handles one request, sends one response.
 final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
+  /// Whether this responder subscribes to the whole connection itself.
+  ///
+  /// **False when the pipeline builds it, which is every server call.** The
+  /// subscription is the connection-wide broadcast, so one listener exists per
+  /// LIVE UNARY HANDLER and each one is invoked for every inbound frame only to
+  /// discard what is not its own — O(N) per frame in the number of concurrent
+  /// calls. A pipeline responder is handed its request directly four lines
+  /// after construction, so the subscription delivered nothing anyway.
+  ///
+  /// What it did deliver was `onError`: a transport error that does NOT close
+  /// the stream was answered here and nowhere else, because the pipeline's own
+  /// `onError` only logged. That duty moved UP rather than away —
+  /// `_answerActiveStreams` now does it once for every stream instead of N
+  /// times for one each.
+  ///
+  /// True keeps the old behaviour for a responder constructed directly, which
+  /// has no pipeline to feed it.
+  final bool listensToTransport;
+
   /// Transport.
   final IRpcTransport _transport;
 
@@ -111,6 +130,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     required FutureOr<TResponse> Function(TRequest request) handler,
     RpcContext? context,
     LogScope? logger,
+    this.listensToTransport = true,
   }) : _transport = transport,
        _serviceName = serviceName,
        _methodName = methodName,
@@ -217,6 +237,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   }
 
   void _setupRequestHandler() {
+    if (!listensToTransport) {
+      if (_logger.isInternal) {
+        _logger.internal('Fed directly; not listening for $_methodPath');
+      }
+      return;
+    }
+
     if (_logger.isInternal) {
       _logger.internal('Configuring request handler for $_methodPath');
     }

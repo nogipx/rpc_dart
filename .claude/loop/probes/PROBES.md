@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-94](P-94-unary-listener-fanout.md)** valid (round 423), rpc_dart — how
+  many listeners sit on the connection-wide broadcast per parked unary handler?
+  **A COUNT, not a duration**: the defect is O(N) listener invocations per
+  inbound frame, and a wall clock on an in-memory pair measures the machine — an
+  earlier record of this shape (48 ms against 333) is a reading nobody can
+  reproduce on other hardware. The control is one flag, `listensToTransport`,
+  and reads exactly N+1 against a flat 1: `2/11/51/201` at 1/10/50/200 parked
+  handlers. Does NOT measure the per-frame cost of each listener, nor the duty
+  they were carrying — that is the witness's GUARD
 - **[P-93](P-93-malformed-reads-as-a-limit.md)** valid (round 412),
   rpc_dart_http2 — does malformed framing read as a resource limit? **The two
   arms differ by FIVE BYTES and nothing else** — same connection, same headers,

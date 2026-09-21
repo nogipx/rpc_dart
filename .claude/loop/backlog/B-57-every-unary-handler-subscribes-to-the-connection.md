@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 415)
-round: 392
+status: closed (round 423)
+round: 423
 commit: a82bcf4c
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
 probe: none yet — the code facts are confirmed by reading; what needs measuring is the COST of the obvious fix
@@ -127,3 +127,37 @@ real and the subscription stays, or it is not and the subscription goes.
 
 Do not ship a removal that rests on the assumption alone — that is the shape
 this lead was filed to prevent.
+
+## Closed — round 423
+
+**The third route exists, and both earlier ones failed for the same reason: they
+asked WHERE the handler should subscribe.** It should not. The duty the
+subscription carried is not the handler's — it is the connection's, and the
+connection already has exactly one subscription.
+
+`UnaryResponder` gains `listensToTransport`, false when the pipeline builds it.
+The pipeline's `onError` — which **logged only**, and that is precisely why
+round 393 would not drop the subscription — gains `_answerActiveStreams`: skip
+advisory errors, answer every active stream through `wireStatusFor`
+(default-deny, so a foreign error is redacted), then abort. `onDone` stays
+separate: there the transport is gone and there is nothing to answer over.
+
+P-94, counting listeners on `incomingMessages`:
+
+```
+parked handlers   before   after
+      1              2       1
+     10             11       1
+     50             51       1
+    200            201       1
+```
+
+The witness's GUARD is the half that matters — *"the handler still gets its
+answer"* passes on BOTH sides of the ablation, which is what says the duty
+moved rather than being dropped with the subscription.
+
+**The measurement this lead asked for was never taken.** It wanted to know
+whether a non-advisory transport error ever arrives without the channel then
+closing, because if not the old `onError` saved nothing. The fix made that moot
+rather than answering it: the duty now lives on a subscription that exists
+either way. A round wanting the negative still has to take that reading.

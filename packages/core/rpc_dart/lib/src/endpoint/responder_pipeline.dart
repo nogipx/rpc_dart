@@ -406,12 +406,78 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           error: error,
           stackTrace: stackTrace,
         );
+
+        // Unless the channel said this is an OBSERVATION rather than a failure.
+        // An advisory error -- a proxy's app-level keepalive arriving as a text
+        // frame -- reports one discarded frame over a connection that still
+        // works, and answering it would fail every call in flight for nothing.
+        if (error is IRpcAdvisoryChannelError) return;
+
+        // ANSWER it. This used to LOG ONLY, and the duty was carried instead by
+        // one subscription per live unary handler, each on this same
+        // connection-wide broadcast -- O(N) listeners invoked per frame to
+        // answer an error that arrives once. Done here it is one pass.
+        //
+        // `onDone` is the other ending and stays separate: there the transport
+        // is gone, so there is nothing to answer over and _abortActiveStreams
+        // only has to reclaim. This path is a transport error that did NOT
+        // close the stream, where the caller is still reachable and otherwise
+        // waits out its own deadline for a failure we could name.
+        _detached(_answerActiveStreams(error), 'transport error');
       },
       onDone: () {
         _log.internal('Transport incoming stream closed');
         _abortActiveStreams('transport closed');
       },
     );
+  }
+
+  /// Tells every in-flight stream about a transport error, then reclaims them.
+  ///
+  /// The connection is still up — that is what separates this from
+  /// [_abortActiveStreams] — so the caller is reachable and gets the status the
+  /// error carries instead of waiting out its own deadline and reporting
+  /// UNAVAILABLE "Stream closed without receiving response", which names a
+  /// symptom rather than a cause.
+  ///
+  /// Through `wireStatusFor`, which is default-deny: a FOREIGN error is
+  /// redacted rather than described to the peer.
+  Future<void> _answerActiveStreams(Object error) async {
+    if (_respStreams.length == 0) return;
+
+    final wire = wireStatusFor(error);
+    final ids = _respStreams.values.map((s) => s.id).toList(growable: false);
+    if (_log.isInternal) {
+      _log.internal(
+        'Answering ${ids.length} active stream(s) with ${wire.status}',
+      );
+    }
+
+    for (final streamId in ids) {
+      try {
+        await transport.sendMetadata(
+          streamId,
+          RpcMetadata.forTrailer(
+            wire.status,
+            message: wire.message,
+            statusDetailsBin: wire.detailsBin,
+            // The STATUS must survive a message longer than the header cap.
+            maxMessageLength: _trailerMessageCap(transport),
+          ),
+          endStream: true,
+        );
+      } catch (e, st) {
+        // Best-effort by construction: the reason the transport errored is
+        // often that it is going away, so this send failing is not news.
+        _log.warning(
+          'Could not report the transport error on stream $streamId: $e',
+          error: e,
+          stackTrace: st,
+        );
+      }
+    }
+
+    _abortActiveStreams('transport error');
   }
 
   /// Aborts every in-flight stream after the connection is gone.
@@ -1312,6 +1378,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       ),
       context: context,
       logger: contextLogger,
+      // The pipeline feeds this responder directly, four lines below, and
+      // answers transport errors for every stream at once in [_answerActiveStreams].
+      // Its own subscription would be a listener on the connection-wide
+      // broadcast per LIVE HANDLER, invoked for every inbound frame only to
+      // discard what is not its own.
+      listensToTransport: false,
     );
 
     state.responder = responder;
