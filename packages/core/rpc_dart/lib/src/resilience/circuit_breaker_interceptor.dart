@@ -282,7 +282,13 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       // takes its turn as the probe, which is a real observation.
       resolveInconclusive();
       // Drop the dangling source subscription; nothing consumes it.
-      sub.cancel();
+      //
+      // UNAWAITED and CAUGHT. This ran on a detached timer callback with the
+      // future discarded bare, so a cancel that REJECTS -- a suspended
+      // generator refusing to unwind -- became an unhandled async error, which
+      // in the root zone kills the isolate. `RpcCallScope.track` records the
+      // same shape as measured: two such drops were enough.
+      unawaited(sub.cancel().catchError((Object _) {}));
     });
 
     return controller.stream;

@@ -172,3 +172,30 @@ Two constraints on the carrying round, both from this record:
 The clauses the helper owns: pause per send; cancel UNAWAITED (L-16); close only
 after that cancel; stop pulling on the call's `done`; route every failure away
 from the zone.
+
+## The three DEFECTS are closed — round 424. The extraction is NOT.
+
+Sites 7, 8 and 9 are fixed: `RpcCallScope.listen` cancels unawaited and catches,
+both `track` and `listen` forward `onPause`/`onResume`, and the circuit
+breaker's abandon timer no longer drops its cancel Future bare.
+
+**The number:** `onDispose(sub.cancel)` made closing a scope holding a parked
+generator cost **5006 ms** — the full `disposerTimeout` — against a 2000 ms
+witness bound. Not a threshold anyone chose; it is the budget.
+
+**Where the rules already were is the finding.** `track`, thirty lines above
+`listen`, states both of them and their price in its own comment; `listen` was
+written with neither, and the circuit breaker's bare cancel is the second half
+of that same sentence in a different file. A rule in a COMMENT does not travel —
+which is the argument for this lead's extraction, made by the lead's own
+evidence.
+
+**Still open, and this is the lead's actual subject**: one helper owning the
+discipline across all nine sites. Its constraints are unchanged — convert one
+call site at a time with its existing witness green after each, and extract FROM
+site 6 (`_bridgeCallerResponses`), the only one carrying the "fire the
+cancellation token ONLY when the stream did not already finish" clause, whose
+loss poisons a reused `RpcContext`.
+
+Sites 1-6 remain confirmed-correct by READING only; round 424 did not re-take
+that.

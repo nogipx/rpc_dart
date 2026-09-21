@@ -143,6 +143,12 @@ final class RpcCallScope {
 
     controller = StreamController<T>(
       onCancel: () => sub.cancel().catchError(_cancelFailed),
+      onPause: () => sub.pause(),
+      onResume: () => sub.resume(),
+      // Forwarded, or a slow consumer of a tracked stream never slows the
+      // SOURCE: the controller buffers without bound while the producer runs
+      // flat out. Every other site in this class of code forwards pause; these
+      // two forwarded nothing.
     );
 
     sub = stream.listen(
@@ -178,7 +184,14 @@ final class RpcCallScope {
       onDone: onDone,
       cancelOnError: cancelOnError,
     );
-    onDispose(sub.cancel);
+    // NOT `onDispose(sub.cancel)`. Disposers are AWAITED, with
+    // [disposerTimeout] as the only bound — so a parked generator made closing
+    // a scope cost up to five seconds per subscription, and a rejected cancel
+    // became an unhandled async error. [track], thirty lines above, states both
+    // rules and the evidence for them; this one was written without either.
+    onDispose(() {
+      unawaited(sub.cancel().catchError(_cancelFailed));
+    });
     return sub;
   }
 
