@@ -140,12 +140,7 @@ final class ClientStreamResponder<
           // Nothing awaits this chain, so a throw from the reply path would
           // reach the zone and take a server process with it.
           try {
-            final wire = wireStatusFor(error);
-            await _processor.sendError(
-              wire.status,
-              wire.message,
-              statusDetailsBin: wire.detailsBin,
-            );
+            await sendWireError(error, _processor.sendError);
           } catch (e, st) {
             _logger.error(
               'Failed to report the handler failure to the peer [id: $id]',

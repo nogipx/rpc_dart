@@ -262,14 +262,7 @@ class RpcHttp2Server implements IRpcServer {
   }
 
   /// Live responder streams across every endpoint this server owns.
-  int _inFlightCalls() {
-    var total = 0;
-    for (final endpoint in _endpoints) {
-      final metrics = endpoint.collectEndpointMetrics();
-      total += (metrics['activeResponders'] as int?) ?? 0;
-    }
-    return total;
-  }
+  int _inFlightCalls() => inFlightResponderCalls(_endpoints);
 
   /// Starts PING keepalive for one connection, or returns null when disabled.
   ///
@@ -288,20 +281,16 @@ class RpcHttp2Server implements IRpcServer {
     Socket socket,
     String clientAddress,
   ) {
-    final interval = _pingInterval;
-    if (interval == null) return null;
-    final timeout = _pingTimeout ?? interval;
-
-    var inFlight = false;
-    return Timer.periodic(interval, (timer) async {
-      // One ping at a time: a slow-but-alive peer must not accumulate probes,
-      // and a stalled one would otherwise start a new ping every interval.
-      if (inFlight) return;
-      inFlight = true;
-      try {
-        await connection.ping().timeout(timeout);
-      } catch (error) {
-        timer.cancel();
+    final timeout = _pingTimeout ?? _pingInterval;
+    return startHttp2Keepalive(
+      interval: _pingInterval,
+      timeout: _pingTimeout,
+      ping: connection.ping,
+      // The guard this half LACKED. The release wiring on `socket.done` does
+      // cancel the timer, but a stopped server with a socket still open kept
+      // probing until that fired.
+      isDead: () => !_isRunning,
+      onDead: (error) {
         _logger?.warning(
           'HTTP/2 keepalive failed for $clientAddress ($error); '
           'closing a connection whose peer stopped answering',
@@ -320,11 +309,8 @@ class RpcHttp2Server implements IRpcServer {
         // Destroy, not finish: this fires socket.done, which runs the release
         // wiring that closes the endpoint and disposes its contracts.
         socket.destroy();
-        return;
-      } finally {
-        inFlight = false;
-      }
-    });
+      },
+    );
   }
 
   /// Drops a disconnected connection's endpoint and CLOSES it.
@@ -365,17 +351,8 @@ class RpcHttp2Server implements IRpcServer {
   /// contracts, so if it fails the connection is useless. The surrounding
   /// try/catch already reports it and destroys the socket, which is the right
   /// outcome -- swallowing it would start an endpoint that serves nothing.
-  void _notify(String what, void Function() body) {
-    try {
-      body();
-    } catch (error, stackTrace) {
-      _logger?.error(
-        'User callback $what threw',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
+  void _notify(String what, void Function() body) =>
+      notifyWithoutDying(what, body, logger: _logger);
 
   @override
   bool get isRunning => _isRunning;

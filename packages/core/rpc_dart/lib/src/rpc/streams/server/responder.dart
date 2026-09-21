@@ -216,12 +216,7 @@ final class ServerStreamResponder<
               error: error,
               stackTrace: trace,
             );
-            final wire = wireStatusFor(error);
-            await _processor.sendError(
-              wire.status,
-              wire.message,
-              statusDetailsBin: wire.detailsBin,
-            );
+            await sendWireError(error, _processor.sendError);
             _completeDone();
           }
         } else {
@@ -256,12 +251,7 @@ final class ServerStreamResponder<
         // An `async` listen callback nobody awaits: a throw here would reach
         // the zone, and a server without a zone handler exits on that.
         try {
-          final wire = wireStatusFor(error);
-          await _processor.sendError(
-            wire.status,
-            wire.message,
-            statusDetailsBin: wire.detailsBin,
-          );
+          await sendWireError(error, _processor.sendError);
         } catch (e, stackTrace) {
           _logger.error(
             'Failed to report the request-stream error to the peer [id: $id]',

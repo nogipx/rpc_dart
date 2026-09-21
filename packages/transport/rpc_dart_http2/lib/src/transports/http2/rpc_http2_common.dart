@@ -28,6 +28,56 @@ const String kGrpcUserAgent = 'rpc-dart/1.0.0';
 /// that never answers cannot hold shutdown open forever.
 const Duration kGracefulCloseTimeout = Duration(seconds: 2);
 
+/// The PING-keepalive loop both HTTP/2 halves run.
+///
+/// Keepalive is the only thing that reclaims a HALF-OPEN connection: a dead
+/// peer never answers, so `ping()` simply never completes and the TIMEOUT is
+/// what detects it.
+///
+/// **What is shared is the loop, not the response.** The two halves answer a
+/// dead peer differently on purpose — the caller marks itself disconnected and
+/// discards the connection so calls fail fast and a supervisor can reconnect;
+/// the server destroys the socket, which fires `socket.done` and runs the
+/// release wiring that disposes the contracts. Forcing those together would be
+/// the cosmetic unification RPC-25 declines. What DID drift is everything here:
+/// the one-probe-at-a-time latch, and [isDead] — a guard the caller half had
+/// and the server half did not.
+///
+/// [onDead] runs once, after the timer is cancelled. Every await is guarded by
+/// the caller of this function: it runs on a detached timer callback, where an
+/// unhandled async error reaches the root zone and kills the isolate.
+Timer? startHttp2Keepalive({
+  required Duration? interval,
+  required Duration? timeout,
+  required Future<void> Function() ping,
+  required bool Function() isDead,
+  required void Function(Object error) onDead,
+}) {
+  if (interval == null) return null;
+  final budget = timeout ?? interval;
+
+  var inFlight = false;
+  return Timer.periodic(interval, (timer) async {
+    // One probe at a time: a slow-but-alive peer must not accumulate pings,
+    // and a stalled one would otherwise start a new one every interval.
+    if (inFlight) return;
+    if (isDead()) {
+      timer.cancel();
+      return;
+    }
+    inFlight = true;
+    try {
+      await ping().timeout(budget);
+    } catch (error) {
+      timer.cancel();
+      onDead(error);
+      return;
+    } finally {
+      inFlight = false;
+    }
+  });
+}
+
 /// Turns Nagle's algorithm off on [socket], as every gRPC stack does.
 ///
 /// Nagle holds a small outbound segment while earlier data is still

@@ -254,17 +254,7 @@ class RpcWebSocketServer implements IRpcServer {
   }
 
   /// Live responder streams across every endpoint this server owns.
-  ///
-  /// Peer-mode endpoints are included: [RpcPeerEndpoint] serves calls too, and
-  /// counting only [RpcResponderEndpoint] would drain a peer server instantly.
-  int _inFlightCalls() {
-    var total = 0;
-    for (final endpoint in _endpoints) {
-      final metrics = endpoint.collectEndpointMetrics();
-      total += (metrics['activeResponders'] as int?) ?? 0;
-    }
-    return total;
-  }
+  int _inFlightCalls() => inFlightResponderCalls(_endpoints);
 
   /// Drops a disconnected connection's endpoint and closes it.
   ///
@@ -286,26 +276,12 @@ class RpcWebSocketServer implements IRpcServer {
 
   /// Invokes an observability callback without letting it take the process out.
   ///
-  /// These run on DETACHED paths — [_handleConnection] off the connections
-  /// stream, [_releaseEndpoint] off `sink.done`'s then/catchError — so a throw
-  /// has no handler above it and reaches the root zone, where an unhandled
-  /// async error kills the isolate.
-  ///
   /// Deliberately NOT applied to [_onEndpointCreated] / [_onPeerEndpointCreated]:
   /// those register the contracts, so if one fails the connection is useless.
   /// The surrounding try/catch reports it and closes the socket, which is the
   /// right outcome — swallowing it would start an endpoint that serves nothing.
-  void _notify(String what, void Function() body) {
-    try {
-      body();
-    } catch (error, stackTrace) {
-      _logger?.error(
-        'User callback $what threw',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-  }
+  void _notify(String what, void Function() body) =>
+      notifyWithoutDying(what, body, logger: _logger);
 
   void _handleConnection(WebSocketChannel channel, String clientLabel) {
     // REFUSED, not dropped. The HttpServer underneath is not this server's to

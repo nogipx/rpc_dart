@@ -499,6 +499,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   @override
   void markDraining() => _respIsDraining = true;
 
+  @override
+  int get activeResponderCount =>
+      _respStreams.values.where((state) => state.hasResponder).length;
+
   /// Initiates graceful drain: rejects new streams and cancels active contexts.
   ///
   /// After calling [drain], new incoming streams receive `UNAVAILABLE` status.
@@ -584,9 +588,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       'clientStreamBuffers': _respStreams.values
           .where((state) => state.hasBufferedClientMessages)
           .length,
-      'activeResponders': _respStreams.values
-          .where((state) => state.hasResponder)
-          .length,
+      // The metrics key and the drain now read ONE source. The key is
+      // observability and free to rename; the count is a shutdown decision.
+      'activeResponders': activeResponderCount,
       if (_respRegistry.contracts.isNotEmpty)
         'contractKeys': List<String>.unmodifiable(_respRegistry.contracts.keys),
     };

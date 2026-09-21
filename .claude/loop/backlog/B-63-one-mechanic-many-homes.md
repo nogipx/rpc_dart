@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured) — found by a sweep during the backlog review, not by a round
+status: closed (round 422)
+round: 422
 commit: 406f6536
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**]
 probe: none — READ, not measured
@@ -262,7 +262,24 @@ right; the reasoning is rewritten to the one that survives: this is a LOCAL
 refusal that names its own remedy, so the caller applies the remedy instead of
 retrying into it.
 
-**Still open**: `_inFlightCalls()` (byte-identical in two servers, counting
-through a stringly-typed map), `_notify` (byte-identical, a process-death guard),
-`_startKeepalive` (twice in one package, already drifted by an `_isClosed`
-check the server half lacks), and the `wireStatusFor` → `sendError` quartet.
+## The remaining four — round 422; the lead is closed
+
+**`_inFlightCalls` was the one with teeth, and this session had made it worse.**
+It is now `RpcEndpointBase.activeResponderCount` — TYPED, so the compiler checks
+it — with `inFlightResponderCalls` in core beside `drainUntilIdle`, and the
+metrics key reading FROM it. The canary is the whole finding: renaming the key
+to `liveResponders` fails the test that watches the coupling and **leaves the
+websocket drain passing**, where before it would have zeroed the drain silently
+with every test green.
+
+`_notify` → `notifyWithoutDying`, `wireStatusFor` → `sendError` → `sendWireError`
+at four responder sites.
+
+**`_startKeepalive` is HALF-extracted, and that is the answer rather than a
+shortcut.** Shared: the loop, the latch, and the `isDead` guard the server half
+lacked. Not shared: the response, because the two differ on purpose — the caller
+marks itself disconnected so a supervisor reconnects; the server destroys the
+socket so the release wiring disposes the contracts. Forcing those together is
+the cosmetic unification this lens declines. The server's missing guard is also
+narrower than this record implies: `socket.done` already cancelled the timer, so
+the window was "a stopped server whose socket is still open".

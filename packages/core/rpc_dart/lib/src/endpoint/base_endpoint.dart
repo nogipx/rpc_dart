@@ -35,6 +35,19 @@ abstract base class RpcEndpointBase {
   /// type test against it is not available to a transport package.
   void markDraining() {}
 
+  /// Live responder streams this endpoint is serving.
+  ///
+  /// **Typed, because a graceful drain polls it.** Both servers used to read
+  /// this out of `collectEndpointMetrics()['activeResponders']` with
+  /// `as int? ?? 0`, so renaming that key — an observability key, free to
+  /// change — made every endpoint count ZERO, every drain complete instantly,
+  /// and the failure look exactly like success. A metrics map is for reading;
+  /// a shutdown decision needs something the compiler checks.
+  ///
+  /// Zero by default, for the same reason [markDraining] is a no-op: an
+  /// endpoint with no responder half is serving nothing.
+  int get activeResponderCount => 0;
+
   /// Collects endpoint metrics for health reporting; subclasses may extend.
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = <String, Object?>{

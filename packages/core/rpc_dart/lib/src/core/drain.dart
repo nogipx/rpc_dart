@@ -4,7 +4,48 @@
 
 import 'dart:async';
 
+import '../endpoint/_index.dart';
 import '../logger/_index.dart';
+
+/// Live responder streams across [endpoints], for a server's drain.
+///
+/// **The count [drainUntilIdle] polls, extracted for the same reason the loop
+/// was.** Both connection-per-endpoint servers wrote this out byte-identically
+/// and read it out of a stringly-typed metrics map — so `drainUntilIdle` was
+/// shared and the number feeding it was not, which is the half that decides
+/// whether a shutdown waits at all.
+///
+/// Peer endpoints are INCLUDED: `RpcPeerEndpoint` serves calls too, and
+/// counting only `RpcResponderEndpoint` drains a peer server instantly.
+int inFlightResponderCalls(Iterable<RpcEndpointBase> endpoints) {
+  var total = 0;
+  for (final endpoint in endpoints) {
+    total += endpoint.activeResponderCount;
+  }
+  return total;
+}
+
+/// Runs an observability callback without letting it take the process out.
+///
+/// **Byte-identical in both connection-per-endpoint servers, and a
+/// process-death guard rather than a convenience.** These callbacks run on
+/// DETACHED paths — off a connections stream, off a `sink.done` handler — so a
+/// throw has no handler above it and reaches the root zone, where an unhandled
+/// async error kills the isolate.
+///
+/// [what] names the callback in the log, because "user callback threw" without
+/// a name is not actionable.
+void notifyWithoutDying(String what, void Function() body, {LogScope? logger}) {
+  try {
+    body();
+  } catch (error, stackTrace) {
+    logger?.error(
+      'User callback $what threw',
+      error: error,
+      stackTrace: stackTrace,
+    );
+  }
+}
 
 /// Waits for a server's in-flight work to finish, up to [budget].
 ///

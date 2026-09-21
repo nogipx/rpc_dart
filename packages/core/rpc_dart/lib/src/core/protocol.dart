@@ -160,6 +160,27 @@ final class RpcMessageHeader {
   RpcMessageHeader(this.isCompressed, this.messageLength);
 }
 
+/// Sends a gRPC error trailer. The shape every responder's `sendError` has.
+typedef RpcErrorSender =
+    Future<void> Function(
+      int status,
+      String message, {
+      Uint8List? statusDetailsBin,
+    });
+
+/// Reports [error] to the peer with the status [wireStatusFor] permits.
+///
+/// **Four responders wrote this out, and one had already drifted** — its own
+/// comment records being repaired for it. The three lines matter more than they
+/// look: `wireStatusFor` is DEFAULT DENY, so it is the single place deciding
+/// what may leave the process. A fifth responder that reaches for `sendError`
+/// directly does not merely duplicate code, it bypasses the gate and puts a
+/// foreign error's text on the wire.
+Future<void> sendWireError(Object error, RpcErrorSender send) {
+  final wire = wireStatusFor(error);
+  return send(wire.status, wire.message, statusDetailsBin: wire.detailsBin);
+}
+
 /// The gRPC status for a non-200 HTTP response, for every transport.
 ///
 /// **One table, because two disagreed on six rows and one of them was

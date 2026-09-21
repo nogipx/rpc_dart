@@ -265,36 +265,21 @@ class RpcHttp2CallerTransport
   /// unhandled async error reaches the root zone and kills the isolate.
   void _startKeepalive() {
     _keepalive?.cancel();
-    final interval = _pingInterval;
-    if (interval == null) return;
-    final timeout = _pingTimeout ?? interval;
     final connection = _connection;
-
-    var inFlight = false;
-    _keepalive = Timer.periodic(interval, (timer) async {
-      // One probe at a time: a slow-but-alive peer must not accumulate pings,
-      // and a stalled one would otherwise start a new one every interval.
-      if (inFlight) return;
-      if (_isClosed) {
-        timer.cancel();
-        return;
-      }
-      inFlight = true;
-      try {
-        await connection.ping().timeout(timeout);
-      } catch (error) {
-        timer.cancel();
+    _keepalive = startHttp2Keepalive(
+      interval: _pingInterval,
+      timeout: _pingTimeout,
+      ping: connection.ping,
+      isDead: () => _isClosed,
+      onDead: (error) {
         _logger?.warning(
           'HTTP/2 keepalive failed for $_host:$_port ($error); the path is '
           'half-open, tearing the connection down so calls fail fast',
         );
         _disconnected = true;
         _discardConnection(connection);
-        return;
-      } finally {
-        inFlight = false;
-      }
-    });
+      },
+    );
   }
 
   /// Connects over TLS (h2), advertising ALPN `h2`.

@@ -166,14 +166,7 @@ final class BidirectionalStreamResponder<
         );
         if (finished) return;
         finished = true;
-        final wire = wireStatusFor(error);
-        unawaited(
-          sendError(
-            wire.status,
-            wire.message,
-            statusDetailsBin: wire.detailsBin,
-          ).catchError((Object _) {}),
-        );
+        unawaited(sendWireError(error, sendError).catchError((Object _) {}));
       },
     );
     _responseSubscription = sub;
