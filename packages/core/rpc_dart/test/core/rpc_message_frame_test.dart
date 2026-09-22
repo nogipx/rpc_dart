@@ -11,7 +11,7 @@ import 'package:test/test.dart';
 void main() {
   group('RpcMessageFrame', () {
     group('encode', () {
-      test('кодирует_сообщение_без_сжатия', () {
+      test('encodes a message, uncompressed', () {
         // Arrange
         final messageBytes = Uint8List.fromList([1, 2, 3, 4, 5]);
 
@@ -19,16 +19,16 @@ void main() {
         final result = RpcMessageFrame.encode(messageBytes, compressed: false);
 
         // Assert
-        expect(result.length, equals(10)); // 5 байт префикс + 5 байт данные
+        expect(result.length, equals(10)); // 5-byte prefix + 5 bytes of data
         expect(result[0], equals(RpcConstants.noCompression));
-        expect(result[1], equals(0)); // старший байт длины
+        expect(result[1], equals(0)); // high byte of the length
         expect(result[2], equals(0));
         expect(result[3], equals(0));
-        expect(result[4], equals(5)); // младший байт длины (5)
+        expect(result[4], equals(5)); // low byte of the length
         expect(result.sublist(5), equals(messageBytes));
       });
 
-      test('кодирует_сообщение_со_сжатием', () {
+      test('encodes a message, compressed', () {
         // Arrange
         final messageBytes = Uint8List.fromList([10, 20, 30]);
 
@@ -37,11 +37,11 @@ void main() {
 
         // Assert
         expect(result[0], equals(RpcConstants.compressed));
-        expect(result[4], equals(3)); // длина 3 байта
+        expect(result[4], equals(3)); // length 3
         expect(result.sublist(5), equals(messageBytes));
       });
 
-      test('кодирует_пустое_сообщение', () {
+      test('encodes an empty message', () {
         // Arrange
         final messageBytes = Uint8List(0);
 
@@ -51,19 +51,19 @@ void main() {
         // Assert
         expect(result.length, equals(5));
         expect(result[0], equals(RpcConstants.noCompression));
-        expect(result[4], equals(0)); // длина 0
+        expect(result[4], equals(0)); // length 0
       });
 
-      test('кодирует_большое_сообщение', () {
+      test('encodes a large message', () {
         // Arrange
-        final messageBytes = Uint8List(300); // 300 байт
+        final messageBytes = Uint8List(300); // 300 bytes
 
         // Act
         final result = RpcMessageFrame.encode(messageBytes);
 
         // Assert
         expect(result.length, equals(305)); // 5 + 300
-        expect(result[1], equals(0)); // старшие байты длины
+        expect(result[1], equals(0)); // high bytes of the length
         expect(result[2], equals(0));
         expect(result[3], equals(1)); // 256 + 44 = 300
         expect(result[4], equals(44));
@@ -71,7 +71,7 @@ void main() {
     });
 
     group('parseHeader', () {
-      test('парсит_заголовок_без_сжатия', () {
+      test('parses an uncompressed header', () {
         // Arrange
         final headerBytes = Uint8List.fromList([0, 0, 0, 0, 42]);
 
@@ -83,9 +83,9 @@ void main() {
         expect(header.messageLength, equals(42));
       });
 
-      test('парсит_заголовок_со_сжатием', () {
+      test('parses a compressed header', () {
         // Arrange
-        final headerBytes = Uint8List.fromList([1, 0, 0, 1, 0]); // 256 байт
+        final headerBytes = Uint8List.fromList([1, 0, 0, 1, 0]); // 256 bytes
 
         // Act
         final header = RpcMessageFrame.parseHeader(headerBytes);
@@ -95,9 +95,9 @@ void main() {
         expect(header.messageLength, equals(256));
       });
 
-      test('выбрасывает_исключение_при_коротком_заголовке', () {
+      test('throws on a header that is too short', () {
         // Arrange
-        final shortHeader = Uint8List.fromList([1, 2, 3]); // только 3 байта
+        final shortHeader = Uint8List.fromList([1, 2, 3]); // only 3 bytes
 
         // Act & Assert
         expect(
@@ -112,8 +112,8 @@ void main() {
         );
       });
 
-      test('парсит_максимальную_длину_сообщения', () {
-        // Arrange - максимальный uint32 (0xFFFFFFFF)
+      test('parses the maximum message length', () {
+        // Arrange: the largest uint32, 0xFFFFFFFF.
         final headerBytes = Uint8List.fromList([0, 255, 255, 255, 255]);
 
         // Act
@@ -124,8 +124,8 @@ void main() {
       });
     });
 
-    group('round-trip тестирование', () {
-      test('кодирование_и_декодирование_сохраняет_данные', () {
+    group('round trip', () {
+      test('encode then decode preserves the data', () {
         // Arrange
         final originalMessage = Uint8List.fromList(
           List.generate(100, (i) => i % 256),

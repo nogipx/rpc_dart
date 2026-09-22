@@ -9,7 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('RpcInMemoryTransport с управлением Stream ID', () {
+  group('RpcInMemoryTransport stream-id management', () {
     late IRpcTransport clientTransport;
     late IRpcTransport serverTransport;
 
@@ -24,23 +24,23 @@ void main() {
       await serverTransport.close();
     });
 
-    test('Создает уникальные ID для клиента и сервера', () {
-      // Клиент использует нечетные ID
+    test('client and server ids never collide', () {
+      // The client uses odd ids.
       expect(clientTransport.createStream(), equals(1));
       expect(clientTransport.createStream(), equals(3));
       expect(clientTransport.createStream(), equals(5));
 
-      // Сервер использует четные ID
+      // The server uses even ones.
       expect(serverTransport.createStream(), equals(2));
       expect(serverTransport.createStream(), equals(4));
       expect(serverTransport.createStream(), equals(6));
     });
 
-    test('Освобождает ID при завершении стрима (finishSending)', () async {
-      // Создаем поток
+    test('finishSending releases the id', () async {
+      // Open a stream.
       final streamId = clientTransport.createStream();
 
-      // Отправляем метаданные и сообщение
+      // Send metadata and a message.
       final metadata = RpcMetadata.forClientRequest(
         'TestService',
         'TestMethod',
@@ -51,34 +51,34 @@ void main() {
         Uint8List.fromList([1, 2, 3]),
       );
 
-      // Завершаем поток и проверяем, что ID освобожден
+      // Finish the stream; the id must come back.
       await clientTransport.finishSending(streamId);
 
-      // Создаем новый поток и проверяем, что его ID отличается от первого
+      // A new stream gets a different id from the first.
       final newStreamId = clientTransport.createStream();
-      expect(newStreamId, equals(3)); // Должен быть следующий нечетный
+      expect(newStreamId, equals(3)); // the next odd id
     });
 
-    test('Освобождает ID при получении END_STREAM', () async {
-      // Создаем первый клиентский поток с ID 1
+    test('an incoming END_STREAM releases the id', () async {
+      // The first client stream, id 1.
       final streamId1 = clientTransport.createStream();
       expect(streamId1, equals(1));
 
-      // Отправляем сообщение с флагом END_STREAM
+      // Send a message carrying END_STREAM.
       await clientTransport.sendMetadata(
         streamId1,
         RpcMetadata.forClientRequest('Test', 'Test'),
         endStream: true,
       );
 
-      // Даем время на обработку сообщений
+      // Let the messages be handled.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      // Создаем новый клиентский поток - должен иметь ID 3
+      // A new client stream: id 3.
       final streamId2 = clientTransport.createStream();
       expect(streamId2, equals(3));
 
-      // Создаем еще один поток и сразу завершаем его
+      // Another one, finished right away.
       final streamId3 = clientTransport.createStream();
       expect(streamId3, equals(5));
 
@@ -88,16 +88,16 @@ void main() {
         endStream: true,
       );
 
-      // Даем время на обработку
+      // Let it be handled.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      // Создаем еще один поток - должен быть ID 7, т.к. 5 еще не успел освободиться
+      // One more: id 7, because 5 has not been released yet.
       final streamId4 = clientTransport.createStream();
       expect(streamId4, equals(7));
     });
 
-    test('Переиспользует ID после их освобождения', () async {
-      // Создаем, используем и освобождаем несколько ID
+    test('released ids are reused', () async {
+      // Open, use and release a few ids.
       for (int i = 0; i < 3; i++) {
         final streamId = clientTransport.createStream(); // 1, 3, 5
         await clientTransport.sendMetadata(
@@ -107,12 +107,12 @@ void main() {
         );
       }
 
-      // Создаем новый транспорт
+      // A fresh transport.
       final newPair = RpcInMemoryTransport.pair();
       final newClientTransport = newPair.$1;
 
       try {
-        // После создания нового транспорта генерация должна начаться сначала
+        // On a fresh transport the numbering starts over.
         expect(newClientTransport.createStream(), equals(1));
       } finally {
         await newClientTransport.close();
@@ -120,25 +120,25 @@ void main() {
       }
     });
 
-    test('Обрабатывает множество потоков одновременно', () async {
-      // Создаем несколько потоков одновременно
+    test('many streams at once', () async {
+      // Open several streams together.
       final totalStreams = 10;
       final streamIds = <int>[];
 
-      // Создаем потоки
+      // Open them.
       for (int i = 0; i < totalStreams; i++) {
         streamIds.add(clientTransport.createStream());
       }
 
-      // Проверяем, что все ID уникальны и нечетные
+      // Every id is distinct and odd.
       expect(streamIds.length, equals(totalStreams));
-      expect(streamIds.toSet().length, equals(totalStreams)); // все уникальные
+      expect(streamIds.toSet().length, equals(totalStreams)); // all distinct
 
       for (final id in streamIds) {
-        expect(id % 2, equals(1)); // все нечетные
+        expect(id % 2, equals(1)); // all odd
       }
 
-      // Одновременно завершаем все потоки
+      // Finish them all at once.
       final futures = <Future<void>>[];
       for (final id in streamIds) {
         futures.add(clientTransport.finishSending(id));
@@ -146,8 +146,8 @@ void main() {
 
       await Future.wait(futures);
 
-      // Все ID должны быть освобождены, теперь следующий ID должен снова начинаться с 1
-      // Пересоздаем транспорт, чтобы проверить поведение
+      // Every id is released, so numbering starts from 1 again. Rebuild the
+      // transport to check that.
       await clientTransport.close();
       await serverTransport.close();
 

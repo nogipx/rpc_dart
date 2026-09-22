@@ -33,8 +33,8 @@ void main() {
   // -------------------------------------------------------------------------
   // Basic correctness
   // -------------------------------------------------------------------------
-  group('RpcMessageParser — базовая корректность', () {
-    test('одно сообщение в одном чанке', () {
+  group('RpcMessageParser - the basics', () {
+    test('one message in one chunk', () {
       final parser = RpcMessageParser();
       final payload = [1, 2, 3, 4, 5];
       final chunk = _frame(payload);
@@ -45,7 +45,7 @@ void main() {
       expect(result[0], equals(Uint8List.fromList(payload)));
     });
 
-    test('пустое сообщение (нулевая длина)', () {
+    test('an empty message, length zero', () {
       final parser = RpcMessageParser();
       final chunk = _frame([]);
 
@@ -55,7 +55,7 @@ void main() {
       expect(result[0], isEmpty);
     });
 
-    test('пустой чанк возвращает пустой список', () {
+    test('an empty chunk yields an empty list', () {
       final parser = RpcMessageParser();
 
       final result = parser(Uint8List(0));
@@ -63,10 +63,10 @@ void main() {
       expect(result, isEmpty);
     });
 
-    test('чанк только из заголовка без тела — ждёт следующий чанк', () {
+    test('a header with no body waits for the next chunk', () {
       final parser = RpcMessageParser();
       final full = _frame([10, 20, 30]);
-      // Отправляем только 5-байтовый заголовок
+      // Just the 5-byte header.
       final headerOnly = full.sublist(0, 5);
       final body = full.sublist(5);
 
@@ -76,26 +76,26 @@ void main() {
       expect(result[0], equals(Uint8List.fromList([10, 20, 30])));
     });
 
-    test('неполный заголовок (< 5 байт) — ждёт следующий чанк', () {
+    test('a partial header, under 5 bytes, waits too', () {
       final parser = RpcMessageParser();
       final full = _frame([42]);
 
-      // Отправляем по 1 байту
+      // One byte at a time.
       for (var i = 0; i < 4; i++) {
         expect(parser(full.sublist(i, i + 1)), isEmpty);
       }
-      // Последний байт заголовка + тело
+      // The last header byte plus the body.
       final result = parser(full.sublist(4));
       expect(result, hasLength(1));
       expect(result[0], equals(Uint8List.fromList([42])));
     });
 
-    test('данные сохраняются между вызовами (частичное тело)', () {
+    test('a partial body is held across calls', () {
       final parser = RpcMessageParser();
       final payload = List.generate(100, (i) => i);
       final full = _frame(payload); // 105 bytes
 
-      // Отправляем по 10 байт за раз, последний чанк — остаток
+      // 10 bytes at a time; the last chunk is whatever is left.
       const chunkSize = 10;
       List<Uint8List>? lastResult;
       for (var i = 0; i < full.length; i += chunkSize) {
@@ -103,7 +103,7 @@ void main() {
         final chunk = full.sublist(i, end);
         lastResult = parser(chunk);
         if (end < full.length) {
-          expect(lastResult, isEmpty, reason: 'ещё не все данные получены');
+          expect(lastResult, isEmpty, reason: 'the body is not complete yet');
         }
       }
       expect(lastResult, hasLength(1));
@@ -114,12 +114,12 @@ void main() {
   // -------------------------------------------------------------------------
   // Fragmentation: one message split across multiple chunks
   // -------------------------------------------------------------------------
-  group('RpcMessageParser — фрагментация', () {
-    test('сообщение разбито ровно на 2 чанка по границе заголовка', () {
+  group('RpcMessageParser - fragmentation', () {
+    test('split into 2 chunks exactly at the header boundary', () {
       final parser = RpcMessageParser();
       final payload = [0xAA, 0xBB, 0xCC];
       final full = _frame(payload);
-      // Разбиваем ровно после 5-байтового заголовка
+      // Split immediately after the 5-byte header.
       final part1 = full.sublist(0, 5);
       final part2 = full.sublist(5);
 
@@ -129,7 +129,7 @@ void main() {
       expect(result[0], equals(Uint8List.fromList(payload)));
     });
 
-    test('сообщение разбито по середине тела', () {
+    test('split in the middle of the body', () {
       final parser = RpcMessageParser();
       final payload = List.generate(20, (i) => i * 2);
       final full = _frame(payload);
@@ -141,7 +141,7 @@ void main() {
       expect(result[0], equals(Uint8List.fromList(payload)));
     });
 
-    test('сообщение разбито на N однобайтовых чанков', () {
+    test('split into N one-byte chunks', () {
       final parser = RpcMessageParser();
       final payload = [1, 2, 3];
       final full = _frame(payload);
@@ -150,7 +150,7 @@ void main() {
         expect(
           parser(full.sublist(i, i + 1)),
           isEmpty,
-          reason: 'должен ждать после байта $i',
+          reason: 'it must still be waiting after byte $i',
         );
       }
       final result = parser(full.sublist(full.length - 1));
@@ -158,11 +158,11 @@ void main() {
       expect(result[0], equals(Uint8List.fromList(payload)));
     });
 
-    test('два сообщения, каждое фрагментировано', () {
+    test('two messages, each fragmented', () {
       final parser = RpcMessageParser();
       final msg1 = _frame([1, 2, 3]);
       final msg2 = _frame([4, 5, 6]);
-      // Общий поток: первая половина msg1 | вторая половина msg1 + вся msg2
+      // The stream: first half of msg1 | second half of msg1 + all of msg2.
       final part1 = msg1.sublist(0, 4);
       final part2 = _concat([msg1.sublist(4), msg2]);
 
@@ -177,8 +177,8 @@ void main() {
   // -------------------------------------------------------------------------
   // Batching: multiple messages in a single chunk (O(N²) regression target)
   // -------------------------------------------------------------------------
-  group('RpcMessageParser — батчинг нескольких сообщений в одном чанке', () {
-    test('2 сообщения в одном чанке', () {
+  group('RpcMessageParser - several messages in one chunk', () {
+    test('2 messages in one chunk', () {
       final parser = RpcMessageParser();
       final chunk = _concat([
         _frame([1, 2]),
@@ -192,7 +192,7 @@ void main() {
       expect(result[1], equals(Uint8List.fromList([3, 4])));
     });
 
-    test('10 сообщений в одном чанке', () {
+    test('10 messages in one chunk', () {
       final parser = RpcMessageParser();
       final messages = List.generate(10, (i) => [i, i + 1, i + 2]);
       final chunk = _concat(messages.map(_frame).toList());
@@ -205,7 +205,7 @@ void main() {
       }
     });
 
-    test('1000 сообщений в одном чанке (регрессия O(N²))', () {
+    test('1000 messages in one chunk, an O(N^2) regression guard', () {
       final parser = RpcMessageParser(maxMessagesPerChunk: 2000);
       final payload = [0xDE, 0xAD];
       final chunk = _concat(List.generate(1000, (_) => _frame(payload)));
@@ -218,7 +218,7 @@ void main() {
       }
     });
 
-    test('после батча буфер очищен — следующее сообщение парсится верно', () {
+    test('the buffer is clear after a batch, so the next one parses', () {
       final parser = RpcMessageParser();
       final batch = _concat([
         _frame([1]),
@@ -235,12 +235,12 @@ void main() {
       expect(r2[0], equals(Uint8List.fromList([99])));
     });
 
-    test('батч + хвостовой фрагмент следующего сообщения', () {
+    test('a batch plus a trailing fragment of the next message', () {
       final parser = RpcMessageParser();
       final msg1 = _frame([1, 2]);
       final msg2 = _frame([3, 4]);
       final msg3 = _frame([5, 6]);
-      // Отправляем msg1 + msg2 целиком, и только заголовок msg3
+      // All of msg1 and msg2, then only msg3's header.
       final chunk1 = _concat([msg1, msg2, msg3.sublist(0, 5)]);
       final chunk2 = msg3.sublist(5);
 
@@ -256,28 +256,28 @@ void main() {
   // -------------------------------------------------------------------------
   // Limits & error handling
   // -------------------------------------------------------------------------
-  group('RpcMessageParser — лимиты и обработка ошибок', () {
-    test('превышение maxMessageLength бросает RpcException', () {
+  group('RpcMessageParser - limits and errors', () {
+    test('exceeding maxMessageLength throws RpcException', () {
       final parser = RpcMessageParser(maxMessageLength: 4);
-      final chunk = _frame([1, 2, 3, 4, 5]); // 5 байт > 4
+      final chunk = _frame([1, 2, 3, 4, 5]); // 5 bytes > the limit of 4
 
       expect(() => parser(chunk), throwsA(isA<RpcException>()));
     });
 
-    test('превышение maxBufferedBytes бросает RpcException', () {
+    test('exceeding maxBufferedBytes throws RpcException', () {
       final parser = RpcMessageParser(
         maxMessageLength: 100,
         maxBufferedBytes: 10,
       );
-      // Отправляем незаконченный фрейм размером 20 байт
+      // An unfinished 20-byte frame.
       final partial = Uint8List(20);
 
       expect(() => parser(partial), throwsA(isA<RpcException>()));
     });
 
-    test('превышение maxMessagesPerChunk бросает RpcException', () {
+    test('exceeding maxMessagesPerChunk throws RpcException', () {
       final parser = RpcMessageParser(maxMessagesPerChunk: 2);
-      // 3 сообщения — на третьем должно бросить
+      // 3 messages: the third must throw.
       final chunk = _concat([
         _frame([1]),
         _frame([2]),
@@ -287,30 +287,30 @@ void main() {
       expect(() => parser(chunk), throwsA(isA<RpcException>()));
     });
 
-    test('после ошибки maxMessageLength парсер снова работает', () {
+    test('the parser recovers after a maxMessageLength error', () {
       final parser = RpcMessageParser(maxMessageLength: 4);
 
-      // Первый вызов — ошибка
+      // The first call errors.
       expect(
         () => parser(_frame([1, 2, 3, 4, 5])),
         throwsA(isA<RpcException>()),
       );
 
-      // Второй вызов — корректное сообщение
+      // The second parses a good message.
       final result = parser(_frame([7, 8]));
       expect(result, hasLength(1));
       expect(result[0], equals(Uint8List.fromList([7, 8])));
     });
 
-    test('невалидный compression flag бросает RpcException', () {
+    test('an invalid compression flag throws RpcException', () {
       final parser = RpcMessageParser();
-      // Compression flag = 2 — недопустимо
+      // Compression flag 2 is not allowed.
       final invalid = Uint8List.fromList([2, 0, 0, 0, 1, 0xFF]);
 
       expect(() => parser(invalid), throwsA(isA<RpcException>()));
     });
 
-    test('после невалидного заголовка парсер снова работает', () {
+    test('the parser recovers after an invalid header', () {
       final parser = RpcMessageParser();
       final invalid = Uint8List.fromList([2, 0, 0, 0, 1, 0xFF]);
 
@@ -325,23 +325,23 @@ void main() {
   // -------------------------------------------------------------------------
   // Compression passthrough
   // -------------------------------------------------------------------------
-  group('RpcMessageParser — сжатие', () {
+  group('RpcMessageParser - compression', () {
     test(
-      'сжатый фрейм без декомпрессора передаётся как есть (с заголовком)',
+      'with no decompressor a compressed frame passes through, header and all',
       () {
-        final parser = RpcMessageParser(); // без decompressor
+        final parser = RpcMessageParser(); // no decompressor
         final payload = [1, 2, 3];
         final compressedFrame = _frame(payload, compressed: true);
 
         final result = parser(compressedFrame);
 
         expect(result, hasLength(1));
-        // Должен вернуть полный gRPC-фрейм с выставленным флагом сжатия
+        // The whole gRPC frame comes back, compression flag still set.
         expect(result[0][0], equals(1)); // compression flag = 1
       },
     );
 
-    test('декомпрессор вызывается для сжатого фрейма', () {
+    test('the decompressor runs on a compressed frame', () {
       var decompressorCalled = false;
       final parser = RpcMessageParser(
         decompressor: (data, {int? maxOutputBytes}) {
@@ -356,7 +356,7 @@ void main() {
       expect(decompressorCalled, isTrue);
     });
 
-    test('декомпрессор не вызывается для несжатого фрейма', () {
+    test('and not on an uncompressed one', () {
       var decompressorCalled = false;
       final parser = RpcMessageParser(
         decompressor: (data, {int? maxOutputBytes}) {
@@ -370,11 +370,11 @@ void main() {
       expect(decompressorCalled, isFalse);
     });
 
-    test('результат декомпрессии превышает maxMessageLength — бросает', () {
+    test('a decompressed result over maxMessageLength throws', () {
       final parser = RpcMessageParser(
         maxMessageLength: 5,
         decompressor: (data, {int? maxOutputBytes}) =>
-            Uint8List(10), // раздувает до 10 байт
+            Uint8List(10), // inflates to 10 bytes
       );
       final compressedFrame = _frame([1, 2, 3], compressed: true);
 
@@ -385,8 +385,8 @@ void main() {
   // -------------------------------------------------------------------------
   // State isolation: multiple independent parser instances
   // -------------------------------------------------------------------------
-  group('RpcMessageParser — изоляция состояния', () {
-    test('два парсера независимы', () {
+  group('RpcMessageParser - state is per-parser', () {
+    test('two parsers do not share state', () {
       final p1 = RpcMessageParser();
       final p2 = RpcMessageParser();
 
@@ -394,14 +394,14 @@ void main() {
       final half1 = msg.sublist(0, 4);
       final half2 = msg.sublist(4);
 
-      // p1 получает первую половину
+      // p1 gets the first half.
       expect(p1(half1), isEmpty);
 
-      // p2 получает полное сообщение
+      // p2 gets a whole message.
       final r2 = p2(msg);
       expect(r2, hasLength(1));
 
-      // p1 получает вторую половину
+      // p1 gets the second half.
       final r1 = p1(half2);
       expect(r1, hasLength(1));
       expect(r1[0], equals(Uint8List.fromList([1, 2, 3])));

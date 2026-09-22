@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441]
 status: confirmed (round 432)
 ---
 
@@ -516,3 +516,32 @@ were rejected as prefixes and done singly. The check takes about as long as
 reading the comments — against six defects nothing in the gate could see.
 
 `../rounds/440-the-rule-applied-to-itself.md`.
+
+## Round 441 — a count that spans scopes reads as progress against one
+
+Six rounds of this sweep each closed with a figure like "`test/` 443 lines
+across 21 files", in a context that made it read as the remainder of the work in
+hand. It was a repo-wide number. Counted by package:
+
+```
+rpc_notify          230 lines   never in scope
+rpc_data_postgres    17 lines   never in scope
+rpc_dart             18 lines   C-47 fixtures only -- finished
+```
+
+Nothing was skipped silently; the rounds swept what the owner's decision names.
+But nothing said the total spanned three scopes either, and a reader watching
+1338 fall to 443 would reasonably have concluded the target was two-fifths done
+when it was complete.
+
+> **Report the remainder on the axis of the DECISION, not the axis the detector
+> happens to return.** A grep counts files; a mandate names packages. When those
+> differ, a falling number is an argument for continuing work that is already
+> finished — or for stopping work that was never started.
+
+Second, smaller: the prefix-damage detector from 440 has a real false-positive
+rate. Four hits repo-wide, all pre-existing Russian sentences opening with an
+English identifier (`// Premium пользователи`, `// Router генерирует`), 4 in 230
+lines. It is a prompt to look, not a check that passes.
+
+`../rounds/441-core-tests-are-down-to-their-fixtures.md`.

@@ -352,3 +352,46 @@ Largest left: `rpc_message_parser_test.dart` (53),
 `in_memory_transport_streams_test.dart` (31),
 `rpc_stream_id_manager_test.dart` (30), `rpc_metadata_test.dart` (20),
 `rpc_message_frame_test.dart` (20), `rpc_message_test.dart` (18).
+
+## Round 441 — THE DECIDED HALF IS COMPLETE
+
+172 lines across the last six files. **`rpc_dart`'s test suite now holds no
+Russian prose**; what remains in it is exactly C-47's fixture set, 18 lines,
+permanent. 453 tests pass.
+
+This record's owner decision (round 415) reads *"sweep the 47 `test/` and
+`example/` files inside core and transport first"*. `example/` went in 432,
+transport `test/` in 435, core `test/` ends here. **There is no in-scope work
+left under it.**
+
+### The remainder was being reported on the wrong axis
+
+Rounds 435-440 each closed with a figure like "`test/` 443 lines across 21
+files". That was always repo-wide. By package:
+
+```
+rpc_notify          230 lines / 3 files    NEVER in scope
+rpc_data_postgres    17 lines / 2 files    NEVER in scope
+rpc_dart             18 lines              C-47 fixtures, finished
+```
+
+`rpc_notify` and `rpc_data_postgres` sit outside the owner's mandate exactly as
+`lib/` does. Nothing was skipped silently, but a reader watching 1338 fall to
+443 would reasonably have concluded core was two-fifths done when it was
+complete. L-12 on the axis of PACKAGE.
+
+### What is left, and all of it needs a decision
+
+```
+lib/ logs        39 lines   rpc_notify only      deferred by the owner's ORDER
+lib/ comments   277 lines   23 files             same
+rpc_notify test 230 lines   3 files              OUTSIDE the mandate
+postgres test    17 lines   2 files              OUTSIDE the mandate
+generated        21 lines   rpc_data/*.g.dart    fix the SOURCE first
+rpc_dart test    18 lines                        C-47 fixtures, permanent
+```
+
+**Every one of these is owner-deferred, out of mandate, generated, or a
+fixture.** The next step on this lead is a decision, not a queue — and it is the
+same question round 436 raised and 437-441 worked around: whether the 39 runtime
+log lines in a published `rpc_notify` outrank the ordering that deferred them.

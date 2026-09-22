@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 void main() {
   group('RpcMetadata', () {
     group('forClientRequest', () {
-      test('создает_корректные_клиентские_метаданные', () {
+      test('builds the client request headers', () {
         const serviceName = 'TestService';
         const methodName = 'TestMethod';
 
@@ -28,7 +28,7 @@ void main() {
         );
       });
 
-      test('не_содержит_http2_псевдо_хедеры', () {
+      test('carries no HTTP/2 pseudo-headers', () {
         final metadata = RpcMetadata.forClientRequest('Svc', 'Method');
 
         expect(_getHeaderValue(metadata, ':method'), isNull);
@@ -40,7 +40,7 @@ void main() {
     });
 
     group('forClientRequestWithPath', () {
-      test('создает_метаданные_с_готовым_путем', () {
+      test('accepts a path that is already built', () {
         const methodPath = '/CustomService/CustomMethod';
 
         final metadata = RpcMetadata.forClientRequestWithPath(methodPath);
@@ -54,7 +54,7 @@ void main() {
     });
 
     group('forServerInitialResponse', () {
-      test('создает_корректные_серверные_метаданные', () {
+      test('builds the server initial-response headers', () {
         final metadata = RpcMetadata.forServerInitialResponse();
 
         // Only content-type — no :status pseudo-header.
@@ -66,7 +66,7 @@ void main() {
         expect(_getHeaderValue(metadata, ':status'), isNull);
       });
 
-      test('добавляет_grpc_encoding_если_указано', () {
+      test('adds grpc-encoding when one is given', () {
         final metadata = RpcMetadata.forServerInitialResponse(encoding: 'gzip');
 
         expect(metadata.headers.length, equals(2));
@@ -78,7 +78,7 @@ void main() {
     });
 
     group('forTrailer', () {
-      test('создает_трейлер_с_успешным_статусом', () {
+      test('builds an OK trailer', () {
         const statusCode = RpcStatus.ok;
 
         final metadata = RpcMetadata.forTrailer(statusCode);
@@ -87,9 +87,9 @@ void main() {
         expect(_getHeaderValue(metadata, RpcHeaders.grpcStatus), equals('0'));
       });
 
-      test('создает_трейлер_с_ошибкой_и_сообщением', () {
+      test('builds an error trailer carrying its message', () {
         const statusCode = RpcStatus.internal;
-        const message = 'Внутренняя ошибка сервера';
+        const message = 'internal server error';
 
         final metadata = RpcMetadata.forTrailer(statusCode, message: message);
 
@@ -101,7 +101,7 @@ void main() {
         );
       });
 
-      test('не_добавляет_пустое_сообщение', () {
+      test('an empty message adds no header', () {
         const statusCode = RpcStatus.cancelled;
 
         final metadata = RpcMetadata.forTrailer(statusCode, message: '');
@@ -112,7 +112,7 @@ void main() {
     });
 
     group('getHeaderValue', () {
-      test('возвращает_значение_существующего_заголовка', () {
+      test('returns the value of a header that exists', () {
         final metadata = RpcMetadata([
           RpcHeader('custom-header', 'custom-value'),
           RpcHeader('another-header', 'another-value'),
@@ -124,7 +124,7 @@ void main() {
         );
       });
 
-      test('возвращает_null_для_несуществующего_заголовка', () {
+      test('returns null for a header that does not', () {
         final metadata = RpcMetadata([RpcHeader('exists', 'value')]);
 
         expect(metadata.getHeaderValue('not-exists'), isNull);
@@ -132,7 +132,7 @@ void main() {
     });
 
     group('methodPath', () {
-      test('возвращает_explicit_field_из_factory', () {
+      test('returns the explicit field set by the factory', () {
         final metadata = RpcMetadata.forClientRequest(
           'TestService',
           'TestMethod',
@@ -141,7 +141,7 @@ void main() {
         expect(metadata.methodPath, equals('/TestService/TestMethod'));
       });
 
-      test('fallback_на_legacy_path_заголовок', () {
+      test('falls back to the legacy path header', () {
         // HTTP/2 transport creates metadata with :path header.
         final metadata = RpcMetadata([
           RpcHeader(':path', '/TestService/TestMethod'),
@@ -150,7 +150,7 @@ void main() {
         expect(metadata.methodPath, equals('/TestService/TestMethod'));
       });
 
-      test('возвращает_null_если_путь_отсутствует', () {
+      test('returns null when there is no path at all', () {
         final metadata = RpcMetadata([]);
 
         expect(metadata.methodPath, isNull);
@@ -158,7 +158,7 @@ void main() {
     });
 
     group('serviceName', () {
-      test('извлекает_имя_сервиса_из_пути', () {
+      test('takes the service name out of the path', () {
         final metadata = RpcMetadata.forClientRequest(
           'TestService',
           'TestMethod',
@@ -167,7 +167,7 @@ void main() {
         expect(metadata.serviceName, equals('TestService'));
       });
 
-      test('извлекает_из_legacy_path_заголовка', () {
+      test('takes it from the legacy path header too', () {
         final metadata = RpcMetadata([
           RpcHeader(':path', '/TestService/TestMethod'),
         ]);
@@ -175,13 +175,13 @@ void main() {
         expect(metadata.serviceName, equals('TestService'));
       });
 
-      test('возвращает_null_для_некорректного_пути', () {
+      test('returns null for a malformed path', () {
         final metadata = RpcMetadata([RpcHeader(':path', 'invalid-path')]);
 
         expect(metadata.serviceName, isNull);
       });
 
-      test('возвращает_null_для_пустого_пути', () {
+      test('returns null for an empty path', () {
         final metadata = RpcMetadata([RpcHeader(':path', '/')]);
 
         expect(metadata.serviceName, isNull);
@@ -189,7 +189,7 @@ void main() {
     });
 
     group('methodName', () {
-      test('извлекает_имя_метода_из_пути', () {
+      test('takes the method name out of the path', () {
         final metadata = RpcMetadata.forClientRequest(
           'TestService',
           'TestMethod',
@@ -198,7 +198,7 @@ void main() {
         expect(metadata.methodName, equals('TestMethod'));
       });
 
-      test('возвращает_null_для_пути_без_метода', () {
+      test('returns null for a path with no method', () {
         final metadata = RpcMetadata([RpcHeader(':path', '/TestService')]);
 
         expect(metadata.methodName, isNull);

@@ -8,8 +8,8 @@ import 'package:test/test.dart';
 
 void main() {
   group('RpcMessage', () {
-    group('конструктор', () {
-      test('создает_сообщение_с_данными_и_метаданными', () {
+    group('constructor', () {
+      test('a message with data and metadata', () {
         // Arrange
         const payload = 'test data';
         final metadata = RpcMetadata([RpcHeader('test', 'value')]);
@@ -29,7 +29,7 @@ void main() {
         expect(message.isEndOfStream, isTrue);
       });
 
-      test('создает_сообщение_с_дефолтными_значениями', () {
+      test('the defaults', () {
         // Arrange & Act
         final message = RpcMessage<String>();
 
@@ -42,7 +42,7 @@ void main() {
     });
 
     group('withPayload', () {
-      test('создает_сообщение_только_с_данными', () {
+      test('a message with data and no metadata', () {
         // Arrange
         const testData = 42;
 
@@ -56,7 +56,7 @@ void main() {
         expect(message.isEndOfStream, isFalse);
       });
 
-      test('работает_с_любым_типом_данных', () {
+      test('the payload can be any type', () {
         // Arrange
         final complexData = {'key': 'value', 'number': 123};
 
@@ -69,7 +69,7 @@ void main() {
     });
 
     group('withMetadata', () {
-      test('создает_сообщение_только_с_метаданными', () {
+      test('a message with metadata and no data', () {
         // Arrange
         final metadata = RpcMetadata([
           RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
@@ -85,7 +85,7 @@ void main() {
         expect(message.isEndOfStream, isFalse);
       });
 
-      test('создает_сообщение_с_метаданными_и_флагом_конца_потока', () {
+      test('metadata carrying the end-of-stream flag', () {
         // Arrange
         final metadata = RpcMetadata([RpcHeader(RpcHeaders.grpcStatus, '0')]);
 
@@ -102,8 +102,8 @@ void main() {
       });
     });
 
-    group('различные типы сообщений', () {
-      test('сообщение_только_с_данными_не_является_metadata_only', () {
+    group('isMetadataOnly', () {
+      test('data alone is not metadata-only', () {
         // Arrange
         final message = RpcMessage.withPayload('data');
 
@@ -111,7 +111,7 @@ void main() {
         expect(message.isMetadataOnly, isFalse);
       });
 
-      test('сообщение_с_данными_и_метаданными_не_является_metadata_only', () {
+      test('data plus metadata is not metadata-only', () {
         // Arrange
         final metadata = RpcMetadata([RpcHeader('header', 'value')]);
         final message = RpcMessage<String>(payload: 'data', metadata: metadata);
@@ -120,7 +120,7 @@ void main() {
         expect(message.isMetadataOnly, isFalse);
       });
 
-      test('сообщение_только_с_метаданными_является_metadata_only', () {
+      test('metadata alone IS metadata-only', () {
         // Arrange
         final metadata = RpcMetadata([RpcHeader('header', 'value')]);
         final message = RpcMessage.withMetadata<String>(metadata);
@@ -129,7 +129,7 @@ void main() {
         expect(message.isMetadataOnly, isTrue);
       });
 
-      test('пустое_сообщение_не_является_metadata_only', () {
+      test('an empty message is not metadata-only', () {
         // Arrange
         final message = RpcMessage<String>();
 
@@ -138,8 +138,8 @@ void main() {
       });
     });
 
-    group('сообщения_различных_типов', () {
-      test('работает_со_строками', () {
+    group('payload types', () {
+      test('strings', () {
         // Arrange & Act
         final message = RpcMessage.withPayload('test string');
 
@@ -148,7 +148,7 @@ void main() {
         expect(message.payload, equals('test string'));
       });
 
-      test('работает_с_числами', () {
+      test('numbers', () {
         // Arrange & Act
         final message = RpcMessage.withPayload(42);
 
@@ -157,7 +157,7 @@ void main() {
         expect(message.payload, equals(42));
       });
 
-      test('работает_со_списками', () {
+      test('lists', () {
         // Arrange
         final list = [1, 2, 3];
 
@@ -169,7 +169,7 @@ void main() {
         expect(message.payload, equals(list));
       });
 
-      test('работает_с_пользовательскими_объектами', () {
+      test('user-defined objects', () {
         // Arrange
         final customObject = TestPayload('test', 123);
 
@@ -185,7 +185,7 @@ void main() {
   });
 }
 
-/// Тестовый класс для проверки работы с пользовательскими объектами
+/// A user-defined payload type, for the test above.
 class TestPayload {
   final String data;
   final int number;

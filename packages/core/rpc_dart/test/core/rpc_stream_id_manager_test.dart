@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('RpcStreamIdManager', () {
-    test('Клиентский менеджер генерирует нечетные ID', () {
+    test('a client manager issues odd ids', () {
       final manager = RpcStreamIdManager(isClient: true);
 
       expect(manager.generateId(), equals(1));
@@ -18,7 +18,7 @@ void main() {
       expect(manager.generateId(), equals(9));
     });
 
-    test('Серверный менеджер генерирует четные ID', () {
+    test('a server manager issues even ids', () {
       final manager = RpcStreamIdManager(isClient: false);
 
       expect(manager.generateId(), equals(2));
@@ -28,7 +28,7 @@ void main() {
       expect(manager.generateId(), equals(10));
     });
 
-    test('Успешно освобождает ID и отслеживает активные ID', () {
+    test('releases an id and tracks which are live', () {
       final manager = RpcStreamIdManager(isClient: true);
 
       final id1 = manager.generateId(); // 1
@@ -40,7 +40,7 @@ void main() {
       expect(manager.isActive(id2), isTrue);
       expect(manager.isActive(id3), isTrue);
 
-      // Освобождаем id2
+      // Release id2.
       expect(manager.releaseId(id2), isTrue);
 
       expect(manager.activeCount, equals(2));
@@ -48,44 +48,43 @@ void main() {
       expect(manager.isActive(id2), isFalse);
       expect(manager.isActive(id3), isTrue);
 
-      // Повторное освобождение должно вернуть false
+      // A second release must return false.
       expect(manager.releaseId(id2), isFalse);
 
-      // Освобождение неиспользуемого ID также должно вернуть false
+      // Releasing an id that was never issued must too.
       expect(manager.releaseId(999), isFalse);
     });
 
-    test('Сброс менеджера очищает все активные ID', () {
+    test('reset() clears every live id', () {
       final manager = RpcStreamIdManager(isClient: true);
 
-      // Генерируем несколько ID
+      // Issue a few ids.
       manager.generateId();
       manager.generateId();
       manager.generateId();
 
       expect(manager.activeCount, equals(3));
 
-      // Сбрасываем
+      // Reset.
       manager.reset();
 
       expect(manager.activeCount, equals(0));
 
-      // После сброса генерация должна начаться сначала
+      // Numbering starts over.
       expect(manager.generateId(), equals(1));
     });
 
-    test('Имеет ограничение на максимальный ID', () {
-      // Проверяем, что константа maxId имеет ожидаемое значение
+    test('there is a ceiling on the id', () {
+      // The maxId constant holds the value we expect.
       expect(RpcStreamIdManager.maxId, equals(0x7FFFFFFF));
       expect(RpcStreamIdManager.maxId, equals(2147483647));
 
-      // Примечание: Реальный тест на переполнение ID невозможен,
-      // так как потребовалось бы сгенерировать более миллиарда ID.
-      // В реальных условиях приложение должно создавать новое соединение
-      // при достижении этого ограничения.
+      // Note: overflow cannot be tested for real -- it would take issuing more
+      // than a billion ids. In production an application is expected to open a
+      // new connection once it reaches this ceiling.
     });
 
-    test('Переиспользует освобожденные ID при достижении предела', () {
+    test('released ids are reused once the ceiling is reached', () {
       final manager = RpcStreamIdManager(isClient: true, customMaxId: 9);
 
       final id1 = manager.generateId();
@@ -102,12 +101,12 @@ void main() {
       expect(manager.generateId(), equals(7));
       expect(manager.generateId(), equals(9));
 
-      // После достижения максимального значения ID должны переиспользоваться
+      // Past the maximum, ids must come from the released pool.
       expect(manager.generateId(), equals(1));
       expect(manager.generateId(), equals(3));
     });
 
-    test('Сбрасывает последовательность при полном освобождении', () {
+    test('releasing everything restarts the sequence', () {
       final manager = RpcStreamIdManager(isClient: false, customMaxId: 10);
 
       final allocated = <int>[];
@@ -124,7 +123,7 @@ void main() {
       expect(manager.generateId(), equals(2));
     });
 
-    test('Выбрасывает исключение если нет свободных ID', () {
+    test('throws when no id is free', () {
       final manager = RpcStreamIdManager(isClient: true, customMaxId: 5);
 
       expect(manager.generateId(), equals(1));
@@ -135,29 +134,29 @@ void main() {
     });
   });
 
-  group('Интеграция с транспортом', () {
-    test('RpcInMemoryTransport корректно генерирует и освобождает ID', () {
+  group('through a transport', () {
+    test('RpcInMemoryTransport issues and releases ids', () {
       final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      // Проверяем генерацию ID в клиентском транспорте
-      final clientId1 = clientTransport.createStream(); // должен быть 1
-      final clientId2 = clientTransport.createStream(); // должен быть 3
+      // Ids issued on the client transport.
+      final clientId1 = clientTransport.createStream(); // expected 1
+      final clientId2 = clientTransport.createStream(); // expected 3
 
       expect(clientId1, equals(1));
       expect(clientId2, equals(3));
 
-      // Проверяем генерацию ID в серверном транспорте
-      final serverId1 = serverTransport.createStream(); // должен быть 2
-      final serverId2 = serverTransport.createStream(); // должен быть 4
+      // Ids issued on the server transport.
+      final serverId1 = serverTransport.createStream(); // expected 2
+      final serverId2 = serverTransport.createStream(); // expected 4
 
       expect(serverId1, equals(2));
       expect(serverId2, equals(4));
 
-      // Проверяем освобождение ID
+      // Releasing an id.
       expect(clientTransport.releaseStreamId(clientId1), isTrue);
       expect(serverTransport.releaseStreamId(serverId1), isTrue);
 
-      // Повторное освобождение должно вернуть false
+      // A second release must return false.
       expect(clientTransport.releaseStreamId(clientId1), isFalse);
       expect(serverTransport.releaseStreamId(serverId1), isFalse);
     });
