@@ -137,6 +137,43 @@ channel, not only send failures. That is the trade, and it is the reason the
 decision needed an owner — a genuine transport error that used to surface at an
 await now arrives through the handler instead.
 
+## Round 431 measured the reach of the guard, and it reaches nobody
+
+**The documentation half is shipped. The guard half is NOT, and that needs the
+owner's word.**
+
+The probe re-runs unchanged 73 rounds on: the crash is live, and the `ZONED` arm
+still shows the construction-zone fix works. What nobody asked is whether the
+crashing arm can be reached with a socket the LIBRARY built. Read at both sites:
+
+```
+who built the socket   raw socket reachable   crash reachable   guard helps
+the library            no -- never handed out  NO               nothing to help
+the application        yes                     YES              cannot reach it
+```
+
+`openWebSocket` builds the raw `WebSocket` locally and wraps it; the server's
+accept path says it in its own comment — *"once inside IOWebSocketChannel the
+socket is no longer reachable"* (`websocket_io_connections.dart:98`). The only
+closer is the library, and every teardown goes through
+`RpcWebSocketChannel.close()`, which sets `_closed` first: the "our close()
+first" control row, which returns.
+
+So the guard covers sockets that cannot reach the crash, and the sockets that
+can were built in the caller's zone, which the guard explicitly cannot reach.
+Shipping it buys nothing and costs the rerouting the decision accepted.
+
+### What the owner might say, none of it presumed
+
+1. **Accept it** — the documentation IS the fix and this lead closes.
+2. **Ship the guard anyway**, as defence in depth against a future path that
+   hands the raw socket out. Cheap; the cost is the rerouting.
+3. **Go upstream** — option (3) below, never withdrawn: a sink that refuses an
+   add should reject a future rather than throw into a foreign zone.
+
+Left `decided by owner` rather than closed, because half of the decision is
+deliberately unexecuted.
+
 ### Do not re-attempt the two call-site fixes
 
 Both were measured and neither works. `try { sink.add } catch (_) {}` changes

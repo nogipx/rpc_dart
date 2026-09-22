@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368]
-status: confirmed (round 368)
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431]
+status: confirmed (round 431)
 ---
 
 # RPC-13 — An unhandled async error is fatal to the isolate
@@ -190,3 +190,32 @@ still open, so the push is legal — reaches it:
 Bench `../probes/P-59-the-four-shapes-under-the-same-edge-case.md`, whose other
 four cells came back identical on all four shapes — `../checked/C-40-the-four-shapes-agree-on-the-ordinary-edge-cases.md`.
 `../rounds/368-the-callback-that-could-kill-the-process.md`.
+
+## Round 431 — a zone guard has a REACH, and it is the construction site
+
+The crash this lens is about is contained by one thing: the zone the object was
+CONSTRUCTED in. That is also its limit, and B-39 spent two owner decisions
+without anyone asking where the reach ends.
+
+`RpcWebSocketChannel.send` throws into the root zone when the raw socket is
+closed in the same turn — reproduced 73 rounds after it was first measured. The
+decided fix was to build the library's own sockets inside `runZonedGuarded`.
+Reading the two construction sites says what that buys:
+
+```
+who built the socket   raw socket reachable   crash reachable   guard helps
+the library            no -- never handed out  NO               nothing to help
+the application        yes                     YES              cannot reach it
+```
+
+> **A construction-zone guard only protects objects whose construction you own,
+> and the throw only happens to whoever can close the thing out from under the
+> object. When those are different parties, the guard and the defect are
+> disjoint.** Ask who can REACH the resource before deciding where to put the
+> zone; the answer here was already in the library's own comments, one of which
+> says the socket "is no longer reachable" once wrapped.
+
+What shipped instead is the sentence the one exposed caller needs, on the type
+they hand their socket to. The guard is back with the owner.
+
+`../rounds/431-the-guard-that-guards-nobody.md`.

@@ -67,6 +67,36 @@ class RpcWebSocketNonBinaryFrame extends RpcException
 ///   isClient: true,
 /// );
 /// ```
+///
+/// **Do not close the socket you passed in while calls are in flight — closing
+/// it out from under this channel can end the isolate.** `WebSocketSink.add`
+/// queues into a `StreamController` and the real send runs a microtask later,
+/// in the zone the socket was CONSTRUCTED in. Close the raw socket in the same
+/// turn as a send and that send throws `Bad state: StreamSink is closed` there,
+/// where no caller can catch it: an unhandled async error, which in the root
+/// zone takes the process with it.
+///
+/// Measured, one variable per row — only the last reaches it:
+///
+/// ```
+/// peer closed, same turn / +1 turn / +50ms      send returned
+/// our close() first                             send returned
+/// the raw socket, closed behind this channel    send returned
+/// the raw socket, closed in the SAME turn       ROOT-ZONE CRASH
+/// ```
+///
+/// Neither `isClosed` nor `closeCode` can see it: within that one turn nothing
+/// observable has changed. So this cannot be guarded here, and a `try`/`catch`
+/// around the send does not help — the throw is not on the caller's stack.
+///
+/// Two ways to be safe. Call [close] and let it close the socket, which sets the
+/// flag first and is why every library teardown path is unaffected. Or, if you
+/// must close the raw socket yourself, build it inside `runZonedGuarded`: the
+/// construction zone is what decides where that throw lands.
+///
+/// `RpcWebSocketCallerTransport.connect` and the server's accept path build the
+/// socket themselves and never hand it out, so a caller using those cannot
+/// reach this at all.
 class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
   final WebSocketChannel _ws;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
