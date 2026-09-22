@@ -194,6 +194,24 @@ named `Unicode strings` or `unicode in reason and metadata`. **Adding a Russian
 comment to explain a Russian fixture is the one thing that would break this** —
 the explanation would itself be a grep hit.
 
+## `loop.py stale` flags this note, and that flag means nothing here
+
+As of round 443 it reads `STALE: 3 since 4fa061de`, naming `cbor_test.dart`,
+`fast_cbor_encoder_test.dart` and `optimized_cbor_test.dart`. Those three
+commits are rounds 437, 440 and 441 — **the sweeps that USED this note**, which
+edited the prose in those files precisely because this note said which lines
+not to touch.
+
+`stale` ages a record against its paths. It cannot tell "the code moved under
+this claim" from "the claim was consulted and the files it names were edited as
+a result". For a negative whose paths are the files the work touches, the
+second is the normal case and the flag fires every round.
+
+**The claims were re-verified after each of those commits** — see below, and
+rounds 440 and 441, where the census came out exact both times. Do not re-verify
+on the strength of the flag alone; check whether the commits it names are the
+ones that consulted this note.
+
 ## Verified against a sweep (round 437)
 
 `test/serializers/` was swept down to this list: five files, 85 Cyrillic lines

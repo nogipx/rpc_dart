@@ -1,13 +1,31 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 443) — the documentation IS the fix; round 431 measured the guard reaching nobody and the owner accepted it
 round: 358
 commit: a0355bfc
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/send_into_a_dead_socket.dart
-reason: "the only fix that works is zone-guarding the socket's CONSTRUCTION, which changes where every async error from that channel surfaces — a behaviour decision, and the same one B-35 is waiting on. The call-site fix was measured and does not work"
+reason: "CLOSED — the guard covers sockets that cannot reach the crash, and the sockets that can were built in the caller's zone where the guard cannot reach. The residual shipped as documentation in round 431; the tripwire test stays"
 ---
 
 # B-39 — a send racing a raw-socket close throws into the root zone
+
+> **CLOSED by the owner after round 443**, on round 431's measurement: the
+> guard reaches nobody. The library never hands the raw socket out, so a
+> library-built channel cannot reach the crash; an application-built one can,
+> and it was constructed in the caller's zone, which the guard explicitly
+> cannot reach. Shipping it would have rerouted every async error from every
+> library-built channel to catch a throw that cannot occur there.
+>
+> **What stays, and why this is safe to close:**
+> `test/send_after_raw_socket_close_test.dart` still pins that the throw
+> happens and still lands in the construction zone — re-run at closure, 4
+> tests, green. The day `package:web_socket_channel` changes, that test goes
+> red and the question comes back on its own.
+>
+> The defect is real and unfixed. What the owner accepted is that the only fix
+> reaching it costs more than it buys, and that the documented behaviour is the
+> honest answer. Options 2 (ship anyway) and 3 (upstream) were declined, not
+> forgotten.
 
 ## Measured
 

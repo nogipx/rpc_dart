@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431]
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443]
 status: confirmed (round 431)
 ---
 
@@ -219,3 +219,26 @@ What shipped instead is the sentence the one exposed caller needs, on the type
 they hand their socket to. The guard is back with the owner.
 
 `../rounds/431-the-guard-that-guards-nobody.md`.
+
+## Round 443 — a lead closed with its detector left in the gate
+
+The owner accepted 431's measurement and B-39 closed with the defect still
+live. That is a bounded exception to this lens rather than a fix, and the thing
+worth carrying forward is what made closing safe.
+
+The tripwire — `send_after_raw_socket_close_test.dart` — was re-run before the
+close (4 tests, green) and **lives in the ordinary suite, not under
+`.dart_tool/probe/`**. So it runs on every `melos run test:unit` with nobody
+remembering it exists, and the day `package:web_socket_channel` stops throwing,
+it goes red.
+
+> **A lead can be closed on a defect that is still live, if it leaves behind a
+> detector that runs unattended.** Then the close is a decision about cost, not
+> a decision to stop looking — and the question re-opens itself when the world
+> moves. A lead closed with its evidence in a probe directory nothing invokes is
+> the other thing, and reads identically in the index.
+
+The distinction is worth checking whenever a lead closes UNFIXED: is the
+evidence in the gate, or in a file someone has to know to run?
+
+`../rounds/443-a-guard-declined-on-its-own-measurement.md`.
