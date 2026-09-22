@@ -37,7 +37,7 @@ void main() {
       await responderEndpoint.close();
     });
 
-    test('ping возвращает успешный ответ с метаданными', () async {
+    test('ping answers successfully, with metadata', () async {
       final result = await callerEndpoint.ping();
 
       expect(result.roundTrip.isNegative, isFalse);
@@ -55,7 +55,7 @@ void main() {
       expect(result.responderTransportType, contains('RpcChannelTransport'));
     });
 
-    test('ping включает debug label responder эндпоинта', () async {
+    test("ping carries the responder endpoint's debug label", () async {
       final result = await callerEndpoint.ping();
 
       expect(result.responderDebugLabel, equals('responder-test'));

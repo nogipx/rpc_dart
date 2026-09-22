@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// Тестовый запрос
+/// The request model.
 class TestRequest implements IRpcSerializable {
   final String message;
 
@@ -24,7 +24,7 @@ class TestRequest implements IRpcSerializable {
   }
 }
 
-/// Тестовый ответ
+/// The response model.
 class TestResponse implements IRpcSerializable {
   final String message;
 
@@ -40,7 +40,7 @@ class TestResponse implements IRpcSerializable {
   }
 }
 
-/// Тестовый контракт для responder с долгими операциями
+/// A responder contract with deliberately slow methods.
 final class TestService extends RpcResponderContract {
   final List<String> callLog = [];
 
@@ -53,7 +53,7 @@ final class TestService extends RpcResponderContract {
       handler: (request, {context}) async {
         callLog.add('SlowMethod started: ${request.message}');
 
-        // Симулируем долгую операцию с проверкой отмены
+        // A long operation that checks for cancellation as it goes.
         for (int i = 0; i < 100; i++) {
           context?.cancellationToken?.throwIfCancelled();
           await Future<void>.delayed(Duration(milliseconds: 10));
@@ -100,14 +100,14 @@ void main() {
     late TestService testService;
 
     setUp(() async {
-      // Создаем пару транспортов
+      // A transport pair.
       final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-      // Создаем эндпоинты
+      // The endpoints.
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
       responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
 
-      // Создаем и регистрируем тестовый сервис
+      // Build and register the service under test.
       testService = TestService();
       responderEndpoint.registerServiceContract(testService);
       responderEndpoint.start();
@@ -119,7 +119,7 @@ void main() {
       testService.callLog.clear();
     });
 
-    test('Отмена унарного метода по ключу', () async {
+    test('cancelling one unary method by key', () async {
       final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'FastMethod',
@@ -133,8 +133,8 @@ void main() {
       await expectLater(future, throwsA(isA<RpcCancelledException>()));
     });
 
-    test('Отмена всех методов сервиса', () async {
-      // Запускаем несколько методов
+    test('cancelling every method of one service', () async {
+      // Start several methods.
       final future1 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
@@ -151,13 +151,13 @@ void main() {
         request: TestRequest('operation 2'),
       );
 
-      // Ждем немного
+      // A short wait.
       await Future<void>.delayed(Duration(milliseconds: 50));
 
-      // Отменяем все методы сервиса
+      // Cancel everything on the service.
       callerEndpoint.cancelServiceMethods('TestService', 'Service shutdown');
 
-      // Проверяем, что первый метод получил отмену
+      // The first method saw the cancellation.
       await expectLater(
         future1,
         throwsA(
@@ -167,16 +167,16 @@ void main() {
         ),
       );
 
-      // FastMethod может успеть выполниться до отмены - проверяем любой результат
+      // FastMethod may finish before the cancel lands, so accept either.
       try {
         await future2;
       } on RpcCancelledException {
-        // Ожидаемо, если метод был отменен
+        // Expected, if the method was cancelled.
       }
     });
 
-    test('Отмена всех активных методов', () async {
-      // Запускаем метод
+    test('cancelling every live method', () async {
+      // Start a method.
       final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
@@ -185,13 +185,13 @@ void main() {
         request: TestRequest('operation'),
       );
 
-      // Ждем немного
+      // A short wait.
       await Future<void>.delayed(Duration(milliseconds: 50));
 
-      // Отменяем все методы
+      // Cancel everything.
       callerEndpoint.cancelAllMethods('Global cancellation');
 
-      // Проверяем отмену
+      // It was cancelled.
       await expectLater(
         future,
         throwsA(
@@ -202,60 +202,57 @@ void main() {
       );
     });
 
-    test('Попытка отмены несуществующего метода', () async {
-      // Пытаемся отменить метод, который не запущен
+    test('cancelling a method that is not running', () async {
+      // Try to cancel a method nobody started.
       final cancelled = callerEndpoint.cancelMethod(
         'TestService',
         'NonExistentMethod',
       );
-      expect(cancelled, 0); // Теперь возвращает количество отмененных токенов
+      expect(cancelled, 0); // The return value is a count of cancelled tokens.
     });
 
-    test(
-      'Проверка токенов отмены через getCancellationTokensForMethod',
-      () async {
-        // Запускаем метод
-        final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
-          serviceName: 'TestService',
-          methodName: 'SlowMethod',
-          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-          request: TestRequest('operation'),
-        );
+    test('getCancellationTokensForMethod reports the live tokens', () async {
+      // Start a method.
+      final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+        serviceName: 'TestService',
+        methodName: 'SlowMethod',
+        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+        request: TestRequest('operation'),
+      );
 
-        // Проверяем количество активных вызовов
-        final activeCallsCount = callerEndpoint
-            .getCancellationTokensForMethod('TestService', 'SlowMethod')
-            .length;
-        expect(activeCallsCount, 1);
+      // How many calls are live.
+      final activeCallsCount = callerEndpoint
+          .getCancellationTokensForMethod('TestService', 'SlowMethod')
+          .length;
+      expect(activeCallsCount, 1);
 
-        // Отменяем все вызовы метода
-        final cancelledCount = callerEndpoint.cancelMethod(
-          'TestService',
-          'SlowMethod',
-        );
-        expect(cancelledCount, 1);
+      // Cancel every call of that method.
+      final cancelledCount = callerEndpoint.cancelMethod(
+        'TestService',
+        'SlowMethod',
+      );
+      expect(cancelledCount, 1);
 
-        // Проверяем, что больше нет активных вызовов
-        final activeCallsCountAfter = callerEndpoint
-            .getCancellationTokensForMethod('TestService', 'SlowMethod')
-            .length;
-        expect(activeCallsCountAfter, 0);
+      // No live calls remain.
+      final activeCallsCountAfter = callerEndpoint
+          .getCancellationTokensForMethod('TestService', 'SlowMethod')
+          .length;
+      expect(activeCallsCountAfter, 0);
 
-        // Проверяем исключение
-        await expectLater(
-          future,
-          throwsA(
-            predicate<RpcCancelledException>(
-              (e) => e.message == 'Method cancelled by user',
-            ),
+      // And the call threw.
+      await expectLater(
+        future,
+        throwsA(
+          predicate<RpcCancelledException>(
+            (e) => e.message == 'Method cancelled by user',
           ),
-        );
-      },
-    );
+        ),
+      );
+    });
 
-    test('Множественные вызовы одного метода с разными токенами', () async {
-      // Запускаем несколько вызовов одного метода
+    test('several calls of one method get separate tokens', () async {
+      // Start several calls of the same method.
       final future1 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
@@ -264,7 +261,7 @@ void main() {
         request: TestRequest('operation 1'),
       );
 
-      // Добавляем небольшую задержку между запросами
+      // A short gap between them.
       await Future<void>.delayed(Duration(milliseconds: 10));
 
       final future2 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
@@ -275,30 +272,30 @@ void main() {
         request: TestRequest('operation 2'),
       );
 
-      // Ждем достаточно времени, чтобы оба запроса зарегистрировались
+      // Long enough for both requests to register.
       await Future<void>.delayed(Duration(milliseconds: 100));
 
-      // Проверяем, что у нас есть 2 токена для одного метода
+      // Two tokens for the one method.
       final tokens = callerEndpoint.getCancellationTokensForMethod(
         'TestService',
         'SlowMethod',
       );
       expect(tokens.length, 2);
 
-      // Отменяем все вызовы метода
+      // Cancel every call of that method.
       final cancelledCount = callerEndpoint.cancelMethod(
         'TestService',
         'SlowMethod',
       );
       expect(cancelledCount, 2);
 
-      // Проверяем, что оба вызова отменены
+      // Both calls were cancelled.
       await expectLater(future1, throwsA(isA<RpcCancelledException>()));
 
       await expectLater(future2, throwsA(isA<RpcCancelledException>()));
     });
 
-    test('Отмена с пользовательской причиной', () async {
+    test('cancelling with a caller-supplied reason', () async {
       final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',

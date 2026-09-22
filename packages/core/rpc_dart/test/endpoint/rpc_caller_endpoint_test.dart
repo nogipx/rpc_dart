@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// Тестовый запрос
+/// The request model.
 class TestRequest implements IRpcSerializable {
   final String message;
 
@@ -24,7 +24,7 @@ class TestRequest implements IRpcSerializable {
   }
 }
 
-/// Тестовый ответ
+/// The response model.
 class TestResponse implements IRpcSerializable {
   final String message;
 
@@ -40,7 +40,7 @@ class TestResponse implements IRpcSerializable {
   }
 }
 
-/// Тестовый контракт для responder
+/// The responder contract these tests call into.
 final class TestService extends RpcResponderContract {
   final List<String> callLog = [];
 
@@ -90,7 +90,7 @@ final class TestService extends RpcResponderContract {
     addBidirectionalMethod<TestRequest, TestResponse>(
       methodName: 'BidirectionalMethod',
       handler: (requests, {context}) async* {
-        callLog.add('BidirectionalMethod: начат');
+        callLog.add('BidirectionalMethod: started');
 
         await for (final request in requests) {
           callLog.add('BidirectionalMethod: ${request.message}');
@@ -98,7 +98,7 @@ final class TestService extends RpcResponderContract {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
 
-        callLog.add('BidirectionalMethod: завершен');
+        callLog.add('BidirectionalMethod: finished');
       },
       requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
       responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
@@ -107,7 +107,7 @@ final class TestService extends RpcResponderContract {
 }
 
 void main() {
-  group('RpcCallerEndpoint Тесты', () {
+  group('RpcCallerEndpoint', () {
     late IRpcTransport clientTransport;
     late IRpcTransport serverTransport;
     late RpcResponderEndpoint responderEndpoint;
@@ -122,11 +122,11 @@ void main() {
       responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
-      // Регистрируем тестовый сервис
+      // Register the service under test.
       testService = TestService();
       responderEndpoint.registerServiceContract(testService);
 
-      // ВАЖНО: Запускаем responderEndpoint для обработки входящих запросов
+      // IMPORTANT: start responderEndpoint, or nothing handles the requests.
       responderEndpoint.start();
     });
 
@@ -136,8 +136,8 @@ void main() {
       testService.callLog.clear();
     });
 
-    test('Унарный запрос возвращает корректный ответ', () async {
-      // Отправляем унарный запрос
+    test('a unary request comes back with the right answer', () async {
+      // Send a unary request.
       final response = await callerEndpoint
           .unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
@@ -147,12 +147,12 @@ void main() {
             request: TestRequest('Hello from test'),
           );
 
-      // Проверяем ответ
+      // Check the answer.
       expect(response.message, equals('Reply to: Hello from test'));
       expect(testService.callLog, contains('UnaryMethod: Hello from test'));
     });
 
-    test('Серверный стрим возвращает все ожидаемые сообщения', () async {
+    test('a server stream delivers every message', () async {
       final stream = callerEndpoint.serverStream<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'ServerStreamMethod',
@@ -176,15 +176,15 @@ void main() {
       );
     });
 
-    test('Клиентский стрим корректно отправляет все сообщения', () async {
-      // Создаем стрим запросов используя Stream.fromIterable для простоты
+    test('a client stream sends every message', () async {
+      // Stream.fromIterable, for simplicity.
       final requestStream = Stream.fromIterable([
         TestRequest('Message 1'),
         TestRequest('Message 2'),
         TestRequest('Message 3'),
       ]);
 
-      // Получаем функцию ответа
+      // Get the call function.
       final getResponse = callerEndpoint
           .clientStream<TestRequest, TestResponse>(
             serviceName: 'TestService',
@@ -193,15 +193,15 @@ void main() {
             responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
           );
 
-      // Вызываем getResponse для отправки всех сообщений и получения ответа
+      // Call it: this sends every message and waits for the answer.
       final response = await getResponse(requestStream).timeout(
         Duration(seconds: 10),
         onTimeout: () {
-          throw TimeoutException('Таймаут ожидания ответа');
+          throw TimeoutException('timed out waiting for the answer');
         },
       );
 
-      // Проверяем результат
+      // Check the result.
       expect(
         response.message,
         equals('Received: Message 1, Message 2, Message 3'),
@@ -212,11 +212,11 @@ void main() {
       );
     });
 
-    test('Двунаправленный стрим работает в обоих направлениях', () async {
-      // Создаем стрим запросов
+    test('a bidirectional stream carries both directions', () async {
+      // The request stream.
       final controller = StreamController<TestRequest>();
 
-      // Запускаем двунаправленный стрим
+      // Open the bidirectional call.
       final responseStream = callerEndpoint
           .bidirectionalStream<TestRequest, TestResponse>(
             serviceName: 'TestService',
@@ -226,13 +226,13 @@ void main() {
             requests: controller.stream,
           );
 
-      // ВАЖНО: начинаем слушать ответы до отправки запросов
+      // IMPORTANT: listen for answers BEFORE sending any request.
       final responsesFuture = responseStream.take(3).toList();
 
-      // Небольшая задержка перед отправкой запросов для стабильности
+      // A short pause before sending, for stability.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      // Отправляем запросы с увеличенными интервалами
+      // Send the requests, spaced out.
       controller.add(TestRequest('Bi Message 1'));
       await Future<void>.delayed(Duration(milliseconds: 1));
 
@@ -242,7 +242,7 @@ void main() {
       controller.add(TestRequest('Bi Message 3'));
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      // Закрываем контроллер, сигнализируя конец потока запросов
+      // Close the controller: that is the end of the request stream.
       await controller.close();
 
       final allResponses = await responsesFuture.timeout(
@@ -254,7 +254,7 @@ void main() {
       expect(allResponses[1].message, equals('Echo: Bi Message 2'));
       expect(allResponses[2].message, equals('Echo: Bi Message 3'));
 
-      expect(testService.callLog, contains('BidirectionalMethod: начат'));
+      expect(testService.callLog, contains('BidirectionalMethod: started'));
       expect(
         testService.callLog,
         contains('BidirectionalMethod: Bi Message 1'),
@@ -269,8 +269,8 @@ void main() {
       );
     });
 
-    test('Закрытие эндпоинта корректно освобождает ресурсы', () async {
-      // Отправляем запрос до закрытия
+    test('closing the endpoint releases its resources', () async {
+      // A request before the close.
       final response = await callerEndpoint
           .unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
@@ -282,13 +282,13 @@ void main() {
 
       expect(response.message, equals('Reply to: Pre-close request'));
 
-      // Закрываем эндпоинт
+      // Close the endpoint.
       await callerEndpoint.close();
 
-      // Проверяем, что эндпоинт больше не активен
+      // It is no longer active.
       expect(callerEndpoint.isActive, isFalse);
 
-      // Попытка использовать закрытый эндпоинт должна вызвать ошибку
+      // Using a closed endpoint must throw.
       expect(() async {
         await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
           serviceName: 'TestService',
@@ -299,7 +299,7 @@ void main() {
         );
       }, throwsA(isA<RpcClosedException>()));
 
-      // Выделяем время для завершения всех асинхронных операций
+      // Give the outstanding async work time to finish.
       await Future<void>.delayed(Duration(milliseconds: 1));
     });
   });

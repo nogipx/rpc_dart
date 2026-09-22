@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439]
 status: confirmed (round 432)
 ---
 
@@ -454,3 +454,33 @@ the number beside it moved.
 > as you translate.
 
 `../rounds/438-the-comment-that-was-right-once.md`.
+
+## Round 439 — the sweep can damage the prose it is fixing
+
+A comment appearing four times looks like a case for a bulk replace. It is not,
+if it is also a PREFIX of longer ones. `// Регистрируем сервис` was both, and
+six longer comments came out half-translated:
+
+```
+// Регистрируем сервис первый раз   ->   // Register the service. первый раз
+```
+
+It compiles. Every test passes. `analyze` is clean. **Nothing in a Dart gate
+can see a mangled comment**, and the only thing that caught it here was the
+round's own Cyrillic grep — which worked purely because the surviving tail was
+Russian. `// Регистрируем сервис v2` would have come out
+`// Register the service. v2` and been reported as clean by the detector, the
+gate, and the sweep.
+
+> **Bulk-replacing comment text is a substring operation on the one part of a
+> file nothing validates.** Anchor to the end of the line, or edit the sites one
+> at a time. Identical comments batch safely; comments that merely begin the
+> same way do not, and at the moment you write the edit the two are
+> indistinguishable.
+
+The general form: every other class of edit this lens covers has SOME checker —
+the compiler for code, a test for behaviour, the detector for the language. A
+prose edit has none of them, so the care has to be in the edit rather than in
+the check after it.
+
+`../rounds/439-the-replace-that-matched-a-prefix.md`.

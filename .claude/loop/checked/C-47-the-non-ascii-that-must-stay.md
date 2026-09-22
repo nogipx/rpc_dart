@@ -107,6 +107,19 @@ Translate it and the suite stays green while the coverage — does this codec
 handle multi-byte UTF-8 — is gone, with nothing anywhere to say so. The two
 loud ones would have stopped a careless sweep by themselves; this one would not.
 
+**A fourth shape, found in round 439, and the worst-behaved**: a bulk replace of
+comment text is a SUBSTRING replace. `// Регистрируем сервис` appeared four
+times, so the sweep batched it — and it is a PREFIX of six longer comments, each
+of which became half-translated: `// Register the service. первый раз`. It
+compiles, every test passes, `analyze` is clean, and **the only thing that
+caught it was the Cyrillic detector re-run, because the surviving tail happened
+to be Russian.** Had the tail been ASCII, the damage would have passed the
+sweep, the gate and the detector, and been reported as a clean file.
+
+> **Anchor a bulk comment replace to the end of the line, or do the sites one at
+> a time.** Identical comments are safe to batch; comments that merely BEGIN the
+> same way are not, and nothing distinguishes them when you write the edit.
+
 **A third shape, found in round 438 and not among the fixtures above**: prose
 data with a producer and an assertion far apart.
 `rpc_context_integration_test.dart` built `'Aggregated N элементов [...]'` at

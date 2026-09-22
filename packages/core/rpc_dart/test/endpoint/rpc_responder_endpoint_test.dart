@@ -8,7 +8,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// Тестовый запрос
+/// The request model.
 class TestRequest implements IRpcSerializable {
   final String message;
 
@@ -24,7 +24,7 @@ class TestRequest implements IRpcSerializable {
   }
 }
 
-/// Тестовый ответ
+/// The response model.
 class TestResponse implements IRpcSerializable {
   final String message;
 
@@ -40,7 +40,7 @@ class TestResponse implements IRpcSerializable {
   }
 }
 
-/// Тестовый контракт для responder
+/// The responder contract under test.
 final class TestService extends RpcResponderContract {
   final List<String> callLog = [];
 
@@ -73,7 +73,7 @@ final class TestService extends RpcResponderContract {
   }
 }
 
-/// Подконтракт для тестирования регистрации подконтрактов
+/// A sub-contract, for the sub-contract registration tests.
 final class SubService extends RpcResponderContract {
   final List<String> callLog = [];
 
@@ -93,7 +93,7 @@ final class SubService extends RpcResponderContract {
   }
 }
 
-/// Тестовый родительский контракт
+/// The parent contract.
 final class ParentService extends RpcResponderContract {
   final List<String> callLog = [];
 
@@ -114,7 +114,7 @@ final class ParentService extends RpcResponderContract {
 }
 
 void main() {
-  group('RpcResponderEndpoint Тесты', () {
+  group('RpcResponderEndpoint', () {
     late IRpcTransport clientTransport;
     late IRpcTransport serverTransport;
     late RpcResponderEndpoint responderEndpoint;
@@ -129,7 +129,7 @@ void main() {
       responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
-      // Регистрируем тестовый сервис
+      // Register the service under test.
       testService = TestService();
     });
 
@@ -139,12 +139,12 @@ void main() {
       testService.callLog.clear();
     });
 
-    test('Регистрация контракта работает корректно', () {
-      // Регистрируем сервис
+    test('registering a contract works', () {
+      // Register the service.
       responderEndpoint.registerServiceContract(testService);
       responderEndpoint.start();
 
-      // Проверяем, что сервис был зарегистрирован
+      // The service is registered.
       expect(responderEndpoint.registeredContracts, contains('TestService'));
       expect(
         responderEndpoint.registeredMethods,
@@ -156,15 +156,15 @@ void main() {
       );
     });
 
-    test('Регистрация нескольких контрактов работает корректно', () {
-      // Создаем и регистрируем несколько сервисов отдельно
+    test('registering several contracts works', () {
+      // Build and register several services, each on its own.
       final parentService = ParentService();
       final subService = SubService();
       responderEndpoint.registerServiceContract(parentService);
       responderEndpoint.registerServiceContract(subService);
       responderEndpoint.start();
 
-      // Проверяем, что оба сервиса зарегистрированы
+      // Both services are registered.
       expect(responderEndpoint.registeredContracts, contains('ParentService'));
       expect(responderEndpoint.registeredContracts, contains('SubService'));
       expect(
@@ -177,12 +177,12 @@ void main() {
       );
     });
 
-    test('Обработка унарного запроса работает корректно', () async {
-      // Регистрируем сервис
+    test('a unary request is handled', () async {
+      // Register the service.
       responderEndpoint.registerServiceContract(testService);
       responderEndpoint.start();
 
-      // Отправляем запрос через caller
+      // Send the request through the caller.
       final response = await callerEndpoint
           .unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
@@ -192,36 +192,36 @@ void main() {
             request: TestRequest('Test request'),
           );
 
-      // Проверяем ответ и вызов обработчика
+      // The answer, and that the handler ran.
       expect(response.message, equals('Reply to: Test request'));
       expect(testService.callLog, contains('UnaryMethod: Test request'));
     });
 
-    test('Ошибка при дублировании сервиса', () {
-      // Регистрируем сервис первый раз
+    test('registering the same service twice throws', () {
+      // First registration.
       responderEndpoint.registerServiceContract(testService);
       responderEndpoint.start();
 
-      // Второй раз должна быть ошибка
+      // The second must fail.
       expect(
         () => responderEndpoint.registerServiceContract(TestService()),
         throwsA(isA<RpcException>()),
       );
     });
 
-    test('Проверка существования метода', () {
-      // Регистрируем сервис
+    test('looking a method up', () {
+      // Register the service.
       responderEndpoint.registerServiceContract(testService);
       responderEndpoint.start();
 
-      // Проверяем существующий метод
+      // A method that exists.
       responderEndpoint.validateMethodExists(
         'TestService',
         'UnaryMethod',
         RpcMethodType.unaryRequest,
       );
 
-      // Проверяем несуществующий метод
+      // A method that does not.
       expect(
         () => responderEndpoint.validateMethodExists(
           'TestService',
@@ -231,7 +231,7 @@ void main() {
         throwsA(isA<RpcException>()),
       );
 
-      // Проверяем метод с неверным типом
+      // The right name under the wrong method type.
       expect(
         () => responderEndpoint.validateMethodExists(
           'TestService',
@@ -242,72 +242,66 @@ void main() {
       );
     });
 
-    test('Закрытие эндпоинта очищает зарегистрированные сервисы', () async {
-      // Регистрируем сервис
+    test('closing the endpoint clears the registered services', () async {
+      // Register the service.
       responderEndpoint.registerServiceContract(testService);
       responderEndpoint.start();
       expect(responderEndpoint.registeredContracts, isNotEmpty);
       expect(responderEndpoint.registeredMethods, isNotEmpty);
 
-      // Закрываем эндпоинт
+      // Close the endpoint.
       await responderEndpoint.close();
 
-      // Проверяем, что контракты и методы очищены
+      // Contracts and methods are both cleared.
       expect(responderEndpoint.isActive, isFalse);
       expect(responderEndpoint.registeredContracts, isEmpty);
       expect(responderEndpoint.registeredMethods, isEmpty);
     });
 
-    test(
-      'Обращение к отдельно зарегистрированному сервису работает корректно',
-      () async {
-        // Регистрируем оба сервиса отдельно
-        final parentService = ParentService();
-        final subService = SubService();
-        responderEndpoint.registerServiceContract(parentService);
-        responderEndpoint.registerServiceContract(subService);
-        responderEndpoint.start();
+    test('a separately registered service is reachable', () async {
+      // Register both services separately.
+      final parentService = ParentService();
+      final subService = SubService();
+      responderEndpoint.registerServiceContract(parentService);
+      responderEndpoint.registerServiceContract(subService);
+      responderEndpoint.start();
 
-        // Отправляем запрос к методу SubService
-        final response = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
-              serviceName: 'SubService',
-              methodName: 'SubUnaryMethod',
-              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-              request: TestRequest('SubService test'),
-            );
+      // Call a SubService method.
+      final response = await callerEndpoint
+          .unaryRequest<TestRequest, TestResponse>(
+            serviceName: 'SubService',
+            methodName: 'SubUnaryMethod',
+            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+            request: TestRequest('SubService test'),
+          );
 
-        // Проверяем ответ и вызов обработчика
-        expect(
-          response.message,
-          equals('SubService reply to: SubService test'),
-        );
-        expect(subService.callLog, contains('SubUnaryMethod: SubService test'));
-      },
-    );
-
-    test('Регистрация без запуска работает корректно', () {
-      // Регистрируем сервис но НЕ запускаем эндпоинт
-      responderEndpoint.registerServiceContract(testService);
-
-      // Проверяем что сервис зарегистрирован
-      expect(responderEndpoint.registeredContracts, contains('TestService'));
-
-      // Проверяем что эндпоинт активен но не слушает
-      expect(responderEndpoint.isActive, isTrue);
-
-      // Примечание: Предупреждение о незапущенном эндпоинте появится
-      // только при получении реального сообщения от транспорта
+      // The answer, and that the handler ran.
+      expect(response.message, equals('SubService reply to: SubService test'));
+      expect(subService.callLog, contains('SubUnaryMethod: SubService test'));
     });
 
-    group('unregisterServiceContract тесты', () {
-      test('Разрегистрация зарегистрированного сервиса работает корректно', () {
-        // Регистрируем сервис
+    test('registering without start() works', () {
+      // Register a service but do NOT start the endpoint.
+      responderEndpoint.registerServiceContract(testService);
+
+      // The service is registered.
+      expect(responderEndpoint.registeredContracts, contains('TestService'));
+
+      // The endpoint is alive but not listening.
+      expect(responderEndpoint.isActive, isTrue);
+
+      // Note: the warning about an unstarted endpoint only fires when a real
+      // message arrives from the transport.
+    });
+
+    group('unregisterServiceContract', () {
+      test('unregistering a registered service works', () {
+        // Register the service.
         responderEndpoint.registerServiceContract(testService);
         responderEndpoint.start();
 
-        // Проверяем что сервис зарегистрирован
+        // The service is registered.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
         expect(
           responderEndpoint.registeredMethods,
@@ -318,10 +312,10 @@ void main() {
           contains('TestService.ServerStreamMethod'),
         );
 
-        // Разрегистрируем сервис
+        // Unregister the service.
         responderEndpoint.unregisterServiceContract('TestService');
 
-        // Проверяем что сервис и его методы удалены
+        // The service and its methods are gone.
         expect(
           responderEndpoint.registeredContracts,
           isNot(contains('TestService')),
@@ -336,8 +330,8 @@ void main() {
         );
       });
 
-      test('Разрегистрация одного сервиса не влияет на другие', () {
-        // Регистрируем несколько сервисов
+      test('unregistering one service leaves the others alone', () {
+        // Register several services.
         final parentService = ParentService();
         final subService = SubService();
         responderEndpoint.registerServiceContract(testService);
@@ -345,7 +339,7 @@ void main() {
         responderEndpoint.registerServiceContract(subService);
         responderEndpoint.start();
 
-        // Проверяем что все сервисы зарегистрированы
+        // Every service is registered.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
         expect(
           responderEndpoint.registeredContracts,
@@ -353,10 +347,10 @@ void main() {
         );
         expect(responderEndpoint.registeredContracts, contains('SubService'));
 
-        // Разрегистрируем только один сервис
+        // Unregister exactly one of them.
         responderEndpoint.unregisterServiceContract('ParentService');
 
-        // Проверяем что только ParentService удален
+        // Only ParentService is gone.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
         expect(
           responderEndpoint.registeredContracts,
@@ -364,7 +358,7 @@ void main() {
         );
         expect(responderEndpoint.registeredContracts, contains('SubService'));
 
-        // Проверяем что методы других сервисов остались
+        // The other services keep their methods.
         expect(
           responderEndpoint.registeredMethods,
           contains('TestService.UnaryMethod'),
@@ -379,8 +373,8 @@ void main() {
         );
       });
 
-      test('Ошибка при разрегистрации незарегистрированного сервиса', () {
-        // Пытаемся разрегистрировать несуществующий сервис
+      test('unregistering a service that was never registered throws', () {
+        // Try to unregister a service that does not exist.
         expect(
           () =>
               responderEndpoint.unregisterServiceContract('NonExistentService'),
@@ -388,28 +382,28 @@ void main() {
         );
       });
 
-      test('Разрегистрация сервиса позволяет повторную регистрацию', () {
-        // Регистрируем сервис
+      test('after unregistering, the service can be registered again', () {
+        // Register the service.
         responderEndpoint.registerServiceContract(testService);
         responderEndpoint.start();
 
-        // Проверяем что сервис зарегистрирован
+        // The service is registered.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
 
-        // Разрегистрируем сервис
+        // Unregister the service.
         responderEndpoint.unregisterServiceContract('TestService');
 
-        // Проверяем что сервис удален
+        // The service is gone.
         expect(
           responderEndpoint.registeredContracts,
           isNot(contains('TestService')),
         );
 
-        // Регистрируем новый экземпляр того же сервиса
+        // Register a fresh instance of the same service.
         final newTestService = TestService();
         responderEndpoint.registerServiceContract(newTestService);
 
-        // Проверяем что сервис снова зарегистрирован
+        // It is registered again.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
         expect(
           responderEndpoint.registeredMethods,
@@ -417,41 +411,38 @@ void main() {
         );
       });
 
-      test(
-        'Функциональность эндпоинта работает после разрегистрации',
-        () async {
-          // Регистрируем несколько сервисов
-          final parentService = ParentService();
-          responderEndpoint.registerServiceContract(testService);
-          responderEndpoint.registerServiceContract(parentService);
-          responderEndpoint.start();
+      test('the endpoint still works after an unregister', () async {
+        // Register several services.
+        final parentService = ParentService();
+        responderEndpoint.registerServiceContract(testService);
+        responderEndpoint.registerServiceContract(parentService);
+        responderEndpoint.start();
 
-          // Разрегистрируем один сервис
-          responderEndpoint.unregisterServiceContract('TestService');
+        // Unregister one service.
+        responderEndpoint.unregisterServiceContract('TestService');
 
-          // Проверяем что оставшийся сервис все еще работает
-          final response = await callerEndpoint
-              .unaryRequest<TestRequest, TestResponse>(
-                serviceName: 'ParentService',
-                methodName: 'ParentMethod',
-                requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-                responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-                request: TestRequest('After unregister test'),
-              );
+        // The one left still answers.
+        final response = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'ParentService',
+              methodName: 'ParentMethod',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('After unregister test'),
+            );
 
-          expect(
-            response.message,
-            equals('ParentService reply to: After unregister test'),
-          );
-          expect(
-            parentService.callLog,
-            contains('ParentMethod: After unregister test'),
-          );
-        },
-      );
+        expect(
+          response.message,
+          equals('ParentService reply to: After unregister test'),
+        );
+        expect(
+          parentService.callLog,
+          contains('ParentMethod: After unregister test'),
+        );
+      });
 
-      test('Разрегистрация всех сервисов очищает все методы', () {
-        // Регистрируем несколько сервисов
+      test('unregistering every service clears every method', () {
+        // Register several services.
         final parentService = ParentService();
         final subService = SubService();
         responderEndpoint.registerServiceContract(testService);
@@ -459,28 +450,28 @@ void main() {
         responderEndpoint.registerServiceContract(subService);
         responderEndpoint.start();
 
-        // Проверяем что все сервисы и методы зарегистрированы
+        // Every service and method is registered.
         expect(responderEndpoint.registeredContracts, hasLength(3));
         expect(responderEndpoint.registeredMethods, isNotEmpty);
 
-        // Разрегистрируем все сервисы по очереди
+        // Unregister them one by one.
         responderEndpoint.unregisterServiceContract('TestService');
         responderEndpoint.unregisterServiceContract('ParentService');
         responderEndpoint.unregisterServiceContract('SubService');
 
-        // Проверяем что все контракты и методы удалены
+        // Every contract and method is gone.
         expect(responderEndpoint.registeredContracts, isEmpty);
         expect(responderEndpoint.registeredMethods, isEmpty);
       });
 
-      test('Регистрация и разрегистрация работает после start()', () async {
-        // Стартуем эндпоинт без сервисов
+      test('register and unregister both work after start()', () async {
+        // Start the endpoint with no services.
         responderEndpoint.start();
 
-        // Регистрируем сервис ПОСЛЕ start()
+        // Register a service AFTER start().
         responderEndpoint.registerServiceContract(testService);
 
-        // Проверяем что сервис зарегистрирован и работает
+        // It is registered, and it answers.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
 
         final response = await callerEndpoint
@@ -495,20 +486,20 @@ void main() {
         expect(response.message, equals('Reply to: After start test'));
         expect(testService.callLog, contains('UnaryMethod: After start test'));
 
-        // Разрегистрируем сервис ПОСЛЕ start()
+        // Unregister it, also after start().
         responderEndpoint.unregisterServiceContract('TestService');
 
-        // Проверяем что сервис удален
+        // The service is gone.
         expect(
           responderEndpoint.registeredContracts,
           isNot(contains('TestService')),
         );
 
-        // Регистрируем новый сервис ПОСЛЕ разрегистрации
+        // Register a different service after the unregister.
         final newService = TestService();
         responderEndpoint.registerServiceContract(newService);
 
-        // Проверяем что новый сервис работает
+        // The new service answers.
         final newResponse = await callerEndpoint
             .unaryRequest<TestRequest, TestResponse>(
               serviceName: 'TestService',
@@ -520,26 +511,26 @@ void main() {
 
         expect(newResponse.message, equals('Reply to: New service test'));
         expect(newService.callLog, contains('UnaryMethod: New service test'));
-        // Убеждаемся что старый сервис не получил запрос
+        // And the old one never saw the request.
         expect(
           testService.callLog,
           isNot(contains('UnaryMethod: New service test')),
         );
       });
 
-      test('Ресурсы автоматически освобождаются при разрегистрации', () async {
-        // Создаем тестовый респондер с типичными ресурсами
+      test('unregistering releases the resources', () async {
+        // A responder holding the kind of resources a real one would.
         final resourceService = ResourceHeavyService();
         responderEndpoint.registerServiceContract(resourceService);
         responderEndpoint.start();
 
-        // Проверяем что сервис зарегистрирован
+        // The service is registered.
         expect(
           responderEndpoint.registeredContracts,
           contains('ResourceHeavyService'),
         );
 
-        // Вызываем метод который может создать ресурсы
+        // Call a method that allocates them.
         final response = await callerEndpoint
             .unaryRequest<TestRequest, TestResponse>(
               serviceName: 'ResourceHeavyService',
@@ -552,46 +543,43 @@ void main() {
         expect(response.message, contains('resources created'));
         expect(resourceService.isResourcesActive(), isTrue);
 
-        // Разрегистрируем сервис - теперь dispose() вызывается автоматически!
+        // Unregister: dispose() is called for us.
         responderEndpoint.unregisterServiceContract('ResourceHeavyService');
 
-        // ✅ С новой dispose() интеграцией ресурсы автоматически освобождаются
+        // So the resources are released without the test doing it.
         expect(resourceService.isResourcesActive(), isFalse);
         expect(resourceService.activeConnections, equals(0));
       });
 
-      test(
-        'dispose() автоматически вызывается при unregisterServiceContract()',
-        () async {
-          // Создаем тестовый респондер с ресурсами
-          final resourceService = ResourceHeavyService();
-          responderEndpoint.registerServiceContract(resourceService);
-          responderEndpoint.start();
+      test('unregisterServiceContract() calls dispose()', () async {
+        // A responder holding resources.
+        final resourceService = ResourceHeavyService();
+        responderEndpoint.registerServiceContract(resourceService);
+        responderEndpoint.start();
 
-          // Создаем ресурсы
-          final response = await callerEndpoint
-              .unaryRequest<TestRequest, TestResponse>(
-                serviceName: 'ResourceHeavyService',
-                methodName: 'CreateResourceIntensiveOperation',
-                requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-                responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-                request: TestRequest('setup resources'),
-              );
+        // Allocate them.
+        final response = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'ResourceHeavyService',
+              methodName: 'CreateResourceIntensiveOperation',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('setup resources'),
+            );
 
-          expect(response.message, contains('resources created'));
-          expect(resourceService.isResourcesActive(), isTrue);
+        expect(response.message, contains('resources created'));
+        expect(resourceService.isResourcesActive(), isTrue);
 
-          // 🆕 Разрегистрируем сервис - dispose() должен вызваться автоматически
-          responderEndpoint.unregisterServiceContract('ResourceHeavyService');
+        // Unregister: dispose() must run on its own.
+        responderEndpoint.unregisterServiceContract('ResourceHeavyService');
 
-          // ✅ Ресурсы должны быть автоматически освобождены
-          expect(resourceService.isResourcesActive(), isFalse);
-          expect(resourceService.activeConnections, equals(0));
-        },
-      );
+        // The resources are released.
+        expect(resourceService.isResourcesActive(), isFalse);
+        expect(resourceService.activeConnections, equals(0));
+      });
 
-      test('dispose() автоматически вызывается при close() эндпоинта', () async {
-        // Создаем новый эндпоинт для этого теста
+      test('close() calls dispose() on every contract', () async {
+        // This test needs an endpoint of its own.
         final (newCallerTransport, newResponderTransport) =
             RpcInMemoryTransport.pair();
         final newResponderEndpoint = RpcResponderEndpoint(
@@ -601,13 +589,13 @@ void main() {
           transport: newCallerTransport,
         );
 
-        // Регистрируем сервис с ресурсами
+        // Register the services that hold resources.
         final resourceService1 = ResourceHeavyService();
 
         newResponderEndpoint.registerServiceContract(resourceService1);
         newResponderEndpoint.start();
 
-        // Создаем ресурсы в обоих сервисах
+        // Allocate resources in both of them.
         await newCallerEndpoint.unaryRequest<TestRequest, TestResponse>(
           serviceName: 'ResourceHeavyService',
           methodName: 'CreateResourceIntensiveOperation',
@@ -618,24 +606,24 @@ void main() {
 
         expect(resourceService1.isResourcesActive(), isTrue);
 
-        // 🆕 Закрываем эндпоинт - dispose() должен вызваться для всех контрактов
+        // Close the endpoint: dispose() must run for every contract.
         await newResponderEndpoint.close();
 
-        // ✅ Ресурсы всех сервисов должны быть освобождены
+        // Every service's resources are released.
         expect(resourceService1.isResourcesActive(), isFalse);
         expect(resourceService1.activeConnections, equals(0));
 
-        // Очистка
+        // Cleanup.
         await newCallerEndpoint.close();
       });
 
-      test('dispose() обрабатывает ошибки gracefully', () async {
-        // Создаем сервис который выбрасывает ошибку в dispose()
+      test('a dispose() that throws does not break the unregister', () async {
+        // A service whose dispose() throws.
         final problematicService = ProblematicDisposeService();
         responderEndpoint.registerServiceContract(problematicService);
         responderEndpoint.start();
 
-        // Разрегистрируем сервис - не должно упасть с ошибкой
+        // Unregistering must not propagate that error.
         expect(
           () => responderEndpoint.unregisterServiceContract(
             'ProblematicDisposeService',
@@ -643,7 +631,7 @@ void main() {
           returnsNormally,
         );
 
-        // Проверяем что сервис все равно удален
+        // And the service is gone regardless.
         expect(
           responderEndpoint.registeredContracts,
           isNot(contains('ProblematicDisposeService')),
@@ -653,7 +641,7 @@ void main() {
   });
 }
 
-/// Тестовый сервис имитирующий реальные ресурсы которые нужно освобождать
+/// A service standing in for one that holds real resources.
 final class ResourceHeavyService extends RpcResponderContract {
   final List<StreamController<void>> _activeStreams = [];
   final Map<String, StreamSubscription<void>> _subscriptions = {};
@@ -668,7 +656,7 @@ final class ResourceHeavyService extends RpcResponderContract {
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'CreateResourceIntensiveOperation',
       handler: (request, {context}) async {
-        // Имитируем создание ресурсов
+        // Stand in for allocating them.
         _createFakeResources();
         return TestResponse(
           'resources created - connections: $activeConnections',
@@ -680,12 +668,12 @@ final class ResourceHeavyService extends RpcResponderContract {
   }
 
   void _createFakeResources() {
-    // 1. Создаем несколько потоков данных
+    // 1. A few data streams.
     for (int i = 0; i < 3; i++) {
       final controller = StreamController<String>.broadcast();
       _activeStreams.add(controller);
 
-      // Имитируем подписку на внешний поток
+      // Stand in for subscribing to an outside stream.
       final subscription = Stream.periodic(
         Duration(seconds: 1),
         (count) => 'data_$count',
@@ -693,7 +681,7 @@ final class ResourceHeavyService extends RpcResponderContract {
       _subscriptions['stream_$i'] = subscription;
     }
 
-    // 2. Создаем таймеры
+    // 2. Timers.
     for (int i = 0; i < 2; i++) {
       final timer = Timer.periodic(Duration(seconds: 2), (timer) {
         activeConnections++;
@@ -701,49 +689,49 @@ final class ResourceHeavyService extends RpcResponderContract {
       _timers.add(timer);
     }
 
-    // 3. Имитируем открытие подключений к БД/сервисам
+    // 3. Stand in for opening database or service connections.
     activeConnections = 5;
     _resourcesActive = true;
   }
 
   bool isResourcesActive() => _resourcesActive;
 
-  /// 🆕 Переопределяем dispose() для автоматической очистки ресурсов
+  /// dispose() is overridden to release everything above.
   @override
   void dispose() {
-    // Закрываем потоки
+    // Close the streams.
     for (final controller in _activeStreams) {
       controller.close();
     }
     _activeStreams.clear();
 
-    // Отменяем подписки
+    // Cancel the subscriptions.
     for (final subscription in _subscriptions.values) {
       subscription.cancel();
     }
     _subscriptions.clear();
 
-    // Отменяем таймеры
+    // Cancel the timers.
     for (final timer in _timers) {
       timer.cancel();
     }
     _timers.clear();
 
-    // Закрываем подключения
+    // Close the connections.
     activeConnections = 0;
     _resourcesActive = false;
 
-    // Вызываем родительский dispose
+    // Required: call the parent dispose().
     super.dispose();
   }
 
-  /// Ручная очистка ресурсов (для тестов совместимости)
+  /// Releases the resources by hand, for the compatibility tests.
   void manualCleanup() {
     dispose();
   }
 }
 
-/// Тестовый сервис который выбрасывает ошибку в dispose() для тестирования error handling
+/// A service whose dispose() throws, for the error-handling test.
 final class ProblematicDisposeService extends RpcResponderContract {
   ProblematicDisposeService() : super('ProblematicDisposeService');
 
@@ -761,7 +749,7 @@ final class ProblematicDisposeService extends RpcResponderContract {
 
   @override
   void dispose() {
-    // Симулируем ошибку в dispose()
-    throw Exception('Ошибка при освобождении ресурсов');
+    // The failure this service exists to produce.
+    throw Exception('failed to release resources');
   }
 }

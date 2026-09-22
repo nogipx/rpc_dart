@@ -282,3 +282,35 @@ generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
 
 Largest left: `rpc_responder_endpoint_test.dart` (116),
 `rpc_message_parser_test.dart` (53), `call_processor_test.dart` (40).
+
+## Round 439 — `test/endpoint/`, and a sweep that damaged its own prose
+
+187 Cyrillic lines to 0 across the four files; the whole directory is clean and
+every test in it passes.
+
+**A rule this record should carry.** `// Регистрируем сервис` appeared four
+times, so the sweep batched it — and it is a PREFIX of six longer comments,
+which came out half-translated (`// Register the service. первый раз`). It
+compiles, tests pass, `analyze` is clean. Nothing in a Dart gate can see a
+mangled comment. The Cyrillic grep caught it only because the surviving tail was
+Russian; `// Регистрируем сервис v2` would have passed everything.
+
+> Anchor a bulk comment replace to the end of the line, or edit the sites one at
+> a time.
+
+**The 437/438 stale-comment rate did not continue**: 187 lines, zero
+number-comments disagreeing with their code. Two then zero says the earlier pair
+were real but the rate is not uniform.
+
+### What remains
+
+```
+lib/ logs        39 lines   rpc_notify only    deferred by the owner's ORDER
+lib/ comments   277 lines   23 files           same
+test/           614 lines   27 files           in scope, open (21 are C-47)
+generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
+```
+
+Largest left: `rpc_message_parser_test.dart` (53),
+`call_processor_test.dart` (40), `server_stream_test.dart` (36),
+`in_memory_transport_streams_test.dart` (31).
