@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-95](P-95-bridge-cancel-paths.md)** valid (round 425), rpc_dart — how long
+  does a CONSUMER's `cancel()` take on a bridge whose source is a user `async*`
+  parked at an await? Five arms, 3000 ms cap. The control is the same parked
+  source through a controller that drops the cancel Future instead of returning
+  it: 6 ms against HUNG, so the park alone does not produce the number, the
+  await does. Two arms are real code paths with the defect absent, one of them a
+  full server-stream call — the premise check for B-56's designated extraction
+  source
 - **[P-94](P-94-unary-listener-fanout.md)** valid (round 423), rpc_dart — how
   many listeners sit on the connection-wide broadcast per parked unary handler?
   **A COUNT, not a duration**: the defect is O(N) listener invocations per

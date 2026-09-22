@@ -237,16 +237,13 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   ///
   /// [cancelReason] is the only thing the two shapes disagreed on.
   ///
-  /// Two rules the body encodes, each of which cost a round:
-  ///
-  /// - Fire the token ONLY when the stream did not already complete. On normal
-  ///   completion onDone runs `finish()` and closes the controller, `await for`
-  ///   tears down its subscription, and that reaches onCancel — firing there
-  ///   poisons a REUSED RpcContext's token, so the next call on that context
-  ///   throws RpcCancelledException even though this stream succeeded.
-  /// - Do NOT await `sub.cancel()`. On dart2js, cancelling the inner chain of
-  ///   `async*` generators may never complete, which would block cancellation on
-  ///   the client side.
+  /// The pause forwarding, the unawaited cancel and the close-on-done belong to
+  /// [StreamBridge]; what is left here is the one rule that is this call's own.
+  /// Fire the token ONLY when the stream did not already complete: on normal
+  /// completion onDone runs `finish()` and closes the controller, `await for`
+  /// tears down its subscription, and that reaches onCancel — firing there
+  /// poisons a REUSED RpcContext's token, so the next call on that context
+  /// throws RpcCancelledException even though this stream succeeded.
   Stream<T> _bridgeCallerResponses<T>({
     required Stream<T> stream,
     required String serviceName,
@@ -254,8 +251,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     required RpcContext ctx,
     required String cancelReason,
   }) {
-    late final StreamController<T> controller;
-    StreamSubscription<T>? sub;
     var finished = false;
 
     void finish() {
@@ -264,37 +259,18 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       _untrackCallerRequest(serviceName, methodName, ctx.requestId);
     }
 
-    controller = StreamController<T>(
-      onListen: () {
-        _trackCallerRequest(serviceName, methodName, ctx);
-        sub = stream.listen(
-          (event) {
-            if (!controller.isClosed) controller.add(event);
-          },
-          onError: (Object error, StackTrace trace) {
-            if (!controller.isClosed) controller.addError(error, trace);
-          },
-          onDone: () {
-            finish();
-            if (!controller.isClosed) controller.close();
-          },
-          cancelOnError: false,
-        );
-      },
-      onPause: () => sub?.pause(),
-      onResume: () => sub?.resume(),
-      onCancel: () {
+    return StreamBridge<T>(
+      source: stream,
+      subscribeOnFirstListen: true,
+      onFirstListen: () => _trackCallerRequest(serviceName, methodName, ctx),
+      onSourceDone: finish,
+      onConsumerCancel: () {
         if (!finished) {
           ctx.cancellationToken?.cancel(cancelReason);
         }
         finish();
-        final inner = sub;
-        sub = null;
-        unawaited(inner?.cancel().catchError((_) {}));
       },
-    );
-
-    return controller.stream;
+    ).stream;
   }
 
   void _untrackCallerRequest(

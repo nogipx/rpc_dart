@@ -55,6 +55,31 @@ same defect (nullable vs not), that three transports were not in the class at
 all, and that **unary is the CHEAPEST of the four call shapes by a factor of
 seven**, which is the fact that made 333's and 334's "nearly done" wrong.
 
+## The second half — a count is taken on an AXIS, and the axis can be wrong
+(round 425)
+
+Round 415 swept this rule's own subject and tabulated it: nine sites, three
+columns, one row each. Round 424 read that table, took the three rows it marked
+wrong, and fixed them. **Two more instances of the same rule survived, in the two
+files 424 had open**, because the table had ONE "cancel unawaited" column and a
+bridge has TWO cancel paths — the consumer's, which `StreamController` awaits,
+and the owner's teardown. 424 fixed the owner half at two sites; `track` and
+`_wrapStream` still returned the source's cancel Future from `onCancel`, and a
+consumer cancelling over a parked generator hung with nothing to bound it.
+
+A second thing the same re-derivation found: the nine "sites of one mechanic"
+were six bridges and four pumps, and `_pumpBidirectionalResponses` was a seventh
+bridge the sweep does not list at all.
+
+> **Counting the class correctly still misses half of it if the class is
+> tabulated on the wrong axis. Count the PATHS into a mechanism, not the sites
+> that have it** — a site is where a rule lives, a path is where it is obeyed or
+> broken. And before extracting from someone's sweep, re-derive its table: a
+> column heading that reads the same for two rows can name two mechanisms.
+
+Price: one round's delay and one probe, on a rule already written down twice
+(L-16) and in a comment thirty lines from one of the misses.
+
 ## Where it does NOT apply
 
 A round that finds ONE instance of a shape and fixes it is not under-delivering

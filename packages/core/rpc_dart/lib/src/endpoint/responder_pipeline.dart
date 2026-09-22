@@ -1714,33 +1714,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     BidirectionalStreamResponder<T, T> responder,
     Stream<T> responses,
   ) async {
-    final relay = StreamController<T>();
-    final handlerSub = responses.listen(
-      relay.add,
-      onError: relay.addError,
-      onDone: () {
-        if (!relay.isClosed) relay.close();
-      },
-    );
-
-    // Hand the `await for` below's demand back to the handler. Without it the
-    // relay is an unbounded buffer between the two: the loop pauses the relay
-    // while a send is in flight and an `async*` handler keeps allocating
-    // regardless. ServerStreamResponder keeps the same bound the same way.
-    var torn = false;
-    relay.onPause = () {
-      if (!torn) handlerSub.pause();
-    };
-    relay.onResume = () {
-      if (!torn) handlerSub.resume();
-    };
+    // The bridge hands the `await for` below's demand back to the handler:
+    // without that the relay is an unbounded buffer between the two, since the
+    // loop pauses it while a send is in flight and an `async*` handler keeps
+    // allocating regardless. ServerStreamResponder keeps the same bound the
+    // same way.
+    final relay = StreamBridge<T>(source: responses);
 
     _detached(
-      responder.done.whenComplete(() {
-        torn = true;
-        unawaited(handlerSub.cancel().catchError((_) {}));
-        if (!relay.isClosed) relay.close();
-      }),
+      responder.done.whenComplete(relay.close),
       'bidirectional teardown',
     );
 
@@ -1749,8 +1731,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         await responder.send(response);
       }
     } finally {
-      unawaited(handlerSub.cancel().catchError((_) {}));
-      if (!relay.isClosed) unawaited(relay.close());
+      relay.close();
     }
   }
 

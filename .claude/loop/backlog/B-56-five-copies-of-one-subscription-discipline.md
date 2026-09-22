@@ -199,3 +199,60 @@ loss poisons a reused `RpcContext`.
 
 Sites 1-6 remain confirmed-correct by READING only; round 424 did not re-take
 that.
+
+## The BRIDGE half is extracted — round 425. The PUMP half is not.
+
+**The nine are two mechanics, not one, and the table above conflates them.**
+
+```
+bridge   mirror a source through a controller the library owns
+         6 _bridgeCallerResponses   7 track   9 _wrapStream
+         2 ServerStreamResponder's relay
+         + _pumpBidirectionalResponses, responder_pipeline.dart:1713 --
+           a SEVENTH bridge this lead's sweep does not list
+pump     drive a source into a call, pausing the subscription per send
+         1 ClientStreamCaller.call   3 the bidi bridge's request half
+         4 requestSink              5 responseSink
+```
+
+"pause per send" and "forward the consumer's pause" share a column heading here
+and are different mechanisms. A single helper over both would take a flag for
+the difference, which is what this lead's own constraint forbids.
+
+**All six bridges now go through `StreamBridge`** (`src/core/stream_bridge.dart`,
+hidden from the public barrel), extracted from site 6 as this lead directs. It
+owns: forward pause/resume, close on the source's done, and BOTH cancel paths —
+`onCancel` and `cancelSource()`/`close()` — neither awaited.
+
+**The defect that half hid.** `StreamController` AWAITS whatever `onCancel`
+returns, and two bridges returned the source's cancel Future. Nothing bounds
+that path — `disposerTimeout` bounds the disposer path, which is the half round
+424 fixed:
+
+```
+consumer cancel(), parked user async*, 3000ms cap
+  RpcCallScope.track            HUNG      -> 8ms
+  circuit breaker _wrapStream   HUNG      -> 5ms
+  CONTROL, await removed        6ms
+  CONTROL site 6                7ms       (the source copy: sound)
+```
+
+`track` is public API a handler calls on a stream the handler supplied, so
+`.first` / `.take(n)` on a tracked generator hung forever.
+
+### What is left, and what would carry it
+
+**The four PUMP sites.** No defect known in any of them; B-56's read stands and
+425 did not re-take it. A pump helper is a different signature — half-close,
+abort-the-peer, stop-on-done — and 4 (`requestSink`) and 5 (`responseSink`) are
+near twins, so they are where a round starts.
+
+**`RpcCallScope.listen` (site 8)** is not a bridge and needs no conversion: raw
+subscription plus a disposer, no controller between.
+
+**`_stateBoundStream` (responder_pipeline.dart:1984)** returns its cancel from
+`onCancel` too, and is out by the ownership criterion — its source is
+`transport.getMessagesForStream`. The comment four lines above it notes that a
+transport is a public extension point, which is the argument for revisiting it;
+that belongs with the untouched TRANSPORT half below, not with the call
+machinery.

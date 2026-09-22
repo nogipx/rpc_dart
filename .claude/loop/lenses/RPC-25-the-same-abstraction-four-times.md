@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424]
-status: confirmed (round 424)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425]
+status: confirmed (round 425)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -491,3 +491,40 @@ produces it.** Two consumers gave it away:
 > from its transport's — which one of this round's canaries needed.
 
 `../rounds/416-every-error-names-its-status.md`.
+
+## Round 425 — a table column is a claim about how many mechanisms there are
+
+B-56's sweep lists nine sites of "one mechanic" with three columns. Reading the
+nine apart gives **two** mechanics that its columns conflate — six bridges
+(mirror a source through a controller we own) and four pumps (pause the
+subscription for the duration of each send) — and `_pumpBidirectionalResponses`
+is a seventh bridge the sweep does not list at all.
+
+> **Before extracting from a sweep's table, re-derive the table.** A column
+> heading that reads the same for two sites ("pause/resume") can name two
+> different mechanisms, and the helper you extract will then take a flag for the
+> difference — which is the failure mode the lead's own constraint warns about.
+
+The defect the re-derivation found is what one column could not hold. A bridge
+has TWO cancel paths, the consumer's (`onCancel`, whose return value
+`StreamController` AWAITS) and the owner's (a scope closing, a timer firing).
+Round 424 fixed the owner half at two sites; two of the six bridges still
+returned the source's cancel from `onCancel`:
+
+    consumer cancel(), source parked, 3000ms cap
+    RpcCallScope.track            HUNG
+    circuit breaker _wrapStream   HUNG
+    CONTROL, await removed        6ms
+    site 6, already correct       7ms
+
+> **Count the PATHS into a mechanism, not the sites that have it.** One row per
+> site with one "cancel unawaited" column answers a question nobody asked: the
+> sites are not where a rule is obeyed or broken, the paths are.
+
+And the extraction's return, measured rather than asserted: ablating
+`StreamBridge.onCancel` once turns BOTH witnesses red. Before it, the same
+ablation had to be made twice in two files to break two tests — which is the
+331 coverage criterion arriving from the other side.
+
+`../rounds/425-the-cancel-path-the-table-had-no-column-for.md`,
+`../probes/P-95-bridge-cancel-paths.md`.

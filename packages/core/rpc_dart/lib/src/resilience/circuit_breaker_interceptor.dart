@@ -205,8 +205,6 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     var resolved = false;
     var listened = false;
     Timer? abandonTimer;
-    late StreamSubscription<TResponse> sub;
-    late StreamController<TResponse> controller;
 
     void cancelAbandonTimer() {
       abandonTimer?.cancel();
@@ -234,41 +232,29 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       _releaseProbe();
     }
 
-    controller = StreamController<TResponse>(
-      onListen: () {
+    final bridge = StreamBridge<TResponse>(
+      source: source,
+      onFirstListen: () {
         listened = true;
         // Stream is being consumed; the abandon safety net is no longer needed.
         cancelAbandonTimer();
       },
-      onPause: () => sub.pause(),
-      onResume: () => sub.resume(),
-      onCancel: () async {
-        // Downstream cancelled before the source terminated. A cancelled
-        // subscription never delivers onDone, and onListen already cancelled
-        // the abandon timer, so without this the gate stays pinned and the
-        // breaker rejects every later call forever. Reached after a normal
-        // close too, where `resolved` makes it a no-op.
-        resolveInconclusive();
-        await sub.cancel();
-      },
-    );
-
-    sub = source.listen(
-      (data) {
-        if (!controller.isClosed) controller.add(data);
-      },
-      onError: (Object error, StackTrace stackTrace) {
+      onSourceError: (Object error, StackTrace stackTrace) {
         failed = true;
         // Count the failure immediately so the breaker reopens even if the
         // wrapped stream is never listened.
         _onFailure(error);
         resolve(success: false);
-        if (!controller.isClosed) controller.addError(error, stackTrace);
       },
-      onDone: () {
+      onSourceDone: () {
         if (!failed) resolve(success: true);
-        if (!controller.isClosed) controller.close();
       },
+      // Downstream cancelled before the source terminated. A cancelled
+      // subscription never delivers onDone, and onListen already cancelled the
+      // abandon timer, so without this the gate stays pinned and the breaker
+      // rejects every later call forever. Reached after a normal close too,
+      // where `resolved` makes it a no-op.
+      onConsumerCancel: resolveInconclusive,
     );
 
     // If the stream is never listened and the source never completes, release
@@ -281,17 +267,14 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       // so the breaker cannot stay wedged; it stays half-open and the next call
       // takes its turn as the probe, which is a real observation.
       resolveInconclusive();
-      // Drop the dangling source subscription; nothing consumes it.
-      //
-      // UNAWAITED and CAUGHT. This ran on a detached timer callback with the
-      // future discarded bare, so a cancel that REJECTS -- a suspended
-      // generator refusing to unwind -- became an unhandled async error, which
-      // in the root zone kills the isolate. `RpcCallScope.track` records the
-      // same shape as measured: two such drops were enough.
-      unawaited(sub.cancel().catchError((Object _) {}));
+      // Drop the dangling source subscription; nothing consumes it. The
+      // controller is left open: this fires only when nobody listened, and a
+      // caller that arrives later should still see the source, not an empty
+      // stream.
+      bridge.cancelSource();
     });
 
-    return controller.stream;
+    return bridge.stream;
   }
 
   /// Checks whether a request is allowed based on the current state.

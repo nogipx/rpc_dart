@@ -32,8 +32,7 @@ final class ServerStreamResponder<
   /// Incoming request subscription.
   StreamSubscription<void>? _subscription;
 
-  /// Our subscription to the user handler's response stream, and the relay it
-  /// feeds.
+  /// The bridge over the user handler's response stream.
   ///
   /// The handler stream used to be consumed with a bare `await for`, whose
   /// implicit subscription nothing could reach. [close] therefore had no way to
@@ -43,8 +42,7 @@ final class ServerStreamResponder<
   /// vanished — burning CPU and pinning everything the generator captured, for
   /// the life of the server process. Owning the subscription lets [close] tear
   /// it down and end the generator at its next suspension point.
-  StreamSubscription<TResponse>? _handlerSubscription;
-  StreamController<TResponse>? _handlerRelay;
+  StreamBridge<TResponse>? _handlerRelay;
 
   /// True until [close] runs; guards the response pump.
   bool _isActive = true;
@@ -147,27 +145,13 @@ final class ServerStreamResponder<
               _logger.internal('Request handler returned a stream [id: $id]');
             }
 
-            // Relay the handler stream through a controller we own, so close()
-            // can cancel the upstream subscription and end the `await for`.
-            final relay = StreamController<TResponse>();
+            // Relay the handler stream through a bridge we own, so close() can
+            // cancel the upstream subscription and end the `await for`. The
+            // bridge is also what passes the loop's demand back: without that
+            // the relay is an unbounded buffer, and an `async*` handler keeps
+            // allocating while a send is in flight.
+            final relay = StreamBridge<TResponse>(source: handlerStream);
             _handlerRelay = relay;
-            _handlerSubscription = handlerStream.listen(
-              relay.add,
-              onError: relay.addError,
-              onDone: () {
-                if (!relay.isClosed) relay.close();
-              },
-            );
-
-            // Backpressure from the transport to the handler -- the responder
-            // half of the demand chain. The relay exists so cancellation can
-            // drop the upstream subscription, but nothing passed its pause
-            // along, so it was an unbounded buffer between the two: the
-            // `await for` below pauses the relay while a send is in flight and
-            // an `async*` handler kept allocating regardless. Pausing that same
-            // subscription turns the relay into a conduit.
-            relay.onPause = () => _handlerSubscription?.pause();
-            relay.onResume = () => _handlerSubscription?.resume();
 
             int responseCount = 0;
             await for (var response in relay.stream) {
@@ -278,15 +262,11 @@ final class ServerStreamResponder<
 
     // Stop pulling from the user's handler. Cancelling ends its generator at
     // the next suspension point; closing the relay unblocks the `await for`
-    // that is waiting on it. Not awaited: a handler stuck in cancel must not
-    // block teardown of the rest of the call.
-    final handlerSub = _handlerSubscription;
-    _handlerSubscription = null;
-    if (handlerSub != null) unawaited(handlerSub.cancel().catchError((_) {}));
-
+    // that is waiting on it. Neither is awaited: a handler stuck in cancel must
+    // not block teardown of the rest of the call.
     final relay = _handlerRelay;
     _handlerRelay = null;
-    if (relay != null && !relay.isClosed) unawaited(relay.close());
+    relay?.close();
 
     await _processor.close();
     _completeDone();

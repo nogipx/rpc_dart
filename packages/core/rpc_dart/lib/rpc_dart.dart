@@ -34,4 +34,5 @@ export 'src/_index.dart'
         RpcResponderPipelineMixin,
         RpcResponderStreamState,
         RpcResponderStreamStore,
+        StreamBridge,
         StreamProcessor;

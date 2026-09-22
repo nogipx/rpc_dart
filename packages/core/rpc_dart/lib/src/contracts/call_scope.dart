@@ -138,35 +138,16 @@ final class RpcCallScope {
       return c.stream;
     }
 
-    late StreamSubscription<T> sub;
-    late StreamController<T> controller;
-
-    controller = StreamController<T>(
-      onCancel: () => sub.cancel().catchError(_cancelFailed),
-      onPause: () => sub.pause(),
-      onResume: () => sub.resume(),
-      // Forwarded, or a slow consumer of a tracked stream never slows the
-      // SOURCE: the controller buffers without bound while the producer runs
-      // flat out. Every other site in this class of code forwards pause; these
-      // two forwarded nothing.
+    // Both cancel paths belong to the bridge: the consumer's, which used to
+    // RETURN the cancel Future from onCancel and so handed a handler doing
+    // `.first` or `.take(n)` the parked generator's own stall, and the scope's,
+    // here.
+    final bridge = StreamBridge<T>(
+      source: stream,
+      onCancelFailed: _cancelFailed,
     );
-
-    sub = stream.listen(
-      controller.add,
-      onError: controller.addError,
-      onDone: controller.close,
-    );
-
-    onDispose(() {
-      // Not awaited: cancelling a suspended generator can block indefinitely
-      // and the scope has to finish closing. Both this and the onCancel above
-      // dropped the returned future outright, so a rejected cancel became TWO
-      // unhandled async errors -- measured, and enough to kill the isolate.
-      unawaited(sub.cancel().catchError(_cancelFailed));
-      if (!controller.isClosed) controller.close();
-    });
-
-    return controller.stream;
+    onDispose(bridge.close);
+    return bridge.stream;
   }
 
   /// Listens to [stream] and auto-cancels the subscription when

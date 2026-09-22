@@ -19,6 +19,7 @@ import '../_internal.dart'
         RpcStatus,
         RpcStatusException,
         RpcLongTimer,
+        StreamBridge,
         LogScope;
 
 export 'dart:typed_data';
