@@ -120,6 +120,29 @@ sweep, the gate and the detector, and been reported as a clean file.
 > a time.** Identical comments are safe to batch; comments that merely BEGIN the
 > same way are not, and nothing distinguishes them when you write the edit.
 
+**The detector for that damage** (round 440), and the only thing that can see
+this class:
+
+```
+grep -nE '// [A-Za-z][A-Za-z ,.()]*[а-яА-ЯёЁ]'   over tracked *.dart
+```
+
+An ASCII sentence followed by non-ASCII on one comment line. Run repo-wide in
+440: **no damage** — every hit is a pre-existing Russian sentence containing an
+English identifier (`IBlobClient реализация`, `StreamController с onCancel`,
+`Premium пользователи`), all in `lib/` or `example/`, which no round has
+touched. So round 439's six were the whole population and its repair was
+complete.
+
+Its limit is the same one that made 439's escape possible: it sees the damage
+only while the surviving tail is non-ASCII. Nothing can see
+`// Register the service. v2`.
+
+Round 440 also costed the rule: `replace_all` was used eight times, each checked
+first against a `sort | uniq -c` of the file's comment lines, and two were
+rejected as prefixes and done singly. The check takes about as long as reading
+the comments.
+
 **A third shape, found in round 438 and not among the fixtures above**: prose
 data with a producer and an assertion far apart.
 `rpc_context_integration_test.dart` built `'Aggregated N элементов [...]'` at

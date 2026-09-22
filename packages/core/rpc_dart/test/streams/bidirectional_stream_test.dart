@@ -11,7 +11,7 @@ void main() {
   group('Bidirectional Stream', () {
     final serializer = RpcCodec(RpcString.fromJson);
     group('BidirectionalStreamClient', () {
-      test('отправляет_и_получает_сообщения_двунаправленно', () async {
+      test('the caller sends and receives both ways', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -24,7 +24,7 @@ void main() {
           responseCodec: serializer,
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -40,13 +40,13 @@ void main() {
         final receivedRequests = <RpcString>[];
         final receivedResponses = <RpcString>[];
 
-        // Настраиваем серверную обработку
+        // Wire up the server side.
         server.requests.listen((request) async {
           receivedRequests.add(request);
           await server.send('Echo: $request'.rpc);
         });
 
-        // Настраиваем клиентскую обработку
+        // Wire up the client side.
         client.responses.listen((message) {
           if (!message.isMetadataOnly && message.payload != null) {
             receivedResponses.add(message.payload!);
@@ -57,7 +57,7 @@ void main() {
         await client.send('Hello'.rpc);
         await client.send('World'.rpc);
 
-        // Ждем обработки сообщений
+        // Wait for the messages to be handled.
         while (receivedResponses.length < 2) {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
@@ -78,7 +78,7 @@ void main() {
     });
 
     group('BidirectionalStreamServer', () {
-      test('получает_и_отправляет_сообщения_двунаправленно', () async {
+      test('the responder receives and sends both ways', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -91,7 +91,7 @@ void main() {
           responseCodec: serializer,
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -107,13 +107,13 @@ void main() {
         final serverReceivedRequests = <RpcString>[];
         final clientReceivedResponses = <RpcString>[];
 
-        // Настраиваем серверную логику
+        // The server's logic.
         server.requests.listen((request) async {
           serverReceivedRequests.add(request);
           await server.send('Server processed: $request'.rpc);
         });
 
-        // Настраиваем клиентскую логику
+        // The client's logic.
         client.responses.listen((message) {
           if (!message.isMetadataOnly && message.payload != null) {
             clientReceivedResponses.add(message.payload!);
@@ -124,7 +124,7 @@ void main() {
         await client.send('Request 1'.rpc);
         await client.send('Request 2'.rpc);
 
-        // Ждем обработки
+        // Let it run.
         while (clientReceivedResponses.length < 2) {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
@@ -150,7 +150,7 @@ void main() {
         await server.close();
       });
 
-      test('обрабатывает_только_запросы_своего_метода', () async {
+      test('a server answers only its own method', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
         var handlerCallCount = 0;
@@ -164,7 +164,7 @@ void main() {
           responseCodec: serializer,
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -189,14 +189,14 @@ void main() {
 
         // Act
         await correctClient.send('correct request'.rpc);
-        // Добавляем задержку, чтобы запрос успел обработаться
+        // A pause, so the request has time to be handled.
         await Future<void>.delayed(Duration(milliseconds: 1));
 
         await incorrectClient.send('incorrect request'.rpc);
-        // Добавляем задержку, чтобы запрос успел обработаться
+        // A pause, so the request has time to be handled.
         await Future<void>.delayed(Duration(milliseconds: 1));
 
-        // Ждем обработки всех запросов
+        // Wait for every request to be handled.
         await Future<void>.delayed(Duration(milliseconds: 1));
 
         // Assert
@@ -209,8 +209,8 @@ void main() {
       });
     });
 
-    group('интеграционные тесты', () {
-      test('полный_цикл_двунаправленного_стриминга', () async {
+    group('integration', () {
+      test('a full bidirectional round', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -223,7 +223,7 @@ void main() {
           responseCodec: serializer,
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -239,7 +239,7 @@ void main() {
         final serverMessages = <RpcString>[];
         final clientMessages = <RpcString>[];
 
-        // Настраиваем сервер
+        // The server.
         server.requests.listen((request) async {
           serverMessages.add(request);
 
@@ -250,7 +250,7 @@ void main() {
           }
         });
 
-        // Настраиваем клиент
+        // The client.
         client.responses.listen((message) {
           if (!message.isMetadataOnly && message.payload != null) {
             clientMessages.add(message.payload!);
@@ -262,7 +262,7 @@ void main() {
         await client.send('hello world'.rpc);
         await client.send('ping 2'.rpc);
 
-        // Ждем обработки всех сообщений
+        // Wait for every message to be handled.
         while (clientMessages.length < 3) {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
@@ -283,7 +283,7 @@ void main() {
         await server.close();
       });
 
-      test('обработка_большого_количества_сообщений', () async {
+      test('a large number of messages', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -296,7 +296,7 @@ void main() {
           responseCodec: serializer,
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -327,7 +327,7 @@ void main() {
           await client.send('message_$i'.rpc);
         }
 
-        // Ждем обработки всех сообщений
+        // Wait for every message to be handled.
         while (receivedResponses.length < messageCount) {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }

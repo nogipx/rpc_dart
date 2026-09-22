@@ -7,7 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// Создает транспортную пару для тестирования
+/// Builds a transport pair for these tests.
 (IRpcTransport, IRpcTransport) createTransportPair() =>
     RpcInMemoryTransport.pair();
 
@@ -16,7 +16,7 @@ void main() {
     final serializer = RpcCodec(RpcString.fromJson);
 
     group('UnaryClient', () {
-      test('отправляет_запрос_и_получает_ответ', () async {
+      test('sends a request and gets an answer', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
         final receivedRequests = <RpcString>[];
@@ -55,7 +55,7 @@ void main() {
         await server.close();
       });
 
-      test('выбрасывает_исключение_при_ошибке_сервера', () async {
+      test('throws when the server fails', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
@@ -90,7 +90,7 @@ void main() {
         await server.close();
       });
 
-      test('применяет_таймаут_к_запросу', () async {
+      test('applies the timeout to the request', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
@@ -101,7 +101,7 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
           handler: (request) async {
-            // Задержка больше таймаута
+            // Longer than the timeout.
             await Future<void>.delayed(Duration(seconds: 1));
             return 'Delayed response'.rpc;
           },
@@ -130,19 +130,19 @@ void main() {
         await server.close();
       });
 
-      test('создает_уникальные_stream_id_для_каждого_вызова', () async {
+      test('every call gets its own stream id', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
         final receivedStreamIds = <int>[];
 
-        // Отслеживаем входящие stream IDs
+        // Watch the incoming stream ids.
         serverTransport.incomingMessages.listen((message) {
           if (message.isMetadataOnly) {
             receivedStreamIds.add(message.streamId);
           }
         });
 
-        // Создаем простой сервер
+        // A plain server.
         final server = UnaryResponder<RpcString, RpcString>(
           transport: serverTransport,
           serviceName: 'TestService',
@@ -152,7 +152,7 @@ void main() {
           handler: (request) => 'Echo: $request'.rpc,
         );
 
-        // Act - делаем несколько вызовов
+        // Act: make several calls.
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
           serviceName: 'TestService',
@@ -161,14 +161,14 @@ void main() {
           responseCodec: serializer,
         );
 
-        // Делаем три последовательных вызова
+        // Three calls, one after another.
         await client.call('request 1'.rpc);
         await client.call('request 2'.rpc);
         await client.call('request 3'.rpc);
 
         // Assert
         expect(receivedStreamIds.length, equals(3));
-        expect(receivedStreamIds.toSet().length, equals(3)); // Все уникальные
+        expect(receivedStreamIds.toSet().length, equals(3)); // All distinct.
 
         // Cleanup
         await client.close();
@@ -177,7 +177,7 @@ void main() {
     });
 
     group('UnaryServer', () {
-      test('обрабатывает_запрос_и_отправляет_ответ', () async {
+      test('handles a request and sends an answer', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
@@ -216,7 +216,7 @@ void main() {
         await server.close();
       });
 
-      test('отправляет_ошибку_при_исключении_в_обработчике', () async {
+      test('a handler that throws sends an error back', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
@@ -250,14 +250,14 @@ void main() {
         await server.close();
       });
 
-      test('обрабатывает_только_запросы_своего_метода', () async {
+      test('a server answers only its own method', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
         var handlerCallCount = 0;
         final receivedRequests = <RpcString>[];
 
-        // Сервер для конкретного метода
+        // A server bound to one method.
         final server = UnaryResponder<RpcString, RpcString>(
           transport: serverTransport,
           serviceName: 'TestService',
@@ -271,7 +271,7 @@ void main() {
           },
         );
 
-        // Второй сервер для другого метода
+        // A second server, on a different method.
         final otherServer = UnaryResponder<RpcString, RpcString>(
           transport: serverTransport,
           serviceName: 'TestService',
@@ -283,7 +283,7 @@ void main() {
           },
         );
 
-        // Создаем клиентов для разных методов
+        // A client for each method.
         final correctClient = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
           serviceName: 'TestService',
@@ -305,10 +305,7 @@ void main() {
         final response2 = await otherClient.call('other request'.rpc);
 
         // Assert
-        expect(
-          handlerCallCount,
-          equals(1),
-        ); // Только один вызов конкретного обработчика
+        expect(handlerCallCount, equals(1)); // Exactly one handler ran.
         expect(receivedRequests, equals(['correct request'.rpc]));
         expect(response1, equals('response from SpecificMethod'.rpc));
         expect(response2, equals('response from DifferentMethod'.rpc));
@@ -321,8 +318,8 @@ void main() {
       });
     });
 
-    group('интеграционные тесты', () {
-      test('полный_цикл_запрос_ответ_работает_корректно', () async {
+    group('integration', () {
+      test('a full request/answer round works', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
@@ -356,7 +353,7 @@ void main() {
         await server.close();
       });
 
-      test('несколько_клиентов_могут_использовать_один_сервер', () async {
+      test('several clients can share one server', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
@@ -374,7 +371,7 @@ void main() {
           },
         );
 
-        // Act - создаем несколько клиентов
+        // Act: several clients.
         final responses = <RpcString>[];
         for (int i = 0; i < 3; i++) {
           final client = UnaryCaller<RpcString, RpcString>(

@@ -9,11 +9,11 @@ import 'dart:async';
 import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
-/// Тесты CallProcessor следуя принципам Unit Testing:
-/// - Тестируем наблюдаемое поведение, не детали реализации
-/// - Используем тестируемые объекты в памяти вместо моков
-/// - Проверяем состояние объектов и выходные данные
-/// - Не тестируем взаимодействия с коллабораторами
+/// CallProcessor, tested against observable behaviour:
+/// - assert on behaviour, not on implementation detail
+/// - use real in-memory objects rather than mocks
+/// - check object state and output
+/// - do not assert on interactions with collaborators
 void main() {
   group('CallProcessor', () {
     late IRpcTransport clientTransport;
@@ -22,10 +22,10 @@ void main() {
     late RpcCodec<RpcString> codec;
 
     setUp(() {
-      // Используем in-memory объекты вместо моков (принцип Unit Testing)
+      // Real in-memory objects, not mocks.
       final transportPair = RpcInMemoryTransport.pair();
-      clientTransport = transportPair.$1; // клиентская часть
-      serverTransport = transportPair.$2; // серверная часть
+      clientTransport = transportPair.$1; // the client end
+      serverTransport = transportPair.$2; // the server end
       codec = RpcCodec(RpcString.fromJson);
 
       processor = CallProcessor<RpcString, RpcString>(
@@ -44,28 +44,28 @@ void main() {
     });
 
     test('creates stream and initializes correctly', () {
-      // Тестируем наблюдаемое поведение - состояние после создания
+      // Observable behaviour: the state right after construction.
       expect(processor.isActive, isTrue);
       expect(processor.streamId, isPositive);
       expect(processor.responses, isA<Stream<RpcMessage<RpcString>>>());
     });
 
     test('sends request and serializes correctly', () async {
-      // Подготавливаем тестовые данные в памяти
+      // The test data.
       final request = 'test message'.rpc;
 
-      // Выполняем тестируемое действие
+      // The action under test.
       await processor.send(request);
 
-      // Ждем обработки
+      // Let it run.
       await Future<void>.delayed(Duration(milliseconds: 250));
 
-      // Проверяем наблюдаемое поведение - процессор активен после отправки
+      // Observable behaviour: the processor stays active after a send.
       expect(processor.isActive, isTrue);
     });
 
     test('processes incoming response and deserializes correctly', () async {
-      // Создаем коллектор для ответов
+      // Collect the answers.
       final receivedResponses = <RpcMessage<RpcString>>[];
       final completer = Completer<void>();
 
@@ -76,18 +76,18 @@ void main() {
         }
       }, onError: completer.completeError);
 
-      // Симулируем получение ответа через серверный транспорт
+      // Stand in for an answer arriving on the server transport.
       final testResponse = 'response message'.rpc;
       final responseBytes = codec.serialize(testResponse);
       final framedMessage = RpcMessageFrame.encode(responseBytes);
 
-      // Отправляем ответ через серверную сторону транспорта
+      // Send the answer from the server end.
       await serverTransport.sendMessage(processor.streamId, framedMessage);
 
-      // Ждем получения ответа
+      // Wait for it to arrive.
       await completer.future.timeout(Duration(seconds: 5));
 
-      // Проверяем наблюдаемое поведение - ответ получен и десериализован
+      // Observable behaviour: the answer arrived and was decoded.
       expect(receivedResponses, isNotEmpty);
       final dataResponse = receivedResponses.firstWhere(
         (r) => !r.isMetadataOnly && r.payload != null,
@@ -99,7 +99,7 @@ void main() {
     });
 
     test('handles metadata responses correctly', () async {
-      // Создаем коллектор для ответов
+      // Collect the answers.
       final receivedResponses = <RpcMessage<RpcString>>[];
       final completer = Completer<void>();
 
@@ -110,14 +110,14 @@ void main() {
         }
       }, onError: completer.completeError);
 
-      // Отправляем метаданные через серверный транспорт
+      // Send metadata from the server end.
       final metadata = RpcMetadata.forTrailer(RpcStatus.ok, message: 'Success');
       await serverTransport.sendMetadata(processor.streamId, metadata);
 
-      // Ждем получения метаданных
+      // Wait for it to arrive.
       await completer.future.timeout(Duration(seconds: 5));
 
-      // Проверяем, что метаданные обработаны
+      // The metadata was handled.
       expect(receivedResponses, isNotEmpty);
       final metadataResponse = receivedResponses.firstWhere(
         (r) => r.isMetadataOnly,
@@ -130,35 +130,35 @@ void main() {
     });
 
     test('finishSending completes successfully', () async {
-      // Выполняем тестируемое действие
+      // The action under test.
       await processor.finishSending();
 
-      // Проверяем наблюдаемое поведение - процессор остается активным
+      // Observable behaviour: the processor stays active.
       expect(processor.isActive, isTrue);
     });
 
     test('handles multiple requests in sequence', () async {
-      // Подготавливаем несколько запросов
+      // Several requests.
       final requests = ['message 1'.rpc, 'message 2'.rpc, 'message 3'.rpc];
 
-      // Отправляем запросы
+      // Send them.
       for (final request in requests) {
         await processor.send(request);
         await Future<void>.delayed(Duration(milliseconds: 1));
       }
 
-      // Проверяем наблюдаемое поведение - все операции завершились без ошибок
+      // Observable behaviour: every send finished without error.
       expect(processor.isActive, isTrue);
     });
 
     test('close makes processor inactive', () async {
-      // Проверяем начальное состояние
+      // The starting state.
       expect(processor.isActive, isTrue);
 
-      // Выполняем тестируемое действие
+      // The action under test.
       await processor.close();
 
-      // Проверяем наблюдаемое поведение - состояние после закрытия
+      // Observable behaviour: the state after close.
       expect(processor.isActive, isFalse);
 
       // A request handed to a closed processor is REFUSED. Returning quietly
@@ -178,42 +178,42 @@ void main() {
     });
 
     test('handles errors gracefully in response stream', () async {
-      // Создаем коллектор для ошибок
+      // Collect the errors.
       final errors = <Object>[];
       final subscription = processor.responses.listen(
         null,
         onError: errors.add,
       );
 
-      // Закрываем серверный транспорт для симуляции ошибки сети
+      // Close the server transport, standing in for a network failure.
       await serverTransport.close();
 
-      // Ждем обработки
+      // Let it run.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      // Проверяем наблюдаемое поведение - процессор продолжает работать
+      // Observable behaviour: the processor keeps working.
       expect(processor.isActive, isTrue);
 
       await subscription.cancel();
     });
 
     test('handles concurrent send operations', () async {
-      // Подготавливаем запросы для конкурентной отправки
+      // Requests to send concurrently.
       final futures = <Future<void>>[];
 
       for (int i = 0; i < 5; i++) {
         futures.add(processor.send('concurrent $i'.rpc));
       }
 
-      // Выполняем все отправки конкурентно
+      // Send them all at once.
       await Future.wait(futures);
 
-      // Проверяем наблюдаемое поведение - все операции завершились
+      // Observable behaviour: every send finished.
       expect(processor.isActive, isTrue);
     });
 
     test('stream closes properly when server sends END_STREAM', () async {
-      // Подписываемся на поток ответов
+      // Subscribe to the answer stream.
       final completer = Completer<void>();
       final subscription = processor.responses.listen(
         (_) {},
@@ -221,7 +221,7 @@ void main() {
         onError: completer.completeError,
       );
 
-      // Отправляем END_STREAM через серверный транспорт
+      // Send END_STREAM from the server end.
       final endMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
       await serverTransport.sendMetadata(
         processor.streamId,
@@ -229,7 +229,7 @@ void main() {
         endStream: true,
       );
 
-      // Ждем закрытия потока
+      // Wait for the stream to close.
       await completer.future.timeout(Duration(seconds: 5));
 
       await subscription.cancel();

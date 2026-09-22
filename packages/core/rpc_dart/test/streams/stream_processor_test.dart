@@ -9,10 +9,10 @@ import 'dart:async';
 import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
-/// Тесты StreamProcessor следуя принципам Unit Testing:
-/// - Тестируем наблюдаемое поведение серверной части
-/// - Используем in-memory объекты вместо моков
-/// - Проверяем основную функциональность без комплексных сценариев
+/// StreamProcessor, tested against observable behaviour:
+/// - assert on what the server side does
+/// - use real in-memory objects rather than mocks
+/// - cover the core behaviour, not elaborate scenarios
 void main() {
   group('StreamProcessor', () {
     late IRpcTransport serverTransport;
@@ -22,9 +22,9 @@ void main() {
     const streamId = 42;
 
     setUp(() {
-      // Используем in-memory объекты вместо моков
+      // Real in-memory objects, not mocks.
       final transportPair = RpcInMemoryTransport.pair();
-      serverTransport = transportPair.$2; // серверная часть
+      serverTransport = transportPair.$2; // the server end
       codec = RpcCodec(RpcString.fromJson);
 
       processor = StreamProcessor<RpcString, RpcString>(
@@ -43,7 +43,7 @@ void main() {
     });
 
     test('creates processor and initializes correctly', () {
-      // Тестируем наблюдаемое поведение - состояние после создания
+      // Observable behaviour: the state right after construction.
       expect(processor.isActive, isTrue);
       expect(processor.requests, isA<Stream<RpcString>>());
     });
@@ -51,7 +51,7 @@ void main() {
     test('binds to message stream without errors', () {
       final messageStreamController = StreamController<RpcTransportMessage>();
 
-      // Операция должна завершиться без ошибки
+      // The call must finish without error.
       expect(
         () => processor.bindToMessageStream(messageStreamController.stream),
         returnsNormally,
@@ -64,13 +64,13 @@ void main() {
       final controller1 = StreamController<RpcTransportMessage>();
       final controller2 = StreamController<RpcTransportMessage>();
 
-      // Первая привязка
+      // The first bind.
       processor.bindToMessageStream(controller1.stream);
 
-      // Повторная привязка должна быть проигнорирована
+      // A second bind must be ignored.
       processor.bindToMessageStream(controller2.stream);
 
-      // Процессор должен остаться активным
+      // The processor stays active.
       expect(processor.isActive, isTrue);
 
       controller1.close();
@@ -80,49 +80,49 @@ void main() {
     test('send method executes without errors', () async {
       final response = 'test response'.rpc;
 
-      // Операция должна завершиться без ошибки
+      // The call must finish without error.
       expect(() => processor.send(response), returnsNormally);
 
-      // Процессор должен остаться активным
+      // The processor stays active.
       expect(processor.isActive, isTrue);
     });
 
     test('finishSending executes without errors', () async {
-      // Операция должна завершиться без ошибки
+      // The call must finish without error.
       expect(() => processor.finishSending(), returnsNormally);
 
-      // Процессор должен остаться активным
+      // The processor stays active.
       expect(processor.isActive, isTrue);
     });
 
     test('sendError executes without errors', () async {
-      // Операция должна завершиться без ошибки
+      // The call must finish without error.
       expect(
         () => processor.sendError(RpcStatus.internal, 'Test error'),
         returnsNormally,
       );
 
-      // Процессор должен остаться активным
+      // The processor stays active.
       expect(processor.isActive, isTrue);
     });
 
     test('close makes processor inactive', () async {
-      // Проверяем начальное состояние
+      // The starting state.
       expect(processor.isActive, isTrue);
 
-      // Закрываем процессор
+      // Close the processor.
       await processor.close();
 
-      // Проверяем наблюдаемое поведение
+      // Observable behaviour.
       expect(processor.isActive, isFalse);
     });
 
     test('operations on closed processor are ignored', () async {
-      // Закрываем процессор
+      // Close the processor.
       await processor.close();
       expect(processor.isActive, isFalse);
 
-      // Попытки операций должны завершаться без ошибки, но ничего не делать
+      // Further calls must finish without error, and do nothing.
       expect(() => processor.send('should not work'.rpc), returnsNormally);
       expect(() => processor.finishSending(), returnsNormally);
       expect(
@@ -135,11 +135,11 @@ void main() {
       final messageStreamController = StreamController<RpcTransportMessage>();
       processor.bindToMessageStream(messageStreamController.stream);
 
-      // Создаем коллектор для входящих запросов
+      // Collect the incoming requests.
       final receivedRequests = <RpcString>[];
       final subscription = processor.requests.listen(receivedRequests.add);
 
-      // Отправляем простое сообщение
+      // Send a plain message.
       final request = 'test request'.rpc;
       final bytes = codec.serialize(request);
       final frame = RpcMessageFrame.encode(bytes);
@@ -152,10 +152,10 @@ void main() {
         ),
       );
 
-      // Ждем обработки
+      // Let it run.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      // Проверяем результат
+      // Check the result.
       expect(receivedRequests, hasLength(1));
       expect(receivedRequests.first.value, equals('test request'));
 
@@ -173,7 +173,7 @@ void main() {
         onDone: completer.complete,
       );
 
-      // Отправляем END_STREAM сообщение
+      // Send an END_STREAM message.
       messageStreamController.add(
         RpcTransportMessage(
           streamId: streamId,
@@ -182,7 +182,7 @@ void main() {
         ),
       );
 
-      // Ждем закрытия потока запросов
+      // Wait for the request stream to close.
       await completer.future.timeout(Duration(seconds: 5));
 
       await subscription.cancel();

@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440]
 status: confirmed (round 432)
 ---
 
@@ -484,3 +484,35 @@ prose edit has none of them, so the care has to be in the edit rather than in
 the check after it.
 
 `../rounds/439-the-replace-that-matched-a-prefix.md`.
+
+## Round 440 — a prose defect needs a prose detector, and one exists
+
+439 said a mangled comment has no checker. That was half right. It has no
+checker in the *toolchain* — but the damage has a signature, and a grep can see
+it:
+
+```
+grep -nE '// [A-Za-z][A-Za-z ,.()]*[а-яА-ЯёЁ]'
+```
+
+An ASCII sentence followed by non-ASCII on one comment line. Run over every
+tracked `*.dart` in 440: **no damage anywhere.** Every hit is a pre-existing
+Russian sentence containing an English identifier — `IBlobClient реализация`,
+`StreamController с onCancel` — all in untouched `lib/` and `example/`. So 439's
+six were the whole population, and the repair was complete.
+
+> **When a sweep can damage what it edits, write the detector for the DAMAGE,
+> not only for the thing being swept.** It is a different pattern from the one
+> driving the work, it costs one grep, and running it repo-wide rather than over
+> the files you touched is what turns "I fixed the ones I saw" into a bound.
+
+Its limit is the one that let 439's escape happen at all: it sees the damage
+only while the surviving tail is non-ASCII. `// Register the service. v2` is
+invisible to everything.
+
+And the rule has now been costed. `replace_all` was used eight times in 440,
+each checked first against a `sort | uniq -c` of the file's comment lines; two
+were rejected as prefixes and done singly. The check takes about as long as
+reading the comments — against six defects nothing in the gate could see.
+
+`../rounds/440-the-rule-applied-to-itself.md`.

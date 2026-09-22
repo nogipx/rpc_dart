@@ -12,7 +12,7 @@ void main() {
     final serializer = RpcCodec(RpcString.fromJson);
 
     group('ServerStreamClient', () {
-      test('отправляет_один_запрос_и_получает_множественные_ответы', () async {
+      test('one request, many answers', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
         final receivedRequests = <RpcString>[];
@@ -34,7 +34,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -74,7 +74,7 @@ void main() {
         await server.close();
       });
 
-      test('обрабатывает_единственный_запрос_без_ответов', () async {
+      test('one request and no answers at all', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -90,7 +90,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -116,7 +116,7 @@ void main() {
         // Act
         await client.send('test request'.rpc);
 
-        // Ждем завершения потока с таймаутом
+        // Wait for the stream to finish, with a timeout.
         await completer.future.timeout(Duration(seconds: 5));
 
         // Assert
@@ -128,7 +128,7 @@ void main() {
         await server.close();
       });
 
-      test('выбрасывает_исключение_при_ошибке_сервера', () async {
+      test('throws when the server fails', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -140,12 +140,12 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
           handler: (request) {
-            // Выбрасываем синхронное исключение
+            // Throw synchronously.
             throw Exception('Server error');
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -165,7 +165,7 @@ void main() {
           Duration(seconds: 5),
         );
 
-        // Проверяем что получили метаданные с ошибкой
+        // The trailer must carry the error.
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
@@ -176,7 +176,7 @@ void main() {
         expect(
           grpcStatus,
           isNot(equals('0')),
-          reason: 'gRPC статус должен указывать на ошибку (не 0)',
+          reason: 'the gRPC status must say error, not 0',
         );
 
         // Cleanup
@@ -184,7 +184,7 @@ void main() {
         await server.close();
       });
 
-      test('завершает_поток_ответов_корректно', () async {
+      test('the answer stream ends cleanly', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -201,7 +201,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -227,7 +227,7 @@ void main() {
         // Act
         await client.send('test request'.rpc);
 
-        // Ждем завершения потока с таймаутом
+        // Wait for the stream to finish, with a timeout.
         await completer.future.timeout(Duration(seconds: 5));
 
         // Assert
@@ -243,7 +243,7 @@ void main() {
     });
 
     group('ServerStreamServer', () {
-      test('получает_один_запрос_и_отправляет_множественные_ответы', () async {
+      test('the responder takes one request and answers many', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
         final receivedRequests = <RpcString>[];
@@ -258,14 +258,14 @@ void main() {
           handler: (request) async* {
             receivedRequests.add(request);
 
-            // Отправляем несколько ответов
+            // Send several answers.
             yield 'Response 1 for: $request'.rpc;
             yield 'Response 2 for: $request'.rpc;
             yield 'Response 3 for: $request'.rpc;
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -311,7 +311,7 @@ void main() {
         await server.close();
       });
 
-      test('обрабатывает_исключение_в_обработчике', () async {
+      test('a handler that throws is reported', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -323,12 +323,12 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
           handler: (request) {
-            // Выбрасываем синхронное исключение
+            // Throw synchronously.
             throw Exception('Handler error');
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -348,7 +348,7 @@ void main() {
           Duration(seconds: 5),
         );
 
-        // Проверяем что получили метаданные с ошибкой
+        // The trailer must carry the error.
         expect(response.isMetadataOnly, isTrue);
         expect(response.metadata, isNotNull);
 
@@ -359,7 +359,7 @@ void main() {
         expect(
           grpcStatus,
           isNot(equals('0')),
-          reason: 'gRPC статус должен указывать на ошибку',
+          reason: 'the gRPC status must say error',
         );
 
         // Cleanup
@@ -367,7 +367,7 @@ void main() {
         await server.close();
       });
 
-      test('обрабатывает_только_запросы_своего_метода', () async {
+      test('a server answers only its own method', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
         var handlerCallCount = 0;
@@ -384,7 +384,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -410,7 +410,7 @@ void main() {
         try {
           await incorrectClient.send('incorrect request'.rpc);
         } catch (e) {
-          // Может быть ошибка для неправильного метода
+          // The wrong method may well error.
         }
 
         // Assert
@@ -422,11 +422,11 @@ void main() {
         await server.close();
       });
 
-      test('завершает_поток_с_ошибкой', () async {
+      test('an error ends the stream as an error', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
-        // Создаем контроллер для управления стримом
+        // A controller, so the test drives the stream.
         final controller = StreamController<RpcString>();
 
         final server = ServerStreamResponder<RpcString, RpcString>(
@@ -437,7 +437,7 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
           handler: (request) {
-            // Асинхронно имитируем отправку одного ответа, а затем ошибку в стриме
+            // One answer, then an error on the stream.
             Future.microtask(() {
               controller.add('First response'.rpc);
               controller.addError(Exception('Test error message'));
@@ -447,7 +447,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -487,8 +487,8 @@ void main() {
           caught,
           isA<RpcStatusException>(),
           reason:
-              'gRPC статус ошибки должен всплывать как ошибка стрима, '
-              'а не как обычное завершение',
+              'a gRPC error status must surface as a stream error, '
+              'not as an ordinary close',
         );
 
         // Cleanup
@@ -499,8 +499,8 @@ void main() {
       // NOTE: close() behavior is exercised by other tests in this suite.
     });
 
-    group('интеграционные тесты', () {
-      test('полный_цикл_серверного_стриминга', () async {
+    group('integration', () {
+      test('a full server-streaming round', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -519,7 +519,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
@@ -551,7 +551,7 @@ void main() {
         // Act
         await client.send('5'.rpc);
 
-        // Ждем завершения потока с таймаутом
+        // Wait for the stream to finish, with a timeout.
         await completer.future.timeout(Duration(seconds: 5));
 
         // Assert
@@ -566,7 +566,7 @@ void main() {
         await server.close();
       });
 
-      test('большое_количество_ответов', () async {
+      test('a large number of answers', () async {
         // Arrange
         final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
 
@@ -585,7 +585,7 @@ void main() {
           },
         );
 
-        // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+        // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );

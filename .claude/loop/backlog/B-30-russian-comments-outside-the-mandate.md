@@ -314,3 +314,41 @@ generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
 Largest left: `rpc_message_parser_test.dart` (53),
 `call_processor_test.dart` (40), `server_stream_test.dart` (36),
 `in_memory_transport_streams_test.dart` (31).
+
+## Round 440 — `test/streams/`, and a detector for the sweep's own damage
+
+171 Cyrillic lines to 0 across six files; 226 tests pass.
+
+**439's rule works and costs almost nothing.** `replace_all` was used eight
+times, each checked first against a `sort | uniq -c` of the file's comment
+lines; two were rejected as prefixes and done singly.
+
+**And the damage 439 introduced has a detector**, which is the durable part:
+
+```
+grep -nE '// [A-Za-z][A-Za-z ,.()]*[а-яА-ЯёЁ]'   over tracked *.dart
+```
+
+An ASCII sentence followed by non-ASCII on one comment line. Run repo-wide:
+**no damage.** Every hit is a pre-existing Russian sentence containing an
+English identifier (`IBlobClient реализация`, `StreamController с onCancel`),
+all in `lib/` or `example/`, untouched. So 439's six were the whole population.
+**Whoever takes the rest should run this after each sweep, repo-wide.**
+
+### What remains
+
+```
+lib/ logs        39 lines   rpc_notify only    deferred by the owner's ORDER
+lib/ comments   277 lines   23 files           same
+test/           443 lines   21 files           in scope, open
+generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
+```
+
+**21 of the 443 are the C-47 fixtures and never go away**, so the real
+remainder is 422 across roughly 18 files. `test/` is now a third of what it was
+when round 435 began.
+
+Largest left: `rpc_message_parser_test.dart` (53),
+`in_memory_transport_streams_test.dart` (31),
+`rpc_stream_id_manager_test.dart` (30), `rpc_metadata_test.dart` (20),
+`rpc_message_frame_test.dart` (20), `rpc_message_test.dart` (18).
