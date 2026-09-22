@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425]
-status: confirmed (round 425)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426]
+status: confirmed (round 426)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -528,3 +528,36 @@ ablation had to be made twice in two files to break two tests — which is the
 
 `../rounds/425-the-cancel-path-the-table-had-no-column-for.md`,
 `../probes/P-95-bridge-cancel-paths.md`.
+
+## Round 426 — a fix on one twin is a QUESTION about the other
+
+Round 390 fixed a caller-side producer that ran on after its call had ended.
+Thirty-six rounds later the mirror was still there, on the sibling that shares
+the shape line for line: `responseSink` watched nothing, and a responder that
+ended its OWN call — a trailer, an error — kept draining the handler's producer
+at +32 and +35 messages per quarter-second, against a +1 control.
+
+The signal existed. `BidirectionalStreamResponder.done` predates this loop.
+
+> **When a round fixes a clause on one copy, the sibling inherits a question,
+> not the fix.** Nothing in a diff carries it over, and the round that made the
+> fix is the one that knows the clause exists. Ask, in the same round: which
+> other copy has this shape, and what would its version of this signal be?
+
+Two further things this pair shows:
+
+- **The lead's own table can be the thing that is wrong.** B-56 described this
+  clause twice and contradicted itself — the nine-site sweep marks `responseSink`
+  "stop on done: y", the five-site table "n/a, it IS the producer". A record with
+  two answers and no measurement is not evidence for either.
+- **The worse copy is the quieter one.** The caller's version logged a failure
+  per message; the responder's `_processor.send` RETURNS on a finished stream, so
+  the same defect produced nothing at all. Severity does not track how loud a
+  defect is.
+
+The extraction's return, measured again: one ablation of `SinkPump`'s stop
+clause reddens both new witnesses AND round 390's, which was written for the
+other copy in another file.
+
+`../rounds/426-the-mirror-nobody-held-up.md`,
+`../probes/P-96-response-pump-outlives-its-call.md`.

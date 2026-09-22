@@ -128,117 +128,42 @@ final class BidirectionalStreamCaller<
     }
   }
 
-  /// Request sink for sending to the server (zero-copy friendly).
-  StreamSink<TRequest>? _requestSink;
-
-  /// Drives [requestSink]. Held as a field so [close] can cancel it FIRST —
-  /// see the note there.
-  StreamSubscription<TRequest>? _requestSub;
+  /// Drives [requestSink]; null until something asks for the sink.
+  SinkPump<TRequest>? _requestPump;
 
   /// Sink used to send requests to the server.
-  StreamSink<TRequest> get requestSink {
-    if (_requestSink == null) {
-      final controller = StreamController<TRequest>();
-      var finished = false;
-      var aborted = false;
-      late final StreamSubscription<TRequest> sub;
-      sub = controller.stream.listen(
-        // Pausing for the duration of each send is what bounds the producer:
-        // `addStream` stops pulling while this subscription is paused, so the
-        // caller holds one message instead of however many the producer can
-        // offer. Without it _sendSequence is an unbounded queue in front of the
-        // transport -- the same bound ClientStreamCaller.call() keeps.
-        //
-        // Not awaited, and the failure is caught rather than raised: a throw
-        // from a listen callback has nothing awaiting it and would reach the
-        // zone, which is exit 255 in a server process. `send` throws by design
-        // once the call is no longer active, and the consumer already has the
-        // real cause on `responses`.
-        (request) {
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Sending request in bidirectional stream: $request',
-            );
-          }
-          sub.pause();
-          unawaited(
-            send(request)
-                .catchError((Object e, StackTrace stackTrace) {
-                  _logger.error(
-                    'Failed to send request via requestSink',
-                    error: e,
-                    stackTrace: stackTrace,
-                  );
-                })
-                .whenComplete(() {
-                  if (!finished) sub.resume();
-                }),
-          );
-        },
-        onDone: () async {
-          finished = true;
-          _logger.internal('Request stream completed');
-          try {
-            await finishSending();
-          } catch (e, stackTrace) {
-            _logger.error(
-              'Failed to half-close via requestSink',
-              error: e,
-              stackTrace: stackTrace,
-            );
-          }
-        },
-        // Tell the peer and END the call, the way ClientStreamCaller does on
-        // the same path. Without the notice the handler sits in `await for
-        // (requests)` forever holding its stream state, responder and admission
-        // slot; without the close the call stays half-alive and the peer keeps
-        // answering a stream this side has already reset -- which on HTTP/2
-        // destroys the whole connection, every other call on it included.
-        // Half-closing instead of aborting would be wrong either way: the
-        // handler would see a request stream that ended successfully.
-        onError: (Object error, StackTrace stackTrace) {
-          _logger.error(
-            'Error in request stream',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          if (aborted || finished) return;
-          aborted = true;
-          // Nothing here may reach the zone: this whole chain is unawaited, and
-          // an unhandled async error is exit 255 in a server process.
-          unawaited(
-            abort(
-              'request stream failed: $error',
-            ).whenComplete(close).catchError((Object e, StackTrace st) {
-              _logger.error(
-                'Teardown after a failed request stream',
-                error: e,
-                stackTrace: st,
-              );
-            }),
-          );
-        },
-      );
-      // Stop PULLING once the call is over. Nothing sent after that can arrive,
-      // and without this an endless producer -- a chat, a sensor feed -- is fed
-      // to a dead stream one logged failure at a time, for as long as it runs.
-      // ClientStreamCaller races its request stream against the response for
-      // the same reason.
-      unawaited(
-        _processor.done
-            .then((_) async {
-              if (finished) return;
-              finished = true;
-              await sub.cancel();
-            })
-            .catchError((Object _) {}),
-      );
-
-      _requestSub = sub;
-      _requestSink = controller.sink;
-    }
-    return _requestSink!;
-  }
+  ///
+  /// [SinkPump] owns the discipline; what is chosen here is
+  /// [CallProcessor.done] as the end-of-life signal — every ending closes the
+  /// response controller, and `isActive` does not, which is why a producer
+  /// could not tell that its call had finished (round 390).
+  StreamSink<TRequest> get requestSink => (_requestPump ??= SinkPump<TRequest>(
+    what: 'requestSink',
+    send: send,
+    halfClose: finishSending,
+    // Tell the peer and END the call, the way ClientStreamCaller does on the
+    // same path. Without the notice the handler sits in `await for (requests)`
+    // forever holding its stream state, responder and admission slot; without
+    // the close the call stays half-alive and the peer keeps answering a stream
+    // this side has already reset -- which on HTTP/2 destroys the whole
+    // connection, every other call on it included. Half-closing instead of
+    // aborting would be wrong either way: the handler would see a request
+    // stream that ended successfully.
+    onSourceFailed: (error, _) => unawaited(
+      abort('request stream failed: $error').whenComplete(close).catchError((
+        Object e,
+        StackTrace st,
+      ) {
+        _logger.error(
+          'Teardown after a failed request stream',
+          error: e,
+          stackTrace: st,
+        );
+      }),
+    ),
+    ended: _processor.done,
+    logger: _logger,
+  )).sink;
 
   /// Closes the stream and releases resources.
   Future<void> close() async {
@@ -254,11 +179,7 @@ final class BidirectionalStreamCaller<
     // all -- a chat pumping an idle input stream. Dropping the await is safe
     // because `_recordCancel` clears the add-stream state SYNCHRONOUSLY, before
     // the future it returns.
-    unawaited(_requestSub?.cancel().catchError((Object _) {}));
-    _requestSub = null;
-    if (_requestSink != null) {
-      unawaited(_requestSink!.close().catchError((Object _) {}));
-    }
+    _requestPump?.close();
     await _processor.close();
   }
 }

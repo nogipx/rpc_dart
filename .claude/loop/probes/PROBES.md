@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-96](P-96-response-pump-outlives-its-call.md)** valid (round 426),
+  rpc_dart — does a producer stop when its call ends, and on WHICH endings? Six
+  arms, one per way a bidi call can end; the number is messages pulled in the
+  250 ms after the ending, counted inside the `async*` generator. **+1 is a pump
+  that stopped, +30-odd is one that did not**, with two controls at +1. Also
+  reports whether `responder.done` fired, which separates "an ending nobody
+  watched" from "an ending with no signal at all" — two arms are the second kind
 - **[P-95](P-95-bridge-cancel-paths.md)** valid (round 425), rpc_dart — how long
   does a CONSUMER's `cancel()` take on a bridge whose source is a user `async*`
   parked at an await? Five arms, 3000 ms cap. The control is the same parked

@@ -86,91 +86,33 @@ final class BidirectionalStreamResponder<
   Stream<TRequest> get requests => _processor.requests;
 
   /// Convenience sink to send responses (forwards to send()).
-  StreamSink<TResponse> get responseSink {
-    _initResponseForwarding();
-    return _responseController.sink;
-  }
+  ///
+  /// [SinkPump] owns the discipline; what is chosen here is [done] as the
+  /// end-of-life signal. Without it a handler that ends the call itself — a
+  /// trailer through [finishReceiving], an error through [sendError] — left its
+  /// producer being drained into a finished stream, and silently: a send on a
+  /// finished processor returns rather than throwing, so there was not even a
+  /// log.
+  StreamSink<TResponse> get responseSink =>
+      (_responsePump ??= SinkPump<TResponse>(
+        what: 'responseSink [id: $id]',
+        // The processor directly, to avoid a cyclic dependency.
+        send: _processor.send,
+        halfClose: finishReceiving,
+        // END the call, the way ServerStreamResponder does when its handler
+        // throws. `addStream` does NOT close the controller, so a source
+        // that fails never reaches onDone: without this the client keeps
+        // the payloads that did arrive and gets no ending at all --
+        // measured as `2 payloads, NEVER ENDED`.
+        onSourceFailed: (error, _) => unawaited(
+          sendWireError(error, sendError).catchError((Object _) {}),
+        ),
+        ended: done,
+        logger: _logger,
+      )).sink;
 
-  /// Controller for outgoing responses.
-  final StreamController<TResponse> _responseController =
-      StreamController<TResponse>();
-
-  /// Subscription for outgoing responses.
-  StreamSubscription<void>? _responseSubscription;
-
-  /// Initializes response forwarding.
-  void _initResponseForwarding() {
-    if (_responseSubscription != null) return;
-
-    var finished = false;
-    late final StreamSubscription<void> sub;
-    sub = _responseController.stream.listen(
-      // Pausing for the duration of each send is what bounds the handler:
-      // `addStream` stops pulling while this subscription is paused, so a
-      // handler producing faster than the wire drains holds one message instead
-      // of however many it can generate. ServerStreamResponder keeps the same
-      // bound through `relay.onPause`.
-      //
-      // Not awaited, and the failure is caught rather than raised: a throw from
-      // a listen callback has nothing awaiting it and would reach the zone.
-      (response) {
-        sub.pause();
-        unawaited(
-          // The processor directly, to avoid a cyclic dependency.
-          _processor
-              .send(response)
-              .then((_) {
-                if (_logger.isInternal) {
-                  _logger.internal('Response sent via responseSink [id: $id]');
-                }
-              })
-              .catchError((Object e, StackTrace stackTrace) {
-                _logger.error(
-                  'Failed to send response via responseSink [id: $id]',
-                  error: e,
-                  stackTrace: stackTrace,
-                );
-              })
-              .whenComplete(() {
-                if (!finished) sub.resume();
-              }),
-        );
-      },
-      onDone: () async {
-        finished = true;
-        if (_logger.isInternal) {
-          _logger.internal('Response stream completed [id: $id]');
-        }
-        // Guarded for the same reason as the onData above it: an `async`
-        // listen callback nobody awaits sends its throw to the zone.
-        try {
-          await finishReceiving();
-        } catch (e, stackTrace) {
-          _logger.error(
-            'Failed to finish responses via responseSink [id: $id]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-        }
-      },
-      // END the call, the way ServerStreamResponder does when its handler
-      // throws. `addStream` does NOT close the controller, so a source that
-      // fails never reaches the `onDone` above: without this the client keeps
-      // the payloads that did arrive and gets no ending at all -- measured as
-      // `2 payloads, NEVER ENDED`.
-      onError: (Object error, StackTrace stackTrace) {
-        _logger.error(
-          'Error in response stream [id: $id]',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        if (finished) return;
-        finished = true;
-        unawaited(sendWireError(error, sendError).catchError((Object _) {}));
-      },
-    );
-    _responseSubscription = sub;
-  }
+  /// Drives [responseSink]; null until something asks for the sink.
+  SinkPump<TResponse>? _responsePump;
 
   /// Binds the responder to the endpoint message stream.
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
@@ -236,14 +178,11 @@ final class BidirectionalStreamResponder<
     if (!_isActive) return;
 
     _isActive = false;
-    // NOT awaited: a handler's `responseSink.addStream(source)` whose source is
-    // an `async*` suspended at an `await` never completes its cancellation, and
-    // teardown must not hang on it. The add-stream state is cleared
-    // synchronously, so the close below still does not throw.
-    unawaited(_responseSubscription?.cancel().catchError((Object _) {}));
-    if (!_responseController.isClosed) {
-      unawaited(_responseController.close());
-    }
+    // Cancels before closing and awaits neither: a handler's
+    // `responseSink.addStream(source)` whose source is an `async*` suspended at
+    // an `await` never completes its cancellation, and teardown must not hang
+    // on it.
+    _responsePump?.close();
     await _processor.close();
     _completeDone();
   }

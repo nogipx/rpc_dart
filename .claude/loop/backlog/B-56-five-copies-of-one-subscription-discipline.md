@@ -247,6 +247,63 @@ consumer cancel(), parked user async*, 3000ms cap
 abort-the-peer, stop-on-done — and 4 (`requestSink`) and 5 (`responseSink`) are
 near twins, so they are where a round starts.
 
+## The SINK pumps are extracted — round 426. Sites 1 and 3 are declined.
+
+**"No defect known in any of them" was a READ, and it was wrong.** Round 426
+re-took it and found the twins disagreeing on the clause round 390 fixed on one
+of them — and **this record describes that clause two different ways**: the
+nine-site sweep marks `responseSink` "stop on done: y", the five-site table
+"n/a, it IS the producer". Neither was measured; both are now wrong.
+
+`responseSink` watched nothing. A handler producing at one message per 5 ms,
+with a consumer reading everything, over the 250 ms after the call ended:
+
+```
+A  the handler half-closes (finishReceiving)   +32   responder.done TRUE
+A2 the handler fails the call (sendError)      +35   responder.done TRUE
+D  CONTROL responder.close()                   +1
+E  CONTROL the caller side, fixed in 390       +1
+```
+
+The responder ENDED THE CALL ITSELF, its own `done` completed, and it kept
+draining. Silently, which the caller's version was not: a send on a finished
+processor returns rather than throwing, so there was not even the logged failure
+390 measured.
+
+Both twins now go through **`SinkPump`** (`src/core/sink_pump.dart`, hidden from
+the public barrel), which owns pause-per-send, half-close-on-done,
+tell-the-peer-once, stop-on-`ended`, and a teardown that cancels before closing
+and awaits neither. Each site chooses only its signal.
+
+### Sites 1 and 3 are declined, on this lead's own constraint
+
+They are not twins of 4 and 5 and they are not twins of each other. The
+difference is CONTROL FLOW, not hooks:
+
+- **1 `ClientStreamCaller.call(Stream)`** — its stop clause IS a `Future.any`
+  race between the drained request stream and the response future. There is no
+  subscription-cancel to hand a helper.
+- **3 the bidi bridge's request half** — its sends go through an ordered
+  `enqueue` sequence, and its teardown (`cleanup`) owns BOTH directions plus the
+  abort-the-peer decision.
+
+Folding either in needs the flags this lead forbids ("a helper taking a
+subscription plus callbacks, NOT a base class"). Nothing measured says either is
+wrong today. **The owner can overrule; this is a recommendation, not a
+measurement.**
+
+### Where the lead stands
+
+```
+  6 bridges          StreamBridge   round 425
+  2 sink pumps       SinkPump       round 426
+  2 stream pumps     declined, with the reason above
+  1 RpcCallScope.listen             neither shape; unchanged
+```
+
+The TRANSPORT half this lead excluded (17 awaited-cancel sites) is still
+untouched and still excluded.
+
 **`RpcCallScope.listen` (site 8)** is not a bridge and needs no conversion: raw
 subscription plus a disposer, no controller between.
 
