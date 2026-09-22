@@ -3,8 +3,8 @@ refines: U-03
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the web is a real build target (dart2js)
 breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
-applied: [219, 227, 285, 286, 345, 383, 392, 427]
-status: confirmed (round 427)
+applied: [219, 227, 285, 286, 345, 383, 392, 427, 428]
+status: confirmed (round 428)
 ---
 
 # RPC-07 — The web as a separate runtime
@@ -131,3 +131,30 @@ Two things about writing it, both of which cost something here:
   like a fix that survived. See L-15.
 
 `../rounds/427-the-number-the-decision-asked-me-to-write-down.md`.
+
+## Round 428 — the platform boundary is a FILE, not a code path
+
+B-31 sat for 118 rounds on the belief that testing the web channel meant
+widening its API, because the class is library-private. It also recorded, as the
+reason route 3 was affordable, that "nothing in the channel's failure path needs
+`dart:js_interop`" — true, and it does not follow that a test can reach it. A
+test imports a LIBRARY, and that library's first two lines are
+`dart:js_interop` and `package:web`.
+
+> **Conditional imports split a package by FILE.** Whatever shares a file with
+> `dart:js_interop` is web-only whether or not it uses a single JS type, and the
+> ordinary suite cannot see it at all. Before concluding that a web-only class
+> needs a browser or an annotation to test, ask what else is in its file — the
+> answer is often that the platform-neutral half can simply move.
+
+What that bought here, measured by doing it: the channel, the wire format and
+the four helpers moved to a file importing `dart:async` and rpc_dart alone, and
+the fix from round 310 got an ordinary VM test with a stub `send` and no Worker.
+**Less public surface than the approved route**, which would have annotated a
+class inside a file the package barrel conditionally exports.
+
+The residue is real and stated: `spawn`, the ready ack, the worker-death
+listeners and `runRpcIsolateManagerWorker` still need a browser, and moving the
+channel does not change that.
+
+`../rounds/428-the-file-the-test-could-not-import.md`.

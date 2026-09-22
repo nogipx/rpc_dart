@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 428)
 round: 313
 commit: 6a35cb7a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart]
@@ -87,3 +87,41 @@ without adding anything to the browser gate.
 The witness must show both halves, since either alone passes on a wrong fix:
 the failing send reports a NAMED error, and a second call on the same channel
 still completes.
+
+## CLOSED — round 428, and NOT by route 3
+
+**Route 3 could not have worked, and the reason is one level below where this
+lead was looking.** Its selling point was "the test runs on the VM, since
+nothing in the channel's failure path needs `dart:js_interop`". True of the
+PATH. A test imports a FILE, and `isolate_transport_web.dart` opens with
+`dart:js_interop` and `package:web`:
+
+```
+Failed to load "test/b31_import_probe_test.dart":
+  .../isolate_manager/lib/src/utils/extract_array_buffers.dart:6:9:
+    Error: Type 'JSArrayBuffer' not found.
+  .../web-1.1.1/lib/src/helpers.dart:81:10:
+    Error: Type 'JSFunction' not found.
+  ... ~20 000 characters of the same
+```
+
+`@visibleForTesting` makes a class nameable; it does not make a library
+loadable. Route 2's diagnosis — "the barrier is the underscore rather than the
+export" — was half the barrier.
+
+**What was done instead**: the channel, the wire format and the helpers moved to
+`lib/src/web_bridge.dart`, which imports `dart:async` and rpc_dart and nothing
+else. Read first, then proven by compiling — the JS dependency is all in
+`spawn`, `_workerSelf` and the isolate_manager controllers.
+
+**Cheaper on the axis this lead was worried about.** Route 3 would have
+annotated a class inside a file the package barrel conditionally EXPORTS.
+`web_bridge.dart` is exported by nothing, so the public API is unchanged and the
+class is testable — the trade this lead called the owner's call did not have to
+be made at all.
+
+The witness asserts both halves plus one more (the channel still RECEIVES), and
+two ablations separate the clauses: closing on a send failure fails all three
+witnesses, swallowing the reason without closing fails only the first.
+
+`../rounds/428-the-file-the-test-could-not-import.md`.
