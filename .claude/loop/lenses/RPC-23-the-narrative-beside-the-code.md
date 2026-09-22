@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435]
 status: confirmed (round 432)
 ---
 
@@ -307,3 +307,45 @@ closed" is two assertions, and "recoverable" buys nothing if it only means
 `isClosed == false` — so the failing arm has to go on and try a LATER reconnect.
 Both did succeed. `../probes/P-89-drive-what-the-message-prescribes.md`,
 `../rounds/404-what-the-messages-promise.md`.
+
+## Round 435 — prose has three audiences, not one, and a grep sees one class
+
+B-30 sweeps Cyrillic out of a repo whose own rule says "English for code,
+comments, and logs". Two measurements from the transport half.
+
+**A text-matching detector cannot tell prose from a fixture.** Three of the
+eight transport test files with Cyrillic must keep it: `'Ошибка'` is asserted to
+percent-encode to ASCII on the wire, `'кириллица' * 6` proves a close reason is
+measured in bytes rather than characters, and the wasm test round-trips UTF-8
+through the native bridge. In each, the non-ASCII-ness IS the subject. The lead
+called its grep "both the detector and the check", and the check would have
+demanded breaking all three.
+
+> **A detector for a prose defect returns prose AND data.** Before acting on one
+> of its hits, ask what the line is FOR. The same grep that finds a Russian
+> comment finds the fixture whose whole point is to be Russian — and the second
+> kind cannot be fixed, only recognised.
+
+Scope, too: run over paths rather than `git ls-files`, that grep returns ten
+gitignored Android resource-merge artifacts in nine languages nobody here wrote.
+
+**The audiences are separate and the counts are not interchangeable:**
+
+    comment in test/   a maintainer who opened the file
+    comment in lib/    that, plus dartdoc on the pub.dev package page
+    LOG in lib/        emitted at runtime into the user's own log stream
+
+The third is the one a reader cannot avoid — no file needs opening, and turning
+it off means turning the logger off. Counted on that axis, the largest single
+concentration in the repo is `rpc_notify/lib/src/stream_distributor.dart`: 176
+lines, 137 comments and **39 runtime log messages**, more than any test file.
+B-30 had never counted the third category, and neither had this lens.
+
+Emoji, swept under the same rule, have a different distribution entirely: 154
+lines across 14 files, every one of them `test/` or `example/`, none in `lib/`.
+
+> **Two style rules stated in one sentence are still two populations.** Count
+> each separately before deciding which to sweep; "no emoji and English
+> everywhere" hid the fact that only one half had reached shipped code.
+
+`../rounds/435-the-half-that-ships.md`, `../backlog/B-30-russian-comments-outside-the-mandate.md`.

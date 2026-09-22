@@ -106,3 +106,66 @@ PRINT, which is output rather than source.
 **What the test half needs that the examples did not**: several of the 1288
 lines are test NAMES, and renaming one changes what the suite reports. That is
 a different kind of edit from a comment and is worth deciding deliberately.
+
+## Round 435 — the transport tests, and a third axis
+
+Five files done. Transports go from 8 tracked Cyrillic test files to 3, and the
+three that remain **must keep theirs**:
+
+    rpc_dart_http2/test/grpc_wire_compliance_test.dart:224      'Ошибка'
+    rpc_dart_websocket/test/protocol_close_reason_is_bytes_test.dart:41
+    rpc_dart_wasm/test/native_text_is_utf8_test.dart            4 lines
+
+Percent-encoding to ASCII, a close reason measured in BYTES not characters, and
+UTF-8 round-tripping through the native bridge. In all three the non-ASCII-ness
+IS the subject. **So the grep is not "both the detector and the check"** — the
+check it prescribes would demand breaking three tests.
+
+Nor is it correctly scoped: run over paths rather than `git ls-files`, it also
+returns 10 gitignored Android resource-merge artifacts under
+`rpc_dart_wasm/example/build/`, in nine languages nobody in this repo wrote.
+
+Test NAMES were renamed after all, and the suites re-RUN (25 + 6 pass). The
+snake_case Cyrillic names were not readable behaviour descriptions in any
+language, and a suite name is internal output, not an API.
+
+### The recount — comment and log are different axes
+
+Counted over tracked `*.dart` only:
+
+                     files   Cyrillic lines
+        lib             23        316
+        test            38       1338
+        example          1         65
+
+`lib/` is still 23 files, but this record's reason for deferring it names the
+wrong ones. The weight is in a file it does not mention:
+
+    packages/notify/rpc_notify/lib/src/stream_distributor.dart   176 lines
+
+More than any test file in the repo, and **39 of those 176 are runtime log
+messages** — `_logger.warning('Попытка публикации в закрытый дистрибьютор')` and
+37 more. The other 137 are comments.
+
+    comment   read by whoever opens the source, or by dartdoc
+    log       EMITTED into the user's own log stream at runtime
+
+A user can avoid the comments. They cannot avoid the logs without turning the
+logger off. `CLAUDE.md` names all three — "code, comments, and logs" — and this
+record has only ever counted the first two.
+
+Emoji, on the same axis, do not reach `lib/` at all: 154 lines across 14 files,
+all `test/` plus one `example/`.
+
+### What remains
+
+    lib/ logs        39 lines   rpc_notify only        runtime, user-visible
+    lib/ comments   277 lines   23 files               dartdoc / maintainers
+    test/          1338 lines   38 files, core mostly  internal
+    generated        21 lines   rpc_data/*.g.dart      fix the SOURCE first
+
+The generated 21 are in `data_contract.g.dart`, from `data_contract.dart` (23
+lines, same directory). Fix the source, regenerate.
+
+**The 39 log lines are the slice to take next** — smallest, and the only one a
+user meets without opening a file.

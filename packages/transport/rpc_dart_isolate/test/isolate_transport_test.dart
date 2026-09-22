@@ -10,7 +10,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 import 'package:test/test.dart';
 
-// Тестовые классы для zero-copy тестов
+// The models the zero-copy tests send.
 class TestComplexObject {
   final int id;
   final String name;
@@ -89,7 +89,7 @@ void main() {
   group('RpcIsolateTransport', () {
     group('TransferableTypedData', () {
       test(
-        'directObject передает TransferableTypedData туда-обратно без копий',
+        'directObject carries TransferableTypedData there and back, no copies',
         () async {
           final result = await RpcIsolateTransport.spawn(
             entrypoint: _transferableEchoServer,
@@ -125,7 +125,7 @@ void main() {
     });
 
     group('spawn factory', () {
-      test('создает_изолят_и_возвращает_транспорт', () async {
+      test('spawns an isolate and returns a transport', () async {
         // Arrange & Act
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -142,7 +142,7 @@ void main() {
         result.kill();
       });
 
-      test('передает_параметры_в_изолят', () async {
+      test('passes the custom params into the isolate', () async {
         // Arrange
         final testParams = {
           'serviceName': 'TestService',
@@ -158,19 +158,19 @@ void main() {
 
         final transport = result.transport;
 
-        // Проверяем что можем общаться с изолятом
+        // Check that we can talk to the isolate.
         final streamId = transport.createStream();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport.incomingMessages.listen(receivedMessages.add);
 
-        // Отправляем тестовое сообщение
+        // Send a test message.
         await transport.sendMessage(
           streamId,
           Uint8List.fromList('test message'.codeUnits),
         );
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
@@ -180,7 +180,7 @@ void main() {
         result.kill();
       });
 
-      test('обрабатывает_ошибки_создания_изолята', () async {
+      test('surfaces an error raised while the isolate starts', () async {
         // A worker that throws during startup must make spawn() fail fast
         // (surfacing the cause) instead of returning a silently-dead transport
         // or hanging forever.
@@ -199,7 +199,7 @@ void main() {
     });
 
     group('createStream', () {
-      test('создает_уникальные_stream_id', () async {
+      test('creates unique stream ids', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -223,7 +223,7 @@ void main() {
         result.kill();
       });
 
-      test('генерирует_нечетные_числа_для_клиента', () async {
+      test('generates odd numbers on the client side', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -241,7 +241,7 @@ void main() {
           expect(
             streamId % 2,
             equals(1),
-            reason: 'Stream ID должен быть нечетным',
+            reason: 'a client-side stream id must be odd',
           );
         }
 
@@ -250,8 +250,8 @@ void main() {
       });
     });
 
-    group('sendMessage и sendMetadata', () {
-      test('отправляет_сообщения_в_изолят', () async {
+    group('sendMessage and sendMetadata', () {
+      test('sends messages into the isolate', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -269,7 +269,7 @@ void main() {
         final testData = Uint8List.fromList('Hello Isolate'.codeUnits);
         await transport.sendMessage(streamId, testData);
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
@@ -286,7 +286,7 @@ void main() {
         result.kill();
       });
 
-      test('отправляет_метаданные_в_изолят', () async {
+      test('sends metadata into the isolate', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testFullCycleServer,
@@ -307,7 +307,7 @@ void main() {
         );
         await transport.sendMetadata(streamId, metadata);
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
@@ -323,7 +323,7 @@ void main() {
         result.kill();
       });
 
-      test('обрабатывает_end_stream_флаг', () async {
+      test('honors the end-stream flag', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testFullCycleServer,
@@ -344,7 +344,7 @@ void main() {
           endStream: true,
         );
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
@@ -362,7 +362,7 @@ void main() {
     });
 
     group('finishSending', () {
-      test('отправляет_end_stream_сообщение', () async {
+      test('sends an end-stream message', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testFinishServer,
@@ -379,7 +379,7 @@ void main() {
         // Act
         await transport.finishSending(streamId);
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
@@ -396,7 +396,7 @@ void main() {
         result.kill();
       });
 
-      test('предотвращает_повторную_отправку', () async {
+      test('a second call sends nothing', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testFinishServer,
@@ -412,9 +412,9 @@ void main() {
 
         // Act
         await transport.finishSending(streamId);
-        await transport.finishSending(streamId); // Повторный вызов
+        await transport.finishSending(streamId); // The second call.
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
@@ -422,7 +422,7 @@ void main() {
             .where((msg) => msg.isEndOfStream && msg.streamId == streamId)
             .toList();
 
-        expect(finishMessages.length, equals(1)); // Только одно сообщение
+        expect(finishMessages.length, equals(1)); // One message, not two.
 
         // Cleanup
         result.kill();
@@ -430,7 +430,7 @@ void main() {
     });
 
     group('getMessagesForStream', () {
-      test('фильтрует_сообщения_по_stream_id', () async {
+      test('filters messages by stream id', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testMultiStreamServer,
@@ -462,14 +462,14 @@ void main() {
           Uint8List.fromList('message3'.codeUnits),
         );
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(stream1Messages.length, greaterThan(0));
         expect(stream2Messages.length, greaterThan(0));
 
-        // Проверяем, что сообщения правильно отфильтрованы
+        // Every message must land on the stream it was sent on.
         for (final msg in stream1Messages) {
           expect(msg.streamId, equals(streamId1));
         }
@@ -483,7 +483,7 @@ void main() {
     });
 
     group('close', () {
-      test('закрывает_транспорт_корректно', () async {
+      test('closes the transport cleanly', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -497,11 +497,11 @@ void main() {
         await transport.close();
 
         // Assert
-        // Проверяем, что после закрытия нельзя отправлять сообщения
+        // Nothing may be sent once the transport is closed.
         final streamId = transport.createStream();
 
-        // Отправка после закрытия ОТКЛОНЯЕТСЯ: тихий возврат сообщал
-        // вызывающему, что сообщение ушло, хотя до провода оно не доходило.
+        // A send after close is REFUSED: returning quietly told the caller the
+        // message had gone out when it never reached the wire.
         await expectLater(
           transport.sendMessage(streamId, Uint8List.fromList('test'.codeUnits)),
           throwsA(isA<RpcStatusException>()),
@@ -512,8 +512,8 @@ void main() {
       });
     });
 
-    group('интеграционные тесты', () {
-      test('полный_цикл_обмена_сообщениями', () async {
+    group('integration', () {
+      test('a full round of message exchange', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testFullCycleServer,
@@ -528,29 +528,29 @@ void main() {
         transport.getMessagesForStream(streamId).listen(receivedMessages.add);
 
         // Act
-        // Отправляем метаданные
+        // Metadata first.
         final metadata = RpcMetadata.forClientRequest(
           'TestService',
           'FullCycle',
         );
         await transport.sendMetadata(streamId, metadata);
 
-        // Отправляем сообщение
+        // Then the message.
         await transport.sendMessage(
           streamId,
           Uint8List.fromList('test request'.codeUnits),
         );
 
-        // Завершаем отправку
+        // Then half-close.
         await transport.finishSending(streamId);
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
 
-        // Проверяем, что получили и метаданные, и данные
+        // Both metadata and data must have come back.
         final metadataMessages = receivedMessages
             .where((msg) => msg.isMetadataOnly)
             .toList();
@@ -565,7 +565,7 @@ void main() {
         result.kill();
       });
 
-      test('обработка_ошибок_в_изоляте', () async {
+      test('an error raised inside the isolate comes back', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testErrorServer,
@@ -585,11 +585,11 @@ void main() {
           Uint8List.fromList('trigger error'.codeUnits),
         );
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
-        // Ожидаем, что получим сообщение об ошибке
+        // We expect an error message.
         expect(receivedMessages.length, greaterThan(0));
 
         // Cleanup
@@ -597,8 +597,8 @@ void main() {
       });
     });
 
-    group('zero-copy с sendDirectObject', () {
-      test('передает_сложные_объекты_без_сериализации', () async {
+    group('zero-copy via sendDirectObject', () {
+      test('carries a complex object with no serialization', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testZeroCopyServer,
@@ -612,7 +612,7 @@ void main() {
 
         transport.incomingMessages.listen(receivedMessages.add);
 
-        // Act - отправляем сложный объект напрямую
+        // Act: send a complex object directly.
         final complexObject = TestComplexObject(
           id: 42,
           name: 'Test User',
@@ -628,13 +628,13 @@ void main() {
 
         await transport.sendDirectObject(streamId, complexObject);
 
-        // Даем время для обработки в изоляте
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 300));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
 
-        // Ищем zero-copy ответ
+        // Find the zero-copy response.
         final directMessage = receivedMessages.firstWhere(
           (msg) => msg.isDirect && msg.directPayload != null,
           orElse: () => throw StateError('Zero-copy response not found'),
@@ -643,21 +643,21 @@ void main() {
         expect(directMessage.directPayload, isA<TestComplexObject>());
         final responseObject = directMessage.directPayload as TestComplexObject;
 
-        // Проверяем, что объект прошел без потерь и был модифицирован сервером
+        // The object crossed intact and the server's edits came back with it.
         expect(responseObject.id, equals(42));
         expect(responseObject.name, equals('Test User [PROCESSED]'));
         expect(
           responseObject.metadata['roles'],
           equals(['admin', 'user', 'zero-copy']),
         );
-        expect(responseObject.tags.length, equals(3)); // добавился 'processed'
+        expect(responseObject.tags.length, equals(3)); // 'processed' was added.
         expect(responseObject.isActive, equals(true));
 
         // Cleanup
         result.kill();
       });
 
-      test('передает_примитивы_и_коллекции_zero_copy', () async {
+      test('carries primitives and collections zero-copy', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testPrimitivesZeroCopyServer,
@@ -671,7 +671,7 @@ void main() {
 
         transport.incomingMessages.listen(receivedMessages.add);
 
-        // Act - отправляем разные типы данных
+        // Act: send a range of payload types.
         final testCases = [
           {
             'numbers': [1, 2, 3, 4, 5],
@@ -692,7 +692,7 @@ void main() {
           await transport.sendDirectObject(newStreamId, testCases[i]);
         }
 
-        // Даем время для обработки всех сообщений
+        // Let the isolate handle all of them.
         await Future<void>.delayed(Duration(milliseconds: 400));
 
         // Assert
@@ -704,7 +704,7 @@ void main() {
 
         expect(directResponses.length, equals(testCases.length));
 
-        // Проверяем каждый ответ
+        // Check every response.
         for (int i = 0; i < directResponses.length; i++) {
           final response = directResponses[i].directPayload;
           expect(response.toString(), contains('ECHO:'));
@@ -714,7 +714,7 @@ void main() {
         result.kill();
       });
 
-      test('измеряет_производительность_zero_copy_vs_serialization', () async {
+      test('times zero-copy against serialization', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testPerformanceServer,
@@ -723,15 +723,12 @@ void main() {
         );
 
         final transport = result.transport;
-        final largeObject = TestLargeObject.generate(
-          5000,
-        ); // Увеличиваем размер
+        final largeObject = TestLargeObject.generate(5000);
 
         // Act & Assert - Zero-copy
         final stopwatchZeroCopy = Stopwatch()..start();
 
         for (int i = 0; i < 50; i++) {
-          // Больше итераций
           final streamId = transport.createStream();
           await transport.sendDirectObject(streamId, largeObject);
         }
@@ -739,12 +736,12 @@ void main() {
         stopwatchZeroCopy.stop();
         final zeroCopyTime = stopwatchZeroCopy.elapsedMicroseconds;
 
-        // Act & Assert - Обычная сериализация (JSON)
+        // Act & Assert - ordinary serialization (JSON)
         final stopwatchSerialized = Stopwatch()..start();
 
         for (int i = 0; i < 50; i++) {
           final streamId = transport.createStream();
-          // Имитируем полную сериализацию в JSON
+          // Stand in for a full serialization to JSON.
           final jsonString = largeObject.data.toString();
           final serialized = Uint8List.fromList(jsonString.codeUnits);
           await transport.sendMessage(streamId, serialized);
@@ -753,24 +750,24 @@ void main() {
         stopwatchSerialized.stop();
         final serializedTime = stopwatchSerialized.elapsedMicroseconds;
 
-        print('Zero-copy время: $zeroCopyTimeμs');
-        print('Сериализация время: $serializedTimeμs');
+        print('zero-copy: ${zeroCopyTime}us');
+        print('serialization: ${serializedTime}us');
 
         if (zeroCopyTime < serializedTime) {
           print(
-            '✅ Zero-copy быстрее в ${(serializedTime / zeroCopyTime).toStringAsFixed(2)}x раз',
+            'zero-copy is '
+            '${(serializedTime / zeroCopyTime).toStringAsFixed(2)}x faster',
           );
         } else {
           print(
-            '⚠️ Для данного размера сериализация быстрее в ${(zeroCopyTime / serializedTime).toStringAsFixed(2)}x раз',
-          );
-          print(
-            '💡 Zero-copy эффективен для очень больших или сложных объектов',
+            'at this size serialization is '
+            '${(zeroCopyTime / serializedTime).toStringAsFixed(2)}x faster; '
+            'zero-copy pays off on very large or deeply nested objects',
           );
         }
 
-        // Главное преимущество zero-copy - не нужна сериализация/десериализация
-        // Поэтому проверяем что оба метода работают
+        // Zero-copy's advantage is skipping serialization entirely, which is
+        // size-dependent, so the assertion is only that both paths work.
         expect(zeroCopyTime, greaterThan(0));
         expect(serializedTime, greaterThan(0));
 
@@ -778,7 +775,7 @@ void main() {
         result.kill();
       });
 
-      test('обрабатывает_ошибки_при_zero_copy', () async {
+      test('reports an error raised on the zero-copy path', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testZeroCopyErrorServer,
@@ -792,9 +789,9 @@ void main() {
 
         transport.incomingMessages.listen(receivedMessages.add);
 
-        // Act - отправляем объект, который вызовет ошибку
+        // Act: send the object the server is written to fail on.
         final errorTrigger = TestComplexObject(
-          id: -1, // специальный ID для триггера ошибки
+          id: -1, // The id the server treats as the error trigger.
           name: 'Error Trigger',
           metadata: {},
           tags: [],
@@ -804,20 +801,19 @@ void main() {
 
         await transport.sendDirectObject(streamId, errorTrigger);
 
-        // Даем время для обработки
+        // Let the isolate handle it.
         await Future<void>.delayed(Duration(milliseconds: 200));
 
         // Assert
         expect(receivedMessages.length, greaterThan(0));
 
-        // Должны получить ошибку через metadata (как в gRPC)
+        // The error arrives in metadata, the way gRPC carries one.
         final errorMessage = receivedMessages.firstWhere(
           (msg) => msg.metadata != null && msg.isEndOfStream,
           orElse: () => throw StateError('Error response not found'),
         );
 
         expect(errorMessage.metadata, isNotNull);
-        // В реальной реализации здесь была бы проверка статуса ошибки
 
         // Cleanup
         result.kill();
@@ -825,7 +821,7 @@ void main() {
     });
 
     group('releaseStreamId', () {
-      test('освобождает_активный_stream_id', () async {
+      test('releases an active stream id', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -836,24 +832,24 @@ void main() {
         final transport = result.transport;
         final streamId = transport.createStream();
 
-        // Act - сначала убеждаемся что stream создан
+        // Act: first make sure the stream exists.
         expect(streamId, greaterThan(0));
 
-        // Освобождаем stream
+        // Then release it.
         final released = transport.releaseStreamId(streamId);
 
         // Assert
         expect(
           released,
           isTrue,
-          reason: 'Должен вернуть true для активного stream',
+          reason: 'releasing an active stream must return true',
         );
 
         // Cleanup
         result.kill();
       });
 
-      test('возвращает_false_для_несуществующего_stream_id', () async {
+      test('returns false for a stream id that never existed', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -863,21 +859,21 @@ void main() {
 
         final transport = result.transport;
 
-        // Act - пытаемся освободить несуществующий stream ID
+        // Act: try to release a stream id that was never issued.
         final released = transport.releaseStreamId(99999);
 
         // Assert
         expect(
           released,
           isFalse,
-          reason: 'Должен вернуть false для несуществующего stream',
+          reason: 'releasing an unknown stream must return false',
         );
 
         // Cleanup
         result.kill();
       });
 
-      test('возвращает_false_для_уже_освобожденного_stream_id', () async {
+      test('returns false for an already-released stream id', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -888,27 +884,23 @@ void main() {
         final transport = result.transport;
         final streamId = transport.createStream();
 
-        // Act - освобождаем дважды
+        // Act: release it twice.
         final firstRelease = transport.releaseStreamId(streamId);
         final secondRelease = transport.releaseStreamId(streamId);
 
         // Assert
-        expect(
-          firstRelease,
-          isTrue,
-          reason: 'Первое освобождение должно быть успешным',
-        );
+        expect(firstRelease, isTrue, reason: 'the first release must succeed');
         expect(
           secondRelease,
           isFalse,
-          reason: 'Повторное освобождение должно вернуть false',
+          reason: 'a second release must return false',
         );
 
         // Cleanup
         result.kill();
       });
 
-      test('возвращает_false_для_закрытого_транспорта', () async {
+      test('returns false once the transport is closed', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -919,7 +911,7 @@ void main() {
         final transport = result.transport;
         final streamId = transport.createStream();
 
-        // Act - закрываем транспорт и пытаемся освободить stream
+        // Act: close the transport, then try to release the stream.
         await transport.close();
         final released = transport.releaseStreamId(streamId);
 
@@ -927,7 +919,7 @@ void main() {
         expect(
           released,
           isFalse,
-          reason: 'Должен вернуть false для закрытого транспорта',
+          reason: 'a closed transport must return false',
         );
         expect(transport.isClosed, isTrue);
 
@@ -935,7 +927,7 @@ void main() {
         result.kill();
       });
 
-      test('освобождает_множественные_stream_ids', () async {
+      test('releases several stream ids', () async {
         // Arrange
         final result = await RpcIsolateTransport.spawn(
           entrypoint: _testEchoServer,
@@ -946,75 +938,72 @@ void main() {
         final transport = result.transport;
         final streamIds = List.generate(5, (_) => transport.createStream());
 
-        // Act - освобождаем все streams
+        // Act: release every stream.
         final results = streamIds.map(transport.releaseStreamId).toList();
 
         // Assert
         expect(
           results.every((result) => result == true),
           isTrue,
-          reason: 'Все streams должны быть освобождены успешно',
+          reason: 'every stream must be released successfully',
         );
 
-        // Повторное освобождение должно вернуть false
+        // A second release must return false.
         final secondResults = streamIds.map(transport.releaseStreamId).toList();
         expect(
           secondResults.every((result) => result == false),
           isTrue,
-          reason: 'Повторное освобождение должно вернуть false',
+          reason: 'a second release must return false',
         );
 
         // Cleanup
         result.kill();
       });
 
-      test(
-        'корректно_работает_с_отправкой_сообщений_после_освобождения',
-        () async {
-          // Arrange
-          final result = await RpcIsolateTransport.spawn(
-            entrypoint: _testEchoServer,
-            customParams: {},
-            isolateId: 'release-after-message-test',
-          );
+      test('sending on a released stream id does not throw', () async {
+        // Arrange
+        final result = await RpcIsolateTransport.spawn(
+          entrypoint: _testEchoServer,
+          customParams: {},
+          isolateId: 'release-after-message-test',
+        );
 
-          final transport = result.transport;
-          final streamId = transport.createStream();
-          final receivedMessages = <RpcTransportMessage>[];
+        final transport = result.transport;
+        final streamId = transport.createStream();
+        final receivedMessages = <RpcTransportMessage>[];
 
-          transport.incomingMessages.listen(receivedMessages.add);
+        transport.incomingMessages.listen(receivedMessages.add);
 
-          // Act - отправляем сообщение
-          final testData = Uint8List.fromList('Test message'.codeUnits);
-          await transport.sendMessage(streamId, testData);
+        // Act: send a message.
+        final testData = Uint8List.fromList('Test message'.codeUnits);
+        await transport.sendMessage(streamId, testData);
 
-          // Ждем ответ
-          await Future<void>.delayed(Duration(milliseconds: 100));
+        // Wait for the answer.
+        await Future<void>.delayed(Duration(milliseconds: 100));
 
-          // Освобождаем stream
-          final released = transport.releaseStreamId(streamId);
+        // Release the stream.
+        final released = transport.releaseStreamId(streamId);
 
-          // Пытаемся отправить еще одно сообщение (не должно вызывать ошибку)
-          await transport.sendMessage(streamId, testData);
+        // Sending once more must not throw.
+        await transport.sendMessage(streamId, testData);
 
-          // Assert
-          expect(released, isTrue);
-          expect(receivedMessages.length, greaterThan(0));
+        // Assert
+        expect(released, isTrue);
+        expect(receivedMessages.length, greaterThan(0));
 
-          // Cleanup
-          result.kill();
-        },
-      );
+        // Cleanup
+        result.kill();
+      });
     });
   });
 }
 
-/// Простой эхо-сервер для тестов
+/// A plain echo server.
 @pragma('vm:entry-point')
 void _testEchoServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
     if (!message.isMetadataOnly && message.payload != null) {
-      // Эхо сообщения
+      // Echo the message back.
       final echoData = Uint8List.fromList(
         'Echo: ${String.fromCharCodes(message.payload!)}'.codeUnits,
       );
@@ -1023,7 +1012,7 @@ void _testEchoServer(IRpcTransport transport, Map<String, dynamic> params) {
   });
 }
 
-/// Сервер для тестирования параметров
+/// A server that echoes with a prefix taken from its custom params.
 @pragma('vm:entry-point')
 void _testParameterServer(
   IRpcTransport transport,
@@ -1042,13 +1031,13 @@ void _testParameterServer(
   });
 }
 
-/// Сервер с ошибкой для тестирования
+/// A server that throws on startup.
 @pragma('vm:entry-point')
 void _faultyServer(IRpcTransport transport, Map<String, dynamic> params) {
   throw Exception('Intentional server error');
 }
 
-/// Мульти-стрим сервер для тестирования фильтрации
+/// A multi-stream server, for the stream-id filtering test.
 @pragma('vm:entry-point')
 void _testMultiStreamServer(
   IRpcTransport transport,
@@ -1066,7 +1055,7 @@ void _testMultiStreamServer(
   });
 }
 
-/// Полный цикл сервер для интеграционных тестов
+/// A full-cycle server, for the integration tests.
 @pragma('vm:entry-point')
 void _testFullCycleServer(
   IRpcTransport transport,
@@ -1076,18 +1065,18 @@ void _testFullCycleServer(
 
   transport.incomingMessages.listen((message) async {
     if (message.isMetadataOnly && !message.isEndOfStream) {
-      // Отправляем начальные метаданные
+      // Initial metadata.
       final initialMetadata = RpcMetadata.forServerInitialResponse();
       await transport.sendMetadata(message.streamId, initialMetadata);
     } else if (!message.isMetadataOnly && message.payload != null) {
-      // Отправляем несколько ответов
+      // Then the responses.
       for (int i = 1; i <= responseCount; i++) {
         final responseText = 'Response $i of $responseCount';
         final responseData = Uint8List.fromList(responseText.codeUnits);
         await transport.sendMessage(message.streamId, responseData);
       }
 
-      // Отправляем финальные метаданные
+      // Then the trailer.
       final finalMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
       await transport.sendMetadata(
         message.streamId,
@@ -1098,12 +1087,12 @@ void _testFullCycleServer(
   });
 }
 
-/// Сервер с ошибками для тестирования
+/// A server that answers every message with an error trailer.
 @pragma('vm:entry-point')
 void _testErrorServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
     if (!message.isMetadataOnly && message.payload != null) {
-      // Отправляем ошибку
+      // Answer with an error.
       final errorMetadata = RpcMetadata.forTrailer(
         RpcStatus.internal,
         message: 'Test error',
@@ -1117,16 +1106,16 @@ void _testErrorServer(IRpcTransport transport, Map<String, dynamic> params) {
   });
 }
 
-/// Простой сервер для тестов finishSending
+/// A plain server for the finishSending tests.
 @pragma('vm:entry-point')
 void _testFinishServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
-    // Отвечаем на любое сообщение, включая END_STREAM
+    // Answer every message, END_STREAM included.
     if (message.isEndOfStream) {
-      // Отправляем подтверждение END_STREAM
+      // Acknowledge the END_STREAM.
       await transport.finishSending(message.streamId);
     } else if (!message.isMetadataOnly && message.payload != null) {
-      // Эхо обычных сообщений
+      // Echo an ordinary message.
       final echoData = Uint8List.fromList(
         'Echo: ${String.fromCharCodes(message.payload!)}'.codeUnits,
       );
@@ -1135,15 +1124,15 @@ void _testFinishServer(IRpcTransport transport, Map<String, dynamic> params) {
   });
 }
 
-/// Zero-copy сервер для сложных объектов
+/// A zero-copy server for complex objects.
 @pragma('vm:entry-point')
 void _testZeroCopyServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
-      // Получаем объект напрямую без сериализации
+      // The object arrives directly, with no deserialization.
       final receivedObject = message.directPayload as TestComplexObject;
 
-      // Модифицируем объект
+      // Edit it, so the test can see the edits come back.
       final modifiedObject = TestComplexObject(
         id: receivedObject.id,
         name: '${receivedObject.name} [PROCESSED]',
@@ -1156,7 +1145,7 @@ void _testZeroCopyServer(IRpcTransport transport, Map<String, dynamic> params) {
         isActive: receivedObject.isActive,
       );
 
-      // Отправляем назад через zero-copy
+      // Send it back the same way.
       await transport.sendDirectObject(
         message.streamId,
         modifiedObject,
@@ -1166,7 +1155,7 @@ void _testZeroCopyServer(IRpcTransport transport, Map<String, dynamic> params) {
   });
 }
 
-/// Zero-copy сервер для примитивов и коллекций
+/// A zero-copy server for primitives and collections.
 @pragma('vm:entry-point')
 void _testPrimitivesZeroCopyServer(
   IRpcTransport transport,
@@ -1174,7 +1163,7 @@ void _testPrimitivesZeroCopyServer(
 ) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
-      // Получаем любой объект и отправляем эхо-ответ
+      // Take whatever arrives and echo it.
       final received = message.directPayload;
       final echo = 'ECHO: $received';
 
@@ -1183,7 +1172,7 @@ void _testPrimitivesZeroCopyServer(
   });
 }
 
-/// Сервер для тестирования производительности
+/// A server for the timing comparison.
 @pragma('vm:entry-point')
 void _testPerformanceServer(
   IRpcTransport transport,
@@ -1191,17 +1180,17 @@ void _testPerformanceServer(
 ) {
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
-      // Просто отправляем подтверждение
+      // Acknowledge and nothing more.
       await transport.sendDirectObject(message.streamId, 'OK', endStream: true);
     } else if (message.payload != null) {
-      // Для сериализованных данных - просто подтверждение
+      // Same for serialized data.
       final response = Uint8List.fromList('OK'.codeUnits);
       await transport.sendMessage(message.streamId, response, endStream: true);
     }
   });
 }
 
-/// Zero-copy сервер с обработкой ошибок
+/// A zero-copy server that fails on one particular payload.
 @pragma('vm:entry-point')
 void _testZeroCopyErrorServer(
   IRpcTransport transport,
@@ -1211,9 +1200,9 @@ void _testZeroCopyErrorServer(
     if (message.isDirect && message.directPayload != null) {
       final receivedObject = message.directPayload as TestComplexObject;
 
-      // Если ID = -1, то генерируем ошибку
+      // An id of -1 is the error trigger.
       if (receivedObject.id == -1) {
-        // Отправляем ошибку через metadata (как в gRPC)
+        // The error goes back in metadata, the way gRPC carries one.
         final errorMetadata = RpcMetadata.forTrailer(
           RpcStatus.invalidArgument,
           message: 'Invalid object ID: ${receivedObject.id}',
@@ -1224,7 +1213,7 @@ void _testZeroCopyErrorServer(
           endStream: true,
         );
       } else {
-        // Обычная обработка
+        // The ordinary path.
         await transport.sendDirectObject(
           message.streamId,
           'Success',

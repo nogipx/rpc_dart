@@ -80,6 +80,37 @@ bridge the sweep does not list at all.
 Price: one round's delay and one probe, on a rule already written down twice
 (L-16) and in a comment thirty lines from one of the misses.
 
+## The axis can also be an AUDIENCE (round 435)
+
+Second instance of the same failure, on a different class. B-30 sweeps Cyrillic
+out of a repo whose rule says "English for code, comments, and logs". The lead
+counted files, round 432 corrected it to lines, and 435 found that both were
+counting on the wrong axis again: **the population splits by who reads it.**
+
+    comment in test/   a maintainer who opened the file
+    comment in lib/    that, plus dartdoc on the pub.dev page
+    LOG in lib/        emitted at runtime into the user's own log stream
+
+The lead deferred `lib/` for its dartdoc surface and named `rpc_data`'s 16
+files. The largest single concentration in the repo is a file it never mentions
+— `rpc_notify/lib/src/stream_distributor.dart`, 176 lines, of which **39 are
+runtime log messages**. That third category is the only one a user cannot avoid
+by not opening a file, and no count in the lead had ever separated it.
+
+Two further ways this axis was wrong, both cheap to check and neither checked:
+
+- The lead's detector is a grep, and it calls that grep "both the detector and
+  the check". Three of the eight files it flags are FIXTURES whose Cyrillic is
+  the subject under test. A text detector returns prose and data alike.
+- The rule states two populations in one sentence — no emoji, and English. They
+  have different distributions: the emoji are 154 lines, every one in `test/` or
+  `example/`, none in `lib/` at all.
+
+> **Before sweeping a class, ask what makes two members of it differ in VALUE,
+> not just in count.** File, line and package are the axes a tool offers;
+> audience, reachability and "is this a specimen or a defect" are the ones that
+> decide what to fix first, and no grep will volunteer them.
+
 ## Where it does NOT apply
 
 A round that finds ONE instance of a shape and fixes it is not under-delivering

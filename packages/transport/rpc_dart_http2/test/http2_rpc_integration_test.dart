@@ -89,8 +89,8 @@ void main() {
       );
     });
 
-    test('unary_rpc_через_caller_и_responder', () async {
-      // Act - делаем унарный RPC вызов через high-level API
+    test('unary rpc through caller and responder', () async {
+      // Act: a unary call through the high-level API.
       final response = await callerEndpoint.unaryRequest<RpcString, RpcString>(
         serviceName: 'TestService',
         methodName: 'Echo',
@@ -102,14 +102,14 @@ void main() {
       // Assert
       expect(response.value, equals('Server Echo: Hello from high-level RPC!'));
 
-      print('✅ Unary RPC через Caller/Responder работает отлично!');
+      print('unary RPC through caller/responder works');
     });
 
-    test('server_streaming_rpc_через_caller_и_responder', () async {
+    test('server streaming rpc through caller and responder', () async {
       final responses = <String>[];
       final completer = Completer<void>();
 
-      // Act - создаем server streaming RPC вызов
+      // Act: open a server-streaming call.
       final responseStream = callerEndpoint.serverStream<RpcString, RpcString>(
         serviceName: 'TestService',
         methodName: 'ServerStream',
@@ -118,8 +118,9 @@ void main() {
         request: RpcString('Generate messages'),
       );
 
-      // Слушаем ответы. Guard every completion: a late stream error (e.g. the
-      // connection closing during tearDown) must not complete the future twice.
+      // Read the responses. Guard every completion: a late stream error (e.g.
+      // the connection closing during tearDown) must not complete the future
+      // twice.
       final sub = responseStream.listen(
         (rpcString) {
           responses.add(rpcString.value);
@@ -150,8 +151,8 @@ void main() {
       expect(responses[2], contains('Stream message #3'));
     });
 
-    test('client_streaming_rpc_через_caller_и_responder', () async {
-      // Act - создаем client streaming RPC вызов
+    test('client streaming rpc through caller and responder', () async {
+      // Act: open a client-streaming call.
       final messages = [
         RpcString('Message 1'),
         RpcString('Message 2'),
@@ -159,7 +160,7 @@ void main() {
       ];
 
       final requestStream = Stream.fromIterable(messages).map((msg) {
-        print('📤 Отправляем client streaming сообщение: ${msg.value}');
+        print('sending a client-streaming message: ${msg.value}');
         return msg;
       });
 
@@ -170,7 +171,7 @@ void main() {
         responseCodec: RpcString.codec,
       );
 
-      // Завершаем отправку и ждем ответ
+      // Half-close and wait for the answer.
       final response = await callFunction(requestStream).timeout(
         Duration(seconds: 5),
         onTimeout: () => throw TimeoutException(
@@ -181,35 +182,35 @@ void main() {
       // Assert
       expect(response.value, contains('Received 3 client messages'));
 
-      print('✅ Client Streaming RPC через Caller/Responder работает отлично!');
+      print('client streaming RPC through caller/responder works');
     });
 
-    test('bidirectional_streaming_rpc_через_caller_и_responder', () async {
+    test('bidirectional streaming rpc through caller and responder', () async {
       final responses = <String>[];
       final completer = Completer<void>();
 
-      // Act - создаем bidirectional streaming RPC вызов
+      // Act: open a bidirectional call.
       final messages = [
         RpcString('Bidirectional message #1'),
         RpcString('Bidirectional message #2'),
         RpcString('Bidirectional message #3'),
       ];
 
-      // Создаем StreamController для контроля закрытия
+      // Our own controller, so the test decides when the stream closes.
       final requestController = StreamController<RpcString>();
 
-      // Отправляем сообщения с задержкой но НЕ закрываем стрим сразу
+      // Paced messages, and the stream is NOT closed straight away.
       unawaited(
         Future.microtask(() async {
           for (final msg in messages) {
             await Future<void>.delayed(Duration(milliseconds: 200));
-            print('🔄 Отправляем bidirectional сообщение: ${msg.value}');
+            print('sending a bidirectional message: ${msg.value}');
             requestController.add(msg);
           }
 
-          // Ждем немного перед закрытием чтобы дать серверу время ответить
+          // A pause before closing, so the server has time to answer.
           await Future<void>.delayed(Duration(milliseconds: 300));
-          print('🏁 Клиент закрывает request stream');
+          print('the client is closing its request stream');
           await requestController.close();
         }),
       );
@@ -225,8 +226,8 @@ void main() {
             requests: requestStream,
           );
 
-      // Слушаем ответы. A late stream error (e.g. the connection closing during
-      // tearDown) must not complete the future twice.
+      // Read the responses. A late stream error (e.g. the connection closing
+      // during tearDown) must not complete the future twice.
       final sub = responseStream.listen(
         (rpcString) {
           responses.add(rpcString.value);
@@ -257,16 +258,14 @@ void main() {
       expect(responses[1], equals('Echo: Bidirectional message #2'));
       expect(responses[2], equals('Echo: Bidirectional message #3'));
 
-      print(
-        '✅ Bidirectional Streaming RPC через Caller/Responder работает отлично!',
-      );
+      print('bidirectional streaming RPC through caller/responder works');
     });
 
-    test('параллельные_rpc_вызовы_разных_типов', () async {
-      // Act - делаем параллельные вызовы разных типов
+    test('parallel rpc calls of different shapes', () async {
+      // Act: several calls at once, of different shapes.
       final futures = <Future<void>>[];
 
-      // Unary вызов
+      // Unary
       futures.add(
         callerEndpoint
             .unaryRequest<RpcString, RpcString>(
@@ -278,11 +277,11 @@ void main() {
             )
             .then((response) {
               expect(response.value, contains('Parallel unary'));
-              print('✅ Параллельный unary завершен: ${response.value}');
+              print('parallel unary finished: ${response.value}');
             }),
       );
 
-      // Server streaming вызов
+      // Server streaming
       futures.add(
         callerEndpoint
             .serverStream<RpcString, RpcString>(
@@ -297,7 +296,8 @@ void main() {
             .then((responses) {
               expect(responses.length, equals(2));
               print(
-                '✅ Параллельный server streaming завершен: ${responses.length} ответов',
+                'parallel server streaming finished: '
+                '${responses.length} responses',
               );
             }),
       );
@@ -308,37 +308,35 @@ void main() {
         onTimeout: () => throw TimeoutException('Timeout in parallel RPC test'),
       );
 
-      print(
-        '✅ Все параллельные RPC вызовы через Caller/Responder завершены успешно!',
-      );
+      print('every parallel RPC call through caller/responder finished');
     });
   });
 }
 
-/// Контракт тестового сервиса
+/// The contract under test.
 final class TestServiceContract extends RpcResponderContract {
   TestServiceContract() : super('TestService');
 
   @override
   void setup() {
-    // Unary метод
+    // Unary
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Echo',
       handler: (request, {context}) async {
         final message = request.value;
-        print('🔄 Обработка unary Echo: $message');
+        print('handling unary Echo: $message');
         return RpcString('Server Echo: $message');
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );
 
-    // Server streaming метод
+    // Server streaming
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'ServerStream',
       handler: (request, {context}) async* {
         final message = request.value;
-        print('🔄 Обработка server streaming: $message');
+        print('handling server streaming: $message');
 
         for (int i = 1; i <= 3; i++) {
           await Future<void>.delayed(Duration(milliseconds: 100));
@@ -349,17 +347,17 @@ final class TestServiceContract extends RpcResponderContract {
       responseCodec: RpcString.codec,
     );
 
-    // Client streaming метод
+    // Client streaming
     addClientStreamMethod<RpcString, RpcString>(
       methodName: 'ClientStream',
       handler: (requestStream, {context}) async {
-        print('🔄 Начало обработки client streaming');
+        print('client streaming started');
 
         final messages = <String>[];
         await for (final request in requestStream) {
           final message = request.value;
           messages.add(message);
-          print('📥 Получено client streaming сообщение: $message');
+          print('received a client-streaming message: $message');
         }
 
         return RpcString(
@@ -370,26 +368,26 @@ final class TestServiceContract extends RpcResponderContract {
       responseCodec: RpcString.codec,
     );
 
-    // Bidirectional streaming метод
+    // Bidirectional streaming
     addBidirectionalMethod<RpcString, RpcString>(
       methodName: 'BidirectionalStream',
       handler: (requestStream, {context}) async* {
-        print('🔄 Начало обработки bidirectional streaming');
+        print('bidirectional streaming started');
 
         await for (final request in requestStream) {
           final message = request.value;
-          print('🔄 Обработка bidirectional сообщения: $message');
+          print('handling a bidirectional message: $message');
 
           final response = RpcString('Echo: $message');
-          print('📤 Отправляем bidirectional ответ: ${response.value}');
+          print('sending a bidirectional response: ${response.value}');
           yield response;
 
-          // Добавляем небольшую задержку чтобы ответ успел отправиться
+          // A short delay, so the response has time to go out.
           await Future<void>.delayed(Duration(milliseconds: 50));
-          print('✅ Bidirectional ответ отправлен: ${response.value}');
+          print('bidirectional response sent: ${response.value}');
         }
 
-        print('🏁 Завершение bidirectional streaming на сервере');
+        print('bidirectional streaming finished on the server');
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,

@@ -10,12 +10,12 @@ import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 import 'package:test/test.dart';
 
 // ============================================================================
-// 📦 МОДЕЛИ ДЛЯ ZERO-COPY ТЕСТИРОВАНИЯ
+// MODELS FOR THE ZERO-COPY TESTS
 // ============================================================================
 
-/// Демонстрация zero-copy функциональности isolate транспорта
-/// Простой тест для проверки работоспособности sendDirectObject
-/// Простая модель для тестирования
+/// Exercises the isolate transport's zero-copy path: does sendDirectObject
+/// carry an object across the boundary intact?
+/// A simple model to send.
 class TestDataModel {
   final String id;
   final List<double> numbers;
@@ -27,7 +27,7 @@ class TestDataModel {
     required this.metadata,
   });
 
-  /// Генерирует тестовые данные
+  /// Builds test data of the given size.
   factory TestDataModel.generate(int size) {
     final random = Random();
     final numbers = List.generate(size, (i) => random.nextDouble() * 100);
@@ -56,7 +56,7 @@ class TestDataModel {
   String toString() => 'TestDataModel(id: $id, numbers: ${numbers.length})';
 }
 
-/// Результат обработки
+/// What the isolate sends back.
 class ProcessingResult {
   final String originalId;
   final double sum;
@@ -78,12 +78,12 @@ class ProcessingResult {
 }
 
 // ============================================================================
-// 🖥️ СЕРВЕР ДЛЯ ИЗОЛЯТА
+// THE SERVER, RUNNING IN THE ISOLATE
 // ============================================================================
 
 @pragma('vm:entry-point')
 void processingServer(IRpcTransport transport, Map<String, dynamic> params) {
-  print('🖥️ [Processing Server] Запуск в изоляте');
+  print('[Processing Server] starting in the isolate');
 
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
@@ -91,14 +91,14 @@ void processingServer(IRpcTransport transport, Map<String, dynamic> params) {
 
       if (payload is TestDataModel) {
         final stopwatch = Stopwatch()..start();
-        print('📊 [Processing Server] Обработка данных: ${payload.id}');
-        print('   📈 Numbers: ${payload.numbers.length}');
+        print('[Processing Server] handling: ${payload.id}');
+        print('   numbers: ${payload.numbers.length}');
 
-        // CPU-intensive вычисления
+        // CPU-intensive work.
         final sum = payload.numbers.reduce((a, b) => a + b);
         final average = sum / payload.numbers.length;
 
-        // Симуляция работы
+        // Stand in for more of it.
         await Future<void>.delayed(Duration(milliseconds: 10));
 
         stopwatch.stop();
@@ -111,9 +111,7 @@ void processingServer(IRpcTransport transport, Map<String, dynamic> params) {
           processingTime: stopwatch.elapsed,
         );
 
-        print(
-          '✅ [Processing Server] Обработка завершена за ${stopwatch.elapsedMilliseconds}мс',
-        );
+        print('[Processing Server] done in ${stopwatch.elapsedMilliseconds}ms');
 
         await transport.sendDirectObject(
           message.streamId,
@@ -124,16 +122,16 @@ void processingServer(IRpcTransport transport, Map<String, dynamic> params) {
     }
   });
 
-  print('✅ [Processing Server] Готов к обработке');
+  print('[Processing Server] ready');
 }
 
 // ============================================================================
-// 🧪 ТЕСТЫ
+// THE TESTS
 // ============================================================================
 
 void main() {
   group('Isolate Transport Zero-Copy Tests', () {
-    test('простой_zero_copy_объект_передается_корректно', () async {
+    test('a simple zero-copy object crosses intact', () async {
       // Arrange
       final result = await RpcIsolateTransport.spawn(
         entrypoint: processingServer,
@@ -165,20 +163,18 @@ void main() {
         expect(processingResult.average, greaterThan(0));
         expect(processingResult.average, equals(processingResult.sum / 100));
 
-        print('✅ Zero-copy тест пройден:');
-        print('   📊 Обработано: ${processingResult.processedCount} элементов');
-        print('   📈 Сумма: ${processingResult.sum.toStringAsFixed(2)}');
-        print('   📈 Среднее: ${processingResult.average.toStringAsFixed(2)}');
-        print(
-          '   ⏱️ Время: ${processingResult.processingTime.inMilliseconds}мс',
-        );
+        print('zero-copy test passed:');
+        print('   handled: ${processingResult.processedCount} items');
+        print('   sum: ${processingResult.sum.toStringAsFixed(2)}');
+        print('   average: ${processingResult.average.toStringAsFixed(2)}');
+        print('   took: ${processingResult.processingTime.inMilliseconds}ms');
       } finally {
         await transport.close();
         result.kill();
       }
     });
 
-    test('большой_объект_обрабатывается_эффективно', () async {
+    test('a large object is handled efficiently', () async {
       // Arrange
       final result = await RpcIsolateTransport.spawn(
         entrypoint: processingServer,
@@ -212,19 +208,22 @@ void main() {
         expect(
           stopwatch.elapsedMilliseconds,
           lessThan(1000),
-        ); // Максимум 1 секунда
+        ); // One second at most.
 
-        print('🚀 Performance тест пройден:');
-        print('   📊 Размер: 5000 чисел + сложные метаданные');
-        print('   ⏱️ Время клиент-сервер: ${stopwatch.elapsedMilliseconds}мс');
+        print('performance test passed:');
+        print('   size: 5000 numbers plus nested metadata');
+        print('   client-to-server: ${stopwatch.elapsedMilliseconds}ms');
         print(
-          '   ⚙️ Время обработки в изоляте: ${processingResult.processingTime.inMilliseconds}мс',
+          '   inside the isolate: '
+          '${processingResult.processingTime.inMilliseconds}ms',
         );
         print(
-          '   📈 Результат: sum=${processingResult.sum.toStringAsFixed(2)}, avg=${processingResult.average.toStringAsFixed(2)}',
+          '   result: sum=${processingResult.sum.toStringAsFixed(2)}, '
+          'avg=${processingResult.average.toStringAsFixed(2)}',
         );
         print(
-          '   ⚡ Zero-copy эффективность: ${(processingResult.processingTime.inMilliseconds / stopwatch.elapsedMilliseconds * 100).toStringAsFixed(1)}%',
+          '   share spent computing: '
+          '${(processingResult.processingTime.inMilliseconds / stopwatch.elapsedMilliseconds * 100).toStringAsFixed(1)}%',
         );
       } finally {
         await transport.close();

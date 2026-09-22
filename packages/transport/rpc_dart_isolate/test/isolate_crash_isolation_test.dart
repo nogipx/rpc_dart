@@ -10,21 +10,21 @@ import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 import 'package:test/test.dart';
 
 // ============================================================================
-// 💥 CRASH-СЕРВЕРЫ
+// THE CRASHING SERVERS
 // ============================================================================
 
-/// Тест для демонстрации crash-изоляции
+/// Crash isolation.
 ///
-/// Проверяет что:
-/// - Crash изолята не влияет на основной процесс
-/// - Другие изоляты продолжают работать
-/// - Основной поток остается стабильным
-/// Сервер который падает по команде
+/// Asserts that:
+/// - an isolate crashing does not affect the host process
+/// - the other isolates keep working
+/// - the main thread stays usable
+/// A server that dies on command.
 @pragma('vm:entry-point')
 void crashingServer(IRpcTransport transport, Map<String, dynamic> params) {
   final currentIsolate = Isolate.current;
 
-  print('💀 [Crashing Server] Запущен в изоляте ${currentIsolate.debugName}');
+  print('[Crashing Server] started in ${currentIsolate.debugName}');
 
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
@@ -33,7 +33,7 @@ void crashingServer(IRpcTransport transport, Map<String, dynamic> params) {
       if (payload is String) {
         switch (payload) {
           case 'PING':
-            print('🏓 [Crashing Server] PONG от ${currentIsolate.debugName}');
+            print('[Crashing Server] PONG from ${currentIsolate.debugName}');
             await transport.sendDirectObject(
               message.streamId,
               'PONG',
@@ -42,13 +42,13 @@ void crashingServer(IRpcTransport transport, Map<String, dynamic> params) {
             break;
 
           case 'CRASH_NOW':
-            print('💥 [Crashing Server] Получен сигнал к краху! Умираю...');
-            // Различные способы краха
+            print('[Crashing Server] crash requested');
+            // One of several ways to die.
             throw StateError('Intentional crash for testing');
 
           case 'MEMORY_BOMB':
-            print('💣 [Crashing Server] Запускаю memory bomb...');
-            // Создаем огромный список для исчерпания памяти
+            print('[Crashing Server] starting the memory bomb');
+            // Allocate until memory runs out.
             final memoryBomb = <List<int>>[];
             for (int i = 0; i < 100000; i++) {
               memoryBomb.add(List.filled(10000, i));
@@ -56,9 +56,9 @@ void crashingServer(IRpcTransport transport, Map<String, dynamic> params) {
             break;
 
           case 'INFINITE_LOOP':
-            print('🔄 [Crashing Server] Запускаю бесконечный цикл...');
+            print('[Crashing Server] entering an infinite loop');
             while (true) {
-              // Бесконечный цикл без yield
+              // No yield anywhere in here, deliberately.
               for (int i = 0; i < 1000000; i++) {
                 final _ = i * i;
               }
@@ -68,22 +68,22 @@ void crashingServer(IRpcTransport transport, Map<String, dynamic> params) {
     }
   });
 
-  print('✅ [Crashing Server] Готов к работе (и крашам)');
+  print('[Crashing Server] ready');
 }
 
-/// Стабильный сервер для контроля
+/// The control: a server that does not die.
 @pragma('vm:entry-point')
 void stableServer(IRpcTransport transport, Map<String, dynamic> params) {
   final currentIsolate = Isolate.current;
 
-  print('🛡️ [Stable Server] Запущен в изоляте ${currentIsolate.debugName}');
+  print('[Stable Server] started in ${currentIsolate.debugName}');
 
   transport.incomingMessages.listen((message) async {
     if (message.isDirect && message.directPayload != null) {
       final payload = message.directPayload;
 
       if (payload is String && payload == 'PING') {
-        print('🏓 [Stable Server] PONG от ${currentIsolate.debugName}');
+        print('[Stable Server] PONG from ${currentIsolate.debugName}');
         await transport.sendDirectObject(
           message.streamId,
           'PONG from stable',
@@ -93,17 +93,17 @@ void stableServer(IRpcTransport transport, Map<String, dynamic> params) {
     }
   });
 
-  print('✅ [Stable Server] Готов к стабильной работе');
+  print('[Stable Server] ready');
 }
 
 // ============================================================================
-// 🧪 ТЕСТЫ CRASH-ИЗОЛЯЦИИ
+// THE CRASH-ISOLATION TESTS
 // ============================================================================
 
 void main() {
   group('Isolate Crash Isolation Tests', () {
-    test('crash_изолята_не_влияет_на_основной_процесс', () async {
-      // Arrange - создаем крашащийся изолят
+    test('an isolate crashing does not affect the host process', () async {
+      // Arrange: the isolate that will crash.
       final crashResult = await RpcIsolateTransport.spawn(
         entrypoint: crashingServer,
         customParams: {},
@@ -111,7 +111,7 @@ void main() {
         debugName: 'CrashWorker',
       );
 
-      // И стабильный изолят для контроля
+      // And the control that will not.
       final stableResult = await RpcIsolateTransport.spawn(
         entrypoint: stableServer,
         customParams: {},
@@ -120,8 +120,8 @@ void main() {
       );
 
       try {
-        // Act 1 - проверяем что оба изолята работают
-        print('🔍 Проверяем исходное состояние...');
+        // Act 1: both isolates answer.
+        print('checking the starting state');
 
         // Ping crash worker
         final crashStreamId = crashResult.transport.createStream();
@@ -133,7 +133,7 @@ void main() {
 
         await crashResult.transport.sendDirectObject(crashStreamId, 'PING');
         await crashPingFuture;
-        print('✅ Crash worker отвечает на ping');
+        print('crash worker answers a ping');
 
         // Ping stable worker
         final stableStreamId1 = stableResult.transport.createStream();
@@ -147,31 +147,31 @@ void main() {
 
         await stableResult.transport.sendDirectObject(stableStreamId1, 'PING');
         await stablePingFuture1;
-        print('✅ Stable worker отвечает на ping');
+        print('stable worker answers a ping');
 
-        // Act 2 - крашим первый изолят
-        print('💥 Крашим первый изолят...');
+        // Act 2: crash the first isolate.
+        print('crashing the first isolate');
 
         final crashStreamId2 = crashResult.transport.createStream();
 
-        // Отправляем команду краша и ожидаем что соединение разорвется
+        // Send the crash command; the connection is expected to drop.
         await crashResult.transport.sendDirectObject(
           crashStreamId2,
           'CRASH_NOW',
         );
 
-        // Ждем немного чтобы краш произошел
+        // Give the crash a moment to land.
         await Future<void>.delayed(Duration(milliseconds: 100));
 
-        // Act 3 - проверяем что основной процесс и другой изолят все еще работают
-        print('🔍 Проверяем состояние после краша...');
+        // Act 3: the host and the other isolate are still fine.
+        print('checking the state after the crash');
 
-        // Проверяем что мы (основной процесс) все еще живы
-        final mainThreadValue = 42 * 2; // Простая операция в основном потоке
+        // We are still running.
+        final mainThreadValue = 42 * 2; // Any work on the main thread.
         expect(mainThreadValue, equals(84));
-        print('✅ Основной процесс остался стабильным');
+        print('the host process is still stable');
 
-        // Проверяем что стабильный изолят все еще работает
+        // And so is the stable isolate.
         final stableStreamId2 = stableResult.transport.createStream();
         final stablePingFuture2 = stableResult.transport
             .getMessagesForStream(stableStreamId2)
@@ -183,12 +183,10 @@ void main() {
 
         await stableResult.transport.sendDirectObject(stableStreamId2, 'PING');
         await stablePingFuture2;
-        print(
-          '✅ Stable worker продолжает работать после краша другого изолята',
-        );
+        print('stable worker still answers after the other isolate died');
 
-        // Act 4 - проверяем что crashed worker действительно мертв
-        print('💀 Проверяем что crashed worker действительно мертв...');
+        // Act 4: the crashed worker really is dead.
+        print('checking that the crashed worker is dead');
 
         await _waitForClosed(crashResult.transport);
         final health = await crashResult.transport.health();
@@ -196,7 +194,7 @@ void main() {
           health.level,
           anyOf(RpcHealthLevel.closed, RpcHealthLevel.unhealthy),
         );
-        print('✅ Crashed worker отмечен как закрытый/ошибочный');
+        print('crashed worker reports closed or unhealthy');
       } finally {
         // Cleanup
         await crashResult.transport.close();
@@ -206,15 +204,15 @@ void main() {
       }
     });
 
-    test('множественные_crash_не_влияют_на_оставшиеся_изоляты', () async {
-      // Arrange - создаем несколько изолятов
+    test('several crashes do not affect the remaining isolates', () async {
+      // Arrange: a handful of isolates.
       const totalIsolates = 5;
       final isolateResults =
           <({IRpcTransport transport, void Function() kill, String name})>[];
 
-      // Создаем 3 crash изолята и 2 stable
+      // Three that crash, two that do not.
       for (int i = 0; i < totalIsolates; i++) {
-        final isStable = i >= 3; // Последние 2 будут stable
+        final isStable = i >= 3; // The last two are stable.
         final result = await RpcIsolateTransport.spawn(
           entrypoint: isStable ? stableServer : crashingServer,
           customParams: {},
@@ -229,8 +227,8 @@ void main() {
       }
 
       try {
-        // Act 1 - проверяем что все изоляты работают
-        print('🔍 Проверяем что все изоляты изначально работают...');
+        // Act 1: every isolate answers.
+        print('checking that every isolate starts healthy');
 
         for (int i = 0; i < totalIsolates; i++) {
           final isolate = isolateResults[i];
@@ -243,27 +241,27 @@ void main() {
 
           await isolate.transport.sendDirectObject(streamId, 'PING');
           await pingFuture;
-          print('✅ ${isolate.name} отвечает на ping');
+          print('${isolate.name} answers a ping');
         }
 
-        // Act 2 - крашим первые 3 изолята поочередно
-        print('💥 Крашим первые 3 изолята...');
+        // Act 2: crash the first three, one at a time.
+        print('crashing the first three isolates');
 
         for (int i = 0; i < 3; i++) {
           final crashIsolate = isolateResults[i];
           final streamId = crashIsolate.transport.createStream();
 
-          print('💀 Крашим ${crashIsolate.name}...');
+          print('crashing ${crashIsolate.name}');
           await crashIsolate.transport.sendDirectObject(streamId, 'CRASH_NOW');
           await Future<void>.delayed(
             Duration(milliseconds: 50),
-          ); // Даем время на краш
+          ); // Let the crash land.
         }
 
-        // Act 3 - проверяем что stable изоляты все еще работают
-        print('🔍 Проверяем что stable изоляты все еще работают...');
+        // Act 3: the stable isolates still answer.
+        print('checking that the stable isolates still answer');
 
-        final stableIndices = [3, 4]; // Последние 2 изолята
+        final stableIndices = [3, 4]; // The last two.
         for (final index in stableIndices) {
           final stableIsolate = isolateResults[index];
           final streamId = stableIsolate.transport.createStream();
@@ -278,11 +276,11 @@ void main() {
 
           await stableIsolate.transport.sendDirectObject(streamId, 'PING');
           await pingFuture;
-          print('✅ ${stableIsolate.name} продолжает работать после крашей');
+          print('${stableIsolate.name} still works after the crashes');
         }
 
-        // Act 4 - проверяем что основной процесс стабилен
-        print('🔍 Проверяем стабильность основного процесса...');
+        // Act 4: the host process is still usable.
+        print('checking the host process');
 
         final mainThreadCalculations = <int>[];
         for (int i = 0; i < 100; i++) {
@@ -291,7 +289,7 @@ void main() {
 
         expect(mainThreadCalculations.length, equals(100));
         expect(mainThreadCalculations.last, equals(99 * 99));
-        print('✅ Основной процесс остался полностью стабильным');
+        print('the host process is completely stable');
       } finally {
         // Cleanup
         for (final result in isolateResults) {
