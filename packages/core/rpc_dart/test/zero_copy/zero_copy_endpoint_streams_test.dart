@@ -57,47 +57,47 @@ final class ZeroCopyTestService extends RpcResponderContract {
 
   @override
   void setup() {
-    // Server Stream Method - TRUE ZERO-COPY (без кодеков)
+    // Server stream, true zero-copy: no codecs.
     addServerStreamMethod<TestRequest, TestResponse>(
       methodName: 'GetNumbers',
       handler: (request, {context}) async* {
-        print('🔥 SERVER HANDLER получил: ${request.message}');
+        print('SERVER HANDLER received: ${request.message}');
         final count = int.tryParse(request.message) ?? 3;
         for (int i = 1; i <= count; i++) {
           yield TestResponse('Number $i for: ${request.message}');
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
-        print('🔥 SERVER HANDLER завершен');
+        print('SERVER HANDLER done');
       },
-      // НЕ указываем кодеки → автоматически zero-copy режим!
+      // No codecs passed -> zero-copy mode, automatically.
     );
 
-    // Client Stream Method - TRUE ZERO-COPY (без кодеков)
+    // Client stream, true zero-copy: no codecs.
     addClientStreamMethod<TestRequest, TestResponse>(
       methodName: 'ProcessItems',
       handler: (requests, {context}) async {
-        print('🔥 CLIENT HANDLER запущен');
+        print('CLIENT HANDLER started');
         final items = <String>[];
         await for (final request in requests) {
-          print('🔥 CLIENT HANDLER получил: ${request.message}');
+          print('CLIENT HANDLER received: ${request.message}');
           items.add(request.message);
         }
         final response = TestResponse(
           'Processed ${items.length} items: ${items.join(", ")}',
         );
-        print('🔥 CLIENT HANDLER завершен: ${response.result}');
+        print('CLIENT HANDLER done: ${response.result}');
         return response;
       },
-      // НЕ указываем кодеки → автоматически zero-copy режим!
+      // No codecs passed -> zero-copy mode, automatically.
     );
 
-    // Bidirectional Stream Method - TRUE ZERO-COPY (без кодеков)
+    // Bidirectional stream, true zero-copy: no codecs.
     addBidirectionalMethod<TestRequest, TestResponse>(
       methodName: 'Chat',
       handler: (requests, {context}) async* {
-        print('🔥 BIDIRECTIONAL HANDLER запущен');
+        print('BIDIRECTIONAL HANDLER started');
         await for (final request in requests) {
-          print('🔥 BIDIRECTIONAL HANDLER получил: ${request.message}');
+          print('BIDIRECTIONAL HANDLER received: ${request.message}');
           if (request.message.startsWith('ping')) {
             yield TestResponse('pong');
           } else {
@@ -105,9 +105,9 @@ final class ZeroCopyTestService extends RpcResponderContract {
           }
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
-        print('🔥 BIDIRECTIONAL HANDLER завершен');
+        print('BIDIRECTIONAL HANDLER done');
       },
-      // НЕ указываем кодеки → автоматически zero-copy режим!
+      // No codecs passed -> zero-copy mode, automatically.
     );
   }
 }
@@ -138,27 +138,27 @@ void main() {
       await serverEndpoint.close();
     });
 
-    test('Server Stream через Endpoint с Zero-Copy', () async {
-      print('\n=== SERVER STREAM ЧЕРЕЗ ENDPOINT ===');
+    test('server stream through the endpoint, zero-copy', () async {
+      print('\n=== SERVER STREAM THROUGH THE ENDPOINT ===');
 
       final sentMessages = <RpcTransportMessage>[];
       serverTransport.incomingMessages.listen((message) {
         sentMessages.add(message);
         if (message.isDirect) {
-          print('🚀 Zero-copy запрос: ${message.directPayload}');
+          print('zero-copy request: ${message.directPayload}');
         }
       });
 
       clientTransport.incomingMessages.listen((message) {
         if (message.isDirect) {
-          print('🚀 Zero-copy ответ: ${message.directPayload}');
+          print('zero-copy response: ${message.directPayload}');
         }
       });
 
       final request = TestRequest('3');
       final responses = <TestResponse>[];
 
-      print('📤 Вызываем serverStream через endpoint...');
+      print('calling serverStream through the endpoint...');
 
       try {
         await for (final response
@@ -170,44 +170,44 @@ void main() {
                 )
                 .timeout(Duration(seconds: 5))) {
           responses.add(response);
-          print('📥 Получен ответ: ${response.result}');
+          print('answer: ${response.result}');
         }
       } catch (e) {
-        print('❌ Ошибка: $e');
+        print('error: $e');
       }
 
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      print('\n📊 Анализ:');
-      print('   Ответов получено: ${responses.length}');
-      print('   Всего сообщений: ${sentMessages.length}');
+      print('\nwhat went over the wire:');
+      print('   answers: ${responses.length}');
+      print('   messages: ${sentMessages.length}');
 
       final directCount = sentMessages.where((m) => m.isDirect).length;
       final serializedCount = sentMessages.where((m) => m.isSerialized).length;
 
-      print('   🚀 Zero-copy: $directCount');
-      print('   📡 Сериализованных: $serializedCount');
+      print('   zero-copy: $directCount');
+      print('   serialized: $serializedCount');
 
       expect(responses.length, equals(3));
       expect(
         directCount,
         greaterThan(0),
-        reason: 'Ожидаем zero-copy сообщения',
+        reason: 'the messages must go zero-copy',
       );
 
       if (directCount > serializedCount) {
-        print('\n✅ ОТЛИЧНО! Zero-copy работает через endpoint!');
+        print('\nzero-copy works through the endpoint');
       }
     });
 
-    test('Client Stream через Endpoint с Zero-Copy', () async {
-      print('\n=== CLIENT STREAM ЧЕРЕЗ ENDPOINT ===');
+    test('client stream through the endpoint, zero-copy', () async {
+      print('\n=== CLIENT STREAM THROUGH THE ENDPOINT ===');
 
       final sentMessages = <RpcTransportMessage>[];
       serverTransport.incomingMessages.listen((message) {
         sentMessages.add(message);
         if (message.isDirect) {
-          print('🚀 Zero-copy запрос: ${message.directPayload}');
+          print('zero-copy request: ${message.directPayload}');
         }
       });
 
@@ -217,7 +217,7 @@ void main() {
         TestRequest('item3'),
       ];
 
-      print('📤 Вызываем clientStream через endpoint...');
+      print('calling clientStream through the endpoint...');
 
       try {
         final response = await clientEndpoint
@@ -227,56 +227,56 @@ void main() {
             )(Stream.fromIterable(requests))
             .timeout(Duration(seconds: 5));
 
-        print('📥 Получен ответ: ${response.result}');
+        print('answer: ${response.result}');
 
         await Future<void>.delayed(Duration(milliseconds: 1));
 
-        print('\n📊 Анализ:');
+        print('\nwhat went over the wire:');
         final directCount = sentMessages.where((m) => m.isDirect).length;
         final serializedCount = sentMessages
             .where((m) => m.isSerialized)
             .length;
 
-        print('   🚀 Zero-copy: $directCount');
-        print('   📡 Сериализованных: $serializedCount');
+        print('   zero-copy: $directCount');
+        print('   serialized: $serializedCount');
 
         expect(response.result, contains('Processed 3 items'));
         expect(
           directCount,
           greaterThan(0),
-          reason: 'Ожидаем zero-copy сообщения',
+          reason: 'the messages must go zero-copy',
         );
 
         if (directCount > serializedCount) {
-          print('\n✅ ОТЛИЧНО! Client Stream Zero-copy работает!');
+          print('\nclient stream zero-copy works');
         }
       } catch (e) {
-        print('❌ Ошибка: $e');
+        print('error: $e');
         fail('Client stream failed: $e');
       }
     });
 
-    test('Bidirectional Stream через Endpoint с Zero-Copy', () async {
-      print('\n=== BIDIRECTIONAL STREAM ЧЕРЕЗ ENDPOINT ===');
+    test('bidirectional stream through the endpoint, zero-copy', () async {
+      print('\n=== BIDIRECTIONAL STREAM THROUGH THE ENDPOINT ===');
 
       final sentMessages = <RpcTransportMessage>[];
       serverTransport.incomingMessages.listen((message) {
         sentMessages.add(message);
         if (message.isDirect) {
-          print('🚀 Zero-copy запрос: ${message.directPayload}');
+          print('zero-copy request: ${message.directPayload}');
         }
       });
 
       clientTransport.incomingMessages.listen((message) {
         if (message.isDirect) {
-          print('🚀 Zero-copy ответ: ${message.directPayload}');
+          print('zero-copy response: ${message.directPayload}');
         }
       });
 
       final requestController = StreamController<TestRequest>();
       final responses = <TestResponse>[];
 
-      print('📤 Вызываем bidirectionalStream через endpoint...');
+      print('calling bidirectionalStream through the endpoint...');
 
       try {
         final responseStream = clientEndpoint
@@ -288,10 +288,10 @@ void main() {
 
         final subscription = responseStream.listen((response) {
           responses.add(response);
-          print('📥 Получен ответ: ${response.result}');
+          print('answer: ${response.result}');
         });
 
-        // Отправляем запросы
+        // Send the requests.
         requestController.add(TestRequest('ping 1'));
         await Future<void>.delayed(Duration(milliseconds: 1));
 
@@ -301,30 +301,30 @@ void main() {
         await requestController.close();
         await Future<void>.delayed(Duration(milliseconds: 1));
 
-        print('\n📊 Анализ:');
+        print('\nwhat went over the wire:');
         final directCount = sentMessages.where((m) => m.isDirect).length;
         final serializedCount = sentMessages
             .where((m) => m.isSerialized)
             .length;
 
-        print('   Ответов получено: ${responses.length}');
-        print('   🚀 Zero-copy: $directCount');
-        print('   📡 Сериализованных: $serializedCount');
+        print('   answers: ${responses.length}');
+        print('   zero-copy: $directCount');
+        print('   serialized: $serializedCount');
 
         expect(responses.length, greaterThanOrEqualTo(2));
         expect(
           directCount,
           greaterThan(0),
-          reason: 'Ожидаем zero-copy сообщения',
+          reason: 'the messages must go zero-copy',
         );
 
         if (directCount > serializedCount) {
-          print('\n✅ ОТЛИЧНО! Bidirectional Stream Zero-copy работает!');
+          print('\nbidirectional stream zero-copy works');
         }
 
         await subscription.cancel();
       } catch (e) {
-        print('❌ Ошибка: $e');
+        print('error: $e');
         fail('Bidirectional stream failed: $e');
       }
     });

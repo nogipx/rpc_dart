@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436]
 status: confirmed (round 432)
 ---
 
@@ -349,3 +349,43 @@ lines across 14 files, every one of them `test/` or `example/`, none in `lib/`.
 > everywhere" hid the fact that only one half had reached shipped code.
 
 `../rounds/435-the-half-that-ships.md`, `../backlog/B-30-russian-comments-outside-the-mandate.md`.
+
+## Round 436 — the fixture that fails SILENTLY when you translate it
+
+435 said a text detector cannot tell prose from a fixture. 436 censused the
+whole fixture class into `../checked/C-47-the-non-ascii-that-must-stay.md` and
+drove three of them, which is where the useful half is: **they do not all fail
+the same way, and the majority do not fail at all.**
+
+```
+cbor_test.dart:138        '☺' -> ':)'                   FAILS -- hex pinned
+audit_header_ascii:27     'тест 🚀' -> 'test rocket'    FAILS -- assertion inverts
+optimized_cbor:164        'Привет, мир!' -> 'Hello...'  PASSES
+```
+
+A round-trip fixture asserts `decoded == original`, which holds for any string.
+Translate it and the suite stays green while the coverage it existed for —
+multi-byte UTF-8 through this codec — is gone. Ten of the twelve sites in C-47
+are that shape; only two fail loudly.
+
+> **Before sweeping prose, ask which hits would fail if you were WRONG.** "The
+> gate would catch it" is an assumption, and for a round-trip assertion it is
+> false: the test is written to accept any value, so the data it was given
+> stops mattering the moment you change it.
+
+Second measurement, on the detector rather than the data. `[а-яА-Я]` is
+script-specific, so it cannot enumerate the class it keeps hitting: it flags
+`optimized_cbor_test.dart:167` only because `'Hello 🌍 Мир 世界'` contains
+`Мир`, and is blind to `'你好世界'` and `'مرحبا بالعالم'` two lines above in the
+SAME map literal, and to `'世界' * 5000` in the sibling file — 10,000
+characters, the largest unicode fixture in the repo.
+
+And the split changes SHAPE between packages: per FILE in transports (3 of 8
+flagged files pure fixture), per LINE in core, where `cbor_test.dart` holds
+comments to translate at `:148` and fixtures not to at `:135`.
+
+> **A `grep -rl` detector answers "which files", and some classes only have an
+> answer at "which lines".** When a sweep starts re-flagging the same sites,
+> that is the signal the unit is wrong — not that the sweeper was careless.
+
+`../rounds/436-the-detector-that-cannot-see-its-own-class.md`, `../checked/C-47-the-non-ascii-that-must-stay.md`.

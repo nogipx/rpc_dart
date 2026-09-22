@@ -6,7 +6,7 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-// Тестовые модели
+// The models under test.
 class TestRequest implements IRpcSerializable {
   final String message;
   final List<String> data;
@@ -42,7 +42,7 @@ class TestResponse implements IRpcSerializable {
   }
 }
 
-// Тестовый сервис
+// The service under test.
 final class TestService extends RpcResponderContract {
   TestService() : super('TestService');
 
@@ -51,7 +51,7 @@ final class TestService extends RpcResponderContract {
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'processData',
       handler: (request, {context}) async {
-        // Симуляция обработки
+        // Stand in for real work.
         final processedData = request.data
             .map((item) => item.toUpperCase())
             .toList();
@@ -64,8 +64,8 @@ final class TestService extends RpcResponderContract {
       responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
     );
 
-    // Хендлер, который всегда падает с UNAVAILABLE — для проверки,
-    // что zero-copy unary путь пробрасывает типизированный RpcStatusException.
+    // A handler that always fails with UNAVAILABLE, so the test can check that
+    // the zero-copy unary path propagates a typed RpcStatusException.
     addUnaryMethod<TestRequest, TestResponse>(
       methodName: 'failUnavailable',
       handler: (request, {context}) async {
@@ -78,7 +78,7 @@ final class TestService extends RpcResponderContract {
 }
 
 void main() {
-  group('🔍 Zero-Copy Endpoint Анализ', () {
+  group('Zero-copy endpoint', () {
     late IRpcTransport clientTransport;
     late IRpcTransport serverTransport;
     late RpcResponderEndpoint responderEndpoint;
@@ -103,10 +103,10 @@ void main() {
       await callerEndpoint.close();
     });
 
-    test('📊 Демонстрация текущей сериализации', () async {
-      print('\n🔬 Анализ текущего поведения endpoint-ов...');
+    test('what a unary call actually puts on the wire', () async {
+      print('\nlooking at what the endpoints do...');
 
-      // Создаем сложный объект для тестирования
+      // A request with enough structure to be worth serializing.
       final request = TestRequest('Complex data processing', [
         'item1',
         'item2',
@@ -115,37 +115,35 @@ void main() {
         'item5',
       ]);
 
-      print('\n📤 Отправляем запрос через endpoint...');
-      print('   Запрос: ${request.message}');
-      print('   Данные: ${request.data}');
+      print('\nsending a request through the endpoint');
+      print('   request: ${request.message}');
+      print('   data: ${request.data}');
 
-      // Трекаем что происходит на транспортном уровне
+      // Watch what reaches the transport layer.
       final sentMessages = <RpcTransportMessage>[];
 
-      // Подписываемся на входящие сообщения на сервере
+      // Subscribe on the server side before sending.
       serverTransport.incomingMessages.listen((message) {
         sentMessages.add(message);
 
         if (message.isSerialized && message.payload != null) {
-          print('\n📡 СЕРИАЛИЗАЦИЯ обнаружена!');
-          print(
-            '   Размер сериализованных данных: ${message.payload!.length} bytes',
-          );
+          print('\nSERIALIZED');
+          print('   serialized size: ${message.payload!.length} bytes');
           print('   Stream ID: ${message.streamId}');
           print('   EndOfStream: ${message.isEndOfStream}');
         } else if (message.isDirect && message.directPayload != null) {
-          print('\n🚀 ZERO-COPY обнаружен!');
-          print('   Прямой объект: ${message.directPayload.runtimeType}');
+          print('\nZERO-COPY');
+          print('   direct object: ${message.directPayload.runtimeType}');
           print('   Stream ID: ${message.streamId}');
           print('   EndOfStream: ${message.isEndOfStream}');
         } else if (message.metadata != null) {
-          print('\n📋 Метаданные:');
+          print('\nmetadata:');
           print('   Headers: ${message.metadata!.headers.length}');
           print('   EndOfStream: ${message.isEndOfStream}');
         }
       });
 
-      // Выполняем RPC вызов через endpoint
+      // Make the call.
       final response = await callerEndpoint
           .unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
@@ -155,15 +153,15 @@ void main() {
             request: request,
           );
 
-      print('\n📥 Получен ответ:');
-      print('   Результат: ${response.result}');
-      print('   Количество: ${response.count}');
+      print('\nanswer:');
+      print('   result: ${response.result}');
+      print('   count: ${response.count}');
 
-      // Ждем чтобы все сообщения были обработаны
+      // Let every message land.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      print('\n📊 Анализ сообщений:');
-      print('   Всего сообщений: ${sentMessages.length}');
+      print('\nwhat went over the wire:');
+      print('   messages: ${sentMessages.length}');
 
       final serializedMessages = sentMessages
           .where((m) => m.isSerialized)
@@ -173,11 +171,11 @@ void main() {
           .where((m) => m.metadata != null && !m.isSerialized && !m.isDirect)
           .length;
 
-      print('   📡 Сериализованных: $serializedMessages');
-      print('   🚀 Zero-copy: $directMessages');
-      print('   📋 Только метаданные: $metadataMessages');
+      print('   serialized: $serializedMessages');
+      print('   zero-copy: $directMessages');
+      print('   metadata only: $metadataMessages');
 
-      // Проверяем что вызов работает
+      // The call works.
       expect(response.result, contains('Processed: Complex data processing'));
       expect(response.count, equals(5));
 
@@ -203,69 +201,62 @@ void main() {
       );
     });
 
-    test('🎯 Идеальный Zero-Copy сценарий', () async {
-      print('\n💭 Как ДОЛЖНО работать zero-copy в endpoint-ах:');
-      print('   1. Endpoint определяет что используется RpcInMemoryTransport');
-      print(
-        '   2. Вместо serialize() + sendMessage() использует sendDirectObject()',
-      );
-      print(
-        '   3. На receiving стороне получает directPayload без deserialize()',
-      );
-      print('   4. Объекты передаются по ссылке - ZERO накладных расходов');
+    test('the object crosses by reference, not by copy', () async {
+      print('\nwhat zero-copy means in an endpoint:');
+      print('   1. the endpoint sees it is on an RpcInMemoryTransport');
+      print('   2. sendDirectObject() instead of serialize() + sendMessage()');
+      print('   3. the receiver reads directPayload, with no deserialize()');
+      print('   4. objects cross by reference, at zero marshalling cost');
 
-      // Демонстрируем прямое использование zero-copy
       final request = TestRequest('Direct object', ['zero', 'copy', 'test']);
 
-      // Прямое использование zero-copy на транспортном уровне
+      // Drive the transport layer directly.
       if (clientTransport.supportsZeroCopy) {
         final streamId = clientTransport.createStream();
 
-        print('\n🚀 Прямой zero-copy вызов:');
+        print('\na direct zero-copy call:');
 
-        // ✅ ИСПРАВЛЕНИЕ: Подписываемся на сообщения ДО отправки
+        // Subscribe BEFORE sending, or the message is gone by the time we look.
         final messagesFuture = serverTransport.incomingMessages
             .where((m) => m.streamId == streamId && m.isDirect)
             .first
-            .timeout(Duration(seconds: 2)); // Добавляем таймаут для отладки
+            .timeout(Duration(seconds: 2));
 
-        // Теперь отправляем сообщение
         await clientTransport.sendDirectObject(
           streamId,
           request,
           endStream: true,
         );
 
-        // Ждем сообщение
         final directMessage = await messagesFuture;
 
         expect(
           directMessage.directPayload,
           same(request),
-          reason: 'Объект должен быть тем же самым (по ссылке)',
+          reason: 'it must be the same object, not a copy of it',
         );
 
-        print('   ✅ Объект передан по ссылке без сериализации!');
-        print('   ✅ Размер данных: 0 bytes (указатель на объект)');
+        print('   the object crossed by reference, with no serialization');
+        print('   bytes on the wire: 0');
       }
     });
 
-    // Регрессия BUG C: zero-copy unary путь (_executeUnaryCall) должен
-    // бросать типизированный RpcStatusException с реальным статусом, а не
-    // обёрнутый Exception. Иначе retry-предикат и circuit breaker не видят
-    // gRPC-статус, и консервативный retry-дефолт не сработает.
+    // Regression, BUG C: the zero-copy unary path (_executeUnaryCall) must
+    // throw a typed RpcStatusException carrying the real status, not a wrapped
+    // Exception. Otherwise the retry predicate and the circuit breaker cannot
+    // see the gRPC status and the conservative retry default never fires.
     test(
-      'zero-copy unary путь бросает типизированный RpcStatusException',
+      'the zero-copy unary path throws a typed RpcStatusException',
       () async {
         Object? caught;
         try {
           await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
             methodName: 'failUnavailable',
-            // Без кодеков -> zero-copy путь через _executeUnaryCall.
+            // No codecs -> the zero-copy path through _executeUnaryCall.
             request: TestRequest('boom', const []),
           );
-          fail('Должно было бросить исключение');
+          fail('it should have thrown');
         } catch (e) {
           caught = e;
         }
@@ -273,12 +264,12 @@ void main() {
         expect(
           caught,
           isA<RpcStatusException>(),
-          reason: 'Должен быть типизированный RpcStatusException, не Exception',
+          reason: 'a typed RpcStatusException, not a bare Exception',
         );
         final ex = caught as RpcStatusException;
         expect(ex.statusCode, RpcStatus.unavailable);
 
-        // Дефолтный retry-предикат должен срабатывать на этом статусе.
+        // The default retry predicate must fire on this status.
         final interceptor = RpcRetryInterceptor(maxAttempts: 3);
         var attempts = 0;
         try {
@@ -295,14 +286,14 @@ void main() {
               throw ex;
             },
           );
-          fail('Должно было бросить после исчерпания попыток');
+          fail('it should have thrown once the attempts ran out');
         } on RpcStatusException catch (e) {
           expect(e.statusCode, RpcStatus.unavailable);
         }
         expect(
           attempts,
           3,
-          reason: 'Дефолтный retry должен повторить UNAVAILABLE',
+          reason: 'the default retry must repeat on UNAVAILABLE',
         );
       },
     );

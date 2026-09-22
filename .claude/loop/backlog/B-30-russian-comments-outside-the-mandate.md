@@ -168,4 +168,49 @@ The generated 21 are in `data_contract.g.dart`, from `data_contract.dart` (23
 lines, same directory). Fix the source, regenerate.
 
 **The 39 log lines are the slice to take next** — smallest, and the only one a
-user meets without opening a file.
+user meets without opening a file. **Round 436 did NOT take them**: this
+record's owner decision is an ORDER, in-scope work remains, and reversing it is
+the owner's call rather than a round's. It is put to them, not acted on.
+
+## Round 436 — the detector cannot enumerate its own exceptions
+
+`test/zero_copy/` swept: 3 files, 171 Cyrillic + 98 emoji to zero. That takes
+the repo's remaining emoji from 154 lines to 56 — all 98 were decoration.
+
+Every deliberate non-ASCII fixture in the repo is now listed in
+`../checked/C-47-the-non-ascii-that-must-stay.md`, 12 sites. Two consequences
+for this record's plan.
+
+**The detector cannot tell prose from data.** `cbor_test.dart` pins `'привет'`
+and `'☺'` to their exact byte encodings (`6cd0bfd180d0b8d0b2d0b5d182`,
+`63e298ba`); translating the string changes the expected hex.
+
+**The detector is script-specific, so it cannot enumerate the class it keeps
+hitting.** `[а-яА-Я]` flags `optimized_cbor_test.dart:167` only because
+`'Hello 🌍 Мир 世界'` happens to contain `Мир`, and is blind to `'你好世界'` and
+`'مرحبا بالعالم'` two lines above it in the SAME map literal, and to
+`'世界' * 5000` in the sibling file — 10,000 characters, the largest unicode
+fixture here.
+
+**And the split changes SHAPE between packages:**
+
+```
+transports   PER FILE   3 of 8 flagged files are pure fixture
+core         PER LINE   cbor_test.dart holds comments to translate at
+                        :148 and :208, fixtures not to at :135 and :374
+```
+
+A file list expresses the first. **Nothing but a line list expresses the
+second**, so the remaining 26 core test files cannot be driven from `grep -rl`.
+
+### What remains
+
+```
+lib/ logs        39 lines   rpc_notify only    deferred by the owner's ORDER
+lib/ comments   277 lines   23 files           same
+test/          1069 lines   26 core files      in scope, open
+generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
+```
+
+`cbor_test.dart`, `optimized_cbor_test.dart` and `fast_cbor_encoder_test.dart`
+are the three that mix both kinds — read C-47 before touching them.

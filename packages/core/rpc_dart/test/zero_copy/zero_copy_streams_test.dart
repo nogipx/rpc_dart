@@ -57,7 +57,7 @@ final class StreamingTestService extends RpcResponderContract {
 
   @override
   void setup() {
-    // 🚀 ZERO-COPY: Server Stream Method - отправляем поток ответов на один запрос
+    // Server stream: one request, a stream of answers.
     addServerStreamMethod<TestRequest, TestResponse>(
       methodName: 'GetNumbers',
       handler: (request, {context}) async* {
@@ -67,11 +67,11 @@ final class StreamingTestService extends RpcResponderContract {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
-      // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-      description: 'Zero-copy server stream для генерации чисел',
+      // No codecs passed -> zero-copy mode, automatically.
+      description: 'Zero-copy server stream that generates numbers',
     );
 
-    // 🚀 ZERO-COPY: Client Stream Method - получаем поток запросов, отправляем один ответ
+    // Client stream: a stream of requests, one answer.
     addClientStreamMethod<TestRequest, TestResponse>(
       methodName: 'ProcessItems',
       handler: (requests, {context}) async {
@@ -83,11 +83,11 @@ final class StreamingTestService extends RpcResponderContract {
           'Processed ${items.length} items: ${items.join(", ")}',
         );
       },
-      // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-      description: 'Zero-copy client stream для обработки элементов',
+      // No codecs passed -> zero-copy mode, automatically.
+      description: 'Zero-copy client stream that processes items',
     );
 
-    // 🚀 ZERO-COPY: Bidirectional Stream Method - поток в обе стороны
+    // Bidirectional: a stream each way.
     addBidirectionalMethod<TestRequest, TestResponse>(
       methodName: 'Chat',
       handler: (requests, {context}) async* {
@@ -100,14 +100,14 @@ final class StreamingTestService extends RpcResponderContract {
           await Future<void>.delayed(Duration(milliseconds: 1));
         }
       },
-      // ✅ НЕ передаем кодеки → автоматически zero-copy режим
-      description: 'Zero-copy bidirectional stream для чата',
+      // No codecs passed -> zero-copy mode, automatically.
+      description: 'Zero-copy bidirectional stream for a chat',
     );
   }
 }
 
 void main() {
-  group('🚀 Zero-Copy Streams Tests', () {
+  group('Zero-copy streams', () {
     late RpcResponderEndpoint serverEndpoint;
     late RpcCallerEndpoint clientEndpoint;
     late StreamingTestService testService;
@@ -127,19 +127,19 @@ void main() {
 
       clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
-      // Мониторим все сообщения
+      // Watch every message.
       sentMessages.clear();
       serverTransport.incomingMessages.listen((message) {
         sentMessages.add(message);
 
         if (message.isSerialized && message.payload != null) {
-          print('\n📡 СЕРИАЛИЗАЦИЯ обнаружена!');
-          print('   Размер: ${message.payload!.length} bytes');
+          print('\nSERIALIZED');
+          print('   size: ${message.payload!.length} bytes');
           print('   Stream ID: ${message.streamId}');
           print('   Type: ${message.runtimeType}');
         } else if (message.isDirect && message.directPayload != null) {
-          print('\n🚀 ZERO-COPY обнаружен!');
-          print('   Объект: ${message.directPayload.runtimeType}');
+          print('\nZERO-COPY');
+          print('   object: ${message.directPayload.runtimeType}');
           print('   Stream ID: ${message.streamId}');
           print('   Data: ${message.directPayload}');
         }
@@ -151,29 +151,29 @@ void main() {
       await serverEndpoint.close();
     });
 
-    test('🚀 Server Stream с Zero-Copy', () async {
-      print('\n📋 === SERVER STREAM ZERO-COPY TEST ===');
+    test('server stream, zero-copy', () async {
+      print('\n=== SERVER STREAM ZERO-COPY TEST ===');
 
       final request = TestRequest('3');
 
-      // Выполняем server stream вызов БЕЗ КОДЕКОВ для zero-copy
+      // A server-stream call with NO CODECS, so zero-copy applies.
       final responses = <TestResponse>[];
       await for (final response
           in clientEndpoint.serverStream<TestRequest, TestResponse>(
             serviceName: 'StreamingTestService',
             methodName: 'GetNumbers',
-            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            // No codecs passed -> zero-copy mode, automatically.
             request: request,
           )) {
         responses.add(response);
-        print('📥 Получен ответ: ${response.result}');
+        print('answer: ${response.result}');
       }
 
-      // Ждем обработки всех сообщений
+      // Let every message land.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      print('\n📊 Анализ сообщений:');
-      print('   Всего сообщений: ${sentMessages.length}');
+      print('\nwhat went over the wire:');
+      print('   messages: ${sentMessages.length}');
 
       final serializedMessages = sentMessages
           .where((m) => m.isSerialized)
@@ -183,34 +183,32 @@ void main() {
           .where((m) => m.metadata != null && !m.isSerialized && !m.isDirect)
           .length;
 
-      print('   📡 Сериализованных: $serializedMessages');
-      print('   🚀 Zero-copy: $directMessages');
-      print('   📋 Только метаданные: $metadataMessages');
+      print('   serialized: $serializedMessages');
+      print('   zero-copy: $directMessages');
+      print('   metadata only: $metadataMessages');
 
       expect(responses.length, equals(3));
       expect(responses[0].result, equals('Number 1 for: 3'));
       expect(responses[1].result, equals('Number 2 for: 3'));
       expect(responses[2].result, equals('Number 3 for: 3'));
 
-      // Проверяем zero-copy
       expect(
         directMessages,
         greaterThan(0),
-        reason: 'Ожидаем zero-copy сообщения',
+        reason: 'the messages must go zero-copy',
       );
       print(
         directMessages > 0
-            ? '\n✅ Server Stream Zero-Copy работает!'
-            : '\n❌ Zero-Copy НЕ работает',
+            ? '\nserver stream zero-copy works'
+            : '\nzero-copy did NOT happen',
       );
     });
 
-    test('🚀 Client Stream с Zero-Copy', () async {
-      print('\n📋 === CLIENT STREAM ZERO-COPY TEST ===');
+    test('client stream, zero-copy', () async {
+      print('\n=== CLIENT STREAM ZERO-COPY TEST ===');
 
       sentMessages.clear();
 
-      // Создаем client stream
       final requestStream = Stream.fromIterable([
         TestRequest('item1'),
         TestRequest('item2'),
@@ -221,46 +219,44 @@ void main() {
           .clientStream<TestRequest, TestResponse>(
             serviceName: 'StreamingTestService',
             methodName: 'ProcessItems',
-            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            // No codecs passed -> zero-copy mode, automatically.
           )(requestStream);
 
-      print('📥 Получен итоговый ответ: ${response.result}');
+      print('final answer: ${response.result}');
 
-      // Ждем обработки всех сообщений
+      // Let every message land.
       await Future<void>.delayed(Duration(milliseconds: 1));
 
-      print('\n📊 Анализ сообщений:');
-      print('   Всего сообщений: ${sentMessages.length}');
+      print('\nwhat went over the wire:');
+      print('   messages: ${sentMessages.length}');
 
       final serializedMessages = sentMessages
           .where((m) => m.isSerialized)
           .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
 
-      print('   📡 Сериализованных: $serializedMessages');
-      print('   🚀 Zero-copy: $directMessages');
+      print('   serialized: $serializedMessages');
+      print('   zero-copy: $directMessages');
 
       expect(response.result, equals('Processed 3 items: item1, item2, item3'));
 
-      // Проверяем zero-copy
       expect(
         directMessages,
         greaterThan(0),
-        reason: 'Ожидаем zero-copy сообщения',
+        reason: 'the messages must go zero-copy',
       );
       print(
         directMessages > 0
-            ? '\n✅ Client Stream Zero-Copy работает!'
-            : '\n❌ Zero-Copy НЕ работает',
+            ? '\nclient stream zero-copy works'
+            : '\nzero-copy did NOT happen',
       );
     });
 
-    test('🚀 Bidirectional Stream с Zero-Copy', () async {
-      print('\n📋 === BIDIRECTIONAL STREAM ZERO-COPY TEST ===');
+    test('bidirectional stream, zero-copy', () async {
+      print('\n=== BIDIRECTIONAL STREAM ZERO-COPY TEST ===');
 
       sentMessages.clear();
 
-      // Создаем bidirectional stream
       final requestController = StreamController<TestRequest>();
       final responses = <TestResponse>[];
 
@@ -268,16 +264,16 @@ void main() {
           .bidirectionalStream<TestRequest, TestResponse>(
             serviceName: 'StreamingTestService',
             methodName: 'Chat',
-            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            // No codecs passed -> zero-copy mode, automatically.
             requests: requestController.stream,
           );
 
       final subscription = responseStream.listen((response) {
         responses.add(response);
-        print('📥 Получен ответ: ${response.result}');
+        print('answer: ${response.result}');
       });
 
-      // Отправляем несколько запросов
+      // A few requests.
       requestController.add(TestRequest('ping 1'));
       await Future<void>.delayed(Duration(milliseconds: 1));
 
@@ -289,47 +285,45 @@ void main() {
 
       await requestController.close();
 
-      // Детерминированное ожидание вместо фиксированного сна: на dart2js
-      // планирование грубее, поэтому ждем прихода всех ответов с таймаутом.
+      // Wait on the answers rather than on a fixed sleep: dart2js schedules
+      // more coarsely, so poll for all three with a deadline.
       final deadline = DateTime.now().add(Duration(seconds: 5));
       while (responses.length < 3 && DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(Duration(milliseconds: 5));
       }
 
-      print('\n📊 Анализ сообщений:');
-      print('   Всего сообщений: ${sentMessages.length}');
+      print('\nwhat went over the wire:');
+      print('   messages: ${sentMessages.length}');
 
       final serializedMessages = sentMessages
           .where((m) => m.isSerialized)
           .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
 
-      print('   📡 Сериализованных: $serializedMessages');
-      print('   🚀 Zero-copy: $directMessages');
+      print('   serialized: $serializedMessages');
+      print('   zero-copy: $directMessages');
 
       expect(responses.length, greaterThanOrEqualTo(3));
       expect(responses.any((r) => r.result == 'pong'), isTrue);
       expect(responses.any((r) => r.result == 'echo: hello world'), isTrue);
 
-      // Проверяем zero-copy
       expect(
         directMessages,
         greaterThan(0),
-        reason: 'Ожидаем zero-copy сообщения',
+        reason: 'the messages must go zero-copy',
       );
       print(
         directMessages > 0
-            ? '\n✅ Bidirectional Stream Zero-Copy работает!'
-            : '\n❌ Zero-Copy НЕ работает',
+            ? '\nbidirectional stream zero-copy works'
+            : '\nzero-copy did NOT happen',
       );
 
       await subscription.cancel();
     });
 
-    test('🎯 Сравнение Zero-Copy vs Сериализация', () async {
-      print('\n📋 === СРАВНЕНИЕ ПРОИЗВОДИТЕЛЬНОСТИ ===');
+    test('zero-copy against serialization', () async {
+      print('\n=== TIMING COMPARISON ===');
 
-      // Тест для демонстрации эффективности zero-copy
       final largeRequest = TestRequest(
         'big data with lots of text that would take time to serialize and deserialize if we were not using zero-copy optimization for inmemory transport which allows us to pass objects by reference',
       );
@@ -337,13 +331,13 @@ void main() {
       sentMessages.clear();
       final stopwatch = Stopwatch()..start();
 
-      // Выполняем server stream с большими данными БЕЗ КОДЕКОВ
+      // A server stream over a large payload, with NO CODECS.
       final responses = <TestResponse>[];
       await for (final response
           in clientEndpoint.serverStream<TestRequest, TestResponse>(
             serviceName: 'StreamingTestService',
             methodName: 'GetNumbers',
-            // ✅ НЕ передаем кодеки → автоматически zero-copy режим
+            // No codecs passed -> zero-copy mode, automatically.
             request: largeRequest,
           )) {
         responses.add(response);
@@ -351,30 +345,27 @@ void main() {
 
       stopwatch.stop();
 
-      print(
-        '⏱️ Время выполнения: ${stopwatch.elapsedMicroseconds} микросекунд',
-      );
+      print('elapsed: ${stopwatch.elapsedMicroseconds}us');
 
       final serializedMessages = sentMessages
           .where((m) => m.isSerialized)
           .length;
       final directMessages = sentMessages.where((m) => m.isDirect).length;
 
-      print('📊 Результаты:');
-      print('   📡 Сериализованных сообщений: $serializedMessages');
-      print('   🚀 Zero-copy сообщений: $directMessages');
+      print('results:');
+      print('   serialized messages: $serializedMessages');
+      print('   zero-copy messages: $directMessages');
       print(
-        '   📈 Экономия на сериализации: ${directMessages > serializedMessages ? 'ЕСТЬ' : 'НЕТ'}',
+        '   serialization avoided: '
+        '${directMessages > serializedMessages ? 'yes' : 'no'}',
       );
 
       expect(responses.length, equals(3));
       expect(directMessages, greaterThan(0));
 
       if (directMessages > serializedMessages) {
-        print('\n🎉 ОТЛИЧНО! Zero-copy оптимизация работает для стримов!');
-        print(
-          '💡 Объекты передаются по ссылке без накладных расходов на сериализацию',
-        );
+        print('\nzero-copy applies to streams too');
+        print('objects cross by reference, at no marshalling cost');
       }
     });
   });
