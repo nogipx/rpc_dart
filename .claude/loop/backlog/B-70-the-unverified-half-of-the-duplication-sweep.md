@@ -324,3 +324,19 @@ worker script built before this change still ignores the parameter.
 **17 items remain**: 5, 6, 7, 10, 11, 13, 14, 17, 18, 20, 21, 24, 26, 29, 31,
 36, and the sweep's own already-shared list. All of them are duplication whose
 copies currently AGREE — the behavioural half of this lead is now spent.
+
+## Round 432 checked here first and found nothing to take
+
+**The BACKLOG index line was stale and pointed at work done 13 rounds earlier**
+— it still read *"34 and 23 are the two worth taking next"*, which the section
+directly above this one refutes. Corrected there.
+
+Read rather than re-measured, because the code says it plainly: item 23's
+`_reconnectOnce` checks `_connectionFactory` for null **before** the teardown,
+with a comment stating exactly why (*"BEFORE the teardown ... Answering here
+leaves the LIVE connection intact and every in-flight call with it"*), and item
+34's `runRpcIsolateManagerWorker` resolves `policy ?? policyFromWorkerUrl(...)
+?? const RpcSecurityPolicy()`.
+
+So this lead is what its own last line says: duplication whose copies agree,
+below RPC-25's bar, with no defect left in it.

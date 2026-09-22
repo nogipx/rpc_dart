@@ -8,14 +8,14 @@ void main() async {
   await BidirectionalStreamExample.run();
 }
 
-/// Пример использования двунаправленного стриминга с контрактами и RpcContext
+/// Bidirectional streaming, using contracts and [RpcContext].
 class BidirectionalStreamExample {
   static Future<void> run() async {
     // logging configured via LogController
-    print('\n=== Пример двунаправленного стриминга с контрактами ===\n');
-    // Создаем транспорты
+    print('\n=== Bidirectional streaming with contracts ===\n');
+    // The transports.
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-    // Создаем серверный эндпоинт и регистрируем контракт
+    // The server endpoint, with its contract registered.
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'Server',
@@ -23,25 +23,25 @@ class BidirectionalStreamExample {
     final service = ChatServiceResponder();
     serverEndpoint.registerServiceContract(service);
     serverEndpoint.start();
-    // Создаем клиентский эндпоинт
+    // The client endpoint.
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'Client',
     );
     final client = ChatServiceCaller(clientEndpoint);
     try {
-      // Пример 1: Простой чат
-      print('\n--- Пример 1: Простой чат ---');
+      // 1: a plain chat.
+      print('\n--- 1: a plain chat ---');
       final context1 = RpcContext.empty()
           .withTraceId('chat-trace-123')
           .withValue('user-id', 'user-456')
           .withValue('session-id', 'session-789');
       final messagesToSend = [
         'ping',
-        'время',
-        'случайное число',
-        'привет, мир!',
-        'завершить',
+        'time',
+        'random number',
+        'hello, world!',
+        'quit',
       ];
       final responses = <String>[];
       await client
@@ -51,64 +51,60 @@ class BidirectionalStreamExample {
           )
           .forEach((response) {
             responses.add(response.value);
-            print('КЛИЕНТ: Получен ответ: "${response.value}"');
+            print('CLIENT: response: "${response.value}"');
           });
-      print('КЛИЕНТ: Получено всего ответов: ${responses.length}');
-      // Пример 2: Чат с аутентификацией
-      print('\n--- Пример 2: Чат с аутентификацией ---');
+      print('CLIENT: ${responses.length} responses in total');
+      // 2: a chat with authentication.
+      print('\n--- 2: a chat with authentication ---');
       final authContext = RpcContextUtils.withBearerToken('secret-token-123')
           .withAdditionalHeaders({'user-role': 'admin'})
           .withTraceId('auth-chat-trace-456');
-      final secureMessages = [
-        'admin:получить статус',
-        'admin:получить пользователей',
-        'admin:выход',
-      ];
+      final secureMessages = ['admin:status', 'admin:users', 'admin:logout'];
       await client
           .chatWithServer(
             Stream.fromIterable(secureMessages.map((m) => m.rpc)),
             context: authContext,
           )
           .forEach((response) {
-            print('КЛИЕНТ: Защищенный ответ: "${response.value}"');
+            print('CLIENT: authenticated response: "${response.value}"');
           });
-      // Пример 3: Чат с отменой
-      print('\n--- Пример 3: Чат с отменой ---');
+      // 3: a chat that gets cancelled.
+      print('\n--- 3: cancelling a chat ---');
       final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(
         cancellationToken,
       ).withValue('chat-type', 'long-running');
-      // Отменяем через 300мс
+      // Cancel after 300ms.
       Future<void>.delayed(Duration(milliseconds: 300), () {
-        print('КЛИЕНТ: Отменяем чат');
+        print('CLIENT: cancelling the chat');
         cancellationToken.cancel('User left chat');
       });
       final longMessages = Stream.periodic(
         Duration(milliseconds: 100),
-        (i) => 'Сообщение #$i'.rpc,
+        (i) => 'Message #$i'.rpc,
       ).take(10);
       try {
         await client
             .chatWithServer(longMessages, context: cancelContext)
             .forEach((response) {
-              print('КЛИЕНТ: Долгий ответ: "${response.value}"');
+              print('CLIENT: long response: "${response.value}"');
             });
       } catch (e) {
-        print('КЛИЕНТ: Чат отменен: $e');
+        print('CLIENT: the chat was cancelled: $e');
       }
     } catch (e, stackTrace) {
-      print('ОШИБКА: $e');
+      print('ERROR: $e');
       print('StackTrace: $stackTrace');
     } finally {
       await serverEndpoint.close();
       await clientEndpoint.close();
     }
-    print('\n=== Пример завершен ===\n');
+    print('\n=== Example finished ===\n');
   }
 }
 
 //
-// СЕРВЕРНЫЙ КОНТРАКТ
+// THE SERVER CONTRACT
 //
 abstract interface class IChatServiceContract implements IRpcContract {
   Stream<RpcString> chatWithServer(Stream<RpcString> messages);
@@ -124,7 +120,7 @@ final class ChatServiceResponder extends RpcResponderContract
       handler: chatWithServer,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Двунаправленный чат с сервером',
+      description: 'A bidirectional chat with the server',
     );
   }
 
@@ -134,25 +130,25 @@ final class ChatServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async* {
     final logger = LogScope.noop;
-    logger.info('🔧 Начинаем чат-сессию');
-    logger.info('🔍 Context: $context');
+    logger.info('starting a chat session');
+    logger.info('context: $context');
     final userId = context?.getValue<String>('user-id');
     final sessionId = context?.getValue<String>('session-id');
     final userRole = context?.getHeader('user-role');
     final authToken = context?.getHeader('authorization');
-    logger.info('👤 User: $userId, Session: $sessionId, Role: $userRole');
-    // Проверяем аутентификацию для защищенных команд
+    logger.info('user: $userId, session: $sessionId, role: $userRole');
+    // Authentication, for the privileged commands.
     final isAuthenticated =
         authToken != null && authToken.startsWith('Bearer ');
     await for (final message in messages) {
       context?.cancellationToken?.throwIfCancelled();
-      logger.info('📨 Получено сообщение: "${message.value}"');
+      logger.info('message: "${message.value}"');
       final messageText = message.value;
       String response;
-      // Обрабатываем различные типы сообщений
+      // Route by message kind.
       if (messageText.startsWith('admin:')) {
         if (!isAuthenticated || userRole != 'admin') {
-          response = 'Ошибка: Недостаточно прав для выполнения команды';
+          response = 'Error: not permitted to run that command';
         } else {
           final command = messageText.substring(6);
           response = _handleAdminCommand(command);
@@ -160,11 +156,11 @@ final class ChatServiceResponder extends RpcResponderContract
       } else {
         response = _handleRegularMessage(messageText);
       }
-      logger.internal('📤 Отправляем ответ: "$response"');
+      logger.internal('response: "$response"');
       yield response.rpc;
-      // Выходим из чата если получили команду завершения
-      if (messageText == 'завершить' || messageText == 'admin:выход') {
-        logger.info('✅ Завершаем чат-сессию');
+      // Leave the chat when asked to.
+      if (messageText == 'quit' || messageText == 'admin:logout') {
+        logger.info('ending the chat session');
         break;
       }
       await Future<void>.delayed(Duration(milliseconds: 10));
@@ -173,14 +169,14 @@ final class ChatServiceResponder extends RpcResponderContract
 
   String _handleAdminCommand(String command) {
     switch (command) {
-      case 'получить статус':
-        return 'Статус системы: ОК, активных пользователей: 42';
-      case 'получить пользователей':
-        return 'Активные пользователи: Alice, Bob, Charlie';
-      case 'выход':
-        return 'Админ-сессия завершена';
+      case 'status':
+        return 'System status: OK, 42 active users';
+      case 'users':
+        return 'Active users: Alice, Bob, Charlie';
+      case 'logout':
+        return 'Admin session ended';
       default:
-        return 'Неизвестная админ-команда: $command';
+        return 'Unknown admin command: $command';
     }
   }
 
@@ -188,21 +184,21 @@ final class ChatServiceResponder extends RpcResponderContract
     switch (message) {
       case 'ping':
         return 'pong';
-      case 'время':
-        return 'Текущее время: ${DateTime.now()}';
-      case 'случайное число':
+      case 'time':
+        return 'Current time: ${DateTime.now()}';
+      case 'random number':
         final random = (DateTime.now().millisecondsSinceEpoch % 100) + 1;
-        return 'Случайное число от 1 до 100: $random';
-      case 'завершить':
-        return 'До свидания! Чат завершен.';
+        return 'A random number between 1 and 100: $random';
+      case 'quit':
+        return 'Goodbye. The chat is over.';
       default:
-        return 'Эхо: $message';
+        return 'Echo: $message';
     }
   }
 }
 
 //
-// КЛИЕНТСКИЙ КОНТРАКТ
+// THE CLIENT CONTRACT
 //
 final class ChatServiceCaller extends RpcCallerContract
     implements IChatServiceContract {

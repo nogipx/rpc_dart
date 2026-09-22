@@ -7,26 +7,26 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 
-/// 🚀 Минимальный пример HTTP/2 RPC сервера
+/// Minimal HTTP/2 RPC server.
 Future<void> main() async {
   // logging configured via LogController
 
   const port = 8080;
 
-  // === СОЗДАЕМ СЕРВЕР ===
+  // === The server ===
   final server = RpcHttp2Server(
     port: port,
     onEndpointCreated: (endpoint) {
-      // Регистрируем сервис на каждое новое подключение
+      // Register the service on every new connection.
       endpoint.registerServiceContract(EchoService());
     },
   );
 
   try {
     await server.start();
-    print('🚀 HTTP/2 сервер запущен на порту $port');
+    print('HTTP/2 server listening on port $port');
 
-    // === СОЗДАЕМ КЛИЕНТА ===
+    // === The client ===
     final transport = await RpcHttp2CallerTransport.connect(
       host: 'localhost',
       port: port,
@@ -35,30 +35,30 @@ Future<void> main() async {
     try {
       final client = RpcCallerEndpoint(transport: transport);
 
-      // === ВЫПОЛНЯЕМ RPC ВЫЗОВ ===
+      // === One RPC call ===
       final response = await client.unaryRequest<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Say',
         requestCodec: RpcString.codec,
         responseCodec: RpcString.codec,
-        request: RpcString('Привет, HTTP/2!'),
+        request: RpcString('Hello, HTTP/2!'),
       );
 
-      print('📨 Ответ: "${response.value}"');
+      print('Response: "${response.value}"');
     } finally {
       await transport.close();
     }
 
-    // Даем время на корректное закрытие соединений
+    // Give the connections a moment to close cleanly.
     await Future<void>.delayed(Duration(milliseconds: 100));
   } finally {
     await server.stop();
   }
 
-  print('✅ Готово!');
+  print('Done');
 }
 
-/// Простой Echo сервис
+/// A minimal echo service.
 final class EchoService extends RpcResponderContract {
   EchoService() : super('Echo');
 
@@ -66,7 +66,8 @@ final class EchoService extends RpcResponderContract {
   void setup() {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Say',
-      handler: (request, {context}) async => RpcString('Эхо: ${request.value}'),
+      handler: (request, {context}) async =>
+          RpcString('Echo: ${request.value}'),
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );

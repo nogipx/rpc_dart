@@ -11,12 +11,12 @@ void main() {
   runIsolateExample();
 }
 
-/// Пример использования изолята с пользовательской entrypoint функцией
+/// Running an isolate with a custom entrypoint function.
 Future<void> runIsolateExample() async {
   // logging configured via LogController
-  print('\n=== Запуск примера с пользовательским entrypoint ===\n');
+  print('\n=== Custom entrypoint example ===\n');
 
-  // Запускаем изолят с пользовательской entrypoint функцией
+  // Spawn the isolate with our own entrypoint.
   final result = await RpcIsolateTransport.spawn(
     entrypoint: customEchoServer,
     customParams: {
@@ -29,9 +29,9 @@ Future<void> runIsolateExample() async {
 
   final killIsolate = result.kill;
 
-  print('Изолят запущен, настраиваем клиент...');
+  print('Isolate up, wiring the client');
 
-  // Создаем клиент для двустороннего потока
+  // A bidirectional stream client.
   final client = BidirectionalStreamCaller<RpcString, RpcString>(
     transport: result.transport,
     serviceName: 'EchoService',
@@ -39,63 +39,63 @@ Future<void> runIsolateExample() async {
     logger: LogScope.noop,
   );
 
-  // Подписываемся на ответы
+  // Subscribe to the responses.
   final subscription = client.responses.listen(
     (message) {
-      print('КЛИЕНТ: Получен ответ: "${message.payload}"');
+      print('CLIENT: response: "${message.payload}"');
     },
     onError: (Object error) {
-      print('КЛИЕНТ: Ошибка: $error');
+      print('CLIENT: error: $error');
     },
   );
 
-  // Отправляем запросы
-  print('\nОтправляем запрос: "Привет, сервер!"');
-  unawaited(client.send('Привет, сервер!'.rpc));
+  // Send the requests.
+  print('\nSending: "Hello, server!"');
+  unawaited(client.send('Hello, server!'.rpc));
 
   await Future<void>.delayed(Duration(milliseconds: 500));
 
-  print('\nОтправляем запрос: "Как дела?"');
-  unawaited(client.send('Как дела?'.rpc));
+  print('\nSending: "How are you?"');
+  unawaited(client.send('How are you?'.rpc));
 
   await Future<void>.delayed(Duration(milliseconds: 500));
 
-  print('\nОтправляем запрос: "Проверка эхо"');
-  unawaited(client.send('Проверка эхо'.rpc));
+  print('\nSending: "Echo check"');
+  unawaited(client.send('Echo check'.rpc));
 
-  // Ждем обработки сообщений
+  // Let the messages be handled.
   await Future<void>.delayed(Duration(seconds: 1));
 
-  // Завершаем отправку
-  print('\nЗавершаем отправку...');
+  // Half-close the request side.
+  print('\nFinishing the request side');
   unawaited(client.finishSending());
 
-  // Отменяем подписку на ответы
+  // Stop reading the responses.
   await subscription.cancel();
 
-  // Завершаем работу
-  print('\nЗавершаем работу транспорта...');
+  // Tear the transport down.
+  print('\nClosing the transport');
   await client.close();
 
-  // Убиваем изолят
+  // Kill the isolate.
   killIsolate();
 
-  print('\n=== Пример завершен ===');
+  print('\n=== Example finished ===');
 }
 
-/// Пользовательская функция сервера, получающая готовый транспорт
+/// The server-side entrypoint, handed a ready transport.
 @pragma('vm:entry-point')
 void customEchoServer(
   IRpcTransport transport,
   Map<String, dynamic> customParams,
 ) {
   print('customParams: $customParams');
-  print('СЕРВЕР: Запущен эхо-сервер с новым API');
+  print('SERVER: echo server started');
   final logger = LogScope.noop;
 
   // logging configured via LogController
 
-  // Создаем двунаправленный стрим-сервер
+  // A bidirectional stream responder.
   final server = BidirectionalStreamResponder<RpcString, RpcString>(
     id: 1,
     transport: transport,
@@ -104,24 +104,24 @@ void customEchoServer(
     logger: logger,
   );
 
-  // ВАЖНО: Привязываем сервер к потоку сообщений для streamId = 1
+  // REQUIRED: bind the responder to the message stream for streamId 1.
   server.bindToMessageStream(
     transport.incomingMessages.where((msg) => msg.streamId == 1),
   );
 
-  // Настраиваем префикс для ответов
+  // The prefix every response carries.
   const messagePrefix = '[ECHO]: ';
 
-  // Слушаем входящие запросы
+  // Listen for incoming requests.
   server.requests.listen((request) {
     final requestStr = request.toString();
-    logger.debug('СЕРВЕР: Получен запрос: "$requestStr"');
+    logger.debug('SERVER: request: "$requestStr"');
 
-    // Обработка запроса и отправка эхо-ответа
+    // Handle it and echo it back.
     final response = '$messagePrefix$requestStr';
-    logger.debug('СЕРВЕР: Отправляем ответ: "$response"');
+    logger.debug('SERVER: response: "$response"');
     server.send(response.rpc);
   });
 
-  logger.debug('СЕРВЕР: Эхо-сервер запущен и готов к обработке запросов');
+  logger.debug('SERVER: echo server ready');
 }

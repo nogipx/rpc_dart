@@ -84,3 +84,25 @@ The `lib/` remainder keeps its own reason and is not closed: 16 of its files are
 `rpc_data`'s `models.dart`, contract and repository interfaces, which is a
 PUBLISHED API surface that dartdoc renders. One is generated, so that one means
 finding the generator's source first.
+
+## Round 432 — the example half is done, and the real number is LINES
+
+**47 files is 1817 Cyrillic lines.** The recount above fixed the file count and
+still measured the wrong thing: translating properly — which this record itself
+demands, *"translate rather than delete"* — is per line, and 1817 is not one
+round's work. Saying so before starting is what L-12 is for.
+
+```
+                            before   after
+example/, core + transport   529      0     10 files, round 432
+test/, core + transport     1288   1288     37 files, open
+```
+
+The examples went first because `example/` is published to pub.dev and is the
+first thing a reader evaluating the package meets; test comments are internal.
+Emoji were removed in the same pass, including from the text these programs
+PRINT, which is output rather than source.
+
+**What the test half needs that the examples did not**: several of the 1288
+lines are test NAMES, and renaming one changes what the suite reports. That is
+a different kind of edit from a comment and is worth deciding deliberately.

@@ -8,50 +8,50 @@ void main() async {
   await ClientStreamingExample.run();
 }
 
-/// Пример использования клиентского стриминга (много запросов, один ответ)
+/// Client streaming: many requests, one response.
 ///
-/// Демонстрирует, как клиент отправляет поток запросов и получает один ответ
+/// Shows a client sending a stream of requests and receiving a single answer.
 class ClientStreamingExample {
-  /// Запускает демонстрацию клиентского стриминга
+  /// Runs the demonstration.
   static Future<void> run() async {
     // logging configured via LogController
-    print('\n=== Пример клиентского стриминга (N запросов -> 1 ответ) ===\n');
-    // Создаем пару соединенных транспортов для клиента и сервера
+    print('\n=== Client streaming (N requests -> 1 response) ===\n');
+    // A connected pair of transports, one end each.
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-    // Создаем серверный эндпоинт
+    // The server endpoint.
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'ClientStreamServer',
     );
-    // Создаем клиентский эндпоинт
+    // The client endpoint.
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'ClientStreamClient',
     );
-    // Регистрируем серверный контракт
+    // Register the server contract.
     final serverContract = DataAggregatorResponder();
     serverEndpoint.registerServiceContract(serverContract);
     serverEndpoint.start();
-    // Создаем клиентский контракт
+    // The client contract.
     final client = DataAggregatorCaller(clientEndpoint);
     try {
-      // Пример 1: Базовая агрегация данных
-      print('\n--- Пример 1: Агрегация текстовых сообщений ---');
+      // 1: aggregating text messages.
+      print('\n--- 1: aggregating text messages ---');
       final context1 = RpcContextUtils.withTracing(
         traceId: 'client-stream-123',
       ).withValue('aggregation-type', 'text');
       final messages = [
-        'Сообщение 1: Привет',
-        'Сообщение 2: Как дела?',
-        'Сообщение 3: Это тест',
-        'Сообщение 4: Клиентского',
-        'Сообщение 5: Стриминга!',
+        'Message 1: Hello',
+        'Message 2: How are you?',
+        'Message 3: This is a test',
+        'Message 4: of client',
+        'Message 5: streaming',
       ];
-      print('КЛИЕНТ: Отправляем ${messages.length} сообщений');
+      print('CLIENT: sending ${messages.length} messages');
       final messageStream = Stream.fromIterable(messages.map((m) => m.rpc))
           .asyncMap((message) async {
-            print('КЛИЕНТ: → "${message.value}"');
-            // Небольшая задержка между сообщениями
+            print('CLIENT: -> "${message.value}"');
+            // A small gap between messages.
             await Future<void>.delayed(Duration(milliseconds: 50));
             return message;
           });
@@ -59,9 +59,9 @@ class ClientStreamingExample {
         messageStream,
         context: context1,
       );
-      print('КЛИЕНТ: Результат агрегации: "${result1.value}"');
-      // Пример 2: Агрегация с аутентификацией
-      print('\n--- Пример 2: Агрегация с аутентификацией ---');
+      print('CLIENT: aggregate: "${result1.value}"');
+      // 2: aggregating with authentication.
+      print('\n--- 2: aggregating with authentication ---');
       final authContext = RpcContextUtils.withBearerToken('aggregate-token-456')
           .withAdditionalHeaders({
             'client-version': '1.4.0',
@@ -76,7 +76,7 @@ class ClientStreamingExample {
       ];
       final secureStream = Stream.fromIterable(secureMessages.map((m) => m.rpc))
           .asyncMap((message) async {
-            print('КЛИЕНТ: → Защищенное сообщение: "${message.value}"');
+            print('CLIENT: -> authenticated message: "${message.value}"');
             await Future<void>.delayed(Duration(milliseconds: 30));
             return message;
           });
@@ -84,16 +84,16 @@ class ClientStreamingExample {
         secureStream,
         context: authContext,
       );
-      print('КЛИЕНТ: Защищенный результат: "${result2.value}"');
-      // Пример 3: Агрегация с отменой
-      print('\n--- Пример 3: Агрегация с отменой ---');
+      print('CLIENT: authenticated aggregate: "${result2.value}"');
+      // 3: aggregating, then cancelling.
+      print('\n--- 3: cancelling an aggregation ---');
       final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(
         cancellationToken,
       ).withValue('batch-size', 100).withTraceId('cancel-aggregate-789');
-      // Отменяем через 150мс
+      // Cancel after 150ms.
       Future<void>.delayed(Duration(milliseconds: 150), () {
-        print('КЛИЕНТ: Отменяем агрегацию');
+        print('CLIENT: cancelling the aggregation');
         cancellationToken.cancel('User cancelled operation');
       });
       final longMessages = Stream.periodic(
@@ -105,12 +105,12 @@ class ClientStreamingExample {
           longMessages,
           context: cancelContext,
         );
-        print('КЛИЕНТ: Результат отменённой агрегации: "${result3.value}"');
+        print('CLIENT: cancelled aggregate: "${result3.value}"');
       } catch (e) {
-        print('КЛИЕНТ: Агрегация отменена: $e');
+        print('CLIENT: the aggregation was cancelled: $e');
       }
-      // Пример 4: Агрегация файлов
-      print('\n--- Пример 4: Агрегация файлов ---');
+      // 4: aggregating files.
+      print('\n--- 4: aggregating files ---');
       final fileContext = RpcContext.withHeaders({
         'operation': 'file-processing',
         'format': 'batch',
@@ -126,20 +126,20 @@ class ClientStreamingExample {
         fileStream,
         context: fileContext,
       );
-      print('КЛИЕНТ: Результат обработки файлов: "${result4.value}"');
+      print('CLIENT: file result: "${result4.value}"');
     } catch (e, stackTrace) {
-      print('ОШИБКА: $e');
+      print('ERROR: $e');
       print('StackTrace: $stackTrace');
     } finally {
       await serverEndpoint.close();
       await clientEndpoint.close();
     }
-    print('\n=== Пример завершен ===\n');
+    print('\n=== Example finished ===\n');
   }
 }
 
 //
-// СЕРВЕРНЫЙ КОНТРАКТ
+// THE SERVER CONTRACT
 //
 abstract interface class IDataAggregatorContract implements IRpcContract {
   Future<RpcString> aggregateMessages(Stream<RpcString> messages);
@@ -155,7 +155,7 @@ final class DataAggregatorResponder extends RpcResponderContract
       handler: aggregateMessages,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Агрегирует поток сообщений и возвращает сводку',
+      description: 'Aggregates a stream of messages into a summary',
     );
   }
 
@@ -165,16 +165,14 @@ final class DataAggregatorResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     final logger = LogScope.noop;
-    logger.info('🔧 Начинаем агрегацию сообщений');
-    logger.info('🔍 Context: $context');
+    logger.info('starting the aggregation');
+    logger.info('context: $context');
     final aggregationType = context?.getValue<String>('aggregation-type');
     final batchSize = context?.getValue<int>('batch-size');
     final format = context?.getHeader('aggregation-format');
     final operation = context?.getHeader('operation');
     final authToken = context?.getHeader('authorization');
-    logger.info(
-      '📊 Type: $aggregationType, Batch: $batchSize, Format: $format',
-    );
+    logger.info('type: $aggregationType, batch: $batchSize, format: $format');
     final receivedMessages = <String>[];
     int count = 0;
     try {
@@ -182,17 +180,17 @@ final class DataAggregatorResponder extends RpcResponderContract
         context?.cancellationToken?.throwIfCancelled();
         count++;
         receivedMessages.add(message.value);
-        logger.internal('📨 Получено сообщение #$count: "${message.value}"');
-        // Имитируем обработку
+        logger.internal('message #$count: "${message.value}"');
+        // Stand in for real work.
         await Future<void>.delayed(Duration(milliseconds: 10));
-        // Проверяем лимит для batch обработки
+        // Stop at the batch limit, if one was given.
         if (batchSize != null && count >= batchSize) {
-          logger.info('📊 Достигнут лимит batch: $batchSize');
+          logger.info('batch limit reached: $batchSize');
           break;
         }
       }
-      logger.info('✅ Агрегация завершена, обработано сообщений: $count');
-      // Формируем результат в зависимости от контекста
+      logger.info('aggregation finished, $count messages');
+      // What the summary looks like depends on the context.
       final String result;
       if (operation == 'file-processing') {
         result = _aggregateFiles(receivedMessages);
@@ -201,19 +199,19 @@ final class DataAggregatorResponder extends RpcResponderContract
       } else {
         result = _aggregateRegularMessages(receivedMessages, aggregationType);
       }
-      logger.internal('📤 Отправляем результат: "$result"');
+      logger.internal('result: "$result"');
       return result.rpc;
     } catch (e) {
-      logger.warning('⚠️ Агрегация отменена: $e');
+      logger.warning('the aggregation was cancelled: $e');
       final partialResult =
-          'Частичная агрегация: обработано $count из ${receivedMessages.length} сообщений';
+          'Partial aggregate: $count of ${receivedMessages.length} messages';
       return partialResult.rpc;
     }
   }
 
   String _aggregateRegularMessages(List<String> messages, String? type) {
     final totalChars = messages.fold<int>(0, (sum, msg) => sum + msg.length);
-    return 'Агрегировано ${messages.length} сообщений ($totalChars символов)';
+    return 'Aggregated ${messages.length} messages ($totalChars characters)';
   }
 
   String _aggregateSecureMessages(List<String> messages, String? format) {
@@ -221,18 +219,19 @@ final class DataAggregatorResponder extends RpcResponderContract
     if (format == 'structured') {
       return 'Secure Report: {total: ${messages.length}, admin_commands: $adminCommands, timestamp: ${DateTime.now()}}';
     }
-    return 'Обработано ${messages.length} защищенных сообщений ($adminCommands команд admin)';
+    return 'Handled ${messages.length} authenticated messages '
+        '($adminCommands admin commands)';
   }
 
   String _aggregateFiles(List<String> messages) {
     final files = messages.where((m) => m.startsWith('file:')).length;
-    final totalSize = messages.length * 1024; // Имитация размера
-    return 'Обработано файлов: $files, общий размер: $totalSize KB';
+    final totalSize = messages.length * 1024; // A stand-in for the real size.
+    return 'Files handled: $files, total size: $totalSize KB';
   }
 }
 
 //
-// КЛИЕНТСКИЙ КОНТРАКТ
+// THE CLIENT CONTRACT
 //
 final class DataAggregatorCaller extends RpcCallerContract
     implements IDataAggregatorContract {

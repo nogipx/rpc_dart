@@ -5,39 +5,39 @@
 import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// 🧹 Пример использования dispose() метода в RPC респондерах
+/// Using dispose() in RPC responders.
 ///
-/// Демонстрирует:
-/// - Управление ресурсами в респондерах (database connections, timers, streams)
-/// - Автоматическую очистку при разрегистрации контрактов
-/// - Автоматическую очистку при закрытии эндпоинта
-/// - Best practices для реализации dispose() в собственных респондерах
-/// - Graceful error handling в dispose() методах
+/// Shows:
+/// - owning resources in a responder (database connections, timers, streams)
+/// - automatic cleanup when a contract is unregistered
+/// - automatic cleanup when the endpoint closes
+/// - how to implement dispose() in your own responders
+/// - handling errors raised inside dispose()
 ///
-/// Ключевые моменты:
-/// 1. dispose() вызывается автоматически при unregisterServiceContract()
-/// 2. dispose() вызывается автоматически при close() эндпоинта
-/// 3. Ошибки в dispose() не прерывают основную логику
-/// 4. Необходимо вызывать super.dispose() в переопределенных методах
-/// 5. Нужно проверять состояние ресурсов перед их освобождением
+/// The rules:
+/// 1. dispose() runs automatically on unregisterServiceContract()
+/// 2. dispose() runs automatically when the endpoint is closed
+/// 3. an error in dispose() does not interrupt anything else
+/// 4. an override must call super.dispose()
+/// 5. check a resource's state before releasing it
 void main() async {
-  print('🚀 Пример использования dispose() в RPC респондерах\n');
-  // Создаем транспорт
+  print('Using dispose() in RPC responders\n');
+  // The transports.
   final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
   final callerEndpoint = RpcCallerEndpoint(transport: callerTransport);
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
-  // Создаем сервисы с ресурсами
+  // Services that own resources.
   final databaseService = DatabaseService();
   final cachingService = CachingService();
   final analyticsService = AnalyticsService();
-  print('📝 Регистрируем сервисы...');
+  print('Registering the services');
   responderEndpoint.registerServiceContract(databaseService);
   responderEndpoint.registerServiceContract(cachingService);
   responderEndpoint.registerServiceContract(analyticsService);
   responderEndpoint.start();
-  // Тестируем работу сервисов
-  print('\n🔨 Тестируем работу сервисов...');
-  // Инициализируем ресурсы (используем zero-copy)
+  // Exercise them.
+  print('\nExercising the services');
+  // Initialise the resources (zero-copy).
   await callerEndpoint.unaryRequest<ResourceRequest, ResourceResponse>(
     serviceName: 'DatabaseService',
     methodName: 'initialize',
@@ -48,38 +48,35 @@ void main() async {
     methodName: 'initialize',
     request: ResourceRequest('setup cache'),
   );
-  print('✅ Все сервисы инициализированы и работают');
-  // Показываем состояние ресурсов
-  print('\n📊 Состояние ресурсов:');
+  print('All services initialised and running');
+  // What each one holds.
+  print('\nResource state:');
   print('  Database connections: ${databaseService.activeConnections}');
   print('  Cache size: ${cachingService.cacheSize}');
   print('  Analytics timers: ${analyticsService.activeTimers}');
-  // Разрегистрируем один сервис
-  print(
-    '\n🗑️  Разрегистрируем DatabaseService (dispose() вызовется автоматически)...',
-  );
+  // Unregister one service.
+  print('\nUnregistering DatabaseService (dispose() runs automatically)');
   responderEndpoint.unregisterServiceContract('DatabaseService');
-  print('📊 Состояние после разрегистрации:');
+  print('State after unregistering:');
   print(
-    '  Database connections: ${databaseService.activeConnections} (должно быть 0)',
+    '  Database connections: ${databaseService.activeConnections} '
+    '(should be 0)',
   );
-  print('  Cache size: ${cachingService.cacheSize} (не изменилось)');
-  print('  Analytics timers: ${analyticsService.activeTimers} (не изменилось)');
-  // Закрываем эндпоинт (остальные dispose() вызовутся автоматически)
-  print(
-    '\n🚪 Закрываем эндпоинт (dispose() вызовется для всех оставшихся сервисов)...',
-  );
+  print('  Cache size: ${cachingService.cacheSize} (unchanged)');
+  print('  Analytics timers: ${analyticsService.activeTimers} (unchanged)');
+  // Close the endpoint: every remaining dispose() runs.
+  print('\nClosing the endpoint (dispose() runs for every remaining service)');
   await responderEndpoint.close();
-  print('📊 Финальное состояние ресурсов:');
+  print('Final resource state:');
   print('  Database connections: ${databaseService.activeConnections}');
-  print('  Cache size: ${cachingService.cacheSize} (должно быть 0)');
-  print('  Analytics timers: ${analyticsService.activeTimers} (должно быть 0)');
+  print('  Cache size: ${cachingService.cacheSize} (should be 0)');
+  print('  Analytics timers: ${analyticsService.activeTimers} (should be 0)');
   await callerEndpoint.close();
-  print('\n✅ Пример завершен. Все ресурсы освобождены!');
+  print('\nExample finished. Every resource is released.');
 }
 
 // =============================================================================
-// Модели данных (Zero-Copy)
+// The models (zero-copy)
 // =============================================================================
 class ResourceRequest {
   final String operation;
@@ -93,10 +90,10 @@ class ResourceResponse {
 }
 
 // =============================================================================
-// Пример 1: Сервис с database connections
+// 1: a service holding database connections
 // =============================================================================
 final class DatabaseService extends RpcResponderContract {
-  // Имитируем подключения к базе данных
+  // Stand-ins for real database connections.
   final List<StreamController<void>> _connections = [];
   final List<StreamSubscription<void>> _subscriptions = [];
   int activeConnections = 0;
@@ -117,19 +114,19 @@ final class DatabaseService extends RpcResponderContract {
     ResourceRequest request, {
     RpcContext? context,
   }) async {
-    print('  🗄️  [Database] Инициализация подключений...');
-    // Создаем имитацию подключений к БД
+    print('  [Database] opening connections');
+    // Stand in for opening real connections.
     for (int i = 0; i < 3; i++) {
       final controller = StreamController<String>();
       _connections.add(controller);
-      // Имитируем подписку на события БД
+      // Stand in for subscribing to database events.
       final subscription = controller.stream.listen((data) {
-        // Обработка данных
+        // Handle the data.
       });
       _subscriptions.add(subscription);
       activeConnections++;
     }
-    print('  🗄️  [Database] Создано $activeConnections подключений');
+    print('  [Database] $activeConnections connections open');
     return ResourceResponse(
       'Database initialized with $activeConnections connections',
     );
@@ -148,32 +145,32 @@ final class DatabaseService extends RpcResponderContract {
     return ResourceResponse('Query executed successfully');
   }
 
-  /// 🆕 Переопределяем dispose() для освобождения database ресурсов
+  /// Releases the database resources.
   @override
   void dispose() {
-    print('  🗄️  [Database] Освобождение ресурсов...');
-    // Закрываем все подписки
+    print('  [Database] releasing resources');
+    // Cancel every subscription.
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }
     _subscriptions.clear();
-    // Закрываем все подключения
+    // Close every connection.
     for (final connection in _connections) {
       connection.close();
     }
     _connections.clear();
     activeConnections = 0;
-    print('  🗄️  [Database] Все подключения закрыты');
-    // Важно: вызываем родительский dispose()
+    print('  [Database] every connection closed');
+    // Required: call the parent dispose().
     super.dispose();
   }
 }
 
 // =============================================================================
-// Пример 2: Caching сервис
+// 2: a caching service
 // =============================================================================
 final class CachingService extends RpcResponderContract {
-  // Имитируем кеш
+  // A stand-in cache.
   final Map<String, dynamic> _cache = {};
   Timer? _cleanupTimer;
   int cacheSize = 0;
@@ -190,41 +187,41 @@ final class CachingService extends RpcResponderContract {
     ResourceRequest request, {
     RpcContext? context,
   }) async {
-    print('  💾 [Cache] Инициализация кеша...');
-    // Заполняем кеш тестовыми данными
+    print('  [Cache] filling the cache');
+    // Fill it with test data.
     for (int i = 0; i < 100; i++) {
       _cache['key_$i'] = 'value_$i';
       cacheSize++;
     }
-    // Запускаем таймер очистки кеша
+    // Start the eviction timer.
     _cleanupTimer = Timer.periodic(Duration(seconds: 30), (timer) {
-      print('  💾 [Cache] Периодическая очистка кеша...');
+      print('  [Cache] periodic eviction');
     });
-    print('  💾 [Cache] Кеш инициализирован с $cacheSize элементами');
+    print('  [Cache] $cacheSize entries');
     return ResourceResponse('Cache initialized with $cacheSize items');
   }
 
-  /// 🆕 Переопределяем dispose() для освобождения cache ресурсов
+  /// Releases the cache resources.
   @override
   void dispose() {
-    print('  💾 [Cache] Освобождение ресурсов...');
-    // Останавливаем таймер очистки
+    print('  [Cache] releasing resources');
+    // Stop the eviction timer.
     _cleanupTimer?.cancel();
     _cleanupTimer = null;
-    // Очищаем кеш
+    // Drop the cache.
     _cache.clear();
     cacheSize = 0;
-    print('  💾 [Cache] Кеш очищен, таймер остановлен');
-    // Важно: вызываем родительский dispose()
+    print('  [Cache] cleared, timer stopped');
+    // Required: call the parent dispose().
     super.dispose();
   }
 }
 
 // =============================================================================
-// Пример 3: Analytics сервис с множественными ресурсами
+// 3: an analytics service holding several kinds of resource
 // =============================================================================
 final class AnalyticsService extends RpcResponderContract {
-  // Имитируем аналитические ресурсы
+  // Stand-ins for analytics resources.
   final List<Timer> _timers = [];
   final List<StreamController<void>> _eventStreams = [];
   int activeTimers = 0;
@@ -235,27 +232,28 @@ final class AnalyticsService extends RpcResponderContract {
       methodName: 'initialize',
       handler: _initializeAnalytics,
     );
-    // Автоматически инициализируем при setup
+    // This one initialises itself at setup.
     _autoInitialize();
   }
 
   void _autoInitialize() {
-    print('  📊 [Analytics] Автоматическая инициализация...');
-    // Создаем таймеры для метрик
+    print('  [Analytics] initialising');
+    // Timers that collect metrics.
     for (int i = 0; i < 2; i++) {
       final timer = Timer.periodic(Duration(seconds: 10), (timer) {
-        // Собираем метрики
+        // Collect the metrics.
       });
       _timers.add(timer);
       activeTimers++;
     }
-    // Создаем event streams
+    // Event streams.
     for (int i = 0; i < 2; i++) {
       final controller = StreamController<Map<String, dynamic>>.broadcast();
       _eventStreams.add(controller);
     }
     print(
-      '  📊 [Analytics] Создано $activeTimers таймеров и ${_eventStreams.length} event streams',
+      '  [Analytics] $activeTimers timers and ${_eventStreams.length} '
+      'event streams',
     );
   }
 
@@ -268,23 +266,23 @@ final class AnalyticsService extends RpcResponderContract {
     );
   }
 
-  /// 🆕 Переопределяем dispose() для освобождения analytics ресурсов
+  /// Releases the analytics resources.
   @override
   void dispose() {
-    print('  📊 [Analytics] Освобождение ресурсов...');
-    // Останавливаем все таймеры
+    print('  [Analytics] releasing resources');
+    // Stop every timer.
     for (final timer in _timers) {
       timer.cancel();
     }
     _timers.clear();
     activeTimers = 0;
-    // Закрываем event streams
+    // Close the event streams.
     for (final controller in _eventStreams) {
       controller.close();
     }
     _eventStreams.clear();
-    print('  📊 [Analytics] Все таймеры остановлены, streams закрыты');
-    // Важно: вызываем родительский dispose()
+    print('  [Analytics] timers stopped, streams closed');
+    // Required: call the parent dispose().
     super.dispose();
   }
 }

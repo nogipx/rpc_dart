@@ -8,15 +8,15 @@ void main() async {
   await UnaryRpcExample.run();
 }
 
-/// Пример использования унарного RPC вызова (один запрос - один ответ)
-/// с использованием новых контрактов и RpcContext
+/// A unary RPC call (one request, one response), using contracts and
+/// [RpcContext].
 class UnaryRpcExample {
   static Future<void> run() async {
     // logging configured via LogController
-    print('\n=== Пример унарного RPC с контрактами и контекстом ===\n');
-    // Создаем транспорты
+    print('\n=== Unary RPC with contracts and context ===\n');
+    // The transports.
     final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
-    // Создаем серверный эндпоинт и регистрируем контракты
+    // The server endpoint, with its contracts registered.
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
       debugLabel: 'Server',
@@ -24,74 +24,74 @@ class UnaryRpcExample {
     final multiService = MultiServiceResponder();
     serverEndpoint.registerServiceContract(multiService);
     serverEndpoint.start();
-    // Создаем клиентский эндпоинт
+    // The client endpoint.
     final clientEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
       debugLabel: 'Client',
     );
     final client = MultiServiceCaller(clientEndpoint);
     try {
-      // Пример 1: Простой вызов без контекста
-      print('\n--- Пример 1: Простой вызов ---');
-      final response1 = await client.sayHello('Привет'.rpc);
-      print('КЛИЕНТ: Получен ответ: "$response1"');
-      // Пример 2: Вызов с базовым контекстом
-      print('\n--- Пример 2: Вызов с контекстом ---');
+      // 1: a plain call, no context.
+      print('\n--- 1: a plain call ---');
+      final response1 = await client.sayHello('Hello'.rpc);
+      print('CLIENT: response: "$response1"');
+      // 2: a call carrying a context.
+      print('\n--- 2: a call with a context ---');
       final context2 = RpcContextUtils.withBearerToken('secret-token-123')
           .withAdditionalHeaders({'user-id': 'user-456'})
           .withTraceId('trace-${DateTime.now().millisecondsSinceEpoch}');
       final response2 = await client.getCurrentTime(
-        'Время'.rpc,
+        'Time'.rpc,
         context: context2,
       );
-      print('КЛИЕНТ: Получен ответ: "$response2"');
-      // Пример 3: Вызов с таймаутом
-      print('\n--- Пример 3: Вызов с таймаутом ---');
+      print('CLIENT: response: "$response2"');
+      // 3: a call with a deadline.
+      print('\n--- 3: a call with a timeout ---');
       final timeoutContext = RpcContext.withTimeout(
         Duration(milliseconds: 500),
       ).withValue('request-type', 'health-check');
       final response3 = await client.checkHealth(
-        'Статус'.rpc,
+        'Status'.rpc,
         context: timeoutContext,
       );
-      print('КЛИЕНТ: Получен ответ: "$response3"');
-      // Пример 4: Вызов с ошибкой
-      print('\n--- Пример 4: Обработка ошибок ---');
+      print('CLIENT: response: "$response3"');
+      // 4: a call that fails.
+      print('\n--- 4: error handling ---');
       try {
-        await client.throwError('Ошибка'.rpc);
+        await client.throwError('Error'.rpc);
       } catch (e) {
-        print('КЛИЕНТ: Получена ожидаемая ошибка: $e');
+        print('CLIENT: the expected error arrived: $e');
       }
-      // Пример 5: Вызов с отменой
-      print('\n--- Пример 5: Отмена операции ---');
+      // 5: a call that is cancelled.
+      print('\n--- 5: cancelling an operation ---');
       try {
         final cancellationToken = RpcCancellationToken();
         final cancelContext = RpcContext.withCancellation(cancellationToken);
-        // Отменяем через 100мс
+        // Cancel after 100ms.
         Future<void>.delayed(Duration(milliseconds: 100), () {
-          print('КЛИЕНТ: Отменяем операцию');
+          print('CLIENT: cancelling');
           cancellationToken.cancel('User cancelled');
         });
         await client.longOperation(
-          'Долгая операция'.rpc,
+          'A long operation'.rpc,
           context: cancelContext,
         );
       } catch (e) {
-        print('КЛИЕНТ: Операция отменена: $e');
+        print('CLIENT: cancelled: $e');
       }
     } catch (e, stackTrace) {
-      print('ОШИБКА: $e');
+      print('ERROR: $e');
       print('StackTrace: $stackTrace');
     } finally {
       await serverEndpoint.close();
       await clientEndpoint.close();
     }
-    print('\n=== Пример завершен ===\n');
+    print('\n=== Example finished ===\n');
   }
 }
 
 //
-// СЕРВЕРНЫЙ КОНТРАКТ
+// THE SERVER CONTRACT
 //
 abstract interface class IMultiServiceContract implements IRpcContract {
   Future<RpcString> sayHello(RpcString message);
@@ -111,45 +111,45 @@ final class MultiServiceResponder extends RpcResponderContract
       handler: sayHello,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Простое приветствие',
+      description: 'A plain greeting',
     );
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'GetCurrentTime',
       handler: getCurrentTime,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Получает текущее время',
+      description: 'Returns the current time',
     );
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'CheckHealth',
       handler: checkHealth,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Проверяет состояние сервиса',
+      description: 'Reports the service health',
     );
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'ThrowError',
       handler: throwError,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Генерирует ошибку для тестирования',
+      description: 'Raises an error, for testing',
     );
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'LongOperation',
       handler: longOperation,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Долгая операция для тестирования отмены',
+      description: 'A long operation, for testing cancellation',
     );
   }
 
   @override
   Future<RpcString> sayHello(RpcString message, {RpcContext? context}) async {
     final logger = LogScope.noop;
-    logger.info('🔧 Получен запрос: ${message.value}');
-    logger.info('🔍 Context: $context');
+    logger.info('request: ${message.value}');
+    logger.info('context: $context');
     await Future<void>.delayed(Duration(milliseconds: 10));
-    return 'Здравствуйте! Это ответ от сервера: ${message.value}'.rpc;
+    return 'Hello! This is the server answering: ${message.value}'.rpc;
   }
 
   @override
@@ -158,12 +158,12 @@ final class MultiServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     final logger = LogScope.noop;
-    logger.info('🔧 Получен запрос времени: ${message.value}');
-    logger.info('🔍 Context: $context');
+    logger.info('time request: ${message.value}');
+    logger.info('context: $context');
     final userId = context?.getHeader('user-id');
     final traceId = context?.traceId;
     await Future<void>.delayed(Duration(milliseconds: 20));
-    return 'Текущее время: ${DateTime.now()} [user: $userId, trace: $traceId]'
+    return 'Current time: ${DateTime.now()} [user: $userId, trace: $traceId]'
         .rpc;
   }
 
@@ -173,20 +173,20 @@ final class MultiServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     final logger = LogScope.noop;
-    logger.info('🔧 Проверка здоровья: ${message.value}');
-    logger.info('🔍 Context: $context');
+    logger.info('health check: ${message.value}');
+    logger.info('context: $context');
     final requestType = context?.getValue<String>('request-type');
     context?.cancellationToken?.throwIfCancelled();
     await Future<void>.delayed(Duration(milliseconds: 30));
-    return 'Все системы работают нормально [$requestType]'.rpc;
+    return 'All systems nominal [$requestType]'.rpc;
   }
 
   @override
   Future<RpcString> throwError(RpcString message, {RpcContext? context}) async {
     final logger = LogScope.noop;
-    logger.info('🔧 Генерируем ошибку: ${message.value}');
-    logger.info('🔍 Context: $context');
-    throw Exception('Тестовая ошибка: ${message.value}');
+    logger.info('raising an error: ${message.value}');
+    logger.info('context: $context');
+    throw Exception('Test error: ${message.value}');
   }
 
   @override
@@ -195,21 +195,21 @@ final class MultiServiceResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     final logger = LogScope.noop;
-    logger.info('🔧 Начинаем долгую операцию: ${message.value}');
-    logger.info('🔍 Context: $context');
+    logger.info('starting a long operation: ${message.value}');
+    logger.info('context: $context');
     for (int i = 0; i < 100; i++) {
       context?.cancellationToken?.throwIfCancelled();
       await Future<void>.delayed(Duration(milliseconds: 10));
       if (i % 20 == 0) {
-        logger.internal('📊 Прогресс: $i%');
+        logger.internal('progress: $i%');
       }
     }
-    return 'Долгая операция завершена: ${message.value}'.rpc;
+    return 'The long operation finished: ${message.value}'.rpc;
   }
 }
 
 //
-// КЛИЕНТСКИЙ КОНТРАКТ
+// THE CLIENT CONTRACT
 //
 final class MultiServiceCaller extends RpcCallerContract
     implements IMultiServiceContract {

@@ -9,17 +9,16 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
 
 // ============================================================================
-// 📋 КОНТРАКТЫ СЕРВИСОВ
+// THE SERVICE CONTRACTS
 // ============================================================================
 
-/// Пример интеграции isolate транспорта с RPC контрактами
+/// The isolate transport behind typed RPC contracts.
 ///
-/// Демонстрирует:
-/// - Типобезопасные RPC контракты с isolate транспортом
-/// - Преимущества isolate транспорта для CPU-intensive операций
-/// - Полноценную RPC архитектуру с Responder/Caller паттерном
-/// - Сравнение производительности с другими транспортами
-/// Контракт для вычислительного сервиса
+/// Shows:
+/// - type-safe RPC contracts over the isolate transport
+/// - why an isolate suits CPU-intensive work
+/// - a full responder/caller architecture
+/// Contract for the compute service.
 abstract interface class ICalculatorContract implements IRpcContract {
   static const name = 'Calculator';
   static const methodCompute = 'compute';
@@ -32,10 +31,10 @@ abstract interface class ICalculatorContract implements IRpcContract {
 }
 
 // ============================================================================
-// 📦 МОДЕЛИ ДАННЫХ
+// THE MODELS
 // ============================================================================
 
-/// Запрос на вычисления
+/// A compute request.
 class ComputeRequest {
   final String operationType;
   final List<double> numbers;
@@ -47,7 +46,7 @@ class ComputeRequest {
     this.parameters = const {},
   });
 
-  /// Генерирует большой запрос для тестирования производительности
+  /// Builds a large request, for measuring throughput.
   factory ComputeRequest.generateLarge(int numbersCount) {
     final random = Random();
     final numbers = List.generate(
@@ -68,7 +67,7 @@ class ComputeRequest {
   }
 }
 
-/// Ответ на вычисления
+/// A compute response.
 class ComputeResponse {
   final double result;
   final Map<String, dynamic> details;
@@ -83,7 +82,7 @@ class ComputeResponse {
   });
 }
 
-/// Запрос на пакетные вычисления
+/// A batch of compute requests.
 class BatchComputeRequest {
   final List<ComputeRequest> requests;
   final bool parallel;
@@ -91,7 +90,7 @@ class BatchComputeRequest {
   const BatchComputeRequest({required this.requests, this.parallel = true});
 }
 
-/// Ответ на пакетные вычисления
+/// The answer to a batch.
 class BatchComputeResponse {
   final List<ComputeResponse> results;
   final Duration totalProcessingTime;
@@ -104,7 +103,7 @@ class BatchComputeResponse {
   });
 }
 
-/// Ответ на потоковые вычисления
+/// One step of a streamed computation.
 class ComputeStepResponse {
   final String requestId;
   final double intermediateResult;
@@ -120,14 +119,14 @@ class ComputeStepResponse {
 }
 
 // ============================================================================
-// 🎯 РЕСПОНДЕР (Серверная сторона в изоляте)
+// THE RESPONDER (the server side, inside the isolate)
 // ============================================================================
 
-/// Респондер для вычислительного сервиса
+/// The compute service.
 final class CalculatorResponder extends RpcResponderContract
     implements ICalculatorContract {
   CalculatorResponder() : super(ICalculatorContract.name) {
-    // Настраиваем методы
+    // Wire up the methods.
     addUnaryMethod<ComputeRequest, ComputeResponse>(
       methodName: ICalculatorContract.methodCompute,
       handler: compute,
@@ -151,10 +150,11 @@ final class CalculatorResponder extends RpcResponderContract
   }) async {
     final stopwatch = Stopwatch()..start();
     print(
-      '🧮 [Calculator] Обработка ${request.operationType} с ${request.numbers.length} числами',
+      '[Calculator] ${request.operationType} over '
+      '${request.numbers.length} numbers',
     );
 
-    // CPU-intensive вычисления (идеально для изолята!)
+    // CPU-intensive work, which is what an isolate is for.
     double result = 0.0;
     final details = <String, dynamic>{};
 
@@ -184,7 +184,7 @@ final class CalculatorResponder extends RpcResponderContract
         details['mean'] = mean;
         break;
       case 'complexAnalysis':
-        // Симулируем сложные вычисления
+        // Stand in for a genuinely heavy computation.
         final iterations = request.parameters['iterations'] as int? ?? 1000;
         double tempResult = 0.0;
         for (int i = 0; i < iterations; i++) {
@@ -203,9 +203,7 @@ final class CalculatorResponder extends RpcResponderContract
     }
 
     stopwatch.stop();
-    print(
-      '✅ [Calculator] Обработка завершена за ${stopwatch.elapsedMilliseconds}мс',
-    );
+    print('[Calculator] done in ${stopwatch.elapsedMilliseconds}ms');
 
     return ComputeResponse(
       result: result,
@@ -221,22 +219,20 @@ final class CalculatorResponder extends RpcResponderContract
     RpcContext? context,
   }) async {
     final stopwatch = Stopwatch()..start();
-    print(
-      '📊 [Calculator] Пакетная обработка ${request.requests.length} запросов',
-    );
+    print('[Calculator] batch of ${request.requests.length} requests');
 
     final results = <ComputeResponse>[];
     int successCount = 0;
 
     if (request.parallel) {
-      // Параллельная обработка (демонстрация возможностей изолята)
+      // In parallel, which is what the isolate buys.
       final futures = request.requests.map((req) async {
         try {
           final result = await compute(req);
           if (result.success) successCount++;
           return result;
         } catch (e) {
-          print('❌ Ошибка обработки запроса: $e');
+          print('request failed: $e');
           return ComputeResponse(
             result: 0.0,
             details: {'error': e.toString()},
@@ -248,14 +244,14 @@ final class CalculatorResponder extends RpcResponderContract
 
       results.addAll(await Future.wait(futures));
     } else {
-      // Последовательная обработка
+      // One after another.
       for (final req in request.requests) {
         try {
           final result = await compute(req);
           results.add(result);
           if (result.success) successCount++;
         } catch (e) {
-          print('❌ Ошибка обработки запроса: $e');
+          print('request failed: $e');
           results.add(
             ComputeResponse(
               result: 0.0,
@@ -269,9 +265,7 @@ final class CalculatorResponder extends RpcResponderContract
     }
 
     stopwatch.stop();
-    print(
-      '✅ [Calculator] Пакетная обработка завершена за ${stopwatch.elapsedMilliseconds}мс',
-    );
+    print('[Calculator] batch done in ${stopwatch.elapsedMilliseconds}ms');
 
     return BatchComputeResponse(
       results: results,
@@ -288,14 +282,14 @@ final class CalculatorResponder extends RpcResponderContract
     await for (final request in requests) {
       final requestId = 'req_${DateTime.now().millisecondsSinceEpoch}';
 
-      // Симулируем поэтапную обработку
+      // Report progress step by step.
       final steps = ['parsing', 'validation', 'computation', 'optimization'];
       double currentResult = 0.0;
 
       for (int i = 0; i < steps.length; i++) {
         await Future<void>.delayed(Duration(milliseconds: 50));
 
-        // Промежуточные вычисления
+        // The intermediate values.
         switch (steps[i]) {
           case 'parsing':
             currentResult = request.numbers.length.toDouble();
@@ -313,7 +307,7 @@ final class CalculatorResponder extends RpcResponderContract
                       request.numbers.length;
             break;
           case 'optimization':
-            currentResult = currentResult * 1.1; // "оптимизированный" результат
+            currentResult = currentResult * 1.1; // The "optimised" result.
             break;
         }
 
@@ -331,10 +325,10 @@ final class CalculatorResponder extends RpcResponderContract
 }
 
 // ============================================================================
-// 🚀 КАЛЕР (Клиентская сторона)
+// THE CALLER (the client side)
 // ============================================================================
 
-/// Калер для вычислительного сервиса
+/// The client for the compute service.
 final class CalculatorCaller extends RpcCallerContract
     implements ICalculatorContract {
   CalculatorCaller(RpcCallerEndpoint endpoint)
@@ -366,14 +360,14 @@ final class CalculatorCaller extends RpcCallerContract
 }
 
 // ============================================================================
-// 🎯 MAIN DEMO
+// THE DEMONSTRATION
 // ============================================================================
 
 Future<void> main() async {
-  print('🚀 RPC Dart + Isolate Transport Demo');
+  print('rpc_dart over the isolate transport');
   print('=' * 50);
 
-  // Создаем isolate транспорт
+  // Spawn the isolate transport.
   final isolateResult = await RpcIsolateTransport.spawn(
     entrypoint: isolateServerEntrypoint,
     customParams: {},
@@ -381,16 +375,16 @@ Future<void> main() async {
     debugName: 'Calculator Demo Server',
   );
 
-  // Настраиваем клиента
+  // Wire up the client.
   final callerEndpoint = RpcCallerEndpoint(transport: isolateResult.transport);
   final calculator = CalculatorCaller(callerEndpoint);
 
   try {
     // ================================================================
-    // 🧮 ПРОСТЫЕ ВЫЧИСЛЕНИЯ
+    // A simple computation
     // ================================================================
 
-    print('\n🧮 === ПРОСТЫЕ ВЫЧИСЛЕНИЯ ===');
+    print('\n=== A simple computation ===');
 
     final simpleRequest = ComputeRequest(
       operationType: 'mean',
@@ -399,40 +393,41 @@ Future<void> main() async {
 
     final simpleResponse = await calculator.compute(simpleRequest);
     if (simpleResponse.success) {
-      print('✅ Среднее значение: ${simpleResponse.result}');
-      print('   ⏱️ Время: ${simpleResponse.processingTime.inMilliseconds}мс');
+      print('mean: ${simpleResponse.result}');
+      print('   took ${simpleResponse.processingTime.inMilliseconds}ms');
     }
 
     // ================================================================
-    // ⚡ CPU-INTENSIVE ВЫЧИСЛЕНИЯ (Преимущество изолята!)
+    // CPU-intensive work, which is what the isolate is for
     // ================================================================
 
-    print('\n⚡ === CPU-INTENSIVE ВЫЧИСЛЕНИЯ ===');
+    print('\n=== CPU-intensive work ===');
 
-    final largeRequest = ComputeRequest.generateLarge(50000); // 50K чисел
-    print('📊 Создан запрос с ${largeRequest.numbers.length} числами');
+    final largeRequest = ComputeRequest.generateLarge(50000);
+    print('built a request with ${largeRequest.numbers.length} numbers');
 
     final processingStopwatch = Stopwatch()..start();
     final complexResponse = await calculator.compute(largeRequest);
     processingStopwatch.stop();
 
     if (complexResponse.success) {
-      print('✅ Сложные вычисления завершены!');
-      print('   📊 Обработано чисел: ${largeRequest.numbers.length}');
-      print('   🧮 Результат: ${complexResponse.result.toStringAsFixed(4)}');
+      print('finished');
+      print('   numbers: ${largeRequest.numbers.length}');
+      print('   result: ${complexResponse.result.toStringAsFixed(4)}');
       print(
-        '   ⏱️ Время клиент-сервер: ${processingStopwatch.elapsedMilliseconds}мс',
+        '   client-to-server: ${processingStopwatch.elapsedMilliseconds}ms',
       );
       print(
-        '   ⚙️ Время в изоляте: ${complexResponse.processingTime.inMilliseconds}мс',
+        '   inside the isolate: '
+        '${complexResponse.processingTime.inMilliseconds}ms',
       );
     }
 
     // ================================================================
-    // 📦 ПАКЕТНАЯ ОБРАБОТКА
+    // A batch
     // ================================================================
 
-    print('\n📦 === ПАКЕТНАЯ ОБРАБОТКА ===');
+    print('\n=== A batch ===');
 
     final batchRequests = [
       ComputeRequest(
@@ -452,27 +447,26 @@ Future<void> main() async {
     );
     final batchResponse = await calculator.batchCompute(batchRequest);
 
-    print('✅ Пакетная обработка завершена!');
-    print('   📊 Обработано запросов: ${batchResponse.results.length}');
-    print('   ✅ Успешных: ${batchResponse.successCount}');
-    print(
-      '   ⏱️ Общее время: ${batchResponse.totalProcessingTime.inMilliseconds}мс',
-    );
+    print('batch finished');
+    print('   requests: ${batchResponse.results.length}');
+    print('   succeeded: ${batchResponse.successCount}');
+    print('   total: ${batchResponse.totalProcessingTime.inMilliseconds}ms');
 
     for (int i = 0; i < batchResponse.results.length; i++) {
       final result = batchResponse.results[i];
       print(
-        '      ${i + 1}. ${result.details['operation']}: ${result.result.toStringAsFixed(4)}',
+        '      ${i + 1}. ${result.details['operation']}: '
+        '${result.result.toStringAsFixed(4)}',
       );
     }
 
     // ================================================================
-    // 🌊 BIDIRECTIONAL STREAMING (работает в isolate транспорте!)
+    // Bidirectional streaming
     // ================================================================
 
-    print('\n🌊 === BIDIRECTIONAL STREAMING ===');
+    print('\n=== Bidirectional streaming ===');
 
-    // Создаем асинхронный стрим с задержками для корректной работы
+    // Paced, so each request is handed over cleanly.
     final streamingRequests =
         Stream.fromIterable([
           ComputeRequest(operationType: 'mean', numbers: [10.0, 20.0, 30.0]),
@@ -482,59 +476,59 @@ Future<void> main() async {
             numbers: [5.0, 15.0, 25.0, 35.0],
           ),
         ]).asyncMap((request) async {
-          // Небольшая задержка между запросами для корректной передачи
+          // A small gap between requests.
           await Future<void>.delayed(Duration(milliseconds: 100));
           return request;
         });
 
-    print('📊 Потоковая обработка нескольких запросов...');
+    print('streaming several requests');
     await for (final step in calculator.streamCompute(streamingRequests)) {
-      final status = step.isComplete ? '✅' : '🔄';
+      final status = step.isComplete ? 'done' : 'step';
       print(
-        '   $status ${step.step}: ${step.intermediateResult.toStringAsFixed(2)}',
+        '   $status ${step.step}: '
+        '${step.intermediateResult.toStringAsFixed(2)}',
       );
     }
 
-    print('\n🏁 Потоковая обработка завершена!');
+    print('\nstreaming finished');
 
     // ================================================================
-    // 🎯 ПРЕИМУЩЕСТВА ISOLATE ТРАНСПОРТА
+    // What the isolate transport buys
     // ================================================================
 
-    print('\n🎯 === ПРЕИМУЩЕСТВА ISOLATE ТРАНСПОРТА ===');
-    print('✅ CPU-intensive операции не блокируют UI');
-    print('✅ Истинный параллелизм на многоядерных системах');
-    print('✅ Изоляция ошибок - краш изолята не влияет на главный поток');
-    print('✅ Эффективная передача больших объектов');
-    print('✅ Типобезопасные RPC контракты между изолятами');
-    print('✅ Простое тестирование и отладка');
+    print('\n=== What the isolate transport buys ===');
+    print('- CPU-intensive work does not block the UI');
+    print('- real parallelism on a multi-core machine');
+    print('- a crash in the isolate does not take the main thread with it');
+    print('- large objects cross the boundary efficiently');
+    print('- type-safe RPC contracts between isolates');
   } catch (e, stackTrace) {
-    print('❌ Ошибка: $e');
-    print('📍 Stack trace: $stackTrace');
+    print('error: $e');
+    print('stack trace: $stackTrace');
   } finally {
-    // Закрываем ресурсы
+    // Release everything.
     await callerEndpoint.close();
     isolateResult.kill();
-    print('\n🏁 Demo завершено');
+    print('\nDemo finished');
   }
 }
 
-/// Entry point для сервера в изоляте
+/// The server entrypoint, running inside the isolate.
 @pragma('vm:entry-point')
 void isolateServerEntrypoint(
   IRpcTransport transport,
   Map<String, dynamic> params,
 ) {
-  print('🖥️ [Isolate Server] Запущен Calculator RPC сервер');
+  print('[Isolate Server] Calculator RPC server starting');
 
-  // Настраиваем RPC endpoint в изоляте
+  // The RPC endpoint inside the isolate.
   final responderEndpoint = RpcResponderEndpoint(transport: transport);
 
-  // Регистрируем вычислительный сервис
+  // Register the compute service.
   responderEndpoint.registerServiceContract(CalculatorResponder());
 
-  // Запускаем сервер
+  // Start serving.
   responderEndpoint.start();
 
-  print('✅ [Isolate Server] Calculator сервис готов к работе');
+  print('[Isolate Server] Calculator service ready');
 }

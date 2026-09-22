@@ -7,18 +7,15 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 
-/// Мощная демонстрация всех типов RPC с настоящим HTTP/2 транспортом! 🚀
+/// Every RPC shape over a real HTTP/2 transport.
 Future<void> main() async {
-  // Настраиваем красивое логирование для отладки
   // logging configured via LogController
 
-  print('🚀 === ДЕМОНСТРАЦИЯ ВСЕХ ТИПОВ RPC С HTTP/2 ТРАНСПОРТОМ === 🚀\n');
-  print(
-    '📱 Покажем Unary, Server Streaming, Client Streaming и Bidirectional!\n',
-  );
+  print('=== Every RPC shape over HTTP/2 ===\n');
+  print('Unary, server streaming, client streaming and bidirectional.\n');
 
-  // Запускаем HTTP/2 сервер с настоящим RPC обработчиком
-  print('📡 Запуск HTTP/2 сервера с RPC обработчиком...');
+  // Start an HTTP/2 server with a real RPC handler.
+  print('Starting the HTTP/2 server');
   final serverPort = 8765;
   final rpcServer = RpcHttp2Server.createWithContracts(
     port: serverPort,
@@ -28,11 +25,11 @@ Future<void> main() async {
   await rpcServer.start();
 
   try {
-    // Даем серверу время на запуск
+    // Give the server a moment to come up.
     await Future<void>.delayed(Duration(milliseconds: 500));
 
-    // Создаем HTTP/2 клиента
-    print('🔌 Подключение HTTP/2 клиента...');
+    // Connect the HTTP/2 client.
+    print('Connecting the HTTP/2 client');
     final transport = await RpcHttp2CallerTransport.connect(
       host: 'localhost',
       port: serverPort,
@@ -40,42 +37,41 @@ Future<void> main() async {
     );
 
     try {
-      // Создаем клиентский endpoint
+      // The caller endpoint.
       final callerEndpoint = RpcCallerEndpoint(
         transport: transport,
         debugLabel: 'HttpClientEndpoint',
       );
 
-      print('\n🎯 === ДЕМОНСТРАЦИЯ ВСЕХ ТИПОВ RPC === 🎯\n');
+      print('\n=== The four shapes ===\n');
 
-      // 1. Unary RPC - один запрос, один ответ
+      // 1. Unary: one request, one response.
       await _demonstrateUnaryRpc(callerEndpoint);
 
-      // 2. Server Streaming RPC - один запрос, множество ответов
+      // 2. Server streaming: one request, many responses.
       await _demonstrateServerStreamingRpc(callerEndpoint);
 
-      // 3. Client Streaming RPC - множество запросов, один ответ
+      // 3. Client streaming: many requests, one response.
       await _demonstrateClientStreamingRpc(callerEndpoint);
 
-      // 4. Bidirectional Streaming RPC - множество запросов, множество ответов
+      // 4. Bidirectional: many requests, many responses.
       await _demonstrateBidirectionalRpc(callerEndpoint);
 
-      print('\n🎉 === ВСЕ ТИПЫ RPC РАБОТАЮТ ОТЛИЧНО! === 🎉');
-      print('🔥 HTTP/2 транспорт показал себя на все 100%!');
+      print('\n=== All four shapes completed ===');
     } finally {
       await transport.close();
-      print('\n🔌 HTTP/2 клиент закрыт');
+      print('\nHTTP/2 client closed');
     }
   } finally {
     await rpcServer.stop();
-    print('📡 HTTP/2 сервер остановлен');
+    print('HTTP/2 server stopped');
   }
 }
 
-/// 1. Демонстрация Unary RPC (один запрос -> один ответ)
+/// 1. Unary: one request, one response.
 Future<void> _demonstrateUnaryRpc(RpcCallerEndpoint endpoint) async {
-  print('🎯 1. UNARY RPC - Echo сервис');
-  print('   Отправляем: "Hello, HTTP/2 Unary World!"');
+  print('1. UNARY - the echo service');
+  print('   sending: "Hello, HTTP/2 Unary World!"');
 
   try {
     final response = await endpoint.unaryRequest<RpcString, RpcString>(
@@ -86,17 +82,17 @@ Future<void> _demonstrateUnaryRpc(RpcCallerEndpoint endpoint) async {
       request: RpcString('Hello, HTTP/2 Unary World!'),
     );
 
-    print('   ✅ Получили: "${response.value}"');
+    print('   received: "${response.value}"');
   } catch (e) {
-    print('   ❌ Ошибка: $e');
+    print('   error: $e');
   }
   print('');
 }
 
-/// 2. Демонстрация Server Streaming RPC (один запрос -> поток ответов)
+/// 2. Server streaming: one request, a stream of responses.
 Future<void> _demonstrateServerStreamingRpc(RpcCallerEndpoint endpoint) async {
-  print('🎯 2. SERVER STREAMING RPC - поток данных от сервера');
-  print('   Запрашиваем: поток из 5 сообщений');
+  print('2. SERVER STREAMING - a stream of data from the server');
+  print('   asking for: a stream of 5 messages');
 
   try {
     final responseStream = endpoint.serverStream<RpcString, RpcString>(
@@ -104,38 +100,39 @@ Future<void> _demonstrateServerStreamingRpc(RpcCallerEndpoint endpoint) async {
       methodName: 'GetStream',
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      request: RpcString('Дайте мне HTTP/2 поток!'),
+      request: RpcString('Send me an HTTP/2 stream'),
     );
 
     int count = 0;
     await for (final response in responseStream) {
       count++;
-      print('   📨 Сообщение $count: "${response.value}"');
+      print('   message $count: "${response.value}"');
     }
-    print('   ✅ Получили $count сообщений от HTTP/2 сервера');
+    print('   received $count messages from the HTTP/2 server');
   } catch (e) {
-    print('   ❌ Ошибка: $e');
+    print('   error: $e');
   }
   print('');
 }
 
-/// 3. Демонстрация Client Streaming RPC (поток запросов -> один ответ)
+/// 3. Client streaming: a stream of requests, one response.
 Future<void> _demonstrateClientStreamingRpc(RpcCallerEndpoint endpoint) async {
-  print('🎯 3. CLIENT STREAMING RPC - отправляем поток HTTP/2 серверу');
-  print('   Отправляем: 4 сообщения серверу');
+  print('3. CLIENT STREAMING - sending a stream to the HTTP/2 server');
+  print('   sending: 4 messages');
 
   try {
     final messages = [
-      RpcString('HTTP/2 сообщение #1'),
-      RpcString('HTTP/2 сообщение #2'),
-      RpcString('HTTP/2 сообщение #3'),
-      RpcString('HTTP/2 сообщение #4'),
+      RpcString('HTTP/2 message #1'),
+      RpcString('HTTP/2 message #2'),
+      RpcString('HTTP/2 message #3'),
+      RpcString('HTTP/2 message #4'),
     ];
 
-    // Создаем Stream заново каждый раз, чтобы избежать "already listened to"
+    // A fresh Stream each time, or the second listen throws
+    // "already listened to".
     Stream<RpcString> createRequestStream() {
       return Stream.fromIterable(messages).asyncMap((msg) async {
-        print('   📤 Отправляем: "${msg.value}"');
+        print('   sending: "${msg.value}"');
         await Future<void>.delayed(Duration(milliseconds: 200));
         return msg;
       });
@@ -149,28 +146,28 @@ Future<void> _demonstrateClientStreamingRpc(RpcCallerEndpoint endpoint) async {
     );
 
     final response = await getResponse(createRequestStream());
-    print('   ✅ Итоговый ответ: "${response.value}"');
+    print('   final response: "${response.value}"');
   } catch (e) {
-    print('   ❌ Ошибка: $e');
+    print('   error: $e');
   }
   print('');
 }
 
-/// 4. Демонстрация Bidirectional Streaming RPC (поток запросов <-> поток ответов)
+/// 4. Bidirectional: a stream each way.
 Future<void> _demonstrateBidirectionalRpc(RpcCallerEndpoint endpoint) async {
-  print('🎯 4. BIDIRECTIONAL STREAMING RPC - HTTP/2 чат в реальном времени');
-  print('   Устанавливаем двустороннюю HTTP/2 связь');
+  print('4. BIDIRECTIONAL STREAMING - a live HTTP/2 chat');
+  print('   opening the two-way stream');
 
   try {
     final messages = [
-      RpcString('Привет, HTTP/2 сервер!'),
-      RpcString('Как дела с мультиплексированием?'),
-      RpcString('HTTP/2 рулит!'),
+      RpcString('Hello, HTTP/2 server!'),
+      RpcString('How is the multiplexing?'),
+      RpcString('HTTP/2 works well'),
     ];
 
     final requestStream = Stream.fromIterable(messages).asyncMap((msg) async {
       await Future<void>.delayed(Duration(milliseconds: 300));
-      print('   📤 Отправляем: "${msg.value}"');
+      print('   sending: "${msg.value}"');
       return msg;
     });
 
@@ -185,96 +182,95 @@ Future<void> _demonstrateBidirectionalRpc(RpcCallerEndpoint endpoint) async {
     int count = 0;
     await for (final response in responseStream) {
       count++;
-      print('   📨 Ответ $count: "${response.value}"');
+      print('   response $count: "${response.value}"');
     }
-    print('   ✅ HTTP/2 чат завершен! Обменялись $count сообщениями');
+    print('   the chat is over; $count messages exchanged');
   } catch (e) {
-    print('   ❌ Ошибка: $e');
+    print('   error: $e');
   }
   print('');
 }
 
-// Старый _Http2RpcServer удален - теперь используем RpcHttp2Server!
-
-/// Контракт демонстрационного RPC сервиса для HTTP/2
+/// The demonstration service contract.
 final class _DemoServiceContract extends RpcResponderContract {
   _DemoServiceContract() : super('DemoService');
 
   @override
   void setup() {
-    // 1. Unary RPC - Echo метод
+    // 1. Unary: echo.
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Echo',
       handler: (request, {context}) async {
         final message = request.value;
-        print('🔄 HTTP/2 Echo: получен "$message"');
+        print('HTTP/2 Echo: received "$message"');
         return RpcString('HTTP/2 Echo: $message');
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Возвращает то же сообщение с HTTP/2 префиксом Echo',
+      description: 'Returns the same message behind an Echo prefix',
     );
 
-    // 2. Server Streaming RPC - поток данных
+    // 2. Server streaming.
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'GetStream',
       handler: (request, {context}) async* {
         final message = request.value;
-        print('🔄 HTTP/2 GetStream: запрос "$message"');
+        print('HTTP/2 GetStream: request "$message"');
 
         for (int i = 1; i <= 5; i++) {
           await Future<void>.delayed(Duration(milliseconds: 200));
-          yield RpcString('HTTP/2 поток #$i из 5: ответ на "$message"');
+          yield RpcString('HTTP/2 stream #$i of 5: answering "$message"');
         }
-        print('🔄 HTTP/2 GetStream: завершен');
+        print('HTTP/2 GetStream: finished');
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Отправляет поток из 5 HTTP/2 сообщений',
+      description: 'Sends a stream of 5 messages',
     );
 
-    // 3. Client Streaming RPC - накопление сообщений
+    // 3. Client streaming: accumulate.
     addClientStreamMethod<RpcString, RpcString>(
       methodName: 'AccumulateMessages',
       handler: (requestStream, {context}) async {
-        print('🔄 HTTP/2 AccumulateMessages: начат');
+        print('HTTP/2 AccumulateMessages: started');
 
         final messages = <String>[];
         await for (final request in requestStream) {
           messages.add(request.value);
-          print('🔄 HTTP/2 AccumulateMessages: получено "${request.value}"');
+          print('HTTP/2 AccumulateMessages: received "${request.value}"');
         }
 
         final result =
-            'HTTP/2 накоплено ${messages.length} сообщений: ${messages.join(", ")}';
-        print('🔄 HTTP/2 AccumulateMessages: завершен с результатом');
+            'HTTP/2 accumulated ${messages.length} messages: '
+            '${messages.join(", ")}';
+        print('HTTP/2 AccumulateMessages: finished');
         return RpcString(result);
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Накапливает все HTTP/2 сообщения и возвращает сводку',
+      description: 'Accumulates every message and returns a summary',
     );
 
-    // 4. Bidirectional Streaming RPC - чат
+    // 4. Bidirectional: chat.
     addBidirectionalMethod<RpcString, RpcString>(
       methodName: 'Chat',
       handler: (requestStream, {context}) async* {
-        print('🔄 HTTP/2 Chat: начат');
+        print('HTTP/2 Chat: started');
 
         await for (final request in requestStream) {
           final message = request.value;
-          print('🔄 HTTP/2 Chat: получено "$message"');
+          print('HTTP/2 Chat: received "$message"');
 
-          // Отвечаем с небольшой задержкой для реалистичности
+          // A small pause, so the exchange reads realistically.
           await Future<void>.delayed(Duration(milliseconds: 100));
-          yield RpcString('HTTP/2 сервер отвечает на: $message');
+          yield RpcString('HTTP/2 server answering: $message');
         }
 
-        print('🔄 HTTP/2 Chat: завершен');
+        print('HTTP/2 Chat: finished');
       },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Интерактивный HTTP/2 чат с эхо-ответами',
+      description: 'An interactive chat that echoes every message',
     );
   }
 }
