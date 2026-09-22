@@ -47,3 +47,24 @@ call that receives an answer still returns in 0.4 s.
 That asymmetry IS the finding this bench exists to hold: **the answer path is
 independent of the send path.** A parked sender cannot delay an answer, which is
 why the RPC-09 shape does not arise here.
+
+## Round 434 re-ran both columns; still valid
+
+All eight cells hold, 113 rounds on, with the mechanism moved from
+`channel_transport.dart` into `RpcFlowController`
+(`src/rpc/transports/flow_controller.dart`, where `_fcOnGrant` is now
+`_onGrant`). The CASE row reads 19/18 pulled where 221 recorded 17/16 — that is
+the overdraft, which this record already describes as "one window plus the
+overdraft" rather than a fixed number.
+
+> **The ablation still starving the sender was not a given.** Round 434 counted
+> FIVE wake paths where the lens said four, including a connection-level grant
+> nobody had listed. Refusing only `_onGrant` could therefore have left the
+> sender woken by the connection path — and the control column would have
+> stopped hanging, making this bench `broken` rather than `valid`. It hangs:
+> the sender parks on per-STREAM credit, and connection credit alone does not
+> admit a message.
+>
+> When a bench's ablation targets one of several paths to the same effect,
+> re-running it is not a formality: the other paths are what decide whether it
+> still sees anything.

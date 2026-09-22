@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322]
-status: swept here (round 322, 9bb632e0)
+applied: [210, 221, 244, 322, 434]
+status: swept here (round 434, 7ee3e602)
 ---
 
 # RPC-09 — A call deadline that sits below the write
@@ -86,3 +86,46 @@ than silent, so it cannot produce `a hang that never ends`.
 > wake 206 added, 211 measured at 30 stranded senders against 0, and 210 ablated.
 > A sweep that reports the previous sweep's number carries an undercount forward
 > for as long as it is repeated.
+
+## Round 434 — it is FIVE, and the code moved
+
+```
+             round 244   round 322   round 434
+wake paths       3           4           5
+```
+
+Recounted from the code, as the paragraph above demands. Every `_wake` /
+`wakeAll` call site in `flow_controller.dart`:
+
+```
+:291  the legacy grace timer expiring          counted since 244
+:378  _onGrant           per-STREAM credit     counted since 244
+:537  handleInbound      CONNECTION credit     NEVER COUNTED
+:593  forget             the call ending       added by 322
+:606  close                                    counted since 244
+```
+
+`:537` is not a second view of `:378`. Connection credit is shared and
+per-stream credit is not; they arrive on different headers and neither implies
+the other. It has existed since connection-level flow control did, and three
+sweeps walked past it.
+
+> **The warning above was right and still not sufficient: recounting catches an
+> undercount only if the recount is EXHAUSTIVE.** 322 recounted and found the
+> fourth by looking where the previous round had looked. The fifth needed
+> enumerating every call site of the wake, mechanically, and asking what method
+> each sits in — which is a grep, not a reading.
+
+**And the mechanism MOVED.** A grep for this lens's own names — `_fcAwaitCredit`,
+`_fcOnGrant`, `_fcForget` — now returns http2 only. Core's parking left
+`channel_transport.dart` for a dedicated `RpcFlowController`
+(`src/rpc/transports/flow_controller.dart`), where they are `awaitCredit`,
+`_onGrant` and `forget`. A detector written against the old names reads as a
+clean sweep of a file that no longer holds the mechanism.
+
+All eight of P-10's cells reproduce, and its ablation still starves the sender —
+which was not a given once a second wake path was known to exist. The sender
+parks on per-stream credit, and connection credit alone does not admit a
+message, so refusing `_onGrant` still hangs the draining call at 20 s.
+
+`../rounds/434-the-fifth-wake-nobody-counted.md`.

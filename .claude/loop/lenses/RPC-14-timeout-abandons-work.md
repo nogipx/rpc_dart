@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323]
-status: swept here (round 323, 34f0b039)
+applied: [223, 233, 246, 273, 323, 433]
+status: swept here (round 433, 7ee3e602)
 ---
 
 # RPC-14 — A timeout abandons the wait, not the work
@@ -160,3 +160,34 @@ attempt; `call_scope.dart:222` abandons a USER disposer by design and logs it)
 and 5 wait on data. `base_endpoint.dart:203` is the near-miss — a timeout around
 `close()`, which produces no handle, and dart:async drops a post-timeout error
 instead of raising it.
+
+## Round 433 re-swept it, 110 rounds and 57 changed files later
+
+```
+                         round 323   round 433
+rpc_dart/lib                 7           7
+rpc_dart_isolate/lib         4           4
+```
+
+Same eleven sites and the same disposition; every line number has moved, two of
+them in the same session that re-swept (`client_connection.dart:514 -> :609`,
+`isolate_transport_web.dart:316 -> :124`).
+
+> **A lens that records its COUNT can be re-swept for the price of one grep.**
+> That is what made this the cheapest round available and why the instruction to
+> record it, written in 323, paid for itself. A lens that records only a verdict
+> gives the next sweep nothing to compare against and has to be re-derived.
+
+The one site worth re-reading rather than re-counting was
+`client_connection`'s: round 430 put a `TypeError` catch inside that timeout
+region, and this lens's whole subject is what the abandoned future does.
+`_discardAbandonedAttempt` ends in `.catchError((Object _) {})`, so the downcast
+430 made possible is caught there rather than reaching the root zone.
+
+The control, repeated from 323 because the code has moved: skipping
+`teardownStartup()` on the ready path fails
+`startup_failure_releases_the_isolate_test` at 20 s with the child *still
+running*. Ten of the eleven sites remain unwitnessed, which is what
+`## What the sweep does NOT establish` says and still says.
+
+`../rounds/433-the-count-that-did-not-move.md`.
