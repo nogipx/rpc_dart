@@ -68,12 +68,12 @@ points — `RpcWebSocketCallerTransport.connect()` and the server's accept path.
 user-supplied `WebSocketChannel` was built in the user's zone and cannot be
 reached retroactively.
 
-## Owner decision
+## The three options, as they stood
 
 A `runZonedGuarded` around construction captures EVERY async error from that
 channel's internals, not only send failures — so errors that currently surface
 to the application would start being swallowed or rerouted. That is the same
-objection B-35 records for `package:http2`, and the same decision:
+objection B-35 records for `package:http2`:
 
 1. leave it, and document that an application closing the raw socket it handed
    us can crash the isolate;
@@ -97,13 +97,22 @@ holding the raw `WebSocket` it passed to `RpcWebSocketChannel` and closing that
 directly while a response is in flight — which is how round 353's fixture hit it
 by accident.
 
-## Owner decision — taken jointly with B-35
+## Owner decision
+
+Taken in round 415, reaffirmed after round 426 and **no longer joint**.
 
 **Zone-guard the construction, at the library's own entry points, and ROUTE what
 the zone catches rather than letting it swallow.**
 
-Applies here and in B-35 identically; the two were decided together because the
-mechanism is one mechanism.
+Unchanged in substance. What changed is the scope: **B-35 was withdrawn from the
+guard and left as-is**, so this decision now covers this lead alone.
+
+The two came apart on REACHABILITY, which is the one thing that was never the
+same. Here an application holding the raw `WebSocket` it passed us and closing it
+while a response is in flight reaches the throw — round 353's fixture hit it by
+accident. In B-35 nothing in the library reaches the equivalent state, measured
+with the budget forced to 1 ms and to zero. Same mechanism, same trade, different
+answer, because a trade is only worth paying against a path that exists.
 
 ### Where
 

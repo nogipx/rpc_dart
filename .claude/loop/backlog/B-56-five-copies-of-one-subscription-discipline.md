@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 426)
 round: 391
 commit: e60dfdbf
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
@@ -303,6 +303,23 @@ measurement.**
 
 The TRANSPORT half this lead excluded (17 awaited-cancel sites) is still
 untouched and still excluded.
+
+## CLOSED — the owner accepted the decline (after round 426)
+
+**The decline of sites 1 and 3 stands.** Asked directly, with the alternatives
+on the table — convert site 3 alone, or overrule and force all ten through
+helpers — and the answer was to accept it.
+
+So this lead is finished at eight of ten, and the two that stay out are a
+decision rather than a remainder. What that costs, stated so nobody re-opens it
+as an oversight: a future clause in this discipline has to be written in three
+places, not one. What it bought: both conversions stayed clean because the
+helper never needed a flag, and each half's re-derivation found a real defect —
+two bridges handing the consumer a cancel that never completes (425), and
+`responseSink` draining its handler after the call was over (426).
+
+Anything further in this discipline is a NEW lead with its own measurement, not
+a continuation of this one.
 
 **`RpcCallScope.listen` (site 8)** is not a bridge and needs no conversion: raw
 subscription plus a disposer, no controller between.

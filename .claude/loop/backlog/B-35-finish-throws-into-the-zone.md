@@ -59,10 +59,9 @@ Do NOT "fix" it at the call site. Two attempts measured, both ineffective: a
 synchronous throw) and `.catchError` on `terminate()` (terminate is not the
 source).
 
-## Owner decision
+## The three options, as they stood
 
-**Not yet taken, and one is needed before anything is built.** The choice is
-between three, and none is a repair:
+None of them is a repair:
 
 1. leave it — nothing in this library reaches the state, measured;
 2. run the connection in `runZonedGuarded`, which contains it and also changes
@@ -72,14 +71,14 @@ between three, and none is a repair:
 Round 347 recommends (1) plus the characterisation test that is already in, and
 (3) if the owner wants it off the list permanently.
 
-## Owner decision — taken jointly with B-39
+## Superseded decision (round 415) — taken jointly with B-39
 
 **Zone-guard the connection's construction, and ROUTE what the zone catches.**
 The full statement of it lives in
-[B-39](B-39-websocket-send-throws-into-the-root-zone.md#owner-decision--taken-jointly-with-b-35);
-the two were decided together because it is one mechanism and one trade.
+[B-39](B-39-websocket-send-throws-into-the-root-zone.md); the two were decided
+together because it is one mechanism and one trade.
 
-Here it means guarding where `RpcHttp2CallerTransport` builds its
+Here it meant guarding where `RpcHttp2CallerTransport` builds its
 `ClientTransportConnection`, so a `finish()` that throws AFTER its own future
 completed lands somewhere that can report it instead of in the root zone.
 
@@ -99,3 +98,31 @@ already is: the thing that closes this lead the day the dependency stops.
 `packages/transport/rpc_dart_http2/test/finish_throws_into_the_zone_test.dart` —
 asserts the dependency still behaves this way, so the day it stops, this lead
 closes.
+
+## Owner decision
+
+Taken after round 426, and it SUPERSEDES the joint one above.
+
+**Leave it. Report upstream to `package:http2`. No behaviour change here.**
+
+The joint decision above is withdrawn **for this lead only** — B-39 keeps its
+construction guard unchanged, so the two are no longer one decision. Asked
+directly with three options on the table, and the reasoning that decided it is
+the qualifier the joint decision itself wrote down: nothing in this library
+reaches the state. Measured over connect / call / close / close-again inside
+`runZonedGuarded`, with the finish budget forced to 1 ms and to zero, nothing
+escapes.
+
+So the round that would have carried the guard was, by its own admission, fixing
+a reachable-in-principle throw with no reproduced failure — and paying for it
+with the trade the guard costs: every async error from that connection rerouted,
+not only this one.
+
+**What stays:** the characterisation test below, which is what closes this lead
+the day the dependency stops throwing. **What a future round may do:** file the
+upstream issue; that is the only work this lead now has.
+
+**Do not re-derive the guard as new.** It was proposed, decided, and withdrawn
+with a reason. A round that finds a REACHABLE path from this library to the
+throw has a new fact and should re-open the question with it — that, and nothing
+less, is what would change this.
