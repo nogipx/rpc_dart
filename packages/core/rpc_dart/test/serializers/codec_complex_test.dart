@@ -6,7 +6,7 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-// Тестовый класс для представления адреса
+// A test model: an address.
 class Address implements IRpcSerializable {
   final String street;
   final String city;
@@ -54,7 +54,7 @@ class Address implements IRpcSerializable {
       street.hashCode ^ city.hashCode ^ country.hashCode ^ zipCode.hashCode;
 }
 
-// Тестовый класс для представления контакта
+// A test model: contact details.
 class Contact implements IRpcSerializable {
   final String email;
   final String phone;
@@ -83,7 +83,7 @@ class Contact implements IRpcSerializable {
   int get hashCode => email.hashCode ^ phone.hashCode;
 }
 
-// Сложный класс с вложенными объектами
+// A composite model, with nested objects.
 class Person implements IRpcSerializable {
   final String name;
   final int age;
@@ -117,7 +117,7 @@ class Person implements IRpcSerializable {
   }
 
   factory Person.fromJson(Map<String, dynamic> json) {
-    // Обработка вложенных объектов
+    // The nested objects.
     final addressJson = json['address'] as Map<String, dynamic>;
     final contactJson = json['contact'] as Map<String, dynamic>;
     final alternativeAddressesJson =
@@ -165,7 +165,7 @@ class Person implements IRpcSerializable {
       alternativeAddresses.hashCode;
 }
 
-// Вспомогательные функции для сравнения списков и карт
+// Helpers for comparing lists and maps.
 bool listEquals<T>(List<T> a, List<T> b) {
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
@@ -183,15 +183,15 @@ bool mapEquals<K, V>(Map<K, V> a, Map<K, V> b) {
 }
 
 void main() {
-  group('RpcCodec с сложными объектами', () {
+  group('RpcCodec over composite objects', () {
     late RpcCodec<Person> codec;
 
     setUp(() {
       codec = RpcCodec<Person>(Person.fromJson);
     });
 
-    test('Сериализация и десериализация сложного объекта', () {
-      // Создаем сложный объект с вложенными объектами и коллекциями
+    test('a composite object survives a round trip', () {
+      // An object with nested objects and collections in it.
       final person = Person(
         name: 'John Doe',
         age: 30,
@@ -220,32 +220,32 @@ void main() {
         ]),
       );
 
-      // Сериализуем объект
+      // Encode it.
       final bytes = codec.serialize(person);
       expect(bytes, isA<Uint8List>());
       expect(bytes.isNotEmpty, isTrue);
 
-      // Десериализуем объект обратно
+      // Decode it back.
       final deserializedPerson = codec.deserialize(bytes);
 
-      // Проверяем, что объект корректно десериализован
+      // The top-level fields.
       expect(deserializedPerson, isA<Person>());
       expect(deserializedPerson.name, equals('John Doe'));
       expect(deserializedPerson.age, equals(30));
 
-      // Проверяем вложенный объект Address
+      // The nested Address.
       expect(deserializedPerson.address, isA<Address>());
       expect(deserializedPerson.address.street, equals('123 Main St'));
       expect(deserializedPerson.address.city, equals('New York'));
       expect(deserializedPerson.address.country, equals('USA'));
       expect(deserializedPerson.address.zipCode, equals(10001));
 
-      // Проверяем вложенный объект Contact
+      // The nested Contact.
       expect(deserializedPerson.contact, isA<Contact>());
       expect(deserializedPerson.contact.email, equals('john@example.com'));
       expect(deserializedPerson.contact.phone, equals('+1234567890'));
 
-      // Проверяем коллекции
+      // The collections.
       expect(
         deserializedPerson.hobbies,
         equals(['reading', 'hiking', 'coding']),
@@ -255,7 +255,7 @@ void main() {
         equals({'math': 95, 'science': 90, 'history': 85}),
       );
 
-      // Проверяем RpcList с вложенными объектами
+      // An RpcList holding nested objects.
       expect(deserializedPerson.alternativeAddresses, isA<RpcList<Address>>());
       expect(deserializedPerson.alternativeAddresses.length, equals(2));
       expect(deserializedPerson.alternativeAddresses[0].city, equals('Boston'));
@@ -264,12 +264,12 @@ void main() {
         equals('San Francisco'),
       );
 
-      // Проверяем полное равенство оригинального и десериализованного объектов
+      // And the whole object, compared at once.
       expect(deserializedPerson, equals(person));
     });
 
-    test('Сериализация и десериализация RpcList', () {
-      // Создаем список объектов Address
+    test('an RpcList survives a round trip', () {
+      // A list of Address objects.
       final addressList = RpcList<Address>.from([
         Address(
           street: '123 Main St',
@@ -285,26 +285,26 @@ void main() {
         ),
       ]);
 
-      // Создаем кодек для RpcList<Address>
+      // A codec for RpcList<Address>.
       final listCodec = RpcCodec<RpcList<Address>>(
         RpcList.fromJson<Address>(Address.fromJson),
       );
 
-      // Сериализуем список
+      // Encode the list.
       final bytes = listCodec.serialize(addressList);
       expect(bytes, isA<Uint8List>());
       expect(bytes.isNotEmpty, isTrue);
 
-      // Десериализуем список обратно
+      // Decode it back.
       final deserializedList = listCodec.deserialize(bytes);
 
-      // Проверяем, что список корректно десериализован
+      // The list came back intact.
       expect(deserializedList, isA<RpcList<Address>>());
       expect(deserializedList.length, equals(2));
       expect(deserializedList[0].city, equals('New York'));
       expect(deserializedList[1].city, equals('Boston'));
 
-      // Проверяем полное равенство оригинального и десериализованного списков
+      // And element by element.
       expect(
         listEquals(deserializedList.toList(), addressList.toList()),
         isTrue,

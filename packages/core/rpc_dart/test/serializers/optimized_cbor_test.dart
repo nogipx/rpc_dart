@@ -11,9 +11,9 @@ import 'package:test/test.dart';
 
 void main() {
   group('Optimized CBOR Codec Tests', () {
-    /// Генерирует случайные тестовые данные для нагрузочного тестирования
+    /// Builds random test data for the load tests.
     Map<String, dynamic> generateRandomData(int depth, int breadth) {
-      final random = Random(42); // Фиксированный seed для воспроизводимости
+      final random = Random(42); // A fixed seed, so runs reproduce.
       final result = <String, dynamic>{};
 
       for (int i = 0; i < breadth; i++) {
@@ -38,7 +38,7 @@ void main() {
                 random.nextInt(100) + 1,
                 (i) => 65 + random.nextInt(26),
               ),
-            ); // Случайная строка A-Z
+            ); // A random A-Z string.
             break;
           case 5:
             result[key] = List.generate(
@@ -90,13 +90,13 @@ void main() {
           'binary_data': Uint8List.fromList([0, 1, 255, 128, 64]),
         };
 
-        // Кодируем быстрым encoder'ом
+        // Encode with the fast encoder.
         final fastEncoded = CborCodec.encode(testData);
 
-        // Декодируем быстрым decoder'ом
+        // Decode with the fast decoder.
         final fastDecoded = CborCodec.decode(fastEncoded);
 
-        // Проверяем полную идентичность
+        // Everything must come back identical.
         expect(fastDecoded['integers'], equals(testData['integers']));
         expect(fastDecoded['negatives'], equals(testData['negatives']));
         expect(fastDecoded['strings'], equals(testData['strings']));
@@ -106,7 +106,7 @@ void main() {
         expect(fastDecoded['nested_map'], equals(testData['nested_map']));
         expect(fastDecoded['binary_data'], equals(testData['binary_data']));
 
-        // Проверяем floats с точностью
+        // Floats, compared with a tolerance.
         for (int i = 0; i < (testData['floats'] as List).length; i++) {
           expect(
             (fastDecoded['floats'] as List)[i],
@@ -128,7 +128,7 @@ void main() {
         final fastEncoded = CborCodec.encode(testData);
         final unsafeEncoded = CborCodec.encodeUnsafe(testData);
 
-        // Проверяем, что результаты кодирования идентичны
+        // Both encoders must produce identical bytes.
         expect(fastEncoded, equals(unsafeEncoded));
       });
     });
@@ -176,7 +176,7 @@ void main() {
       });
 
       test('Very long strings', () {
-        final longString = 'A' * 100000; // 100KB строка
+        final longString = 'A' * 100000; // A 100 KB string.
         final testData = {'long_string': longString};
 
         final encoded = CborCodec.encode(testData);
@@ -209,11 +209,11 @@ void main() {
           };
         }
 
-        final deepData = createNestedMap(50); // 50 уровней вложенности
+        final deepData = createNestedMap(50); // 50 levels deep.
         final encoded = CborCodec.encode(deepData);
         final decoded = CborCodec.decode(encoded);
 
-        // Проверяем корректность на разных уровнях
+        // Check several depths, not just the top.
         expect(decoded['level'], equals(50));
         var current = decoded;
         for (int i = 50; i > 0; i--) {
@@ -241,7 +241,7 @@ void main() {
 
     group('Performance Characteristics', () {
       test('Large data encoding performance', () {
-        final largeData = generateRandomData(3, 100); // 3 уровня, 100 ключей
+        final largeData = generateRandomData(3, 100); // 3 levels, 100 keys.
 
         final stopwatch = Stopwatch()..start();
         final encoded = CborCodec.encode(largeData);
@@ -250,11 +250,11 @@ void main() {
         print('Large data encoding took: ${stopwatch.elapsedMilliseconds}ms');
         print('Encoded size: ${encoded.length} bytes');
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // < 1 секунды
+        expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // < 1 second
         expect(
           encoded.length,
           greaterThan(1000),
-        ); // Должно быть достаточно данных
+        ); // There must be enough data to be worth measuring.
       });
 
       test('Large data decoding performance', () {
@@ -268,7 +268,7 @@ void main() {
         print('Large data decoding took: ${stopwatch.elapsedMilliseconds}ms');
         print('Decoded keys count: ${decoded.keys.length}');
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(500)); // < 0.5 секунды
+        expect(stopwatch.elapsedMilliseconds, lessThan(500)); // < 0.5 seconds
         expect(decoded.keys.length, equals(largeData.keys.length));
       });
 
@@ -278,7 +278,7 @@ void main() {
         // CBOR
         final cborEncoded = CborCodec.encode(testData);
 
-        // JSON для сравнения
+        // JSON, for comparison.
         final jsonEncoded = utf8.encode(jsonEncode(testData));
 
         print('CBOR size: ${cborEncoded.length} bytes');
@@ -287,7 +287,7 @@ void main() {
           'Compression ratio: ${(cborEncoded.length / jsonEncoded.length * 100).toStringAsFixed(1)}%',
         );
 
-        // CBOR должен быть компактнее JSON
+        // CBOR must come out smaller than JSON.
         expect(cborEncoded.length, lessThan(jsonEncoded.length));
       });
     });
@@ -296,12 +296,12 @@ void main() {
       test('Deterministic encoding', () {
         final testData = {'c': 3, 'a': 1, 'b': 2};
 
-        // Кодируем несколько раз
+        // Encode the same data several times.
         final encoded1 = CborCodec.encode(testData);
         final encoded2 = CborCodec.encode(testData);
         final encoded3 = CborCodec.encode(testData);
 
-        // Результат должен быть одинаковым
+        // Every run must produce the same bytes.
         expect(encoded1, equals(encoded2));
         expect(encoded2, equals(encoded3));
       });
@@ -398,7 +398,7 @@ void main() {
           'array': [1, 2, 3],
         };
 
-        // Выполняем 1000 циклов кодирования/декодирования
+        // 1000 encode/decode cycles.
         for (int i = 0; i < 1000; i++) {
           data['counter'] = i;
           final encoded = CborCodec.encode(data);
@@ -416,14 +416,14 @@ void main() {
       test('Memory stress test with large objects', () {
         final largeObjects = <Map<String, dynamic>>[];
 
-        // Создаем много больших объектов
+        // A lot of large objects.
         for (int i = 0; i < 100; i++) {
           final obj = generateRandomData(2, 50);
           obj['id'] = i;
           largeObjects.add(obj);
         }
 
-        // Кодируем и декодируем все объекты
+        // Encode and decode every one of them.
         final encodedObjects = <Uint8List>[];
         for (final obj in largeObjects) {
           encodedObjects.add(CborCodec.encode(obj));
@@ -434,7 +434,7 @@ void main() {
           decodedObjects.add(CborCodec.decode(encoded));
         }
 
-        // Проверяем, что все ID сохранились
+        // Every id must have survived.
         for (int i = 0; i < 100; i++) {
           expect(decodedObjects[i]['id'], equals(i));
         }
@@ -445,7 +445,7 @@ void main() {
       test('Concurrent operations simulation', () async {
         final testData = generateRandomData(3, 30);
 
-        // Симулируем конкурентные операции
+        // Stand in for concurrent use.
         final futures = <Future<void>>[];
 
         for (int i = 0; i < 50; i++) {

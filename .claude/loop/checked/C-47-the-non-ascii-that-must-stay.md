@@ -144,13 +144,26 @@ named `Unicode strings` or `unicode in reason and metadata`. **Adding a Russian
 comment to explain a Russian fixture is the one thing that would break this** —
 the explanation would itself be a grep hit.
 
+## Verified against a sweep (round 437)
+
+`test/serializers/` was swept down to this list: five files, 85 Cyrillic lines
+before, and afterwards **20 non-ASCII lines across the directory, every one of
+them named above.** The census missed nothing, and the directory is now a clean
+fixture-only state that `grep -P` can confirm in one command.
+
 ## Does NOT cover
 
 Non-ASCII outside `test/` — none was found in `lib/` beyond prose, but that was
-not the question asked. Nor the `μ` in `fast_cbor_encoder_test.dart:140`
-(`$minTimeμs`), which is a unit suffix in output rather than a fixture, and
-which parses only because `μ` terminates a Dart identifier — the same construct
-round 435 broke and repaired in the isolate suite.
+not the question asked.
+
+Nor the `μ` in `fast_cbor_encoder_test.dart:141` (`$minTimeμs`), which is a unit
+suffix in output rather than a fixture, and which parses only because `μ`
+terminates a Dart identifier — the same construct round 435 broke and repaired
+in the isolate suite. **Round 437 tried to disambiguate it with braces and the
+gate refused**: `unnecessary_brace_in_string_interps` under `--fatal-infos`.
+The analyzer knows the boundary from the grammar, so it calls the braces
+redundant and removes the only signal a reader has. The site carries a comment
+saying so; changing the lint config is the owner's call.
 
 `../rounds/435-the-half-that-ships.md`,
 `../rounds/436-the-detector-that-cannot-see-its-own-class.md`,

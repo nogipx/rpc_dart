@@ -214,3 +214,37 @@ generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
 
 `cbor_test.dart`, `optimized_cbor_test.dart` and `fast_cbor_encoder_test.dart`
 are the three that mix both kinds — read C-47 before touching them.
+
+## Round 437 — the serializers, and the comment nobody checked
+
+`test/serializers/` swept, 85 Cyrillic lines to 10. Counting every script the
+directory now holds **20 non-ASCII lines and every one is in C-47** — the
+census held exactly, which is what made these five files sweepable at all.
+
+**The rule's non-style argument, found by obeying it.**
+`fast_cbor_encoder_test.dart:144` read
+
+```dart
+expect(avgTime, lessThan(10000)); // < 3ms среднее время
+```
+
+10,000 microseconds is 10 ms. The comment had been wrong since it was written,
+and survived because a reviewer who skips a language they do not read skips the
+claim inside it too. The sibling comment one line down was correct.
+
+**And the repo's lint mandates a construct that has already caused one
+mis-edit.** `$minTimeμs` reads as one identifier and is not; `${minTime}μs`
+would say so and `unnecessary_brace_in_string_interps` refuses it under
+`--fatal-infos`. Commented in place. The config is the owner's call.
+
+### What remains
+
+```
+lib/ logs        39 lines   rpc_notify only    deferred by the owner's ORDER
+lib/ comments   277 lines   23 files           same
+test/           970 lines   33 files           in scope, open (20 are C-47)
+generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
+```
+
+Largest files left: `rpc_responder_endpoint_test.dart` (116),
+`rpc_context_test.dart` (83).

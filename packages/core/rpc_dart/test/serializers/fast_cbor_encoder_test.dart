@@ -20,14 +20,14 @@ void main() {
           'large_negative': [-65536, -4294967295],
         };
 
-        // Тестируем производительность кодирования
+        // Time the encode.
         final stopwatch = Stopwatch()..start();
         final encoded = CborCodec.encode(testData);
         stopwatch.stop();
 
         print('Integer encoding took: ${stopwatch.elapsedMicroseconds}μs');
 
-        // Проверяем корректность декодирования
+        // Then check the decode is correct.
         final decoded = CborCodec.decode(encoded);
         expect(decoded['small_positive'], equals([0, 1, 23]));
         expect(decoded['medium_positive'], equals([24, 255, 256, 65535]));
@@ -109,7 +109,7 @@ void main() {
           'special_zero': [0.0, -0.0],
         };
 
-        // Измеряем время несколько раз для более стабильного результата
+        // Several runs, so the reading is less noisy.
         final times = <int>[];
         for (int i = 0; i < 3; i++) {
           final stopwatch = Stopwatch()..start();
@@ -118,7 +118,7 @@ void main() {
           times.add(stopwatch.elapsedMicroseconds);
 
           if (i == 0) {
-            // Проверяем корректность только в первый раз
+            // Only check correctness on the first pass.
             final decoded = CborCodec.decode(encoded);
             final simpleFloats = decoded['simple_floats'] as List;
             expect(simpleFloats[0], equals(0.0));
@@ -137,12 +137,18 @@ void main() {
         final minTime = times.reduce((a, b) => a < b ? a : b);
 
         print(
-          'Float encoding times: ${times.join(', ')}μs (avg: ${avgTime.round()}μs, min: $minTimeμs)',
+          // `$minTimeμs` reads as one identifier and is not: `μ` is not an
+          // ASCII letter, so it terminates the name and `μs` is a literal.
+          // Braces would say so, but `unnecessary_brace_in_string_interps`
+          // rejects them -- the analyzer knows the boundary and a reader does
+          // not. Round 435 mis-edited exactly this construct elsewhere.
+          'Float encoding times: ${times.join(', ')}μs '
+          '(avg: ${avgTime.round()}μs, min: $minTimeμs)',
         );
 
-        // Более мягкая проверка производительности - используем среднее время и увеличенный лимит
-        expect(avgTime, lessThan(10000)); // < 3ms среднее время
-        expect(minTime, lessThan(2000)); // < 2ms минимальное время
+        // A lenient timing check: the average, against a generous limit.
+        expect(avgTime, lessThan(10000)); // < 10 ms on average
+        expect(minTime, lessThan(2000)); // < 2 ms at best
       });
 
       test('Complex nested structure encoding', () {
@@ -181,7 +187,7 @@ void main() {
         expect(decoded['level'], equals(5));
         expect((decoded['children'] as List).length, equals(5));
 
-        // Проверяем глубокую вложенность
+        // Deep nesting.
         var current = decoded;
         for (int i = 5; i > 0; i--) {
           expect(current['level'], equals(i));
@@ -190,7 +196,7 @@ void main() {
         }
         expect(current['leaf'], equals(true));
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // < 1 секунда
+        expect(stopwatch.elapsedMilliseconds, lessThan(1000)); // < 1 second
       });
     });
 
@@ -218,7 +224,7 @@ void main() {
           'Encoded size: ${(encoded.length / 1024 / 1024).toStringAsFixed(2)} MB',
         );
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(5000)); // < 5 секунд
+        expect(stopwatch.elapsedMilliseconds, lessThan(5000)); // < 5 seconds
         expect(encoded.length, greaterThan(1000000)); // > 1MB
       });
 
@@ -238,7 +244,7 @@ void main() {
           encodings.add(CborCodec.encode(testData));
         }
 
-        // Все кодирования должны быть идентичными
+        // Every encode must produce the same bytes.
         final firstEncoding = encodings[0];
         for (int i = 1; i < encodings.length; i++) {
           expect(encodings[i], equals(firstEncoding));
@@ -294,19 +300,19 @@ void main() {
     group('Length Encoding Optimization', () {
       test('Different length encoding patterns', () {
         final testData = {
-          // Длина <= 23 (inline)
+          // Length <= 23 (inline)
           'short_string': 'a' * 20,
           'short_array': List.generate(15, (i) => i),
 
-          // Длина 24-255 (1 байт)
+          // Length 24-255 (1 byte)
           'medium_string': 'b' * 100,
           'medium_array': List.generate(100, (i) => i),
 
-          // Длина 256-65535 (2 байта)
+          // Length 256-65535 (2 bytes)
           'long_string': 'c' * 1000,
           'long_array': List.generate(1000, (i) => i),
 
-          // Длина > 65535 (4 байта)
+          // Length > 65535 (4 bytes)
           'very_long_string': 'd' * 100000,
           'very_long_array': List.generate(100000, (i) => i % 1000),
         };
@@ -333,7 +339,7 @@ void main() {
           equals(List.generate(100000, (i) => i % 1000)),
         );
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(3000)); // < 3 секунды
+        expect(stopwatch.elapsedMilliseconds, lessThan(3000)); // < 3 seconds
       });
     });
 
@@ -366,7 +372,7 @@ void main() {
           expect(
             stopwatch.elapsedMicroseconds,
             lessThan(size * 10000),
-          ); // Линейная зависимость
+          ); // Growth must stay roughly linear.
         }
       });
     });

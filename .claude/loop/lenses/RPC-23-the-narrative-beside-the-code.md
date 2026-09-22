@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437]
 status: confirmed (round 432)
 ---
 
@@ -389,3 +389,42 @@ comments to translate at `:148` and fixtures not to at `:135`.
 > that is the signal the unit is wrong — not that the sweeper was careless.
 
 `../rounds/436-the-detector-that-cannot-see-its-own-class.md`, `../checked/C-47-the-non-ascii-that-must-stay.md`.
+
+## Round 437 — prose nobody reads is prose nobody checks
+
+The rule this lens serves is usually argued as style. Round 437 found the
+version that is not.
+
+```dart
+expect(avgTime, lessThan(10000)); // < 3ms среднее время
+```
+
+10,000 microseconds is 10 ms. The comment had been wrong since it was written
+and nobody noticed, because a reviewer who skips a language they do not read
+skips the CLAIM inside it too. The sibling comment one line down was correct,
+so this was not a systematic slip — it was an unchecked one.
+
+> **A comment in a language the reviewers do not read is not merely unhelpful;
+> it is exempt from review.** That is the argument for the rule that does not
+> depend on anyone's preference: translating it is what subjects it to the same
+> scrutiny as the code beside it.
+
+**And a lint can mandate the ambiguous form.** `$minTimeμs` reads as one
+identifier and is not — `μ` is not an ASCII letter, so it ends the name and
+`μs` is a literal. Round 435 met that shape and mis-edited it into an undefined
+identifier. The obvious repair, `${minTime}μs`, is refused:
+
+```
+info - Unnecessary braces in a string interpolation - unnecessary_brace_in_string_interps
+```
+
+and `analyze` is `--fatal-infos`, so that is a build failure. The analyzer knows
+the boundary from the grammar and calls the braces redundant, which removes the
+only signal a human has.
+
+> **"Unnecessary" in a lint means unnecessary TO THE PARSER.** Where a
+> disambiguator exists for the reader and the compiler does not need it, the
+> rule and the reason for the rule point opposite ways. Comment the site; the
+> config is the owner's to change, not a round's.
+
+`../rounds/437-the-lint-that-mandates-the-ambiguous-form.md`.

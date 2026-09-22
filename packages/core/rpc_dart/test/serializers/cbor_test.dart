@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 
 void main() {
   group('CBOR Codec - RFC 7049 Compliance Tests', () {
-    /// Утилита для преобразования шестнадцатеричной строки в байты
+    /// Turns a hex string into bytes.
     Uint8List hexToBytes(String hex) {
       final result = Uint8List((hex.length) ~/ 2);
       for (var i = 0; i < result.length; i++) {
@@ -19,7 +19,7 @@ void main() {
       return result;
     }
 
-    /// Утилита для отображения байтов в шестнадцатеричном формате
+    /// Renders bytes as a hex string.
     String bytesToHex(Uint8List bytes) {
       return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join('');
     }
@@ -144,8 +144,8 @@ void main() {
         expect(
           encoded[0],
           equals(0x78),
-        ); // начинается с 0x78 (строка, длина в 1 байт)
-        expect(encoded[1], equals(24)); // длина 24
+        ); // starts with 0x78 (string, length in 1 byte)
+        expect(encoded[1], equals(24)); // length 24
         expect(CborCodec.decodeUnsafe(encoded), equals(longStr));
 
         final veryLongStr = 'a' * 1000;
@@ -153,7 +153,7 @@ void main() {
         expect(
           encoded2[0],
           equals(0x79),
-        ); // начинается с 0x79 (строка, длина в 2 байта)
+        ); // starts with 0x79 (string, length in 2 bytes)
         expect(CborCodec.decodeUnsafe(encoded2), equals(veryLongStr));
       });
     });
@@ -204,8 +204,8 @@ void main() {
         expect(
           encoded[0],
           equals(0x98),
-        ); // начинается с 0x98 (массив, длина в 1 байт)
-        expect(encoded[1], equals(100)); // длина 100
+        ); // starts with 0x98 (array, length in 1 byte)
+        expect(encoded[1], equals(100)); // length 100
         expect(CborCodec.decodeUnsafe(encoded), equals(longArray));
       });
     });
@@ -262,7 +262,7 @@ void main() {
 
     group('RFC 7049 Appendix A examples', () {
       test('Examples from RFC 7049 Appendix A', () {
-        // Таблица 1: Examples from Appendix A
+        // Table 1: examples from Appendix A
         final examples = [
           // Integer
           {'value': 0, 'hex': '00'},
@@ -353,7 +353,7 @@ void main() {
             reason: 'Encoding of $value failed',
           );
 
-          // Проверяем также декодирование
+          // Check decoding too.
           final decoded = CborCodec.decodeUnsafe(hexToBytes(hexExpected));
           expect(
             decoded,
@@ -396,7 +396,7 @@ void main() {
         final encoded = CborCodec.encodeUnsafe(complexData);
         final decoded = CborCodec.decodeUnsafe(encoded);
 
-        // Проверяем, что все данные сохранились при кодировании и декодировании
+        // Every field must survive the encode/decode round trip.
         expect(decoded['int'], equals(12345));
         expect(decoded['negative'], equals(-12345));
         expect(decoded['float'], closeTo(3.14159, 0.00001));
@@ -449,7 +449,7 @@ void main() {
           'Space saving: ${((jsonEncoded.length - cborEncoded.length) / jsonEncoded.length * 100).toStringAsFixed(2)}%',
         );
 
-        // Убедимся, что CBOR компактнее JSON
+        // CBOR must come out smaller than JSON.
         expect(cborEncoded.length, lessThan(jsonEncoded.length));
       });
     });
