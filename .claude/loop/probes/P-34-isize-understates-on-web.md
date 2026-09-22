@@ -35,10 +35,28 @@ forged trailer reads as harmless, so the pre-check is not what does the
 refusing — without it the test would prove nothing about the path after it.
 
 ```
-runtime        refused in   mechanism
-VM                  12 ms   boundedInflate aborts at the limit
-dart2js / node   15980 ms   no bounded inflater: 64 MiB inflated, then rejected
+runtime          round 286   round 427   mechanism
+VM                   12 ms       13 ms   boundedInflate aborts at the limit
+dart2js / node    15980 ms    13463 ms   no bounded inflater: 64 MiB inflated,
+                                         then rejected
+ratio                1332x       1036x
 ```
+
+Round 427's web figure is the median of three (13606 / 13094 / 13463). **The
+finding is intact across 141 rounds and the figure moved 16%**, which is why the
+public documentation it fed carries the shape and points here for the number
+rather than quoting one.
+
+## What this bench CANNOT do
+
+**It cannot canary `boundedInflate`.** Disabling it and re-running this fixture
+reads 22 ms on the VM, which looks like the abort still working and is not:
+`dart:io`'s gzip filter rejects the FORGED trailer outright, one layer upstream
+of the limit. The ablation is absorbed before it reaches the code under test.
+
+For that, use `isize_wrap_bomb_test.dart` — VM-only, builds a true 4 GiB wrap
+the filter accepts, and with `boundedInflate` disabled reads **RSS +2072 MiB**
+against its 400 MiB bound. The two fixtures look interchangeable and are not.
 
 > **Run the identical test on both runtimes and print, do not assert, the
 > number.** The VM half of this was already covered by `isize_wrap_bomb_test`,

@@ -40,6 +40,20 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   ///
   /// Note: ISIZE is only the size modulo 2^32, so this guard is exact only for
   /// outputs below 4 GiB; for larger declared sizes set the limit accordingly.
+  ///
+  /// **On web the limit is enforced AFTER the output is allocated, and that is
+  /// not configurable.** A payload whose ISIZE understates it clears the
+  /// pre-check; the VM then aborts the inflate at the limit, while dart2js and
+  /// Wasm have no incremental inflater — `package:archive` materialises the
+  /// whole output — so the check runs on the finished buffer. Nothing over the
+  /// limit is ever returned, but on web the refusal costs the full allocation
+  /// and the event-loop time first: against a 16 MiB limit, ~65 KiB of wire
+  /// inflating to 64 MiB is refused about three orders of magnitude slower
+  /// there than on the VM. `test/audit/isize_understates_on_web_test.dart`
+  /// carries the current figures.
+  ///
+  /// So on web this is a bound on what you will accept, not a defence against
+  /// what it costs to refuse.
   final int maxDecompressedSize;
 
   /// Default compression level (archive / zlib default).

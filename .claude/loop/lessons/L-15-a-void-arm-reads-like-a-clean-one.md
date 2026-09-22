@@ -58,6 +58,32 @@ own paths say.** `loop.py stale` computes from path churn and cannot see this �
 round 373 touched `bidirectional/caller.dart`, which is inside P-63's `paths:`,
 and P-63 was still not re-run.
 
+## The same shape on the CANARY side — round 427
+
+The rule above is about a bench arm. A canary can be void in the mirror way:
+**the ablation is absorbed by a guard upstream of the one under test, and the
+witness then reads like a fix that survived it.**
+
+Round 427 disabled `boundedInflate` against P-34's fixture and read **22 ms** —
+indistinguishable from the shipped 13 ms, and the obvious conclusion is "the
+abort is not what makes this fast". Wrong: that fixture FORGES the gzip ISIZE
+trailer, and `dart:io`'s filter rejects a forged trailer outright before any
+inflating happens. The number measured the filter.
+
+The valid canary is the fixture whose precondition is REAL — a true 4 GiB wrap,
+which the filter accepts — and it reads **RSS +2072 MiB** against a 400 MiB
+bound.
+
+> **A fixture that forges a precondition can be refused by a layer above the one
+> under test.** Then it is measuring that layer, and an ablation aimed past it
+> changes nothing. Before trusting a canary that came back GREEN or barely
+> moved, ask which layer actually produced the refusal — the exception's
+> identity says so where the wall clock does not (`Filter error, bad data`
+> against `decompressed output exceeds limit`).
+
+Price: one wrong causal paragraph, drafted for PUBLIC documentation and caught
+before it shipped only because the number was too small to believe.
+
 ## What a reader gives up by having this as the fifteenth lesson
 
 Attention, which is the lesson layer's binding constraint, and this one is close

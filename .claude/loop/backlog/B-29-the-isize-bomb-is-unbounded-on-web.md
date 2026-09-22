@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 427)
 round: 285
 commit: 9b82b12a
 paths: [packages/core/rpc_dart_compression/lib/**, packages/core/rpc_dart_compression/test/audit/isize_wrap_bomb_test.dart]
@@ -110,3 +110,26 @@ recording so neither is re-proposed as new:
 The audit test stays as the record of the number. A round taking this writes the
 residual into the compression package's public documentation, next to the limit
 it qualifies — not into a changelog, which nobody reads while choosing a value.
+
+## CLOSED — round 427
+
+Written in two places: `RpcGzipCodec.maxDecompressedSize`'s doc comment, and a
+"Decompression limits" section in the package README, which had not mentioned
+the limit existed at all.
+
+**One departure from this decision, and it is deliberate.** The decision names
+the figure to write down — 15980 ms against the VM's 12 ms. Re-measuring it
+first, as L-13 requires:
+
+```
+                    round 286      round 427
+VM                      12 ms          13 ms
+dart2js / node       15980 ms       13463 ms   (median of 13606/13094/13463)
+```
+
+The finding is intact and the figure has moved 16% in 141 rounds. So the prose
+carries the SHAPE — three orders of magnitude, enforced after allocation, not
+configurable — and points at the audit test for the current numbers. A doc that
+quotes a measured figure reads exactly like evidence and nothing checks it.
+
+The two declined alternatives were not re-opened.

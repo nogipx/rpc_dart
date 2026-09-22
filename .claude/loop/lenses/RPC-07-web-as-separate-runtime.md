@@ -3,8 +3,8 @@ refines: U-03
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the web is a real build target (dart2js)
 breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
-applied: [219, 227, 285, 286, 345, 383, 392]
-status: confirmed (round 090, off-journal)
+applied: [219, 227, 285, 286, 345, 383, 392, 427]
+status: confirmed (round 427)
 ---
 
 # RPC-07 — The web as a separate runtime
@@ -104,3 +104,30 @@ And the census does NOT establish that the guard would catch this lens's bug
 classes: nothing was ablated to see whether a planted 2^53 overflow or `async*`
 cancel turns anything red. That is `../backlog/B-18-web-guard-is-a-census-not-a-sweep.md`,
 and it is why this lens stays `confirmed` rather than `swept here`.
+
+## Round 427 — a platform difference that cannot be fixed still has to be SAID
+
+Rounds 285 and 286 measured the one gap in this lens that has no repair:
+`boundedInflate` aborts a decompression bomb mid-inflate on the VM and does not
+exist on web, because `package:archive` materialises the whole output. Every fix
+was examined and declined — a compressed-size heuristic is useless at deflate's
+1032:1 ceiling, and a different inflater is a dependency decision.
+
+> **When a platform difference is permanent, the deliverable is the sentence a
+> user cannot derive from the API.** The limit's own doc said what it enforces
+> and not WHEN, and the package README did not mention the limit existed. An
+> operator choosing `maxDecompressedSize` had no way to learn that on web the
+> bound is a statement about what you accept, not about what refusing costs.
+
+Two things about writing it, both of which cost something here:
+
+- **The figure had moved 16% in 141 rounds** (15980 ms → a median 13463 ms)
+  while the finding was intact. So the prose carries the shape and the audit
+  test carries the number — a doc with a measured figure in it reads exactly
+  like evidence and nothing checks it.
+- **The cheap cross-platform fixture cannot canary the VM half.** P-34 forges
+  the ISIZE trailer, and `dart:io`'s filter rejects a forged trailer before the
+  inflater runs, so ablating `boundedInflate` against it reads 22 ms and looks
+  like a fix that survived. See L-15.
+
+`../rounds/427-the-number-the-decision-asked-me-to-write-down.md`.
