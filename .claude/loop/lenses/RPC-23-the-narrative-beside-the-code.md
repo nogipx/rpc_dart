@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442]
 status: confirmed (round 432)
 ---
 
@@ -545,3 +545,39 @@ English identifier (`// Premium пользователи`, `// Router генер
 lines. It is a prompt to look, not a check that passes.
 
 `../rounds/441-core-tests-are-down-to-their-fixtures.md`.
+
+## Round 442 — prose that REASSURES against the measurement
+
+The strongest instance this lens has. B-71 records, measured:
+
+> a browser client on a half-open path has **no liveness signal at all**
+
+The shipped doc for the same parameter said:
+
+> **A web client is not unprotected**, but it cannot be tuned here.
+
+and the implementation, more strongly: *"is not left unprotected — the browser
+is doing it"*. Both false. A browser does run ping/pong, which is what the
+sentence rests on, but exposes neither the interval nor the OUTCOME: a missing
+pong never reaches the page. **True of the frames, false of the only thing the
+frames are for.**
+
+Two copies, in the API doc and the implementation, each reading as corroboration
+of the other. That is how it survived.
+
+> **The dangerous prose is not the stale comment or the wrong number — it is the
+> one that tells a reader they are SAFE.** A stale comment costs a minute; a
+> false reassurance is acted on, and it is acted on precisely by the careful
+> reader who went looking for the caveat. When a lead and a doc comment disagree
+> about a platform's behaviour, the doc is the one users obey and the lead is
+> the one with the measurement behind it.
+
+The detector: a backlog lead that names a gap, read against the doc for the same
+symbol. This lens has been reading docs against CODE for 150 rounds; reading
+them against the JOURNAL is new and found this in one pass.
+
+Corollary earned the same round: the fix a doc can deliver is honesty, not
+coverage. The gap is unchanged; what changed is that the page now tells the
+caller to set a deadline on every call, which is the only bound there is.
+
+`../rounds/442-the-doc-that-said-the-opposite.md`.

@@ -9,9 +9,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// Opens a WebSocket, applying [pingInterval] where the platform supports it.
 ///
 /// The portable fallback and the WEB implementation both. [pingInterval] is
-/// accepted and IGNORED: browsers run ping/pong inside the WebSocket
-/// implementation and expose no API for it, so a web client is not left
-/// unprotected — the browser is doing it — it just cannot be tuned from here.
+/// accepted and IGNORED, and that leaves a real gap. A browser runs ping/pong
+/// inside its WebSocket implementation, but exposes neither the interval nor
+/// the outcome: a missing pong does not surface to the page and does not close
+/// the socket the way `dart:io` does. **A web client on a half-open path has no
+/// liveness signal at all** — it learns only when a call reaches its own
+/// deadline. It is accepted rather than rejected so cross-platform code need
+/// not branch; see `RpcWebSocketCallerTransport.connect`.
 ///
 /// [enableCompression] is likewise accepted and ignored: the browser negotiates
 /// permessage-deflate itself, so a web client can neither turn it off here nor
@@ -37,8 +41,9 @@ Future<WebSocketChannel> openWebSocket(
   Duration? connectTimeout,
 }) async {
   // Referenced so the analyzer does not flag them, and so a reader sees the
-  // platform cannot honour them rather than that somebody forgot.
-  final _ = (enableCompression, headers);
+  // platform cannot honour them rather than that somebody forgot. pingInterval
+  // belongs here too: it is the one whose absence actually costs something.
+  final _ = (pingInterval, enableCompression, headers);
   final channel = WebSocketChannel.connect(uri, protocols: protocols);
   final ready = connectTimeout == null
       ? channel.ready

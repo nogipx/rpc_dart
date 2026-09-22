@@ -1,13 +1,40 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 441) — the decided half swept; the owner chose to close the rest rather than extend the mandate
 round: 303
 commit: 139bca2a
 paths: [packages/core/*/test/**, packages/core/*/example/**, packages/transport/*/test/**, packages/transport/*/example/**, packages/data/rpc_data/lib/**, packages/data/rpc_data_sqlite/lib/**, packages/blob/rpc_blob/lib/**, packages/notify/rpc_notify/lib/**]
 probe: none
-reason: decided — sweep the 47 test/ and example/ files inside core+transport first; the 23 lib/ files are all outside the mandate and wait
+reason: CLOSED — the decided scope is complete; everything remaining is owner-deferred, out of mandate, generated, or a permanent C-47 fixture
 ---
 
 # B-30 — Russian comments in packages outside the mandate
+
+> **CLOSED by the owner after round 441.** The decided half — the `test/` and
+> `example/` files of core and transport — is swept. The owner was shown the
+> four options for the remainder (take the 39 `lib/` log lines, take all of
+> `lib/`, extend the mandate to `rpc_notify` and `rpc_data_postgres`, or close)
+> and chose to close.
+>
+> **What that leaves in the repo, deliberately:**
+>
+> ```
+> lib/ logs        39 lines   rpc_notify, runtime, user-visible
+> lib/ comments   277 lines   23 files, dartdoc renders them
+> rpc_notify test 230 lines   3 files, outside the mandate
+> postgres test    17 lines   2 files, outside the mandate
+> generated        21 lines   rpc_data/*.g.dart, needs the source
+> fixtures         18 lines   C-47, must never be translated
+> ```
+>
+> The 39 log lines are the part a user meets without opening a file. Round 435
+> measured them and 436-441 raised them each round; the owner has seen the
+> number and accepted the cost. **Do not re-raise it as a finding** — it is a
+> known, accepted divergence from `CLAUDE.md`'s "English for code, comments, and
+> logs", not something a later sweep has discovered.
+>
+> Reopen only if the owner asks, or if `lib/` prose is found to be WRONG rather
+> than merely Russian — rounds 437 and 438 each found one stale number-comment
+> in the swept half, and nobody has checked the 277 unswept ones.
 
 The root `CLAUDE.md` states the rule plainly:
 

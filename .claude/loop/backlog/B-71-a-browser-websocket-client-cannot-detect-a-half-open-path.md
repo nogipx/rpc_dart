@@ -61,9 +61,51 @@ of this fix is to make the web path REFUSE a non-null `pingInterval` instead of
 dropping it, so the gap is at least loud — that is a one-line change and a
 breaking one for anyone passing it today.
 
+## Round 442 — the shipped docs said the OPPOSITE of this record
+
+The owner asked for a witness. There is none to build (see below), but looking
+for one found that **this lead's central claim was contradicted in writing, in
+the two places a reader looks.**
+
+```
+this record        "no liveness signal at all"        measured, round 422
+the API doc        "A web client is not unprotected"  shipped
+the stub           "is not left unprotected --
+                    the browser is doing it"          shipped
+```
+
+Both doc copies are false. A browser does run ping/pong, which is what the
+reassurance rests on, but it exposes neither the interval nor the OUTCOME: a
+missing pong never reaches the page and does not close the socket the way
+`dart:io` does. True of the frames, false of the only thing the frames are for.
+And two copies that agree read as corroboration, which is how it survived.
+
+Both now carry this record's table and the consequence neither had: **on the
+web, set a deadline on every call — it is the only bound there is.** One code
+change, `pingInterval` added to the stub's discard tuple, whose own comment says
+that tuple exists so a reader sees the platform cannot honour them.
+
+**That was option 1 below, and it is now spent.** The gap is unchanged; it is
+merely honest.
+
+### Why the witness cannot be built — do not re-attempt
+
+Half-open means the peer is gone with no FIN and no RST, which needs raw socket
+control AFTER the handshake:
+
+- `dart:io`'s `WebSocket` answers ping at the protocol layer, so a server on
+  `WebSocketTransformer.upgrade` cannot be made to go silent;
+- hand-rolling the upgrade on a raw `ServerSocket` needs the
+  `Sec-WebSocket-Accept` SHA-1, and this package depends only on
+  `web_socket_channel`;
+- the web arm needs a browser cuttable at the network layer, and `test:web` is
+  dart2js against node.
+
 ## Owner decision
 
 —
+
+Options 2 and 3 below are still open and still need a call. Option 1 is done.
 
 Three shapes, and the cheapest is not obviously wrong:
 

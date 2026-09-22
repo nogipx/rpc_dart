@@ -119,9 +119,26 @@ class RpcWebSocketCallerTransport
   /// leaves calls hanging. Take the shortest idle timeout on the path — load
   /// balancers commonly use 60s — and halve it.
   ///
-  /// Accepted and IGNORED on the web: browsers run ping/pong inside the
-  /// WebSocket implementation and expose no API for it. A web client is not
-  /// unprotected, but it cannot be tuned here.
+  /// Accepted and IGNORED on the web, and that leaves a real gap. A browser
+  /// runs ping/pong inside its WebSocket implementation, but exposes neither
+  /// the interval nor the outcome: a missing pong does not surface to the page
+  /// and does not close the socket the way `dart:io` does. So a web client on
+  /// a half-open path has **no liveness signal at all** — it learns only when
+  /// a call reaches its own deadline, and a caller that set none waits
+  /// forever.
+  ///
+  /// ```
+  ///   transport            half-open detected by
+  ///   websocket (VM)       WebSocket.pingInterval, native
+  ///   websocket (web)      NOTHING
+  ///   http2                startHttp2Keepalive, this library's own loop
+  ///   isolate              the port closing
+  /// ```
+  ///
+  /// The parameter is accepted rather than rejected so one piece of
+  /// cross-platform code can pass it without branching on the platform. **On
+  /// the web, set a deadline on every call** — that is the only bound there
+  /// is.
   ///
   /// [headers] go on the upgrade REQUEST — the only place a websocket client
   /// can authenticate, since there is no second round trip to attach a token
