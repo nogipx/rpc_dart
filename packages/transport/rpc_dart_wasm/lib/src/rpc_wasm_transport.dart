@@ -16,7 +16,11 @@ abstract final class RpcWasmTransport {
   ///
   /// [isClient] follows the normal rpc_dart stream-ID convention: client
   /// transports use odd IDs, server transports use even IDs.
-  static IRpcTransport fromBridge({
+  /// Returns [IRpcReconnectableTransport], not [IRpcTransport]: the object
+  /// carries a stream-id cursor, and narrowing the declared type would erase
+  /// that: `RpcClientConnection`'s factory would refuse this transport at
+  /// compile time while it works perfectly at run time.
+  static IRpcReconnectableTransport fromBridge({
     required RpcWasmBridge bridge,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),

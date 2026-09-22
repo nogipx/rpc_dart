@@ -27,7 +27,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed.
-final class _Tracked implements IRpcTransport, IRpcStreamIdSequence {
+final class _Tracked implements IRpcReconnectableTransport {
   _Tracked(this.id);
 
   final int id;
@@ -102,15 +102,15 @@ final class _Tracked implements IRpcTransport, IRpcStreamIdSequence {
 typedef _Harness = ({
   RpcClientConnection connection,
   List<_Tracked> made,
-  List<Completer<IRpcTransport>> gates,
+  List<Completer<IRpcReconnectableTransport>> gates,
 });
 
 _Harness _build({int? maxAttempts}) {
   final made = <_Tracked>[];
-  final gates = <Completer<IRpcTransport>>[];
+  final gates = <Completer<IRpcReconnectableTransport>>[];
   final connection = RpcClientConnection(
     transportFactory: () {
-      final gate = Completer<IRpcTransport>();
+      final gate = Completer<IRpcReconnectableTransport>();
       gates.add(gate);
       return gate.future;
     },

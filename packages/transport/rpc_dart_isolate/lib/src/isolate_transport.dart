@@ -212,7 +212,12 @@ typedef RpcIsolateEntrypoint =
 /// gets a server transport (even stream IDs). Both are backed by
 /// [RpcChannelTransport] wrapping an [_IsolateMultiplexedChannel].
 abstract interface class RpcIsolateTransport {
-  static Future<({IRpcTransport transport, void Function() kill})> spawn({
+  /// The record's `transport` is [IRpcReconnectableTransport], not
+  /// [IRpcTransport]: it is an [RpcChannelTransport] and carries a stream-id
+  /// cursor. Narrowing the declared type erases that, and a factory handing
+  /// this to `RpcClientConnection` stops compiling while it works at run time.
+  static Future<({IRpcReconnectableTransport transport, void Function() kill})>
+  spawn({
     required RpcIsolateEntrypoint entrypoint,
     Map<String, dynamic>? customParams,
     String isolateId = 'default',

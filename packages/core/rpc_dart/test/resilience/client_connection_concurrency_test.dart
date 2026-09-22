@@ -39,7 +39,7 @@ import 'package:test/test.dart';
 
 /// A transport whose lifetime is observable, and which can be made to drop the
 /// way a real one does when its peer dies.
-final class _FakeTransport implements IRpcTransport, IRpcStreamIdSequence {
+final class _FakeTransport implements IRpcReconnectableTransport {
   _FakeTransport(this._registry) {
     _registry.add(this);
   }
@@ -121,7 +121,7 @@ void main() {
   setUp(() => produced = []);
 
   /// A factory slow enough that concurrent drivers genuinely overlap.
-  Future<IRpcTransport> slowFactory() async {
+  Future<IRpcReconnectableTransport> slowFactory() async {
     await Future<void>.delayed(const Duration(milliseconds: 150));
     return _FakeTransport(produced);
   }

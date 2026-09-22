@@ -26,7 +26,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// A client transport with a frame already sitting in its inbound buffer.
-Future<IRpcTransport> _clientWithAGreetingPending() async {
+Future<IRpcReconnectableTransport> _clientWithAGreetingPending() async {
   final (clientChannel, serverChannel) = RpcFrameMultiplexedChannel.pair();
   final client = RpcChannelTransport(channel: clientChannel, isClient: true);
   final server = RpcChannelTransport(channel: serverChannel, isClient: false);

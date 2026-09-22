@@ -25,10 +25,9 @@ import 'ws_open_stub.dart' if (dart.library.io) 'ws_open_io.dart';
 /// cursor cannot cross a reconnect.
 class RpcWebSocketCallerTransport
     implements
-        IRpcTransport,
+        IRpcReconnectableTransport,
         IRpcSecurityPolicyAware,
-        IRpcFlowControlled,
-        IRpcStreamIdSequence {
+        IRpcFlowControlled {
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
 

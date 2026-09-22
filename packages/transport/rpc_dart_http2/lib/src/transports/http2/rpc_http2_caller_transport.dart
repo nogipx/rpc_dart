@@ -30,10 +30,9 @@ class _DrainSignal {
 /// gets `const RpcSecurityPolicy()` instead of the configured one.
 class RpcHttp2CallerTransport
     implements
-        IRpcTransport,
+        IRpcReconnectableTransport,
         IRpcStreamReset,
-        IRpcSecurityPolicyAware,
-        IRpcStreamIdSequence {
+        IRpcSecurityPolicyAware {
   @override
   bool get isClient => true;
 

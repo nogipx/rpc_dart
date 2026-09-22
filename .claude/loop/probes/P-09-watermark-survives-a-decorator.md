@@ -59,6 +59,27 @@ The decorator forwards every `IRpcTransport` member and declares nothing else �
 what a metrics or auth wrapper looks like written the obvious way, and the same
 shape round 209 found dropping `IRpcFlowControlled` on http2.
 
+## Round 430 — the decorated arm now needs a deliberate `dynamic` hop
+
+`transportFactory` returns `IRpcReconnectableTransport`, so the CASE arm — a
+transport without the cursor — can no longer be written in sound Dart. It goes
+through `final dynamic plain = _Plain(client); return plain as ...`, and the
+probe says so in place.
+
+**Do not "clean up" that cast.** Removing it does not fix a wart, it deletes the
+arm: the bench then has a control and nothing to compare it against.
+
+Re-run after the type change, both arms unchanged:
+
+```
+  factory returns          came online   reason names it   handlers ended
+  the transport itself     yes, id 3     n/a               0 -> 0
+  a plain decorator        NO, refused   true              0
+```
+
+That the readings did not move is the evidence round 430 leaned on: the
+compile-time error is new, the runtime behaviour is not.
+
 `0 -> 1` is a live bidirectional call whose request stream was half-closed by an
 unrelated dead call's teardown, so the server finished serving it. That is the
 defect `RpcClientConnection`'s own comment says the watermark exists to prevent,

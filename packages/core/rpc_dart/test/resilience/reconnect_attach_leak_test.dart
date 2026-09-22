@@ -25,7 +25,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed, and can be dropped on cue.
-final class _TrackedTransport implements IRpcTransport, IRpcStreamIdSequence {
+final class _TrackedTransport implements IRpcReconnectableTransport {
   _TrackedTransport(this.id);
 
   final int id;

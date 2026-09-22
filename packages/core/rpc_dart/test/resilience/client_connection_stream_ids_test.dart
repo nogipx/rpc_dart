@@ -116,7 +116,7 @@ _Fixture _build() {
   final responders = <RpcResponderEndpoint>[];
   final peers = <RpcChannelTransport>[];
 
-  Future<IRpcTransport> factory() async {
+  Future<IRpcReconnectableTransport> factory() async {
     built++;
     final (client, server) = RpcChannelTransport.pair();
     final responder = RpcResponderEndpoint(transport: server);
@@ -205,14 +205,19 @@ void main() {
       final errors = <String>[];
       final responders = <RpcResponderEndpoint>[];
 
-      Future<IRpcTransport> factory() async {
+      // DELIBERATELY UNSOUND. `transportFactory` returns
+      // [IRpcReconnectableTransport], so this is what it takes to reach the
+      // runtime guard at all now -- which is the measurement this group exists
+      // for. See the group's own comment.
+      Future<IRpcReconnectableTransport> factory() async {
         built++;
         final (client, server) = RpcChannelTransport.pair();
         final responder = RpcResponderEndpoint(transport: server);
         responder.registerServiceContract(_Svc(() {}));
         responder.start();
         responders.add(responder);
-        return _Plain(client);
+        final dynamic plain = _Plain(client);
+        return plain as IRpcReconnectableTransport;
       }
 
       final connection = RpcClientConnection(

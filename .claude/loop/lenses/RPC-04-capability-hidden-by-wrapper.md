@@ -3,8 +3,8 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292, 334, 335, 352, 418]
-status: confirmed (round 418)
+applied: [209, 289, 290, 291, 292, 334, 335, 352, 418, 430]
+status: confirmed (round 430)
 ---
 
 # RPC-04 — Transport capabilities hidden by a wrapper
@@ -150,3 +150,35 @@ abstract, over the class that had it (U-14). Bench
 `../probes/P-44-capabilities-through-the-proxy.md`, rebuilt once because the
 frame channel's own policy refused the body in BOTH arms.
 `../rounds/352-the-wrapper-that-declared-nothing.md`.
+
+## Round 430 — the compile-time form, and what it costs
+
+`RpcClientConnection`'s factory now returns `IRpcReconnectableTransport`, so a
+decorator that forwards every `IRpcTransport` member and declares nothing else
+is a compile error at the factory rather than a disconnect on the first run.
+That is this lens's defect, refused one step earlier.
+
+Two things the round measured that generalise beyond it.
+
+> **A declared type can erase a capability as thoroughly as a decorator can.**
+> Three first-party entry points returned objects that implement the cursor
+> while their signatures said `IRpcTransport` — `RpcInMemoryTransport.pair`,
+> `RpcIsolateTransport.spawn`, `RpcWasmTransport.fromBridge`. The `is` check
+> found the capability at run time and the type system had already thrown it
+> away. **Grep for factories whose return type is the bare interface**, not only
+> for classes that fail to declare one.
+
+> **A type that forbids the bad case can walk past the guard that handled it.**
+> Round 224 refused a cursorless transport at attach: one shot, state
+> `Disconnected`, a message naming the two members to forward. With the type in
+> place the bad case can only arrive through a cast, which throws BEFORE the
+> guard — and the generic catch turned that into a backoff spin, built twice and
+> counting. The fix was measured and kept (a `TypeError` catch that ends the
+> loop), but the lesson is the order: **when a compile-time check replaces a
+> runtime one, re-run the runtime one's witness.** It does not simply become
+> redundant; it can become unreachable, and unreachable is not the same as
+> satisfied.
+
+`../rounds/430-the-guard-the-type-walked-past.md`, bench
+`../probes/P-09-watermark-survives-a-decorator.md` — reused, and its decorated
+arm now needs a deliberate `dynamic` hop to exist at all.

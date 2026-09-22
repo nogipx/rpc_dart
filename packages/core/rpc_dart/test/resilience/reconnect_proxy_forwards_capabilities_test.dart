@@ -28,7 +28,7 @@ const _bodyBytes = 20 * _mib;
 final _codec = RpcCodec(RpcString.fromJson);
 
 /// Brings an [RpcClientConnection] online over [inner] and returns its proxy.
-Future<IRpcTransport> _proxyOver(IRpcTransport inner) async {
+Future<IRpcTransport> _proxyOver(IRpcReconnectableTransport inner) async {
   final conn = RpcClientConnection(transportFactory: () async => inner);
   addTearDown(conn.dispose);
   conn.connect();

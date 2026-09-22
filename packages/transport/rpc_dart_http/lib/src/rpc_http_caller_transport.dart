@@ -90,7 +90,7 @@ String? _shortReason(Uint8List body) {
 ///   Response: 200 OK                      body = gRPC-framed bytes
 ///             All response headers (including grpc-status) are in HTTP headers.
 class RpcHttpCallerTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcStreamIdSequence {
+    implements IRpcReconnectableTransport, IRpcSecurityPolicyAware {
   final String _baseUrl;
   final http.Client _httpClient;
   final RpcSecurityPolicy _policy;

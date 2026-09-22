@@ -28,7 +28,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed.
-final class _Tracked implements IRpcTransport, IRpcStreamIdSequence {
+final class _Tracked implements IRpcReconnectableTransport {
   _Tracked(this.id);
 
   final int id;

@@ -209,6 +209,22 @@ abstract interface class IRpcStreamIdSequence {
   void resumeStreamIdsAfter(int streamId);
 }
 
+/// What `RpcClientConnection` needs from the transports its factory builds.
+///
+/// The one place a capability is REQUIRED rather than probed for. Everywhere
+/// else a transport may decline [IRpcStreamIdSequence] and the caller falls
+/// back; a reconnecting connection has no fallback, because a fresh transport
+/// restarts its ids at 1 and hands the next call an id a call from the old
+/// connection still holds.
+///
+/// `RpcClientConnection` refuses such a transport at attach, so the failure was
+/// never silent. This makes it a COMPILE error at the factory instead of a
+/// disconnect on the first run, and it points at the members to forward — which
+/// is what a decorator author needs, since forwarding every [IRpcTransport]
+/// member and declaring nothing else erases the capability without a trace.
+abstract interface class IRpcReconnectableTransport
+    implements IRpcTransport, IRpcStreamIdSequence {}
+
 /// Capability: a higher layer takes over flow-control metering for a stream.
 ///
 /// The transport meters what it hands out through `getMessagesForStream`,

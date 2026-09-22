@@ -416,9 +416,16 @@ final class _ReconnectingTransportProxy
 /// be recreated when the underlying connection drops and re-establishes.
 ///
 /// This is the recommended, transport-agnostic way to get auto-reconnect on a
-/// client: it works with any [IRpcTransport] via [transportFactory] and exposes
-/// observable state, backoff and attempt limits. (A transport's own
-/// `reconnect()` is a lower-level primitive; prefer this wrapper for new code.)
+/// client: it works with any [IRpcReconnectableTransport] via
+/// [transportFactory] and exposes observable state, backoff and attempt limits.
+/// (A transport's own `reconnect()` is a lower-level primitive; prefer this
+/// wrapper for new code.)
+///
+/// The factory's return type is [IRpcReconnectableTransport] rather than
+/// [IRpcTransport] because a reconnecting connection cannot fall back when the
+/// stream-id cursor is missing — see that interface. A decorator that forwards
+/// every [IRpcTransport] member and declares nothing else now fails to compile
+/// here instead of disconnecting on the first run.
 ///
 /// Note on semantics:
 /// - **In-flight calls do not survive a reconnect.** Only the endpoint and
@@ -448,7 +455,7 @@ final class _ReconnectingTransportProxy
 class RpcClientConnection {
   /// Creates a new [RpcClientConnection].
   RpcClientConnection({
-    required Future<IRpcTransport> Function() transportFactory,
+    required Future<IRpcReconnectableTransport> Function() transportFactory,
     BackoffPolicy backoff = const ExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
     int? maxAttempts,
@@ -465,7 +472,7 @@ class RpcClientConnection {
     _proxy.onDropped = _onTransportDropped;
   }
 
-  final Future<IRpcTransport> Function() _factory;
+  final Future<IRpcReconnectableTransport> Function() _factory;
   final BackoffPolicy _backoff;
   final bool Function(Object? error)? _shouldReconnect;
   final int? _maxAttempts;
@@ -596,7 +603,7 @@ class RpcClientConnection {
       }
 
       try {
-        final Future<IRpcTransport> factoryFuture = _factory();
+        final Future<IRpcReconnectableTransport> factoryFuture = _factory();
         final IRpcTransport inner;
         if (_connectTimeout != null) {
           inner = await factoryFuture.timeout(
@@ -673,6 +680,29 @@ class RpcClientConnection {
         _logger?.call('info', 'Connected (attempt ${_reconnectAttempts + 1})');
         _reconnectAttempts = 0;
         _emit(const RpcClientOnline());
+        guard.complete();
+        return;
+      } on TypeError catch (e) {
+        // The factory declares [IRpcReconnectableTransport], so a transport
+        // without the stream-id cursor can only arrive through code that
+        // defeats the type -- a cast, `dynamic`, JS interop. The implicit
+        // downcast then throws HERE, before the guard below the await ever
+        // sees the value.
+        //
+        // Ending the loop is the point. A missing capability is a programmer
+        // error and not transient, so leaving it to the generic catch turns
+        // the one-shot refusal into a backoff spin that rebuilds a transport
+        // per attempt -- measured, 2 and counting where it must be 1.
+        final error = ArgumentError.value(
+          '$e',
+          'transportFactory',
+          'RpcClientConnection needs a transport implementing '
+              'IRpcStreamIdSequence to carry stream ids across a reconnect. '
+              'Forward resumeStreamIdsAfter and lastIssuedStreamId from the '
+              'transport being wrapped',
+        );
+        _logger?.call('error', '$error');
+        _emit(RpcClientDisconnected(reason: error));
         guard.complete();
         return;
       } catch (e) {

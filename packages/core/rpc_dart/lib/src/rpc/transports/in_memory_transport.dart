@@ -14,7 +14,12 @@ import 'channel_transport.dart';
 abstract final class RpcInMemoryTransport {
   /// Creates a paired client/server in-memory transport with zero-copy;
   /// closing one side closes both.
-  static (IRpcTransport, IRpcTransport) pair({
+  ///
+  /// [IRpcReconnectableTransport], not [IRpcTransport]: these are
+  /// [RpcChannelTransport]s and carry a stream-id cursor. Narrowing the
+  /// declared type erases that, and `RpcClientConnection`'s factory then
+  /// refuses at compile time a transport that works perfectly at run time.
+  static (IRpcReconnectableTransport, IRpcReconnectableTransport) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
     return RpcChannelTransport.memoryPair(policy: policy);

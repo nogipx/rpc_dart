@@ -25,10 +25,9 @@ import 'stream_buffer_ledger.dart';
 /// ```
 class RpcChannelTransport
     implements
-        IRpcTransport,
+        IRpcReconnectableTransport,
         IRpcSecurityPolicyAware,
-        IRpcFlowControlled,
-        IRpcStreamIdSequence {
+        IRpcFlowControlled {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;

@@ -42,7 +42,8 @@ external DedicatedWorkerGlobalScope get _workerSelf;
 
 /// Web implementation backed by isolate_manager Worker controllers.
 abstract interface class RpcIsolateTransport {
-  static Future<({IRpcTransport transport, void Function() kill})> spawn({
+  static Future<({IRpcReconnectableTransport transport, void Function() kill})>
+  spawn({
     required RpcIsolateEntrypoint entrypoint,
     Map<String, dynamic>? customParams,
     String isolateId = 'default',
