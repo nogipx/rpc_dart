@@ -269,16 +269,30 @@ final class RpcMetadata {
   /// `base64.normalize` restores the padding and accepts the url-safe alphabet,
   /// the same leniency the spec asks for. The catch stays for input that is
   /// genuinely not base64.
+  ///
+  /// SPLIT on `,` first, which PROTOCOL-HTTP2 states as a MUST for every
+  /// `-bin` header. A comma is in neither base64 alphabet, so an unsplit value
+  /// cannot decode at all: the catch below returns null and the error's
+  /// structured details disappear while its status and message arrive intact.
+  /// Any intermediary that combines duplicate header lines produces this, which
+  /// RFC 9110 s5.3 permits.
   Uint8List? get statusDetailsBin {
     final raw = getHeaderValue(RpcHeaders.grpcStatusDetails);
     if (raw == null || raw.isEmpty) return null;
-    try {
-      return base64Decode(base64.normalize(raw));
-    } catch (_) {
-      // Not base64 at all: treat as absent rather than failing the call, since
-      // the status itself is still usable.
-      return null;
+    // The FIRST value: duplicates are separate values, not one split across
+    // lines, so concatenating their bytes would forge a message nobody sent.
+    for (final value in raw.split(',')) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) continue;
+      try {
+        return base64Decode(base64.normalize(trimmed));
+      } catch (_) {
+        // Not base64 at all: treat as absent rather than failing the call,
+        // since the status itself is still usable.
+        return null;
+      }
     }
+    return null;
   }
 
   /// Finds a header value by name.

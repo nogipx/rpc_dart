@@ -3,8 +3,8 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413]
-status: confirmed (round 211)
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429]
+status: confirmed (round 429)
 ---
 
 # RPC-15 — Re-measure the loop's own record
@@ -80,3 +80,33 @@ fix, and nothing ages those: round 314's said an aborted socket is answered by a
 prompt read error rather than by `bodyReadTimeout`, which measured false — both
 cost the server the same 2009 ms. The round that re-reads such a comment should
 measure it, because it reads exactly like evidence and is a record of reasoning.
+
+## Round 429 — a DECISION ages too, and it ages worse than a measurement
+
+B-09 held three items. Two were already fixed when the owner decided what to do
+about them, and the round that carried the decisions out is the first thing that
+looked.
+
+- item 2, "align the 504 row": already one shared table, `504 => unavailable`,
+  **with a doc comment making the lead's own retryability argument almost word
+  for word**. An earlier round did it and nothing told the lead.
+- item 3, "measure shape (d) before fixing": does not reproduce. The expected
+  `items=2, NO ERROR` reads `items=2, RpcStatusException` (P-97).
+
+> **A lead that was never measured cannot go stale honestly — it was already a
+> reading.** B-09's items came out of private memory with commits attached and
+> no probe, so "verified against the code in the backlog review" meant read
+> again, by the same method that produced them. Two survived that and neither
+> survived a measurement.
+
+The sharpest part is that the lead states the rule it broke, in its own item 3:
+*"when deferring for blast radius, verify the specific thing you claim would
+break, or the deferral is a guess wearing a reason's clothes."* It applied that
+to round 89's revert and not to itself.
+
+> **When a lead explains why ANOTHER record went stale, check the explanation
+> against the lead.** The insight is usually general and the author usually
+> thinks it is about someone else.
+
+`../rounds/429-two-of-three-were-already-done.md`,
+`../probes/P-97-truncated-stream-shape-d.md`.

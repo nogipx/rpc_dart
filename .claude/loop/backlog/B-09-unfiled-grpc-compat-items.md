@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 429)
 round: — (not re-measured)
 commit: 5bf4d34e
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
@@ -112,3 +112,51 @@ Taken, one per item:
    a richer table defensible there.
 3. **Measure before fixing.** One probe for shape (d) on the channel transports,
    no fix in the same round. Decide on the number.
+
+## CLOSED — round 429. Two of the three were already done.
+
+**This lead's own item 3 states the rule it broke**: *"when deferring for blast
+radius, verify the specific thing you claim would break, or the deferral is a
+guess wearing a reason's clothes."* Items 2 and 3 were carried from private
+memory, decided on that reading, and were already fixed when the decision was
+written.
+
+**Item 2 — done before the decision.** `grpcStatusFromHttpStatus`
+(`protocol.dart`) is one table for every transport, `429 || 502 || 503 || 504 =>
+unavailable`, and its doc comment makes this lead's own retryability argument
+almost word for word. The HTTP/1.1 caller calls it and says so at the call site.
+
+**Item 3 — does not reproduce.** P-97, three arms, with a control:
+
+```
+d  delivered-then-cut    items=2  error=RpcStatusException  endedClean=false
+c  cut-before-delivery   items=0  error=RpcStatusException  endedClean=false
+CONTROL complete         items=2  NO ERROR                  endedClean=true
+```
+
+The expected `items=2, NO ERROR` is gone. The control matters: three arms all
+reporting an error would otherwise be equally consistent with an instrument
+that cannot report anything else.
+
+**Item 1 — live, and fixed.** Both halves were the same mistake about one
+character: gRPC names `,`, RFC 9110 only RECOMMENDS comma-SP.
+
+- `statusDetailsBin` now splits on `,` before decoding (the spec MUST), trims,
+  and takes the first non-empty value. Measured first, as this lead demanded: a
+  comma-joined value read as **null**, so the error's structured details vanish
+  while its status and message arrive intact.
+- the HTTP/1.1 caller splits on `\s*,\s*` instead of `', '`, and the comment
+  that called this a KNOWN LIMITATION with symmetric loss is rewritten — the
+  spec does not agree that loss exists.
+
+### What is NOT established
+
+Shape (d) was measured on the CHANNEL transports only. http2 and HTTP/1.1 on a
+truncated response is different code and a different measurement.
+
+`-bin` splitting is fixed in `statusDetailsBin`, the one such header this
+library reads. A future `-bin` header inherits the MUST and will not inherit
+the fix, because the split lives in the getter rather than in a shared decoder.
+
+`../rounds/429-two-of-three-were-already-done.md`,
+`../probes/P-97-truncated-stream-shape-d.md`.

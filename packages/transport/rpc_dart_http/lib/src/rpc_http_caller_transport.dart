@@ -31,6 +31,12 @@ const int _maxReasonChars = 200;
 /// UTF-8, and an HTML page usually puts its interesting words after some markup.
 const int _maxReasonBytes = 8 * 1024;
 
+/// Separates values a receiver combined into one field line.
+///
+/// gRPC names the bare `,`; RFC 9110 only RECOMMENDS comma-SP, so whitespace
+/// either side is optional and a peer following gRPC's own text emits none.
+final RegExp _headerValueDelimiter = RegExp(r'\s*,\s*');
+
 /// A single-line, bounded, printable rendering of an error [body], or null when
 /// there is nothing worth repeating.
 ///
@@ -358,26 +364,29 @@ class RpcHttpCallerTransport
       final initialHeaders = <RpcHeader>[];
       final trailerHeaders = <RpcHeader>[];
       streamedResponse.headers.forEach((name, value) {
-        // package:http joins multi-values with ', ' — split them back.
+        // Split repeated field lines back apart. package:http has already
+        // combined them -- `BaseResponse.headers` is a `Map<String, String>` --
+        // and RFC 9110 s5.3 permits that only for a field whose definition
+        // allows the values to be recombined as a comma-separated list.
         //
-        // KNOWN LIMITATION, not fixable at this layer. HTTP/1.1 lets a receiver
-        // combine repeated field lines into one comma-separated value (RFC 9110
-        // s5.3) and package:http always does -- `BaseResponse.headers` is a
-        // `Map<String, String>` -- so by the time a response reaches here, "two
-        // headers" and "one header containing a comma-space" are the same bytes.
+        // Custom-Metadata IS that field: PROTOCOL-HTTP2 says duplicate header
+        // names "may have their values joined with ',' as the delimiter and be
+        // considered semantically equivalent". So splitting is the recombination
+        // the field's own definition provides for, not a lossy guess -- and NOT
+        // splitting would collapse values the spec calls equivalent.
         //
-        // Both choices therefore lose something, and this one SPLITS: a single
-        // metadata value containing ", " is split apart, while genuinely
-        // repeated keys survive. Not splitting inverts it, collapsing repeated
-        // gRPC metadata keys -- which the spec allows -- into one joined string.
+        // The DELIMITER is ',' with optional surrounding whitespace, not ', '.
+        // gRPC names the bare comma; RFC 9110 only recommends comma-SP ("For
+        // consistency, use comma SP"). Splitting on ', ' alone never split a
+        // peer that joined the way gRPC's own text describes.
+        //
+        // A metadata value that must carry a comma has a specified home: a
+        // `-bin` key, base64, whose alphabet contains no comma.
         //
         // grpc-status and grpc-message are unaffected either way: the status is
         // numeric, and grpc-message is percent-encoded over ALPHA/DIGIT/-/./_/~,
-        // so the literal ", " can never appear in it.
-        //
-        // Use rpc_dart_http2 (or websocket/isolate) if metadata values must
-        // round-trip byte-for-byte; HTTP/2 keeps header fields separate.
-        for (final v in value.split(', ')) {
+        // so a comma can never appear in it.
+        for (final v in value.split(_headerValueDelimiter)) {
           final header = RpcHeader(name, v);
           if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
             trailerHeaders.add(header);

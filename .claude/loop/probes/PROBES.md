@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-97](P-97-truncated-stream-shape-d.md)** valid (round 429), rpc_dart —
+  how does a server stream END when the peer vanishes mid-stream? Three arms
+  over a channel pair; the reading is the COMBINATION of items delivered, error
+  or not, and whether `onDone` ran clean — `items=2, NO ERROR, endedClean=true`
+  is a truncated response nobody can tell from a complete one. **The third arm
+  is the control and it is what makes the negative readable**: a handler that
+  ends properly, so the probe has to report `NO ERROR` for something
 - **[P-96](P-96-response-pump-outlives-its-call.md)** valid (round 426),
   rpc_dart — does a producer stop when its call ends, and on WHICH endings? Six
   arms, one per way a bidi call can end; the number is messages pulled in the
