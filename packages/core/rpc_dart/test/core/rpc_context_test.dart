@@ -11,8 +11,8 @@ import 'package:test/test.dart';
 
 void main() {
   group('RpcContext', () {
-    group('создание контекста', () {
-      test('создает_пустой_контекст_с_базовыми_параметрами', () {
+    group('creating a context', () {
+      test('empty() gives the base fields', () {
         // Arrange & Act
         final sut = RpcContext.empty();
 
@@ -28,7 +28,7 @@ void main() {
         expect(sut.remainingTime, isNull);
       });
 
-      test('создает_контекст_с_заголовками', () {
+      test('withHeaders() carries the headers', () {
         // Arrange
         final headers = <String, String>{
           'authorization': 'Bearer token-123',
@@ -46,7 +46,7 @@ void main() {
         expect(sut.getHeader('non-existent'), isNull);
       });
 
-      test('создает_контекст_с_deadline', () {
+      test('a context can carry a deadline', () {
         // Arrange
         final deadline = DateTime.now().add(Duration(hours: 1));
 
@@ -60,7 +60,7 @@ void main() {
         expect(sut.remainingTime!.inMinutes, greaterThanOrEqualTo(59));
       });
 
-      test('создает_контекст_с_timeout', () {
+      test('a context can carry a timeout', () {
         // Arrange
         final timeout = Duration(minutes: 30);
         final beforeCreation = DateTime.now().add(timeout);
@@ -81,7 +81,7 @@ void main() {
         );
       });
 
-      test('создает_контекст_с_токеном_отмены', () {
+      test('a context can carry a cancellation token', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
 
@@ -93,7 +93,7 @@ void main() {
         expect(sut.isCancelled, isFalse);
       });
 
-      test('создает_контекст_с_trace_id', () {
+      test('a context can carry a trace id', () {
         // Arrange
         const traceId = 'trace-id-12345';
 
@@ -105,7 +105,7 @@ void main() {
       });
     });
 
-    group('модификация контекста', () {
+    group('modifying a context', () {
       late RpcContext baseSut;
 
       setUp(() {
@@ -114,7 +114,7 @@ void main() {
         }).withTraceId('base-trace');
       });
 
-      test('добавляет_дополнительные_заголовки_сохраняя_существующие', () {
+      test('adding headers keeps the ones already there', () {
         // Arrange
         final additionalHeaders = <String, String>{
           'new-header': 'new-value',
@@ -128,10 +128,10 @@ void main() {
         expect(sut.getHeader('existing'), equals('header'));
         expect(sut.getHeader('new-header'), equals('new-value'));
         expect(sut.getHeader('another'), equals('value'));
-        expect(sut.traceId, equals('base-trace')); // Остальные поля сохранены
+        expect(sut.traceId, equals('base-trace')); // Others preserved.
       });
 
-      test('перезаписывает_существующие_заголовки_при_добавлении', () {
+      test('adding a header that exists overwrites it', () {
         // Arrange
         final overrideHeaders = <String, String>{
           'existing': 'new-value',
@@ -146,7 +146,7 @@ void main() {
         expect(sut.getHeader('additional'), equals('header'));
       });
 
-      test('устанавливает_новый_deadline', () {
+      test('sets a new deadline', () {
         // Arrange
         final newDeadline = DateTime.now().add(Duration(hours: 2));
 
@@ -158,11 +158,11 @@ void main() {
         expect(
           sut.getHeader('existing'),
           equals('header'),
-        ); // Остальные поля сохранены
+        ); // The other fields are preserved.
         expect(sut.traceId, equals('base-trace'));
       });
 
-      test('устанавливает_timeout_относительно_текущего_времени', () {
+      test('sets a timeout relative to now', () {
         // Arrange
         final timeout = Duration(minutes: 45);
         final beforeCreation = DateTime.now().add(timeout);
@@ -183,7 +183,7 @@ void main() {
         );
       });
 
-      test('устанавливает_токен_отмены', () {
+      test('sets a cancellation token', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
 
@@ -195,10 +195,10 @@ void main() {
         expect(
           sut.getHeader('existing'),
           equals('header'),
-        ); // Остальные поля сохранены
+        ); // The other fields are preserved.
       });
 
-      test('устанавливает_новый_trace_id', () {
+      test('sets a new trace id', () {
         // Arrange
         const newTraceId = 'new-trace-id-789';
 
@@ -210,10 +210,10 @@ void main() {
         expect(
           sut.getHeader('existing'),
           equals('header'),
-        ); // Остальные поля сохранены
+        ); // The other fields are preserved.
       });
 
-      test('добавляет_значение_в_контекст', () {
+      test('adds a value to the context', () {
         // Arrange
         const key = 'user-data';
         const value = 'important-value';
@@ -227,12 +227,12 @@ void main() {
         expect(
           sut.getHeader('existing'),
           equals('header'),
-        ); // Остальные поля сохранены
+        ); // The other fields are preserved.
       });
     });
 
-    group('проверка_состояния', () {
-      test('определяет_истекший_deadline', () {
+    group('state', () {
+      test('sees an expired deadline', () {
         // Arrange
         final expiredDeadline = DateTime.now().subtract(Duration(minutes: 1));
         final sut = RpcContext.withDeadline(expiredDeadline);
@@ -242,7 +242,7 @@ void main() {
         expect(sut.remainingTime, equals(Duration.zero));
       });
 
-      test('определяет_активный_deadline', () {
+      test('sees a live deadline', () {
         // Arrange
         final futureDeadline = DateTime.now().add(Duration(hours: 1));
         final sut = RpcContext.withDeadline(futureDeadline);
@@ -253,19 +253,19 @@ void main() {
         expect(sut.remainingTime!.inMinutes, greaterThanOrEqualTo(59));
       });
 
-      test('определяет_отмененный_контекст', () {
+      test('sees a cancelled context', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
         final sut = RpcContext.withCancellation(cancellationToken);
 
         // Act
-        cancellationToken.cancel('Пользователь отменил операцию');
+        cancellationToken.cancel('the user cancelled the operation');
 
         // Assert
         expect(sut.isCancelled, isTrue);
       });
 
-      test('определяет_неотмененный_контекст', () {
+      test('sees a context that is not cancelled', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
         final sut = RpcContext.withCancellation(cancellationToken);
@@ -275,8 +275,8 @@ void main() {
       });
     });
 
-    group('доступ_к_данным', () {
-      test('возвращает_неизменяемые_заголовки', () {
+    group('reading the data', () {
+      test('the headers come back unmodifiable', () {
         // Arrange
         final originalHeaders = <String, String>{'key': 'value'};
         final sut = RpcContext.withHeaders(originalHeaders);
@@ -288,7 +288,7 @@ void main() {
         expect(() => headers['new'] = 'value', throwsUnsupportedError);
       });
 
-      test('возвращает_неизменяемые_значения', () {
+      test('the values come back unmodifiable', () {
         // Arrange
         final sut = RpcContext.empty().withValue('key', 'value');
 
@@ -299,7 +299,7 @@ void main() {
         expect(() => values['new'] = 'value', throwsUnsupportedError);
       });
 
-      test('корректно_типизирует_значения', () {
+      test('a value comes back at its declared type', () {
         // Arrange
         final sut = RpcContext.empty()
             .withValue('string-key', 'string-value')
@@ -311,7 +311,7 @@ void main() {
         expect(sut.getValue<int>('int-key'), equals(42));
         expect(sut.getValue<List<int>>('list-key'), equals([1, 2, 3]));
 
-        // Проверяем что неправильный тип выбрасывает исключение при касте
+        // Asking for the wrong type must throw on the cast.
         expect(
           () => sut.getValue<String>('int-key'),
           throwsA(isA<TypeError>()),
@@ -319,11 +319,11 @@ void main() {
       });
     });
 
-    group('генерация_request_id', () {
-      test('генерирует_уникальные_request_id', () async {
+    group('request id', () {
+      test('every request id is unique', () async {
         // Arrange & Act
         final context1 = RpcContext.empty();
-        // Добавляем небольшую задержку чтобы timestamp был разный
+        // A short delay, so the two timestamps differ.
         await Future<void>.delayed(Duration(milliseconds: 1));
         final context2 = RpcContext.empty();
         await Future<void>.delayed(Duration(milliseconds: 1));
@@ -338,7 +338,7 @@ void main() {
         expect(context1.requestId, isNot(equals(context3.requestId)));
       });
 
-      test('сохраняет_request_id_при_модификации', () {
+      test('the request id survives a modification', () {
         // Arrange
         final originalSut = RpcContext.empty();
         final originalRequestId = originalSut.requestId;
@@ -355,7 +355,7 @@ void main() {
     });
 
     group('toString', () {
-      test('отображает_базовую_информацию', () {
+      test('prints the basics', () {
         // Arrange
         final sut = RpcContext.empty();
 
@@ -367,7 +367,7 @@ void main() {
         expect(result, contains('requestId: ${sut.requestId}'));
       });
 
-      test('отображает_все_установленные_поля', () {
+      test('prints every field that is set', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
         final deadline = DateTime.now().add(Duration(hours: 1));
@@ -389,7 +389,7 @@ void main() {
         expect(result, isNot(contains('EXPIRED')));
       });
 
-      test('отображает_статус_отмены', () {
+      test('prints that it is cancelled', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
         final sut = RpcContext.withCancellation(cancellationToken);
@@ -402,7 +402,7 @@ void main() {
         expect(result, contains('CANCELLED'));
       });
 
-      test('отображает_статус_истечения', () {
+      test('prints that it has expired', () {
         // Arrange
         final expiredDeadline = DateTime.now().subtract(Duration(minutes: 1));
         final sut = RpcContext.withDeadline(expiredDeadline);
@@ -417,8 +417,8 @@ void main() {
   });
 
   group('CancellationToken', () {
-    group('создание_токена', () {
-      test('создает_активный_токен', () {
+    group('creating a token', () {
+      test('a fresh token is live', () {
         // Arrange & Act
         final sut = RpcCancellationToken();
 
@@ -427,9 +427,9 @@ void main() {
         expect(sut.reason, isNull);
       });
 
-      test('создает_уже_отмененный_токен', () {
+      test('cancelled() gives an already-cancelled token', () {
         // Arrange
-        const reason = 'Предварительно отменен';
+        const reason = 'cancelled up front';
 
         // Act
         final sut = RpcCancellationToken.cancelled(reason);
@@ -439,7 +439,7 @@ void main() {
         expect(sut.reason, equals(reason));
       });
 
-      test('создает_отмененный_токен_без_причины', () {
+      test('cancelled() without a reason leaves reason null', () {
         // Arrange & Act
         final sut = RpcCancellationToken.cancelled();
 
@@ -449,11 +449,11 @@ void main() {
       });
     });
 
-    group('отмена_токена', () {
-      test('отменяет_активный_токен', () {
+    group('cancelling a token', () {
+      test('cancels a live token', () {
         // Arrange
         final sut = RpcCancellationToken();
-        const reason = 'Пользователь отменил';
+        const reason = 'the user cancelled';
 
         // Act
         sut.cancel(reason);
@@ -463,7 +463,7 @@ void main() {
         expect(sut.reason, equals(reason));
       });
 
-      test('отменяет_токен_без_причины', () {
+      test('cancels without a reason', () {
         // Arrange
         final sut = RpcCancellationToken();
 
@@ -475,23 +475,23 @@ void main() {
         expect(sut.reason, isNull);
       });
 
-      test('игнорирует_повторную_отмену', () {
+      test('a second cancel is ignored', () {
         // Arrange
         final sut = RpcCancellationToken();
-        sut.cancel('Первая причина');
+        sut.cancel('the first reason');
 
         // Act
-        sut.cancel('Вторая причина');
+        sut.cancel('the second reason');
 
         // Assert
         expect(sut.isCancelled, isTrue);
         expect(
           sut.reason,
-          equals('Первая причина'),
-        ); // Сохраняется первая причина
+          equals('the first reason'),
+        ); // The first reason is the one kept.
       });
 
-      test('уведомляет_о_отмене_через_future', () async {
+      test('the future completes on cancel', () async {
         // Arrange
         final sut = RpcCancellationToken();
         bool notified = false;
@@ -500,7 +500,7 @@ void main() {
         unawaited(sut.cancelled.then((_) => notified = true));
         sut.cancel();
 
-        // Даем время на выполнение callback
+        // Let the callback run.
         await Future<void>.delayed(Duration.zero);
 
         // Assert
@@ -508,8 +508,8 @@ void main() {
       });
     });
 
-    group('проверка_отмены', () {
-      test('не_выбрасывает_исключение_для_активного_токена', () {
+    group('throwIfCancelled', () {
+      test('a live token does not throw', () {
         // Arrange
         final sut = RpcCancellationToken();
 
@@ -517,10 +517,10 @@ void main() {
         expect(() => sut.throwIfCancelled(), returnsNormally);
       });
 
-      test('выбрасывает_исключение_для_отмененного_токена', () {
+      test('a cancelled token throws, carrying the reason', () {
         // Arrange
         final sut = RpcCancellationToken();
-        const reason = 'Токен отменен';
+        const reason = 'the token was cancelled';
         sut.cancel(reason);
 
         // Act & Assert
@@ -536,10 +536,10 @@ void main() {
         );
       });
 
-      test('выбрасывает_исключение_с_дефолтным_сообщением', () {
+      test('with no reason it throws the default message', () {
         // Arrange
         final sut = RpcCancellationToken();
-        sut.cancel(); // Без причины
+        sut.cancel(); // No reason given.
 
         // Act & Assert
         expect(
@@ -557,8 +557,8 @@ void main() {
   });
 
   group('RpcContextUtils', () {
-    group('аутентификация', () {
-      test('создает_контекст_с_basic_auth', () {
+    group('authentication', () {
+      test('basic auth', () {
         // Arrange
         const username = 'testuser';
         const password = 'testpass';
@@ -576,7 +576,7 @@ void main() {
         );
       });
 
-      test('создает_контекст_с_bearer_token', () {
+      test('a bearer token', () {
         // Arrange
         const token = 'abc123def456';
 
@@ -587,7 +587,7 @@ void main() {
         expect(sut.getHeader('authorization'), equals('Bearer $token'));
       });
 
-      test('создает_контекст_с_api_key', () {
+      test('an api key', () {
         // Arrange
         const key = 'api-key-12345';
 
@@ -598,7 +598,7 @@ void main() {
         expect(sut.getHeader('x-api-key'), equals(key));
       });
 
-      test('создает_контекст_с_кастомным_заголовком_api_key', () {
+      test('an api key under a custom header', () {
         // Arrange
         const key = 'custom-api-key';
         const headerName = 'custom-auth-header';
@@ -612,8 +612,8 @@ void main() {
       });
     });
 
-    group('трассировка', () {
-      test('создает_контекст_с_полной_трассировкой', () {
+    group('tracing', () {
+      test('a full trace: trace id, span id, parent span id', () {
         // Arrange
         const traceId = 'trace-123';
         const spanId = 'span-456';
@@ -633,7 +633,7 @@ void main() {
         expect(sut.traceId, equals(traceId));
       });
 
-      test('создает_контекст_только_с_trace_id', () {
+      test('a trace id on its own', () {
         // Arrange
         const traceId = 'trace-only';
 
@@ -647,7 +647,7 @@ void main() {
         expect(sut.traceId, equals(traceId));
       });
 
-      test('генерирует_trace_id_если_не_указан', () {
+      test('a trace id is generated when none is given', () {
         // Arrange & Act
         final sut = RpcContextUtils.withTracing();
 
@@ -655,11 +655,11 @@ void main() {
         expect(sut.traceId, isNotNull);
         expect(sut.traceId, isNotEmpty);
         expect(sut.traceId, startsWith('trace_'));
-        // Когда traceId не передан, он генерируется но заголовок не устанавливается
+        // With no traceId passed one is generated, but no header is set.
         expect(sut.getHeader('x-trace-id'), isNull);
       });
 
-      test('generateTraceId уникален в пределах одной миллисекунды', () {
+      test('generateTraceId is unique within one millisecond', () {
         // Tight loop -> many ids share the same millisecond timestamp.
         final ids = <String>{};
         for (var i = 0; i < 10000; i++) {
@@ -670,8 +670,8 @@ void main() {
       });
     });
 
-    group('объединение_контекстов', () {
-      test('объединяет_заголовки_из_двух_контекстов', () {
+    group('merging two contexts', () {
+      test('headers from both are kept', () {
         // Arrange
         final leftSut = RpcContext.withHeaders({
           'left-header': 'left-value',
@@ -691,10 +691,10 @@ void main() {
         expect(
           merged.getHeader('common'),
           equals('right'),
-        ); // Правый имеет приоритет
+        ); // The right-hand side wins.
       });
 
-      test('объединяет_значения_из_двух_контекстов', () {
+      test('values from both are kept', () {
         // Arrange
         final leftSut = RpcContext.empty()
             .withValue('left-key', 'left-value')
@@ -712,10 +712,10 @@ void main() {
         expect(
           merged.getValue<String>('common-key'),
           equals('right'),
-        ); // Правый имеет приоритет
+        ); // The right-hand side wins.
       });
 
-      test('использует_правые_значения_для_специальных_полей', () {
+      test('for the special fields the right-hand side wins', () {
         // Arrange
         final leftDeadline = DateTime.now().add(Duration(hours: 1));
         final rightDeadline = DateTime.now().add(Duration(hours: 2));
@@ -739,7 +739,7 @@ void main() {
         expect(merged.requestId, equals(rightSut.requestId));
       });
 
-      test('использует_левые_значения_если_правые_null', () {
+      test('the left-hand side is used where the right is null', () {
         // Arrange
         final deadline = DateTime.now().add(Duration(hours: 1));
         final token = RpcCancellationToken();
@@ -761,10 +761,10 @@ void main() {
     });
   });
 
-  group('исключения', () {
-    test('RpcCancelledException_содержит_корректное_сообщение', () {
+  group('exceptions', () {
+    test('RpcCancelledException carries its message', () {
       // Arrange
-      const message = 'Операция была отменена пользователем';
+      const message = 'the operation was cancelled by the user';
 
       // Act
       final sut = RpcCancelledException(message);
@@ -774,7 +774,7 @@ void main() {
       expect(sut.toString(), equals('RpcCancelledException: $message'));
     });
 
-    test('RpcDeadlineExceededException_содержит_deadline_и_timeout', () {
+    test('RpcDeadlineExceededException carries deadline and timeout', () {
       // Arrange
       final deadline = DateTime.now().add(Duration(minutes: 5));
       final timeout = Duration(minutes: 5);

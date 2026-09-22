@@ -73,6 +73,11 @@ test/serializers/fast_cbor_encoder_test.dart:48-50, 65-67
 
 test/serializers/fast_cbor_encoder_test.dart:260, 285
     'unicode: 🌟'
+
+test/core/rpc_context_validation_test.dart:76                (round 438)
+    RpcContext.withHeaders({'x-name': 'тест с unicode 🚀'})
+    then expectLater(..., throwsA(isA<ArgumentError>()))
+    the send must REFUSE it; ASCII is valid, so translating inverts the test
 ```
 
 ## Control
@@ -101,6 +106,15 @@ round-trip fixture asserts `decoded == original`, which holds for any string.
 Translate it and the suite stays green while the coverage — does this codec
 handle multi-byte UTF-8 — is gone, with nothing anywhere to say so. The two
 loud ones would have stopped a careless sweep by themselves; this one would not.
+
+**A third shape, found in round 438 and not among the fixtures above**: prose
+data with a producer and an assertion far apart.
+`rpc_context_integration_test.dart` built `'Aggregated N элементов [...]'` at
+`:592` and asserted `contains('3 элементов')` at `:231` and `:271`. Three sites,
+one edit; translate any two and the suite goes red. That is the GOOD failure
+mode, and it is worth naming only because a partial edit is what triggers it —
+the hazard is proportional to how far the producer sits from the assertion, and
+here it was 350 lines. These lines are not fixtures and were translated.
 
 Everything in the census above is one of those two shapes. The round-trip shape
 covers `error_details_test.dart:266-277`, `cbor_test.dart:374/404/421`,

@@ -8,8 +8,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-/// Комплексные тесты валидации корректности реализации RPC контекста
-/// Проверяют правильность работы во всех типах RPC методов и edge cases
+/// End-to-end validation of the RPC context: that it behaves correctly across
+/// every method shape, and at the edges.
 void main() {
   group('RPC Context Validation', () {
     late RpcCallerEndpoint clientEndpoint;
@@ -36,8 +36,8 @@ void main() {
       await serverEndpoint.close();
     });
 
-    group('Header передача', () {
-      test('все_типы_заголовков_передаются_корректно', () async {
+    group('carrying headers', () {
+      test('every kind of header crosses intact', () async {
         // Arrange
         final context = RpcContext.withHeaders({
           'user-id': 'test-user-123',
@@ -69,7 +69,7 @@ void main() {
         expect(response, contains('numbers:12345'));
       });
 
-      test('не-ASCII значение заголовка отклоняется на отправке', () async {
+      test('a non-ASCII header value is refused on send', () async {
         // Per gRPC, ASCII metadata values must be printable ASCII; non-ASCII /
         // binary must use a -bin key. Sending a unicode header value must fail
         // rather than silently corrupt on the wire.
@@ -88,7 +88,7 @@ void main() {
         );
       });
 
-      test('системные_заголовки_работают_корректно', () async {
+      test('the system headers behave', () async {
         // Arrange
         final context = RpcContext.withTraceId('test-trace-123');
 
@@ -105,15 +105,12 @@ void main() {
         // Assert
         final response = result.value;
         expect(response, contains('trace-id:test-trace-123'));
-        expect(
-          response,
-          contains('request-id:req_'),
-        ); // Проверяем формат request ID
+        expect(response, contains('request-id:req_')); // The request-id format.
       });
     });
 
-    group('Deadline и Timeout', () {
-      test('контекст_с_timeout_работает_правильно', () async {
+    group('deadline and timeout', () {
+      test('a context with a timeout works', () async {
         // Arrange
         final context = RpcContext.withTimeout(Duration(milliseconds: 10));
 
@@ -133,8 +130,8 @@ void main() {
         );
       });
 
-      test('контекст_с_deadline_проверяется_перед_вызовом', () async {
-        // Arrange - создаем уже истекший deadline
+      test('a deadline is checked before the call goes out', () async {
+        // Arrange: a deadline that has already passed.
         final expiredDeadline = DateTime.now().subtract(Duration(hours: 1));
         final context = RpcContext.withDeadline(expiredDeadline);
 
@@ -154,7 +151,7 @@ void main() {
     });
 
     group('Cancellation Token', () {
-      test('отмена_до_вызова_выбрасывает_исключение', () async {
+      test('cancelling before the call throws', () async {
         // Arrange
         final token = RpcCancellationToken.cancelled('Pre-cancelled');
         final context = RpcContext.withCancellation(token);
@@ -173,12 +170,12 @@ void main() {
         );
       });
 
-      test('отмена_во_время_выполнения_прерывает_операцию', () async {
+      test('cancelling mid-flight interrupts the operation', () async {
         // Arrange
         final token = RpcCancellationToken();
         final context = RpcContext.withCancellation(token);
 
-        // Отменяем через 100мс (после начала выполнения)
+        // Cancel once the handler is under way.
         Timer(Duration(milliseconds: 1), () {
           token.cancel('Operation cancelled during execution');
         });
@@ -198,8 +195,8 @@ void main() {
       });
     });
 
-    group('Server Streaming с контекстом', () {
-      test('контекст_передается_в_server_stream_handler', () async {
+    group('server streaming with a context', () {
+      test('the context reaches the server-stream handler', () async {
         // Arrange
         final context = RpcContext.withHeaders({
           'stream-size': '3',
@@ -230,8 +227,8 @@ void main() {
       });
     });
 
-    group('Client Streaming с контекстом', () {
-      test('контекст_передается_в_client_stream_handler', () async {
+    group('client streaming with a context', () {
+      test('the context reaches the client-stream handler', () async {
         // Arrange
         final context = RpcContext.withHeaders({
           'aggregation-type': 'count',
@@ -268,8 +265,8 @@ void main() {
       });
     });
 
-    group('Bidirectional Streaming с контекстом', () {
-      test('контекст_передается_в_bidirectional_handler', () async {
+    group('bidirectional streaming with a context', () {
+      test('the context reaches the bidirectional handler', () async {
         // Arrange
         final context = RpcContext.withHeaders({
           'echo-prefix': 'ECHO',
@@ -297,14 +294,14 @@ void main() {
         requestController.add('hello'.rpc);
         await Future<void>.delayed(
           Duration(milliseconds: 1),
-        ); // Даем время для обработки
+        ); // Let the handler run.
         requestController.add('world'.rpc);
         await Future<void>.delayed(
           Duration(milliseconds: 1),
-        ); // Даем время для обработки
+        ); // Let the handler run.
         await requestController.close();
 
-        // Ждем больше времени для получения ответов
+        // Wait longer, for the answers to arrive.
         await Future<void>.delayed(Duration(milliseconds: 1));
         await subscription.cancel();
 
@@ -319,8 +316,8 @@ void main() {
       });
     });
 
-    group('Context Values (локальные значения)', () {
-      test('context_values_не_передаются_по_сети', () async {
+    group('context values, which are local', () {
+      test('context values do not go over the wire', () async {
         // Arrange
         final context = RpcContext.withHeaders({
           'visible-header': 'should-appear',
@@ -343,12 +340,12 @@ void main() {
         expect(
           response,
           contains('context-values-count:0'),
-        ); // Сервер не должен видеть context values
+        ); // The server must not see the context values.
       });
     });
 
     group('Edge Cases', () {
-      test('пустой_контекст_не_ломает_работу', () async {
+      test('an empty context breaks nothing', () async {
         // Arrange
         final context = RpcContext.empty();
 
@@ -366,12 +363,12 @@ void main() {
         expect(result.value, isNotEmpty);
       });
 
-      test('null_контекст_работает_корректно', () async {
+      test('a null context works', () async {
         // Act
         final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName:
-              'ValidateSystemHeaders', // Используем метод который всегда генерирует requestId
+              'ValidateSystemHeaders', // This method always makes a requestId.
           requestCodec: RpcString.codec,
           responseCodec: RpcString.codec,
           request: 'test'.rpc,
@@ -379,16 +376,16 @@ void main() {
         );
 
         // Assert
-        expect(result.value, isNotEmpty); // Должен содержать хотя бы requestId
+        expect(result.value, isNotEmpty); // At minimum, a requestId.
         expect(
           result.value,
           contains('request-id:req_'),
-        ); // Базовый requestId должен быть
+        ); // The base requestId must be there.
       });
 
-      test('очень_длинные_заголовки_работают', () async {
+      test('a very long header value works', () async {
         // Arrange
-        final longValue = 'x' * 1000; // 1KB заголовок
+        final longValue = 'x' * 1000; // A 1 KB header.
         final context = RpcContext.withHeaders({'long-header': longValue});
 
         // Act
@@ -408,7 +405,7 @@ void main() {
   });
 }
 
-/// Тестовый сервис для валидации контекста
+/// The service these tests drive.
 final class ValidationServiceContract extends RpcResponderContract {
   ValidationServiceContract() : super('ValidationService');
 
@@ -419,7 +416,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _validateHeaders,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Проверяет передачу заголовков',
+      description: 'Checks that headers are carried',
     );
 
     addUnaryMethod<RpcString, RpcString>(
@@ -427,7 +424,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _validateSystemHeaders,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Проверяет системные заголовки',
+      description: 'Checks the system headers',
     );
 
     addUnaryMethod<RpcString, RpcString>(
@@ -435,7 +432,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _slowOperation,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Медленная операция для тестирования timeout',
+      description: 'A slow operation, for the timeout tests',
     );
 
     addUnaryMethod<RpcString, RpcString>(
@@ -443,7 +440,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _fastOperation,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Быстрая операция',
+      description: 'A fast operation',
     );
 
     addUnaryMethod<RpcString, RpcString>(
@@ -451,7 +448,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _longOperation,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Долгая операция для тестирования отмены',
+      description: 'A long operation, for the cancellation tests',
     );
 
     addUnaryMethod<RpcString, RpcString>(
@@ -459,7 +456,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _checkContextValues,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Проверяет что context values не передаются по сети',
+      description: 'Checks that context values stay off the wire',
     );
 
     addServerStreamMethod<RpcString, RpcString>(
@@ -467,7 +464,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _generateWithContext,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Генерирует данные используя контекст',
+      description: 'Generates data from the context',
     );
 
     addClientStreamMethod<RpcString, RpcString>(
@@ -475,7 +472,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _aggregateWithContext,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Агрегирует данные используя контекст',
+      description: 'Aggregates data using the context',
     );
 
     addBidirectionalMethod<RpcString, RpcString>(
@@ -483,7 +480,7 @@ final class ValidationServiceContract extends RpcResponderContract {
       handler: _processWithContext,
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-      description: 'Обрабатывает поток используя контекст',
+      description: 'Processes a stream using the context',
     );
   }
 
@@ -511,7 +508,7 @@ final class ValidationServiceContract extends RpcResponderContract {
   }) async {
     await Future<void>.delayed(
       Duration(seconds: 5),
-    ); // Превышает timeout в тесте
+    ); // Longer than the timeout the test sets.
     return 'slow-result'.rpc;
   }
 
@@ -526,7 +523,7 @@ final class ValidationServiceContract extends RpcResponderContract {
     RpcString request, {
     RpcContext? context,
   }) async {
-    // Проверяем отмену каждые 10мс
+    // Check for cancellation every 10 ms.
     for (int i = 0; i < 1000; i++) {
       context?.cancellationToken?.throwIfCancelled();
       await Future<void>.delayed(Duration(milliseconds: 1));

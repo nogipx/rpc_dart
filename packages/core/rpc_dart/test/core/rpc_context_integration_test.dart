@@ -16,7 +16,7 @@ void main() {
     late IRpcTransport serverTransport;
 
     setUp(() {
-      // Arrange - Создаем пару транспортов
+      // Arrange: a transport pair.
       final (client, server) = RpcInMemoryTransport.pair();
       clientTransport = client;
       serverTransport = server;
@@ -30,8 +30,8 @@ void main() {
       await serverEndpoint.close();
     });
 
-    group('унарные запросы с контекстом', () {
-      test('передает_заголовки_аутентификации_корректно', () async {
+    group('unary calls with a context', () {
+      test('the auth headers cross intact', () async {
         // Arrange
         final testService = _TestServiceContract();
         serverEndpoint.registerServiceContract(testService);
@@ -55,7 +55,7 @@ void main() {
         expect(response.value, contains('user-123'));
       });
 
-      test('передает_trace_id_для_распределенной_трассировки', () async {
+      test('the trace id crosses, for distributed tracing', () async {
         // Arrange
         final tracingService = _TracingServiceContract();
         serverEndpoint.registerServiceContract(tracingService);
@@ -85,7 +85,7 @@ void main() {
         expect(response.value, contains('parent-span-001'));
       });
 
-      test('объединяет_контексты_с_разными_заголовками', () async {
+      test('two contexts with different headers merge', () async {
         // Arrange
         final combinedService = _CombinedContextServiceContract();
         serverEndpoint.registerServiceContract(combinedService);
@@ -120,8 +120,8 @@ void main() {
       });
     });
 
-    group('серверные стримы с контекстом', () {
-      test('передает_контекст_в_server_stream_handler', () async {
+    group('server streams with a context', () {
+      test('the context reaches the server-stream handler', () async {
         // Arrange
         final streamService = _StreamServiceContract();
         serverEndpoint.registerServiceContract(streamService);
@@ -156,7 +156,7 @@ void main() {
         expect(responses.every((r) => r.value.contains('test')), isTrue);
       });
 
-      test('работает_с_трейсингом_в_server_stream', () async {
+      test('tracing works over a server stream', () async {
         // Arrange
         final streamService = _StreamServiceContract();
         serverEndpoint.registerServiceContract(streamService);
@@ -192,8 +192,8 @@ void main() {
       });
     });
 
-    group('клиентские стримы с контекстом', () {
-      test('передает_контекст_в_client_stream_handler', () async {
+    group('client streams with a context', () {
+      test('the context reaches the client-stream handler', () async {
         // Arrange
         final aggregationService = _AggregationServiceContract();
         serverEndpoint.registerServiceContract(aggregationService);
@@ -216,7 +216,7 @@ void main() {
               context: context,
             )(requestsController.stream);
 
-        // Отправляем данные
+        // Send the data.
         final requests = ['data1', 'data2', 'data3'];
         for (final req in requests) {
           requestsController.add(req.rpc);
@@ -228,11 +228,11 @@ void main() {
         // Assert
         expect(response.value, contains('aggregator-456'));
         expect(response.value, contains('sum'));
-        expect(response.value, contains('3 элементов'));
+        expect(response.value, contains('3 items'));
         expect(response.value, contains('proc-123'));
       });
 
-      test('работает_с_аутентификацией_в_client_stream', () async {
+      test('authentication works over a client stream', () async {
         // Arrange
         final aggregationService = _AggregationServiceContract();
         serverEndpoint.registerServiceContract(aggregationService);
@@ -255,7 +255,7 @@ void main() {
               context: context,
             )(requestsController.stream);
 
-        // Отправляем данные
+        // Send the data.
         final requests = ['auth-data1', 'auth-data2'];
         for (final req in requests) {
           requestsController.add(req.rpc);
@@ -268,12 +268,12 @@ void main() {
         expect(response.value, contains('Bearer client-stream-token'));
         expect(response.value, contains('auth-user-789'));
         expect(response.value, contains('authenticated'));
-        expect(response.value, contains('2 элементов'));
+        expect(response.value, contains('2 items'));
       });
     });
 
-    group('двунаправленные стримы с контекстом', () {
-      test('передает_контекст_в_bidirectional_stream_handler', () async {
+    group('bidirectional streams with a context', () {
+      test('the context reaches the bidirectional handler', () async {
         // Arrange
         final echoService = _EchoServiceContract();
         serverEndpoint.registerServiceContract(echoService);
@@ -302,17 +302,17 @@ void main() {
           receivedResponses.add(message);
         });
 
-        // Отправляем сообщения
+        // Send the messages.
         requestsController.add('msg1'.rpc);
         requestsController.add('msg2'.rpc);
 
-        // Ждем немного для обработки
+        // Let the handler run.
         await Future<void>.delayed(Duration(milliseconds: 1));
 
-        // Закрываем поток запросов
+        // Close the request stream.
         await requestsController.close();
 
-        // Ждем завершения
+        // Wait for it to finish.
         await Future<void>.delayed(Duration(milliseconds: 1));
         await responseSubscription.cancel();
 
@@ -330,7 +330,7 @@ void main() {
         }
       });
 
-      test('работает_с_полным_контекстом_в_bidirectional_stream', () async {
+      test('a full context works over a bidirectional stream', () async {
         // Arrange
         final echoService = _EchoServiceContract();
         serverEndpoint.registerServiceContract(echoService);
@@ -361,13 +361,13 @@ void main() {
           receivedResponses.add(message);
         });
 
-        // Отправляем сообщения
+        // Send the messages.
         requestsController.add('secure-msg'.rpc);
 
-        // Ждем обработки
+        // Let the handler run.
         await Future<void>.delayed(Duration(milliseconds: 1));
 
-        // Закрываем поток
+        // Close the stream.
         await requestsController.close();
         await Future<void>.delayed(Duration(milliseconds: 1));
         await responseSubscription.cancel();
@@ -380,8 +380,8 @@ void main() {
       });
     });
 
-    group('контрактная интеграция', () {
-      test('работает_через_caller_contract_с_контекстом', () async {
+    group('through a contract', () {
+      test('a caller contract carries the context', () async {
         // Arrange
         final testService = _TestServiceContract();
         serverEndpoint.registerServiceContract(testService);
@@ -401,7 +401,7 @@ void main() {
         expect(response.value, contains('contract-user'));
       });
 
-      test('stream_contract_с_контекстом', () async {
+      test('a stream contract carries the context', () async {
         // Arrange
         final streamService = _StreamServiceContract();
         serverEndpoint.registerServiceContract(streamService);
@@ -430,8 +430,8 @@ void main() {
       });
     });
 
-    group('обработка ошибок с контекстом', () {
-      test('включает_trace_id_в_сообщения_об_ошибках', () async {
+    group('errors, with a context', () {
+      test('the trace id appears in the error message', () async {
         // Arrange
         final errorService = _ErrorServiceContract();
         serverEndpoint.registerServiceContract(errorService);
@@ -450,7 +450,7 @@ void main() {
             request: 'error-request'.rpc,
             context: context,
           );
-          fail('Ожидалось исключение');
+          fail('it should have thrown');
         } catch (e) {
           expect(e.toString(), contains(traceId));
         }
@@ -459,7 +459,7 @@ void main() {
   });
 }
 
-/// Тестовый сервис для проверки передачи аутентификации
+/// A service for the authentication tests.
 final class _TestServiceContract extends RpcResponderContract {
   _TestServiceContract() : super('TestService');
 
@@ -482,7 +482,7 @@ final class _TestServiceContract extends RpcResponderContract {
   }
 }
 
-/// Тестовый сервис для проверки трассировки
+/// A service for the tracing tests.
 final class _TracingServiceContract extends RpcResponderContract {
   _TracingServiceContract() : super('TracingService');
 
@@ -509,7 +509,7 @@ final class _TracingServiceContract extends RpcResponderContract {
   }
 }
 
-/// Тестовый сервис для проверки объединения контекстов
+/// A service for the context-merging tests.
 final class _CombinedContextServiceContract extends RpcResponderContract {
   _CombinedContextServiceContract() : super('CombinedContextService');
 
@@ -536,7 +536,7 @@ final class _CombinedContextServiceContract extends RpcResponderContract {
   }
 }
 
-/// Тестовый сервис для серверных стримов
+/// A service for the server-stream tests.
 final class _StreamServiceContract extends RpcResponderContract {
   _StreamServiceContract() : super('StreamService');
 
@@ -565,7 +565,7 @@ final class _StreamServiceContract extends RpcResponderContract {
   }
 }
 
-/// Тестовый сервис для клиентских стримов
+/// A service for the client-stream tests.
 final class _AggregationServiceContract extends RpcResponderContract {
   _AggregationServiceContract() : super('AggregationService');
 
@@ -589,12 +589,12 @@ final class _AggregationServiceContract extends RpcResponderContract {
     final processorId = context?.getHeader('processor-id');
 
     final allRequests = await requests.toList();
-    return 'Aggregated ${allRequests.length} элементов [type=$aggregationType, user=$userId, auth=$auth, processor=$processorId]'
+    return 'Aggregated ${allRequests.length} items [type=$aggregationType, user=$userId, auth=$auth, processor=$processorId]'
         .rpc;
   }
 }
 
-/// Тестовый сервис для двунаправленных стримов
+/// A service for the bidirectional-stream tests.
 final class _EchoServiceContract extends RpcResponderContract {
   _EchoServiceContract() : super('EchoService');
 
@@ -624,7 +624,7 @@ final class _EchoServiceContract extends RpcResponderContract {
   }
 }
 
-/// Тестовый сервис для проверки обработки ошибок
+/// A service for the error-handling tests.
 final class _ErrorServiceContract extends RpcResponderContract {
   _ErrorServiceContract() : super('ErrorService');
 
@@ -654,7 +654,7 @@ final class _ErrorServiceContract extends RpcResponderContract {
   }
 }
 
-/// Клиентский контракт для тестового сервиса
+/// The caller contract for the test service.
 final class _TestServiceCallerContract extends RpcCallerContract {
   _TestServiceCallerContract(RpcCallerEndpoint endpoint)
     : super('TestService', endpoint);
@@ -670,7 +670,7 @@ final class _TestServiceCallerContract extends RpcCallerContract {
   }
 }
 
-/// Клиентский контракт для стримового сервиса
+/// The caller contract for the streaming service.
 final class _StreamServiceCallerContract extends RpcCallerContract {
   _StreamServiceCallerContract(RpcCallerEndpoint endpoint)
     : super('StreamService', endpoint);

@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438]
 status: confirmed (round 432)
 ---
 
@@ -428,3 +428,29 @@ only signal a human has.
 > config is the owner's to change, not a round's.
 
 `../rounds/437-the-lint-that-mandates-the-ambiguous-form.md`.
+
+## Round 438 — the second one, which makes it a rate
+
+437's stale comment could have been an accident. 438 swept a comparable volume
+and found another, in the second file it opened:
+
+```
+437  fast_cbor_encoder_test.dart:144    "< 3ms"  on lessThan(10000)  -- 10 ms
+438  rpc_context_validation_test.dart   "100мс"  on milliseconds: 1
+```
+
+Both state a NUMBER a reader could check against the line below in one second.
+
+The 438 case is the more instructive: `git log -S` shows the timer WAS
+`milliseconds: 100` when the comment was written, and became `1` in a later
+commit. **It was not wrong when written. It drifted, and the drift was
+invisible** — a reviewer skipping a language they do not read cannot notice that
+the number beside it moved.
+
+> **Comments in an unread language do not merely go unwritten-for; they go
+> un-maintained.** Every ordinary edit that moves a constant leaves them behind,
+> and the usual defence — someone reads the diff — is exactly what does not
+> happen there. Expect drift concentrated in that subset, and check the numbers
+> as you translate.
+
+`../rounds/438-the-comment-that-was-right-once.md`.

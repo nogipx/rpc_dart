@@ -248,3 +248,37 @@ generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
 
 Largest files left: `rpc_responder_endpoint_test.dart` (116),
 `rpc_context_test.dart` (83).
+
+## Round 438 — the `rpc_context` family, and a second stale comment
+
+170 Cyrillic lines to 1 across the three `rpc_context` test files; the one that
+stays is a new C-47 fixture (`'тест с unicode 🚀'`, asserted to throw
+`ArgumentError`). 305 tests pass in `test/core/`.
+
+**437's finding is now a rate.** A second stale comment, in the second file
+swept: `// Отменяем через 100мс` over `Timer(Duration(milliseconds: 1))`. And
+`git log -S` shows the timer WAS 100 ms when the comment was written — so it was
+right once and drifted, which is the harder case to see than one that was always
+wrong.
+
+```
+437  fast_cbor_encoder_test.dart:144    "< 3ms"  on lessThan(10000)
+438  rpc_context_validation_test.dart   "100мс"  on milliseconds: 1
+```
+
+**This bears on the deferred half.** The 277 `lib/` comment lines have had the
+same exemption from review, on code that ships and that dartdoc renders. Nobody
+has counted how many of them are wrong. Not an argument for jumping the owner's
+order — a number the owner did not have.
+
+### What remains
+
+```
+lib/ logs        39 lines   rpc_notify only    deferred by the owner's ORDER
+lib/ comments   277 lines   23 files           same
+test/           801 lines   31 files           in scope, open (21 are C-47)
+generated        21 lines   rpc_data/*.g.dart  fix the SOURCE first
+```
+
+Largest left: `rpc_responder_endpoint_test.dart` (116),
+`rpc_message_parser_test.dart` (53), `call_processor_test.dart` (40).
