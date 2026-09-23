@@ -98,7 +98,7 @@ in the file nobody has read, not in the ones that explain themselves.
 
 ## Links
 
-Lead `../backlog/B-06-websocket-lead-list-is-stale.md` — scope narrowed, still
+Lead `../backlog/archive/B-06-websocket-lead-list-is-stale.md` — scope narrowed, still
 open, with the unread file named.
 Lens `../lenses/RPC-14-timeout-abandons-work.md` — `applied: [233]`, and its
 paths do NOT gain websocket: the form is absent, so adding the path would claim

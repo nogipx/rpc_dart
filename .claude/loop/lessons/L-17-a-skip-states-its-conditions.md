@@ -2,7 +2,7 @@
 round: 398
 class: process
 cost: 5 runs of an arm that could not see the defect — 4 solo, 1 workspace gate per http2 version — all green, and a conclusion stated out loud ("the upgrade is not what changed it") that was wrong by 10 of 10. The probe that settled it in 2 runs is named in the lead's own frontmatter. Caught by the owner in one sentence: *maybe the test is wrong?*
-paths: [packages/transport/rpc_dart_http2/test/request_sink_error_over_http2_test.dart, .claude/loop/backlog/B-53-an-http2-reset-racing-responses-kills-the-connection.md]
+paths: [packages/transport/rpc_dart_http2/test/request_sink_error_over_http2_test.dart, .claude/loop/backlog/archive/B-53-an-http2-reset-racing-responses-kills-the-connection.md]
 commit: 007d7004
 status: active
 ---

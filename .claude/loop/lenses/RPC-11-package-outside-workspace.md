@@ -49,7 +49,7 @@ Swift and Kotlin only. So the package's DART source is analysed by nothing and
 format-checked by nothing, `melos run prepare` included. Run directly it is
 clean — `No issues found!`, 18 files unchanged — so the hole costs nothing
 today. `../checked/C-22-wasm-is-outside-every-gate-script.md`,
-`../backlog/B-19-close-the-gate-over-wasm.md`.
+`../backlog/archive/B-19-close-the-gate-over-wasm.md`.
 
 > **A compensating script is not the same as a covered package.** The three wasm
 > scripts read like compensation and cover the native halves and the Dart tests;

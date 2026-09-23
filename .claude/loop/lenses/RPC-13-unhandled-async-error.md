@@ -77,7 +77,7 @@ that says nothing about what the callback inside it does.
 > tomorrow.** The guard here exists because a client hanging up killed two
 > production replicas, and deleting it changes nothing any test can see. Ask of
 > every guard this lens confirms: what would notice if somebody removed it?
-> `../backlog/B-20-detached-guard-has-no-witness.md`.
+> `../backlog/archive/B-20-detached-guard-has-no-witness.md`.
 
 ## Round 356 — the same lens from the CATCHING side
 
@@ -154,7 +154,7 @@ RpcWebSocketChannel.send
 > turn, does. The item as filed said "the peer closed"; the table said otherwise,
 > and that changed both the severity and the reachability.
 
-DEFERRED to `../backlog/B-39-websocket-send-throws-into-the-root-zone.md`, the
+DEFERRED to `../backlog/archive/B-39-websocket-send-throws-into-the-root-zone.md`, the
 sibling of B-35 one dependency over. Bench
 `../probes/P-49-send-into-a-dead-socket.md`.
 

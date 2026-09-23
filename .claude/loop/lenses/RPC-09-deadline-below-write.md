@@ -54,7 +54,7 @@ An ablation removing `_fcWake` from `_fcForget` moved neither number, which both
 confirms the independence and shows THAT ablation could not see a hang — so the
 probes were not promoted to benches in 210. What it left open is a parked sender
 outliving its own call, which is a leaked completer rather than a hang:
-`../backlog/B-13-parked-sender-outlives-its-call.md`.
+`../backlog/archive/B-13-parked-sender-outlives-its-call.md`.
 
 > **When a sweep comes back clean, ask what the ablation proved was UNTESTED.**
 > Here it was the very wake a previous round added for this purpose.

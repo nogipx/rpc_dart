@@ -98,7 +98,7 @@ connect.
 
 ## Links
 
-Lead `../backlog/B-17-watermark-lost-through-a-decorator.md` — new, awaiting owner.
+Lead `../backlog/archive/B-17-watermark-lost-through-a-decorator.md` — new, awaiting owner.
 Bench `../probes/P-09-watermark-survives-a-decorator.md` — new, validated by its control.
 Lens `../lenses/RPC-03-stream-ids-restart-on-reconnect.md` — `applied: [217]`,
 with the decorator door recorded.

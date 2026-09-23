@@ -89,7 +89,7 @@ nine smoke-only packages, and see whether anything goes red — is filed as B-18
 
 ## Links
 
-Lead `../backlog/B-18-web-guard-is-a-census-not-a-sweep.md` — new.
+Lead `../backlog/archive/B-18-web-guard-is-a-census-not-a-sweep.md` — new.
 Lens `../lenses/RPC-07-web-as-separate-runtime.md` — `applied: [219]`, with the
 coverage table.
 Round `218-generation-tagging-cannot-work.md` — why B-17 was not the target.

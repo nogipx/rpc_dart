@@ -60,4 +60,4 @@ candidate fix would have done exactly that. **A fifth arm that never calls
 `getMessagesForStream` is required before this bench can validate any change to
 the credit paths.**
 
-Lead: `../backlog/B-22-paused-consumer-never-repays-the-pool.md`.
+Lead: `../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md`.

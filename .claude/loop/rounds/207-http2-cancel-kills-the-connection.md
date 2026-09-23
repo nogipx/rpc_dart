@@ -119,6 +119,6 @@ re-derived.
 Lens `../lenses/RPC-01-flow-control-credit-on-skip.md` — `applied: [206, 207]`,
 paths widened to the transport packages, third instance recorded.
 Bench `../probes/P-02-http2-aborted-call-pool.md` — new, validated by its control.
-Lead `../backlog/B-12-http2-cancel-kills-the-connection.md` — new, awaiting owner.
+Lead `../backlog/archive/B-12-http2-cancel-kills-the-connection.md` — new, awaiting owner.
 Lesson `../lessons/L-02-vary-the-event-not-the-setup.md` — new.
 Round `206-connection-credit-never-repaid.md` — the same shape one layer up.

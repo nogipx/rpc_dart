@@ -138,7 +138,7 @@ Lens `../lenses/RPC-03-stream-ids-restart-on-reconnect.md` — `applied: [234]`,
 status `confirmed (round 234)`, third instance of the same shape.
 Bench `../probes/P-13-ids-after-a-peer-started-reconnect.md` — new, validated by
 its control.
-Lead `../backlog/B-06-websocket-lead-list-is-stale.md` — CLOSED: the file 233
+Lead `../backlog/archive/B-06-websocket-lead-list-is-stale.md` — CLOSED: the file 233
 named as the place to start has now been read in full, and it held this.
 Lesson `../lessons/L-06-the-path-the-owner-drives.md` — new.
 Round `233-websocket-rescan-the-first-third.md` — named the file; this is what

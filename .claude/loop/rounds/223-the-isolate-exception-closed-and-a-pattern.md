@@ -157,20 +157,20 @@ factual error that reading had not.
 
 Lens `../lenses/RPC-14-timeout-abandons-work.md` — `applied: [223]`, the
 `except isolate` exception removed, sweep refreshed to 0e7b984a.
-Lead `../backlog/B-04-isolate-future-timeout-unaudited.md` — closed by this
+Lead `../backlog/archive/B-04-isolate-future-timeout-unaudited.md` — closed by this
 round, with the untested-guard note.
 Lesson `../lessons/L-04-a-guard-with-no-witness.md` — new, paid for by two
 rounds of ablation.
 Round `222-every-site-guarded-the-guard-untested.md` — the first half of the
 pattern.
-Lead `../backlog/B-20-detached-guard-has-no-witness.md` — the same gap in core;
+Lead `../backlog/archive/B-20-detached-guard-has-no-witness.md` — the same gap in core;
 approved in this round's intake, to be done with B-04's isolate half.
 Negative `../checked/C-23-wasm-guest-promise-rejection-accepted.md` — new, from
 the intake.
-Leads `../backlog/B-17-watermark-lost-through-a-decorator.md`,
-`../backlog/B-01-response-metadata-dropped.md`,
-`../backlog/B-02-wasm-android-promise-rejection.md`,
-`../backlog/B-19-close-the-gate-over-wasm.md`,
-`../backlog/B-18-web-guard-is-a-census-not-a-sweep.md`,
+Leads `../backlog/archive/B-17-watermark-lost-through-a-decorator.md`,
+`../backlog/archive/B-01-response-metadata-dropped.md`,
+`../backlog/archive/B-02-wasm-android-promise-rejection.md`,
+`../backlog/archive/B-19-close-the-gate-over-wasm.md`,
+`../backlog/archive/B-18-web-guard-is-a-census-not-a-sweep.md`,
 `../backlog/B-10-layers-without-lenses.md` — all answered, all re-ranked in
 `../backlog/BACKLOG.md`.

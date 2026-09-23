@@ -76,4 +76,4 @@ Nothing
 
 Lens `../lenses/RPC-09-deadline-below-write.md` — the same shape ("await the
 write, then report locally") somewhere else; closed the lead
-`../backlog/B-08-decision-closed-transport-error-split.md`.
+`../backlog/archive/B-08-decision-closed-transport-error-split.md`.

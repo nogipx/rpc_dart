@@ -89,7 +89,7 @@ recording it as a negative.
 
 ## Links
 
-Lead `../backlog/B-17-watermark-lost-through-a-decorator.md` — reopened with the
+Lead `../backlog/archive/B-17-watermark-lost-through-a-decorator.md` — reopened with the
 measured impossibility and the third option.
 Bench `../probes/P-09-watermark-survives-a-decorator.md` — reused unchanged; it
 is what showed the fix was not working rather than the record claiming it did.

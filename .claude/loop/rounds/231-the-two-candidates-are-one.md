@@ -101,7 +101,7 @@ with the work the next round needs regardless of which shape is chosen:
 
 ## Links
 
-Lead `../backlog/B-22-paused-consumer-never-repays-the-pool.md` — reopened with
+Lead `../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md` — reopened with
 the third caller and the collapse of the two candidates.
 Bench `../probes/P-11-connection-debt-with-a-paused-consumer.md` — its blind
 spot recorded.

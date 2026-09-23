@@ -91,7 +91,7 @@ Recorded as C-22 so the next round does not re-derive the package list.
 ## Links
 
 Negative `../checked/C-22-wasm-is-outside-every-gate-script.md` — new.
-Lead `../backlog/B-19-close-the-gate-over-wasm.md` — new.
+Lead `../backlog/archive/B-19-close-the-gate-over-wasm.md` — new.
 Lens `../lenses/RPC-11-package-outside-workspace.md` — `applied: [220]`.
 Round `219-what-the-web-gate-actually-covers.md` — the same question one layer
 out: what a gate that passes does not actually run.

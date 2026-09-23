@@ -117,7 +117,7 @@ measurement is what the conversion was checked against.
 
 ## Links
 
-Lead `../backlog/B-19-close-the-gate-over-wasm.md` — closed by this round.
+Lead `../backlog/archive/B-19-close-the-gate-over-wasm.md` — closed by this round.
 Negative `../checked/C-22-wasm-is-outside-every-gate-script.md` — superseded for
 the three scripts, kept for the measurement.
 Lens `../lenses/RPC-11-package-outside-workspace.md` — `applied: [226]`.

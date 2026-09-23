@@ -104,7 +104,7 @@ Filed as B-16 with the bench design.
 ## Links
 
 Bench `../probes/P-06-handler-slots-return.md` — new, validated by an ablation.
-Lead `../backlog/B-16-pre-method-byte-budget-release.md` — new, the rest of this
+Lead `../backlog/archive/B-16-pre-method-byte-budget-release.md` — new, the rest of this
 detector.
 Lens `../lenses/RPC-05-concurrency-limit-charge-point.md` — `applied: [214]`,
 with the swept and un-swept fields written into it.

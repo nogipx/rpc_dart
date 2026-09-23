@@ -165,5 +165,5 @@ Lens `../lenses/RPC-25-the-same-abstraction-four-times.md`, fifteenth
 application — and the first where the two implementations are a CONSTRUCTOR and
 a METHOD on one class.
 Bench `../probes/P-51-three-core-diagnostics.md`, new.
-Lead `../backlog/B-40-method-path-from-key-drops-dots.md`, new.
+Lead `../backlog/archive/B-40-method-path-from-key-drops-dots.md`, new.
 Catalog shape U-14.

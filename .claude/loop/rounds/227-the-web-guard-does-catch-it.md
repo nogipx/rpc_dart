@@ -136,7 +136,7 @@ case, so that class has a detector too; whether IT fires is unmeasured.
 
 ## Links
 
-Lead `../backlog/B-18-web-guard-is-a-census-not-a-sweep.md` — closed by this
+Lead `../backlog/archive/B-18-web-guard-is-a-census-not-a-sweep.md` — closed by this
 round, premise corrected.
 Negative `../checked/C-25-web-smoke-catches-a-cancel-deadlock.md` — new.
 Lens `../lenses/RPC-07-web-as-separate-runtime.md` — `applied: [227]`.

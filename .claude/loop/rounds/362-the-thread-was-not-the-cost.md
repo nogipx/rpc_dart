@@ -120,7 +120,7 @@ Lens `../lenses/RPC-06-native-plugin-layers.md` — `applied:` gains 362; STATUS
 unchanged, because an INCONCLUSIVE round confirms nothing.
 Bench `../probes/P-53-android-main-thread-during-transfer.md`, new and
 `broken`.
-Lead `../backlog/B-41-android-base64-on-the-main-thread.md`, new, reason
+Lead `../backlog/archive/B-41-android-base64-on-the-main-thread.md`, new, reason
 "bench".
 Round `../rounds/357-a-fix-nobody-could-run.md`, the same lens reaching the same
 shape of answer from the other side: 357 could not run the code, 362 ran it and

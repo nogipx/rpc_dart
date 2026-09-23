@@ -92,7 +92,7 @@ separation as deliberate.
 
 Two rounds remain before the cap, and the config says not to open work spanning
 several rounds near it. Filed as
-[B-22](../backlog/B-22-paused-consumer-never-repays-the-pool.md) with the three
+[B-22](../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md) with the three
 candidates and the measurement, for the owner.
 
 **Reachability, stated so the severity is not overread.** The leak needs a
@@ -108,7 +108,7 @@ round and the sha, so `stale` can age it.
 
 ## Links
 
-Lead `../backlog/B-22-paused-consumer-never-repays-the-pool.md` — new, awaiting
+Lead `../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md` — new, awaiting
 the owner.
 Bench `../probes/P-11-connection-debt-with-a-paused-consumer.md` — new, round
 206's bench with the third arm.

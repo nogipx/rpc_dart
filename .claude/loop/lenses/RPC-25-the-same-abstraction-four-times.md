@@ -391,7 +391,7 @@ which is the evidence that there is one home now rather than two copies.
 `../probes/P-46-drain-in-peer-mode.md`,
 `../rounds/354-the-drain-that-polled-a-key-nobody-published.md`. The getter half
 of the same divergence is a breaking interface change and is
-`../backlog/B-37-endpoints-getter-excludes-peers.md`.
+`../backlog/archive/B-37-endpoints-getter-excludes-peers.md`.
 
 ## Round 360 — a CONSTRUCTOR and a METHOD are two implementations
 
@@ -420,7 +420,7 @@ everything downstream is keyed on the id alone.
 Same round, same shape, DECLINED: `_methodPathFromKey` cannot round-trip a
 dotted service name that its sibling `_parseMethodPath` explicitly admits — real
 drift, in one file, and the ordinary path measured clean, so it is
-`../backlog/B-40-method-path-from-key-drops-dots.md` rather than a fix. **Drift
+`../backlog/archive/B-40-method-path-from-key-drops-dots.md` rather than a fix. **Drift
 is not automatically a defect; it is a defect where something reaches it.**
 
 `../probes/P-51-three-core-diagnostics.md`,

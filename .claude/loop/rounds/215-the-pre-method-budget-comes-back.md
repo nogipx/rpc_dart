@@ -98,7 +98,7 @@ RPC-05 becomes `swept here`.
 
 ## Links
 
-Lead `../backlog/B-16-pre-method-byte-budget-release.md` — closed by this round.
+Lead `../backlog/archive/B-16-pre-method-byte-budget-release.md` — closed by this round.
 Bench `../probes/P-07-pre-method-budget-returns.md` — new, two controls.
 Negative `../checked/C-20-pre-method-budget-held-for-the-reclaim.md` — new.
 Lens `../lenses/RPC-05-concurrency-limit-charge-point.md` — `swept here (round 215, d0612f96)`,

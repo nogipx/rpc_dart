@@ -47,4 +47,4 @@ for `plainJs.contains("export")` takes the suite from **`+21 ~2` to `+3 ~2 -13`*
 
 Android only, measured. The same arms would report differently on iOS, where a
 SyntaxError kills the whole `<script>` tag and the failure surfaces as the 30 s
-boot watchdog instead — see `../backlog/B-42-ios-strip-failfast-unwitnessed.md`.
+boot watchdog instead — see `../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md`.

@@ -235,4 +235,4 @@ saying so; changing the lint config is the owner's call.
 
 `../rounds/435-the-half-that-ships.md`,
 `../rounds/436-the-detector-that-cannot-see-its-own-class.md`,
-`../backlog/B-30-russian-comments-outside-the-mandate.md`.
+`../backlog/archive/B-30-russian-comments-outside-the-mandate.md`.

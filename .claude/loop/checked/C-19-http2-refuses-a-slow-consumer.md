@@ -43,7 +43,7 @@ Round 208 therefore chose to keep reading and fail the call.
 The remaining way to throttle without ever not-reading is rpc-level
 `x-window-update` grants, as `RpcChannelTransport` does. That was proposed,
 sized, and **withdrawn by the owner** as not worth porting onto two transports:
-`../backlog/B-15-rpc-level-grants-on-http2.md`.
+`../backlog/archive/B-15-rpc-level-grants-on-http2.md`.
 
 ## What would change this
 

@@ -116,7 +116,7 @@ closed door.
 
 ## Links
 
-Lead `../backlog/B-05-isolate-null-credit-silent.md` — closed by this round,
+Lead `../backlog/archive/B-05-isolate-null-credit-silent.md` — closed by this round,
 except the logging half.
 Bench `../probes/P-12-zero-grant-reads-as-legacy.md` — new.
 Lens `../lenses/RPC-01-flow-control-credit-on-skip.md` — `applied: [229]`.

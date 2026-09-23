@@ -130,7 +130,7 @@ really is what it replaces there.
 
 Lens `../lenses/RPC-06-native-plugin-layers.md`, fifth application.
 Bench `../probes/P-54-unstripped-module-syntax.md`, new.
-Lead `../backlog/B-42-ios-strip-failfast-unwitnessed.md`, new.
+Lead `../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md`, new.
 Round `../rounds/357-a-fix-nobody-could-run.md`, whose opposite call this round
 departs from on stated grounds.
 Catalog shape U-18 — silent acceptance of a programmer error, here the

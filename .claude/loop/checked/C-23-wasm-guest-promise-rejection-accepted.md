@@ -71,4 +71,4 @@ rejection callback — at which point the fix is a subscription rather than a
 `Promise` wrap, and reason 2 disappears.
 
 Lens: `../lenses/RPC-06-native-plugin-layers.md`. Lead, now closed:
-`../backlog/B-02-wasm-android-promise-rejection.md`.
+`../backlog/archive/B-02-wasm-android-promise-rejection.md`.

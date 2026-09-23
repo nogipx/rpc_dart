@@ -195,4 +195,4 @@ Bench `../probes/P-43-cancelled-stream-probe.md`, whose control took two attempt
 to aim: the first varied the cancel AND whether the source terminated, which
 cannot distinguish "cancel skips the release" from "a live source has not
 released yet". `../rounds/351-the-ending-nobody-wired.md`; the neighbouring
-ending that releases but answers wrongly is `../backlog/B-36-the-abandon-timer-fabricates-a-success.md`.
+ending that releases but answers wrongly is `../backlog/archive/B-36-the-abandon-timer-fabricates-a-success.md`.

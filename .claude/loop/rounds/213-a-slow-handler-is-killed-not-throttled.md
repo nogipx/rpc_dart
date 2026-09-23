@@ -103,9 +103,9 @@ when B-15 lands.
 
 ## Links
 
-Lead `../backlog/B-15-rpc-level-grants-on-http2.md` — sharpened with this
+Lead `../backlog/archive/B-15-rpc-level-grants-on-http2.md` — sharpened with this
 measurement; its urgency is no longer a matter of taste.
 Bench `../probes/P-05-slow-consumer-is-throttled.md` — new, validated by its
 control, deliberately left red.
 Round `208-refuse-instead-of-pausing.md` — whose trade this re-measures.
-Lead `../backlog/B-12-http2-cancel-kills-the-connection.md` — the decision trail.
+Lead `../backlog/archive/B-12-http2-cancel-kills-the-connection.md` — the decision trail.

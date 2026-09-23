@@ -348,7 +348,7 @@ lines across 14 files, every one of them `test/` or `example/`, none in `lib/`.
 > each separately before deciding which to sweep; "no emoji and English
 > everywhere" hid the fact that only one half had reached shipped code.
 
-`../rounds/435-the-half-that-ships.md`, `../backlog/B-30-russian-comments-outside-the-mandate.md`.
+`../rounds/435-the-half-that-ships.md`, `../backlog/archive/B-30-russian-comments-outside-the-mandate.md`.
 
 ## Round 436 — the fixture that fails SILENTLY when you translate it
 

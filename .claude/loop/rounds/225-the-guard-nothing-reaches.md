@@ -118,7 +118,7 @@ unexplained, and it may be either of L-04's two cases.
 
 ## Links
 
-Lead `../backlog/B-20-detached-guard-has-no-witness.md` — closed by this round,
+Lead `../backlog/archive/B-20-detached-guard-has-no-witness.md` — closed by this round,
 as a negative rather than as the test it asked for.
 Negative `../checked/C-24-detached-guard-is-unreachable.md` — new.
 Lesson `../lessons/L-04-a-guard-with-no-witness.md` — amended: a green ablation

@@ -102,7 +102,7 @@ before trusting it. `melos run test:web`, exit 0, twelve suites:
 
 And the census does NOT establish that the guard would catch this lens's bug
 classes: nothing was ablated to see whether a planted 2^53 overflow or `async*`
-cancel turns anything red. That is `../backlog/B-18-web-guard-is-a-census-not-a-sweep.md`,
+cancel turns anything red. That is `../backlog/archive/B-18-web-guard-is-a-census-not-a-sweep.md`,
 and it is why this lens stays `confirmed` rather than `swept here`.
 
 ## Round 427 — a platform difference that cannot be fixed still has to be SAID

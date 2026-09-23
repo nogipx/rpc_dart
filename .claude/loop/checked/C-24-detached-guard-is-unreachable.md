@@ -80,5 +80,5 @@ site table above: if a new call site wraps something other than those five
 expressions, re-run the probe.
 
 Probe: `packages/core/rpc_dart/.dart_tool/probe/detached_guard_rejects_nothing.dart`.
-Lead, now closed: `../backlog/B-20-detached-guard-has-no-witness.md`.
+Lead, now closed: `../backlog/archive/B-20-detached-guard-has-no-witness.md`.
 Lesson: `../lessons/L-04-a-guard-with-no-witness.md`, which this round amends.

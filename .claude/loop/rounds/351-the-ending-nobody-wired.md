@@ -136,5 +136,5 @@ as B-36.
 
 Lens `../lenses/RPC-05-concurrency-limit-charge-point.md` (`applies:` widened
 past policy fields; sixth application). Bench `../probes/P-43-cancelled-stream-probe.md`, new.
-Lead `../backlog/B-36-the-abandon-timer-fabricates-a-success.md`, new.
+Lead `../backlog/archive/B-36-the-abandon-timer-fabricates-a-success.md`, new.
 Catalog shape U-07; sibling comparison is U-14.

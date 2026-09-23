@@ -76,5 +76,5 @@ to be behavioural.
 - **[C-23](C-23-wasm-guest-promise-rejection-accepted.md)** round 223, wasm — a guest promise rejection is lost on Android and stays lost; **the one record here with no number**, an owner decision to stop pursuing, not a measurement
 
 Large payloads with fragmentation (round 64) and server-side keepalive
-(round 63) live in `../backlog/B-06-websocket-lead-list-is-stale.md`: there they
+(round 63) live in `../backlog/archive/B-06-websocket-lead-list-is-stale.md`: there they
 also carry the conclusion about the stale lead list.

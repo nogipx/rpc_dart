@@ -15,7 +15,7 @@ Those fifteen rounds were **one investigation** — B-22, the paused consumer th
 never repaid the connection pool — and their findings were written into the LEAD
 rather than into round files. The commits are all in git
 (`docs(loop): round 263 …`, `264`, `265`), and
-`../backlog/B-22-paused-consumer-never-repays-the-pool.md` names 251, 252, 253,
+`../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md` names 251, 252, 253,
 254, 256, 262, 263, 264 and 265 by number: five witnesses that failed to observe
 the defect and one reading that explained why.
 

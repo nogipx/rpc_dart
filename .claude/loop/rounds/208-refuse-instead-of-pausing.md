@@ -129,7 +129,7 @@ B-12 keeps the reproduction.
 
 ## Links
 
-Lead `../backlog/B-12-http2-cancel-kills-the-connection.md` — closed by this
+Lead `../backlog/archive/B-12-http2-cancel-kills-the-connection.md` — closed by this
 round, owner decision carried out.
 Bench `../probes/P-02-http2-aborted-call-pool.md` — reused unchanged, still
 valid; its control now passes on both arms, which is the fix.

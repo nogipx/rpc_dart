@@ -129,7 +129,7 @@ zeroes it out. Filed as B-11 with what was tried; not claimed as covered.
 Lens `../lenses/RPC-01-flow-control-credit-on-skip.md` — `applied: [206]`,
 status refreshed with the connection-level evidence.
 Bench `../probes/P-01-connection-window-debt.md` — new, validated by its control.
-Lead `../backlog/B-11-endpoint-reachability-needs-latency.md` — new, reason
+Lead `../backlog/archive/B-11-endpoint-reachability-needs-latency.md` — new, reason
 "bench".
 Lesson `../lessons/L-01-half-a-fix-can-mask-the-other-half.md` — new.
 Catalog `U-07` (abort became continue) is the parent shape; this is its

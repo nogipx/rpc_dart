@@ -128,6 +128,6 @@ Filed as B-37.
 Lens `../lenses/RPC-25-the-same-abstraction-four-times.md` (fourteenth
 application; the first on the endpoint classes rather than the transports).
 Bench `../probes/P-46-drain-in-peer-mode.md`, new.
-Lead `../backlog/B-37-endpoints-getter-excludes-peers.md`, new.
+Lead `../backlog/archive/B-37-endpoints-getter-excludes-peers.md`, new.
 Catalog shapes U-14 and U-13 — the witness is the mirror of a responder-mode
 battery that had already paid.

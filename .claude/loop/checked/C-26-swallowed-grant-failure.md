@@ -81,5 +81,5 @@ non-fatally on send would wedge the connection permanently with no trace.
 Not fixed, deliberately: the only remedy is a log, and the config's severity bar
 rules diagnostics out as a round's product. Recorded so the trade is visible.
 
-Sibling: `../backlog/B-05-isolate-null-credit-silent.md`, whose logging half is
+Sibling: `../backlog/archive/B-05-isolate-null-credit-silent.md`, whose logging half is
 the same argument from the receiving end.

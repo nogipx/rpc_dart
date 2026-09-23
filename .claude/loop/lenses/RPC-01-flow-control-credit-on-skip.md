@@ -64,7 +64,7 @@ the owner's choice: never stop reading, keep `flowControlWindowBytes` as the
 budget, and FAIL a call past it. All four runs recover, and the bound still
 bites at 4171 KiB against 15291 KiB with no bound at all. Bench
 `../probes/P-02-http2-aborted-call-pool.md`; lead
-`../backlog/B-12-http2-cancel-kills-the-connection.md`.
+`../backlog/archive/B-12-http2-cancel-kills-the-connection.md`.
 
 The lesson that generalises past http2: **a bound implemented by NOT READING is
 a bound held in the layer below**, and whatever that layer does with it on
@@ -93,7 +93,7 @@ consumer's `onCancel`; a consumer that binds and then STOPS satisfies
     receiver BINDS and PAUSES         4 calls, 1024 KiB, wedged at call 4
 
 1024 KiB is the pool exactly. Deferred as
-`../backlog/B-22-paused-consumer-never-repays-the-pool.md`, because repaying
+`../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md`, because repaying
 unconditionally double-credits and the fix has to split the credit paths first;
 bench `../probes/P-11-connection-debt-with-a-paused-consumer.md`.
 

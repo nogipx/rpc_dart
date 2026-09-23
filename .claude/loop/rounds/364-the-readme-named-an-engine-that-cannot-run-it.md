@@ -115,7 +115,7 @@ Do not assume parity with the table above."* An absent number that announces
 itself is worth more than one quietly extrapolated from the other platform.
 
 Tracked with the other simulator-blocked work in
-`../backlog/B-42-ios-strip-failfast-unwitnessed.md` and
+`../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md` and
 `../backlog/B-38-ios-recv-loop-dies-silently.md`.
 
 ## Links

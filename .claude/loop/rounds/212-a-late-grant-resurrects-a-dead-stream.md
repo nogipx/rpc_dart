@@ -107,9 +107,9 @@ job and does not belong inside this one.
 
 ## Links
 
-Lead `../backlog/B-14-stale-sendcredit-per-abandoned-upload.md` — closed by this
+Lead `../backlog/archive/B-14-stale-sendcredit-per-abandoned-upload.md` — closed by this
 round, mechanism pinned.
-Lead `../backlog/B-15-rpc-level-grants-on-http2.md` — new, owner-decided.
+Lead `../backlog/archive/B-15-rpc-level-grants-on-http2.md` — new, owner-decided.
 Bench `../probes/P-04-parked-waiters-drain.md` — reused unchanged; its
 `sendCredit` column is now zero in both arms, which is the fix.
 Lens `../lenses/RPC-01-flow-control-credit-on-skip.md` — `applied: [206, 207, 208, 212]`.

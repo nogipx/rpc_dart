@@ -108,5 +108,5 @@ Lesson `../lessons/L-03-no-backticks-in-a-shell-argument.md` — new, paid for b
 this round's own commit.
 Lens `../lenses/RPC-09-deadline-below-write.md` — `applied: [210]`,
 `swept here (round 210, beed83e5)`, with the reason the shape cannot arise.
-Lead `../backlog/B-13-parked-sender-outlives-its-call.md` — new, reason "bench".
+Lead `../backlog/archive/B-13-parked-sender-outlives-its-call.md` — new, reason "bench".
 Round `208-refuse-instead-of-pausing.md` — the refusal this checked.

@@ -122,7 +122,7 @@ because the ordering rests on an undocumented WebKit convention. Measured, the
 convention holds over 10000 frames. Chaining would serialise every send —
 removing the pipelining that the 5.0 s iOS figure depends on — which is a speed
 trade, and the config's standing owner requirement is to ASK before trading
-speed. Filed as `../backlog/B-43-ios-send-order-is-a-convention.md` with the
+speed. Filed as `../backlog/archive/B-43-ios-send-order-is-a-convention.md` with the
 numbers, so the decision is made on them rather than on a worry.
 
 **B-42 is closed by this round**: the iOS half of round 363's fail-fast passes
@@ -133,7 +133,7 @@ all five of its witnesses on the simulator.
 Lens `../lenses/RPC-06-native-plugin-layers.md`, sixth application.
 Benches `../probes/P-56-guest-timer-lag.md` and
 `../probes/P-57-guest-to-host-frame-order.md`, both new.
-Lead `../backlog/B-43-ios-send-order-is-a-convention.md`, new; closes
-`../backlog/B-42-ios-strip-failfast-unwitnessed.md`.
+Lead `../backlog/archive/B-43-ios-send-order-is-a-convention.md`, new; closes
+`../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md`.
 Catalog shape U-19, the parity matrix — the defect is the cell where one
 platform supplies a global the other does not.

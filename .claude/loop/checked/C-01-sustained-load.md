@@ -32,7 +32,7 @@ but its per-unit is FALLING, not flattening on a positive plateau, and the
 process holds two Dart heaps (host and worker), so the high-water mark is
 naturally higher and less readily returned. Compare round 90's genuine
 retention, which flattened at ~8113 B/frame
-(`../backlog/B-16-pre-method-byte-budget-release.md`).
+(`../backlog/archive/B-16-pre-method-byte-budget-release.md`).
 
 Isolate spawn/kill cycles are flat too: 20 / 40 / 80 cycles at 11 / -3 / 2 KiB
 per cycle, i.e. nothing. A leaked isolate is megabytes, so this is the expensive

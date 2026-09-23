@@ -88,8 +88,8 @@ disproven theory so it is not re-tried.
 
 ## Links
 
-Lead `../backlog/B-13-parked-sender-outlives-its-call.md` — closed by this round.
-Lead `../backlog/B-14-stale-sendcredit-per-abandoned-upload.md` — new.
+Lead `../backlog/archive/B-13-parked-sender-outlives-its-call.md` — closed by this round.
+Lead `../backlog/archive/B-14-stale-sendcredit-per-abandoned-upload.md` — new.
 Bench `../probes/P-04-parked-waiters-drain.md` — new, validated by two controls.
 Lens `../lenses/RPC-15-remeasure-own-record.md` — `applied: [201, 211]`.
 Round `210-the-answer-does-not-wait-on-the-send.md` — whose ablation opened this.

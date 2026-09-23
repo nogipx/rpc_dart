@@ -152,9 +152,9 @@ what was authorised, and is filed as B-21 rather than smuggled in here.
 
 ## Links
 
-Lead `../backlog/B-17-watermark-lost-through-a-decorator.md` — closed by this
+Lead `../backlog/archive/B-17-watermark-lost-through-a-decorator.md` — closed by this
 round.
-Lead `../backlog/B-21-reconnectable-transport-type.md` — new, the compile-time
+Lead `../backlog/archive/B-21-reconnectable-transport-type.md` — new, the compile-time
 follow-up.
 Bench `../probes/P-09-watermark-survives-a-decorator.md` — reused; its decorated
 arm rewritten to measure the refusal, control untouched.

@@ -46,6 +46,6 @@ not a finding.
 ## What would change it
 
 Any wasm Dart change landing without someone running those two commands by hand.
-Closing the hole is `../backlog/B-19-close-the-gate-over-wasm.md`; it was not
+Closing the hole is `../backlog/archive/B-19-close-the-gate-over-wasm.md`; it was not
 done in round 220 because it means restructuring the two main gate scripts to
 fix nothing that is currently broken.

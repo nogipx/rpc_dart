@@ -92,7 +92,7 @@ existed watched that path, three rounds and a hundred commits later.
 > instead. Read the ordering before choosing the arm; that path is still
 > unwitnessed and its teardown is a strict subset, which is weaker than a canary.
 
-Still outstanding: `../backlog/B-20-detached-guard-has-no-witness.md` for core —
+Still outstanding: `../backlog/archive/B-20-detached-guard-has-no-witness.md` for core —
 though round 225's amendment above says that one is probably case 2
 (unreachable), not case 1.
 

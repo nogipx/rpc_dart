@@ -97,7 +97,7 @@ uses in rpc_dart_isolate. Filed as B-20.
 
 ## Links
 
-Lead `../backlog/B-20-detached-guard-has-no-witness.md` — new.
+Lead `../backlog/archive/B-20-detached-guard-has-no-witness.md` — new.
 Lens `../lenses/RPC-13-unhandled-async-error.md` — `applied: [222]`, sweep
 refreshed to b8d934a2 with the site list and the untested-guard finding.
 Round `221-the-sweep-that-could-not-see-a-hang.md` — the same Q4 discipline, and

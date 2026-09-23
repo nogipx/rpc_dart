@@ -1,6 +1,6 @@
 ---
-status: open
-round: 444 — item 5 MEASURED and closed; the rest is still a READ sweep
+status: closed (round 444)
+round: 444 — item 5 MEASURED and closed; the rest was SPLIT into B-72..B-87
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
 probe: packages/core/rpc_dart/.dart_tool/probe/ping_reserved_headers.dart — P-98, item 5 only; every other item is READ at the address named, never run
@@ -402,3 +402,42 @@ shim and therefore a device round. The rest of the 24 stays as filed.
 
 **Do not re-derive "the behavioural half is spent."** It was written once from a
 read, repeated once from a narrower read, and item 5 refuted it.
+
+## CLOSED — split into B-72 .. B-87, at the owner's instruction after round 444
+
+**The round record says this lead stays open, and that was true when it was
+written.** The owner then asked for the remainder to be broken into separate
+leads, which is what closes it: there is nothing left in B-70 that is not
+somewhere else. It survives as the routing table for the original 36 items and
+as the record of the six claims that died on the re-read — do not re-file those.
+
+```
+  13 -> B-72   context header limits are a second home, wired to nothing
+  10 -> B-73   the deadline disposer is caller-side only
+  21 -> B-74   a trailer can overtake a credit-parked data frame
+  18 -> B-75   the HTTP/1.1 caller has no active-stream ceiling
+  17 -> B-76   three reconnect machines, three answers to id reuse
+  29 -> B-77   three content-type behaviours in three layers
+  26 -> B-78   ensureGrpcFrame guesses whether data is framed
+  20 -> B-79   bufferedBytes charged in core and nowhere in http2
+  31 -> B-80   the +5-byte prefix rule never reaches an HTTP body
+   6 -> B-81   two cancel orderings, each justified by a comment
+   7 -> B-82   eleven case-sensitive encoding comparisons
+  11 -> B-83   the drain refusal is ordered against its sibling's rule
+  24 -> B-84   three cleanup blocks with different subsets
+  36 -> B-85   a default written twice, and a shim in two languages
+  19 -> B-86   the end flag is gated on the status on one path only
+       B-87   the sweep's own negatives, never verified by anyone
+```
+
+**Item 14 gets no number**: it is one of B-56's nine (`CallScope.track` builds
+its controller with `onCancel` only), and B-56 closed at round 426 with sites 1
+and 3 declined. If it is still live it is B-56's remainder, not a new lead.
+
+**What the split cost and bought.** The lead's own `reason:` was *"24 confirmed
+copies that did not each justify a number"* — that judgement was made when all
+24 were unmeasured similarity. Item 5 turning out to be a reachable defect is
+what changed it: a container lead is a place where the strongest item is read at
+the average of the container. Fifteen numbers cost fifteen index lines; what
+they buy is that `loop.py next` can rank them against each other and against
+everything else, which it could not do while they were one line reading "cost".

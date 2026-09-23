@@ -56,4 +56,4 @@ decode — and it did not help: run 4 and run 5 differ by more than the fix does
 
 **What would resolve it**: a physical device rather than an emulator, or an
 in-plugin timer reporting main-thread occupancy directly instead of a
-scheduling proxy. See `../backlog/B-41-android-base64-on-the-main-thread.md`.
+scheduling proxy. See `../backlog/archive/B-41-android-base64-on-the-main-thread.md`.

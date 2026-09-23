@@ -110,7 +110,7 @@ the other half has the discipline in L-09 and nothing enforcing it.
 
 ## Links
 
-Lead `../backlog/B-23-pre-201-knowledge-outside-the-journal.md` — still open,
+Lead `../backlog/archive/B-23-pre-201-knowledge-outside-the-journal.md` — still open,
 queue narrowed, `continuation: yes` retained.
 Lesson `../lessons/L-09-a-delete-has-an-inbound-half.md` — new.
 Negative `../checked/C-30-closed-transport-leniency-is-a-contract.md` — new.

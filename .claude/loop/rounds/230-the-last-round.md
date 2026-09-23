@@ -101,15 +101,15 @@ Stop: YES and the recurring job should be cancelled.
 
 Left for whoever picks it up, in the order I would take them:
 
-- **[B-22](../backlog/B-22-paused-consumer-never-repays-the-pool.md)** — awaiting
+- **[B-22](../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md)** — awaiting
   the owner, and the only measured unfixed defect: a wedged connection, 4 calls
   against a 1024 KiB pool.
-- **[B-06](../backlog/B-06-websocket-lead-list-is-stale.md)** — rescan the
+- **[B-06](../backlog/archive/B-06-websocket-lead-list-is-stale.md)** — rescan the
   websocket package, the owner's stated priority transport, whose lead list went
   stale off-journal.
-- **[B-11](../backlog/B-11-endpoint-reachability-needs-latency.md)** — needs a
+- **[B-11](../backlog/archive/B-11-endpoint-reachability-needs-latency.md)** — needs a
   bench with real latency; three shapes failed on an in-memory pair.
-- **[B-21](../backlog/B-21-reconnectable-transport-type.md)**, next major.
+- **[B-21](../backlog/archive/B-21-reconnectable-transport-type.md)**, next major.
 - **[B-10](../backlog/B-10-layers-without-lenses.md)** — deferred by the owner
   until core and transport are exhausted; 234 files with no lens.
 

@@ -103,7 +103,7 @@ decisions looks correct every time a decision is live.
 
 ## Links
 
-Lead `../backlog/B-22-paused-consumer-never-repays-the-pool.md` — the lead that
+Lead `../backlog/archive/B-22-paused-consumer-never-repays-the-pool.md` — the lead that
 exposed it; unchanged by this round beyond the control's revert.
 Round `230-the-last-round.md` — where the other half of this fix shipped.
 Round `231-the-two-candidates-are-one.md` — which produced the superseded
