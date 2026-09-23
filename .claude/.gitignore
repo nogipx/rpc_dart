@@ -8,3 +8,4 @@ scheduled_tasks.lock
 # clone a dangling path that looks like a directory. CLAUDE.md says how to
 # recreate it; `.claude/loop/` — the journal this project owns — stays in git.
 skills/evidence-loop
+evidence-loop

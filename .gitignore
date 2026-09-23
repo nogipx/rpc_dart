@@ -15,3 +15,8 @@ site/
 # Test coverage artifacts (matches any depth: root + every package).
 coverage/
 *.lcov
+
+# Local MCP wiring: absolute paths to one machine's checkout, so it is nobody
+# else's. Ignored rather than annotated because `reuse lint` is part of the
+# gate and an unlicensed file at the root fails it -- which it did.
+.mcp.json
