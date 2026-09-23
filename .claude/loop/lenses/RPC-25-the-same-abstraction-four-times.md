@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426]
-status: confirmed (round 426)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444]
+status: confirmed (round 444)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -561,3 +561,34 @@ other copy in another file.
 
 `../rounds/426-the-mirror-nobody-held-up.md`,
 `../probes/P-96-response-pump-outlives-its-call.md`.
+
+## Round 444 — the instance can be an ABSENCE, and a sweep's own test says where it looked
+
+Every instance above is two copies that disagree. This one is a copy that is not
+there: three sites merge a caller context's headers into outbound metadata, two
+filter the protocol-reserved keys, and `ping()` did a bare `addAll`. There is no
+drifted line to diff — the detector's step 2, *read the methods side by side*,
+finds the defect only if the third site is in the list being read.
+
+> **A missing copy cannot be found by comparing the copies you have.** Enumerate
+> the sites by what they DO — grep the operation, not the helper's name — or the
+> site that never had the helper is invisible, because it does not contain the
+> string you searched for.
+
+Here `grep -rn "isReserved"` returns the two sites that have it. The third came
+from grepping the operation instead: every place building a `headerMap` from a
+context, `headers.entries` and `.headers)` across core and the transports.
+
+**And the previous sweep left its own record of where it looked.**
+`cancellation_header_reserved_test.dart` was written when these keys were
+reserved, and one of its cases is named *"the control keys never reach the wire,
+ordinary ones do"* — over the unary and streaming shapes. A witness enumerates
+the sites its author had in mind, so:
+
+> **Read an existing witness for this class as a list of what was swept, then
+> diff that list against the sites that exist today.** The gap is the finding.
+> It is cheaper than re-deriving the sweep and it is evidence rather than
+> memory — which is what L-12 asks for and what a test can actually supply.
+
+`../rounds/444-the-third-merge-site-nobody-swept.md`,
+`../probes/P-98-the-same-context-down-two-call-shapes.md`.

@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-98](P-98-the-same-context-down-two-call-shapes.md)** valid (round 444),
+  rpc_dart — one caller `RpcContext` sent down two call shapes, so the SHAPE is
+  the only variable. Seven arms over a channel pair; the reading is the
+  difference between two arms holding the same context. **Two controls, and one
+  would not have done**: the sibling shape (whose merge site has the filter) and
+  a clean context down the shape under test — A1 differing from both is what
+  separates "the header is the cause" from "ping is broken". Two further arms
+  BOUND the severity rather than reassure: the reserved keys a peer acts on do
+  reach the frame and change nothing, because their consumers gate on
+  `methodPath == null`
 - **[P-97](P-97-truncated-stream-shape-d.md)** valid (round 429), rpc_dart —
   how does a server stream END when the peer vanishes mid-stream? Three arms
   over a channel pair; the reading is the COMBINATION of items delivered, error

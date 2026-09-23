@@ -1,10 +1,10 @@
 ---
 status: open
-round: (not re-measured) — a READ sweep handed in by the owner; every item below was re-read against ff930001, but nothing here was MEASURED
-commit: ff930001
+round: 444 — item 5 MEASURED and closed; the rest is still a READ sweep
+commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
-probe: none — READ at the addresses named, never run
-reason: cost — 24 confirmed copies that did not each justify a number; the ones that clear RPC-25's bar are called out at the end and a round takes those first
+probe: packages/core/rpc_dart/.dart_tool/probe/ping_reserved_headers.dart — P-98, item 5 only; every other item is READ at the address named, never run
+reason: cost — 24 confirmed copies that did not each justify a number; item 5 was measured and closed in 444, and 13, 36 and 10 are named there as the next three, in that order
 ---
 
 # B-70 — the tail of the duplication sweep, all of it re-read
@@ -340,3 +340,65 @@ leaves the LIVE connection intact and every in-flight call with it"*), and item
 
 So this lead is what its own last line says: duplication whose copies agree,
 below RPC-25's bar, with no defect left in it.
+
+## Round 444 — that conclusion was wrong, and item 5 is why
+
+**"All of them are duplication whose copies currently AGREE" was never
+measured.** Round 419 wrote it about fifteen items it had not re-read, and 432
+confirmed it after re-reading only 23 and 34 — the two a stale index line pointed
+at, and both already CLOSED. Two rounds agreeing is not two measurements.
+
+**Item 5 is CLOSED (round 444), and it was a behavioural defect.** The class was
+counted first — sites merging a caller `RpcContext`'s headers into outbound
+request metadata, grepped by the OPERATION rather than by the helper's name,
+because a site that never had the helper does not contain its string:
+
+```
+  base_processor.dart:1256   CallProcessor._sendInitialMetadata   had the filter
+  unary/caller.dart:401      UnaryCaller                          had the filter
+  caller_pipeline.dart:325   ping()                               bare addAll
+```
+
+Measured on P-98: a context carrying `content-type` — what forwarding an inbound
+HTTP header map produces, the exact case `RpcHeaders.reserved`'s own doc names —
+ended the ping at **status 3, `Invalid content-type for gRPC`**, while the SAME
+context down the sibling shape succeeded. The severity is bounded by measurement
+rather than by argument: `x-client-cancelled` and the window grants do reach the
+ping frame and change nothing, because both consumers gate on
+`methodPath == null` and a ping frame carries one.
+
+**Items 13, 36 and 10 remain open and none of them is "copies agree" either.**
+Re-read against the tree at round 444 and restated here with today's line
+numbers, so the next round does not inherit 419's sentence:
+
+- **13 — a knob that is monotone downward only, B-67's shape.** `RpcContext`
+  holds `_maxHeaderCount` 128, `_maxHeaderNameLength` 128,
+  `_maxHeaderValueLength` 8*1024, `_maxTotalHeaderBytes` 64*1024
+  (`contracts/context.dart:11-14`), numerically equal to `RpcSecurityPolicy`'s
+  defaults (`security_policy.dart:197-206`) and wired to nothing.
+  `_sanitizeHeaders` (`:238`) `continue`s past an over-long header and `break`s
+  at the count or byte ceiling (`:259-262`), discarding the remainder with no
+  signal. Raise `maxHeaders` and it never reaches this. **Not a copies-agree
+  item: the two numbers agreeing is exactly what hides that one of them is
+  unreachable.**
+- **36 — a default written twice.** `security_policy.dart:197-206` in the
+  constructor against `:258-261` in `fromMap`, literal repeated. The copies DO
+  agree today; the failure mode is a changed default, which is a different
+  claim from "there is nothing here". Its second half — the wasm JS shim carried
+  as strings in both the Swift and the Kotlin plugin — is untouched and is a
+  device-round concern.
+- **10 — a rule implemented on one side of a class boundary.**
+  `_setupDeadlineMonitoring` exists once, at `base_processor.dart:1321`, inside
+  `CallProcessor`, which is the CALLER side; `StreamProcessor` (`:178`), the
+  responder side, has `_setupCancellationMonitoring` and no deadline disposer.
+  **Whether that is a defect is NOT established** — the responder may bound the
+  deadline in `responder_pipeline`, and nobody has measured it. That is a bench,
+  not a re-read.
+
+**What a round takes next, in order**: 13, because it is measurable in one round
+and its consequence is silent truncation of headers a caller believes it sent;
+then 10, which needs its own bench; then 36, whose reachable half is the wasm
+shim and therefore a device round. The rest of the 24 stays as filed.
+
+**Do not re-derive "the behavioural half is spent."** It was written once from a
+read, repeated once from a narrower read, and item 5 refuted it.

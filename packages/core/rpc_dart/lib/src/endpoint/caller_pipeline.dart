@@ -322,7 +322,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       final headerMap = <String, String>{
         for (final h in baseMetadata.headers) h.name: h.value,
       };
-      headerMap.addAll(routingContext.headers);
+      // User metadata must not clobber protocol-reserved headers.
+      for (final entry in routingContext.headers.entries) {
+        if (RpcHeaders.isReserved(entry.key)) continue;
+        headerMap[entry.key] = entry.value;
+      }
       if (routingContext.traceId != null) {
         headerMap[RpcHeaders.xTraceId] = routingContext.traceId!;
       }
