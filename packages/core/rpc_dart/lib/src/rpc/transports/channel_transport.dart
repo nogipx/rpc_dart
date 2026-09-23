@@ -449,6 +449,11 @@ class RpcChannelTransport
   }) async {
     _refuseIfClosed();
     _policy.validateMetadata(metadata);
+    // A trailer ends the stream just as `finishSending` does, so it takes the
+    // same claim: mark first, then wait for anything parked for credit. Written
+    // straight out, it overtook a parked DATA frame and the peer ended a frame
+    // short while the sender believed it had sent everything.
+    if (endStream && !await _claimEnding(streamId)) return;
     await _channel.send(
       RpcTransportMessage.withMetadata(
         metadata: metadata,
@@ -457,7 +462,7 @@ class RpcChannelTransport
         streamId: streamId,
       ),
     );
-    if (endStream) _markFinished(streamId);
+    if (endStream) _releaseStream(streamId);
   }
 
   @override
@@ -549,14 +554,7 @@ class RpcChannelTransport
     // [_refuseIfClosed] on its way out of the wait, so the wait below cannot
     // outlive the call: there is no second refusal here, because a canary
     // showed one would carry no weight of its own.
-    _rememberFinished(streamId);
-    final parked = _parkedSends[streamId];
-    if (parked != null) {
-      try {
-        await parked.future;
-      } catch (_) {}
-    }
-    if (_closed) return;
+    if (!await _claimEnding(streamId)) return;
     await _channel.send(
       RpcTransportMessage(
         metadata: RpcMetadata([]),
@@ -565,6 +563,26 @@ class RpcChannelTransport
       ),
     );
     _releaseStream(streamId);
+  }
+
+  /// Claims the right to end [streamId] and waits for anything parked on it.
+  ///
+  /// Every path that can end a stream goes through here. Two of them used to
+  /// carry the rule and the third did not, so a trailer written by
+  /// [sendMetadata] could overtake a DATA frame still parked for credit.
+  ///
+  /// Returns false when the ending must not go out at all: already ended, or
+  /// the transport closed while this waited.
+  Future<bool> _claimEnding(int streamId) async {
+    if (_closed) return false;
+    _rememberFinished(streamId);
+    final parked = _parkedSends[streamId];
+    if (parked != null) {
+      try {
+        await parked.future;
+      } catch (_) {}
+    }
+    return !_closed;
   }
 
   @override
