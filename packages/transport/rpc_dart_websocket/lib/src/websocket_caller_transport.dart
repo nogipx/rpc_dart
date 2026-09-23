@@ -56,7 +56,30 @@ class RpcWebSocketCallerTransport
   ///
   /// A stale id is DROPPED, never raised on — every call site here is a teardown
   /// path, and a `finally` that throws masks the error that got it there.
+  ///
+  /// NOT the whole picture on its own: see [_peerStreamIds] for the streams
+  /// this transport answers but did not mint.
   final Set<int> _idsOnThisConnection = {};
+
+  /// Stream ids the PEER minted on the current connection.
+  ///
+  /// In peer mode either side may start a call, so this transport both makes
+  /// requests and answers them — and a response goes out on the id the REMOTE
+  /// chose, which by construction is never in [_idsOnThisConnection].
+  ///
+  /// Without this set the send guards below dropped every frame of every
+  /// answer, silently and with no error: the handler ran, nothing reached the
+  /// wire, and the caller waited out its deadline. Measured on a reverse unary
+  /// call over a peer pair — `handlerCalls=1`, then a timeout — which is to say
+  /// a peer client could receive a call and could never reply to one.
+  ///
+  /// Kept as a second set rather than by testing the id's parity. Parity works
+  /// (this transport is always `isClient: true`, so its own ids are odd and the
+  /// peer's are even) but it would leave peer-initiated ids unguarded
+  /// ENTIRELY, which is the very hazard [_idsOnThisConnection] exists to answer
+  /// — a stale teardown after a reconnect landing on whichever call now holds
+  /// that number. Membership gives both directions the same protection.
+  final Set<int> _peerStreamIds = {};
 
   /// No live socket, but recovery is expected.
   ///
@@ -207,8 +230,11 @@ class RpcWebSocketCallerTransport
   /// covers what the resume cannot.
   void _attach(WebSocketChannel ws, {int? resumeStreamIdsAfter}) {
     // Every id minted on the previous connection is stale, and with the resume
-    // above they can no longer be confused with new ones.
+    // above they can no longer be confused with new ones. The peer's ids go
+    // too: its numbering restarts on the new socket, so a remembered one would
+    // authorise a send on whatever call now holds it.
     _idsOnThisConnection.clear();
+    _peerStreamIds.clear();
     _inner = RpcChannelTransport.fromChannel(
       channel: RpcWebSocketChannel(ws),
       isClient: true,
@@ -217,6 +243,12 @@ class RpcWebSocketCallerTransport
     );
     _fwdSub = _inner.incomingMessages.listen(
       (m) {
+        // An id this transport did not mint is one the peer did, and the only
+        // place that fact is observable is here. Recorded by MEMBERSHIP rather
+        // than by parity so the rule survives a change of id scheme.
+        if (!_idsOnThisConnection.contains(m.streamId)) {
+          _peerStreamIds.add(m.streamId);
+        }
         if (!_incomingCtl.isClosed) _incomingCtl.add(m);
       },
       onError: (Object e) {
@@ -297,6 +329,22 @@ class RpcWebSocketCallerTransport
     return _inner.releaseStreamId(streamId);
   }
 
+  /// Whether [streamId] names a stream live on the CURRENT connection, in
+  /// either direction: one this transport opened, or one the peer opened and
+  /// this transport is answering.
+  bool _liveHere(int streamId) =>
+      _idsOnThisConnection.contains(streamId) ||
+      _peerStreamIds.contains(streamId);
+
+  /// Forgets a peer-initiated stream once this side has finished answering it.
+  ///
+  /// The trailer is the last thing a responder puts on a stream, so this is
+  /// where [_peerStreamIds] stops growing. Without it the set would accumulate
+  /// one entry per inbound call for the life of the connection.
+  void _retirePeerStream(int streamId, bool endStream) {
+    if (endStream) _peerStreamIds.remove(streamId);
+  }
+
   @override
   Future<void> sendMetadata(
     int streamId,
@@ -307,7 +355,8 @@ class RpcWebSocketCallerTransport
     // Reached by teardown as well as by ordinary sends: the cancellation notice
     // in base_processor is a sendMetadata with endStream, so a cancel racing a
     // reconnect would otherwise cancel whichever call now holds this id.
-    if (!_idsOnThisConnection.contains(streamId)) return;
+    if (!_liveHere(streamId)) return;
+    _retirePeerStream(streamId, endStream);
     return _inner.sendMetadata(streamId, metadata, endStream: endStream);
   }
 
@@ -318,7 +367,8 @@ class RpcWebSocketCallerTransport
     bool endStream = false,
   }) async {
     _ensureUsable();
-    if (!_idsOnThisConnection.contains(streamId)) return;
+    if (!_liveHere(streamId)) return;
+    _retirePeerStream(streamId, endStream);
     return _inner.sendMessage(streamId, data, endStream: endStream);
   }
 
@@ -335,7 +385,7 @@ class RpcWebSocketCallerTransport
     bool endStream = false,
   }) async {
     _ensureUsable();
-    if (!_idsOnThisConnection.contains(streamId)) return;
+    if (!_liveHere(streamId)) return;
     return _inner.sendDirectObject(streamId, object, endStream: endStream);
   }
 
@@ -344,7 +394,7 @@ class RpcWebSocketCallerTransport
     // The worst of the stale operations: this puts a real end-of-stream frame
     // on the wire, so a dead call half-closed a live one's request stream and
     // the server finished serving it.
-    if (!_idsOnThisConnection.contains(streamId)) return;
+    if (!_liveHere(streamId)) return;
     return _inner.finishSending(streamId);
   }
 
