@@ -923,6 +923,14 @@ class RpcHttp2CallerTransport
     // Read BEFORE the cleanup below drops it.
     final halfClosed = _halfClosedLocal.contains(streamId);
 
+    // Same two steps `releaseStreamId` takes, and for its stated reason: release
+    // anything parked on the server's window BEFORE the subscription goes, and
+    // forget the flow-control charge. This path had neither, so cancelling a
+    // call left its outgoing pump behind -- measured `pumps 1 -> 1` here against
+    // `1 -> 0` for `releaseStreamId` on the same stream.
+    _outgoingPumps.remove(streamId)?.dispose();
+    _fcForget(streamId);
+
     await _streamSubscriptions.remove(streamId)?.cancel();
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
@@ -1037,6 +1045,14 @@ class RpcHttp2CallerTransport
     'activeStreams': _activeStreams.length,
     'pendingSubscriptions': _streamSubscriptions.length,
     'pendingParsers': _streamParsers.length,
+    // Per-stream state that only a TEARDOWN clears, exposed because the three
+    // teardown paths clear different subsets and no instrument could see the
+    // difference. An outgoing pump left behind is the expensive one: a caller
+    // parked on the server's window never unwinds once its stream is gone,
+    // which is why `releaseStreamId` disposes it first.
+    'fcOutstanding': _fcOutstanding.length,
+    'outgoingPumps': _outgoingPumps.length,
+    'streamControllers': _streams.length,
     'host': _host,
     'port': _port,
     'scheme': _scheme,

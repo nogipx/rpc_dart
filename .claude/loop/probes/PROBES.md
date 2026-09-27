@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-105](P-105-what-each-teardown-block-clears.md)** valid (round 452),
+  rpc_dart_http2 — one arm per teardown path on a stream left MID-FLIGHT, so no
+  ending clears the state before the path under test runs. A silent server is the
+  point. **The instrument had to be built first**: `_outgoingPumps`,
+  `_fcOutstanding` and the stream-controller router were private, which is why the
+  lead sat unmeasured for 26 rounds — three counts in `health()` made it
+  askable. Control is `releaseStreamId` on the same shape, `1 -> 0` every run, and
+  the BEFORE value is asserted too because an arm with no pump to lose would pass
+  silently. Carries a VOID arm: a 256 KiB send did not park, so the hang the
+  sibling's comment promises was not reproduced
 - **[P-104](P-104-is-a-responder-side-deadline-bounded.md)** valid (round 451),
   rpc_dart — a handler yielding every 100 ms against a 300 ms deadline, so the
   ITEM COUNT is the clock. **The reading is a responder-side LOG record, not the

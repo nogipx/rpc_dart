@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451]
-status: confirmed (round 448)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452]
+status: confirmed (round 452)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -723,3 +723,32 @@ widens it upward, into the caller's own stack.
 
 `../rounds/451-the-disposer-was-in-the-other-layer.md`,
 `../checked/C-50-the-responder-bounds-its-deadline-in-the-pipeline.md`.
+
+## Round 452 — the divergence that bites is the one the SWEEP's list omitted
+
+B-84 tabulated three teardown blocks and what each adds. It got the shape right
+and the contents short: it listed `_fcForget` as `releaseStreamId`'s extra, and
+there were two — the other being `_outgoingPumps.remove(...).dispose()`, which is
+the one `resetStream` leaked.
+
+> **Re-derive the sweep's own table before working from it.** L-12 says count the
+> class before fixing any of it; this is the smaller sibling — the count may be
+> right while the CELLS are incomplete, and a one-item-short cell reads exactly
+> like a complete one.
+
+Second half, and it is the reason this sat for 26 rounds inside B-70 without
+anyone answering a question it had already written down:
+
+> **A divergence you cannot OBSERVE is not a weak lead, it is an unbuilt
+> instrument.** `_outgoingPumps`, `_fcOutstanding` and the stream router were
+> private with no getter, so the three blocks could only be compared by reading.
+> Three counts in `health()` turned "the weakest of the remainder" into a
+> measured leak in one round.
+
+```
+releaseStreamId   pumps 1 -> 0
+resetStream       pumps 1 -> 1     <- the cancellation path
+```
+
+`../rounds/452-the-weakest-lead-had-a-leak-in-it.md`,
+`../probes/P-105-what-each-teardown-block-clears.md`.

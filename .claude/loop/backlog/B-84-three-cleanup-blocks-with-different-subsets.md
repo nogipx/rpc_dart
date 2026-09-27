@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 452)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
@@ -8,6 +8,32 @@ reason: cost — split out of B-70 item 24; the copies are near-identical and no
 ---
 
 # B-84 — three cleanup blocks, each clearing a different subset
+
+## CLOSED (round 452) — and the weakest lead had a real leak in it
+
+Question 1 came back DIRTY. `resetStream` — the path a cancellation takes — left
+the stream's outgoing pump behind:
+
+```
+releaseStreamId   pumps 1 -> 0
+resetStream       pumps 1 -> 1
+```
+
+**This lead's own arithmetic was short.** It lists `_fcForget` as what
+`releaseStreamId` adds; it adds TWO things, and the other one —
+`_outgoingPumps.remove(...).dispose()` — is the one that leaked.
+
+**And neither question could be ASKED as filed**: `_outgoingPumps`,
+`_fcOutstanding` and the stream-controller router were private with no getter,
+which is why this sat unmeasured for 26 rounds inside B-70. Three counts added to
+`_buildHealthDetails` is what made it measurable.
+
+Not confirmed: the HANG that `releaseStreamId`'s comment promises. A 256 KiB send
+against the 65535-byte window did not park, so the leak is state, not a stall.
+`_fcForget` was added on the sibling's shape rather than on a measurement.
+
+Question 2 (does `releaseStreamId` leave a live subscription) is answered clean:
+`subs 1 -> 0` on every path. The third block was not armed — see the round.
 
 `rpc_http2_caller_transport.dart` tears a stream down in three places, over a
 shared core of `_streamParsers` / `_initialHeadersReceived` / `_halfClosedLocal`
