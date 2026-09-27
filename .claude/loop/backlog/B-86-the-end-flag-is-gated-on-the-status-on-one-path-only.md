@@ -1,6 +1,6 @@
 ---
-status: open
-round: 447 — http2 half MEASURED and FIXED; the HTTP/1.1 half still unproven
+status: closed (round 460)
+round: 460 — both halves measured; http2 FIXED in 447, HTTP/1.1 CLEAN
 commit: 4ff4e346
 paths: [packages/transport/rpc_dart_http/lib/**]
 probe: packages/transport/rpc_dart_http2/.dart_tool/probe/missing_trailers.dart
@@ -9,7 +9,24 @@ reason: bench — what remains is whether an HTTP/1.1 response can end with no s
 
 # B-86 — the end flag is gated on the status on the DATA path only
 
-## http2 HALF CLOSED (round 447). What is left is HTTP/1.1 only.
+## CLOSED (round 460). HTTP/1.1 is CLEAN — `checked/C-52`.
+
+The remaining half is measured. A 200 with no `grpc-status` anywhere IS reachable —
+the synthesised status covers non-2xx only, so the trailer set comes out empty —
+and the consumer is told:
+
+```
+200, no grpc-status   status=14 "The stream closed before the peer sent a status"
+200, grpc-status: 0   RETURNED "answer"    <- control
+200, grpc-status: 5   status=5
+```
+
+**The difference from http2 is the NUMBER of terminal messages, not the empty
+metadata this lead reasoned from.** http2 emitted two — the trailers frame with no
+status, then a synthesised one carrying 14 — and the first closed the consumer.
+HTTP/1.1 emits exactly one, so there is no ordering to lose.
+
+## http2 half (round 447)
 
 Measured (P-101) and fixed: a trailers frame ending the stream with no
 grpc-status read **CLEAN END after 2 items, no error** — the ending closed the

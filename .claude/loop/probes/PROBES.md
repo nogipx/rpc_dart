@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-110](P-110-a-200-with-no-grpc-status.md)** valid (round 460),
+  rpc_dart_http — a raw `HttpServer`, because only a non-conforming peer ends a
+  response without a status. **200 is the load-bearing choice**: the caller
+  synthesises a status from the HTTP code for non-2xx, so at any other code the
+  trailer set is never empty and the arm does not exist. Body built with the
+  library's own serializer (L-10). Controls: `grpc-status: 0` on the same server
+  returning cleanly, and `grpc-status: 5` reported as itself — so the UNAVAILABLE is
+  neither the harness nor a catch-all
 - **[P-109](P-109-a-message-at-exactly-the-limit.md)** valid (round 458),
   rpc_dart_http + core — an off-by-five defect cannot be measured approximately, so
   **the limit is set to the message's own serialized length**: "exactly at the

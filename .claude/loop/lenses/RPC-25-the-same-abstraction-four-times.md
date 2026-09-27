@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460]
 status: confirmed (round 458)
 ---
 
@@ -883,3 +883,60 @@ Two smaller notes the round paid for:
 
 `../rounds/458-a-message-at-exactly-the-limit.md`,
 `../probes/P-109-a-message-at-exactly-the-limit.md`.
+
+## Round 459 — an ABSENT copy in one sibling can be the correct answer
+
+This lens has spent fifty rounds finding that a missing copy is a defect. 459 is
+the case where it is not, and the distinction is worth having: the duty was in the
+shared layer all along, and the window it guards does not exist on the sibling that
+lacks it.
+
+```
+the parser buffer cap    http2 DOES pass it; the parser's null fallback is the
+                         same formula core passes explicitly
+the residency charge     lives in core's responder_pipeline, which http2 feeds
+the window it guards     cannot open on HTTP/2 -- the method is a `:path`
+                         pseudo-header on the frame that opens the stream
+```
+
+> **Three questions before filing an absence, and the third is the one usually
+> skipped.** Is the duty here? Is it in a layer this sibling shares? And can the
+> situation it guards against ARISE here at all? Round 451 stopped at the second;
+> this one needed the third, because the honest answer is "correct by
+> construction", not "covered elsewhere".
+
+The corollary is about evidence, not code:
+
+> **A grep for a NAME is not evidence about a MECHANISM.** B-79 rested on
+> "`bufferedBytes` does not appear anywhere in `rpc_dart_http2/lib`" — and
+> `maxBufferedBytes` appears twice, while the thing the lead meant is a property on
+> a message class that no transport needs to name. Two different mechanisms shared
+> one word, and the word was searched instead of either.
+
+`../rounds/459-the-charge-lives-where-they-meet.md`,
+`../checked/C-51-http2-does-charge-the-buffered-bytes.md`.
+
+## Round 460 — the siblings differed in a property the lead never named
+
+B-86 was filed on the shape both transports share: a terminal message whose metadata
+is EMPTY. It reasoned that if that reads as a clean end on one, it reads as a clean
+end on the other. It does not, and the reason is a property nobody had written down.
+
+```
+http2      TWO terminal messages: trailers with no status, then a synthesised 14.
+           The first closes the consumer; the second is discarded.
+HTTP/1.1   ONE terminal message. Nothing to lose the ordering of.
+```
+
+Same empty metadata, opposite outcomes — and the fix on http2 was about ORDER, not
+about emptiness at all.
+
+> **When a lead generalises from a shape, ask what else differs between the copies
+> before accepting or refuting it.** The shape was identical and the answer still
+> depended on a cardinality the lead never mentioned. A shared shape licenses a
+> hypothesis about the sibling, never a conclusion — which is the same rule round
+> 449 arrived at from the other direction, where the divergence was real and the harm
+> was not.
+
+`../rounds/460-one-terminal-message-not-two.md`,
+`../checked/C-52-http1-tells-the-consumer-when-a-status-never-came.md`.
