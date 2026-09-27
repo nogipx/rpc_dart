@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455]
-status: confirmed (round 455)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456]
+status: confirmed (round 456)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -811,3 +811,40 @@ building the channel to pass the fact down.**
 
 `../rounds/455-the-guess-over-bytes-the-peer-chose.md`,
 `../probes/P-107-does-a-body-that-looks-framed-survive-unchanged.md`.
+
+## Round 456 — a LENIENT copy and a strict one both pass, in opposite directions
+
+The usual failure in this lens is two copies giving different answers to the same
+question, with one of them wrong. 456 is worse and quieter: three answers, two of
+them normalising, and the value satisfied every check — each in the direction that
+made the next one harmful.
+
+```
+isSupported('Identity')     true       normalises, so nothing is refused
+'Identity' != 'identity'    true       so compression is switched ON
+compress(enc: 'Identity')   unchanged  normalises, so nothing is compressed
+```
+
+Result: the compressed FLAG on bytes nothing compressed.
+
+> **When copies disagree about STRICTNESS rather than about a value, the lenient
+> one hides the strict one.** No check refuses, so no error names the
+> disagreement; the damage is downstream of all of them. The detector is not "do
+> the copies return the same thing" but "does each copy NORMALISE the same input
+> before deciding".
+
+Two method notes the round paid for:
+
+> **A witness in the wrong LAYER can pass on both sides of the fix.** Over a
+> channel pair, compress and decompress both normalise in one process, so the bug
+> round trips harmlessly and the test is green either way. It only bites where the
+> two ends are built separately — here, http2's parser against the pipeline's
+> reading. Put the witness where the copies are actually independent.
+
+> **Check the lead's claim about REACHABILITY, not just its claim about the code.**
+> B-82 said a hand-built peer was required. The opposite was true: a foreign peer
+> at flag 0 is inert, and the library's own caller reaches it through a documented
+> context header.
+
+`../rounds/456-the-registry-was-lenient-and-nothing-else-was.md`,
+`../probes/P-108-what-the-case-of-grpc-encoding-changes.md`.

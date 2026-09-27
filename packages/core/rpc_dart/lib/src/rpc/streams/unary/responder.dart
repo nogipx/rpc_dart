@@ -103,7 +103,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           final encoding =
               state.clientRequestEncoding ??
               _context?.getHeader(RpcHeaders.grpcEncoding);
-          if (encoding == null || encoding == RpcGrpcCompression.identity) {
+          if (RpcGrpcCompression.isIdentity(encoding)) {
             // INTERNAL: the peer set the compressed bit and named no encoding,
             // which is a protocol violation no retry can fix.
             throw RpcStatusException(
@@ -113,7 +113,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           }
           return RpcGrpcCompression.decompress(
             payload,
-            encoding: encoding,
+            encoding: encoding!,
             maxOutputBytes: maxOutputBytes,
           );
         },
@@ -361,7 +361,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       final requestEnc = message.metadata!.getHeaderValue(
         RpcHeaders.grpcEncoding,
       );
-      if (requestEnc != null && requestEnc != RpcGrpcCompression.identity) {
+      if (!RpcGrpcCompression.isIdentity(requestEnc)) {
         state.clientRequestEncoding = requestEnc;
       }
       return; // Register metadata only.

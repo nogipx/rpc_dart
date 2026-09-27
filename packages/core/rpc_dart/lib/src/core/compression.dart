@@ -116,6 +116,25 @@ abstract final class RpcGrpcCompression {
     _cachedAcceptEncoding = null;
   }
 
+  /// Whether [encoding] names "no compression" — absent, or any spelling of
+  /// [identity].
+  ///
+  /// **Use this instead of comparing against [identity].** A raw header value is
+  /// whatever the peer or the caller wrote, and this registry has always been
+  /// case-insensitive (RFC 9110, see [_normalize]) while eleven sites outside it
+  /// compared the raw value against the lower-case constant. The two disagreed on
+  /// `Identity`, and the disagreement was not inert: `isSupported` said yes so
+  /// nothing was refused, the comparison said "not identity" so compression was
+  /// switched ON, and [compress] normalised and returned the bytes UNCHANGED —
+  /// putting the compressed FLAG on an uncompressed message. Measured over a real
+  /// socket, from the library's own caller with `grpc-encoding: Identity` in the
+  /// call context:
+  ///
+  ///     identity  -> OK
+  ///     Identity  -> status=13 Internal server error
+  static bool isIdentity(String? encoding) =>
+      encoding == null || _normalize(encoding) == identity;
+
   /// Returns true if [encoding] is supported.
   ///
   /// Case-insensitive, per RFC 9110 — see [_normalize].

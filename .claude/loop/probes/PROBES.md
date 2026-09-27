@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-108](P-108-what-the-case-of-grpc-encoding-changes.md)** valid (round 456),
+  rpc_dart_http2 + core — varies the SPELLING against the same codec, and crosses
+  it with the compression FLAG, because the flag decides whether a decompressor is
+  looked up at all. **Two halves, and the second is where the defect lives**: a
+  hand-built peer (where the case turns out to be INERT at flag 0) and the
+  library's OWN caller with the encoding in the call context — which is the
+  supported way to select it, so the lead's assumption that a foreign peer was
+  needed was backwards. Controls: `identity` in every arm, `absent` for the null
+  branch, and `nosuchcodec` to show the refusal machinery is informative — which is
+  what makes the opaque INTERNAL elsewhere worth noticing (B-91)
 - **[P-107](P-107-does-a-body-that-looks-framed-survive-unchanged.md)** valid (round 455),
   rpc_dart_http2 — constructs the input rather than hoping to observe it, and
   READING came first: knowing the function is fed `RpcMessageParser` output, which

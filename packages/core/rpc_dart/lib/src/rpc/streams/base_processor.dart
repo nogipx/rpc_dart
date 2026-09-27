@@ -23,10 +23,9 @@ Future<void> _frameAndSend(
   Uint8List serialized,
   String? encoding,
 ) {
-  final useCompression =
-      encoding != null && encoding != RpcGrpcCompression.identity;
+  final useCompression = !RpcGrpcCompression.isIdentity(encoding);
   final payload = useCompression
-      ? RpcGrpcCompression.compress(serialized, encoding: encoding)
+      ? RpcGrpcCompression.compress(serialized, encoding: encoding!)
       : serialized;
   final framed = RpcMessageFrame.encode(payload, compressed: useCompression);
   return transport.sendMessage(streamId, framed);
@@ -256,7 +255,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
         decompressor: (payload, {int? maxOutputBytes}) {
           final encoding =
               _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding);
-          if (encoding == null || encoding == RpcGrpcCompression.identity) {
+          if (RpcGrpcCompression.isIdentity(encoding)) {
             throw RpcStatusException(
               RpcStatus.internal,
               'Compressed gRPC payload received without grpc-encoding',
@@ -264,7 +263,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           }
           return RpcGrpcCompression.decompress(
             payload,
-            encoding: encoding,
+            encoding: encoding!,
             maxOutputBytes: maxOutputBytes,
           );
         },
@@ -551,7 +550,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
       // grpc-encoding: what the peer used to compress its requests.
       final reqEnc = meta.getHeaderValue(RpcHeaders.grpcEncoding);
-      if (reqEnc != null && reqEnc != RpcGrpcCompression.identity) {
+      if (!RpcGrpcCompression.isIdentity(reqEnc)) {
         _requestEncoding = reqEnc;
       }
 
@@ -959,7 +958,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           logger: _logger,
           decompressor: (payload, {int? maxOutputBytes}) {
             final encoding = _peerGrpcEncoding;
-            if (encoding == null || encoding == RpcGrpcCompression.identity) {
+            if (RpcGrpcCompression.isIdentity(encoding)) {
               throw RpcStatusException(
                 RpcStatus.internal,
                 'Compressed gRPC payload received without grpc-encoding',
@@ -967,7 +966,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             }
             return RpcGrpcCompression.decompress(
               payload,
-              encoding: encoding,
+              encoding: encoding!,
               maxOutputBytes: maxOutputBytes,
             );
           },
@@ -1121,9 +1120,8 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           }
 
           final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
-          if (requestEncoding != null &&
-              requestEncoding != RpcGrpcCompression.identity &&
-              !RpcGrpcCompression.isSupported(requestEncoding)) {
+          if (!RpcGrpcCompression.isIdentity(requestEncoding) &&
+              !RpcGrpcCompression.isSupported(requestEncoding!)) {
             // UNIMPLEMENTED is what the gRPC spec prescribes for a compression
             // algorithm the receiver does not support, alongside
             // grpc-accept-encoding. Not INTERNAL: the peer can pick another.

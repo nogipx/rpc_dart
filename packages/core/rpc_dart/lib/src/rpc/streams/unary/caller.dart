@@ -119,7 +119,7 @@ final class UnaryCaller<TRequest, TResponse> {
       logger: _logger,
       decompressor: (payload, {int? maxOutputBytes}) {
         final encoding = peerGrpcEncoding;
-        if (encoding == null || encoding == RpcGrpcCompression.identity) {
+        if (RpcGrpcCompression.isIdentity(encoding)) {
           throw RpcStatusException(
             RpcStatus.internal,
             'Compressed gRPC payload received without grpc-encoding',
@@ -127,7 +127,7 @@ final class UnaryCaller<TRequest, TResponse> {
         }
         return RpcGrpcCompression.decompress(
           payload,
-          encoding: encoding,
+          encoding: encoding!,
           maxOutputBytes: maxOutputBytes,
         );
       },
@@ -487,9 +487,8 @@ final class UnaryCaller<TRequest, TResponse> {
       }
       final serializedRequest = _requestSerializer.serialize(request);
       final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
-      if (requestEncoding != null &&
-          requestEncoding != RpcGrpcCompression.identity &&
-          !RpcGrpcCompression.isSupported(requestEncoding)) {
+      if (!RpcGrpcCompression.isIdentity(requestEncoding) &&
+          !RpcGrpcCompression.isSupported(requestEncoding!)) {
         // UNIMPLEMENTED, matching base_processor's copy and the gRPC spec.
         throw RpcStatusException(
           RpcStatus.unimplemented,
@@ -500,13 +499,11 @@ final class UnaryCaller<TRequest, TResponse> {
           'package:rpc_dart_compression).',
         );
       }
-      final useCompression =
-          requestEncoding != null &&
-          requestEncoding != RpcGrpcCompression.identity;
+      final useCompression = !RpcGrpcCompression.isIdentity(requestEncoding);
       final payload = useCompression
           ? RpcGrpcCompression.compress(
               serializedRequest,
-              encoding: requestEncoding,
+              encoding: requestEncoding!,
             )
           : serializedRequest;
       if (_logger.isInternal) {

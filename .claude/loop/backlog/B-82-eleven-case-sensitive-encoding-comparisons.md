@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 456)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
@@ -8,6 +8,41 @@ reason: cost — split out of B-70 item 7; eleven sites, one rule, and the peer 
 ---
 
 # B-82 — eleven sites compare a raw header where the registry normalises
+
+## CLOSED (round 456) — and the reachable path was the OWN caller, not a peer
+
+**This lead had the direction backwards.** It says a hand-built peer is needed
+because rpc_dart's own caller always spells it lower-case. The encoding is selected
+by a header on the call CONTEXT — `_context?.getHeader(grpcEncoding)` — so a USER
+picks the spelling, and the library's own caller reaches it:
+
+```
+own caller, grpc-encoding=identity   OK
+own caller, grpc-encoding=Identity   status=13 Internal server error
+```
+
+From a foreign peer at compression flag 0 the same value is INERT, which is the
+opposite of what the lead predicted.
+
+The mechanism, three answers to one question:
+
+```
+isSupported('Identity')     true       normalises, nothing refused
+'Identity' != 'identity'    true       compression switched ON
+compress(enc:'Identity')    unchanged  normalises, no compression happens
+```
+
+so the compressed FLAG went out on bytes nothing compressed.
+
+Fixed with one accessor, `RpcGrpcCompression.isIdentity`, at all eleven sites; it
+absorbs the `== null` half too. Inbound metadata is not rewritten, as decided.
+
+**A witness over a channel pair would have been worthless** and nearly shipped:
+in one process compress and decompress both normalise, so the call round trips on
+both sides of the fix. The witness lives in `rpc_dart_http2`.
+
+Beside it, not part of it: `gzip` fails the same way in BOTH spellings, before and
+after. Filed as **B-91**.
 
 `RpcGrpcCompression` normalises before comparing — `trim().toLowerCase()`
 (`compression.dart:118`) — and uses the NORMALISED value at `:124`, `:131` and

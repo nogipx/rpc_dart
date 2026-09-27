@@ -153,8 +153,8 @@ final class RpcMetadata {
   static RpcMetadata forServerInitialResponse({String? encoding}) {
     return RpcMetadata([
       const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
-      if (encoding != null && encoding != RpcGrpcCompression.identity)
-        RpcHeader(RpcHeaders.grpcEncoding, encoding),
+      if (!RpcGrpcCompression.isIdentity(encoding))
+        RpcHeader(RpcHeaders.grpcEncoding, encoding!),
     ]);
   }
 
