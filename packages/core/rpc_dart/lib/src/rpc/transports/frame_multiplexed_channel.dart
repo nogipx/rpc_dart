@@ -153,8 +153,9 @@ class RpcFrameMultiplexedChannel
   /// Bound the frame payload by the policy value directly and the real ceiling
   /// becomes `maxMessageLengthBytes - 5`, rejecting a message at exactly the
   /// configured limit.
-  int get _maxFramePayloadBytes =>
-      _policy.maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+  /// The rule itself now lives on the policy, because the HTTP transports needed
+  /// it too and were bounding the framed body by the message limit directly.
+  int get _maxFramePayloadBytes => _policy.maxFramedMessageBytes;
 
   /// Reassembly-buffer cap, in bytes.
   ///

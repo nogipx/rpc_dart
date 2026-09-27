@@ -190,7 +190,14 @@ class RpcHttpCallerTransport
     http.StreamedResponse response,
     int streamId,
   ) async {
-    final limit = _policy.maxMessageLengthBytes;
+    // BOUND on the framed size, REPORT the configured one. This body carries the
+    // 5-byte gRPC prefix that `maxMessageLengthBytes` does not count, so bounding
+    // by the message limit rejected a response at exactly the configured limit
+    // (see `RpcSecurityPolicy.maxFramedMessageBytes`). But the number in the
+    // message has to be the knob the operator set and would raise -- naming
+    // `max + 5` names a value they never configured.
+    final limit = _policy.maxFramedMessageBytes;
+    final configured = _policy.maxMessageLengthBytes;
     final builder = BytesBuilder(copy: false);
     await for (final chunk in response.stream) {
       builder.add(chunk);
@@ -199,7 +206,7 @@ class RpcHttpCallerTransport
         // a message larger than the maximum.
         throw RpcStatusException(
           RpcStatus.resourceExhausted,
-          'HTTP response body exceeds the configured limit of $limit bytes '
+          'HTTP response body exceeds the configured limit of $configured bytes '
           '(stream $streamId, method ${response.request?.url.path}). Raise '
           'RpcSecurityPolicy.maxMessageLengthBytes if this is expected.',
         );

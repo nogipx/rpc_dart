@@ -338,6 +338,24 @@ final class RpcSecurityPolicy {
       maxBufferedBytes ??
       (maxMessageLengthBytes + RpcConstants.messagePrefixSize);
 
+  /// The largest a single gRPC FRAME may be: one message plus its 5-byte prefix.
+  ///
+  /// **Bound WIRE bytes by this, never by [maxMessageLengthBytes] directly.**
+  /// That limit is expressed in MESSAGE bytes, and everything on a wire carries
+  /// the prefix, so comparing a framed length against it makes the effective
+  /// limit `maxMessageLengthBytes - 5` and rejects a message at exactly the
+  /// limit. Measured over HTTP/1.1 with the limit set to one message's exact
+  /// serialized length:
+  ///
+  ///     channel transport   ACCEPTED
+  ///     HTTP/1.1            REFUSED, RESOURCE_EXHAUSTED
+  ///     both, limit + 5     ACCEPTED   <- so it is the five bytes
+  ///
+  /// One home for the rule. It was computed inline in three places before, and
+  /// the two HTTP sites did not compute it at all.
+  int get maxFramedMessageBytes =>
+      maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+
   /// Header-name validation for transport-level metadata.
   ///
   /// Enforces basic safety invariants:

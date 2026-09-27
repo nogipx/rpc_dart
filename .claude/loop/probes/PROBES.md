@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-109](P-109-a-message-at-exactly-the-limit.md)** valid (round 458),
+  rpc_dart_http + core — an off-by-five defect cannot be measured approximately, so
+  **the limit is set to the message's own serialized length**: "exactly at the
+  limit" is then true by construction and nothing has to predict what CBOR does to
+  a 1000-character string. Varies the TRANSPORT, holds message and limit fixed.
+  Two arms on the far side: `limit + 5` accepted everywhere (so the refusal is the
+  five bytes) and `limit - 1` refused everywhere (so widening the bound did not
+  remove it). The handler echoes the LENGTH it received, so an acceptance also
+  proves nothing was truncated
 - **[P-108](P-108-what-the-case-of-grpc-encoding-changes.md)** valid (round 456),
   rpc_dart_http2 + core — varies the SPELLING against the same codec, and crosses
   it with the compression FLAG, because the flag decides whether a decompressor is

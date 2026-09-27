@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456]
-status: confirmed (round 456)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458]
+status: confirmed (round 458)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -848,3 +848,38 @@ Two method notes the round paid for:
 
 `../rounds/456-the-registry-was-lenient-and-nothing-else-was.md`,
 `../probes/P-108-what-the-case-of-grpc-encoding-changes.md`.
+
+## Round 458 — the copies agreed on the VALUE and disagreed on the UNIT
+
+Every application so far compares what copies DO. 458's copies do the same thing
+with the same number and still disagree, because one of them measures a message
+and the other measures a frame.
+
+```
+channel, limit = exactly the message   ACCEPTED
+http,    limit = exactly the message   REFUSED status=8
+both,    limit = message + 5           ACCEPTED   <- the difference is 5 bytes
+```
+
+`maxMessageLengthBytes` counts a MESSAGE. An HTTP body is a FRAME. Comparing one
+against the other silently lowers the operator's ceiling by the prefix — and only
+on the transport that forgot, so the same policy means two things.
+
+> **When a limit crosses a layer, check its UNIT, not just that it is applied.**
+> "Is there a bound?" is the question a lead asks; "a bound on WHAT?" is the one
+> that finds the defect. The tell is a name that describes the payload being
+> compared against a length that includes a header.
+
+Two smaller notes the round paid for:
+
+> **Bound on the wire size, REPORT the configured one.** The first fix made the
+> refusal name `max + 5`, a number the operator never typed. An existing test
+> caught it, and its own `reason` explained why: the message has to name the knob
+> somebody would raise.
+
+> **An off-by-N defect cannot be measured approximately.** Setting the limit to the
+> message's own serialized length makes "exactly at the limit" true by
+> construction, instead of guessing what the codec does to the payload.
+
+`../rounds/458-a-message-at-exactly-the-limit.md`,
+`../probes/P-109-a-message-at-exactly-the-limit.md`.

@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 458)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/core/frame_multiplexed_channel.dart, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**]
@@ -8,6 +8,32 @@ reason: cost — split out of B-70 item 31; the consequence is a message at exac
 ---
 
 # B-80 — the "+5 bytes of prefix" rule exists twice, both times in core
+
+## CLOSED (round 458). Both halves of the premise above were wrong.
+
+**The rule has THREE homes, not two** — `parser.dart:113` was never counted. And
+**`rpc_dart_http` references `maxMessageLengthBytes` in SEVEN places, two of them
+enforcing it**, so "does not reference it at all outside one doc line" is false.
+
+The defect is real and sharper than the lead's version: both HTTP sites bound the
+RAW body, which is the FRAMED message, against a limit expressed in MESSAGE bytes.
+With the limit pinned to one message's exact serialized length:
+
+```
+channel, limit = exactly the message   ACCEPTED
+http,    limit = exactly the message   REFUSED status=8
+both,    limit = message + 5           ACCEPTED    <- so it is the five bytes
+both,    limit = message - 1           REFUSED     <- the bound still bites
+```
+
+Fixed with one accessor, `RpcSecurityPolicy.maxFramedMessageBytes`, used by both
+HTTP sites and by the frame channel, which had it inline. **Bound on the framed
+size, REPORT the configured one** — an existing test caught that: naming `max + 5`
+names a number the operator never set.
+
+Left alone deliberately: `parser.dart:113`, which is the same arithmetic answering
+a different question (a buffer bound, not a single frame). http2 untouched and
+unmeasured — B-79 is that lead.
 
 A gRPC frame carries a five-byte prefix, so a limit expressed in message bytes
 has to allow for it. Core states that twice:

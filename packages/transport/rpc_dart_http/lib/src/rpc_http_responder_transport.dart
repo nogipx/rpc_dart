@@ -335,12 +335,19 @@ class RpcHttpResponderTransport
         await for (final chunk in request.read()) {
           if (exceeded) continue;
           builder.add(chunk);
-          if (policy != null && builder.length > policy.maxMessageLengthBytes) {
+          // maxFramedMessageBytes, not maxMessageLengthBytes: this body IS the
+          // gRPC-framed message, so it carries the 5-byte prefix the message
+          // limit does not count. Bounding it by the message limit made the real
+          // ceiling `max - 5` -- measured, a message at exactly the configured
+          // limit was refused RESOURCE_EXHAUSTED here and accepted by the channel
+          // transports.
+          if (policy != null && builder.length > policy.maxFramedMessageBytes) {
             exceeded = true;
             builder.clear();
           }
         }
         if (exceeded) {
+          // The CONFIGURED number, not the framed one: see the bound above.
           throw _BodyTooLarge(policy!.maxMessageLengthBytes);
         }
         return builder.takeBytes();
