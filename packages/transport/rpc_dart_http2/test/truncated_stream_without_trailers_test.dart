@@ -92,9 +92,23 @@ Uint8List _dataFrame(
   ...payload,
 ]);
 
-/// A raw HTTP/2 server that answers with [messages] items and then ends the
-/// stream in the way [withTrailers] selects.
-Future<ServerSocket> _rawServer({required bool withTrailers}) async {
+/// How the raw server ends the stream after two messages.
+enum _Ending {
+  /// Malformed: END_STREAM on DATA, no trailers, no status. Round 429.
+  dataEndStream,
+
+  /// Conforming: last DATA without END_STREAM, then trailers carrying status.
+  trailersWithStatus,
+
+  /// Malformed the other way, and B-86's shape: real trailers, END_STREAM, and
+  /// no grpc-status in them. The DATA path was guarded in round 429 and this
+  /// one was not, so it kept reading as a clean end.
+  trailersWithoutStatus,
+}
+
+/// A raw HTTP/2 server that answers with two items and then ends the stream in
+/// the way [ending] selects.
+Future<ServerSocket> _rawServer({required _Ending ending}) async {
   final listener = await ServerSocket.bind('127.0.0.1', 0);
   listener.listen((socket) async {
     socket.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
@@ -120,19 +134,28 @@ Future<ServerSocket> _rawServer({required bool withTrailers}) async {
     );
     socket.add(_dataFrame(body, streamId: 1, endStream: false));
 
-    if (withTrailers) {
-      // Conforming: last DATA without END_STREAM, then trailers carrying it.
-      socket.add(_dataFrame(body, streamId: 1, endStream: false));
-      socket.add(
-        _headersFrame(
-          [_hpackLiteral('grpc-status', '0')],
-          streamId: 1,
-          endStream: true,
-        ),
-      );
-    } else {
-      // Malformed: END_STREAM on DATA, no trailers, no status.
-      socket.add(_dataFrame(body, streamId: 1, endStream: true));
+    switch (ending) {
+      case _Ending.trailersWithStatus:
+        socket.add(_dataFrame(body, streamId: 1, endStream: false));
+        socket.add(
+          _headersFrame(
+            [_hpackLiteral('grpc-status', '0')],
+            streamId: 1,
+            endStream: true,
+          ),
+        );
+      case _Ending.dataEndStream:
+        socket.add(_dataFrame(body, streamId: 1, endStream: true));
+      case _Ending.trailersWithoutStatus:
+        socket.add(_dataFrame(body, streamId: 1, endStream: false));
+        // A trailers frame that ends the stream and carries no status at all.
+        socket.add(
+          _headersFrame(
+            [_hpackLiteral('x-trailer', 'present')],
+            streamId: 1,
+            endStream: true,
+          ),
+        );
     }
     await socket.flush();
   });
@@ -173,7 +196,7 @@ void main() {
   test(
     'a stream ended on DATA without trailers is an error, not a clean end',
     () async {
-      final listener = await _rawServer(withTrailers: false);
+      final listener = await _rawServer(ending: _Ending.dataEndStream);
       addTearDown(() => listener.close());
 
       expect(
@@ -188,13 +211,39 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
+  // Round 447, B-86. The same damage on the HEADERS path, which round 429 did
+  // not cover: a trailers frame ends the stream, carries no grpc-status, and
+  // closed the consumer before `onDone` could synthesise the UNAVAILABLE.
+  //
+  //   [transport] payload=false end=true grpc-status=-    <- closes it
+  //   [transport] payload=false end=true grpc-status=14   <- too late
+  //   consumer: CLEAN END after 2 item(s), no error raised
+  test(
+    'trailers that end the stream without a status are an error too',
+    () async {
+      final listener = await _rawServer(ending: _Ending.trailersWithoutStatus);
+      addTearDown(() => listener.close());
+
+      expect(
+        await _drain(listener.port),
+        'status ${RpcStatus.unavailable} after 2',
+        reason:
+            'a trailers frame with no grpc-status ends the stream without ever '
+            'saying how it went, so a clean end is the same silent data loss '
+            'the DATA path was guarded against',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
   test(
     'GUARD: a conforming stream with trailers still ends cleanly',
     () async {
-      // The load-bearing guard: end-of-stream now waits for a status, so a
+      // The load-bearing guard, and it covers BOTH witnesses: end-of-stream now
+      // waits for a status on the data path and on the headers path, so a
       // well-formed response must still terminate -- otherwise every server
       // stream would hang.
-      final listener = await _rawServer(withTrailers: true);
+      final listener = await _rawServer(ending: _Ending.trailersWithStatus);
       addTearDown(() => listener.close());
 
       expect(await _drain(listener.port), 'clean end after 2');

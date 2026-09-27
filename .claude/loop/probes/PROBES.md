@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-101](P-101-an-ending-with-no-status-per-frame-type.md)** valid (round 447),
+  rpc_dart_http2 — holds the missing grpc-status fixed and varies the FRAME TYPE
+  the ending rides on. Extends round 429's raw-HTTP/2 probe with two cases rather
+  than building a server again. **Three controls**: the same frame type with a
+  status (so the fix did not just stop ending streams), the same malformation on
+  the already-guarded DATA path (the sharpest pair in the table), and the shape
+  measured at the CORE boundary, which is what proved the gap http2-local and
+  refuted the owner's decision. **Trap**: print the label BEFORE the arm —
+  `'${await run(x)}'` evaluates first, so each trace lands under the previous
+  heading, which is how the first reading looked like a passing arm
 - **[P-100](P-100-does-raising-maxheaders-raise-anything.md)** valid (round 446),
   rpc_dart — varies the KNOB and holds the input fixed, which is the shape for
   any "this limit is wired to nothing" claim. Four static arms plus three

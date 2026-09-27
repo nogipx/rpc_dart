@@ -1337,11 +1337,19 @@ class RpcHttp2CallerTransport
       }
     }
 
-    // Build the transport message.
+    // Same rule as the DATA path below, and for the same reason: ending the
+    // stream here closes the consumer FIRST, so the UNAVAILABLE that `onDone`
+    // synthesises arrives after a clean end and is discarded. A trailers frame
+    // carrying no grpc-status is exactly that case -- measured as
+    // `CLEAN END after 2 item(s)` with the status arriving one message too late.
+    //
+    // A Trailers-Only response is unaffected: its status is on this very frame,
+    // so `_statusReceived` is already set above.
+    final statusKnown = _statusReceived.contains(streamId);
     final transportMessage = RpcTransportMessage(
       streamId: streamId,
       metadata: metadata,
-      isEndOfStream: message.endStream,
+      isEndOfStream: message.endStream && statusKnown,
       methodPath: methodPath,
     );
 

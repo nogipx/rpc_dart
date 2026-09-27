@@ -1,13 +1,33 @@
 ---
-status: decided by owner (round 445)
-round: 444 — re-read against the tree, never measured
-commit: 67303ea6
-paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**]
-probe: —
-reason: cost — split out of B-70 item 19; confirmed for the http2 HEADERS path, and the HTTP/1.1 half is unproven
+status: open
+round: 447 — http2 half MEASURED and FIXED; the HTTP/1.1 half still unproven
+commit: 4ff4e346
+paths: [packages/transport/rpc_dart_http/lib/**]
+probe: packages/transport/rpc_dart_http2/.dart_tool/probe/missing_trailers.dart
+reason: bench — what remains is whether an HTTP/1.1 response can end with no status at all, which needs its own arm on that transport's trailer path
 ---
 
 # B-86 — the end flag is gated on the status on the DATA path only
+
+## http2 HALF CLOSED (round 447). What is left is HTTP/1.1 only.
+
+Measured (P-101) and fixed: a trailers frame ending the stream with no
+grpc-status read **CLEAN END after 2 items, no error** — the ending closed the
+consumer and the synthesised UNAVAILABLE arrived one message too late, which is
+the DATA path's own documented failure on the path without its guard. The HEADERS
+path now reads `_statusReceived` before setting the end flag.
+
+**The owner's decision was REFUTED by measurement and is not what shipped.** It
+said to put the check in core at the consumer boundary, once, for every transport,
+on the reasoning that this would cover the unproven HTTP/1.1 half for free. Core
+already raises: over `RpcChannelTransport`, an ending with no status gives
+`RpcStatusException` in all three variants tried, with a status-trailer control
+reading NO ERROR. So there was nothing to add there, the gap was http2-local, and
+**the free HTTP/1.1 coverage was never available.**
+
+So this lead stays OPEN with its scope reduced to HTTP/1.1, and the round did not
+quietly claim it. The corrected version of the HTTP/1.1 claim is below and was
+already weaker than the sweep's.
 
 http2's DATA path will not end a stream before the status is known:
 

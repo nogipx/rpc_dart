@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446]
-status: confirmed (round 446)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447]
+status: confirmed (round 447)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -622,3 +622,30 @@ sentence, because the reason it gave had already expired.
 
 `../rounds/446-the-knob-that-only-turned-down.md`,
 `../probes/P-100-does-raising-maxheaders-raise-anything.md`.
+
+## Round 447 — the two copies can be two BRANCHES of one method
+
+The copies here are not two classes or two packages. They are the DATA branch and
+the HEADERS branch of one `_onMessage`, in one file, forty lines apart. One reads
+`_statusReceived` before setting the end flag and the other does not — and the
+one that does carries a fifteen-line comment describing the data loss it prevents.
+
+```
+(d) END_STREAM on DATA,    no status -> status 14 after 2 items   guarded
+(e) END_STREAM on HEADERS, no status -> CLEAN END after 2 items   not guarded
+(f) END_STREAM on HEADERS, status 0  -> CLEAN END after 2 items   correct
+```
+
+(d) against (e) is the pair: identical malformation, different frame type,
+opposite outcomes. And (e)'s transport trace reproduces (d)'s comment verbatim —
+the ending closes the consumer, the synthesised status arrives one message later
+and is discarded.
+
+> **When a branch carries a long comment explaining a rule, ask which SIBLING
+> BRANCH of the same method should carry it too.** The detector for this variant
+> is not "find the duplicated helper" but "find the guarded branch and read its
+> neighbours". The state was not even missing: the unguarded branch MAINTAINS
+> `_statusReceived` two lines above, and only failed to read it back.
+
+`../rounds/447-the-same-loss-on-the-other-frame.md`,
+`../probes/P-101-an-ending-with-no-status-per-frame-type.md`.
