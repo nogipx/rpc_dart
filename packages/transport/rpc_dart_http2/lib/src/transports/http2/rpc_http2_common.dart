@@ -555,61 +555,6 @@ int? extractHttpStatus(List<http2.Header> headers) {
   return null;
 }
 
-/// Frames one message BODY as a gRPC frame (5-byte prefix + payload).
-///
-/// Takes what `RpcMessageParser` emitted, which is always de-framed — the parser
-/// strips the prefix and adds the body (`result.add(payload)`). Both call sites
-/// pass its output, so whether the input is framed is KNOWN, not guessed.
-///
-/// It used to guess, by parsing the first five bytes and returning the input
-/// unchanged when the declared length matched the rest. That is a heuristic over
-/// bytes the peer chooses, and it fires on any message body that happens to look
-/// like a frame — measured end to end over a real socket, with the same body
-/// length in both arms and only the first byte differing:
-///
-///     body 13B, first byte 0x00 (valid flag)  -> payload 13B, UNCHANGED
-///     body 13B, first byte 0x99 (not a flag)  -> payload 18B, re-framed
-///
-/// In the first row the layer above then read those five bytes as a header and
-/// got an 8-byte message instead of the 13 the peer sent. Silently: nothing is
-/// rejected, the message is re-interpreted.
-Uint8List frameParsedMessage(Uint8List data) {
-  // The check is a HEURISTIC and it is load-bearing. Round 455 removed it on the
-  // premise that `RpcMessageParser` always emits de-framed bodies, and that is
-  // false in exactly one branch -- the branch http2 always takes.
-  //
-  // These transports build their parser with NO decompressor. For a COMPRESSED
-  // message the parser therefore cannot de-frame: it re-frames the compressed
-  // payload itself, `RpcMessageFrame.encode(payload, compressed: true)`
-  // (parser.dart:218), explicitly so the layer above can decompress it. So the
-  // parser's output is a complete frame for a compressed message and a bare body
-  // for an uncompressed one, and this function has to tell them apart.
-  //
-  // Framing it again loses the compressed BIT -- the outer header says
-  // uncompressed -- and the layer above then hands gzip bytes to the codec.
-  // Measured over real http2, with the encoding in the call context:
-  //
-  //     unconditional framing   grpc-encoding: gzip -> status=13 INTERNAL
-  //     this check              grpc-encoding: gzip -> OK
-  //
-  // B-78 is re-opened for the RIGHT fix, which is to stop guessing WITHOUT
-  // losing the bit: the parser knows which branch it took and nothing asks it.
-  // Until it does, the guess stays, because the alternative corrupts every
-  // compressed message.
-  if (data.length >= RpcConstants.messagePrefixSize) {
-    try {
-      final header = RpcMessageFrame.parseHeader(data);
-      if (RpcConstants.messagePrefixSize + header.messageLength ==
-          data.length) {
-        return data;
-      }
-    } catch (_) {
-      // Fall through and frame it.
-    }
-  }
-  return RpcMessageFrame.encode(data, compressed: false);
-}
-
 /// Returns `true` when [data] has a valid gRPC 5-byte prefix and matching
 /// payload length.
 bool isGrpcFrame(Uint8List data) {

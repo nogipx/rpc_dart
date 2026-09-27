@@ -625,6 +625,9 @@ class RpcHttp2ResponderTransport
           logger: _logger?.child('Parser-$streamId'),
           maxMessageLength: _policy.maxMessageLengthBytes,
           maxBufferedBytes: _policy.maxBufferedBytes,
+          // Frames upward, so the parser makes them. See the caller transport and
+          // `RpcMessageParser.emitFramed`.
+          emitFramed: true,
           maxMessagesPerChunk: _policy.maxMessagesPerChunk,
         ),
       );
@@ -638,7 +641,8 @@ class RpcHttp2ResponderTransport
       // INDEX rather than by value: Uint8List compares by identity, which
       // breaks the moment the same reference appears twice.
       for (var i = 0; i < messages.length; i++) {
-        final framedMessage = frameParsedMessage(messages[i]);
+        // Already a frame: the parser was asked for frames.
+        final framedMessage = messages[i];
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
           payload: framedMessage,

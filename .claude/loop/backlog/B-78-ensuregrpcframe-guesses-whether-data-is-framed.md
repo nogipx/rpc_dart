@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 461)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
@@ -9,7 +9,30 @@ reason: cost — split out of B-70 item 26; the reachable input has to be constr
 
 # B-78 — ensureGrpcFrame decides "already framed?" by guessing
 
-## RE-OPENED (round 457). Round 455's fix was WRONG and is reverted.
+## CLOSED (round 461) — the question was removed, not answered
+
+`RpcMessageParser` takes `emitFramed`, and both http2 transports pass it. Every
+value it emits is then a complete frame, so no caller has to ask the bytes
+anything. `frameParsedMessage` is deleted; it had no callers left.
+
+The subtlety is the whole fix: the compressed branch already frames, so the parser
+tracks `alreadyFramed` and does not wrap twice. **That "fact" round 455 tried to
+derive and round 457 said should be carried turns out to live entirely inside the
+parser** — nothing had to cross a boundary.
+
+```
+before   self-framing body  13B -> 13B UNCHANGED   gzip status=13 (if guess deleted)
+after    self-framing body  13B -> 18B RE-FRAMED   gzip OK
+```
+
+One canary switch (`emitFramed: false`) fires BOTH the B-78 witness and the
+compressed-message guards, which is the evidence that the two defects were one
+ambiguity.
+
+Still there, and now the only survivor of the guess: `isGrpcFrame`, unused in
+`lib/`.
+
+## History: RE-OPENED (round 457), because round 455's fix was WRONG
 
 The defect below is real and still there. What was wrong is the fix: **the fact is
 not a constant.** `parser.dart:212-218` — with NO decompressor, which is exactly

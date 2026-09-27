@@ -1395,6 +1395,11 @@ class RpcHttp2CallerTransport
           maxMessageLength: _policy.maxMessageLengthBytes,
           maxBufferedBytes: _policy.maxBufferedBytes,
           maxMessagesPerChunk: _policy.maxMessagesPerChunk,
+          // This transport hands FRAMES upward, so let the parser produce them.
+          // It used to emit a body for an uncompressed message and a frame for a
+          // compressed one, and the caller had to guess which -- from the bytes,
+          // which the peer chooses. See `RpcMessageParser.emitFramed`.
+          emitFramed: true,
         ),
       );
 
@@ -1430,7 +1435,8 @@ class RpcHttp2CallerTransport
       // the data path still short-circuited it for a peer that half-closes.
       final statusKnown = _statusReceived.contains(streamId);
       for (var i = 0; i < messages.length; i++) {
-        final framedMessage = frameParsedMessage(messages[i]);
+        // Already a frame: the parser was asked for frames.
+        final framedMessage = messages[i];
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
           payload: framedMessage,

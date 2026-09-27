@@ -31,7 +31,6 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
-import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_common.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
@@ -104,7 +103,7 @@ void main() {
         id,
         // The library's own serializer, not a hand-built body: the wire format
         // is CBOR and nothing in the request shape says so (lesson L-10).
-        frameParsedMessage(_codec.serialize('go'.rpc)),
+        RpcMessageFrame.encode(_codec.serialize('go'.rpc)),
         endStream: true,
       );
 

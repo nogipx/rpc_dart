@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461]
 status: confirmed (round 458)
 ---
 
@@ -940,3 +940,39 @@ about emptiness at all.
 
 `../rounds/460-one-terminal-message-not-two.md`,
 `../checked/C-52-http1-tells-the-consumer-when-a-status-never-came.md`.
+
+## Round 461 — the re-derived fact ends at the PRODUCER, not at the caller
+
+455 found a re-derived fact and located it in the CALLERS: both pass
+`RpcMessageParser` output, so the input is always de-framed, so frame
+unconditionally. That reading was wrong and the loop paid two rounds for it: the
+parser emits a FRAME for a compressed message it cannot de-frame and a BODY
+otherwise, so framing unconditionally double-wrapped every compressed message and
+lost the compression bit (`grpc-encoding: gzip -> status=13`).
+
+461's fix moved one level upstream. The parser takes `emitFramed`, tracks
+`alreadyFramed` for the branch that already framed, and every value it emits is
+then the same shape. `frameParsedMessage` is deleted rather than corrected.
+
+> **When a callee re-derives what its callers know, 455's question — "do all
+> callers already know?" — has a twin that has to be asked first: does the
+> PRODUCER know, and is it the same producer every time?** If one producer feeds
+> every call site, the fix belongs in the producer's output shape, and it is
+> smaller than any fact carried through the callers: the flag that disambiguates
+> turned out to be a local variable eight lines from where the ambiguity is
+> created. Nothing had to cross a boundary.
+
+> **The evidence that the boundary is the right one is a SINGLE canary reddening
+> both witnesses.** `emitFramed: false` fires P-107's framing witness and P-108's
+> compressed-message guards at once. Two defects that one switch controls were
+> never two defects; they were one ambiguity, and a fix that addresses one of them
+> is by construction in the wrong place.
+
+The same pair also shows what 455's fix cost by being in the wrong layer: the
+caller-side version could not even be witnessed against compression, because at
+that layer the compressed case is indistinguishable from the framed one — which
+is exactly the ambiguity being removed. **A fix placed where the fact is not
+available cannot be tested against the case it breaks.**
+
+`../rounds/461-the-parser-answers-so-nobody-guesses.md`, and rounds 455 (the wrong
+layer) and 457 (the revert that named this one).

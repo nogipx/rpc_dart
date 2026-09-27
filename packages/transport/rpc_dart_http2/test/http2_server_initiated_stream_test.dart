@@ -8,7 +8,6 @@ import 'dart:io';
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
-import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_common.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -54,7 +53,7 @@ void main() {
       // http2 stream. Sending on it must throw, not silently no-op.
       final serverStreamId = responder.createStream();
 
-      final frame = frameParsedMessage(Uint8List.fromList([1, 2, 3]));
+      final frame = RpcMessageFrame.encode(Uint8List.fromList([1, 2, 3]));
       expect(
         () => responder.sendMessage(serverStreamId, frame),
         throwsA(
@@ -86,7 +85,7 @@ void main() {
 
     test('sendMessage_on_unknown_id_throws', () async {
       // An id that was never created at all must also fail loudly.
-      final frame = frameParsedMessage(Uint8List.fromList([9]));
+      final frame = RpcMessageFrame.encode(Uint8List.fromList([9]));
       expect(
         () => responder.sendMessage(99999, frame),
         throwsA(
@@ -114,7 +113,7 @@ void main() {
           );
           await responder.sendMessage(
             msg.streamId,
-            frameParsedMessage(Uint8List.fromList([42])),
+            RpcMessageFrame.encode(Uint8List.fromList([42])),
           );
           await responder.sendMetadata(
             msg.streamId,
@@ -133,7 +132,7 @@ void main() {
         http2.Header.ascii('te', 'trailers'),
       ]);
       clientStream.sendData(
-        frameParsedMessage(Uint8List.fromList([1])),
+        RpcMessageFrame.encode(Uint8List.fromList([1])),
         endStream: true,
       );
 

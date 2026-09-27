@@ -55,7 +55,7 @@ after the change, which is what the status is for.
   five bytes) and `limit - 1` refused everywhere (so widening the bound did not
   remove it). The handler echoes the LENGTH it received, so an acceptance also
   proves nothing was truncated
-- **[P-108](P-108-what-the-case-of-grpc-encoding-changes.md)** valid (round 456),
+- **[P-108](P-108-what-the-case-of-grpc-encoding-changes.md)** valid (rounds 456, 461),
   rpc_dart_http2 + core — varies the SPELLING against the same codec, and crosses
   it with the compression FLAG, because the flag decides whether a decompressor is
   looked up at all. **Two halves, and the second is where the defect lives**: a
@@ -65,7 +65,7 @@ after the change, which is what the status is for.
   needed was backwards. Controls: `identity` in every arm, `absent` for the null
   branch, and `nosuchcodec` to show the refusal machinery is informative — which is
   what makes the opaque INTERNAL elsewhere worth noticing (B-91)
-- **[P-107](P-107-does-a-body-that-looks-framed-survive-unchanged.md)** valid (round 455),
+- **[P-107](P-107-does-a-body-that-looks-framed-survive-unchanged.md)** valid (rounds 455, 461),
   rpc_dart_http2 — constructs the input rather than hoping to observe it, and
   READING came first: knowing the function is fed `RpcMessageParser` output, which
   is de-framed, is what made the arm constructible at all. Measured at the

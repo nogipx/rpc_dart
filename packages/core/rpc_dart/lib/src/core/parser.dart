@@ -95,24 +95,43 @@ final class RpcMessageParser {
   _decompressor;
   final int _maxMessagesPerChunk;
 
+  /// Emit complete gRPC FRAMES rather than bare bodies. See `emitFramed`.
+  final bool _emitFramed;
+
   /// Creates an [RpcMessageParser] with the given configuration.
   ///
   /// The [decompressor], when provided, receives a `maxOutputBytes` hint equal
   /// to [maxMessageLength] so it can bound decompression and reject
   /// decompression bombs before fully materializing the output.
+  ///
+  /// [emitFramed] makes every emitted value a complete gRPC frame instead of a
+  /// bare message body. Off by default, which is what the stream layer wants: it
+  /// holds a codec and takes a body. The transports that hand frames upward say
+  /// so — currently http2, both directions.
+  ///
+  /// **It exists because the answer was otherwise unknowable to the caller.**
+  /// With no [decompressor] this parser cannot de-frame a compressed message, so
+  /// it re-frames the payload and emits a FRAME; for an uncompressed one it emits
+  /// a BODY. A caller receiving both had to guess which it held, and the only
+  /// evidence available was the bytes — a heuristic over peer-chosen data that
+  /// fired on any body whose first five bytes declared its own remaining length,
+  /// silently turning a 13-byte message into an 8-byte one (B-78). Removing the
+  /// guess without this flag broke every compressed message instead.
   RpcMessageParser({
     LogScope? logger,
     int maxMessageLength = 64 * 1024 * 1024,
     int? maxBufferedBytes,
     Uint8List Function(Uint8List payload, {int? maxOutputBytes})? decompressor,
     int maxMessagesPerChunk = 1024,
+    bool emitFramed = false,
   }) : _logger = logger ?? LogScope.noop,
        _maxMessageLength = maxMessageLength,
        _maxBufferedBytes =
            maxBufferedBytes ??
            (maxMessageLength + RpcConstants.messagePrefixSize),
        _decompressor = decompressor,
-       _maxMessagesPerChunk = maxMessagesPerChunk;
+       _maxMessagesPerChunk = maxMessagesPerChunk,
+       _emitFramed = emitFramed;
 
   /// Internal parser state.
   final _MessageParserState _state = _MessageParserState();
@@ -209,6 +228,11 @@ final class RpcMessageParser {
         _state.readOffset,
         _state.readOffset + _state.expectedMessageLength!,
       );
+      // Whether `payload` is already a complete frame rather than a bare body.
+      // Only the compressed-without-a-decompressor branch makes it one, and
+      // [_emitFramed] needs to know so it does not wrap it twice -- which loses
+      // the compression bit and is what round 455 shipped.
+      var alreadyFramed = false;
       if (_state.isCompressed) {
         final decompressor = _decompressor;
         if (decompressor == null) {
@@ -216,6 +240,7 @@ final class RpcMessageParser {
           // frame (with compression bit set) and pass it through so the
           // application layer can decompress it.
           payload = RpcMessageFrame.encode(payload, compressed: true);
+          alreadyFramed = true;
         } else {
           // Pass the message-size limit so the decompressor can abort a
           // decompression bomb before fully expanding it. The post-check below
@@ -266,7 +291,11 @@ final class RpcMessageParser {
           }
         }
       }
-      result.add(payload);
+      result.add(
+        _emitFramed && !alreadyFramed
+            ? RpcMessageFrame.encode(payload, compressed: false)
+            : payload,
+      );
       if (result.length > _maxMessagesPerChunk) {
         _state.clear();
         _state.reset();

@@ -329,40 +329,20 @@ void main() {
       expect(header.messageLength, equals(payload.length));
     });
 
-    // Round 455 inverted this assertion on the premise that `RpcMessageParser`
-    // always emits de-framed bodies, and round 457 restored it after measuring
-    // why that is false: with NO decompressor — which is what these transports
-    // build — the parser cannot de-frame a COMPRESSED message, so it re-frames
-    // the compressed payload itself and this function must pass it through.
-    // Framing it again loses the compressed bit and gzip stops working entirely.
+    // `frameParsedMessage` is GONE (round 461), and with it the pair of tests
+    // that lived here.
     //
-    // The pass-through is a heuristic and it has a real hole (B-78, open): an
-    // application body that looks like a frame is passed through too. That hole
-    // is characterised in `a_self_framing_body_is_still_framed_test.dart`.
-    test(
-      'frameParsedMessage does not double-wrap an already-framed payload',
-      () {
-        final payload = Uint8List.fromList([1, 2, 3]);
-        final framed = RpcMessageFrame.encode(payload, compressed: false);
-        final again = frameParsedMessage(framed);
-
-        expect(
-          again.length,
-          equals(framed.length),
-          reason:
-              'for a compressed message the parser hands up a complete frame; '
-              'wrapping it again drops the compressed bit',
-        );
-      },
-    );
-
-    test('frameParsedMessage frames raw data', () {
-      final raw = Uint8List.fromList([1, 2, 3]);
-      final framed = frameParsedMessage(raw);
-
-      expect(framed.length, equals(5 + raw.length));
-      expect(isGrpcFrame(framed), isTrue);
-    });
+    // It existed to answer "is this already framed?" about `RpcMessageParser`
+    // output, and it answered by parsing the first five bytes — a heuristic over
+    // bytes the peer chooses. Round 455 removed the check and broke every
+    // compressed message; round 457 restored it and re-opened B-78.
+    //
+    // The parser now answers instead: `emitFramed: true` makes every emitted value
+    // a complete frame, so the question never reaches a caller. The behaviour that
+    // used to be tested here is tested where it now lives —
+    // `a_self_framing_body_is_still_framed_test.dart` for the body that used to be
+    // mistaken for a frame, and `identity_case_round_trips_test.dart` for the
+    // compressed path the guess was protecting.
   });
 }
 

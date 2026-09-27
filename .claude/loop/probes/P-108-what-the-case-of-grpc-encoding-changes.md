@@ -46,6 +46,25 @@ own caller                   before          after
   grpc-encoding=GZIP         status=13       status=13   <- B-91
 ```
 
+## Reused in round 461 — and it is now the guard on the OTHER defect
+
+`gzip` failing was B-91, which turned out to be round 455's own regression: the
+frame was wrapped twice and the compression bit lost. After 457 reverted it and
+461 redid the fix inside the parser, all four rows pass:
+
+```
+own caller, round 461        emitFramed: true    canary, emitFramed: false
+  grpc-encoding=identity     OK saw:x            status=13
+  grpc-encoding=Identity     OK saw:x            status=13
+  grpc-encoding=gzip         OK saw:x            status=13
+  grpc-encoding=GZIP         OK saw:x            status=13
+```
+
+**One switch reddens this bench AND P-107**, which is the evidence that the case
+defect and the framing defect were one ambiguity in the parser's output shape.
+So this probe is no longer only about spelling: it is the compressed-message arm
+whose absence let 455 ship (L-15).
+
 ## Measures
 
 The call's outcome: the handler's answer, or the grpc-status with its message and

@@ -2,33 +2,31 @@
 //
 // SPDX-License-Identifier: MIT
 
-// **THE FILENAME IS WRONG AND CANNOT BE CHANGED HERE** (`mv` is outside the
-// loop's allowlist). It says "a self-framing body is still framed", which is what
-// round 455 asserted and round 457 had to undo. Rename it to
-// `a_framed_payload_passes_through_test.dart` when convenient.
+// The filename happens to be right again. It took three rounds.
 //
-// What this file now characterises is a DEFECT that is still open (B-78), and why
-// it cannot simply be removed.
+// B-78: `ensureGrpcFrame`/`frameParsedMessage` decided whether its input was
+// already a gRPC frame by PARSING the first five bytes — a heuristic over bytes
+// the peer chooses. A body whose first five bytes declared its own remaining
+// length was passed through, so the layer above read five of the body's own bytes
+// as a header: a 13-byte message arrived as an 8-byte one, silently.
 //
-// `frameParsedMessage` decides whether its input is already a gRPC frame by
-// PARSING the first five bytes. That is a heuristic over bytes the peer chose, and
-// round 455 measured the damage: a body whose first five bytes happen to declare
-// its own remaining length is passed through, so the layer above reads five of the
-// body's own bytes as a header — a 13-byte message arrives as an 8-byte one,
-// silently.
-//
-// Round 455 removed the heuristic. That was WRONG, and round 457 measured why:
-// these transports build their parser with NO decompressor, so for a COMPRESSED
-// message `RpcMessageParser` cannot de-frame — it re-frames the compressed payload
-// itself (`encode(payload, compressed: true)`, parser.dart:218) precisely so the
-// layer above can decompress it. Framing that again loses the compressed bit:
+// Round 455 removed the guess and broke every compressed message, because with NO
+// decompressor — which is what these transports build — `RpcMessageParser` cannot
+// de-frame a compressed one and re-frames the payload itself
+// (`encode(payload, compressed: true)`), so the guess was load-bearing:
 //
 //     unconditional framing   grpc-encoding: gzip -> status=13 INTERNAL
 //     the heuristic           grpc-encoding: gzip -> OK
 //
-// So the guess is load-bearing until the parser TELLS its caller which branch it
-// took. Both behaviours below are asserted so the trade is visible: the pass-through
-// that compression needs, and the same pass-through misfiring on an application body.
+// Round 461 removed the QUESTION instead. `RpcMessageParser` takes
+// `emitFramed: true` and returns a complete frame every time — it knows which
+// branch it took, and `frameParsedMessage` is gone. Both rows below are now the
+// same rule with no exception:
+//
+//     a body that looks framed      -> framed   (no bytes lost)
+//     a body that cannot look framed -> framed
+//
+// The compressed path is covered by `identity_case_round_trips_test.dart`.
 @TestOn('vm')
 library;
 
@@ -168,23 +166,24 @@ Future<int> _payloadLengthFor(Uint8List body) async {
 }
 
 void main() {
-  // CHARACTERISES B-78, which is OPEN. A body indistinguishable from a frame is
-  // passed through, and five of its bytes become a header. This is not the
-  // behaviour anyone wants; it is the price of the pass-through that compression
-  // needs, and it is asserted so the day the parser carries the fact, this test
-  // fails and points at B-78.
+  // B-78 is FIXED (round 461), and this is the inversion the previous version of
+  // this test asked for in so many words: "when B-78 is fixed properly this
+  // becomes body.length + 5 and this test should be inverted".
+  //
+  // Nothing guesses any more. `RpcMessageParser` is built with `emitFramed: true`
+  // by these transports, so every value it emits is a complete frame — it knows
+  // which branch it took, and the caller never has to ask the bytes.
   test(
-    'KNOWN DEFECT (B-78): a body that looks framed is passed through',
+    'a body that looks framed is framed anyway',
     () async {
       final body = _selfFramingBody(8);
 
       expect(
         await _payloadLengthFor(body),
-        body.length,
+        body.length + 5,
         reason:
-            'the heuristic cannot tell this body from a compressed message the '
-            'parser already re-framed; when B-78 is fixed properly this becomes '
-            'body.length + 5 and this test should be inverted',
+            'a body is a body; the parser says whether it framed something, so '
+            'no five bytes of an application message can be read as a header',
       );
     },
     timeout: const Timeout(Duration(seconds: 60)),

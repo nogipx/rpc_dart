@@ -46,6 +46,23 @@ body 13B, first byte 0x99     18B  RE-FRAMED        18B  RE-FRAMED
 The payload head after the fix reads `00 00 00 00 0d ...` — an outer header
 declaring 13 bytes, with the body's own bytes intact behind it.
 
+## Reused in round 461, and it read the same
+
+Round 455's fix was reverted in 457 and redone in 461 through the parser's
+`emitFramed`. The bench needed no change — it measures the payload the transport
+delivers, and which layer frames it is not something it can see:
+
+```
+                              461, emitFramed: true    canary, emitFramed: false
+body 13B, first byte 0x00     18B  RE-FRAMED           13B  UNCHANGED
+body 13B, first byte 0x99     18B  RE-FRAMED           18B  RE-FRAMED
+```
+
+**That indifference is what made it a bench rather than a test of one fix.** The
+same two arms confirmed a fix, then a revert, then a different fix — and the
+canary column is byte-identical to the "before" column below, three rounds and two
+mechanisms apart.
+
 ## Measures
 
 The LENGTH of the payload delivered on `transport.incomingMessages`. Re-framed is
