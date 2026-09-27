@@ -1,13 +1,51 @@
 ---
-status: decided by owner (round 445)
-round: 444 — re-read against the tree, never measured
-commit: 67303ea6
+status: open
+round: 449 — the silent-drop claim MEASURED and REFUTED; re-scoped to the answer
+commit: 3f88d9fa
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-probe: —
-reason: cost — split out of B-70 item 17; adjacent to B-21 and NOT covered by it
+probe: packages/transport/rpc_dart_http2/.dart_tool/probe/send_during_the_factory_await.dart
+reason: cost — the three machines tell the caller three different things about one state, and http2 disagrees with itself depending on timing
 ---
 
 # B-76 — three reconnect machines answer id reuse three different ways
+
+## RE-SCOPED (round 449). The silent drop is NOT there — `checked/C-48`.
+
+Measured on http2 with the factory stalled 800 ms and a send 200 ms in:
+
+```
+control, no reconnect        ACCEPTED
+during the factory await     RpcStatusException code=14   <- refused
+after reconnect completed    ACCEPTED
+during the await: disconnected=false
+```
+
+So the flag-timing window is real, exactly as the body below says, and **nothing
+is lost in it**: the old connection is discarded before the await, so the send
+path answers UNAVAILABLE. The proxy cannot have the defect at all — `_inner` is
+nulled before any factory runs and `_require()` throws on null, so its guard is
+an absence rather than a boolean whose timing could be wrong.
+
+**The owner's step one — port the `_disconnected` guard to the other two — is
+therefore refuted and must not be carried out.** Step two survives, and the round
+sharpened what it is about:
+
+```
+websocket   _disconnected before the await   FAILED_PRECONDITION
+http2       old connection discarded         UNAVAILABLE   (during the await)
+http2       _ensureUsable, flag set          FAILED_PRECONDITION
+the proxy   _inner = null, _require()        FAILED_PRECONDITION
+```
+
+http2's `_ensureUsable` carries a comment saying its code matches the websocket
+sibling *deliberately*, because no single `catch` covered both otherwise. Timing
+alone undoes that: FAILED_PRECONDITION says *call reconnect()*, UNAVAILABLE says
+*retry*, so a caller's strategy depends on how far into a reconnect its send
+landed.
+
+**What is left to do**: bench the websocket arm, which was only READ, and then
+decide what one state should tell a caller. The id-reuse half of the body below
+is untouched by this round.
 
 `websocket_caller_transport.dart`, `rpc_http2_caller_transport.dart` and
 `_ReconnectingTransportProxy` (`client_connection.dart:78`) each solve the SAME

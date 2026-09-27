@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 450)
 round: 444 — never checked at all, by anyone
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**]
@@ -8,6 +8,23 @@ reason: cost — nine claimed negatives, each cheap to check and none of them ch
 ---
 
 # B-87 — the duplication sweep's own "already shared" list was never verified
+
+## CLOSED (round 450). Eight held, one did not — `checked/C-49`.
+
+All nine checked in one pass. Eight are one implementation in core with the
+transports calling it, including the two that looked most likely to hide a second
+copy: `drainUntilIdle`'s COUNT is extracted as well, and http2's `ensureGrpcFrame`
+CALLS `RpcMessageFrame.parseHeader`/`.encode` rather than re-deriving them.
+
+**"Parity alignment in `RpcStreamIdManager`" is false as written.** True of the
+manager — and http2 does not use the manager at all, keeping its own counters and
+its own parity rules in both the caller and the responder. Three homes for one
+rule, where the sweep's word implies one. Filed as **B-89**, at its real strength:
+nothing has been shown to bite.
+
+`bufferedBytes` is worth one line, because it nearly read as a second false
+negative: it IS core-only, and its absence in http2 is B-79's finding. Duplication
+and coverage are different questions and the sweep's claim was about the second.
 
 The `ff930001` sweep listed what it believed was ALREADY shared and therefore
 not worth reporting:

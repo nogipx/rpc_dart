@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451]
 status: confirmed (round 448)
 ---
 
@@ -678,3 +678,48 @@ whole call. The fix keeps the ordering and drops the blocking.
 
 `../rounds/448-the-promise-that-was-too-big.md`,
 `../probes/P-102-cancel-against-a-send-that-never-completes.md`.
+
+## Round 449 — the lens can be RIGHT about the divergence and WRONG about the harm
+
+The three reconnect machines do diverge, exactly as this lens predicts. What the
+round refuted is the HARM the divergence was assumed to cause: the copy without
+the guard was supposed to accept and silently drop sends, and it refuses them.
+
+> **A divergence is a lead about where to look, never a finding about what
+> happens.** The missing guard was real and redundant: http2 discards the old
+> connection before the await, so the send path refuses on its own, and the
+> proxy's guard is an ABSENCE (`_inner = null`) rather than a boolean, which no
+> flag-timing argument can reach. Both were invisible from the diff that showed
+> one machine setting a flag earlier than another.
+
+The divergence that survived is one this lens does not usually look for: not what
+the copies DO, but what they TELL the caller. Same state, three answers, and
+http2 disagreeing with itself by timing — UNAVAILABLE during the await,
+FAILED_PRECONDITION after, under a comment saying the two were aligned on purpose
+so one `catch` would cover both.
+
+`../rounds/449-the-window-was-real-the-loss-was-not.md`,
+`../checked/C-48-no-machine-drops-a-send-during-its-factory-await.md`.
+
+## Round 451 — the sibling that answers the duty can be in another LAYER
+
+Two rounds in a row now where the divergence was real and the harm was not, and
+451 says why in a way that generalises: the detector compares SIBLINGS, and it
+finds them by looking sideways. `CallProcessor` and `StreamProcessor` sit in one
+file, one is the caller half and one the responder half, and one of them owns
+`_setupDeadlineMonitoring`. Read that way the responder is missing it.
+
+It is not. The responder enforces the deadline in `responder_pipeline`, one layer
+up — and more thoroughly, because the pipeline owns the stream state and can
+therefore arm a RECLAIM backstop that `CallProcessor` has no way to provide.
+
+> **Before filing an absence, ask which layer OWNS the thing the duty needs.** A
+> duty lands where its resources are, not where its sibling put it. The pair the
+> detector shows you may be the wrong pair, and the tell is that the "missing"
+> half would have to reach for state it does not hold.
+
+Round 388 already widened where a sibling may live (into the DEPENDENCY); this
+widens it upward, into the caller's own stack.
+
+`../rounds/451-the-disposer-was-in-the-other-layer.md`,
+`../checked/C-50-the-responder-bounds-its-deadline-in-the-pipeline.md`.

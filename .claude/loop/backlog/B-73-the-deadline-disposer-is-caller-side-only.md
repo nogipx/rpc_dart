@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 451)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -8,6 +8,28 @@ reason: bench — whether the responder bounds the deadline elsewhere was never 
 ---
 
 # B-73 — the deadline disposer exists on the caller side only
+
+## CLOSED (round 451) — the responder bounds it one LAYER up. `checked/C-50`.
+
+The lead's own caveat was right: `responder_pipeline` does bound the deadline by
+another route. `_ensureResponderContext` arms a timer from `context.deadline`
+(`:2006`), and `_onDeadlineExceeded` (`:2042`) cancels the handler's token and
+then arms a RECLAIM backstop for a handler that ignores it — which the caller half
+does NOT have, so the asymmetry runs the other way from this lead's reading.
+
+Its three questions, answered in order: torn down on expiry, YES; by the
+pipeline, not the processor; and the consumer sees an ERROR
+(`RpcDeadlineExceededException`), not a clean end. The third was the gate.
+
+```
+cooperative, 300 ms deadline    3 items   DeadlineExceeded   responder timer fired
+stubborn,    300 ms deadline    3 items   DeadlineExceeded   responder timer fired
+CONTROL, no deadline          100 items   CLEAN END          not fired
+```
+
+The isolating trick, worth reusing: the caller's exception proves nothing here,
+because one `grpc-timeout` header arms a timer on BOTH ends. The observable is the
+responder's own log record, which only `_onDeadlineExceeded` emits.
 
 `base_processor.dart` holds two classes. `CallProcessor` (`:895`) is the CALLER
 side and owns `_setupDeadlineMonitoring` (`:1321`), wired at `:1003`.

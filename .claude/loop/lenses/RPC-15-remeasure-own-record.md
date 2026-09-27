@@ -3,8 +3,8 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429]
-status: confirmed (round 429)
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450]
+status: confirmed (round 450)
 ---
 
 # RPC-15 — Re-measure the loop's own record
@@ -110,3 +110,29 @@ to round 89's revert and not to itself.
 
 `../rounds/429-two-of-three-were-already-done.md`,
 `../probes/P-97-truncated-stream-shape-d.md`.
+
+## Round 450 — a record can be an unchecked NEGATIVE, and that is the cheapest kind to be wrong about
+
+Everything above re-measures a claim the loop made about a DEFECT. Round 450
+re-measured the loop's claims about non-defects: the `ff930001` sweep's list of
+nine things it believed were already shared and therefore never reported.
+
+Eight held. One did not — *"parity alignment in `RpcStreamIdManager`"* names the
+class that owns the rule and stops there, and http2 does not use that class at
+all.
+
+> **A negative is a record like any other and ages like any other, but nothing
+> routes to it.** A false positive costs a round and announces itself. A false
+> negative costs nothing today and removes the question from the board, so the
+> next reader inherits "settled" with no measurement under it. Re-reading the
+> loop's own exclusion lists is therefore higher-yield per grep than re-reading
+> its findings.
+
+Method note worth keeping: check the entries that look most obviously true. The
+two that nearly slipped were the two whose wording elsewhere in the journal
+implies a second implementation — `drainUntilIdle` (whose COUNT is what bit
+before) and the 5-byte frame (which B-78 describes as if http2 parsed it by hand,
+where in fact `ensureGrpcFrame` calls the shared parser).
+
+`../rounds/450-eight-held-one-did-not.md`,
+`../checked/C-49-the-sweeps-nine-negatives-verified.md`.

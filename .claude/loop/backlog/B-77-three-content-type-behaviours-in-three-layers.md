@@ -39,6 +39,27 @@ tidy-up.
 Bench: one hand-built peer, three transports, four inputs (absent, correct,
 correct-with-suffix, wrong). The matrix IS the finding.
 
+## Sized in round 449, and NOT started — it is more than one round
+
+The three behaviours were re-read against the tree and all three still hold:
+`rpc_http_responder_transport.dart:231` takes `?? ''` and `startsWith`, so ABSENT
+is rejected with 415; `responder_pipeline.dart:859` guards on `!= null`, so absent
+is accepted and only a wrong value refused, with INVALID_ARGUMENT.
+
+What the decision asks for costs, counted before touching anything:
+
+- **three harnesses**, because each layer is reachable only from its own wire: a
+  real HTTP/1.1 request, a raw HTTP/2 client (the existing raw harnesses are
+  CALLER-side and this is the responder), and a channel pair for core;
+- **12 rows** — 4 inputs (absent, correct, correct-with-suffix, wrong) x 3 layers;
+- a new policy ENUM and field, which must be added to the constructor AND
+  `fromMap` AND `toMap` or it becomes a fresh instance of B-85;
+- three call sites rewired, and http2 gains a check it has never had — so that
+  one needs its own witness and canary, not just a shared function.
+
+Take it as its own round with the matrix as the deliverable, or split it: the
+matrix first (CLEAN or not, no code), then the validator.
+
 ## Owner decision
 
 **One shared validator, plus a policy key. Default keeps today's core

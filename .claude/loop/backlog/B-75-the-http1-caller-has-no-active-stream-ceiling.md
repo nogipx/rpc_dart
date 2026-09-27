@@ -34,6 +34,33 @@ If it is genuinely missing, the canary is RPC-05's own A1: both neighbours of
 the right charge point are usually wrong, and the tests must fail DIFFERENTLY
 for each wrong choice.
 
+## Two corrections before anyone benches this (round 451, a read)
+
+**1. The HTTP/1.1 package DOES enforce `maxActiveStreams` — on the responder.**
+`rpc_http_responder_transport.dart:219` checks `_pending.length >=
+policy.maxActiveStreams`, and its doc at `:88` says so outright: *"This transport
+enforces `maxActiveStreams`, the method path, metadata and ..."*. The absence is
+caller-side only, and the lead's table does not say that.
+
+**2. C-29 says what the limit is FOR, and it is not a caller self-limit.**
+*"Responder endpoints are PER CONNECTION — except on HTTP/1.1 … a peer pins
+roughly `maxActiveStreams x 33 KiB` per connection it opens."* The limit is a
+defence against a peer. On that reading the HTTP/1.1 caller having no ceiling is
+not a gap at all, and neither is the shape of the table: core's channel transport
+bounds `_activeStreams` for a class that serves BOTH roles, so its bound covers
+the responder role too.
+
+**So the round's first question is not "why is it missing here" but "what is a
+CALLER-side ceiling for at all".** http2's caller does bound `_reservedStreams`,
+which is the one genuinely caller-side instance, and whether that protects
+anything a user would notice is unmeasured. If it does not, the finding inverts:
+the limit should be documented as responder-scoped and http2's caller-side bound
+is the odd one out.
+
+The neighbouring measurement, if the answer is "yes, callers should be bounded":
+the HTTP/1.1 caller is already bounded by its `HttpClient` connection pool, so the
+ceiling may be unreachable rather than absent.
+
 ## Owner decision
 
 **Measure first, then apply uniformly.** One line for the whole class —

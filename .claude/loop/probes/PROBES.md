@@ -38,6 +38,23 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-104](P-104-is-a-responder-side-deadline-bounded.md)** valid (round 451),
+  rpc_dart — a handler yielding every 100 ms against a 300 ms deadline, so the
+  ITEM COUNT is the clock. **The reading is a responder-side LOG record, not the
+  caller's exception**: one `grpc-timeout` header arms a timer on BOTH ends, so
+  `RpcDeadlineExceededException` at the caller is equally consistent with the
+  responder doing nothing. Only `_onDeadlineExceeded` emits its notice. Control is
+  the no-deadline arm, where the line is ABSENT — which is the whole risk with a
+  log-based reading. `RpcResponderEndpoint` takes a `LogController`, not a
+  `LogScope`. Carries a VOID arm on purpose: a hand-driven responder read
+  `payloads=0` in the timeout row AND its control
+- **[P-103](P-103-a-send-during-the-reconnect-factory-await.md)** valid (round 449),
+  rpc_dart_http2 — the window is a matter of TIMING, so it is made 800 ms wide on
+  purpose rather than raced. **Reads `health()` INSIDE the window**, which is what
+  turns "the send was refused" into a refutation rather than an untested claim:
+  without it the refusal could be the flag having been set after all. Controls on
+  both sides of the window, both ACCEPTED. `connect()` does not take the
+  injectable factory — only `viaSocket` does
 - **[P-102](P-102-cancel-against-a-send-that-never-completes.md)** valid (round 448),
   rpc_dart — supplies the transport class a comment merely NAMED: a decorator
   whose end-of-stream send never completes. Reports a hang as the string `hung`,
