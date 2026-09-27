@@ -2,22 +2,33 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `ensureGrpcFrame` decided whether a payload was already framed by PARSING its
-// first five bytes and checking the declared length against the rest. It is
-// called on the OUTPUT of `RpcMessageParser`, which emits de-framed BODIES — so
-// the bytes it inspected are an application message body, chosen by the peer.
+// **THE FILENAME IS WRONG AND CANNOT BE CHANGED HERE** (`mv` is outside the
+// loop's allowlist). It says "a self-framing body is still framed", which is what
+// round 455 asserted and round 457 had to undo. Rename it to
+// `a_framed_payload_passes_through_test.dart` when convenient.
 //
-// Any body that happens to look like a frame was returned unchanged, and the
-// layer above then read those five bytes as a header. Measured over a real
-// socket, same body length in both arms, only the first byte differing:
+// What this file now characterises is a DEFECT that is still open (B-78), and why
+// it cannot simply be removed.
 //
-//   body 13B, first byte 0x00 (valid flag)  -> payload 13B, UNCHANGED
-//   body 13B, first byte 0x99 (not a flag)  -> payload 18B, re-framed
+// `frameParsedMessage` decides whether its input is already a gRPC frame by
+// PARSING the first five bytes. That is a heuristic over bytes the peer chose, and
+// round 455 measured the damage: a body whose first five bytes happen to declare
+// its own remaining length is passed through, so the layer above reads five of the
+// body's own bytes as a header — a 13-byte message arrives as an 8-byte one,
+// silently.
 //
-// In the first row a 13-byte message arrived as an 8-byte one, silently.
+// Round 455 removed the heuristic. That was WRONG, and round 457 measured why:
+// these transports build their parser with NO decompressor, so for a COMPRESSED
+// message `RpcMessageParser` cannot de-frame — it re-frames the compressed payload
+// itself (`encode(payload, compressed: true)`, parser.dart:218) precisely so the
+// layer above can decompress it. Framing that again loses the compressed bit:
 //
-// Whether the input is framed is KNOWN at both call sites, so the guess is gone:
-// `frameParsedMessage` frames unconditionally.
+//     unconditional framing   grpc-encoding: gzip -> status=13 INTERNAL
+//     the heuristic           grpc-encoding: gzip -> OK
+//
+// So the guess is load-bearing until the parser TELLS its caller which branch it
+// took. Both behaviours below are asserted so the trade is visible: the pass-through
+// that compression needs, and the same pass-through misfiring on an application body.
 @TestOn('vm')
 library;
 
@@ -92,8 +103,6 @@ Uint8List _selfFramingBody(int inner) => Uint8List.fromList([
   ...List.filled(inner, 0xAB),
 ]);
 
-/// A raw server that answers with one message whose BODY is [body], singly
-/// framed — what a conforming peer sends.
 Future<ServerSocket> _server(Uint8List body) async {
   final listener = await ServerSocket.bind('127.0.0.1', 0);
   listener.listen((socket) async {
@@ -127,8 +136,8 @@ Future<ServerSocket> _server(Uint8List body) async {
   return listener;
 }
 
-/// The LENGTH of the payload the transport handed upward. Re-framed is
-/// `body.length + 5`; returned unchanged is `body.length`.
+/// The LENGTH of the payload the transport handed upward. Framed is
+/// `body.length + 5`; passed through is `body.length`.
 Future<int> _payloadLengthFor(Uint8List body) async {
   final listener = await _server(body);
   final transport = await RpcHttp2CallerTransport.connect(
@@ -159,31 +168,32 @@ Future<int> _payloadLengthFor(Uint8List body) async {
 }
 
 void main() {
-  // WITNESS. Before the fix this read 13: the body was handed up unchanged and
-  // its first five bytes became a header, turning a 13-byte message into an
-  // 8-byte one.
+  // CHARACTERISES B-78, which is OPEN. A body indistinguishable from a frame is
+  // passed through, and five of its bytes become a header. This is not the
+  // behaviour anyone wants; it is the price of the pass-through that compression
+  // needs, and it is asserted so the day the parser carries the fact, this test
+  // fails and points at B-78.
   test(
-    'a body that looks like a frame is still framed',
+    'KNOWN DEFECT (B-78): a body that looks framed is passed through',
     () async {
       final body = _selfFramingBody(8);
 
       expect(
         await _payloadLengthFor(body),
-        body.length + 5,
+        body.length,
         reason:
-            'the parser emits de-framed bodies, so this one needs a frame like '
-            'any other; guessing from its bytes loses five of them',
+            'the heuristic cannot tell this body from a compressed message the '
+            'parser already re-framed; when B-78 is fixed properly this becomes '
+            'body.length + 5 and this test should be inverted',
       );
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  // CONTROL. The same body LENGTH, whose first byte is not a valid compression
-  // flag, so the old heuristic could never have fired on it. It read
-  // `body + 5` before the fix and must still. If this ever fails, the witness is
-  // measuring the harness rather than the heuristic.
+  // The other half of the same decision: a body that CANNOT be mistaken for a
+  // frame is framed, which is the ordinary path for every uncompressed message.
   test(
-    'CONTROL: a body that cannot look like a frame is unaffected',
+    'a body that cannot look framed is framed',
     () async {
       final body = Uint8List.fromList([0x99, ...List.filled(12, 0xAB)]);
 

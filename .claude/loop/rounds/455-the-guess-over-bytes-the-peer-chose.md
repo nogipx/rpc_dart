@@ -9,6 +9,20 @@ commit: yes
 
 # Round 455 — the guess over bytes the peer chose
 
+> **THIS ROUND'S FIX WAS WRONG AND IS REVERTED — see round 457.** Its
+> MEASUREMENT stands: the heuristic is reachable and does turn a 13-byte message
+> into an 8-byte one. Its PREMISE does not. "Both call sites pass parser output,
+> which is de-framed by construction" is false in one branch, and it is the branch
+> http2 always takes: with no decompressor the parser cannot de-frame a COMPRESSED
+> message, so it re-frames the payload itself (`parser.dart:218`) and emits a
+> complete frame on purpose. Framing that again lost the compressed bit and broke
+> gzip entirely — filed as B-91, closed in 457 as this round's regression.
+>
+> The reading error, kept because it is the transferable part: `result.add(payload)`
+> was quoted as evidence that the emitted value is de-framed, without reading the
+> twenty lines above it that reassign `payload`. **A quote is evidence for what the
+> quoted line does, not for what the variable holds.**
+
 ## Target
 
 B-78, and its own instruction was the round: establish whether a payload reaching

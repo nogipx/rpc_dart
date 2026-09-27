@@ -1,5 +1,5 @@
 ---
-status: closed (round 455)
+status: open
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
@@ -9,7 +9,29 @@ reason: cost — split out of B-70 item 26; the reachable input has to be constr
 
 # B-78 — ensureGrpcFrame decides "already framed?" by guessing
 
-## CLOSED (round 455) — reachable, and the fact was a CONSTANT
+## RE-OPENED (round 457). Round 455's fix was WRONG and is reverted.
+
+The defect below is real and still there. What was wrong is the fix: **the fact is
+not a constant.** `parser.dart:212-218` — with NO decompressor, which is exactly
+what the http2 transports build, the parser cannot de-frame a COMPRESSED message, so
+it re-frames the compressed payload itself and emits a complete frame on purpose.
+So the parser's output is a frame for a compressed message and a bare body for an
+uncompressed one, and the function genuinely has to tell them apart.
+
+Framing unconditionally therefore double-wrapped every compressed message and lost
+the compressed bit: `grpc-encoding: gzip -> status=13 INTERNAL`. That was B-91,
+which turned out to be this round's own regression.
+
+**The right fix, still to do**: the parser KNOWS which branch it took and nothing
+asks it. Have it say so — a flag beside the payload, or two output shapes — and the
+guess disappears without losing the bit. That is a core API change, which is why
+round 457 restored the guess rather than improvising one under time pressure.
+
+The hole is characterised by a test, so the day this is fixed properly that test
+fails and points here: `a_self_framing_body_is_still_framed_test.dart`, whose name
+is now wrong (`mv` is outside the allowlist).
+
+## Round 455's measurement, which still stands
 
 The lead's question answered by reading: `ensureGrpcFrame` is called on the OUTPUT
 of `RpcMessageParser` at both call sites, and the parser emits de-framed BODIES

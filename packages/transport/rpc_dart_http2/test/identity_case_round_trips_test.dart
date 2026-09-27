@@ -61,7 +61,7 @@ void main() {
 
   tearDown(() => server.stop());
 
-  Future<String> callWith(String encoding) async {
+  Future<String> callWith(String encoding, {String payload = 'x'}) async {
     final transport = await RpcHttp2CallerTransport.connect(
       host: '127.0.0.1',
       port: server.port,
@@ -77,7 +77,7 @@ void main() {
           .unaryRequest<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
-            request: 'x'.rpc,
+            request: payload.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
             context: RpcContext.withHeaders({'grpc-encoding': encoding}),
@@ -114,4 +114,36 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
+
+  // THE GUARD WHOSE ABSENCE LET A REGRESSION SHIP (round 457).
+  //
+  // Nothing in this suite exercised a genuinely COMPRESSED message over http2, so
+  // round 455 removed `ensureGrpcFrame`'s heuristic on the premise that
+  // `RpcMessageParser` always emits de-framed bodies -- true except in the one
+  // branch http2 always takes. These transports build their parser with no
+  // decompressor, so for a compressed message the parser re-frames the payload
+  // itself (`encode(payload, compressed: true)`) and the heuristic is what stops
+  // it being framed twice, which would lose the compressed bit.
+  //
+  //     unconditional framing   gzip -> status=13 INTERNAL
+  //     the heuristic           gzip -> OK
+  //
+  // A body worth compressing, so the two framings differ in size and the failure
+  // cannot hide in a payload small enough to be incompressible.
+  for (final encoding in ['gzip', 'GZIP']) {
+    test(
+      'a COMPRESSED message round trips: grpc-encoding: $encoding',
+      () async {
+        expect(
+          await callWith(encoding, payload: 'y' * 4096),
+          'saw:${'y' * 4096}',
+          reason:
+              'http2 parses with no decompressor, so the parser hands up an '
+              'already-framed compressed message; framing it again drops the '
+              'compressed bit and the codec then reads gzip bytes',
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
+  }
 }

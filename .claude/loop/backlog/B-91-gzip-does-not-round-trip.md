@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 457)
 round: 456
 commit: b5b5980f
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/rpc/streams/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -8,6 +8,37 @@ reason: bench — measured as a failure but NOT diagnosed; the claim "compressio
 ---
 
 # B-91 — gzip does not round trip through the documented path
+
+## CLOSED (round 457) — NOT pre-existing. Round 455 caused it.
+
+This lead was filed as an undiagnosed pre-existing failure. It was a regression,
+one round old, from the loop's own work.
+
+Question 1 answered: the codec is fine (`compress 4096 -> 43`, `decompress 43 ->
+4096`, IDENTICAL, both spellings) and the same call over a channel pair works at
+every size. So it was http2-specific — which is where round 455 had changed
+something.
+
+The cause, from `parser.dart:212-218`: **the http2 transports build their parser
+with NO decompressor**, and in that case the parser cannot de-frame a COMPRESSED
+message — it re-frames the compressed payload itself, `encode(payload, compressed:
+true)`, deliberately, so the layer above can decompress it. Round 455 removed
+`ensureGrpcFrame`'s heuristic on the premise that parser output is always
+de-framed, so that complete frame was framed AGAIN with `compressed: false`, and
+the codec then met gzip bytes.
+
+```
+unconditional framing   grpc-encoding: gzip -> status=13 INTERNAL
+the heuristic restored  grpc-encoding: gzip -> OK
+```
+
+The opaque INTERNAL this lead complained about was `wireStatusFor` redacting
+whatever the codec threw — so the lead's own warning ("expect to need a
+responder-side log; the wire will not tell you") was right, and the answer came
+from reading the parser instead.
+
+B-78 is re-opened, and a compressed-message guard now exists in
+`identity_case_round_trips_test.dart` — the arm whose absence let this ship.
 
 Found beside B-82 in round 456, and deliberately not folded into it: it is not
 about case.

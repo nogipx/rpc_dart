@@ -3,8 +3,8 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450]
-status: confirmed (round 450)
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457]
+status: confirmed (round 457)
 ---
 
 # RPC-15 — Re-measure the loop's own record
@@ -136,3 +136,35 @@ where in fact `ensureGrpcFrame` calls the shared parser).
 
 `../rounds/450-eight-held-one-did-not.md`,
 `../checked/C-49-the-sweeps-nine-negatives-verified.md`.
+
+## Round 457 — the record to re-measure was TWO ROUNDS OLD and the loop's own
+
+Everything above re-measures somebody else's record, or one old enough to have
+aged. 457's subject is round 455, committed the same day, by the same loop — and
+the lead that found it, B-91, was filed as a pre-existing defect belonging to
+nobody.
+
+```
+in process     compress 4096 -> 43, decompress 43 -> 4096  IDENTICAL
+channel pair   every size, every spelling                  OK
+http2          grpc-encoding: gzip                         status=13
+```
+
+The elimination order is the method: codec, then the in-process transport, then the
+one that differs. What differed was the round two commits back.
+
+> **A new lead whose paths were touched by a recent round is a suspect, not an
+> inheritance.** B-91 was written as "pre-existing" on no evidence beyond the
+> author not remembering causing it. `git log` over the lead's own `paths:` would
+> have named the round in one command, and that check costs nothing.
+
+And the reading rule the regression turned on:
+
+> **A quote is evidence for what the quoted LINE does, not for what the variable
+> HOLDS.** Round 455 cited `result.add(payload)` as proof the parser emits
+> de-framed bodies. Twenty lines above, the compressed branch reassigns `payload`
+> to a complete frame. Follow the variable to its assignments before quoting its
+> use.
+
+`../rounds/457-my-own-premise-was-false.md`,
+`../probes/P-108-what-the-case-of-grpc-encoding-changes.md`.
