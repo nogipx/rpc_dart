@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444]
-status: confirmed (round 444)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446]
+status: confirmed (round 446)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -592,3 +592,33 @@ the sites its author had in mind, so:
 
 `../rounds/444-the-third-merge-site-nobody-swept.md`,
 `../probes/P-98-the-same-context-down-two-call-shapes.md`.
+
+## Round 446 — the copy can be a VALUE, and it can be unreachable
+
+Every application above is a duplicated method or duty. 446 is a duplicated
+NUMBER: `RpcContext` held `128 / 128 / 8 KiB / 64 KiB`, equal to
+`RpcSecurityPolicy`'s four defaults, in a static method on a value type the user
+builds before any transport exists — so it could never read a policy.
+
+The usual detector does not fire. There is no drift to find, because the copies
+agree, and they will go on agreeing until somebody edits one. What bites is
+something else:
+
+> **A duplicated value whose second home cannot be reached makes its knob
+> MONOTONE. Lowering the policy still refuses; raising it changes nothing,
+> because the unreachable copy truncates first.** Ask of every limit: raise it
+> past the default and measure whether anything moved.
+
+Measured: `maxHeaders` raised to 512, 200 headers set, and the call **SUCCEEDED
+with 73 of them missing** — no error or log on either side. The equality is the
+camouflage, which is why this is the one variant of the shape that a
+copies-disagree detector can never see.
+
+Second, smaller lesson, and it cost this round its cheapest path: when a fix
+deletes a limit, the tests pinning it may be a prior round's DECISION rather than
+a stale assertion. `f876d602` had made these caps effective on purpose and said
+why in its commit. Read that before rewriting the test — and re-measure the
+sentence, because the reason it gave had already expired.
+
+`../rounds/446-the-knob-that-only-turned-down.md`,
+`../probes/P-100-does-raising-maxheaders-raise-anything.md`.

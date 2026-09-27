@@ -8,11 +8,6 @@ part of '_index.dart';
 /// gRPC-style RPC context - holds call metadata, timeouts, cancellation
 /// tokens, and other contextual information.
 final class RpcContext {
-  static const int _maxHeaderCount = 128;
-  static const int _maxHeaderNameLength = 128;
-  static const int _maxHeaderValueLength = 8 * 1024;
-  static const int _maxTotalHeaderBytes = 64 * 1024;
-
   static final RegExp _headerNamePattern = RegExp(r'^[0-9a-z_.-]+$');
 
   /// Request headers/metadata.
@@ -235,31 +230,33 @@ final class RpcContext {
 
   static String _normalizeHeaderName(String key) => key.trim().toLowerCase();
 
+  /// Drops what can never be a header, and bounds nothing.
+  ///
+  /// SIZE is [RpcSecurityPolicy]'s: it owns `maxHeaders`, `maxMetadataBytes`,
+  /// `maxHeaderNameBytes` and `maxHeaderValueBytes`, and `validateMetadata`
+  /// THROWS on them. This class used to hold four private copies of those
+  /// numbers, equal to the policy's defaults and reachable from no policy —
+  /// so raising `maxHeaders` to 512 still truncated at 128, and the extra
+  /// headers went missing with no error on either side. The equality is what
+  /// hid it.
+  ///
+  /// What stays is structural: a key that is empty, pseudo-header, off-pattern
+  /// or carrying CR/LF/NUL is not a header at any size, so no limit is being
+  /// applied by dropping it.
   static Map<String, String> _sanitizeHeaders(Map<String, String> headers) {
     final sanitized = <String, String>{};
-    var totalBytes = 0;
 
     for (final entry in headers.entries) {
       final key = _normalizeHeaderName(entry.key);
       if (key.isEmpty ||
           key.startsWith(':') ||
-          key.length > _maxHeaderNameLength ||
           !_headerNamePattern.hasMatch(key) ||
           _containsInvalidHeaderChars(key)) {
         continue;
       }
 
       final value = entry.value;
-      if (value.length > _maxHeaderValueLength ||
-          _containsInvalidHeaderChars(value)) {
-        continue;
-      }
-
-      totalBytes += key.length + value.length;
-      if (sanitized.length >= _maxHeaderCount ||
-          totalBytes > _maxTotalHeaderBytes) {
-        break;
-      }
+      if (_containsInvalidHeaderChars(value)) continue;
 
       sanitized[key] = value;
     }

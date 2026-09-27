@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-100](P-100-does-raising-maxheaders-raise-anything.md)** valid (round 446),
+  rpc_dart — varies the KNOB and holds the input fixed, which is the shape for
+  any "this limit is wired to nothing" claim. Four static arms plus three
+  end-to-end ones, the count read INSIDE the handler so the caller's own object
+  can be compared against what crossed. **Three controls, and the third is what
+  stops a wrong reading**: asking `validateMetadata` about the same 200 headers,
+  without which the context's truncation and the policy's refusal are
+  indistinguishable and the defect reads as "the limit works"
 - **[P-99](P-99-which-ending-paths-wait-for-a-parked-send.md)** valid (round 445),
   rpc_dart — which of the four send paths waits for a credit-parked frame before
   ending the stream. Six arms over both transport pairs; the reading is the ORDER
