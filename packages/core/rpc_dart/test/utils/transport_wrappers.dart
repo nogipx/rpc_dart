@@ -3,7 +3,70 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:rpc_dart/rpc_dart.dart';
+
+/// Delegates everything, except that an end-of-stream metadata send never
+/// completes -- the shape a cancellation notice takes.
+///
+/// Deliberately NOT an `IRpcStreamReset`: `_notifyPeerOfCancellation` tries a
+/// stream reset first and would never reach `sendMetadata` if this claimed that
+/// capability.
+final class HangingEndOfStreamTransport implements IRpcTransport {
+  final IRpcTransport _inner;
+
+  /// False makes this a pass-through, for the control arm.
+  final bool hang;
+
+  HangingEndOfStreamTransport(this._inner, {this.hang = true});
+
+  @override
+  Future<void> sendMetadata(
+    int streamId,
+    RpcMetadata metadata, {
+    bool endStream = false,
+  }) {
+    if (hang && endStream) return Completer<void>().future;
+    return _inner.sendMetadata(streamId, metadata, endStream: endStream);
+  }
+
+  @override
+  bool get isClient => _inner.isClient;
+  @override
+  bool get isClosed => _inner.isClosed;
+  @override
+  bool get supportsZeroCopy => _inner.supportsZeroCopy;
+  @override
+  int createStream() => _inner.createStream();
+  @override
+  bool releaseStreamId(int streamId) => _inner.releaseStreamId(streamId);
+  @override
+  Future<void> sendMessage(
+    int streamId,
+    Uint8List data, {
+    bool endStream = false,
+  }) => _inner.sendMessage(streamId, data, endStream: endStream);
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) => _inner.sendDirectObject(streamId, object, endStream: endStream);
+  @override
+  Stream<RpcTransportMessage> get incomingMessages => _inner.incomingMessages;
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _inner.getMessagesForStream(streamId);
+  @override
+  Future<void> finishSending(int streamId) => _inner.finishSending(streamId);
+  @override
+  Future<void> close() => _inner.close();
+  @override
+  Future<RpcHealthStatus> health() => _inner.health();
+  @override
+  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+}
 
 final class NoZeroCopyTransport implements IRpcTransport {
   final IRpcTransport _inner;

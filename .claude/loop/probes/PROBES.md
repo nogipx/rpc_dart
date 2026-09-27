@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-102](P-102-cancel-against-a-send-that-never-completes.md)** valid (round 448),
+  rpc_dart — supplies the transport class a comment merely NAMED: a decorator
+  whose end-of-stream send never completes. Reports a hang as the string `hung`,
+  so it is an assertable value rather than a test that dies on a timeout.
+  **Two controls**, the same path with the send completing and the SIBLING
+  ordering against the same hanging send — the second is what makes the reading
+  about ordering. **Trap**: the wrapper must NOT implement `IRpcStreamReset`, or
+  the notice takes the reset path and never reaches `sendMetadata`
 - **[P-101](P-101-an-ending-with-no-status-per-frame-type.md)** valid (round 447),
   rpc_dart_http2 — holds the missing grpc-status fixed and varies the FRAME TYPE
   the ending rides on. Extends round 429's raw-HTTP/2 probe with two cases rather

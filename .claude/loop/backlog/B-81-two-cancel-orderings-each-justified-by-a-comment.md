@@ -1,13 +1,35 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 448)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
-probe: —
+probe: packages/core/rpc_dart/.dart_tool/probe/cancel_with_a_hanging_notice.dart
 reason: cost — split out of B-70 item 6; one of the two comments describes the other's bug, which makes this a hang, not a style question
 ---
 
 # B-81 — two cancel orderings, and one comment describes the other's bug
+
+## CLOSED (round 448) — the hang is real, and both comments were right
+
+Measured (P-102): on a transport whose end-of-stream send never completes, the
+unary call **NEVER SETTLED**, while the streaming sibling returned
+`RpcCancelledException` over the same transport. Expected outcome confirmed.
+
+Two corrections to the lead:
+
+- **The reading is the CALL's future, not `cancel()`.** The `await` sits in the
+  call's own `finally`, so what hangs is the in-flight call.
+- **"Never throws" is literally TRUE**, and that is why it read as a closed door:
+  `_notifyPeerOfCancellation` is ONE shared function and wraps both the reset and
+  the send in try/catch. The defect is not a missing catch, it is that a catch
+  cannot catch a hang.
+
+Fixed by decoupling: the ordering that is real is notice-before-ID-RELEASE, so
+the release is chained onto the notice rather than the call blocking on it.
+Neither existing ordering was copied, as the decision asked.
+
+Also worth keeping: the wrapper must NOT implement `IRpcStreamReset`, or the
+notice takes the reset path and the arm is void.
 
 Two sites send a cancellation notice and then tear down, in opposite orders, and
 **each carries a comment defending itself**:

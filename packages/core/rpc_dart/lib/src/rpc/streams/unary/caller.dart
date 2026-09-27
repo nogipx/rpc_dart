@@ -7,6 +7,14 @@ part of '../_index.dart';
 
 /// Unary client: sends one request, gets one response (per call stream ID).
 final class UnaryCaller<TRequest, TResponse> {
+  /// How long the stream id is held for a cancellation notice still in flight.
+  ///
+  /// Only a backstop. The notice normally settles at once, and on a dead
+  /// transport it settles when the transport refuses the send; this bounds the
+  /// case where neither happens, so a wedged send cannot hold an id against
+  /// `maxActiveStreams` for the life of the process.
+  static const Duration _noticeBeforeReleaseBudget = Duration(seconds: 5);
+
   /// Transport.
   final IRpcTransport _transport;
 
@@ -593,14 +601,28 @@ final class UnaryCaller<TRequest, TResponse> {
       }
       await subscription?.cancel();
       await cancellationSubscription?.cancel();
-      // Let the cancellation notice finish before the id is released, so the
-      // frame is not sent against an id the transport has already reclaimed.
-      // _notifyPeerOfCancellation never throws.
-      await cancellationNotice;
-      // Release the transport stream id; the unary path never calls
-      // finishSending(), so without this the id leaks against maxActiveStreams
-      // and a long-lived client eventually fails with "Too many active streams".
-      _transport.releaseStreamId(streamId);
+      // The notice must go out before the id is reclaimed, or the frame lands
+      // on whatever call now holds the number. That ordering is between the
+      // NOTICE and the RELEASE -- awaiting it here made it an ordering between
+      // the notice and THIS CALL'S RETURN, and `_notifyPeerOfCancellation`
+      // awaits a send. "Never throws" is true and not the risk: a transport
+      // whose send never completes left cancel NEVER SETTLED, while the
+      // streaming sibling, which sends the notice `unawaited`, returned.
+      //
+      // So the release is chained onto the notice instead of blocking on it,
+      // and bounded so a wedged send cannot hold the id for ever either --
+      // which is what the release exists to prevent. The unary path never calls
+      // finishSending(), so nothing else reclaims the id.
+      final notice = cancellationNotice;
+      if (notice == null) {
+        _transport.releaseStreamId(streamId);
+      } else {
+        unawaited(
+          notice
+              .timeout(_noticeBeforeReleaseBudget, onTimeout: () {})
+              .whenComplete(() => _transport.releaseStreamId(streamId)),
+        );
+      }
     }
   }
 

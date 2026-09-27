@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447]
-status: confirmed (round 447)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448]
+status: confirmed (round 448)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -649,3 +649,32 @@ and is discarded.
 
 `../rounds/447-the-same-loss-on-the-other-frame.md`,
 `../probes/P-101-an-ending-with-no-status-per-frame-type.md`.
+
+## Round 448 — the helper was ALREADY shared, and the copies were the CALLS
+
+Every application above looks for a duplicated implementation. Here there was
+none to find: `_notifyPeerOfCancellation` is one function. What diverged is how
+two callers sequence it — `unawaited` on the streaming side, `await` in the unary
+side's `finally` — and each wrote a comment defending its own choice.
+
+> **Extraction does not end the divergence; it MOVES it to the call sites.** When
+> a lens says "the copies drift", ask whether the drifting copy is the helper or
+> the way it is invoked. The detector is the same question asked one level up:
+> find the shared helper, then read every call of it side by side.
+
+The trap in reading them: the unary comment says *"`_notifyPeerOfCancellation`
+never throws"*, and that is TRUE — the shared helper wraps both its branches in
+try/catch. So the comment survives inspection and the defect is what it does not
+mention. A catch does not catch a hang, and the sibling's comment says exactly
+that, twelve hundred lines away.
+
+Measured: the unary call NEVER SETTLED on a transport whose end-of-stream send
+never completes; the streaming sibling returned over the same transport.
+
+Corollary worth carrying: neither ordering was the one to copy. The unary side
+was sequencing something real — the notice must precede the id release, or the
+frame lands on the next call to hold that number — and had done it by blocking the
+whole call. The fix keeps the ordering and drops the blocking.
+
+`../rounds/448-the-promise-that-was-too-big.md`,
+`../probes/P-102-cancel-against-a-send-that-never-completes.md`.
