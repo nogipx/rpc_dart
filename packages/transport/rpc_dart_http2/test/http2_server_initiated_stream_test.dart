@@ -54,7 +54,7 @@ void main() {
       // http2 stream. Sending on it must throw, not silently no-op.
       final serverStreamId = responder.createStream();
 
-      final frame = ensureGrpcFrame(Uint8List.fromList([1, 2, 3]));
+      final frame = frameParsedMessage(Uint8List.fromList([1, 2, 3]));
       expect(
         () => responder.sendMessage(serverStreamId, frame),
         throwsA(
@@ -86,7 +86,7 @@ void main() {
 
     test('sendMessage_on_unknown_id_throws', () async {
       // An id that was never created at all must also fail loudly.
-      final frame = ensureGrpcFrame(Uint8List.fromList([9]));
+      final frame = frameParsedMessage(Uint8List.fromList([9]));
       expect(
         () => responder.sendMessage(99999, frame),
         throwsA(
@@ -114,7 +114,7 @@ void main() {
           );
           await responder.sendMessage(
             msg.streamId,
-            ensureGrpcFrame(Uint8List.fromList([42])),
+            frameParsedMessage(Uint8List.fromList([42])),
           );
           await responder.sendMetadata(
             msg.streamId,
@@ -133,7 +133,7 @@ void main() {
         http2.Header.ascii('te', 'trailers'),
       ]);
       clientStream.sendData(
-        ensureGrpcFrame(Uint8List.fromList([1])),
+        frameParsedMessage(Uint8List.fromList([1])),
         endStream: true,
       );
 

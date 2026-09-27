@@ -104,7 +104,7 @@ void main() {
         id,
         // The library's own serializer, not a hand-built body: the wire format
         // is CBOR and nothing in the request shape says so (lesson L-10).
-        ensureGrpcFrame(_codec.serialize('go'.rpc)),
+        frameParsedMessage(_codec.serialize('go'.rpc)),
         endStream: true,
       );
 

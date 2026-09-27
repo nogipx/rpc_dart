@@ -638,7 +638,7 @@ class RpcHttp2ResponderTransport
       // INDEX rather than by value: Uint8List compares by identity, which
       // breaks the moment the same reference appears twice.
       for (var i = 0; i < messages.length; i++) {
-        final framedMessage = ensureGrpcFrame(messages[i]);
+        final framedMessage = frameParsedMessage(messages[i]);
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
           payload: framedMessage,

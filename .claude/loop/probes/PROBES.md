@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-107](P-107-does-a-body-that-looks-framed-survive-unchanged.md)** valid (round 455),
+  rpc_dart_http2 — constructs the input rather than hoping to observe it, and
+  READING came first: knowing the function is fed `RpcMessageParser` output, which
+  is de-framed, is what made the arm constructible at all. Measured at the
+  TRANSPORT boundary, because there is no `RpcBytes` message type to carry
+  arbitrary bytes through a contract. **The control is a body of the SAME length
+  whose first byte cannot be a compression flag**, so the heuristic could never
+  fire on it — without that, "the crafted body was re-framed" is equally
+  consistent with everything being re-framed for another reason. LENGTH alone
+  separates the outcomes, which is why both arms use 13 bytes
 - **[P-106](P-106-what-a-late-frame-on-a-closed-stream-is-told.md)** valid (round 454),
   rpc_dart — varies the endpoint's DRAIN FLAG and holds the arriving frame fixed.
   **One COMPLETE call first is the setup that matters**: it is what puts the id in

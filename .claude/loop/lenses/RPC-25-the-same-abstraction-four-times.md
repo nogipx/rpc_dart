@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454]
-status: confirmed (round 454)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455]
+status: confirmed (round 455)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -781,3 +781,33 @@ Second lesson, from the round's GUARD rather than its witness:
 
 `../rounds/454-the-order-the-sibling-wrote-down.md`,
 `../probes/P-106-what-a-late-frame-on-a-closed-stream-is-told.md`.
+
+## Round 455 — the duplicated thing can be a FACT, re-derived instead of passed
+
+Round 446 found a duplicated VALUE whose second home was unreachable. 455 is the
+next step down: nothing is duplicated in the code at all. What is duplicated is
+KNOWLEDGE — both call sites know their input is de-framed, because both pass
+`RpcMessageParser` output, and the callee threw that away and re-derived it from
+the bytes.
+
+```
+body 13B, first byte 0x00 (valid flag)  -> payload 13B  UNCHANGED
+body 13B, first byte 0x99 (not a flag)  -> payload 18B  re-framed
+```
+
+A 13-byte message arrived as an 8-byte one, silently.
+
+> **When a callee re-derives something its callers already know, the detector is
+> the callee's NAME.** `ensureGrpcFrame` — "ensure" promises a check, so a check
+> was written, and the only evidence available to it was the argument itself. Ask
+> of any `ensureX`/`maybeX`/`normalizeX`: does every caller already know the
+> answer? If so the check is not defensive, it is a guess with the caller's
+> knowledge discarded.
+
+The fix was therefore SMALLER than the shape B-62 suggested. B-62 carries a flag
+alongside the data; here the fact is a constant at both sites, so it is carried by
+the function's contract and its name instead. **Look for the constant before
+building the channel to pass the fact down.**
+
+`../rounds/455-the-guess-over-bytes-the-peer-chose.md`,
+`../probes/P-107-does-a-body-that-looks-framed-survive-unchanged.md`.

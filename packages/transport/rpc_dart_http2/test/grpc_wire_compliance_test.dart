@@ -329,21 +329,36 @@ void main() {
       expect(header.messageLength, equals(payload.length));
     });
 
-    test('ensureGrpcFrame does not double-wrap', () {
+    // This pair used to assert the opposite of the first case: `ensureGrpcFrame`
+    // detected an already-framed input and returned it unchanged. That detection
+    // was a HEURISTIC over peer-chosen bytes — it is called on `RpcMessageParser`
+    // output, which is always de-framed — and it fired on any message body that
+    // happened to look like a frame, handing the layer above five of the body's
+    // own bytes as a header. Measured in round 455 over a real socket:
+    //
+    //   body 13B, first byte 0x00 (valid flag)  -> payload 13B, UNCHANGED
+    //   body 13B, first byte 0x99 (not a flag)  -> payload 18B, re-framed
+    //
+    // So the "does not double-wrap" case stood only on the defect, and the
+    // contract is now unconditional: whether the input is framed is known at
+    // both call sites, so it is never guessed.
+    test('frameParsedMessage frames a body that LOOKS framed', () {
       final payload = Uint8List.fromList([1, 2, 3]);
-      final framed = RpcMessageFrame.encode(payload, compressed: false);
-      final reframed = ensureGrpcFrame(framed);
+      final looksFramed = RpcMessageFrame.encode(payload, compressed: false);
+      final framed = frameParsedMessage(looksFramed);
 
       expect(
-        reframed.length,
-        equals(framed.length),
-        reason: 'Already-framed data should not be double-wrapped',
+        framed.length,
+        equals(5 + looksFramed.length),
+        reason:
+            'a body is a body: guessing from its bytes is what lost five of '
+            'them',
       );
     });
 
-    test('ensureGrpcFrame wraps raw data', () {
+    test('frameParsedMessage frames raw data', () {
       final raw = Uint8List.fromList([1, 2, 3]);
-      final framed = ensureGrpcFrame(raw);
+      final framed = frameParsedMessage(raw);
 
       expect(framed.length, equals(5 + raw.length));
       expect(isGrpcFrame(framed), isTrue);

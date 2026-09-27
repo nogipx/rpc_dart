@@ -1430,7 +1430,7 @@ class RpcHttp2CallerTransport
       // the data path still short-circuited it for a peer that half-closes.
       final statusKnown = _statusReceived.contains(streamId);
       for (var i = 0; i < messages.length; i++) {
-        final framedMessage = ensureGrpcFrame(messages[i]);
+        final framedMessage = frameParsedMessage(messages[i]);
         final transportMessage = RpcTransportMessage(
           streamId: streamId,
           payload: framedMessage,

@@ -555,27 +555,26 @@ int? extractHttpStatus(List<http2.Header> headers) {
   return null;
 }
 
-/// Guarantees that [data] is a valid gRPC frame (5-byte prefix + payload).
+/// Frames one message BODY as a gRPC frame (5-byte prefix + payload).
 ///
-/// If [data] already has a valid 5-byte gRPC prefix the input is returned
-/// unchanged.  Otherwise an uncompressed frame is built around [data].
-Uint8List ensureGrpcFrame(Uint8List data) {
-  if (data.length >= RpcConstants.messagePrefixSize) {
-    try {
-      final header = RpcMessageFrame.parseHeader(data);
-      final expectedLength =
-          RpcConstants.messagePrefixSize + header.messageLength;
-
-      if (expectedLength == data.length) {
-        return data;
-      }
-    } catch (_) {
-      // Fall through and re-frame.
-    }
-  }
-
-  return RpcMessageFrame.encode(data, compressed: false);
-}
+/// Takes what `RpcMessageParser` emitted, which is always de-framed — the parser
+/// strips the prefix and adds the body (`result.add(payload)`). Both call sites
+/// pass its output, so whether the input is framed is KNOWN, not guessed.
+///
+/// It used to guess, by parsing the first five bytes and returning the input
+/// unchanged when the declared length matched the rest. That is a heuristic over
+/// bytes the peer chooses, and it fires on any message body that happens to look
+/// like a frame — measured end to end over a real socket, with the same body
+/// length in both arms and only the first byte differing:
+///
+///     body 13B, first byte 0x00 (valid flag)  -> payload 13B, UNCHANGED
+///     body 13B, first byte 0x99 (not a flag)  -> payload 18B, re-framed
+///
+/// In the first row the layer above then read those five bytes as a header and
+/// got an 8-byte message instead of the 13 the peer sent. Silently: nothing is
+/// rejected, the message is re-interpreted.
+Uint8List frameParsedMessage(Uint8List data) =>
+    RpcMessageFrame.encode(data, compressed: false);
 
 /// Returns `true` when [data] has a valid gRPC 5-byte prefix and matching
 /// payload length.
