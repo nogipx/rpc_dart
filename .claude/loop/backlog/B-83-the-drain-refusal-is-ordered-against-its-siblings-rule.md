@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -44,4 +44,17 @@ Related and already closed: B-59 (a peer arriving while stopped) and round 414's
 
 ## Owner decision
 
-—
+**Take it. Run the two-row bench, then align the drain refusal with the
+sibling's documented order — unless the bench shows the specialisation is
+deliberate.**
+
+The bench is the deliverable either way: the status the caller gets on each of
+the two arrivals, and whether `_respStreams` is resurrected. Read B-59 and round
+414's `markDraining` work before building, as the lead says.
+
+If the order turns out to be deliberate, the round's output is the missing
+comment, not a code change — an undocumented specialisation that survives a
+measurement should stop being undocumented.
+
+Changing which status a caller sees on that race is a behaviour change, so it
+gets a CHANGELOG line even though the blast radius is small.

@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
@@ -45,4 +45,22 @@ not eleven `toLowerCase()` calls.
 
 ## Owner decision
 
-—
+**Take it. Measure what happens today FIRST, then one shared normalising
+accessor.**
+
+The measurement decides the severity and is not skippable: the two plausible
+outcomes are UNIMPLEMENTED with a usable `grpc-accept-encoding` (acceptable) and
+a decompression attempt against a codec that does not exist (not). Build the
+hand-made peer, because rpc_dart's own caller always spells it lower-case —
+and follow L-10: the body has to come from the library's own `codec.serialize`
+or the failure hides behind a default-deny INTERNAL.
+
+The fix is ONE accessor that all eleven sites call, not eleven `toLowerCase()`
+calls — otherwise the twelfth site written next year repeats this.
+
+Do NOT normalise inbound metadata in place as a shortcut. It is cheaper and it
+is wrong: application code reading raw headers would silently get something
+other than what the peer sent.
+
+Accepting `GZIP` / `Identity` where they are refused today is a loosening, not a
+break — patch, with a CHANGELOG line.

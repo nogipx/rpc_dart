@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 422
 commit: 5674789e
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_stub.dart]
@@ -103,11 +103,28 @@ control AFTER the handshake:
 
 ## Owner decision
 
-—
+**Option 3, opt-in: an application-level heartbeat on the EXISTING ping, web
+only, off by default.** Minor, not a break.
 
-Options 2 and 3 below are still open and still need a call. Option 1 is done.
+- Carry it on `RpcEndpointPingExchange`, which the lead already names. No new
+  frame type and no new wire vocabulary — the only new thing is a timer driving
+  what exists.
+- Off unless asked for. The shape to check first is whether `pingInterval` on
+  the web arm can DRIVE this instead of being dropped: that makes the parameter
+  mean the same thing on both platforms, and it resolves option 2's complaint
+  without option 2's break. If that does not work out, an explicit separate knob
+  is the fallback — do not reach for refusing `pingInterval`.
 
-Three shapes, and the cheapest is not obviously wrong:
+DECLINED: always-on (`dart:io` already does this at the platform layer, so four
+transports would pay the wire cost for one's need), and an idle-activity
+callback alone (without a probe, quiet is indistinguishable from dead — it is a
+building block, not detection).
+
+Unresolved and part of the round, not a blocker: the lead's third bullet — a
+heartbeat firing while a long call is in flight competes with it for the
+connection window. Measure that before choosing the default interval.
+
+Option 1 was spent by round 442. The three shapes it was chosen among:
 
 1. **Leave it, document it.** The comment exists; the transport's public doc
    does not say it.

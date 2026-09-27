@@ -72,6 +72,21 @@ Does not establish: that parking alone loses anything. It does not — all frame
 arrive in every row above. Parking is the PRECONDITION for the defect round 366
 fixed, not the defect.
 
+## Corrected by round 445 — which park this is about
+
+The line above, *"`RpcChannelTransport.pair()` answers never park in EVERY
+row"*, is true and is about the LATENCY-shaped park: the wait for the peer's
+first grant, which an in-process pair has ready before the next send asks.
+
+**It is not true of a park made of VOLUME.** Drive credit negative by
+arithmetic — a 600-byte frame into a 512-byte window — and the pair parks
+reliably, with no socket and no RTT. P-99 measures frame ORDER around such a
+park and needs no relay at all.
+
+Read as the stronger claim "a pair cannot measure parking", this note would have
+cost round 445 its instrument. Ask which of the two shapes a question is about
+before reaching for the relay.
+
 ## Trap worth keeping
 
 The credit gate admits on `credit > 0`, not on whether the message FITS. A

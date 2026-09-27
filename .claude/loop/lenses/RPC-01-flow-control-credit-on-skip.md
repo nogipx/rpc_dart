@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366]
-status: confirmed (round 230)
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445]
+status: confirmed (round 445)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -125,3 +125,25 @@ two rpc_dart transports can see it.
 > credit come back?" has a twin: "does the record of it go away?" Both hops
 > here — the grant and the forget — had to be instrumented before the order was
 > visible, and the first theory was wrong.
+
+Round 445 read the detector's own clause — *"`sendMessage` as the sole consumer
+of credit"* — as a question about the OTHER paths, and it is where the lens paid
+again. Four send paths can end a stream; only the metered one is metered, so an
+ending on any unmetered path had nothing making it wait:
+
+    finishSending          held back    (round 366 gave it the rule)
+    sendMetadata(end)      held back    (663cccec, outside the journal)
+    sendDirectObject(end)  OVERTAKEN -> held back
+    sendMessage(end) fast  0 of 200, and the arm is VOID
+
+`[data:600, direct, end, data:16]` is the failure: the end reached the peer ahead
+of a frame the sender was still waiting to place, so the peer counts a stream
+short while the sender believes it sent everything. Bench
+`../probes/P-99-which-ending-paths-wait-for-a-parked-send.md`; lead B-88 holds
+the one path no witness could reach.
+
+> **Being outside the accounting is the qualification, not the exemption.** Each
+> round here asked whether charged credit comes back. This one asks the mirror:
+> which operations are not charged at all, and therefore pass a gate that exists
+> to make things wait. `sendDirectObject` never calls `tryConsume`, which is
+> exactly why nothing held it back.

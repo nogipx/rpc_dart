@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
@@ -41,4 +41,20 @@ recorded.
 
 ## Owner decision
 
-—
+**Take it. Measure first, then ONE shared notify-then-teardown with a BOUNDED
+await.**
+
+Neither existing ordering is the answer to copy:
+
+- `unawaited` gives up on delivery to keep the caller free;
+- `await` keeps delivery and hands the caller the hang the sibling's comment
+  describes.
+
+A bounded await is both — best-effort delivery that cannot outlive a timeout —
+and it belongs in one helper, because the whole defect is that two call sites
+each decided this alone.
+
+Do the bench before the helper: a transport whose send never completes, cancel
+driven through each path, reading whether `cancel()` returns. If BOTH return,
+the hanging transport class named in the comment no longer exists — close as a
+negative in `checked/` with that fact written down, and do not build the helper.

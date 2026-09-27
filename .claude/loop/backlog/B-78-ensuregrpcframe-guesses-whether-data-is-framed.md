@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
@@ -34,4 +34,15 @@ let it through unchanged.
 
 ## Owner decision
 
-—
+**Take it. Establish reachability first; if reachable, carry the fact, do not
+sharpen the guess.**
+
+The round is the lead's own question: can a payload reaching `ensureGrpcFrame`
+be chosen freely? If every entry point has already framed or definitely not
+framed its data, this closes as a negative in `checked/` and costs one round.
+
+If it IS reachable, the fix is B-62's shape — carry the already-framed fact
+through the call path instead of re-deriving it from the bytes. A tighter
+heuristic (checking the compression flag byte, an exact length match) is
+explicitly DECLINED: a better guess over application-controlled bytes is still a
+guess, and the failure stays silent, which is the part that matters.

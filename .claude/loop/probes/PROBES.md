@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-99](P-99-which-ending-paths-wait-for-a-parked-send.md)** valid (round 445),
+  rpc_dart — which of the four send paths waits for a credit-parked frame before
+  ending the stream. Six arms over both transport pairs; the reading is the ORDER
+  of arrival at the peer, not a quantity. **Two controls**: the ablation (the
+  witness flips to OVERTAKEN) and the guarded sibling run on the SAME pair kind
+  as each witness — a witness on `memoryPair` controlled only on `pair()` would
+  not establish the rule. **It also corrects P-58**: a pair never parks on the
+  LATENCY-shaped park and parks reliably on the VOLUME-shaped one, so no relay is
+  needed here. One arm is VOID and says so (B-88)
 - **[P-98](P-98-the-same-context-down-two-call-shapes.md)** valid (round 444),
   rpc_dart — one caller `RpcContext` sent down two call shapes, so the SHAPE is
   the only variable. Seven arms over a channel pair; the reading is the

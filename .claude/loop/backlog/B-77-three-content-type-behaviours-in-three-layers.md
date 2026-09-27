@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -41,4 +41,25 @@ correct-with-suffix, wrong). The matrix IS the finding.
 
 ## Owner decision
 
-—
+**One shared validator, plus a policy key. Default keeps today's core
+behaviour.**
+
+- The three implementations collapse to ONE function, and http2 — which
+  validates nowhere — starts calling it.
+- `RpcSecurityPolicy` gains `contentTypeValidation: lenient | strict`.
+  `lenient` is core's present rule (absent accepted, wrong value refused) and is
+  the default, so nothing breaks in this release. `strict` is the gRPC-spec rule
+  (absent refused) and becomes the default in the next major.
+
+The reasoning the owner gave: the defect is three implementations with three
+answers, not the strictness. Once there is one validator the strictness is a
+one-line default rather than three edits, and the decision becomes reversible
+and testable.
+
+DECLINED for now: strict everywhere immediately (breaks any peer that omits the
+header — major, and nothing has asked for it yet), and docs-only (leaves the
+verdict decided by which transport a request arrived on).
+
+Order of work: read the spec first as the lead says, then build the four-input
+matrix over the three transports — the matrix is what tells you whether
+`lenient` is describable as one rule at all before it becomes one function.

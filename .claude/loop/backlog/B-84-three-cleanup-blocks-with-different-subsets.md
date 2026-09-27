@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
@@ -42,4 +42,14 @@ should be written rather than left open.
 
 ## Owner decision
 
-—
+**Take it as verification, not as a refactor.** Answer the lead's two
+questions — does a teardown at `:933` or `:1180` leave flow-control state
+behind, and does one at `:788` leave a live subscription.
+
+If both come back clean, this closes as a negative in `checked/` and no code
+changes. Cosmetic unification of three near-copies is DECLINED on its own; only
+a measured leak justifies touching them.
+
+If one is a real omission, fix that omission — and only then ask whether the
+three should be one, with the `## Ask` answered: whose behaviour would the
+shared version have, and which of the three would that CHANGE.

@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
@@ -35,4 +35,23 @@ and the consequence is a caller believing it sent something it did not.
 
 ## Owner decision
 
-—
+**Take it. Delete the second home, and make the overflow LOUD.**
+
+- The four private constants go. `RpcContext` reads the limits from
+  `RpcSecurityPolicy`, so raising `maxHeaders` raises what the context will
+  carry. One source, and the equality that hides the bug stops existing.
+- `_sanitizeHeaders` stops `continue`-ing and `break`-ing past what it cannot
+  carry. A caller that exceeds the limit is TOLD; silent truncation is the
+  actual damage in this lead — a caller believing it sent what it did not.
+
+The repo has the precedent for throwing here: `fix(rpc_dart)!: require
+printable-ASCII metadata header values` made the same trade, an
+`ArgumentError` in place of a silent mangle. Match that shape rather than
+inventing a new one.
+
+Still answer the lead's open question first — whether any transport re-checks
+the count on the way out — because if one does, the drop is already a refusal
+somewhere and the fix is smaller than it looks.
+
+Raising the effective ceiling means more headers on the wire than before; note
+it in the CHANGELOG.

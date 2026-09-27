@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — never checked at all, by anyone
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**]
@@ -47,4 +47,17 @@ measurements; do not fold them back in here.
 
 ## Owner decision
 
-—
+**Take it. Nine greps, all nine, in one pass.**
+
+Prefer B-63's checked "Already extracted" list wherever the two overlap, and
+check only what B-63 does not cover — that is the cheap half.
+
+Two rules for the pass:
+
+- Write the negative for every entry that holds. A verified negative is the
+  deliverable; without it this list gets re-read a fourth time.
+- Verify the WHOLE list before reporting. A partial pass on a list whose defect
+  is "nobody checked it" reproduces the defect.
+
+Entries that turn out not to be shared get their own numbers and their own
+measurements — do not fold a finding back into this lead.

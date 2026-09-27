@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -42,4 +42,19 @@ absence is invisible in a diff.
 
 ## Owner decision
 
-—
+**Take it, in two steps, and do not stop after the first.**
+
+1. Port the `_disconnected`-before-`await _reconnectFactory()` guard to http2
+   and to `_ReconnectingTransportProxy`. This is the confirmed defect — sends
+   accepted and dropped silently for the whole factory await — and the websocket
+   sibling already carries both the fix and the comment explaining the cost.
+2. Then make the three machines ONE. Three answers to one question is the
+   lead's actual finding, and step 1 alone leaves it standing.
+
+Step 2 needs the `## Ask` answered explicitly before any code: if the three were
+one, whose behaviour would the shared version have, and which of the three does
+that CHANGE? Bring that answer back rather than picking the most general.
+
+Enumerate by what the machines DO, not by grepping the field name — RPC-25's
+round-444 note and L-16: the copy without the guard does not contain the string,
+and an absence is invisible in a diff.

@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -35,4 +35,17 @@ round-worthy.
 
 ## Owner decision
 
-—
+**Take it as a measurement, in the lead's three-question order.** The third
+question is the gate: only "the handler's consumer sees a clean end" makes this
+round-worthy.
+
+If the responder IS unbounded, the disposer does NOT get copied from
+`CallProcessor` into `StreamProcessor`. It goes somewhere both halves inherit —
+a fourth hand-written copy of a lifecycle rule is how this lead came to exist.
+
+If the responder bounds the deadline by another route, that route gets written
+down in `checked/` with its name, so the next sweep does not re-file the
+absence as a finding.
+
+Tearing down a handler that runs past its deadline is a behaviour change on the
+server side and needs a CHANGELOG line if it lands.

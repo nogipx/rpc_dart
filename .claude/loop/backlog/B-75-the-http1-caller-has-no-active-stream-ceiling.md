@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -36,4 +36,21 @@ for each wrong choice.
 
 ## Owner decision
 
-—
+**Measure first, then apply uniformly.** One line for the whole class —
+B-75, B-79 and B-80 all got the same call.
+
+1. Read RPC-05 and C-29 before anything, then answer whether the limit is
+   MEANINGFUL on the HTTP/1.1 caller. Each call there is its own request and
+   concurrency is already bounded by the `HttpClient` connection pool, so the
+   limit may be meaningless rather than missing.
+2. If it is meaningful: charge it at the same point as core and http2, and put
+   the new refusals in the CHANGELOG — a policy that silently does not apply on
+   one transport is the worse failure, so consistency wins over not adding a
+   refusal.
+3. If the HTTP/1.1 shape makes it meaningless: close as a negative in `checked/`
+   plus one doc line saying so. That is a result, not a non-result.
+
+DECLINED: mapping the policy onto `maxConnectionsPerHost` (turns the limit into
+a queue on one transport and a refusal on the others — the same disagreement
+this lead is about), and documenting it as unsupported without measuring (leaves
+the user believing they bounded something).

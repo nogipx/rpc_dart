@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
@@ -37,4 +37,22 @@ alone. Round 444 ranked this third of B-70's three for exactly that reason.
 
 ## Owner decision
 
-—
+**The Dart half only: ONE source for the defaults, plus the test.**
+
+The owner took the stronger of the two options offered. A test that asserts the
+copies agree was DECLINED as the whole job: it detects the drift, it does not
+prevent it, and a value with two homes is the shape this lead is filed under.
+So the constructor and `fromMap` are to read the same declared defaults, and
+the test stays as the witness that they do.
+
+Keep the test even after the single source lands. It is what fails if someone
+re-introduces a literal, and it is cheap.
+
+Bar for "one source": no literal appears twice. If the shape that achieves that
+costs more than the drift it prevents — for instance if it forces every default
+through a map and loses the constructor's types — bring the trade back rather
+than absorbing it.
+
+**The native half is NOT in this decision.** The JS shim carried as strings in
+both Swift and Kotlin stays a separate, device-bound job, alongside B-38 and
+B-03, and needs the owner to boot a simulator and an emulator.

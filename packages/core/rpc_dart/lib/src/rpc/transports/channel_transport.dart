@@ -526,6 +526,10 @@ class RpcChannelTransport
       );
     }
     _refuseIfClosed();
+    // Ends a stream like the other three, and meters nothing at all: a direct
+    // object never takes credit, so without the claim it sails past a DATA
+    // frame still parked and the peer ends a frame short.
+    if (endStream && !await _claimEnding(streamId)) return;
     await _channel.send(
       RpcTransportMessage.withDirectObject(
         directPayload: object,
@@ -567,12 +571,13 @@ class RpcChannelTransport
 
   /// Claims the right to end [streamId] and waits for anything parked on it.
   ///
-  /// Every path that can end a stream goes through here. Two of them used to
-  /// carry the rule and the third did not, so a trailer written by
-  /// [sendMetadata] could overtake a DATA frame still parked for credit.
+  /// Every ending goes through here EXCEPT the one in [sendMessage]'s parked
+  /// branch, which IS the parked send: it would await its own completer, and
+  /// that completes only after it returns.
   ///
-  /// Returns false when the ending must not go out at all: already ended, or
-  /// the transport closed while this waited.
+  /// Returns false only when the transport closed, before the wait or during
+  /// it. A repeat ending is not refused here — [finishSending] keeps its own
+  /// `_finishedStreams` guard for that.
   Future<bool> _claimEnding(int streamId) async {
     if (_closed) return false;
     _rememberFinished(streamId);

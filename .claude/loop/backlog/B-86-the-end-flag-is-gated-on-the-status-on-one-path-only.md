@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**]
@@ -40,4 +40,21 @@ assuming the sweep's version of it.
 
 ## Owner decision
 
-—
+**Take it. Reachability on the http2 HEADERS path first; then put the check in
+CORE, at the consumer boundary, once.**
+
+Order is the lead's own and is not negotiable — establish reachability before
+writing anything.
+
+If it is reachable, do not add a third `statusKnown` clause to a third end-flag
+expression. The processor is the one place that knows BOTH facts — the stream
+ended, and no status was ever seen — so a clean end with no status becomes an
+error there, for every transport at once. That also covers the HTTP/1.1 half
+without first having to prove the empty-trailer path is reachable, which is the
+question the sweep overstated.
+
+This turns a silent success into an error. That is the point — today a short
+read is reported as success — but it needs an explicit CHANGELOG line, because
+a consumer that quietly tolerates truncation starts failing.
+
+Reuse P-97 for reading the ending; repeat its control first.

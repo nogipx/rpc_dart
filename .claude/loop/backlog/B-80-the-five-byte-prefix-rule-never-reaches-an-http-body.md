@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/core/frame_multiplexed_channel.dart, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**]
@@ -39,4 +39,17 @@ over each of the four transports. Four rows, and two of them are expected to be
 
 ## Owner decision
 
-—
+**Measure first, then apply uniformly** — the same call as B-75 and B-79, given
+once for the class.
+
+The lead's own first question stands as the round: which limit, if any, an HTTP
+body is checked against. Two of the four expected rows are "no limit applied",
+and that is the finding — the missing +5 is moot until a bound exists.
+
+If a bound is added, the "+5 bytes of prefix" rule goes into ONE shared accessor
+in core, used by all four transports. Do not write the rule a third time: it is
+already stated twice inside core, which is half of why B-85 exists.
+
+New refusals for oversized messages go in the CHANGELOG. DECLINED: applying the
+limit without measuring what the HTTP path does today, and documenting it as
+unsupported.

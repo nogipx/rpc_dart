@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 445)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/transport/rpc_dart_http2/lib/**]
@@ -34,4 +34,20 @@ the bytes arriving.
 
 ## Owner decision
 
-—
+**Measure first, then apply uniformly** — the same call as B-75 and B-80, given
+once for the class.
+
+The measurement in the lead is the round, and it decides between two answers,
+not one: if `dart:io` / `package:http2` has already committed the peak before
+this library sees a byte, the answer is a DOC LINE, because RPC-17 says a limit
+that fires after residency is not a limit. Adding a counter is NOT pre-approved
+by this decision.
+
+If http2 does need a bound, prefer the http2 flow-control window over a counter:
+it prevents the residency instead of reporting it, and it does not introduce a
+refusal the transport never produced. That shape needs its own measurement —
+whether the window can be driven from the policy value at all — so treat it as
+the second question, not the fix.
+
+DECLINED: adding the counter without the measurement, and documenting it as
+unsupported without one either.

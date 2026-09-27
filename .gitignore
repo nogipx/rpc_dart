@@ -20,3 +20,11 @@ coverage/
 # else's. Ignored rather than annotated because `reuse lint` is part of the
 # gate and an unlicensed file at the root fails it -- which it did.
 .mcp.json
+
+# devtrack's live SQLite database and its WAL sidecars. `.devtrack/tasks/` is
+# the readable markdown export and IS tracked; these three are binary runtime
+# state that cannot carry an SPDX header, so they failed `reuse lint` in the
+# gate the same way `.mcp.json` did.
+.devtrack/devtrack.db
+.devtrack/devtrack.db-shm
+.devtrack/devtrack.db-wal
