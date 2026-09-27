@@ -1,13 +1,36 @@
 ---
 status: decided by owner (round 445)
-round: 444 — re-read against the tree, never measured
-commit: 67303ea6
-paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+round: 453 — Dart half DONE; the native half is untouched
+commit: 92bbcff8
+paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
 probe: —
-reason: cost — split out of B-70 item 36; the Dart half has no failing case today and the native half is a device round
+reason: owner decision — the native half needs a booted simulator AND emulator, which is the owner's to run (as with B-38 and B-03)
 ---
 
 # B-85 — a default written twice, and a shim written in two languages
+
+## DART HALF DONE (round 453). Only the native half is left.
+
+13 repeated literals are now one private constant each, used by the constructor
+and by `fromMap`. The 14th, `maxMethodPathLength`, already worked that way and is
+the idiom the rest follow.
+
+The test the owner asked to keep is `test/core/policy_defaults_agree_test.dart`,
+and it earns its place: a literal written back into `fromMap` —
+`readInt('maxHeaders', 64)` — fails it with `at location ['maxHeaders'] is <64>
+instead of <128>`, naming the field rather than failing an opaque `==`. Only the
+EMPTY-MAP arm catches that; the round-trip arms pass, because `toMap` writes the
+value and `fromMap` reads it instead of falling back.
+
+The constants are PRIVATE: `public_member_api_docs` wanted a doc comment on each,
+and 13 new documented public members is a real addition to a published surface for
+something no caller needs to name.
+
+**What is left, and why it is yours**: the JS shim carried as strings in BOTH
+`RpcDartWasmPlugin.swift` and `RpcDartWasmPlugin.kt`. Per `config.md` a fix to one
+is never a fix to the other, and it needs `analyze:native` plus
+`test:wasm:device` on both platforms — a booted simulator and emulator, as with
+B-38 and B-03.
 
 Two halves, deliberately kept together because they are one shape — a value with
 two homes and nothing checking they agree.

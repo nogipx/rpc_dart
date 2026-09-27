@@ -187,24 +187,48 @@ final class RpcSecurityPolicy {
   /// advertises unprompted at connection setup, so this is not a per-call wait.
   final Duration? initialSendWindowGrace;
 
+  // One home per default, because there are TWO routes into this class and they
+  // must not disagree: the constructor, and [fromMap] — which is how a policy
+  // crosses an isolate or a worker boundary, so a drift would put the two ends
+  // of one process on different limits. `maxMethodPathLength` was already named
+  // this way; the rest were literals repeated in both places.
+  //
+  // `defaults_agree_test.dart` asserts the two routes produce the same policy.
+  // Keep it even though this makes them one source: it is what fails if someone
+  // writes a literal back in.
+  static const int _defaultMaxMessageLengthBytes = 16 * 1024 * 1024;
+  static const int _defaultMaxMessagesPerChunk = 1024;
+  static const int _defaultMaxActiveStreams = 4096;
+  static const int _defaultMaxMetadataBytes = 64 * 1024;
+  static const int _defaultMaxHeaders = 128;
+  static const int _defaultMaxHeaderNameBytes = 128;
+  static const int _defaultMaxHeaderValueBytes = 8 * 1024;
+  static const bool _defaultCloseOnProtocolError = false;
+  static const Duration _defaultHalfOpenStreamTimeout = Duration(seconds: 60);
+  static const int _defaultFlowControlWindowBytes = 4 * 1024 * 1024;
+  static const int _defaultFlowControlConnectionWindowBytes = 64 * 1024 * 1024;
+  static const int _defaultInitialSendWindowBytes = 64 * 1024;
+  static const Duration _defaultInitialSendWindowGrace = Duration(seconds: 5);
+
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
-    this.maxMessageLengthBytes = 16 * 1024 * 1024,
+    this.maxMessageLengthBytes = _defaultMaxMessageLengthBytes,
     this.maxBufferedBytes,
-    this.maxMessagesPerChunk = 1024,
-    this.maxActiveStreams = 4096,
+    this.maxMessagesPerChunk = _defaultMaxMessagesPerChunk,
+    this.maxActiveStreams = _defaultMaxActiveStreams,
     this.maxConcurrentHandlers,
-    this.maxMetadataBytes = 64 * 1024,
-    this.maxHeaders = 128,
-    this.maxHeaderNameBytes = 128,
-    this.maxHeaderValueBytes = 8 * 1024,
+    this.maxMetadataBytes = _defaultMaxMetadataBytes,
+    this.maxHeaders = _defaultMaxHeaders,
+    this.maxHeaderNameBytes = _defaultMaxHeaderNameBytes,
+    this.maxHeaderValueBytes = _defaultMaxHeaderValueBytes,
     this.maxMethodPathLength = kDefaultMaxMethodPathLength,
-    this.closeOnProtocolError = false,
-    this.halfOpenStreamTimeout = const Duration(seconds: 60),
-    this.flowControlWindowBytes = 4 * 1024 * 1024,
-    this.flowControlConnectionWindowBytes = 64 * 1024 * 1024,
-    this.initialSendWindowBytes = 64 * 1024,
-    this.initialSendWindowGrace = const Duration(seconds: 5),
+    this.closeOnProtocolError = _defaultCloseOnProtocolError,
+    this.halfOpenStreamTimeout = _defaultHalfOpenStreamTimeout,
+    this.flowControlWindowBytes = _defaultFlowControlWindowBytes,
+    this.flowControlConnectionWindowBytes =
+        _defaultFlowControlConnectionWindowBytes,
+    this.initialSendWindowBytes = _defaultInitialSendWindowBytes,
+    this.initialSendWindowGrace = _defaultInitialSendWindowGrace,
   });
 
   /// Serializes this policy to a plain map.
@@ -245,51 +269,66 @@ final class RpcSecurityPolicy {
 
     final maxBuffered = map['maxBufferedBytes'];
     return RpcSecurityPolicy(
-      maxMessageLengthBytes: readInt('maxMessageLengthBytes', 16 * 1024 * 1024),
+      maxMessageLengthBytes: readInt(
+        'maxMessageLengthBytes',
+        _defaultMaxMessageLengthBytes,
+      ),
       maxBufferedBytes: maxBuffered is int && maxBuffered > 0
           ? maxBuffered
           : null,
-      maxMessagesPerChunk: readInt('maxMessagesPerChunk', 1024),
-      maxActiveStreams: readInt('maxActiveStreams', 4096),
+      maxMessagesPerChunk: readInt(
+        'maxMessagesPerChunk',
+        _defaultMaxMessagesPerChunk,
+      ),
+      maxActiveStreams: readInt('maxActiveStreams', _defaultMaxActiveStreams),
       maxConcurrentHandlers: switch (map['maxConcurrentHandlers']) {
         final int limit when limit > 0 => limit,
         _ => null,
       },
-      maxMetadataBytes: readInt('maxMetadataBytes', 64 * 1024),
-      maxHeaders: readInt('maxHeaders', 128),
-      maxHeaderNameBytes: readInt('maxHeaderNameBytes', 128),
-      maxHeaderValueBytes: readInt('maxHeaderValueBytes', 8 * 1024),
+      maxMetadataBytes: readInt('maxMetadataBytes', _defaultMaxMetadataBytes),
+      maxHeaders: readInt('maxHeaders', _defaultMaxHeaders),
+      maxHeaderNameBytes: readInt(
+        'maxHeaderNameBytes',
+        _defaultMaxHeaderNameBytes,
+      ),
+      maxHeaderValueBytes: readInt(
+        'maxHeaderValueBytes',
+        _defaultMaxHeaderValueBytes,
+      ),
       maxMethodPathLength: readInt(
         'maxMethodPathLength',
         kDefaultMaxMethodPathLength,
       ),
-      closeOnProtocolError: readBool('closeOnProtocolError', false),
+      closeOnProtocolError: readBool(
+        'closeOnProtocolError',
+        _defaultCloseOnProtocolError,
+      ),
       // Absent means the default; an explicit non-positive value disables it.
       halfOpenStreamTimeout: switch (map['halfOpenStreamTimeoutMs']) {
         final int ms when ms > 0 => Duration(milliseconds: ms),
         final int _ => null,
-        _ => const Duration(seconds: 60),
+        _ => _defaultHalfOpenStreamTimeout,
       },
       flowControlWindowBytes: switch (map['flowControlWindowBytes']) {
         final int bytes when bytes > 0 => bytes,
         final int _ => null,
-        _ => 4 * 1024 * 1024,
+        _ => _defaultFlowControlWindowBytes,
       },
       flowControlConnectionWindowBytes:
           switch (map['flowControlConnectionWindowBytes']) {
             final int bytes when bytes > 0 => bytes,
             final int _ => null,
-            _ => 64 * 1024 * 1024,
+            _ => _defaultFlowControlConnectionWindowBytes,
           },
       initialSendWindowBytes: switch (map['initialSendWindowBytes']) {
         final int bytes when bytes > 0 => bytes,
         final int _ => null,
-        _ => 64 * 1024,
+        _ => _defaultInitialSendWindowBytes,
       },
       initialSendWindowGrace: switch (map['initialSendWindowGraceMs']) {
         final int ms when ms > 0 => Duration(milliseconds: ms),
         final int _ => null,
-        _ => const Duration(seconds: 5),
+        _ => _defaultInitialSendWindowGrace,
       },
     );
   }
