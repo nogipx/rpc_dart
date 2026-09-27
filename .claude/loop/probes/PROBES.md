@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-106](P-106-what-a-late-frame-on-a-closed-stream-is-told.md)** valid (round 454),
+  rpc_dart — varies the endpoint's DRAIN FLAG and holds the arriving frame fixed.
+  **One COMPLETE call first is the setup that matters**: it is what puts the id in
+  the closed-stream set, and without it the arm measures a fresh stream instead of
+  a finished one. Stream 1 on purpose, so the late frame is provably not new. The
+  third arm is a GUARD rather than a control — moving a refusal later is the change
+  that can disable it — and it is what surfaced B-90, because the refusal COUNT
+  matters as much as its presence
 - **[P-105](P-105-what-each-teardown-block-clears.md)** valid (round 452),
   rpc_dart_http2 — one arm per teardown path on a stream left MID-FLIGHT, so no
   ending clears the state before the path under test runs. A silent server is the

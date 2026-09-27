@@ -690,19 +690,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       );
     }
 
-    // During drain, reject new streams but allow messages for existing ones.
-    if (_respIsDraining && _respStreams[message.streamId] == null) {
-      _detached(
-        _sendGrpcErrorAndCleanup(
-          streamId: message.streamId,
-          status: RpcStatus.unavailable,
-          message: 'Server is shutting down',
-        ),
-        'grpc error cleanup',
-      );
-      return;
-    }
-
     // Ignore meaningless control frames for streams we do not already track.
     // A frame opens a new stream only if it carries a methodPath, a payload,
     // an end-of-stream marker, or a client-cancellation header. Anything else
@@ -742,6 +729,26 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         return;
       }
       _respClosedStreams.remove(message.streamId);
+    }
+
+    // During drain, reject new streams but allow messages for existing ones.
+    //
+    // Ordered with the ceiling refusal below, and for the ceiling's stated
+    // reason. Checked BEFORE the closed-stream guard, this answered a TRAILING
+    // frame on an already-completed stream with UNAVAILABLE -- a SECOND terminal
+    // status on a stream the peer had already been told was OK. Measured: a late
+    // metadata-only frame on a finished id read `status=14 Server is shutting
+    // down` while draining, and was correctly ignored while not.
+    if (_respIsDraining && _respStreams[message.streamId] == null) {
+      _detached(
+        _sendGrpcErrorAndCleanup(
+          streamId: message.streamId,
+          status: RpcStatus.unavailable,
+          message: 'Server is shutting down',
+        ),
+        'grpc error cleanup',
+      );
+      return;
     }
 
     // Refuse to open a NEW stream past the concurrency ceiling. Checked after

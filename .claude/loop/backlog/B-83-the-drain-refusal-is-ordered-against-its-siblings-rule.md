@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 454)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -8,6 +8,26 @@ reason: cost — split out of B-70 item 11; the consequence is a refusal on a st
 ---
 
 # B-83 — the drain refusal is ordered one way, the ceiling refusal the other
+
+## CLOSED (round 454) — it was the bug the other comment exists to prevent
+
+Not an undocumented specialisation. Measured:
+
+```
+draining, late frame on a closed id   status=14 "Server is shutting down"
+NOT draining, same frame              NONE (ignored)
+```
+
+The peer had completed that call and been told OK. A late metadata-only frame on
+the same id — exactly what the closed-stream guard exists to ignore — reached the
+drain check first and was answered UNAVAILABLE: a SECOND terminal status on one
+stream. The check now sits with the ceiling refusal, after the guard.
+
+**The GUARD arm was load-bearing and found a second defect.** Moving a refusal
+later is the change that can disable it, so the test opens a genuinely new stream
+while draining and requires UNAVAILABLE. It gets it — TWICE, one refusal per
+frame. That is pre-existing (the same double answer appears with the old ordering)
+and is now **B-90**.
 
 Two refusals in `responder_pipeline.dart`, sitting either side of the same
 closed-stream guard:

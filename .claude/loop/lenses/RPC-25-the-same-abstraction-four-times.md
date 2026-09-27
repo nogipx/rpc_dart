@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453]
-status: confirmed (round 452)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454]
+status: confirmed (round 454)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -752,3 +752,32 @@ resetStream       pumps 1 -> 1     <- the cancellation path
 
 `../rounds/452-the-weakest-lead-had-a-leak-in-it.md`,
 `../probes/P-105-what-each-teardown-block-clears.md`.
+
+## Round 454 — the comment was on the RIGHT copy, which is the useful case
+
+U-01 says a comment justifying deliberateness is a lead, not a closed door, and
+every earlier application here treated the comment as the thing to doubt. 454 is
+the other half: two refusals sat either side of one guard, one carried a comment
+explaining its position, and the comment was CORRECT. The copy without it had the
+wrong order.
+
+```
+draining, late frame on a closed id   status=14 "Server is shutting down"
+NOT draining, same frame              NONE (ignored)
+```
+
+> **A rule written on one copy is a specification for its siblings.** When two
+> near-copies straddle a shared guard and only one says where it belongs, read the
+> comment as the intended rule and check the silent one against it — rather than
+> asking whether the documented one is right.
+
+Second lesson, from the round's GUARD rather than its witness:
+
+> **Moving a refusal later needs a test that it still refuses.** That guard is
+> where the round's second finding came from: the new stream IS refused, and
+> refused TWICE, because nothing records the id a refusal just refused (B-90).
+> Count the answers, not just their presence — `[14]` and `[14, 14]` read the same
+> to a `contains` matcher.
+
+`../rounds/454-the-order-the-sibling-wrote-down.md`,
+`../probes/P-106-what-a-late-frame-on-a-closed-stream-is-told.md`.
