@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something caps concurrency by HOLDING state that must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463]
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467]
 status: confirmed (round 351)
 ---
 
@@ -235,6 +235,39 @@ slot: the endpoint calls `releaseStreamId` on every one.
 
 `../rounds/463-the-ceiling-the-pool-did-not-cover.md`,
 `../probes/P-112-what-a-caller-ceiling-is-for.md`.
+
+## Round 467 — the REFUSAL is part of the lifecycle too, and it answered twice
+
+Every application above is about charging or releasing. 467 is about the third
+thing a limit does: refuse. A call opened as a peer opens one — metadata, then
+payload — is TWO frames, and both refusals in `responder_pipeline` answered both:
+
+```
+draining, a NEW call    [status=14, status=14]
+ceiling 1, a 2nd call   [status=8,  status=8]
+```
+
+> **A refusal has a lifecycle: decide, answer, and record that the id is done.**
+> The third step existed — `_cleanupStream` remembers the id — and ran a
+> microtask too late, because every call site fires the helper through
+> `_detached`. So the defect is not a missing give-back but a LATE one, which the
+> detector for a leak would never surface: nothing accumulates, the counters all
+> return to zero, and the damage is on the wire.
+
+> **`async` bodies run synchronously to the first `await`, and that is a place to
+> put a fact.** Moving the remember above the first await put it back on the call
+> site's own stack. Sixteen call sites, one line, because the race was in none of
+> them.
+
+Method note, which cost this round its first ceiling arm:
+
+> **A bench for a SERVER limit must not give the ceiling to the client too.**
+> `RpcChannelTransport.pair(policy:)` configures both ends, and since round 463
+> the caller's own `createStream` refuses first — so the arm measures the client
+> and reports it as the server. C-29's test note said this before round 463 made
+> it true on every transport.
+
+`../rounds/467-a-refusal-that-answered-twice.md`, `../probes/P-106-what-a-late-frame-on-a-closed-stream-is-told.md`.
 
 Bench `../probes/P-43-cancelled-stream-probe.md`, whose control took two attempts
 to aim: the first varied the cancel AND whether the source terminated, which

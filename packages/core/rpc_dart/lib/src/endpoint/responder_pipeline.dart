@@ -1802,6 +1802,26 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcContext? context,
     List<RpcHeader> extraHeaders = const [],
   }) async {
+    // SYNCHRONOUSLY, before the first await, and that is the whole fix.
+    //
+    // `_cleanupStream` in the `finally` below already remembers the id — but
+    // every refusal site calls this through `_detached`, so the remembering
+    // happened a microtask later than the next inbound frame. A call opened with
+    // metadata AND payload is two frames: both found no stream, both fell through
+    // the same checks, and both were refused. TWO terminal statuses on one
+    // stream, which is a protocol violation anywhere the peer keeps stream state.
+    //
+    // Measured on a channel pair, before:
+    //
+    //     draining, a NEW call (2 frames)   [status=14, status=14]
+    //     ceiling 1, a 2nd call (2 frames)  [status=8,  status=8]
+    //
+    // One site rather than the sixteen call sites, because the race is not in any
+    // of them: it is in the gap between deciding to refuse and recording that the
+    // id is done. Suppressing the second SEND instead would leave the refusal
+    // path still treating a refused stream as unknown, and the next frame type
+    // would find the same hole.
+    _rememberClosedStream(streamId);
     try {
       // Trimmed to the policy this trailer is about to be validated against;
       // see RpcMetadata.forTrailer. The status is what must reach the peer.

@@ -42,6 +42,27 @@ The grpc-status values delivered to the peer after its call finished. A count of
 them matters as much as their presence: the guard arm reads TWO, which is how the
 second defect (B-90) surfaced.
 
+## Reused in round 467, with one new arm
+
+B-90 came out of this bench's own GUARD arm and asked that the SIBLING refusal be
+driven before anything was fixed. It now is:
+
+```
+                                       before      after
+GUARD draining, NEW stream (2 frames)  [14, 14]    [14]
+CEILING at 1, a 2nd call (2 frames)    [8,  8]     [8]
+```
+
+**The ceiling arm needs the client and the responder to hold SEPARATE policies.**
+`RpcChannelTransport.pair(policy:)` configures both ends, and since round 463 the
+caller's own `createStream` refuses at the ceiling first — so a shared policy
+measures the client and reports it as the server. C-29's test note, four rounds
+after the round that made it bite on every transport.
+
+The occupying call is a metadata frame with NO payload: it never dispatches, so
+the state stays live and holds the slot for the whole arm without a parked
+handler.
+
 ## Control
 
 Two, and the third arm is a GUARD rather than a control.

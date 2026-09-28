@@ -144,7 +144,7 @@ after the change, which is what the status is for.
   fire on it — without that, "the crafted body was re-framed" is equally
   consistent with everything being re-framed for another reason. LENGTH alone
   separates the outcomes, which is why both arms use 13 bytes
-- **[P-106](P-106-what-a-late-frame-on-a-closed-stream-is-told.md)** valid (round 454),
+- **[P-106](P-106-what-a-late-frame-on-a-closed-stream-is-told.md)** valid (rounds 454, 467),
   rpc_dart — varies the endpoint's DRAIN FLAG and holds the arriving frame fixed.
   **One COMPLETE call first is the setup that matters**: it is what puts the id in
   the closed-stream set, and without it the arm measures a fresh stream instead of
