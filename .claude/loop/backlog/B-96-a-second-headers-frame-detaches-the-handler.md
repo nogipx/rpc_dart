@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 487)
+round: 487
+commit: 7764b081
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-126
+reason: "closed — the witness was built and CONFIRMED it: 0 of 1 cancels observed and 0 of 1 disposers run after one extra frame"
 ---
 
 # B-96 — a second metadata frame with a methodPath replaces a running call's context
@@ -58,3 +58,35 @@ dispatched stream.
 ## Owner decision
 
 —
+
+## Closed (round 487) — confirmed, and the ping half is a different defect
+
+```
+                        handler saw the cancel   disposer ran
+second HEADERS                    0                   0
+nothing extra (control)           1                   1
+```
+
+Fixed as the sketch's first clause says — ignore a methodPath metadata frame for
+a stream that already has a method — and the condition was not invented: the
+data path has carried it all along (`if (!state.hasMethod && message.methodPath
+!= null)`). The sketch's "at most read encoding hints from it" was declined;
+nothing asks for it.
+
+Ignored rather than refused, because a peer sending one is buggy and failing a
+call that is working is the larger harm. The warning is behind a bool, per
+CLAUDE.md.
+
+**The ping sentence is TRUE and this guard does not reach it.** `frames on the
+stream id: 2 -> 4` against a control of `2 -> 2`, unchanged by the fix — by the
+time the second frame arrives the ping's `onComplete` has run `_cleanupStream`,
+so `hasMethod` is false on the fresh state and the frame opens what looks like a
+new call on a reused id. That is id-reuse behaviour (RPC-03), not a context
+rebuild, and a responder cannot tell a reused id from a new call. Harm: the peer
+gets a second pong on a stream it has already released. Not filed as a new lead
+— re-open this one if a measurement gives the reuse case teeth.
+
+**Its instrument is worth inheriting.** Counted on `getMessagesForStream(id)`
+the ping arm reads `2 -> 2` in both arms and with the fix ablated, because that
+controller closes when the ping ends. `incomingMessages` filtered by id is what
+sees it.

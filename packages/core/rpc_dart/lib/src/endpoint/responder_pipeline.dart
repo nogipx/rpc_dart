@@ -230,6 +230,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// ids buys more budget.
   int _respPreMethodBytes = 0;
 
+  /// Whether the "repeat opening frame" notice has gone out.
+  ///
+  /// Once. A peer that sends one sends it on every call, and the interesting
+  /// fact is that it happens at all.
+  bool _warnedRepeatOpeningFrame = false;
+
   /// Ceiling for [_respPreMethodBytes].
   ///
   /// [RpcSecurityPolicy.maxMessageLengthBytes] rather than a new knob: the
@@ -815,7 +821,26 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
 
     if (message.isMetadataOnly && message.methodPath != null) {
-      _handleMetadataMessage(state, message);
+      if (state.hasMethod) {
+        // A second opening frame for a stream that is already running. Acting
+        // on it rebuilt the context -- new cancellation token, new RpcCallScope,
+        // new deadline timer -- while the live handler kept the old one, so
+        // drain, deadline, client cancel and teardown all reached a token
+        // nobody held and the handler's own disposers were never run.
+        //
+        // Ignored rather than refused: a peer sending it is buggy, and failing
+        // a call that is working is the larger harm. The data path at
+        // [_handleDataMessage] has always been guarded this way.
+        if (!_warnedRepeatOpeningFrame) {
+          _warnedRepeatOpeningFrame = true;
+          _log.warning(
+            'Ignoring a repeat opening frame on stream ${state.id}: the stream '
+            'is already bound to ${state.methodKey}',
+          );
+        }
+      } else {
+        _handleMetadataMessage(state, message);
+      }
     }
 
     final hasPayload =

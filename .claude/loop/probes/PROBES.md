@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-126](P-126-what-a-second-opening-frame-detaches.md)** valid (round 487),
+  rpc_dart — counts two things from INSIDE the handler's own closure (did it
+  observe its cancel, did its disposer run), so the numbers say what the handler
+  saw rather than what the pipeline believes it sent. **Its second arm is a
+  worked example of an instrument that reads zero for the wrong reason**:
+  counted on `getMessagesForStream(id)` the repeat-ping arm reads `2 -> 2` in
+  both arms AND with the fix ablated, because that controller closes when the
+  ping ends; counted on `incomingMessages` filtered by id it reads `2 -> 4`
 - **[P-125](P-125-what-one-bad-frame-costs-a-reconnecting-client.md)** valid
   (round 486), rpc_dart + rpc_dart_websocket — **counts the transports a factory
   BUILDS**, one per reconnect, with the websocket transports constructed bare so

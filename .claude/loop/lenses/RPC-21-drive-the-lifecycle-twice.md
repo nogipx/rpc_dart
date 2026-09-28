@@ -1,10 +1,10 @@
 ---
 refines: U-15
-paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**]
-applies: an object has start/stop/close/reconnect and a suite that builds a fresh one per test
-breaks: a connection leak.
-applied: [241, 401]
-status: confirmed (round 401)
+paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
+applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
+breaks: a connection leak; or a running call detached from everything that can stop it.
+applied: [241, 401, 487]
+status: confirmed (round 487)
 ---
 
 # RPC-21 — Drive the lifecycle twice
@@ -145,6 +145,39 @@ and upgrading, and a broadcast stream with no listener drops the event: the peer
 completes its handshake, is never answered and never closed, and waits on its
 own deadline. B-59. `../probes/P-87-restart-the-way-the-error-says.md`,
 `../rounds/401-the-remedy-that-was-not-one.md`.
+
+## Round 487 — the object with a lifecycle need not be an object
+
+Every application above drives a class with `start`/`stop`/`close`/`reconnect`.
+A STREAM has a lifecycle too, it is opened by a FRAME rather than by a method
+call, and the peer decides how many times that method is called.
+
+`_handleMetadataMessage` ran for every metadata frame carrying a methodPath,
+with no check that the stream was already bound. The second one cleared the
+cached context and built a new one — new cancellation token, new `RpcCallScope`,
+new deadline timer — while the handler kept the first:
+
+    second HEADERS   handler saw the cancel 0   disposer ran 0
+    nothing extra    handler saw the cancel 1   disposer ran 1
+
+> **Widen "lifecycle API" to anything a PEER can invoke twice.** The detector is
+> unchanged — create, use, use again — but the inputs are frames, and a peer
+> sending the opening frame twice is a ~30-byte message, not a programming
+> mistake somebody has to make. The `paths:` above gained the endpoint for this
+> reason.
+
+The Ask answers the same way as ever: after the second call, the object's
+reported state did not match what it held. `state.cachedContext` named a context
+no running code had.
+
+> **And the sibling path had the guard all along.** `_handleDataMessage` opens
+> with `if (!state.hasMethod && message.methodPath != null)`; the metadata path
+> — the one a peer reaches without sending any payload — did not. When this lens
+> finds an unguarded second call, look for the same operation on a neighbouring
+> path before designing a guard; here the fix is that condition, moved.
+
+`../probes/P-126-what-a-second-opening-frame-detaches.md`,
+`../rounds/487-the-frame-that-swaps-the-handlers-context.md`, B-96.
 
 Imported from private memory in the curate pass after round 234, which is also
 what C-06 had been asking for: it recorded shape U-15 as having no lens.
