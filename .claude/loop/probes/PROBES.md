@@ -38,6 +38,29 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-123](P-123-what-the-two-shims-actually-share.md)** valid (round 482),
+  rpc_dart_wasm — **the instrument B-93 named and nobody ran.** Extracts every
+  top-level named function from both boot literals by BRACE MATCHING (a
+  non-greedy regex stops at the first inner `}` and silently compares a prefix),
+  normalises indentation (the literals sit at different nesting depths, so a byte
+  compare reports 100% drift and means nothing), and buckets them IDENTICAL /
+  DIFFERENT / one-sided. **5 identical of 14, all trivial**; every difference
+  host-forced. Its control is that it returns BOTH answers in one pass — an
+  extractor stuck on either verdict cannot. Its first run was wrong in both
+  directions and printed an equally tidy table, so it now asserts its own `"""`
+  line bounds and exits 2 when either literal moves
+- **[P-122](P-122-a-goaway-written-after-the-sink-closed.md)** valid (round 480),
+  rpc_dart_http2 — **the same defect as P-40, rebuilt so it runs WITHOUT us.**
+  B-35's decision left one task, the upstream report, and a report measured
+  through `RpcHttp2CallerTransport` asks a maintainer to install this library to
+  see their own bug. Both ends are `package:http2` here. It sharpened the finding
+  twice: the trigger is `finish()` on a connection that **never opened a
+  stream** (every arm with traffic is silent), and `finish()` completes
+  **normally**, so the invariant is that the error never reaches its future
+  rather than that it arrives late. 5 of 5 runs, http2 3.1.0 (latest). Two
+  companion files on purpose — the matrix with the controls, and a minimal
+  `upstream_minimal.dart` that is the pasted issue text kept as a file that RUNS
+  rather than a quotation that rots. Its own first version was VOID and says so
 - **[P-121](P-121-does-the-ceiling-reach-keepalive.md)** valid (round 479),
   rpc_dart_http2 — **the sweep arm: does the stream ceiling reach HTTP/2
   keepalive?** P-120 found the websocket heartbeat closed a healthy connection at

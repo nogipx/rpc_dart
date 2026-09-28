@@ -1,13 +1,51 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 484)
 round: 357
 commit: 0f05352a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
 probe: packages/transport/rpc_dart_wasm/example/wasm_guest/main.dart
-reason: "bench — the witness needs a booted iOS simulator and none could be started in this session: `flutter emulators --launch apple_ios_simulator` returned silently five times and the device never registered, and `xcrun simctl` / `open -a Simulator` are outside the allowlist. The fix is written below and type-checks; it is not committed, because a native change nobody ran is exactly what this project's config says must not ship"
+reason: "bench — round 472 built the witness this lead specifies, on a booted simulator, and all three arms read `+27 All tests passed!` including the ORIGINAL code. The arm is VOID: a supersede is followed by a success, so the recv loop never stops and the give-up ceiling is unreachable that way. The fix is written and type-checks; it stays reverted, because the owner declined shipping on `analyze:native` alone. What blocks it is a witness DESIGN, not a device"
 ---
 
 # B-38 — the iOS recv loop gives up silently, and Android already fixed this
+
+## CLOSED by the owner (round 484) — stop pursuing, NOT "not a bug"
+
+Asked directly whether the remaining leads were critical and told no, the owner
+closed them: *"close them so they stop getting in the way."*
+
+**The defect is real and stands unfixed.** iOS's `_startRecvLoop` catch sets
+`_recvRunning = false` and nothing else; host-to-guest is that loop, so where it
+stops the direction stops, `recvQueue` grows on the Swift side, and in-flight
+calls wait out a deadline that is OPTIONAL on this transport. Android reports
+death. `RpcWasmBridge`'s contract promises a dead runtime is reported. None of
+that changed.
+
+What the closure says is that **27 rounds of attention against an unreproduced
+iOS-only defect is enough**, which is a judgement about cost and it is the
+owner's to make. Scope is narrow: one Flutter package, one platform, running a
+dart2wasm guest in a WebView.
+
+**Everything needed to resume is in this file** and is deliberately not deleted:
+the four-step fix, written and `analyze:native`-clean; the witness that was built
+and refuted; and why it was refuted.
+
+**What would reopen it:** a field report of an iOS wasm call that hangs after the
+app is backgrounded. That is the `webView(_:stop:)` route nobody could construct,
+and a real occurrence would hand over the witness 13 rounds of work could not
+build.
+
+**One live thread was cut here, and it is worth naming so it is not lost.**
+Round 484 was reading the scheme handler when this closed, and had got as far as
+a specific doubt about round 472's refutation. `/recv` has TWO branches
+(`RpcDartWasmPlugin.swift:476`): if `recvQueue` is NOT empty the task is answered
+immediately and `pendingRecvTask` is never touched, so **the supersede only
+happens when the queue is empty at that instant**. Round 472's witness ran a
+normal call immediately before the break, which is exactly what leaves bytes
+queued. So its three identical greens may mean "the supersede never fired"
+rather than its stated "a supersede is followed by a success". Unverified, and
+now not going to be — but a future reader should not inherit round 472's
+conclusion as settled.
 
 ## The WITNESS designed below is refuted (round 472)
 
@@ -174,6 +212,47 @@ back after that run. `xcrun simctl` and `open -a Simulator` are outside this
 session's allowlist, so nothing here can start it.
 
 ## Owner decision
+
+### The decision below was CARRIED OUT and its premise did not hold (round 481)
+
+Not a rewrite of the owner's words — they stand exactly as written underneath,
+and the note is here because this is the section `loop.py status` prints.
+
+*"Boot a simulator and the round finishes"* was carried out in round 472. The
+simulator booted, all four steps were reapplied, `analyze:native` passed, and the
+witness this lead specifies was built. It did not finish the round: all three
+arms read `+27 All tests passed!`, the ORIGINAL code included, because a
+supersede is followed by a success and the loop never stops. The fix was
+reverted per this lead's own instruction.
+
+So the sentence the decision rests on — *"the second is reachable from inside
+the guest, which is what makes a witness possible at all"* — is true and not
+sufficient (L-13). For nine rounds after that, this section still told every
+round reading `loop.py status` to go and boot a simulator.
+
+**So the status is `open`, not `decided by owner`.** What remains is a witness
+DESIGN, which is a round's work and not a judgement — round 472 says so in as
+many words. Of the three routes this lead named, one is refuted and two are
+untried (`webView(_:stop:)` under memory pressure, or a navigation the guest
+triggers). The owner's standing calls are unchanged and still bind: no shipping
+on `analyze:native` alone, and no fix without a witness.
+
+Only if BOTH remaining routes are shown unreachable does this become a question
+again — what such a fix may ship on — and that one would be the owner's. It is
+not asked yet, because nothing has established it.
+
+Round 481 measured what it could of the device half and it is NOT the blocker:
+
+```
+Android, physical Pixel 8, Android 16 / API 36     +24 ~2  All tests passed!
+  (the recorded run was an EMULATOR at API 30)
+iOS simulator, this session                        never registers;
+  `fvm flutter emulators --launch apple_ios_simulator` is silent, and `xcrun`
+  is not in the allowlist, so an agent cannot boot it HERE — which is an
+  environment fact about one session, not a property of this lead
+```
+
+### The decision as taken (round 415), unedited
 
 **None needed on the fix — it needs a device, not a decision.** Boot a simulator
 and the round finishes: reapply the four steps above, run

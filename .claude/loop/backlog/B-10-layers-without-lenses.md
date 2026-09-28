@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 484)
 round: — (not re-measured)
 commit: 5bf4d34e
 paths: [packages/data/**, packages/notify/**, packages/blob/**]
@@ -8,6 +8,19 @@ reason: deferred by owner (223, narrowed in the backlog review) — the deferral
 ---
 
 # B-10 — Three layers of the project have no lens at all
+
+## CLOSED by the owner (round 484) — it had been a deferral since round 223
+
+*"Close them so they stop getting in the way."* This was never a defect: it is a
+coverage gap in the loop's own method, deferred by the owner at round 223 and
+narrowed in the backlog review. Closing it formalises what was already true and
+takes it out of the queue.
+
+**The narrowing survives the closure and still applies**: the deferral covered
+SEARCHING `packages/data`, `packages/notify` and `packages/blob` for new
+defects. It never covered fixing one already measured there — which is how B-33
+and B-46 were worked. If a defect turns up in those layers, it is ordinary work
+and needs no lens and no re-opening of this.
 
 `loop.py stale` counts lens path coverage against the tracked files and names
 the directories no detector looks at:

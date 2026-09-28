@@ -3,7 +3,7 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355, 357, 362, 363, 365]
+applied: [348, 355, 357, 362, 363, 365, 482, 484]
 status: confirmed (round 365)
 ---
 
@@ -230,3 +230,28 @@ recording rather than just the assertion.
 `../probes/P-56-guest-timer-lag.md`,
 `../probes/P-57-guest-to-host-frame-order.md`,
 `../rounds/365-the-clock-one-sandbox-does-not-have.md`.
+
+## Round 482 — "the same code twice" is a claim, and it is usually wrong
+
+This lens's whole premise is two implementations of one contract, so "they have
+drifted" is the natural suspicion and B-93 filed it: the boot JS is *"the same
+shim"* in a Swift literal and again in a Kotlin one. Measured, of 14 named
+functions each, **5 are identical and all five are trivial**; nine differ or are
+one-sided, and every difference is forced by the host API.
+
+> **Before de-duplicating two implementations, measure the OVERLAP, not the
+> resemblance.** Two files that solve the same problem against different host
+> APIs look like copies from a distance and share almost nothing up close. Here
+> the transport differs (`fetch` against a base64 outbox), the console differs,
+> and the timer driver is INVERTED — iOS schedules itself, the Android host
+> pulls. A single copy would have to carry twelve platform-specific functions to
+> unify five one-liners.
+
+The corollary matters more for this lens: **the cost of two native layers is
+real but it is not in the shared code.** What a fix to one platform misses is
+the platform-SPECIFIC half, which no single copy can cover — B-38 is exactly
+that, and no amount of de-duplication would have prevented it.
+
+`../rounds/482-five-trivial-functions-is-the-whole-overlap.md`,
+`../probes/P-123-what-the-two-shims-actually-share.md`,
+`../checked/C-56-the-two-shims-have-not-drifted.md`.
