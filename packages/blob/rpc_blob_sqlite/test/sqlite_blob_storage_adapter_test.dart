@@ -8,7 +8,23 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:test/test.dart';
+
+/// A version-mismatch refusal, as round 416 made it.
+///
+/// `StateError` was what these asserted, and this suite is excluded from
+/// `test:unit`, so the conversion never reached it — 55 rounds green by absence.
+/// ABORTED and not `StateError` is the point of that round: `wireStatusFor` is
+/// default-deny, so a `StateError` is redacted to INTERNAL and the caller loses
+/// the version numbers that say what to retry with.
+final Matcher _throwsAborted = throwsA(
+  isA<RpcStatusException>().having(
+    (e) => e.statusCode,
+    'statusCode',
+    RpcStatus.aborted,
+  ),
+);
 
 void main() {
   late SqliteBlobRepository adapter;
@@ -131,7 +147,7 @@ void main() {
           expectedVersion: 1,
         ),
       ),
-      throwsA(isA<StateError>()),
+      _throwsAborted,
     );
   });
 
@@ -146,7 +162,7 @@ void main() {
 
     await expectLater(
       adapter.deleteBlob('temp', 'del', expectedVersion: 2),
-      throwsA(isA<StateError>()),
+      _throwsAborted,
     );
 
     final deleted = await adapter.deleteBlob('temp', 'del', expectedVersion: 1);

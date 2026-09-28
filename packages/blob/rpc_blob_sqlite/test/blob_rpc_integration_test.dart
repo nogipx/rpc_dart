@@ -7,7 +7,19 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:test/test.dart';
+
+/// A corrupt chunk's refusal, as round 416 made it.
+///
+/// These asserted `StateError`, and this suite is excluded from `test:unit`, so
+/// the conversion never reached them. DATA_LOSS is the point: a corrupt chunk is
+/// not a caller mistake, and `wireStatusFor` redacts a `StateError` to INTERNAL.
+final Matcher _throwsChecksumMismatch = throwsA(
+  isA<RpcStatusException>()
+      .having((e) => e.statusCode, 'statusCode', RpcStatus.dataLoss)
+      .having((e) => e.message, 'message', contains('Chunk checksum mismatch')),
+);
 
 void main() {
   final fixtures = <_ClientFixture>[
@@ -208,15 +220,11 @@ void main() {
 
         final stream = Stream.fromIterable([good, bad]);
 
-        expect(
-          () => clientWithChecksums.bulkPutBlob(stream),
-          throwsA(
-            isA<StateError>().having(
-              (e) => e.message,
-              'message',
-              contains('Chunk checksum mismatch'),
-            ),
-          ),
+        // awaitED, for the reason on the single-put case below: an un-awaited
+        // future races the `close()` that follows it.
+        await expectLater(
+          clientWithChecksums.bulkPutBlob(stream),
+          _throwsChecksumMismatch,
         );
 
         await clientWithChecksums.close();
@@ -251,11 +259,14 @@ void main() {
           last: true,
         );
 
-        expect(
-          () => clientWithChecksums.putBlob(
-            Stream.fromIterable([badFirst, next]),
-          ),
-          throwsA(isA<StateError>()),
+        // awaitED. `expect(() => aFuture, throwsA(...))` does not wait for the
+        // future, so the call was still in flight when `close()` ran on the next
+        // line and the assertion saw `RpcClosedException: Adapter is closed`
+        // instead of the mismatch. Latent since this file was written, because
+        // the suite is excluded from `test:unit` and nobody ran it.
+        await expectLater(
+          clientWithChecksums.putBlob(Stream.fromIterable([badFirst, next])),
+          _throwsChecksumMismatch,
         );
 
         await clientWithChecksums.close();

@@ -88,6 +88,26 @@ four service-dependent suites become reachable in one go.
 named the wrong obstacle, and round 470 found it false. A blocker is a claim and
 ages like one.
 
+## Questions 2 and 3 ANSWERED (round 476); the package is back in the gate
+
+**Q2 — all seven are staleness, and the scary one was a cascade.** Run in
+ISOLATION each failure names itself: `RpcStatusException(10)` for the two version
+checks, `RpcStatusException(15) Chunk checksum mismatch` for the checksum. The
+`Adapter is closed` appeared only in the full suite, where an earlier failure had
+closed the adapter. Running the suspicious test ALONE is what separated them.
+
+**One genuine test bug**, unrelated to 416 and latent since the file was written:
+`expect(() => aFuture, throwsA(...))` does not await, so the call was in flight
+when the next line's `close()` ran. Now `await expectLater(...)`.
+
+**Q3 — the reason belongs to the sibling.** The root pubspec's comment is about
+`rpc_data_sqlite` and `sql_cipher_integration_test`. `rpc_blob_sqlite` has no
+cipher test and is green without any cipher build. It was excluded by
+association, which is why 416's sweep went stale in it unseen.
+
+**Fixed**: removed from `test:unit` and `coverage:collect`. The suite is `+37`
+green and the gate now runs 15 packages instead of 14.
+
 ## The trap
 
 Do not fix the seven assertions one at a time until question 2 is answered.

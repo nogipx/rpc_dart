@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
 applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
-applied: [220, 226, 269, 270, 344, 470, 471, 472, 473]
+applied: [220, 226, 269, 270, 344, 470, 471, 472, 473, 476]
 status: confirmed (round 220)
 ---
 
@@ -182,3 +182,36 @@ resolves through CocoaPods.
 
 `../rounds/473-spm-already-gets-the-plugin.md`,
 `../checked/C-55-spm-already-gets-the-plugin.md`.
+
+### Round 476 — an exclusion inherited by ASSOCIATION, and one that outlived its cause
+
+The first round on this lens to put a package back INSIDE the gate, and the two
+sqlite packages show two different ways an exclusion goes bad.
+
+```
+rpc_blob_sqlite   excluded with no reason of its own    +30 -7  ->  +37, now in the gate
+rpc_data_sqlite   excluded for a cause since fixed      +45 -1  ->  +46, still out
+```
+
+> **An exclusion list is inherited by NAME SIMILARITY more readily than by
+> reason.** `rpc_blob_sqlite` has no cipher test; the comment explaining the
+> sqlite special case is entirely about `rpc_data_sqlite`. It sat outside the
+> gate for a requirement that was never its own, and that is where round 416's
+> sweep went stale unseen.
+
+> **And an exclusion outlives its cause silently.** `rpc_data_sqlite`'s reason —
+> the `user_defines` declaration having no effect — is fixed: the block is at the
+> workspace root now and `sql_cipher_integration_test` PASSES. What keeps that
+> package out today is something the comment never said: the test asserts
+> availability with no skip, so it would fail for a missing toolchain rather than
+> a defect. Re-deriving why an exclusion still holds is a different job from
+> reading why it was added.
+
+Method note the round paid for, and it is the cheaper half of L-15:
+
+> **Run a suspicious failure ALONE before believing its message.** The one
+> failure that looked like a real defect — `Adapter is closed` on a checksum test
+> — said `Chunk checksum mismatch` in isolation. It was a cascade from an earlier
+> failure in the same suite, and one command told the difference.
+
+`../rounds/476-the-exclusion-that-belonged-to-a-sibling.md`.

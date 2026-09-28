@@ -5,6 +5,7 @@
 import 'dart:typed_data';
 
 import 'package:rpc_blob_sqlite/rpc_blob_sqlite.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:test/test.dart';
 
 void main() {
@@ -33,9 +34,20 @@ void main() {
         last: true,
       );
 
+      // DATA_LOSS, not `StateError`. Round 416 replaced this library's
+      // `StateError`s with typed status exceptions, and this suite is excluded
+      // from `test:unit`, so the conversion never reached the assertion.
+      // The status is the useful part: a corrupt chunk is not a caller mistake,
+      // and `wireStatusFor` redacts a `StateError` to INTERNAL.
       await expectLater(
         service.putBlob(Stream.value(chunk)),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.dataLoss,
+          ),
+        ),
       );
     });
   });

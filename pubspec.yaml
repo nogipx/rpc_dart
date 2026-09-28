@@ -120,6 +120,24 @@ melos:
         ignore: [rpc_dart_generator]
 
     # Tests that need NO external services (skip postgres/minio/sqlcipher infra).
+    #
+    # `rpc_blob_sqlite` was on this list and is NOT service-dependent: it has no
+    # cipher test, and the reason at the top of this file — the MultipleCiphers
+    # build, `sql_cipher_integration_test` — belongs to `rpc_data_sqlite` alone.
+    # It was excluded by association for so long that round 416's typed-exception
+    # sweep went stale in it unseen: the first run in round 471 was `+30 -7`, all
+    # of it assertions the gate would have caught the day they broke.
+    #
+    # An exclusion's REASON has to be checked against what it excludes.
+    #
+    # `rpc_data_sqlite` is STILL excluded, and its reason is now half obsolete
+    # too — measured in round 476, its suite is `+46` green HERE, cipher
+    # integration test included, because the `user_defines` block above is at the
+    # root where pub reads it. What keeps it out is not that it fails: it is that
+    # `sql_cipher_integration_test` asserts `cipherAvailable` is true with no
+    # skip, so on any machine where the hook cannot build sqlite3mc the gate goes
+    # red for a missing toolchain rather than a defect. Joining it is a decision
+    # about CI, not about this package.
     test:unit:
       description: Tests excluding service-dependent packages.
       run: fvm dart test --reporter expanded
@@ -133,7 +151,6 @@ melos:
           - "*_redis"
           - "*_minio"
           - rpc_data_sqlite
-          - rpc_blob_sqlite
 
     # Coverage for the package(s) you choose: `melos run coverage` prompts a
     # package multi-select, runs coverage for each, and opens its HTML report.
@@ -179,8 +196,9 @@ melos:
           - "*_postgres"
           - "*_redis"
           - "*_minio"
+          # See test:unit — rpc_blob_sqlite is not service-dependent and was
+          # excluded by association with its sibling.
           - rpc_data_sqlite
-          - rpc_blob_sqlite
 
     # NOTE: rpc_dart_generator golden tests (build_test) cannot run in workspace
     # mode (build_test needs a per-package .dart_tool/package_config.json, which

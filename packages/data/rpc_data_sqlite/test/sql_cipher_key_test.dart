@@ -5,6 +5,7 @@
 
 import 'dart:typed_data';
 
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:rpc_data_sqlite/rpc_data_sqlite.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
@@ -39,7 +40,21 @@ void main() {
 
         expect(() => key.applyTo(database), throwsA(isA<SqlCipherException>()));
 
-        expect(() => key.applyTo(database), throwsStateError);
+        // The SECOND call: the key was consumed by the first. Round 416
+        // replaced this library's `StateError`s with typed status exceptions and
+        // never reached here, because this package is excluded from `test:unit`.
+        // FAILED_PRECONDITION is the point of that round — `wireStatusFor` is
+        // default-deny, so a `StateError` is redacted to INTERNAL.
+        expect(
+          () => key.applyTo(database),
+          throwsA(
+            isA<RpcStatusException>().having(
+              (e) => e.statusCode,
+              'statusCode',
+              RpcStatus.failedPrecondition,
+            ),
+          ),
+        );
       },
     );
   });
