@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 492)
+round: 492
+commit: e8acaadb
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-131
+reason: "closed — NOT reproduced on either platform with the overlap proven present; negative in checked/C-57, with the unverified dependency property that would reopen it"
 ---
 
 # B-101 — Android wasm: a frame of 64 KiB or more can be overtaken by a smaller one
@@ -57,3 +57,41 @@ host→guest frame through named data so both paths have one ordering.
 ## Owner decision
 
 —
+
+## Closed (round 492) — the shape is real, the defect is not
+
+Every structural claim in this lead was confirmed by reading, including the one
+it rests on: **nothing serialises above the plugin.**
+`RpcFrameMultiplexedChannel.send` encodes and awaits with no lock, and
+`RpcFlutterWasmBridge.send` awaits its own platform reply with no lock either, so
+concurrent callers do overlap.
+
+The reorder still did not happen:
+
+```
+                    peak in flight   overlapped   >=64 KiB   result
+android  1 big + 50 small     52         152          1      all echoes correct
+android  5 big + 50 small x3 110         492         15      all echoes correct
+ios      5 big + 50 small x3  56         329         15      all echoes correct
+```
+
+**The overlap is asserted, not assumed.** The bench fails if forwards in flight
+never peak above 1 — for a race, a green run that did not create the concurrency
+is indistinguishable from a negative, and the first version of this round would
+have reported clean from a peak of 1.
+
+**What is NOT established is why**, and that is the part to read before trusting
+this. The likely explanation is that `androidx.javascriptengine` evaluates one
+script per isolate and `evaluateJavaScriptAsync` completes only once the async
+IIFE's promise settles, so the large path delivers before the next script starts.
+That is a property of the DEPENDENCY and nothing here measured it. An androidx
+version that parallelises evaluation reopens this lead;
+`host_to_guest_order_test.dart` is what would say so, and it now runs in
+`test:wasm:device` on both platforms.
+
+The fix sketch is deliberately NOT applied: a Mutex per runtime would serialise
+every host-to-guest forward for a race that does not occur.
+
+Not pinned: a large frame concurrent with an unawaited flow-control GRANT
+specifically. Grants are small and were certainly among the overlaps counted, but
+no assertion isolates one.

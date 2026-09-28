@@ -3,7 +3,7 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355, 357, 362, 363, 365, 482, 484]
+applied: [348, 355, 357, 362, 363, 365, 482, 484, 492]
 status: confirmed (round 365)
 ---
 
@@ -255,3 +255,36 @@ that, and no amount of de-duplication would have prevented it.
 `../rounds/482-five-trivial-functions-is-the-whole-overlap.md`,
 `../probes/P-123-what-the-two-shims-actually-share.md`,
 `../checked/C-56-the-two-shims-have-not-drifted.md`.
+
+## Round 492 — a native RACE needs the bench to prove its own preconditions
+
+Every earlier application of this lens found something a Dart grep could not see.
+Round 492 looked for one and did not find it, and the method is what the round
+is worth keeping for.
+
+The claim was a reorder between two Kotlin forward paths of different latency.
+Read statically it holds up completely: two paths, one `scope.launch` per
+platform message, and no lock anywhere above them — confirmed in core as well as
+in the plugin. Measured on a device it does not happen, on either platform:
+
+    android  110 peak forwards in flight   492 overlapped   15 >=64 KiB
+    ios       56                           329              15
+
+> **For a race, a bench that failed to create the concurrency is green in
+> exactly the way a negative is.** So the bench asserts its own precondition: a
+> decorator counts forwards in flight and the test FAILS below a peak of two.
+> The first version of this round would have reported clean from a peak of one.
+> Where the hypothesis is "A can overtake B", the count of overlaps — and of
+> overlaps of the KIND under test — belongs in the output next to the verdict.
+
+> **A native negative usually rests on a DEPENDENCY property, and that must be
+> labelled.** Here: `androidx.javascriptengine` evaluating one script per isolate,
+> with `evaluateJavaScriptAsync` completing only once the async IIFE's promise
+> settles. Nothing in this repository measured that, and it is exactly the kind
+> of thing a version bump changes. The negative names it, and names the test that
+> would report its loss — which is the same discipline RPC-15 applies to the
+> loop's own records, one layer further out.
+
+`../probes/P-131-does-a-large-host-to-guest-frame-keep-its-place.md`,
+`../rounds/492-the-race-that-had-its-chance.md`,
+`../checked/C-57-a-large-host-to-guest-frame-keeps-its-place.md`, B-101.

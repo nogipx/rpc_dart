@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-131](P-131-does-a-large-host-to-guest-frame-keep-its-place.md)** valid
+  (round 492), rpc_dart_wasm — 5 frames of 192 KiB and 50 small ones issued in
+  ONE turn, three bursts, on a device. **Its `_CountingBridge` decorator asserts
+  the bench's own precondition**: forwards in flight must peak above 1, or the
+  run proves nothing about ordering. Copy that anywhere the hypothesis is a
+  RACE — a bench that failed to drive the concurrency is green in exactly the
+  way a negative is
 - **[P-130](P-130-does-a-reclaimed-stream-answer-its-request.md)** valid (round
   491), rpc_dart_http — counts requests `arrived` and `answered` in a shelf
   middleware wrapped around `responder.handler`, so "answered" means the future
