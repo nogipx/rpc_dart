@@ -38,6 +38,19 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-112](P-112-what-a-caller-ceiling-is-for.md)** valid (round 463),
+  rpc_dart_http + rpc_dart_http2 + core — twelve concurrent calls against a handler
+  that PARKS, ceiling 4 on the caller and 1024 on the responder, one arm per caller
+  transport. **The parked handler is what makes the ceiling observable**: with a
+  handler that returns, calls retire faster than they are issued and twelve never
+  hold four slots at once. Three measures, and the third answers the lead's
+  counter-hypothesis — admitted/refused, peak concurrent HANDLER entries counted on
+  the far side of the wire, and for HTTP/1.1 peak concurrent requests open at the
+  server (12 of 12, so the connection pool bounds nothing). Two further arms: a
+  SEQUENTIAL one, which is RPC-05's ratchet canary made into a measurement, and the
+  four ENDINGS run with the second release site ablated — which is how that site is
+  known redundant rather than assumed necessary. Controls: the two siblings for the
+  outcome, a high ceiling for the refusal
 - **[P-111](P-111-content-type-across-the-layers.md)** valid (round 462),
   core + rpc_dart_http + rpc_dart_http2 — the MATRIX is the bench: four inputs
   against three responder layers in one run, each on its own wire (a real

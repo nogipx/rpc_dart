@@ -97,6 +97,14 @@ class RpcHttpCallerTransport
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: true);
   final Map<int, _PendingCall> _pending = {};
   final Set<int> _inFlight = {};
+
+  /// Stream ids minted and not yet given back — what [maxActiveStreams] counts.
+  ///
+  /// Neither [_pending] nor [_inFlight] can serve: a call is in _pending only
+  /// between `sendMetadata` and `finishSending`, and in _inFlight only after
+  /// that, so each is empty for part of every call's life and a ceiling read off
+  /// either one admits past itself.
+  final Set<int> _activeStreams = {};
   final BufferedBroadcastController<RpcTransportMessage> _incoming =
       BufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
@@ -243,12 +251,29 @@ class RpcHttpCallerTransport
   @override
   int createStream() {
     if (_isClosed) throw RpcClosedException('Transport');
-    return _idManager.generateId();
+    // `maxActiveStreams` was inert here: a client configured with 4 opened 12
+    // concurrent calls, all 12 reaching the server at once, while the same
+    // configuration refused the 5th over core and HTTP/2. The HttpClient
+    // connection pool does not cover for it -- measured, 12 concurrent server
+    // requests -- because its default is unlimited per host.
+    if (_activeStreams.length >= _policy.maxActiveStreams) {
+      // RESOURCE_EXHAUSTED and the same wording as the two siblings: a
+      // transient limit the caller can back off from, not a mistake it made.
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
+        'Too many active streams: ${_activeStreams.length} '
+        '(max: ${_policy.maxActiveStreams})',
+      );
+    }
+    final streamId = _idManager.generateId();
+    _activeStreams.add(streamId);
+    return streamId;
   }
 
   @override
   bool releaseStreamId(int streamId) {
     _pending.remove(streamId);
+    _activeStreams.remove(streamId);
     return _idManager.releaseId(streamId);
   }
 
@@ -478,6 +503,15 @@ class RpcHttpCallerTransport
       _emitError(streamId, _asRpcStatus(e, call.methodPath), st);
     } finally {
       _inFlight.remove(streamId);
+      // The second give-back, matching both siblings: core prunes on a terminal
+      // inbound frame as well as in releaseStreamId, and http2 removes at four
+      // sites. Measured REDUNDANT today -- with this line ablated, all four
+      // endings (completion, connection refused, HTTP 503, a non-gRPC 200) still
+      // return the slot, because the endpoint above calls releaseStreamId on
+      // every one. Kept because that is another layer's behaviour, and the
+      // failure if it ever changes is the worst one this limit has: a ceiling
+      // that ratchets shut for good, N calls into a process.
+      _activeStreams.remove(streamId);
       _idManager.releaseId(streamId);
     }
   }
@@ -544,6 +578,7 @@ class RpcHttpCallerTransport
         // all three must return to a baseline once calls finish.
         'pendingCalls': _pending.length,
         'inFlight': _inFlight.length,
+        'activeStreams': _activeStreams.length,
         'streamControllers': _streams.length,
       },
     );
@@ -563,6 +598,7 @@ class RpcHttpCallerTransport
     if (_isClosed) return;
     _isClosed = true;
     _pending.clear();
+    _activeStreams.clear();
     _httpClient.close();
     // Only the calls actually in flight are told why they ended; the rest just
     // close. See [_closedDuringCall].

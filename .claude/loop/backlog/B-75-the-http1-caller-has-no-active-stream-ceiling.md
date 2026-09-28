@@ -1,13 +1,47 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 463)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-probe: —
+probe: P-112
 reason: cost — split out of B-70 item 18; RPC-05 and C-29 may already have written up the charge point
 ---
 
 # B-75 — the HTTP/1.1 caller has no active-stream ceiling at all
+
+## CLOSED (round 463) — meaningful, not meaningless; the pool bounds nothing
+
+Twelve concurrent calls against a parked handler, ceiling 4 on the caller and
+1024 on the responder:
+
+```
+                    admitted  refused  peak handlers  peak server requests
+core (channel)         4         8           4
+http2                  4         8           4
+HTTP/1.1 before       12         0          12                12
+HTTP/1.1 after         4         8           4                 4
+```
+
+**The connection-pool hypothesis is refuted**: all twelve requests were open at
+the server at once, because `dart:io`'s `maxConnectionsPerHost` defaults to
+unlimited. So step 2 of the decision applies, not step 3.
+
+**And round 451's re-read over-read C-29.** C-29 describes the RESPONDER scope;
+it does not say a caller-side ceiling is pointless. The library already decided
+that twice, and http2's comment at its own charge point records the measurement:
+*"a client configured with 5 opened 500 concurrent streams … with nothing refused
+and no error anywhere"*. HTTP/1.1 is the transport that never got the decision,
+not the one that correctly declined it.
+
+Shipped: `_activeStreams` charged in `createStream()` and released in
+`releaseStreamId()`, `RESOURCE_EXHAUSTED` with the siblings' wording, and
+`activeStreams` in `health().details`. Neither existing counter could serve —
+`_pending` holds a call only before `finishSending` and `_inFlight` only after,
+so each is empty for part of every call's life.
+
+The CHANGELOG line the decision asks for is NOT written: that package's top
+section is a published version, so the line belongs to one that does not exist
+yet. The text is in the round record, ready to paste.
 
 Three transports, three different answers, and one of them is an absence:
 

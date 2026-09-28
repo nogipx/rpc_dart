@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something caps concurrency by HOLDING state that must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382]
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463]
 status: confirmed (round 351)
 ---
 
@@ -190,6 +190,51 @@ forever, recoverable only by `reset()`.
 > only other interceptor in the workspace that wraps a stream around per-call
 > state, and it ends its span in `onCancel`. One `grep -n onCancel` across the
 > interceptors is the whole sweep (U-14).
+
+## Round 463 — a limit that is charged NOWHERE, and the ending that was already covered
+
+Every application above is about a limit charged at the wrong point. This one is
+not charged at all: `RpcHttpCallerTransport` referenced `maxActiveStreams`
+nowhere, so a client configured with 4 opened 12 concurrent calls.
+
+```
+                    admitted  refused  peak handlers  peak server requests
+core (channel)         4         8           4
+http2                  4         8           4
+HTTP/1.1              12         0          12                12
+```
+
+> **Before accepting "this limit is meaningless here", measure what is supposed
+> to be standing in for it.** The lead's counter-hypothesis was that the
+> `HttpClient` connection pool already bounds concurrency, which would make the
+> ceiling redundant rather than missing. Twelve simultaneous requests at the
+> SERVER says otherwise, and `dart:io`'s `maxConnectionsPerHost` defaults to
+> unlimited. A plausible substitute mechanism is a claim, and it takes one
+> counter on the far side of the wire to settle.
+
+> **The parked handler is not a detail of the bench, it is the bench.** With a
+> handler that returns, twelve calls retire faster than they are issued and never
+> hold four slots at once — so every transport reads the same and the ceiling is
+> never reached. Round 245 records the mirror trap: SATURATING the connection
+> hides a leak. A concurrency limit needs the arrivals held open against it, at
+> exactly the rate that keeps the counter at its ceiling.
+
+The endings half came back the other way for the first time. Four of them —
+completion, connection refused, HTTP 503, a 200 that is not gRPC — were run with
+the transport's second release site ABLATED, and all four still returned the
+slot: the endpoint calls `releaseStreamId` on every one.
+
+> **An ending that is already covered is worth measuring too.** The rule has
+> always been "enumerate the endings and check each reaches the release"; the
+> result here was that a release site is REDUNDANT, which is a different thing
+> from unnecessary. It was kept, because the coverage belongs to another layer
+> and the failure if that changes is the worst one this shape has — not a leak
+> but a RATCHET, a ceiling that shuts for good N calls into a process. What the
+> measurement buys is that the line is documented as redundant-today rather than
+> being indistinguishable from an oversight.
+
+`../rounds/463-the-ceiling-the-pool-did-not-cover.md`,
+`../probes/P-112-what-a-caller-ceiling-is-for.md`.
 
 Bench `../probes/P-43-cancelled-stream-probe.md`, whose control took two attempts
 to aim: the first varied the cancel AND whether the source terminated, which

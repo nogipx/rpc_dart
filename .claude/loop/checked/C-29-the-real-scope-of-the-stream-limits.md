@@ -54,6 +54,23 @@ makes a COMPLETED call report as truncated. Every remaining structure there
 
 > **Whenever you add per-stream state to a transport, ask WHO chooses the key.**
 
+## What this note does NOT say (round 463)
+
+Everything above is about the RESPONDER side, and round 451 read it as an
+argument that `maxActiveStreams` is responder-scoped altogether — on which
+reading http2's caller-side bound would be the odd one out and the HTTP/1.1
+caller's absence correct.
+
+That does not follow, and measurement says the opposite: at a caller ceiling of
+4, core and http2 admit 4 of 12 concurrent calls and HTTP/1.1 admitted all 12.
+The caller-side ceiling is a decision this library took twice, for a reason
+http2's own comment records — *"a client configured with 5 opened 500 concurrent
+streams … with nothing refused"*. `../rounds/463-the-ceiling-the-pool-did-not-cover.md`.
+
+> **A negative's scope line bounds what it ESTABLISHES, not what is true.** This
+> note's `scope: [core, http2]` and its responder framing are accurate; reading
+> the silence about callers as a finding about callers is the error.
+
 ## Control
 
 Each claim has one. The per-connection scope was checked with a SECOND
