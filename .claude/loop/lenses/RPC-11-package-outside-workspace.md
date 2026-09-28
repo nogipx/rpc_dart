@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
 applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
-applied: [220, 226, 269, 270, 344, 470, 471, 472, 473, 476]
+applied: [220, 226, 269, 270, 344, 470, 471, 472, 473, 476, 477]
 status: confirmed (round 220)
 ---
 
@@ -215,3 +215,34 @@ Method note the round paid for, and it is the cheaper half of L-15:
 > failure in the same suite, and one command told the difference.
 
 `../rounds/476-the-exclusion-that-belonged-to-a-sibling.md`.
+
+### Round 477 — the whole exclusion list, and where the damage actually was
+
+Seven rounds on this lens; this is the one that finished the count.
+
+```
+rpc_blob_sqlite      +37   2 stale assertions + 1 test bug   JOINED the gate
+rpc_data_sqlite      +46   1 stale assertion                 excluded for CI
+rpc_blob_minio       +23   1 stale assertion
+rpc_data_postgres    +20   clean
+rpc_notify_postgres   +9   clean
+rpc_notify_redis     +13   clean
+rpc_dart_generator     —   structurally unrunnable
+```
+
+> **Being outside the gate is not by itself what rots a suite — being outside it
+> for a reason nobody re-reads is.** Four of six had no staleness at all. The two
+> that did are exactly the two whose exclusion had drifted from its stated cause,
+> so they had been out longest and nobody was looking. The service suites, whose
+> exclusion has a real current reason, were fine.
+
+And the round's own false blocker, which is the third this session:
+
+> **Before recording that a dependency is unavailable, ask what is already
+> LOCAL.** Round 471 wrote "the blocker is registry credentials" on the strength
+> of a failed `docker run` and a failed `docker pull` — both of which go to the
+> registry by construction and neither of which inspects the cache. `docker
+> images` listed every image needed. A command that can only fail one way proves
+> nothing when it fails.
+
+`../rounds/477-every-excluded-suite-run.md`.

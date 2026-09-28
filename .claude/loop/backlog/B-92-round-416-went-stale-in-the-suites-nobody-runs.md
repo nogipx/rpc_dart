@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 477)
 round: 471
 commit: 8a32b446
 paths: [packages/blob/rpc_blob_sqlite/test/**, packages/blob/rpc_blob_minio/test/**, packages/data/rpc_data_postgres/test/**, packages/notify/rpc_notify_postgres/test/**, packages/notify/rpc_notify_redis/test/**]
@@ -68,7 +68,41 @@ nobody noticed the suite was red.
    cipher lib, that test can be skipped and the rest of the suite joined to the
    gate — which is what would stop this recurring.
 
-## What was tried for the services, so it is not retried blindly
+## CLOSED (round 477) — every member run, the class counted to the end
+
+```
+rpc_blob_sqlite      +37   2 stale assertions + 1 test bug   476, JOINED the gate
+rpc_data_sqlite      +46   1 stale assertion                 476, excluded for CI
+rpc_blob_minio       +23   1 stale assertion                 477
+rpc_data_postgres    +20   clean
+rpc_notify_postgres   +9   clean
+rpc_notify_redis     +13   clean
+rpc_dart_generator     —   structurally unrunnable (build_test in a workspace)
+```
+
+**Four of six carried no staleness at all.** The damage was concentrated in the
+sqlite pair — the two whose exclusion had drifted from its stated cause, so they
+had been outside every gate the longest.
+
+**And the blocker recorded below is WRONG**, which is the other lesson. The
+images were on disk the whole time; `docker run quay.io/minio/minio` with no tag
+means `:latest`, which is not the cached tag, so it went to the registry — and
+`docker pull` goes there unconditionally. One `docker images` would have said so.
+
+The commands that work, from the cached images:
+
+```
+minio     -p 9010:9000   minio/minio:latest server /data
+postgres  -p 5455:5432   postgres:16-alpine     with RPC_PG_URL
+postgres  -p 5433:5432   postgres:16-alpine     notify: port+password hardcoded
+redis     -p 6379:6379   redis:7-alpine
+```
+
+**Port 5434 is taken by a Postgres.app on this machine** and the adapter tests
+default there, so a first run fails 20 of 20 on `Postgres.app rejected "trust"
+authentication` — which reads exactly like a broken container and is not.
+
+## What was tried for the services, so it is not retried blindly (SUPERSEDED — see above)
 
 Docker IS running here (two unrelated containers up), and the minio test file
 documents its own command. The registry is what refuses:

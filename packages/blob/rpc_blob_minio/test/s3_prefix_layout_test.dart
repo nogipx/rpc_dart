@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:minio/minio.dart';
 import 'package:rpc_blob_minio/rpc_blob_minio.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:test/test.dart';
 
 /// Integration tests for the single-bucket, prefix-per-collection layout.
@@ -377,7 +378,19 @@ void main() {
               expectedVersion: 99,
             ),
           ),
-          throwsA(isA<StateError>()),
+          // ABORTED, not `StateError`. Round 416 replaced this library's
+          // `StateError`s with typed status exceptions and never reached here:
+          // this package is excluded from `test:unit` for needing a live S3, so
+          // the assertion went stale unseen. `wireStatusFor` is default-deny, so
+          // a `StateError` is redacted to INTERNAL and the caller loses the
+          // version numbers that say what to retry with.
+          throwsA(
+            isA<RpcStatusException>().having(
+              (e) => e.statusCode,
+              'statusCode',
+              RpcStatus.aborted,
+            ),
+          ),
         );
       },
       skip: skipReason,
