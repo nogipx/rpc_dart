@@ -115,13 +115,97 @@ class RpcWebSocketCallerTransport
     }
   }
 
+  /// Drives [_startAppLevelHeartbeat]; null means no heartbeat.
+  ///
+  /// The SAME value the platform was given, so `pingInterval` means one thing on
+  /// both: on the VM dart:io pings and closes the socket itself, and where it
+  /// cannot this runs the library's own ping at the same cadence.
+  final Duration? _heartbeatInterval;
+
+  Timer? _heartbeat;
+  bool _heartbeatProbeInFlight = false;
+
   RpcWebSocketCallerTransport(
     WebSocketChannel channel, {
     Future<WebSocketChannel> Function()? reconnectFactory,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    Duration? pingInterval,
+    bool? platformHandlesPing,
   }) : _reconnectFactory = reconnectFactory,
-       _policy = policy {
+       _policy = policy,
+       // Only where the platform DROPPED it. On the VM dart:io already pings
+       // and closes on a missing pong, and running both would double the wire
+       // cost for nothing. `platformHandlesPing` overrides the compile-time
+       // constant so the web behaviour is reachable from a VM test — the stub
+       // is the portable fallback as well as the web implementation, but the
+       // constant is chosen by conditional import and cannot be varied.
+       _heartbeatInterval = (platformHandlesPing ?? platformHonoursPingInterval)
+           ? null
+           : pingInterval {
     _attach(channel);
+    _startAppLevelHeartbeat();
+  }
+
+  /// Probes the peer with the library's own ping where the platform will not.
+  ///
+  /// A browser owns ping/pong and exposes neither the interval nor the outcome,
+  /// so a missing pong never reaches the page and a web client on a half-open
+  /// path has NO liveness signal — measured at 626 ms to notice on the VM
+  /// against never, at the same interval.
+  ///
+  /// Uses `RpcEndpointPingExchange`, not a new frame type: the protocol already
+  /// has a probe, and any rpc_dart responder answers it. The failure ANSWER
+  /// matches what dart:io does with a missing pong — close the socket — so a
+  /// supervisor polling `health()` or a reconnecting wrapper sees the same
+  /// thing on both platforms.
+  void _startAppLevelHeartbeat() {
+    final interval = _heartbeatInterval;
+    if (interval == null) return;
+    _heartbeat?.cancel();
+    _heartbeat = Timer.periodic(interval, (timer) async {
+      // One probe at a time: a slow-but-alive peer must not accumulate pings,
+      // and a stalled one would otherwise start a new one every interval.
+      if (_heartbeatProbeInFlight) return;
+      if (_closed || _disconnected) return;
+      _heartbeatProbeInFlight = true;
+      try {
+        final streamId = _inner.createStream();
+        try {
+          await RpcEndpointPingExchange(
+            transport: _inner,
+            streamId: streamId,
+            sentAt: DateTime.timestamp(),
+          ).execute(
+            metadata: RpcMetadata.forClientRequest(
+              RpcEndpointPingProtocol.serviceName,
+              RpcEndpointPingProtocol.methodName,
+            ),
+            // One interval, exactly as dart:io: a pong that has not arrived by
+            // the next probe is what "dead" means here.
+            timeout: interval,
+          );
+        } finally {
+          _inner.releaseStreamId(streamId);
+        }
+      } on TimeoutException {
+        // SILENCE, and only silence, is death. Nothing came back within one
+        // interval, which is the half-open path this exists for, and the answer
+        // matches dart:io's on a missing pong: close the socket.
+        timer.cancel();
+        _heartbeat = null;
+        unawaited(_inner.close().catchError((Object _) {}));
+      } catch (_) {
+        // Every other failure means the probe never went out, or the peer
+        // ANSWERED. Neither is evidence of a dead path, and closing on one
+        // takes a healthy connection down: at `maxActiveStreams` `createStream`
+        // throws resourceExhausted, and a catch-all here killed the very calls
+        // that filled the ceiling. Skipped, not swallowed -- the next interval
+        // probes again. Caught at all because this is a detached timer
+        // callback, where an unhandled async error reaches the root zone.
+      } finally {
+        _heartbeatProbeInFlight = false;
+      }
+    });
   }
 
   /// Connects to the given WebSocket [uri] with automatic reconnect support.
@@ -143,26 +227,27 @@ class RpcWebSocketCallerTransport
   /// leaves calls hanging. Take the shortest idle timeout on the path — load
   /// balancers commonly use 60s — and halve it.
   ///
-  /// Accepted and IGNORED on the web, and that leaves a real gap. A browser
-  /// runs ping/pong inside its WebSocket implementation, but exposes neither
-  /// the interval nor the outcome: a missing pong does not surface to the page
-  /// and does not close the socket the way `dart:io` does. So a web client on
-  /// a half-open path has **no liveness signal at all** — it learns only when
-  /// a call reaches its own deadline, and a caller that set none waits
-  /// forever.
+  /// On the WEB the browser drops it: ping/pong lives inside the browser's own
+  /// WebSocket implementation, which exposes neither the interval nor the
+  /// outcome, so a missing pong never surfaces to the page. The transport
+  /// therefore runs the library's own ping at the same cadence there and
+  /// closes the socket when one goes unanswered — the same answer dart:io
+  /// gives, reached a different way. Measured at 626 ms to notice against
+  /// never, at a 300 ms interval.
   ///
   /// ```
   ///   transport            half-open detected by
   ///   websocket (VM)       WebSocket.pingInterval, native
-  ///   websocket (web)      NOTHING
+  ///   websocket (web)      this transport's own RpcEndpointPingExchange loop
   ///   http2                startHttp2Keepalive, this library's own loop
   ///   isolate              the port closing
   /// ```
   ///
-  /// The parameter is accepted rather than rejected so one piece of
-  /// cross-platform code can pass it without branching on the platform. **On
-  /// the web, set a deadline on every call** — that is the only bound there
-  /// is.
+  /// **Only SILENCE counts as death.** A probe that could not be sent, or one
+  /// the peer answered with an error, leaves the connection alone and retries
+  /// next interval: at `maxActiveStreams` `createStream` throws, and treating
+  /// that as a dead peer closed a healthy connection along with every call
+  /// holding those ids.
   ///
   /// [headers] go on the upgrade REQUEST — the only place a websocket client
   /// can authenticate, since there is no second round trip to attach a token
@@ -212,6 +297,10 @@ class RpcWebSocketCallerTransport
       await openChannel(),
       reconnectFactory: openChannel,
       policy: policy,
+      // Passed on so the parameter means the same thing on both platforms: the
+      // VM lets dart:io handle it, the web runs the library's own ping at the
+      // same cadence. Before this it was accepted and silently dropped there.
+      pingInterval: pingInterval,
     );
   }
 
@@ -501,6 +590,12 @@ class RpcWebSocketCallerTransport
 
       _attach(ws, resumeStreamIdsAfter: idCursor);
       _disconnected = false;
+      // Re-armed against the NEW socket. The old timer's probe went through the
+      // inner transport that was just replaced, so without this a reconnected
+      // transport is left with no heartbeat at all — blind again after exactly
+      // the first drop, which is when a flaky path is most likely. Same shape
+      // as http2's `_startKeepalive` on its own reconnect.
+      _startAppLevelHeartbeat();
       return RpcHealthStatus.healthy(
         component: 'RpcWebSocketCallerTransport',
         message: 'Reconnected',
@@ -523,6 +618,10 @@ class RpcWebSocketCallerTransport
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    // Before the awaits: a timer left running fires against a torn-down inner
+    // transport and reports a dead peer for a socket the caller closed itself.
+    _heartbeat?.cancel();
+    _heartbeat = null;
     await _fwdSub?.cancel();
     await _inner.close();
     if (!_incomingCtl.isClosed) await _incomingCtl.close();

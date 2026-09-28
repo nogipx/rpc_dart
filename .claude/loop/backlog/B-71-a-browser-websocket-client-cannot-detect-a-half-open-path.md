@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 479)
 round: 422
 commit: 5674789e
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_stub.dart]
@@ -8,6 +8,30 @@ reason: risk — the WebSocket API in a browser has no ping, so the fix is an ap
 ---
 
 # B-71 — a browser WebSocket client cannot detect a half-open path
+
+## CLOSED (round 479) — option 3 shipped, and the open item found a second defect
+
+`../rounds/479-only-silence-is-death.md`. The web arm now runs the library's own
+ping at `pingInterval` where the platform drops it, and closes the socket on
+silence — the same answer dart:io gives, reached a different way.
+
+**The item this decision called "unresolved and part of the round" is what the
+round turned on.** Asked to measure a heartbeat competing with a long call for
+the connection window, P-120 found the window is not the axis: the ping sends
+only `sendMetadata`, which never consults credit. The axis is the stream
+CEILING, where `createStream()` throws — and the fix as first written read that
+throw as a dead peer and closed a healthy connection, taking down the very calls
+that filled the ceiling. Against a live responder: `CLOSED` at 4 of 4 ids held,
+`open` at 3 of 4, `open` under a 120000 x 1 KiB stream throughout.
+
+Only `TimeoutException` now closes. A probe that could not be SENT, or one the
+peer ANSWERED with an error, is not evidence of a dead path.
+
+Only ONE of the two public promises round 466 priced was made — the ping symbols.
+`startHttp2Keepalive` was NOT lifted into core: the decision did not grant it,
+and P-121 showed the two loops differ in exactly what this round fixed (http2's
+probe opens no stream, so the ceiling cannot reach it — measured `ready` at 4 of
+4, with a frozen-path arm proving the bench can report `down`).
 
 ## MEASURED (round 466). Both preconditions answered; the fix needs TWO owner calls.
 

@@ -20,13 +20,15 @@ export 'logger.dart';
 /// Narrowing this was only possible once `lib/` stopped importing it; the
 /// implementation uses `src/_internal.dart`, and so do the tests that reach
 /// these types.
+/// The three ping symbols were hidden until round 479. A transport whose
+/// platform cannot detect a half-open path has to probe for itself, and the
+/// probe has to be the library's OWN ping — a new frame type would be new wire
+/// vocabulary for a problem the protocol already solves. `rpc_dart_websocket`
+/// is the first such caller; see its `_startAppLevelHeartbeat`.
 export 'src/_index.dart'
     hide
         CallProcessor,
         RpcCallerPipelineMixin,
-        RpcEndpointPingExchange,
-        RpcEndpointPingProtocol,
-        RpcEndpointPingResult,
         RpcLongTimer,
         RpcResponderMethodBinding,
         RpcResponderMethodRegistry,

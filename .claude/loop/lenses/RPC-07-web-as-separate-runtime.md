@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the web is a real build target (dart2js)
 breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
-applied: [219, 227, 285, 286, 345, 383, 392, 427, 428, 466]
+applied: [219, 227, 285, 286, 345, 383, 392, 427, 428, 466, 479]
 status: confirmed (round 428)
 ---
 
@@ -189,3 +189,45 @@ The trap this one had, and it is the mirror of the rule above:
 
 `../rounds/466-the-gap-measured-and-two-promises-priced.md`,
 `../probes/P-116-how-long-until-a-web-client-notices.md`.
+
+## Round 479 — closing a platform gap puts the OTHER platform's assumptions in play
+
+466 measured the gap; 479 closed it, and the interesting part is what the
+closing cost. The VM gets half-open detection from `dart:io`, which pings at the
+protocol layer. Giving the web the same capability means doing it at the
+APPLICATION layer — and an application-layer probe allocates things a protocol
+frame does not.
+
+> **A compensating implementation runs at a different layer, so it is subject to
+> limits the original never met.** `dart:io`'s ping is a protocol frame charged
+> to nothing. The replacement opens a STREAM, which means it meets
+> `maxActiveStreams` — and the first version read `createStream()`'s
+> `resourceExhausted` as "the peer is dead" and closed a healthy connection,
+> killing the very calls that had filled the ceiling. Before shipping a
+> platform-parity fix, ask what the substitute consumes that the original did
+> not.
+
+Measured against a LIVE responder, so every close is a false positive by
+construction:
+
+```
+at the ceiling (4 of 4 ids held)     CLOSED    ->  open
+CONTROL: one id free (3 of 4)        open          open
+under a 120000 x 1 KiB stream        open          open
+```
+
+The rule that came out of it is worth more than the fix: **only SILENCE is
+death.** A probe that could not be SENT, and a probe the peer ANSWERED with an
+error, are both evidence the prober is confused rather than that the path is
+gone. Only a timeout — nothing came back — means what the heartbeat is for.
+
+The third arm is also the answer to the question the owner actually asked (does
+a heartbeat compete with a long call for the connection WINDOW?) and it is
+clean, for a reason reading gave before any arm ran: the ping sends only
+`sendMetadata`, and only `sendMessage` consults credit. **The named axis was the
+wrong one, and the unnamed one was fatal** — which is the argument for measuring
+a decision's open item rather than reasoning it away.
+
+`../rounds/479-only-silence-is-death.md`,
+`../probes/P-120-what-a-heartbeat-mistakes-for-death.md`,
+`../probes/P-121-does-the-ceiling-reach-keepalive.md`.

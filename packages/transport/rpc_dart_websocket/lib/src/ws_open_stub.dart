@@ -6,16 +6,31 @@ import 'dart:async';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+/// Whether THIS platform's `openWebSocket` actually applies `pingInterval`.
+///
+/// FALSE here, and that is the gap this constant exists to close. A browser runs
+/// ping/pong inside its own WebSocket implementation and exposes neither the
+/// interval nor the outcome, so a missing pong never reaches the page. Measured
+/// against a peer that completes the handshake and then goes silent, at a 300 ms
+/// interval:
+///
+///     dart:io, honours it   626ms to notice
+///     here, drops it        NEVER (capped at 5s)
+///
+/// `RpcWebSocketCallerTransport` reads this to decide whether it must run an
+/// application-level heartbeat instead.
+const bool platformHonoursPingInterval = false;
+
 /// Opens a WebSocket, applying [pingInterval] where the platform supports it.
 ///
 /// The portable fallback and the WEB implementation both. [pingInterval] is
-/// accepted and IGNORED, and that leaves a real gap. A browser runs ping/pong
-/// inside its WebSocket implementation, but exposes neither the interval nor
-/// the outcome: a missing pong does not surface to the page and does not close
-/// the socket the way `dart:io` does. **A web client on a half-open path has no
-/// liveness signal at all** — it learns only when a call reaches its own
-/// deadline. It is accepted rather than rejected so cross-platform code need
-/// not branch; see `RpcWebSocketCallerTransport.connect`.
+/// accepted and IGNORED HERE: a browser runs ping/pong inside its WebSocket
+/// implementation and exposes neither the interval nor the outcome, so a
+/// missing pong does not surface to the page and does not close the socket the
+/// way `dart:io` does. **Ignored here does not mean lost** —
+/// [platformHonoursPingInterval] is how `RpcWebSocketCallerTransport` learns to
+/// run the library's own ping at that cadence instead. Change one without the
+/// other and the web arm is blind again.
 ///
 /// [enableCompression] is likewise accepted and ignored: the browser negotiates
 /// permessage-deflate itself, so a web client can neither turn it off here nor

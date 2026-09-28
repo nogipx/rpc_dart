@@ -38,6 +38,29 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-121](P-121-does-the-ceiling-reach-keepalive.md)** valid (round 479),
+  rpc_dart_http2 — **the sweep arm: does the stream ceiling reach HTTP/2
+  keepalive?** P-120 found the websocket heartbeat closed a healthy connection at
+  `maxActiveStreams`, and `startHttp2Keepalive` is the same loop with the same
+  `catch (error) { … onDead(error) }`. Reading says it cannot bite — the probe is
+  `connection.ping`, a protocol frame charged to no stream limit — and this is
+  that argument turned into a measurement: `ready` at 4 of 4 held and at 3 of 4.
+  **The third arm is the reason it is a bench**: two `ready`s are equally
+  consistent with a keepalive that never fired in the 700 ms window, so a frozen
+  relay (both sockets open, bytes stopped) shows the same loop at the same
+  interval flipping health to `down`. Clean, and clean for a structural reason —
+  a future `ping` that allocated anything would put the shape back in play
+- **[P-120](P-120-what-a-heartbeat-mistakes-for-death.md)** valid (round 479),
+  rpc_dart_websocket — **what does a heartbeat mistake for a dead peer?** Built
+  for the item B-71's decision called unresolved — a heartbeat competing with a
+  long call for the connection window — and reading moved the question before the
+  first arm ran: the ping sends only `sendMetadata`, which never consults credit,
+  so the window is not where they meet. `createStream()` is. Every arm runs
+  against a LIVE responder, so **every close it reports is a false positive by
+  construction**: `CLOSED` at 4 of 4 ids held, `open` at 3 of 4, `open` under a
+  120000 x 1 KiB stream. The one-id-free arm is load-bearing — same peer, same
+  interval, same wait — and the "before fix" column is not hypothetical, it is
+  what this round's fix looked like when first written
 - **[P-119](P-119-inside-the-waking-turn.md)** valid (round 475),
   rpc_dart — **the seam is the RECEIVE side, and it is free.** P-118 measured the
   flow-control window at the controller's API and stopped, because the

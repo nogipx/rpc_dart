@@ -8,6 +8,14 @@ import 'dart:io';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+/// Whether THIS platform's `openWebSocket` actually applies `pingInterval`.
+///
+/// True here: dart:io owns the ping and closes the socket itself when no pong
+/// returns. The web implementation cannot, and says so with `false`, which is
+/// what `RpcWebSocketCallerTransport` reads to decide whether it has to run an
+/// application-level heartbeat instead.
+const bool platformHonoursPingInterval = true;
+
 /// Opens a WebSocket, applying [pingInterval] where the platform supports it.
 ///
 /// The VM implementation, where [pingInterval] is real: dart:io pings every
