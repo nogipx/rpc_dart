@@ -1,10 +1,11 @@
 ---
 status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
-paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+round: 493
+commit: 016d34d6
+paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/example/integration_test/idle_sandbox_death_test.dart]
+probe: "packages/transport/rpc_dart_wasm/example/integration_test/idle_sandbox_death_test.dart — built, gated, never yet driven to a kill"
+reason: "bench — the witness needs the sandbox process killed from the HOST mid-run, and round 493 could not identify that process on the emulator in five runs; the instrument is built and committed"
+continuation: yes
 ---
 
 # B-102 — Android wasm: a sandbox that dies while the driver is parked is never reported
@@ -40,6 +41,57 @@ hangs to its deadline and no `died` event arrives.
 
 Call `wakeDriver` in a `finally`, route the forward catch to `reportDeath` for
 `IsolateTerminatedException`, and register the isolate's termination callback.
+
+## Round 493 — the four sites are verified, the kill is not
+
+**The instrument exists now**:
+`example/integration_test/idle_sandbox_death_test.dart`, committed and `skip`ped
+unless `--dart-define=rpcWasmKillProbe=true`. It makes a call, proves the pipe
+works, opens a 40 s window, then reports whether death was reported and how long
+a later call took. A probe outside `integration_test/` is refused outright
+(`integration_test plugin was not detected`), which is why it lives there.
+
+**Every structural claim checked, by reading:**
+
+1. `setOnTerminatedCallback`, `addOnTerminated` and `IsolateStartupParameters`
+   appear NOWHERE under `android/` — grep returns nothing. No callback exists.
+2. `startDriver`'s catch does call `reportDeath`, but it can only fire on an
+   exception from an evaluation IN FLIGHT; parked on `waker.await()` there is
+   none.
+3. `wakeDriver` is the last statement of `forwardBytesToRuntime`, after the
+   `.await()` that throws, so a throwing forward skips it.
+4. `registerByteChannel`'s catch logs and then `reply.reply(null)` — Dart's
+   `send` resolves as SUCCESS over a dead runtime.
+
+**A concern about the FIX SKETCH, raised and refuted:** routing the forward's
+catch to `reportDeath` looked unsafe, because the code's own comment says an
+ordinary close with traffic in flight is the usual source of
+`IsolateTerminatedException`. It is safe — `closeRuntime` removes the id from
+`runtimes` before closing, and `reportDeath` opens with
+`if (!runtimes.containsKey(runtimeId)) return`. `closeRuntime` also calls
+`wakeDriver` itself. **So the gap is external death only**, and the sketch's
+three steps stand as written.
+
+**What is missing is one fact.** Five device runs, three of them with the window
+open, sampling `adb shell ps -A` for `sandboxed`, `nogipx`, `rpc_dart_wasm` and
+`webview`: only `webview_zygote` ever appeared, so nothing could be killed and
+every arm read `death: NONE, closed: false, after-kill call: echo:b after 84ms`
+— the runtime was alive because nothing had killed it.
+
+`webview_zygote` is the sandbox service's PARENT, so its child is the target.
+
+**And the obstacle is probably NOT timing, which is what I assumed for four of
+the runs.** A sample taken 88 s in — comfortably inside the window, with the test
+demonstrably past its first successful call — showed `webview_zygote` and
+nothing else: not the sandbox child, and **not the example app's own process
+either**, though it was plainly running. So `adb shell ps -A` is not seeing this
+app's processes at all on this image, and hunting the sandbox with `ps` is the
+wrong instrument rather than a mistimed one.
+
+The next round should reach for `adb shell pidof com.nogipx.rpc_dart_wasm_example`
+or `adb shell dumpsys activity processes | grep -i wasm` first, and confirm it
+can see the APP before trying to find the sandbox. Once a pid can be named, the
+committed test is the whole witness and this closes in one run.
 
 ## Owner decision
 
