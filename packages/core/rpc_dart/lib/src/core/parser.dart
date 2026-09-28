@@ -19,54 +19,82 @@ import 'protocol.dart';
 /// call at the end of each parse pass drops consumed bytes in a single O(n)
 /// copy, and sublist() on a Uint8List produces a typed copy without boxing.
 final class _MessageParserState {
-  /// Accumulated byte buffer. May contain already-consumed bytes before [readOffset].
+  /// Capacity buffer. Only `readOffset..[_length]` is valid data; the rest is
+  /// spare room grown geometrically.
   Uint8List _bytes = Uint8List(0);
+
+  /// End of the valid region in [_bytes]. NOT `_bytes.length`, which is capacity.
+  int _length = 0;
 
   /// Index of the first unprocessed byte in [_bytes].
   int readOffset = 0;
 
   /// Number of bytes not yet consumed.
-  int get available => _bytes.length - readOffset;
+  int get available => _length - readOffset;
 
-  /// Appends [data] to the buffer.
-  ///
-  /// When the buffer is fully consumed, the new data is taken directly (one
-  /// copy). When there are unconsumed bytes, they are concatenated with the
-  /// new data (one copy of combined bytes, no boxing).
-  void addBytes(Uint8List data) {
-    if (readOffset == _bytes.length) {
-      // All previous bytes consumed — reuse incoming data directly.
-      _bytes = Uint8List.fromList(data);
-      readOffset = 0;
-    } else {
-      // Concat unconsumed tail + new data in a single allocation.
-      final unconsumed = _bytes.length - readOffset;
-      final merged = Uint8List(unconsumed + data.length);
-      merged.setRange(0, unconsumed, _bytes, readOffset);
-      merged.setRange(unconsumed, merged.length, data);
-      _bytes = merged;
-      readOffset = 0;
+  /// Grows capacity to at least [needed], doubling, and keeps the valid region.
+  void _ensureCapacity(int needed) {
+    if (needed <= _bytes.length) return;
+    var cap = _bytes.isEmpty ? 64 : _bytes.length;
+    while (cap < needed) {
+      cap *= 2;
     }
+    final grown = Uint8List(cap);
+    grown.setRange(0, _length, _bytes);
+    _bytes = grown;
+  }
+
+  /// Appends [data] to the buffer, amortized O(size of data).
+  ///
+  /// Every version before this one reallocated and copied the UNCONSUMED TAIL on
+  /// each call, which is O(N^2/C) while one message's body is incomplete: a
+  /// 16 MiB message in 16 KiB chunks is ~1024 growing copies. Measured at a
+  /// fixed 16 KiB chunk, cost per KiB doubling with the message:
+  ///
+  ///     1 MiB    7 ms    6.84 us/KiB
+  ///     4 MiB  122 ms   29.79 us/KiB
+  ///    16 MiB 1515 ms   92.47 us/KiB
+  ///
+  /// Geometric growth is the same shape `RpcFrameMultiplexedChannel` uses one
+  /// layer up, for the same reason and with the same names.
+  void addBytes(Uint8List data) {
+    // Reclaim the consumed prefix before growing, so a long-lived stream of
+    // whole messages reuses one buffer instead of extending it forever.
+    if (readOffset > 0 && readOffset == _length) {
+      readOffset = 0;
+      _length = 0;
+    }
+    _ensureCapacity(_length + data.length);
+    _bytes.setRange(_length, _length + data.length, data);
+    _length += data.length;
   }
 
   /// Returns a typed copy of bytes [from]..[to] — one copy, no boxing.
   Uint8List sublist(int from, int to) => _bytes.sublist(from, to);
 
+  /// Drops consumed bytes from the front, so the buffer does not grow without
+  /// bound across messages.
+  ///
+  /// Called once per parser invocation rather than per message. With a capacity
+  /// buffer this MOVES the unconsumed tail down instead of reallocating, so the
+  /// common case — everything consumed — is free.
+  void compact() {
+    if (readOffset == 0) return;
+    final remaining = _length - readOffset;
+    if (remaining > 0) {
+      _bytes.setRange(0, remaining, _bytes, readOffset);
+    }
+    _length = remaining;
+    readOffset = 0;
+  }
+
   /// Advances the read pointer by [n] bytes without copying.
   void advance(int n) => readOffset += n;
-
-  /// Drops consumed bytes from the front. Called once per parser invocation
-  /// instead of slicing on every message — O(remaining) total instead of O(N²).
-  void compact() {
-    if (readOffset > 0) {
-      _bytes = _bytes.sublist(readOffset);
-      readOffset = 0;
-    }
-  }
 
   /// Clears all buffered data and resets the read pointer.
   void clear() {
     _bytes = Uint8List(0);
+    _length = 0;
     readOffset = 0;
   }
 
@@ -160,10 +188,13 @@ final class RpcMessageParser {
   List<Uint8List> _call(Uint8List data) {
     final result = <Uint8List>[];
 
-    // Append incoming data to the buffer.
-    _state.addBytes(data);
-    if (_state.available > _maxBufferedBytes) {
-      final buffered = _state.available;
+    // Checked BEFORE the append, which is the whole point: the buffer grows
+    // GEOMETRICALLY now, so appending first lets a peer past the bound make us
+    // allocate up to twice it before the bound is consulted. The limit exists to
+    // cap what is allocated, not only what is retained — the same order
+    // `RpcFrameMultiplexedChannel` uses one layer up, and for the same reason.
+    if (_state.available + data.length > _maxBufferedBytes) {
+      final buffered = _state.available + data.length;
       _state.clear();
       _state.reset();
       // RESOURCE_EXHAUSTED on the TYPE, not inferred downstream. The http2
@@ -176,6 +207,7 @@ final class RpcMessageParser {
         'gRPC frame buffer overflow: $buffered bytes (max: $_maxBufferedBytes)',
       );
     }
+    _state.addBytes(data);
 
     // Process buffer while messages can be extracted.
     // Uses readOffset instead of slicing — O(1) per iteration, O(remaining)

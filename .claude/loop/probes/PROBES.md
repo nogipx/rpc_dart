@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-134](P-134-what-reassembling-one-large-message-costs.md)** valid (round
+  496), rpc_dart — **five message sizes at ONE chunk size, reported as us/KiB**,
+  because "is it slow" and "is it quadratic" are different questions and a single
+  timing answers only the first. Flat means linear; doubling with the message
+  means quadratic. Feeds `Uint8List.sublistView` pieces so the harness's own
+  slicing is not in the number, and warms up first or the first scale pays the
+  JIT for the rest
 - **[P-133](P-133-which-part-of-reconnect-answers-what.md)** valid (round 495),
   rpc_dart_websocket — **makes the SEGMENTS of one method separately
   addressable**: a fake channel whose close is slow holds the teardown await

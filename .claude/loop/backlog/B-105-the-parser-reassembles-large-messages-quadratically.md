@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 496)
+round: 496
+commit: 3d7979df
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-134
+reason: "closed — CONFIRMED quadratic across five scales, 16 MiB at 1515 ms -> 8 ms and the per-byte curve flat"
 ---
 
 # B-105 — RpcMessageParser copies the whole unconsumed tail on every chunk
@@ -55,3 +55,43 @@ keep a list of chunks for the header phase; read the header with a
 ## Owner decision
 
 —
+
+## Closed (round 496) — quadratic confirmed across five scales
+
+```
+                      before                  after
+ 1 MiB in 65 chunks      7 ms  6.84 us/KiB     0 ms  0.00 us/KiB
+ 2 MiB in 129 chunks    34 ms 16.60 us/KiB     1 ms  0.49 us/KiB
+ 4 MiB in 257 chunks   122 ms 29.79 us/KiB     2 ms  0.49 us/KiB
+ 8 MiB in 513 chunks   350 ms 42.72 us/KiB     3 ms  0.37 us/KiB
+16 MiB in 1025 chunks 1515 ms 92.47 us/KiB     8 ms  0.49 us/KiB
+```
+
+Chunk size FIXED, so the rising cost per byte is the message's doing. A single
+timing could not have shown this; the curve is the evidence.
+
+Fixed as the sketch's spirit asks, but not by its letter: instead of a special
+body-phase buffer plus a chunk list for the header, a **capacity buffer grown
+geometrically** — which is `RpcFrameMultiplexedChannel`'s own shape, with the same
+two method names, one layer up. `compact()` now moves the tail rather than
+reallocating.
+
+**The sibling's second rule came with it and the sketch does not mention it**: that
+channel checks its size limit BEFORE the append, because geometric growth would
+otherwise let a peer past the bound make us allocate twice it first. The parser
+checked after. Copying the growth without the ordering would have traded a CPU bug
+for a memory one.
+
+The stale comment the sketch names is gone: `"reuse incoming data directly"`
+described a branch that copied.
+
+## Left undone
+
+- **The http2 end-to-end arm.** The parser is fed identically there and the cost
+  is inside it, so the number would add transport noise to a settled question —
+  but no claim about http2 throughput can cite this round.
+- **Allocation peak**, unmeasured; only time. The pre-append limit check is what
+  bounds allocation.
+- **The 5-byte header `sublist`**, which the sketch also names. O(1) per message,
+  invisible beside what was fixed, and every byte of this file's arithmetic is now
+  load-bearing for correctness — a second change wants its own witness.

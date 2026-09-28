@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478]
-status: confirmed (round 458)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496]
+status: confirmed (round 496)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -1184,3 +1184,31 @@ And the implementation asymmetry the sweep exposed:
 > three needed a line or nothing. Count the cost per copy, not per class.
 
 `../rounds/478-one-contract-for-a-conditional-delete.md`.
+
+## Round 496 — one copy had been OPTIMISED and the other had not
+
+The duty: accumulate bytes until a declared length arrives. Two implementations,
+one layer apart — `RpcFrameMultiplexedChannel` for channel frames,
+`RpcMessageParser` for gRPC messages. The channel's had been made amortized, with
+a comment saying so; the parser's still reallocated and copied the unconsumed tail
+on every chunk:
+
+    16 MiB in 1025 chunks of 16 KiB    1515 ms  92.47 us/KiB   ->  8 ms  0.49 us/KiB
+     1 MiB in 65 chunks                   7 ms   6.84 us/KiB   ->  0 ms  0.00 us/KiB
+
+> **The divergence this lens looks for can be PERFORMANCE, with both copies
+> correct.** Every earlier application found one copy answering a question
+> differently — a status, a duty, a limit. Here both reassemble correctly and one
+> is quadratic. A copies-disagree detector reading behaviour finds nothing; the
+> tell is a comment on one copy (*"amortized O(1) via _appendToBuffer"*) with no
+> counterpart on the other.
+
+> **And the sibling's SECOND rule is the one worth crossing the boundary for.**
+> The channel's comment says its size limit is *"checked BEFORE the append, which
+> is the whole point"* — because geometric growth lets a peer past the bound make
+> you allocate twice it first. Copying the growth without that ordering would have
+> traded a CPU bug for a memory one. When taking an optimisation from a sibling,
+> take the invariants written around it.
+
+`../probes/P-134-what-reassembling-one-large-message-costs.md`,
+`../rounds/496-the-sibling-had-solved-it-one-layer-up.md`, B-105.
