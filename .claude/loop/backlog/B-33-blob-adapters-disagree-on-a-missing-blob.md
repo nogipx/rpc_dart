@@ -9,6 +9,41 @@ reason: "owner scope decision (round 318) — refactoring is core and transport 
 
 # B-33 — two blob adapters answer a missing blob differently
 
+## Step one is DONE (round 471): the matrix, all four adapters
+
+The owner asked for this before any fix. Input: the blob is MISSING and
+`expectedVersion != null`.
+
+```
+in_memory   throws StateError('Expected version N ... but blob is missing.')
+webdav      returns false
+minio (S3)  returns false          -- headBlob null, returns before the check
+sqlite      throws RpcStatusException(aborted, '... no rows deleted.')
+```
+
+Derived by reading all four `deleteBlob` implementations, which is where the
+answer lives; no service needed for the matrix itself.
+
+**Two answers, and the two that throw throw DIFFERENT TYPES.** This lead's claim
+that *"for a mismatch on an EXISTING blob both throw `StateError`"* is true of the
+two it compared and FALSE across four — minio and sqlite both raise
+`RpcStatusException(aborted)` there.
+
+**Round 416 settles half of it without a judgement call.** `StateError` is wrong
+on both axes, because `wireStatusFor` is default-deny and redacts it to INTERNAL,
+so a caller loses the reason. `RpcStatusException(aborted)` is the right shape for
+a version mismatch.
+
+What is NOT settled is the missing-blob case. The interface's own doc — *"returns
+`true` when something was removed"* — points at `false`, and two adapters already
+agree with it. That is the one line the owner has to write.
+
+**Sized, for whoever takes it**: the interface doc, two adapters changed on the
+missing axis (in_memory, sqlite), two on the mismatch axis (in_memory, webdav),
+one test per adapter — and `rpc_blob_minio`'s suite needs a service, so two of
+the four cannot be verified without one. `rpc_blob_sqlite`'s suite runs but is
+currently RED for an unrelated reason: see B-92.
+
 Found incidentally in round 318 while enumerating surfaces, before the owner
 narrowed scope back to core and transport. **Not investigated further and not
 fixed.** Filed so a measured contradiction is not lost.

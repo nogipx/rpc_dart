@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
 applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
-applied: [220, 226, 269, 270, 344, 470]
+applied: [220, 226, 269, 270, 344, 470, 471, 472, 473]
 status: confirmed (round 220)
 ---
 
@@ -86,3 +86,99 @@ was red:
 > to findings.
 
 `../rounds/470-the-device-suite-ran-on-android.md`.
+
+### Round 471 — one unrun suite is an instance; the EXCLUSION LIST is the class
+
+470 fixed a suite. 471 asked how many there are, and the answer is the gate's own
+exclusion list — which no round had ever read as a population:
+
+```
+config.md, excluded from test:unit    *_postgres, *_minio, the SQLCipher test
+CLAUDE.md, excluded from every test*  rpc_dart_generator (build_test)
+outside the workspace                 rpc_dart_wasm (its own scripts)
+```
+
+The second reachable member, run for the first time: `rpc_blob_sqlite` at
+`+30 -7`, same `StateError`-versus-typed-exception shape as the wasm one.
+
+> **A gate's exclusion list is a list of places a sweep did not reach.** When a
+> round changes something in ~80 places, the packages it verified are the ones
+> the gate runs; the excluded ones took the edit and never took the check. Read
+> the exclusion list as the population BEFORE deciding a cross-package change is
+> complete.
+
+And the reason this one hid for 55 rounds is a second, sharper thing:
+
+> **An exclusion's stated REASON can be narrower than the exclusion.**
+> `config.md` excludes the sqlite packages for the SQLCipher native lib. The
+> suite runs; the seven failures are not that test. So the whole package sat
+> outside the gate on the strength of one test's requirement, and nobody read the
+> gap between the reason and the effect. Check what an exclusion actually excludes
+> against what it says it is for.
+
+`../rounds/471-the-other-suite-nobody-runs.md`,
+`../backlog/B-92-round-416-went-stale-in-the-suites-nobody-runs.md`.
+
+### Round 472 — the device arrived, and the LEAD was what failed
+
+Three rounds on this lens in a row, and the third is the one worth remembering.
+The device that B-38 waited thirteen rounds for finally booted; the fix was
+reapplied in full and type-checked; and the witness the lead itself designed
+turned out unable to see the defect:
+
+```
+with the fix (retry + report)           +27  All tests passed!
+CANARY: no retry, give up on failure 1  +27  All tests passed!
+CONTROL: the ORIGINAL recv loop         +27  All tests passed!
+```
+
+> **A lead that names its own witness has done half the round's thinking, and
+> that half needs checking too.** B-38's sentence was *"reachable from inside the
+> guest, which is what makes a witness possible at all"* — true about
+> REACHABILITY and false about SUFFICIENCY. A supersede replaces the pending task
+> with one that is then answered, so the failure it induces is transient by
+> construction. Reaching a failure path is not the same as making its
+> CONSEQUENCE observable.
+
+> **Run the control BEFORE believing a green fix, especially on a device.** Each
+> of these runs costs five minutes, which is exactly the pressure that makes a
+> single green run look like enough. The fix's own run and the canary were both
+> green; only the third — the original code — showed that none of them meant
+> anything.
+
+The outcome is the rule this project already holds: the fix was **reverted**
+rather than shipped on `analyze:native` alone. A test that passes on broken code
+converts an open question into a false answer, which is worse than the silence it
+was meant to replace.
+
+`../rounds/472-the-witness-b-38-designed-cannot-see-it.md`.
+
+### Round 473 — an excluded package's leads go stale in a second way
+
+470 found a suite nobody ran. 471 found the class. 472 found a lead whose witness
+design was wrong. 473 is the fourth shape and the cheapest: a lead about the
+package's INTEGRATION with its host toolchain, resting on a claim about that
+toolchain's behaviour, which nobody could check because nobody could build.
+
+```
+SPM enabled    "Adding Swift Package Manager integration..."   +26  passed
+CocoaPods      no such line                                    +26  passed
+```
+
+B-03 said an SPM-enabled app *"does not get the plugin at all"*. It does:
+Flutter's SPM support is additive, and a plugin with no `Package.swift` still
+resolves through CocoaPods.
+
+> **A package outside the gate accumulates leads about its ENVIRONMENT, and those
+> age faster than leads about code.** A claim about the repository can be
+> re-checked by reading; a claim about what Xcode, CocoaPods or the Flutter tool
+> does needs a build, and the package that cannot be built is exactly where such
+> claims pile up unchecked. Four rounds here, three refuted premises.
+
+> **When the variable is a toolchain FLAG, the build log is the control.**
+> `Adding Swift Package Manager integration...` in one arm and not the other is
+> what separates "SPM works" from "the setting was ignored". Two identical green
+> runs prove nothing on their own.
+
+`../rounds/473-spm-already-gets-the-plugin.md`,
+`../checked/C-55-spm-already-gets-the-plugin.md`.

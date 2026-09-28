@@ -1,13 +1,37 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 474)
 round: 453 — Dart half DONE; the native half is untouched
 commit: 92bbcff8
-paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
+paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart]
 probe: —
-reason: owner decision — the native half needs a booted simulator AND emulator. Round 470 found the EMULATOR bootable (`flutter emulators --launch Small_Phone`) and the simulators broken on disk, not forbidden; see B-38
+reason: the owner's decision covered the Dart half only and it is discharged; the native half was never decided and is now B-93
 ---
 
 # B-85 — a default written twice, and a shim written in two languages
+
+## CLOSED (round 474) — the decision is discharged, and it never covered the rest
+
+The owner's decision ends with it in as many words: **"The native half is NOT in
+this decision."** What was decided is the Dart half, and round 453 did it.
+
+Re-checked against the bar the decision set — *"no literal appears twice"*:
+
+```
+grep for default literals outside the _default* block   nothing
+what remains                                            Duration(milliseconds: ms)
+                                                        from a PARSED int, and the
+                                                        0x20/0x7F character checks
+                                                        in the header validators
+```
+
+`policy_defaults_agree_test.dart` is green in every gate run, and round 462's
+`contentTypeValidation` was added through the same idiom — constructor, `toMap`,
+`fromMap` and one `_default` constant — so the shape held under the first field
+added after the decision, which is the real test of it.
+
+**The native half is now `B-93`**, because it is a different thing: undecided,
+not device-blocked, and a lead that keeps an undecided tail on a discharged
+decision reads as work in progress when it is work not yet chosen.
 
 ## DART HALF DONE (round 453). Only the native half is left.
 

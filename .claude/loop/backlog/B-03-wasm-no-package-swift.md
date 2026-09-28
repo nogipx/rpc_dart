@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 473)
 round: — (not re-measured)
 commit: 5bf4d34e
 paths: [packages/transport/rpc_dart_wasm/ios/**]
@@ -8,6 +8,45 @@ reason: decided — add `Package.swift` now rather than waiting for SPM to becom
 ---
 
 # B-03 — wasm: no `Package.swift`
+
+## CLOSED (round 473) — the premise is REFUTED
+
+*"An app that has turned on Swift Package Manager support in Flutter does not get
+the plugin at all."* Measured on the simulator round 472 got running, same suite,
+one flag varied:
+
+```
+SPM enabled    build log: "Adding Swift Package Manager integration..."
+               +26  All tests passed!
+CocoaPods      no such line
+               +26  All tests passed!
+```
+
+**The plugin loads either way.** Flutter's SPM support is ADDITIVE: a plugin with
+no `Package.swift` still resolves through CocoaPods, and the two coexist. Had it
+not loaded, all 26 tests would have failed at the first `loadRuntime`.
+
+The build-log line is the control for the flag itself, so two green runs are not
+just the setting being ignored.
+
+**The second constraint is satisfied too, on a built app** — which is the evidence
+this lead demands:
+
+```
+Runner.app/Frameworks/rpc_dart_wasm.framework/
+    rpc_dart_wasm_privacy.bundle/PrivacyInfo.xcprivacy
+```
+
+From `resource_bundles` alone. With no `Package.swift` there is no second
+manifest path to keep in sync, which was this lead's stated difficulty.
+
+`checked/C-55`.
+
+**What remains is a forward-compatibility CHOICE, not a fix**: whether to add
+`Package.swift` for the day Flutter stops falling back. Re-decide it against this
+measurement rather than the sentence above. And note it needs a file MOVE into
+`ios/<plugin>/Sources/<plugin>/` — `mv`, `git mv` and `rm` are all outside the
+allowlist, so it is not a change a round can make under rule zero.
 
 ## The iOS blocker is real but NOT what the other leads say (round 470)
 

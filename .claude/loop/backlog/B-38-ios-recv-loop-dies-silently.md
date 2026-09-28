@@ -9,7 +9,40 @@ reason: "bench — the witness needs a booted iOS simulator and none could be st
 
 # B-38 — the iOS recv loop gives up silently, and Android already fixed this
 
-## The blocker recorded here is WRONG (round 470)
+## The WITNESS designed below is refuted (round 472)
+
+The simulator now boots — `CoreSimulator/Devices` did not exist at all, so
+`xcrun simctl erase` had no contents to destroy and round 470 was wrong to
+decline it. The whole fix was reapplied, `analyze:native` PASS/PASS, and the
+`BreakRecvLoop` witness built exactly as specified below. Three runs on an
+iPhone 16 Pro:
+
+```
+with the fix (retry + report)           +27  All tests passed!
+CANARY: no retry, give up on failure 1  +27  All tests passed!
+CONTROL: the ORIGINAL recv loop         +27  All tests passed!
+```
+
+Identical. **The arm is VOID**, and the reason is in this lead's own premise.
+*"The second is reachable from inside the guest, which is what makes a witness
+possible at all"* — reachable, but not sufficient: **a supersede replaces the
+pending task with one that is then ANSWERED**, so the loop's poll rejects once,
+its next poll succeeds, and host-to-guest never stops.
+
+The same property blocks the give-up ceiling. Six supersedes at once, then six
+spaced 300 ms apart to stay ahead of the 50 ms x N backoff: `isDead=false` both
+times. Five CONSECUTIVE failures cannot be produced this way, because every
+supersede is followed by a success that resets the count.
+
+**The fix is reverted**, per this lead's own instruction and the owner's
+declining of `analyze:native`-only.
+
+So this is no longer waiting on a device. **It is waiting on a witness design.**
+The remaining route is `webView(_:stop:)` — memory pressure or a navigation —
+driven by something a test can ask for; candidates are in round 472 and none was
+attempted blind.
+
+## The blocker recorded here was WRONG (round 470)
 
 *"`xcrun simctl` and `open -a Simulator` are outside this session's allowlist"*
 was written in round 357 and copied forward untested. It runs:

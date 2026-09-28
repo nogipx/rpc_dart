@@ -156,9 +156,9 @@ individual findings live in `backlog/`.
 Exhausted means the verdict is INCONCLUSIVE, not CLEAN: a bench that could not
 see the defect does not prove its absence.
 
-probes: 3
-canaries: 3
-round cap: 460
+probes: 5
+canaries: 5
+round cap: 490
 
 ## Out of scope
 

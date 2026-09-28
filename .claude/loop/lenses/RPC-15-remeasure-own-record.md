@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474]
 status: confirmed (round 457)
 ---
 
@@ -168,3 +168,35 @@ And the reading rule the regression turned on:
 
 `../rounds/457-my-own-premise-was-false.md`,
 `../probes/P-108-what-the-case-of-grpc-encoding-changes.md`.
+
+## Round 474 — the record can be a STATUS, and the stale part its SCOPE
+
+Every application above re-measures a CLAIM. 474 re-measured a status field.
+
+B-85 sat at `decided by owner`, carrying `round: 453 — Dart half DONE; the
+native half is untouched`. Both halves of that line are true, and together they
+read as a decided job partly done. The decision itself says otherwise, in its
+last paragraph:
+
+> **The native half is NOT in this decision.**
+
+So the decided work was finished twenty-one rounds ago and the remainder was
+never chosen. I repeated the misreading in a report — *"B-85's native half can be
+taken"* — which is what made it worth a round.
+
+> **A lead's status describes the LEAD; a decision's scope describes the work.
+> They drift apart the moment a decision covers only part of what the lead
+> carries.** Read the decision's last paragraph, not the lead's title, before
+> calling remaining work "decided and waiting".
+
+> **An undecided remainder attached to a discharged decision is worse than a
+> separate lead**, because every tool here reports it as work in progress and
+> nothing distinguishes "not yet done" from "not yet chosen". Split it: B-93.
+
+The check itself is the ordinary one — the decision's own bar (*"no literal
+appears twice"*) against today's tree, not against the round that claimed it.
+What made it convincing was a field added AFTER the decision, round 462's
+`contentTypeValidation`, which followed the idiom without anyone re-reading the
+lead.
+
+`../rounds/474-a-decision-discharged-and-a-tail-split-off.md`.
