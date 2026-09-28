@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-129](P-129-which-ceiling-stops-a-finite-http1-stream.md)** valid (round
+  490), rpc_dart_http — **two ceilings of different kinds, so the shapes are
+  chosen to trip exactly one each**: `1500 x 10 B` is inside any byte budget and
+  past the 1024-message count, `20 x 1 MiB` the reverse. Both answer
+  RESOURCE_EXHAUSTED, so only the shape that provoked it says which fired. The
+  control is the same contract over a channel pair, which meets neither ceiling
+  the same way
 - **[P-128](P-128-what-an-http1-server-stream-retains.md)** valid (round 489),
   rpc_dart_http — peak RSS against production at three scales, plus the caller's
   delivered item count, which is what turns the cost into a defect (`received 0`

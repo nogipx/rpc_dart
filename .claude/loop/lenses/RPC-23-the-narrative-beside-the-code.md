@@ -3,8 +3,8 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442]
-status: confirmed (round 432)
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490]
+status: confirmed (round 490)
 ---
 
 # RPC-23 — The narrative beside the code
@@ -581,3 +581,36 @@ coverage. The gap is unchanged; what changed is that the page now tells the
 caller to set a deadline on every call, which is the only bound there is.
 
 `../rounds/442-the-doc-that-said-the-opposite.md`.
+
+## Round 490 — the doc that was honest about the WRONG failure
+
+`RpcHttpCallerTransport`'s class doc is unusually candid: it says streaming
+methods *"do not fail — they silently degrade, which is worse"*, and spells out
+that a finite stream succeeds fully buffered while an unbounded one hangs. Every
+sentence of that is written against the reader's interest and none of it was
+complete, because a finite stream has two ceilings and past either one it does
+not degrade at all — it fails RESOURCE_EXHAUSTED:
+
+    1500 x 10 B   http FAILED status=8    channel OK 1500
+    20 x 1 MiB    http FAILED status=8    channel OK 20
+    100 x 10 B    http OK 100             channel OK 100
+
+> **A doc that names a failure mode is harder to doubt than one that says
+> nothing.** This one had done the difficult part — admitting the transport
+> degrades — and a reader who got that far had no reason to suspect a third
+> behaviour underneath it. Candour about one failure reads as a complete
+> account of the failures.
+
+> **The detector here was a LIMIT read against the prose that promises past
+> it.** For every sentence of the form "X succeeds", find the limits on X's path
+> and ask what each one does to it. Two limits, two shapes, and the shapes have
+> to be chosen so each trips exactly one — otherwise the first to fire hides the
+> other and the doc gets one correction instead of two.
+
+And the correction the round could make was bounded by what the code does: the
+DEFAULTS still refuse those streams. What changed is that the ceilings are named,
+the knob for each is named, and one of them now works — `maxBufferedBytes`
+bounded nothing at all, because every body site used the per-message limit.
+
+`../probes/P-129-which-ceiling-stops-a-finite-http1-stream.md`,
+`../rounds/490-the-knob-that-names-the-thing-bounded-nothing.md`, B-99.

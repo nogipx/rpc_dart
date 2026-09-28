@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 490)
+round: 490
+commit: a12a4209
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/core/rpc_dart/lib/src/core/parser.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-129
+reason: "closed — both ceilings CONFIRMED against a channel-pair control; the byte one is now raisable by the knob that names it and the doc states both"
 ---
 
 # B-99 — an HTTP/1.1 stream in either direction is capped at ONE message's size and 1024 messages
@@ -55,3 +55,48 @@ class doc on what bidi and streaming mean over HTTP/1.1.
 ## Owner decision
 
 —
+
+## Closed (round 490) — both ceilings confirmed, and one was wired to the wrong knob
+
+```
+                       http                      channel (control)
+1500 x 10 B      FAILED after 0 status=8       OK 1500
+20 x 1 MiB       FAILED after 0 status=8       OK 20
+100 x 10 B       OK 100                        OK 100
+
+client-stream upload, 1500 x 10 B      status=8
+client-stream upload, 4 x 1 MiB        got:4
+```
+
+**The sketch was narrowed by the measurement.** It asks for a separate
+stream-level budget; both ceilings turned out to be raisable by knobs that
+already exist, so a third would be new public surface for something
+configuration solves. What was actually broken is that the BYTE ceiling was
+wired to the wrong one: all three body sites bounded a whole body by
+`maxFramedMessageBytes` (one message plus its prefix), so `maxBufferedBytes` —
+"max buffered bytes for reassembly/parsing" — bounded nothing at all.
+
+```
+each knob raised alone, http           before      after
++maxBufferedBytes      20 x 1 MiB      FAILED      OK 20
++maxMessagesPerChunk   1500 x 10 B     OK 1500     OK 1500
+```
+
+The default is unchanged by construction: `effectiveMaxBufferedBytes` falls back
+to `maxMessageLengthBytes + 5`, the same number, which is what keeps round 458's
+message-at-exactly-the-limit working.
+
+The class doc states both ceilings now, names the knob for each, and carries the
+table above.
+
+## Left open, deliberately
+
+- **Chunk-by-chunk parsing.** It is the only way to lift the COUNT ceiling
+  without raising a global knob, and it is a change to how the transport emits
+  rather than a limit read from the wrong field. Needs its own bench.
+- **The defaults.** A finite stream past them still fails rather than degrades.
+  Raising either raises what one call may buffer on a transport that must hold
+  the whole thing — a capacity decision, not a defect.
+- **The ping-pong bidi.** *"blocks until its deadline because nothing is sent
+  before `finishSending`"* is plausible from the wire format and was NOT
+  measured; nothing in P-129 would see a hang.

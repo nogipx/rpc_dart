@@ -349,20 +349,23 @@ class RpcHttpResponderTransport
         await for (final chunk in request.read()) {
           if (exceeded) continue;
           builder.add(chunk);
-          // maxFramedMessageBytes, not maxMessageLengthBytes: this body IS the
-          // gRPC-framed message, so it carries the 5-byte prefix the message
-          // limit does not count. Bounding it by the message limit made the real
-          // ceiling `max - 5` -- measured, a message at exactly the configured
-          // limit was refused RESOURCE_EXHAUSTED here and accepted by the channel
-          // transports.
-          if (policy != null && builder.length > policy.maxFramedMessageBytes) {
+          // `maxBufferedBytes`, not the per-message limit: this body is a whole
+          // client-stream UPLOAD, not one message. Identical by default --
+          // `effectiveMaxBufferedBytes` falls back to `maxMessageLengthBytes +
+          // 5`, which is what keeps a unary request at exactly the configured
+          // limit acceptable where the bare message limit made the real ceiling
+          // `max - 5`.
+          if (policy != null &&
+              builder.length > policy.effectiveMaxBufferedBytes) {
             exceeded = true;
             builder.clear();
           }
         }
         if (exceeded) {
           // The CONFIGURED number, not the framed one: see the bound above.
-          throw _BodyTooLarge(policy!.maxMessageLengthBytes);
+          throw _BodyTooLarge(
+            policy!.maxBufferedBytes ?? policy.maxMessageLengthBytes,
+          );
         }
         return builder.takeBytes();
       }
@@ -496,7 +499,11 @@ class RpcHttpResponderTransport
     // it, so every byte past this point is retained to be thrown away.
     // Measured at 64 KiB: 512/2048/8192 KiB produced cost +8.7/+12.6/+40 MiB of
     // RSS, and the caller received 0 items in all three.
-    final limit = securityPolicy.maxFramedMessageBytes;
+    //
+    // `maxBufferedBytes`, the same knob the two body reads use: this is a whole
+    // STREAM, and bounding it by the per-message limit made raising the knob
+    // whose name means "buffered bytes" do nothing.
+    final limit = securityPolicy.effectiveMaxBufferedBytes;
     if (pending.bodyBuffer.length > limit) {
       _answerOversizedResponse(streamId, pending);
       return;
@@ -516,14 +523,14 @@ class RpcHttpResponderTransport
     pending.bodyBuffer.clear();
     _logger?.warning(
       'Response for [streamId: $streamId] exceeded '
-      '${securityPolicy.maxMessageLengthBytes} bytes and was ended early. '
+      '${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes} bytes and was ended early. '
       'HTTP/1.1 buffers a whole server stream before sending it.',
     );
     pending.responseHeaders.addAll([
       RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.resourceExhausted}'),
       RpcHeader(
         RpcHeaders.grpcMessage,
-        'Response exceeds the ${securityPolicy.maxMessageLengthBytes}-byte '
+        'Response exceeds the ${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes}-byte '
         'limit; HTTP/1.1 cannot stream it',
       ),
     ]);

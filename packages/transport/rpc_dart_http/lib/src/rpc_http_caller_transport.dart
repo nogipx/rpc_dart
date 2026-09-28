@@ -69,11 +69,20 @@ String? _shortReason(Uint8List body) {
 ///
 /// They do not fail — they silently degrade, which is worse:
 ///
-///  * A FINITE stream SUCCEEDS, fully buffered. Nothing arrives until the
-///    handler completes, then everything at once. Client-streaming and
-///    bidirectional round-trip too, since the whole exchange fits in one
-///    request/response pair. Nothing warns that the streaming semantics are
-///    gone.
+///  * A FINITE stream SUCCEEDS **if it fits in one request/response pair**,
+///    fully buffered. Nothing arrives until the handler completes, then
+///    everything at once. Client-streaming and bidirectional round-trip the same
+///    way. Nothing warns that the streaming semantics are gone.
+///  * "Fits" is TWO ceilings, and a finite stream past either one fails
+///    RESOURCE_EXHAUSTED rather than degrading. Measured on the defaults:
+///    `1500 x 10 B` and `20 x 1 MiB` both fail here and both succeed over a
+///    channel transport.
+///      - bytes: the whole body against [RpcSecurityPolicy.maxBufferedBytes]
+///        (16 MiB when unset, from `maxMessageLengthBytes`).
+///      - count: the body reaches the parser as ONE chunk, so
+///        [RpcSecurityPolicy.maxMessagesPerChunk] — 1024 by default, a per-chunk
+///        guard — bounds the whole stream.
+///    Both are raisable, and raising them raises what one call may buffer.
 ///  * An UNBOUNDED stream HANGS, and leaks. There is no response until the
 ///    handler finishes, so a handler that never finishes hangs the caller while
 ///    the server keeps producing, with nothing to stop it.
@@ -198,14 +207,16 @@ class RpcHttpCallerTransport
     http.StreamedResponse response,
     int streamId,
   ) async {
-    // BOUND on the framed size, REPORT the configured one. This body carries the
-    // 5-byte gRPC prefix that `maxMessageLengthBytes` does not count, so bounding
-    // by the message limit rejected a response at exactly the configured limit
-    // (see `RpcSecurityPolicy.maxFramedMessageBytes`). But the number in the
-    // message has to be the knob the operator set and would raise -- naming
-    // `max + 5` names a value they never configured.
-    final limit = _policy.maxFramedMessageBytes;
-    final configured = _policy.maxMessageLengthBytes;
+    // A whole BODY, which on this transport is a whole stream -- so the knob is
+    // `maxBufferedBytes` ("max buffered bytes for reassembly/parsing"), not the
+    // per-message one. Identical by default, since `effectiveMaxBufferedBytes`
+    // falls back to `maxMessageLengthBytes + 5`, which is what keeps a unary
+    // response at exactly the configured limit acceptable. What changes is that
+    // a server stream over 16 MiB is now raisable by the knob whose name means
+    // it; bounded by the message limit, raising that one did nothing.
+    final limit = _policy.effectiveMaxBufferedBytes;
+    final configured =
+        _policy.maxBufferedBytes ?? _policy.maxMessageLengthBytes;
     final builder = BytesBuilder(copy: false);
     await for (final chunk in response.stream) {
       builder.add(chunk);
@@ -216,7 +227,8 @@ class RpcHttpCallerTransport
           RpcStatus.resourceExhausted,
           'HTTP response body exceeds the configured limit of $configured bytes '
           '(stream $streamId, method ${response.request?.url.path}). Raise '
-          'RpcSecurityPolicy.maxMessageLengthBytes if this is expected.',
+          'RpcSecurityPolicy.maxBufferedBytes if this is expected: on HTTP/1.1 '
+          'the body is the WHOLE stream, not one message.',
         );
       }
     }
