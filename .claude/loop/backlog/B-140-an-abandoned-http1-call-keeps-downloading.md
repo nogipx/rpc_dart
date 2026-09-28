@@ -36,3 +36,13 @@ Build `AbortableRequest` with an abort trigger completed from `releaseStreamId`
 ## Owner decision
 
 —
+
+## Round 488 handed this the abort (B-97)
+
+B-97 removed the phantom `/Unknown/Unknown` POST that every cancel used to fire,
+and stopped there deliberately: cancelling still does not STOP the server's
+handler, because this transport implements no `IRpcStreamReset`.
+
+Implementing it over `package:http` 1.6's `AbortableRequest` — resolved in the
+lockfile, checked — closes both leads with one change: B-140's abandoned call
+that keeps downloading is the same abort seen from the receive side.

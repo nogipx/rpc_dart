@@ -288,7 +288,21 @@ class RpcHttpCallerTransport
     // on send, consistent with every other transport. HTTP/1.1 puts these on
     // the wire as headers, so non-ASCII / CR-LF would corrupt or inject.
     _policy.validateMetadata(metadata);
-    final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
+    final methodPath = metadata.methodPath;
+    if (methodPath == null) {
+      // A control frame for a call that is already open -- on this wire format
+      // the only one core sends is the cancellation notice, which rides a
+      // metadata frame because the transport implements no IRpcStreamReset.
+      //
+      // There is nothing to put on the wire for it: one request IS the call, and
+      // by cancellation time it has been sent. Treating it as an opening frame
+      // fired a second POST to `/Unknown/Unknown` for every cancel -- answered
+      // UNIMPLEMENTED, preflight-failing in a browser, and leaving the real
+      // handler running regardless. And the pending call must survive it
+      // intact: the old code REPLACED it, so a cancel arriving before the
+      // request fired lost the method path and the buffered body with it.
+      return;
+    }
     _pending[streamId] = _PendingCall(
       methodPath: methodPath,
       requestHeaders: metadata.headers.toList(),

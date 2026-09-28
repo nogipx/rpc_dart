@@ -93,10 +93,15 @@ void main() {
         }
       });
 
+      // `methodPath` is NOT a header, so spreading `.headers` into a new
+      // RpcMetadata drops it -- and a metadata frame that names no method
+      // cannot open a call on this transport. It used to fall back to
+      // `/Unknown/Unknown`, so this test passed while its request went to a
+      // path nobody serves.
       final metadata = RpcMetadata([
         ...RpcMetadata.forClientRequest('Svc', 'Method').headers,
         const RpcHeader('x-custom-header', 'my-value'),
-      ]);
+      ], methodPath: '/Svc/Method');
 
       final streamId = clientTransport.createStream();
       await clientTransport.sendMetadata(streamId, metadata);

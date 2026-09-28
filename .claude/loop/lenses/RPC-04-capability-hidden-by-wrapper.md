@@ -3,8 +3,8 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292, 334, 335, 352, 418, 430]
-status: confirmed (round 430)
+applied: [209, 289, 290, 291, 292, 334, 335, 352, 418, 430, 488]
+status: confirmed (round 488)
 ---
 
 # RPC-04 — Transport capabilities hidden by a wrapper
@@ -182,3 +182,35 @@ Two things the round measured that generalise beyond it.
 `../rounds/430-the-guard-the-type-walked-past.md`, bench
 `../probes/P-09-watermark-survives-a-decorator.md` — reused, and its decorated
 arm now needs a deliberate `dynamic` hop to exist at all.
+
+## Round 488 — ask what the FALLBACK does where the capability is absent
+
+Every application above asks who DROPS a capability. Round 488 asks the
+complement: core already knows a transport may not implement `IRpcStreamReset`
+and has a fallback for it — a metadata frame with `endStream: true`. So the
+question is whether the transport that lacks the capability can actually honour
+the fallback.
+
+`RpcHttpCallerTransport` cannot. One request IS the call there, and by
+cancellation time it has been sent, so the frame has nothing to be. It was
+turned into a request anyway:
+
+    after the request fires   cancel   2 requests  [/Svc/slow, /Unknown/Unknown]
+    before it fires           cancel   1 request   [/Unknown/Unknown], body 0 B
+
+> **A fallback is a second implementation of the capability, and nothing type-
+> checks it.** `IRpcStreamReset` is declared, discovered by an `is` check and
+> absent here — all visible. The fallback is prose in a doc comment plus a call
+> to a method that means something else, and the transport answered it with a
+> plausible-looking request to a path nobody serves.
+
+> **The default that made it plausible is the tell.** `metadata.methodPath ??
+> '/Unknown/Unknown'` turns "this cannot be a call" into "this is a call named
+> Unknown". Grep for defaults that manufacture a required value: they convert a
+> precondition failure into traffic.
+
+And the pre-fire arm is where the damage is loss rather than noise — the
+assignment to `_pending` was unconditional, so the notice replaced the real
+call, method path and 16-byte body included.
+`../probes/P-127-what-a-cancel-puts-on-the-http1-wire.md`,
+`../rounds/488-a-frame-that-names-no-method-cannot-open-a-call.md`, B-97.

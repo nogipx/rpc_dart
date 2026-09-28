@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 488)
+round: 488
+commit: d3363ea4
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-127
+reason: "closed — the witness was built and CONFIRMED it, 2 requests against a control's 1, and found a worse second window the lead does not name"
 ---
 
 # B-97 — cancelling a call over HTTP/1.1 sends a brand-new POST to /Unknown/Unknown
@@ -58,3 +58,44 @@ real cancellation implement `IRpcStreamReset` by aborting the in-flight request
 ## Owner decision
 
 —
+
+## Closed (round 488) — confirmed, with a second window the lead does not name
+
+The witness was built as designed and read exactly what it predicted: `2`
+requests, the second `/Unknown/Unknown`.
+
+```
+                       requests reaching the server
+after the request fires
+  cancel      before   2  [/Svc/slow, /Unknown/Unknown]
+  cancel      after    1  [/Svc/slow]
+  no cancel            1  [/Svc/slow]
+
+before the request fires
+  cancel      before   1  [/Unknown/Unknown]  body 0 bytes
+  cancel      after    1  [/Svc/slow]         body 16 bytes
+```
+
+**The pre-fire window is the worse half.** The assignment to `_pending[streamId]`
+is unconditional, so a notice arriving before `_fireRequest` REPLACES the
+pending call: the method path and the whole buffered body go with it and the
+real request is never sent. Not a second request but a lost one.
+
+Fixed with the sketch's first clause, generalised one step: not "endStream and
+no pending call" but **no methodPath at all**, which is the property that makes
+a frame unable to open a call here. That covers the pre-fire window too, where
+there IS a pending call.
+
+**The sketch's second clause is NOT done and is deliberately left to B-140**:
+implementing `IRpcStreamReset` over `package:http` 1.6's `AbortableRequest`
+(present in the lockfile, checked). The server's handler still runs to
+completion in every arm. B-140 is the same abort seen from the other side.
+
+The browser half — `x-client-cancelled` failing CORS preflight — is moot rather
+than fixed: the request carrying those headers is no longer sent.
+
+**A finding about the core API, found through a test that failed on the fix**:
+`methodPath` is a FIELD on `RpcMetadata`, not a header, so
+`RpcMetadata([...md.headers])` silently drops it. A first-party test had been
+sending its request to `/Unknown/Unknown` for that reason while asserting only
+on headers.

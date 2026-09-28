@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-127](P-127-what-a-cancel-puts-on-the-http1-wire.md)** valid (round 488),
+  rpc_dart_http — records every request PATH at the server, because the caller
+  reports `RpcCancelledException` whether or not a phantom request went out, so
+  the caller's own outcome cannot be the instrument. Two levels: through the
+  endpoint for the ordinary cancel, and on the transport directly for the window
+  before the request fires, which core releases too quickly to reach otherwise
 - **[P-126](P-126-what-a-second-opening-frame-detaches.md)** valid (round 487),
   rpc_dart — counts two things from INSIDE the handler's own closure (did it
   observe its cancel, did its disposer run), so the numbers say what the handler
