@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-130](P-130-does-a-reclaimed-stream-answer-its-request.md)** valid (round
+  491), rpc_dart_http — counts requests `arrived` and `answered` in a shelf
+  middleware wrapped around `responder.handler`, so "answered" means the future
+  the server awaits actually completed. **The caller cannot be the instrument**:
+  it reports `RpcDeadlineExceededException` in every arm because its own
+  deadline fires regardless of what the server does
 - **[P-129](P-129-which-ceiling-stops-a-finite-http1-stream.md)** valid (round
   490), rpc_dart_http — **two ceilings of different kinds, so the shapes are
   chosen to trip exactly one each**: `1500 x 10 B` is inside any byte budget and

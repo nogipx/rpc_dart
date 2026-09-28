@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 491)
+round: 491
+commit: 00e27930
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-130
+reason: "closed — the witness was built and CONFIRMED it, requests answered 0 of 1 against a control's 1 of 1"
 ---
 
 # B-100 — releaseStreamId on the HTTP/1.1 responder drops the pending call without answering it
@@ -53,3 +53,34 @@ Complete the completer in `releaseStreamId` (a 200 with `grpc-status` 4/1, or a
 ## Owner decision
 
 —
+
+## Closed (round 491) — confirmed, and the second sentence too
+
+```
+                                 arrived  answered  pendingRequests
+handler ignores its token           1        0            0
+handler cooperates (control)        1        1            0
+```
+
+The lead's witness design was built as written and read what it predicted. The
+instrument has to be on the SERVER: the caller reports
+`RpcDeadlineExceededException` in both arms, its own deadline having fired
+regardless.
+
+**The lead's `health()` sentence is confirmed too** — `pendingRequests: 0` while
+the response was unwritten, because the reclaim had already removed the entry
+`health()` counts.
+
+Fixed as the sketch says, with the status chosen: **CANCELLED, not
+DEADLINE_EXCEEDED and not 503.** `releaseStreamId` cannot know why the stream was
+released, and a peer that set a deadline has already reported one locally.
+
+The guard that earns its place is that an ordinary call is answered exactly ONCE:
+`_flushResponse` removes the entry before this can see it, and a second
+completion would throw `Bad state: Future already completed` into the pipeline
+rather than failing visibly.
+
+Still true, with no defect behind it today: `health()` cannot see an unanswered
+response, since the entry it counts is gone by then. After this fix nothing is
+left unanswered for it to miss — but a future path that drops a pending entry
+without completing it would be invisible the same way.

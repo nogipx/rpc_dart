@@ -1,10 +1,10 @@
 ---
 refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
-applies: something caps concurrency by HOLDING state that must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate
+applies: something is HELD and must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate, or a request the caller of a lifecycle method is awaiting
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467]
-status: confirmed (round 351)
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491]
+status: confirmed (round 491)
 ---
 
 # RPC-05 — Where a concurrency limit is charged
@@ -274,3 +274,32 @@ to aim: the first varied the cancel AND whether the source terminated, which
 cannot distinguish "cancel skips the release" from "a live source has not
 released yet". `../rounds/351-the-ending-nobody-wired.md`; the neighbouring
 ending that releases but answers wrongly is `../backlog/archive/B-36-the-abandon-timer-fabricates-a-success.md`.
+
+## Round 491 — the thing held can be somebody else's REQUEST
+
+Every application above releases a counter, a budget or a gate. On HTTP/1.1 the
+thing `releaseStreamId` holds is a `Completer<Response>` that the shelf server is
+AWAITING — so the release is not an accounting entry, it is the only ending the
+HTTP exchange has.
+
+    handler ignores its token     requests arrived 1, answered 0
+    handler cooperates (control)  requests arrived 1, answered 1
+
+> **Ask what the method's caller is waiting for.** `releaseStreamId` returns a
+> bool and reads as bookkeeping; the object it drops is the one holding a socket
+> open. The detector extends from "what is charged and when is it released" to
+> "who is BLOCKED on this being released, and does the release reach them".
+
+> **The path in is the one designed for the worst case.** The pipeline's deadline
+> reclaim exists precisely for a handler that ignores its token, and it
+> deliberately sends no trailer — a decision about the STATUS, correct on its own
+> terms, which left the exchange with no ending at all. When a comment explains
+> why something is NOT sent, ask what else was riding on it.
+
+And the second finding is the reason this was invisible: `health()` counts
+`_pending`, which the reclaim had already emptied, so it read
+`pendingRequests: 0` while the response was unwritten. **A counter that a
+teardown decrements cannot report work the teardown abandoned.**
+
+`../probes/P-130-does-a-reclaimed-stream-answer-its-request.md`,
+`../rounds/491-the-call-ended-and-the-request-did-not.md`, B-100.

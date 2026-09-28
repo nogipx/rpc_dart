@@ -449,7 +449,35 @@ class RpcHttpResponderTransport
 
   @override
   bool releaseStreamId(int streamId) {
-    _pending.remove(streamId);
+    final pending = _pending.remove(streamId);
+    // The shelf handler is AWAITING this completer. Dropping the entry without
+    // completing it left the HTTP request open until the client gave up, with
+    // the request object and the handler closure reachable behind it — and
+    // health() reads `_pending`, so the drain saw an idle server with responses
+    // still unwritten. Reached whenever a stream is torn down before it
+    // answered: the pipeline's deadline reclaim is the ordinary way, and it
+    // deliberately sends no trailer of its own.
+    //
+    // On every ORDINARY ending `_flushResponse` has already removed the entry,
+    // so this cannot answer twice.
+    if (pending != null && !pending.completer.isCompleted) {
+      _logger?.warning(
+        'Stream $streamId was released before it answered; closing the HTTP '
+        'request with CANCELLED.',
+      );
+      pending.responseHeaders.addAll([
+        RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.cancelled}'),
+        RpcHeader(
+          RpcHeaders.grpcMessage,
+          'The call was torn down before the handler answered',
+        ),
+      ]);
+      // CANCELLED, not DEADLINE_EXCEEDED: this method cannot know why the
+      // stream was released, and the peer that set a deadline has already
+      // reported one locally.
+      _completeResponse(streamId, pending);
+      return true;
+    }
     return _idManager.releaseId(streamId);
   }
 
