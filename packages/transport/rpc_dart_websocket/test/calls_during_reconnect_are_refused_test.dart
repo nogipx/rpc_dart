@@ -13,10 +13,11 @@
 //   sendMessage            returned    returned                StateError
 //   getMessagesForStream   -           RpcStatusException(14)  StateError
 //
-// So sends were ACCEPTED and dropped by the closed inner, and a read answered a
-// synthetic UNAVAILABLE -- which is RETRYABLE, so the caller is invited to try
-// the thing that cannot work. The window is a disconnected state and now says
-// so: the in-window column equals the disconnected column.
+// So sends were ACCEPTED and dropped by the closed inner. The window is a
+// disconnected state and now says so, through `_ensureUsable` on every method.
+//
+// Round 464 changed WHAT it says. The window and a FAILED reconnect are two
+// states, and the answer that fits both is neither: see `_refusedRetryable`.
 @TestOn('vm')
 library;
 
@@ -33,21 +34,30 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///
 /// The type changed from `StateError` when the owner asked for one refusal
 /// shape across every transport: the same state came back as `StateError` here
-/// and `RpcStatusException` on http2, so no single `catch` covered both. The
-/// original argument is unchanged and is the second half of this matcher — a
-/// synthetic UNAVAILABLE is RETRYABLE and invites the caller to repeat what
-/// cannot work, and `RpcRetryInterceptor._shouldRetry` takes only UNAVAILABLE
-/// and RESOURCE_EXHAUSTED. FAILED_PRECONDITION is catchable as the library's
-/// own error type AND is not retried.
+/// and `RpcStatusException` on http2, so no single `catch` covered both.
 ///
-/// Asserting the type alone would let the code regress to UNAVAILABLE and stay
-/// green, which is the defect this file was written for.
-final Matcher _refusedNotRetryable = throwsA(
-  isA<RpcStatusException>().having(
-    (e) => e.statusCode,
-    'statusCode',
-    RpcStatus.failedPrecondition,
-  ),
+/// **The STATUS changed in round 464, and the sentence it used to rest on was
+/// measured and is false.** This matcher demanded FAILED_PRECONDITION because
+/// *"a synthetic UNAVAILABLE is RETRYABLE and invites the caller to repeat what
+/// cannot work"*. A retry is not a repeat: `RpcRetryInterceptor` backs off. One
+/// call fired 100 ms into an 800 ms window, through a retry interceptor whose
+/// first backoff is 250 ms:
+///
+///     FAILED_PRECONDITION   status=9 after 0ms     never retried
+///     UNAVAILABLE           OK pong after 711ms    retried, succeeded
+///
+/// So the window is exactly the state UNAVAILABLE is FOR: transient, the remedy
+/// already running, nothing the caller can do but wait. FAILED_PRECONDITION is
+/// kept for the state whose remedy IS the caller's — a reconnect that FAILED, or
+/// was never started — which `RpcNoConnectionException` now tells apart.
+///
+/// Asserting the type alone would let the code regress to a bare
+/// `RpcStatusException` from a discarded connection, which is what http2 did
+/// for the same state.
+final Matcher _refusedRetryable = throwsA(
+  isA<RpcNoConnectionException>()
+      .having((e) => e.statusCode, 'statusCode', RpcStatus.unavailable)
+      .having((e) => e.reconnecting, 'reconnecting', isTrue),
 );
 
 typedef _Rig = ({
@@ -99,35 +109,36 @@ void main() {
 
     await expectLater(
       rig.transport.sendMessage(rig.streamId, Uint8List.fromList([1, 2, 3])),
-      _refusedNotRetryable,
+      _refusedRetryable,
       reason:
           'the send returned normally and the closed inner dropped it, so the '
           'call waited out a deadline for a frame that was never sent',
     );
-    expect(() => rig.transport.createStream(), _refusedNotRetryable);
+    expect(() => rig.transport.createStream(), _refusedRetryable);
 
     await reconnecting.timeout(const Duration(seconds: 8));
   });
 
-  // WITNESS: a read inside the window answered a RETRYABLE status, which
-  // invites the caller to repeat something that cannot work.
-  test(
-    'a read inside the reconnect window is refused, not UNAVAILABLE',
-    () async {
-      final rig = await _rig();
-      rig.slowDownFactory();
-      final reconnecting = rig.transport.reconnect();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+  // WITNESS: a read inside the window used to answer a SYNTHETIC UNAVAILABLE
+  // from the closed inner transport, which carries no `reconnecting` fact and is
+  // indistinguishable from the peer being unreachable. Same status now, from the
+  // guard, as the type the caller can branch on.
+  test('a read inside the reconnect window is refused by the guard', () async {
+    final rig = await _rig();
+    rig.slowDownFactory();
+    final reconnecting = rig.transport.reconnect();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      expect(
-        () => rig.transport.getMessagesForStream(rig.streamId),
-        _refusedNotRetryable,
-        reason: 'a synthetic UNAVAILABLE from the closed inner is retryable',
-      );
+    expect(
+      () => rig.transport.getMessagesForStream(rig.streamId),
+      _refusedRetryable,
+      reason:
+          'the status is right either way; what the closed inner could not '
+          'say is WHICH unavailability this is',
+    );
 
-      await reconnecting.timeout(const Duration(seconds: 8));
-    },
-  );
+    await reconnecting.timeout(const Duration(seconds: 8));
+  });
 
   // WITNESS for the second half: `sendDirectObject` was the one send method
   // with no `_ensureUsable()`.
@@ -155,7 +166,7 @@ void main() {
 
       await expectLater(
         rig.transport.sendDirectObject(rig.streamId, 'an object'),
-        _refusedNotRetryable,
+        _refusedRetryable,
       );
 
       await reconnecting.timeout(const Duration(seconds: 8));

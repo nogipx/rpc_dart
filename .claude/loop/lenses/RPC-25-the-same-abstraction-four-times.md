@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464]
 status: confirmed (round 458)
 ---
 
@@ -1029,3 +1029,49 @@ implementation, and one call site that names a different argument to it.
 
 `../rounds/462-three-implementations-two-behaviours.md`,
 `../probes/P-111-content-type-across-the-layers.md`.
+
+## Round 464 — unify the DUTY, and take the flag from what each copy already has
+
+Round 416 unified what this library THROWS; 464 unified what it throws for one
+state, and the interesting part is the second half.
+
+Three reconnect machines answered the disconnected state three ways, and the
+owner's `## Ask` — *whose behaviour would the shared version have?* — has no
+answer as posed:
+
+```
+                          websocket   http2     health
+during the factory await     9          14      degraded
+after a FAILED reconnect     9           9      unhealthy
+```
+
+> **When the Ask has no winner, check whether the copies are answering ONE
+> question.** They were not: a reconnect in flight and a reconnect that failed
+> want opposite advice, and every copy gave one answer to both. `health()`
+> already distinguished them, which is the tell — a fact the system computes
+> somewhere and the shape under test does not carry.
+
+The shared version became a TYPE, `RpcNoConnectionException(what, reconnecting:)`,
+the same remedy round 416 reached for. What it needed was a flag at each site,
+and this is where the shape is easy to get wrong:
+
+> **Do not add a flag for the unified duty; find the one each copy already
+> keeps.** A fresh `bool _reconnecting` would have needed clearing at three exits
+> in one machine, three in another and SEVEN in the third's connect loop — and an
+> uncleared one leaves callers retrying into a loop that gave up. All three
+> already had a field meaning "an attempt is in flight", each cleared in exactly
+> one place: two single-flight `Future`s and a `Completer` guard. The proxy takes
+> it as a CALLBACK rather than a copy, so there is still one source.
+
+The first attempt here did add the bool — and the compiler refused it, because
+the name `_reconnecting` was already taken by the single-flight future in BOTH
+transports. A collision is a weak signal and it was the right one.
+
+Third note, on the sibling that was right by accident: http2 answered the correct
+status during its window and not from its guard — it discards the connection
+first, so the send path threw on its own. **A copy that produces the right value
+for the wrong reason is still a copy that will drift**, and the type made it
+visible: same code, different exception class, for one state.
+
+`../rounds/464-two-states-wearing-one-word.md`,
+`../probes/P-113-what-one-state-tells-a-caller.md`.

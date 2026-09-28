@@ -194,15 +194,19 @@ class RpcHttp2CallerTransport
   void _ensureUsable() {
     if (_isClosed) throw RpcClosedException('Transport');
     if (_disconnected) {
-      // Same type and code as the websocket sibling, deliberately: this state
-      // used to surface as StateError there and RpcStatusException here, so no
-      // single `catch` covered both. NOT UNAVAILABLE, which is what the caller
-      // is told when the PEER is unreachable — this is a local refusal, and it
-      // names the remedy so the caller applies it rather than retrying into it.
-      throw RpcStatusException(
-        RpcStatus.failedPrecondition,
-        'Transport is disconnected and has no connection; call reconnect(). '
-        'A failed reconnect leaves the transport recoverable, not closed.',
+      // Same type as the websocket sibling, deliberately, and the type now
+      // carries the split both machines used to get wrong: UNAVAILABLE while a
+      // reconnect is IN FLIGHT, FAILED_PRECONDITION once it has failed. This
+      // transport answered 14 in the first case only by accident — it discards
+      // the connection before the await, so the send path threw before any
+      // guard ran — and 9 from here once the flag was set.
+      // Read off the SINGLE-FLIGHT future, not a second flag: that field is
+      // already "an attempt is in flight", it is cleared by one `whenComplete`
+      // rather than at each of reconnect()'s exits, and a second copy would be
+      // one more thing to leave set after a failure.
+      throw RpcNoConnectionException(
+        'Transport',
+        reconnecting: _reconnecting != null,
       );
     }
   }
@@ -1794,6 +1798,16 @@ class RpcHttp2CallerTransport
     _reservedStreams.clear();
     _statusReceived.clear();
 
+    // From here until the attach below there is no connection, and saying so is
+    // what makes `_ensureUsable` the one that answers. Without it the flag was
+    // false for the whole factory await, the guard passed, and the refusal came
+    // from the discarded connection instead -- the right CODE (14) by accident
+    // and the wrong TYPE, so a caller branching on RpcNoConnectionException saw
+    // it on the websocket sibling and not here for the same state.
+    //
+    // NOT the silent-drop fix round 449 refuted: nothing is lost in this window
+    // either way, which that round measured. This is about which code answers.
+    _disconnected = true;
     try {
       final connection = await factory();
 

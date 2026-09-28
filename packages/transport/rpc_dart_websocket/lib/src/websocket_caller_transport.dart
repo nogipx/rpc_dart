@@ -99,17 +99,18 @@ class RpcWebSocketCallerTransport
   void _ensureUsable() {
     if (_closed) throw RpcClosedException('Transport');
     if (_disconnected) {
-      // FAILED_PRECONDITION, and the code is the load-bearing part. It has to
-      // be an RpcStatusException so transport-agnostic error handling catches
-      // it — the same state on http2 used to come back as one, so a caller
-      // could not write a single `catch` for both. And it must NOT be
-      // UNAVAILABLE, which is what the caller is told when the PEER is
-      // unreachable: this is a LOCAL refusal that names its own remedy, so the
-      // caller applies the remedy instead of retrying into it.
-      throw RpcStatusException(
-        RpcStatus.failedPrecondition,
-        'Transport is disconnected and has no socket; call reconnect(). '
-        'A failed reconnect leaves the transport recoverable, not closed.',
+      // The type carries the split: UNAVAILABLE while a reconnect is IN FLIGHT
+      // (retry, the remedy is already running), FAILED_PRECONDITION once it has
+      // failed (call reconnect()). Answering 9 for both told a standard gRPC
+      // retry policy not to retry for a condition that resolves itself in tens
+      // of milliseconds.
+      // Read off the SINGLE-FLIGHT future, not a second flag: that field is
+      // already "an attempt is in flight", it is cleared by one `whenComplete`
+      // rather than at each of this method's exits, and a second copy would be
+      // one more thing to leave set after a failure.
+      throw RpcNoConnectionException(
+        'Transport',
+        reconnecting: _reconnecting != null,
       );
     }
   }

@@ -54,6 +54,44 @@ Reported before acting rather than after, which is the only part of this that is
 not luck: the verdict was RETRACTED and the owner's instruction was left
 undone, with the numbers and the reason in the record.
 
+## Round 464 — the sentence can be in a TEST's matcher, and it can be the ROUND's own
+
+380's sentence was in a round record. 464's was in a matcher's doc comment, three
+lines above the assertion it justifies:
+
+> *"a synthetic UNAVAILABLE is RETRYABLE and invites the caller to repeat what
+> cannot work"*
+
+That is a decision, argued and written down, and the fastest way past it was to
+change one identifier in the matcher and move on. Measured instead — one call
+through `RpcRetryInterceptor` fired 100 ms into an 800 ms reconnect window:
+
+```
+FAILED_PRECONDITION   status=9 after 0ms     never retried
+UNAVAILABLE           OK pong after 711ms    retried, succeeded
+```
+
+The sentence has a hidden premise — that "repeat" means "repeat immediately" —
+and the library's own retry interceptor backs off, so the premise is false for
+this state and true for the neighbouring one.
+
+> **A test whose matcher carries an argument is a decision record, and changing
+> the matcher is executing a decision.** Look for the sentence wherever the
+> assertion is justified: a matcher, a `reason:`, a doc comment on a constant. A
+> red test is the usual way you meet one, which is exactly when the temptation to
+> edit it is highest.
+
+> **When the sentence turns out false, rewrite the argument, not just the
+> assertion.** The matcher now carries the two numbers and says which half of the
+> old sentence survives. An assertion changed without its reason is worse than
+> before: the next reader sees a bare choice where there used to be one with a
+> defence.
+
+Price here was one probe and the discipline to build it after the fix already
+looked right — the change was written, the gate went red on exactly the test that
+recorded the decision, and the measurement came second. Which is the one thing to
+do differently: 380 measured BEFORE acting.
+
 See also [L-05](L-05-green-locally-is-not-green-clean.md) — an ablation proves
 sensitivity, not portability. Same family: a result is about exactly what was
 varied, and a sentence generalising it is a separate claim.

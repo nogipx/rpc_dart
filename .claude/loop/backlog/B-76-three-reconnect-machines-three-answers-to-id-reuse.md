@@ -9,6 +9,42 @@ reason: cost — the three machines tell the caller three different things about
 
 # B-76 — three reconnect machines answer id reuse three different ways
 
+## STEP 2 DONE (round 464). Still open for the ID-REUSE half.
+
+The `## Ask` the owner attached, answered by measurement: **neither machine's
+behaviour, because the question has two answers.** Two arms per machine, a send
+during a reconnect that is IN FLIGHT and one after a reconnect that FAILED:
+
+```
+                          websocket   http2     health
+during the factory await     9          14      degraded
+after a FAILED reconnect     9           9      unhealthy
+```
+
+Both machines gave ONE status to TWO states, and `health()` already told them
+apart. A reconnect in flight is transient with the remedy already running —
+UNAVAILABLE. A failed one needs `reconnect()` — FAILED_PRECONDITION.
+
+The websocket's answer was a prior round's deliberate decision resting on a
+written-down sentence: *"a synthetic UNAVAILABLE ... invites the caller to repeat
+what cannot work"*. Measured (P-114), that sentence is false for this state,
+because a retry backs off:
+
+```
+a retried call fired 100 ms into an 800 ms window
+  FAILED_PRECONDITION   status=9 after 0ms     never retried
+  UNAVAILABLE           OK pong after 711ms    retried, succeeded
+```
+
+Shipped: `RpcNoConnectionException(what, reconnecting:)` in core, thrown by all
+three machines, each reading a field it ALREADY had for "an attempt is in flight"
+— the two transports' single-flight future and the proxy's `_connectingGuard` —
+rather than a new bool that would need clearing at three, three and seven exits.
+
+**What is left here**: the id-reuse mechanisms. A `Set` of live ids, a never-reset
+counter, and an id watermark, all solving one problem three ways. Round 464
+changed none of them.
+
 ## RE-SCOPED (round 449). The silent drop is NOT there — `checked/C-48`.
 
 Measured on http2 with the factory stalled 800 ms and a send 200 ms in:

@@ -244,6 +244,43 @@ final class RpcClosedException extends RpcStatusException {
   final String what;
 }
 
+/// A transport with no live connection — and which of the two such states it is.
+///
+/// "Disconnected" is two states wearing one word, and they want OPPOSITE advice.
+/// A reconnect IN FLIGHT will very likely have a connection in tens of
+/// milliseconds and nothing the caller does can help, so the answer is
+/// UNAVAILABLE: retry with backoff. A reconnect that FAILED, or was never
+/// started, needs `reconnect()` called — FAILED_PRECONDITION, whose whole
+/// meaning is "do not retry until the state is fixed".
+///
+/// Measured on a send 200 ms into an 800 ms factory stall, before this type:
+///
+///     during the factory await   websocket 9   http2 14
+///     after a FAILED reconnect   websocket 9   http2  9
+///
+/// So one cell disagreed, and BOTH machines got the in-flight case wrong for the
+/// caller: 9 tells a standard gRPC retry policy not to retry, and it then
+/// surfaces a hard failure for a condition that resolves itself. http2 read 14
+/// by accident — it discards the connection before the await, so the send path
+/// threw on its own rather than from any guard.
+final class RpcNoConnectionException extends RpcStatusException {
+  /// [what] names the thing, e.g. `'Transport'`.
+  RpcNoConnectionException(this.what, {required this.reconnecting})
+    : super(
+        reconnecting ? RpcStatus.unavailable : RpcStatus.failedPrecondition,
+        reconnecting
+            ? '$what is reconnecting and has no connection; retry.'
+            : '$what is disconnected and has no connection; call reconnect(). '
+                  'A failed reconnect leaves it recoverable, not closed.',
+      );
+
+  /// The thing with no connection, for a caller that wants to branch on it.
+  final String what;
+
+  /// Whether a reconnect was in flight when this was thrown.
+  final bool reconnecting;
+}
+
 /// The grpc-message sent for an error the handler did NOT describe itself.
 ///
 /// Deliberately says nothing about the cause. See [wireStatusFor]. Its

@@ -38,6 +38,26 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-114](P-114-does-a-retry-survive-the-reconnect-window.md)** valid (round 464),
+  core + rpc_dart_websocket — **a sentence, measured**: a prior round chose
+  FAILED_PRECONDITION for the reconnect window because "a synthetic UNAVAILABLE is
+  RETRYABLE and invites the caller to repeat what cannot work". One call through
+  `RpcRetryInterceptor` fired 100 ms into an 800 ms window, first backoff 250 ms —
+  `status=9 after 0ms` versus `OK pong after 711ms`. The DURATION is the measure:
+  0 ms proves no retry was attempted, 711 ms proves the retry waited the window
+  out rather than racing it. Timings chosen so the question has a fair answer both
+  ways — a window longer than the retry budget would prove only that retries can be
+  exhausted. Control: the same call with no reconnect, 30 ms
+- **[P-113](P-113-what-one-state-tells-a-caller.md)** valid (round 464),
+  rpc_dart_websocket + rpc_dart_http2 + core — **two arms per machine, which is the
+  design**: a send during a reconnect that is IN FLIGHT, and one after a reconnect
+  that FAILED. Every earlier record collapses those into "disconnected"; separated,
+  they turn out to want opposite advice, and `health()` already told them apart
+  (`degraded` / `unhealthy`) while the status did not. One injectable factory with a
+  `stall` and a `failNext`, so both arms come off one transport in one process.
+  Reports the exception TYPE as well as the code, because http2 read the right code
+  by ACCIDENT — from a discarded connection rather than from its guard. Controls: a
+  send with no reconnect (accepted), and one after it completes (accepted)
 - **[P-112](P-112-what-a-caller-ceiling-is-for.md)** valid (round 463),
   rpc_dart_http + rpc_dart_http2 + core — twelve concurrent calls against a handler
   that PARKS, ceiling 4 on the caller and 1024 on the responder, one arm per caller

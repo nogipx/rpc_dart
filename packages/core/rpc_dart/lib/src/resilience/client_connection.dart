@@ -233,12 +233,24 @@ final class _ReconnectingTransportProxy
     _inner = null;
   }
 
+  /// Whether [RpcClientConnection]'s connect loop is running right now.
+  ///
+  /// Null `_inner` is two states wearing one word — a reconnect IN FLIGHT and a
+  /// loop that gave up or never ran — and they want opposite advice from a
+  /// caller. See [RpcNoConnectionException].
+  ///
+  /// A callback rather than a flag this class maintains, deliberately: the
+  /// connect loop already has the answer in `_connectingGuard` and has SEVEN
+  /// exits, so a second copy would be seven chances to leave a caller retrying
+  /// into a loop that gave up.
+  bool Function()? isReconnecting;
+
   IRpcTransport _require() {
     final inner = _inner;
     if (inner == null || inner.isClosed) {
-      throw RpcStatusException(
-        RpcStatus.failedPrecondition,
-        'RpcClientConnection: transport not connected; call connect() first.',
+      throw RpcNoConnectionException(
+        'RpcClientConnection',
+        reconnecting: isReconnecting?.call() ?? false,
       );
     }
     return inner;
@@ -470,6 +482,8 @@ class RpcClientConnection {
        _logger = logger,
        _onStateChanged = onStateChanged {
     _proxy.onDropped = _onTransportDropped;
+    _proxy.isReconnecting = () =>
+        _connectingGuard != null && !_connectingGuard!.isCompleted;
   }
 
   final Future<IRpcReconnectableTransport> Function() _factory;
