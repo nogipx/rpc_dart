@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421]
-status: confirmed (round 421)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485]
+status: confirmed (round 485)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -223,5 +223,44 @@ object's own `health()` before testing what it does.** Without that, "the two
 transports behave differently" and "one of them had not noticed yet" are the
 same output. `../probes/P-90-which-type-escapes-when-disconnected.md`,
 `../rounds/405-the-guard-that-never-fires.md`, B-61.
+
+## Round 485 — the signal need not belong to us at all
+
+Round 353 moved this lens from a flag to an error stream. Round 485 moves it one
+level further, onto a **status code on the wire** — and the reader is not a
+transport but core's `RpcRetryInterceptor`.
+
+`UNAVAILABLE` is the framework's "the connection is gone". It is ALSO what a
+handler throws when its own downstream is down, what a draining server answers,
+and what core synthesises for a stream that ended without a status.
+`_reconnectIfConnectionIsGone` read it in the first sense only and called
+`transport.reconnect()` — which on a websocket closes the live socket under
+every OTHER call:
+
+    B's handler throws     sockets   A (a server stream on the same socket)
+    unavailable               2      errored after 4 messages
+    resourceExhausted         1      alive, 30 messages
+
+> **Ask the component about itself.** The status describes the CALL; only the
+> transport can describe the CONNECTION, and every transport here already
+> answers it — `health()` reports degraded on a websocket whose socket dropped
+> and on an http2 connection whose peer went away. One gate, `isHealthy`, and
+> the two meanings stop being one signal.
+
+> **The detector does not extend to "list the writers" here, because the writers
+> are the peer and the application.** For a signal that arrives from OUTSIDE,
+> enumerate who can PRODUCE it, then ask whether the reader's single
+> interpretation is right for each. Seven `addError` sites in round 353; four
+> producers of UNAVAILABLE here, and only one of them was about the connection.
+
+The blast radius is the give-away, and it compounds: every collateral failure is
+itself UNAVAILABLE, so N concurrent retrying calls feed the same mechanism.
+
+A caution this round paid for in a gate failure: the capability the reconnect
+exists for is real, and the fix must not quietly revert it. The bench's third arm
+drives a path that really died and reads `sockets=2, recovered` — with the
+reconnect ablated, `sockets=1, RpcNoConnectionException`.
+`../probes/P-124-what-one-calls-unavailable-costs-the-others.md`,
+`../rounds/485-unavailable-is-about-the-call.md`, B-94.
 
 Imported from private memory in the curate pass after round 234.

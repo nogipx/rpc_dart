@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (external audit, 2026-09-28; not a round)
+status: closed (round 485)
+round: 485
 commit: 8253fe8a
 paths: [packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-124
+reason: "closed — the witness was built and CONFIRMED the lead: sockets 2 -> 1, and the unrelated call stopped being killed"
 ---
 
 # B-94 — the retry interceptor reconnects on ANY unavailable, and a websocket reconnect kills every call on the socket
@@ -65,3 +65,29 @@ Rename or keep the name honest.
 ## Owner decision
 
 —
+
+## Closed (round 485) — confirmed, and the witness ran as designed
+
+The lead's own witness design was built (`P-124`) and every prediction in it
+held: `A fails, two sockets` in the case arm, `A survives, one socket` in the
+RESOURCE_EXHAUSTED guard arm.
+
+```
+                              sockets  A                B
+case    unavailable    before    2     errored, 4 msgs  RpcStatusException
+case    unavailable    after     1     alive,  30 msgs  RpcStatusException
+control resourceExhausted        1     alive,  30 msgs  RpcStatusException
+```
+
+Fixed with the first option in the sketch, expressed through `health()` rather
+than `isClosed`: the transport is asked whether IT is down, because the status
+only ever described the call. `isClosed` alone would have been too narrow — a
+websocket whose socket dropped reports `isClosed == false` and `degraded`, which
+is exactly the case that must still reconnect.
+
+**What the fix must not do is revert B-61**, so a third arm drives a path that
+really died: `sockets=2, recovered` with the reconnect, `sockets=1,
+RpcNoConnectionException` with it ablated.
+
+The second half of the title — a websocket reconnect closing the live socket —
+is NOT a defect and was left alone. Closing the socket is what a reconnect is.

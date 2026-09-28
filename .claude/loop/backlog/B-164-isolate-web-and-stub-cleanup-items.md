@@ -1,6 +1,6 @@
 ---
 status: open
-round: — (external audit, 2026-09-28; not a round)
+round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart, packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart, packages/transport/rpc_dart_isolate/lib/src/worker_policy.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport_stub.dart]
 probe: none — static read, nothing run

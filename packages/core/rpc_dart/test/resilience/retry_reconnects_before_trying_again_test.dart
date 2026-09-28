@@ -16,6 +16,10 @@
 // transport's decision — websocket keeps refusing the reconnect WINDOW
 // non-retryably, http2 keeps answering UNAVAILABLE — and makes UNAVAILABLE mean
 // what it says.
+//
+// The status alone does NOT say the connection is gone (B-94), so the
+// interceptor asks the transport first; a fake here has to answer that
+// question honestly or it is not the situation being measured.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -38,9 +42,13 @@ class _FlakyTransport implements IRpcTransport {
   @override
   Future<void> close() async {}
 
+  // The interceptor asks before reconnecting, so this has to answer about the
+  // CONNECTION rather than always say ok: a fake that reports healthy while
+  // `up` is false describes no transport this library ships.
   @override
-  Future<RpcHealthStatus> health() async =>
-      RpcHealthStatus.healthy(component: 'flaky', message: 'ok');
+  Future<RpcHealthStatus> health() async => up
+      ? RpcHealthStatus.healthy(component: 'flaky', message: 'ok')
+      : RpcHealthStatus.unhealthy(component: 'flaky', message: 'no connection');
 
   @override
   bool get isClient => true;

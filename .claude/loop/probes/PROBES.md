@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-124](P-124-what-one-calls-unavailable-costs-the-others.md)** valid (round
+  485), rpc_dart + rpc_dart_websocket — **two calls on one socket, only one of
+  them failing.** Counts sockets ACCEPTED at a real `RpcWebSocketServer`, so the
+  blast radius is a connection count rather than an inference from a log. Its
+  control is the same rig with one constant changed — the status the failing
+  handler throws — and the arm that keeps the fix honest is a third one where
+  the path really dies, carrying its own ablation: remove the reconnect and it
+  falls from `sockets=2, slow:x` to `sockets=1, RpcNoConnectionException`
 - **[P-123](P-123-what-the-two-shims-actually-share.md)** valid (round 482),
   rpc_dart_wasm — **the instrument B-93 named and nobody ran.** Extracts every
   top-level named function from both boot literals by BRACE MATCHING (a

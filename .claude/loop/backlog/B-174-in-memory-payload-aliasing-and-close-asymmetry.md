@@ -1,6 +1,6 @@
 ---
 status: open
-round: — (external audit, 2026-09-28; not a round)
+round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/in_memory_transport.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
 probe: none — static read, nothing run

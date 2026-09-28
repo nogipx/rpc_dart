@@ -141,6 +141,13 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// connection is fine; reconnecting would drop a working one and add load to
   /// a server already asking for less.
   ///
+  /// **And UNAVAILABLE alone does not mean the connection is gone.** A handler
+  /// may throw it (a downstream is down), a draining server answers it, and one
+  /// truncated stream synthesises it — so the transport is asked, because its
+  /// answer is about the CONNECTION where the status is only about this call.
+  /// Reconnecting on the status alone closes a live socket and fails every
+  /// other call on it, each of those failures being UNAVAILABLE in turn.
+  ///
   /// Best-effort by construction. A transport that cannot reconnect ANSWERS —
   /// `RpcChannelTransport` returns `degraded / supported: false` rather than
   /// throwing — and a failed attempt leaves a recoverable transport, so the
@@ -152,10 +159,14 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   ) async {
     if (error is! RpcStatusException) return;
     if (error.statusCode != RpcStatus.unavailable) return;
+    final transport = call.endpoint.transport;
     try {
-      await call.endpoint.transport.reconnect();
+      if ((await transport.health()).isHealthy) return;
+      await transport.reconnect();
     } catch (_) {
       // Nothing to do: the attempt below will fail the same way and report it.
+      // A health() that throws tells us nothing, and tearing a possibly live
+      // connection down on no evidence is the defect this guard exists for.
     }
   }
 

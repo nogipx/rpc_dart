@@ -1,6 +1,6 @@
 ---
 status: open
-round: — (external audit, 2026-09-28; not a round)
+round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
 probe: none — static read, nothing run
