@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-125](P-125-what-one-bad-frame-costs-a-reconnecting-client.md)** valid
+  (round 486), rpc_dart + rpc_dart_websocket — **counts the transports a factory
+  BUILDS**, one per reconnect, with the websocket transports constructed bare so
+  the proxy is the only reconnect machinery in the rig. Four arms, each with its
+  own control; the load-bearing one is the FOURTH, which sends arm 2's identical
+  `RpcFrameException.policy` with `closeOnProtocolError: true` and must still
+  read `1 -> 2`. A fix keyed on the error type passes the first three arms and
+  fails that one
 - **[P-124](P-124-what-one-calls-unavailable-costs-the-others.md)** valid (round
   485), rpc_dart + rpc_dart_websocket — **two calls on one socket, only one of
   them failing.** Counts sockets ACCEPTED at a real `RpcWebSocketServer`, so the

@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 486)
+round: 486
+commit: 931d8a0f
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-125
+reason: "closed — the witness was built and CONFIRMED both instances the lead named: one non-fatal frame cost a whole connection and every call on it"
 ---
 
 # B-95 — RpcClientConnection treats every error on incomingMessages as a dropped connection
@@ -63,3 +63,30 @@ Retire only on `onDone`, or on an error the transport declares fatal; skip
 ## Owner decision
 
 —
+
+## Closed (round 486) — both instances confirmed, and the fix is not the sketch
+
+```
+                              transports built   the other call
+a TEXT keepalive                   1 -> 2        errored, 3 msgs
+a lenient policy violation         1 -> 2        errored, 3 msgs
+nothing sent (control)             1 -> 1        alive,  88 msgs
+```
+
+Both sites the lead names reach the proxy and both retire the connection.
+
+**The fix sketch's middle option is the one that does not work.** *"Skip
+`IRpcAdvisoryChannelError` and `RpcFrameException.policy`"* keyed on the error
+type — and the type does not carry the answer: the SAME
+`RpcFrameException.policy` with `closeOnProtocolError: true` is genuinely fatal,
+and a proxy that skips it by type never retires a transport that has closed
+itself. What makes it safe is the sketch's first option combined with it: retire
+on `onDone`, which a fatal violation reaches through the transport's own close.
+Measured as arm 4: `built 1 -> 2`, correctly.
+
+`cancelOnError: true` is gone, as the sketch says, and that is not cosmetic —
+with it, a subscription cancelled by an error the proxy declined to act on never
+sees the close that should retire it. It is its own canary.
+
+Errors of both kinds are forwarded to the proxy's own message stream, because
+that is where `IRpcAdvisoryChannelError`'s contract says they go.

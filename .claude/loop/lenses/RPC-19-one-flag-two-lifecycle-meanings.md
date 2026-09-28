@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485]
-status: confirmed (round 485)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486]
+status: confirmed (round 486)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -262,5 +262,41 @@ drives a path that really died and reads `sockets=2, recovered` — with the
 reconnect ablated, `sockets=1, RpcNoConnectionException`.
 `../probes/P-124-what-one-calls-unavailable-costs-the-others.md`,
 `../rounds/485-unavailable-is-about-the-call.md`, B-94.
+
+## Round 486 — check the reader ABOVE the one you fixed
+
+Round 353 split one signal into "the connection is gone" and "one frame was
+bad", and taught `RpcChannelTransport` the difference. Round 486 is the same
+signal read by `RpcClientConnection`, which sits one layer above and had no such
+split: `cancelOnError: true` and retire on any error.
+
+    event                        transports built   the other call
+    a TEXT keepalive                  1 -> 2        errored at 3 messages
+    a lenient policy violation        1 -> 2        errored at 3 messages
+    nothing sent (control)            1 -> 1        alive at 88
+
+> **A distinction is only as good as its furthest reader.** 353's marker worked
+> exactly as designed at the layer it was written for, and the doc that states
+> the contract — *"reaches `incomingMessages`, where both endpoints log it. It
+> just stops there"* — was false one object up. When a round teaches one layer
+> to tell two things apart, enumerate everyone else who reads that signal.
+
+**And the discriminator is not the TYPE.** Arms 2 and 4 of the bench send the
+identical `RpcFrameException.policy` and differ only in `closeOnProtocolError`:
+strict mode closes the transport, and that close arrives as `onDone`, which
+retires. One type, two outcomes.
+
+> **Let the thing speak for itself.** The fix does not classify the error as
+> fatal or not; it declines to act on errors at all for these kinds and lets the
+> connection's own ENDING be the signal. The same move as round 485 asking
+> `health()` instead of reading a status — and the reason both work is that the
+> object under discussion is the only one that knows.
+
+The second canary is what makes the pair complete, and it fails on a different
+test from the first: restoring `cancelOnError: true` leaves the witnesses green
+and kills the STRICT guard, because a subscription cancelled by the error it
+declined to act on never sees the close.
+`../probes/P-125-what-one-bad-frame-costs-a-reconnecting-client.md`,
+`../rounds/486-a-bad-frame-is-not-a-dropped-connection.md`, B-95.
 
 Imported from private memory in the curate pass after round 234.

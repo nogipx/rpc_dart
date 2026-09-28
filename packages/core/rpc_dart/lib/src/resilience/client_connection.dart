@@ -190,12 +190,32 @@ final class _ReconnectingTransportProxy
       },
       onError: (Object e) {
         if (!identical(_inner, inner)) return;
+        if (_isAboutOneFrame(e)) {
+          // Report it where an unproxied transport reports it, and keep the
+          // connection. Retiring here closed a working socket and failed every
+          // call on it.
+          if (!_msgCtl.isClosed) _msgCtl.addError(e);
+          return;
+        }
         _retire(inner);
         onDropped?.call(e);
       },
-      cancelOnError: true,
+      // Not cancelOnError: the errors above are survivable, and a subscription
+      // cancelled by the first one would never see the connection end.
+      cancelOnError: false,
     );
   }
+
+  /// Whether [e] describes ONE inbound frame rather than the connection.
+  ///
+  /// A transport reports both on the same stream. An advisory error says so in
+  /// as many words ([IRpcAdvisoryChannelError]); [RpcFrameException] is about a
+  /// frame by construction, and where such a violation IS fatal the transport
+  /// closes itself — which arrives as `onDone` and retires. So nothing is lost
+  /// by declining to act on the error, and a peer that sends one text keepalive
+  /// stops costing a reconnect.
+  static bool _isAboutOneFrame(Object e) =>
+      e is IRpcAdvisoryChannelError || e is RpcFrameException;
 
   /// Drops [inner] as the live transport and closes it.
   ///
