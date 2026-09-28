@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 495)
+round: 495
+commit: 027ca636
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-133
+reason: "closed — CONFIRMED with the right exception type: status 9 in the close await against 14 in the factory await, and health() read CLOSED"
 ---
 
 # B-104 — websocket caller: calls made at the start of reconnect() get FAILED_PRECONDITION instead of UNAVAILABLE
@@ -49,3 +49,31 @@ Set `_disconnected = true` (and the reconnecting flag) before the first await.
 ## Owner decision
 
 —
+
+## Closed (round 495) — confirmed, plus a consequence the lead does not name
+
+```
+                          status                                health
+inside the CLOSE await    RpcClosedException, 9, not retryable  closed
+inside the FACTORY await  RpcNoConnection,   14, RETRYABLE      degraded
+no reconnect in flight    no throw                              healthy
+```
+
+The exception type is exactly as filed, and the factory arm — round 359's fixed
+segment — is the control that says the 9 belongs to the segment rather than to
+the rig.
+
+**`health()` read CLOSED, which is terminal.** It delegates to `_inner` whenever
+`_disconnected` is false, and the inner is already closed by then, so a supervisor
+polling health during a recovery was told the transport was gone for good. Same
+root cause, worse consequence than the status.
+
+Fixed as the sketch says — the flag before the first await. The parenthetical
+"(and the reconnecting flag)" needs nothing: `reconnect()` assigns `_reconnecting`
+immediately after `_reconnectOnce()` suspends, and the prologue has no await
+between the two lines, so no caller can observe `_disconnected` set with
+`_reconnecting` still null.
+
+Left unmeasured: how long the real window is. The bench holds it open for a chosen
+600 ms; the seconds dart:io actually waits for a close frame the peer never sends
+is B-134's number, not confirmed here.

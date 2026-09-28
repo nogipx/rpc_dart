@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-133](P-133-which-part-of-reconnect-answers-what.md)** valid (round 495),
+  rpc_dart_websocket — **makes the SEGMENTS of one method separately
+  addressable**: a fake channel whose close is slow holds the teardown await
+  open, a slow factory holds the next one, and each arm issues one call 50 ms in.
+  The already-fixed segment is the control. Reports `health()` alongside the
+  status, which is where its second finding came from. Trap: the fake's stream
+  must stay OPEN — `Stream.empty()` ends at once and the transport then treats
+  the peer as dropped at construction, making every arm read alike
 - **[P-132](P-132-does-the-peer-id-set-return-to-zero.md)** valid (round 494),
   rpc_dart_websocket — reads `peerStreamIds` out of `health().details`, which the
   round had to ADD (the wrapper delegated health to its inner transport, which

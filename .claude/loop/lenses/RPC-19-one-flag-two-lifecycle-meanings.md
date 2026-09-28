@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486]
-status: confirmed (round 486)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495]
+status: confirmed (round 495)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -298,5 +298,42 @@ and kills the STRICT guard, because a subscription cancelled by the error it
 declined to act on never sees the close.
 `../probes/P-125-what-one-bad-frame-costs-a-reconnecting-client.md`,
 `../rounds/486-a-bad-frame-is-not-a-dropped-connection.md`, B-95.
+
+## Round 495 — a DURATION has segments, and a fix can cover one of them
+
+Round 359 asked this lens's duration question of `_disconnected` and found the
+flag describing an outcome rather than a state. It moved the flag up to cover the
+factory handshake. Round 495 is the same flag, the same method, and the two
+awaits AHEAD of where 359 put it:
+
+    inside the CLOSE await     RpcClosedException, 9, not retryable   health=closed
+    inside the FACTORY await   RpcNoConnection,   14, RETRYABLE       health=degraded
+    no reconnect in flight     no throw                               health=healthy
+
+> **"During the recovery" is not one instant, and a fix that covers the await it
+> was written for leaves the others.** The detector that finds this is the same
+> one 359 used, applied per AWAIT rather than per method: for every suspension
+> point between the flag's last write and the state being restored, ask what the
+> flag says there. Here there were three and the fix had covered one.
+
+> **Make the segments separately addressable in the bench.** Each arm holds ONE
+> await open — a fake channel whose close is slow for the first, a slow factory
+> for the second — so the arms differ in which suspension point the call lands
+> in and in nothing else. The already-fixed segment is then the control, and it
+> is what says the bench can read the right answer.
+
+And `health()` carried a second finding the lead never named: it read CLOSED,
+terminal, because it delegates to an inner transport that is already closed. **Ask
+what the OBSERVERS of a state report during it, not only what the callers get** —
+a supervisor polling health during a recovery was told the transport was gone for
+good, which is this lens's original defect wearing its original clothes.
+
+A trap worth inheriting: the fake's stream must stay OPEN. `Stream.empty()` ends
+at once, so the transport's own `onDone` treats the peer as dropped at
+construction and sets the flag for a reason unrelated to the window — every arm
+then reads alike and nothing can be told apart.
+
+`../probes/P-133-which-part-of-reconnect-answers-what.md`,
+`../rounds/495-the-whole-method-is-one-window.md`, B-104.
 
 Imported from private memory in the curate pass after round 234.

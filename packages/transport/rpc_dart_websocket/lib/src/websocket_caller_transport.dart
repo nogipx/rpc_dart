@@ -581,20 +581,30 @@ class RpcWebSocketCallerTransport
       );
     }
     try {
+      // BEFORE the first await, because every await from here is part of the
+      // window. Round 359 moved this up to cover the factory handshake and left
+      // the two teardown awaits ahead of it — and `_inner.close()` waits on the
+      // PEER's close frame, which dart:io gives seconds. Measured with a channel
+      // whose close takes 600 ms, a call at 50 ms:
+      //
+      //   inside the close await    health=closed    RpcClosedException, 9
+      //   inside the factory await  health=degraded  RpcNoConnection, 14
+      //
+      // Both wrong in the same direction the type exists to prevent: 9 says "do
+      // not retry until you fix something", for a state that clears itself. And
+      // `health()` read CLOSED — terminal — because it delegates to an inner
+      // that is already closed, so a supervisor polling it during a recovery is
+      // told the transport is gone for good.
+      //
+      // Safe to set before `_reconnecting` is assigned in [reconnect]: nothing
+      // runs between this line and that one, the prologue here having no await.
+      _disconnected = true;
       // Read as early as possible, but the value must survive `_inner` being
       // closed either way -- on a peer-started drop it closed itself before
       // this method was ever called. See [_attach].
       final idCursor = _inner.lastIssuedStreamId;
       await _fwdSub?.cancel();
       await _inner.close();
-      // From here until `_attach` there is no socket, and saying so is the
-      // point of [_disconnected]. Set only in the catch below, it was false for
-      // the whole factory await -- a handshake, tens to hundreds of ms -- so
-      // `_ensureUsable` passed and work went into the CLOSED inner: sends
-      // accepted and dropped silently, and `getMessagesForStream` answering a
-      // synthetic UNAVAILABLE, which is RETRYABLE and so invites the caller to
-      // do it again.
-      _disconnected = true;
       final ws = await _reconnectFactory();
 
       // Re-checked AFTER the factory. The guard at the top of this method runs
