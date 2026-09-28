@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469]
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475]
 status: confirmed (round 445)
 ---
 
@@ -178,3 +178,38 @@ Method note, and it is the one this round paid for:
 
 `../rounds/469-the-void-arm-repaired.md`,
 `../probes/P-118-the-turn-a-grant-lands.md`.
+
+## Round 475 — the window is one turn wide, so get CALLED inside it
+
+469 measured the window at the controller and declared the transport-level
+consequence unreachable: *"from outside `RpcChannelTransport` every entry point
+is async"*. 475 closed it six rounds later by noticing what that sentence does
+not say.
+
+```
+before  [meta, meta, data(64), data(8)+END, data(64)]
+after   [meta, meta, data(64), data(64), data(8)+END]
+```
+
+> **A caller cannot get inside a callee's turn by calling harder; it gets there
+> by being CALLED.** The transport listens to an inbound stream, so a
+> `StreamController(sync: true)` runs the whole grant path — `handleInbound`,
+> `_onGrant`, `wakeAll()` — before `add` returns, and the woken sender's
+> continuation is still a queued microtask. For anything with an inbound stream
+> this seam is free and needs no production change.
+
+> **When a round stops on "unreachable", re-check which DIRECTION it measured.**
+> 469's sentence was about the API being called and the turn was created by the
+> API calling back. Both halves were true; only one was relevant.
+
+The fix's shape is the other thing to carry:
+
+> **A guard on a deliberately synchronous path is conditional, not
+> unconditional.** `_claimEnding` is `async`, so `await`ing it always costs a
+> microtask hop — on a path whose own comment says it must not introduce one.
+> `_parkedSends.containsKey(streamId)` is a map lookup, and the await happens
+> only when there is something to wait for. Pinned by a test that runs the same
+> sequence with flow control OFF.
+
+`../rounds/475-inside-the-waking-turn.md`,
+`../probes/P-119-inside-the-waking-turn.md`.

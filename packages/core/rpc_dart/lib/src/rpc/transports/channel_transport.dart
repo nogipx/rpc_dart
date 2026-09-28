@@ -503,6 +503,25 @@ class RpcChannelTransport
       }
       return;
     }
+    // The fifth ending site, and the only one that did not claim its ending.
+    //
+    // `tryConsume` admits on `credit > 0` rather than on fit and never consults
+    // `_sendWaiters`, so in the turn a grant lands a parked sender is woken —
+    // its continuation a MICROTASK — while this path takes the credit and goes
+    // out first. Measured with a synchronous channel, which is what puts a
+    // caller inside that turn:
+    //
+    //     [meta, meta, data(64), data(8)+END, data(64)]
+    //                            ^ the ending, ahead of the parked frame
+    //
+    // GUARDED on `containsKey`, not an unconditional `await`: with the window
+    // off nothing ever parks, and an await here would add a microtask hop to
+    // every send on a path the comment above keeps deliberately synchronous.
+    if (endStream &&
+        _parkedSends.containsKey(streamId) &&
+        !await _claimEnding(streamId)) {
+      return;
+    }
     await _channel.send(
       RpcTransportMessage.withPayload(
         payload: data,

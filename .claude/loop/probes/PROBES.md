@@ -38,6 +38,19 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-119](P-119-inside-the-waking-turn.md)** valid (round 475),
+  rpc_dart — **the seam is the RECEIVE side, and it is free.** P-118 measured the
+  flow-control window at the controller's API and stopped, because the
+  transport-level consequence needs a caller inside the turn a grant lands and
+  "every entry point is async". True of the SEND side: the transport also LISTENS,
+  `IRpcMultiplexedChannel` is five members, and a `StreamController(sync: true)`
+  for `incoming` runs `handleInbound` → `_onGrant` → `wakeAll()` before `add`
+  returns — so the woken sender's continuation is a queued microtask and the next
+  statement is in the window. Measures the ORDER the transport handed to the
+  channel, recorded inside `send`. **The control is asserting the frame is still
+  parked BEFORE the grants**: without it, "the ending came second" is equally
+  consistent with nothing having parked, which is how round 445's 0-of-200 went
+  void. Policy must SEED the sender or nothing parks at all
 - **[P-118](P-118-the-turn-a-grant-lands.md)** valid (round 469),
   rpc_dart — **an interleaving CONSTRUCTED rather than raced for**, which is what
   repaired a 0-of-200 void arm. `RpcFlowController` driven at its own API (it is on

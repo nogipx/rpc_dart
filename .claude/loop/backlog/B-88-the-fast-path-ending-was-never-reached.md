@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 475)
 round: 445
 commit: 0f3adf45
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart]
@@ -8,6 +8,41 @@ reason: bench — the arm is VOID, not clean: 0 of 200 because the two precondit
 ---
 
 # B-88 — `sendMessage`'s fast-path ending was never reached
+
+## CLOSED (round 475) — the seam was the RECEIVE side
+
+Round 469 stopped on *"from outside `RpcChannelTransport` every entry point is
+async, so no test can be in that turn"*. True of the SEND side; the transport
+also LISTENS, and `IRpcMultiplexedChannel` is five members. A
+`StreamController(sync: true)` for `incoming` runs `handleInbound` → `_onGrant` →
+`wakeAll()` before `add` returns, leaving the woken sender's continuation a
+queued microtask — so the next statement is inside the window. No production
+change needed to get there.
+
+```
+before the grant  [meta, meta, data(64)]
+before the fix    [meta, meta, data(64), data(8)+END, data(64)]
+after the fix     [meta, meta, data(64), data(64), data(8)+END]
+```
+
+The ending overtook the parked frame: the peer was told the stream ended and then
+handed a frame on it.
+
+Shipped: the guard round 445 wrote and dropped, now witnessed —
+
+```dart
+if (endStream &&
+    _parkedSends.containsKey(streamId) &&
+    !await _claimEnding(streamId)) return;
+```
+
+**`containsKey` first is load-bearing**, not a micro-optimisation: `sendMessage`'s
+own comment keeps the fast path synchronous, and an unconditional await would add
+a microtask hop to every send with the window off. Guarded by a test that asserts
+ordering is unchanged in that configuration.
+
+Canary: the condition disabled reproduces `Expected: a value greater than <4> /
+Actual: <3>` with both guards still green. `P-119`.
 
 ## The arm is REPAIRED (round 469). The fix is still unwitnessed.
 
