@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465]
 status: confirmed (round 458)
 ---
 
@@ -1075,3 +1075,35 @@ visible: same code, different exception class, for one state.
 
 `../rounds/464-two-states-wearing-one-word.md`,
 `../probes/P-113-what-one-state-tells-a-caller.md`.
+
+## Round 465 — the ablation aimed at one copy answered for another
+
+The same lead's other half, and it is the third time it has ended "the divergence
+is real and the harm is not". Three mechanisms for stream-id reuse across a
+reconnect, and the outcome is identical:
+
+```
+             before  after  collision  late finishSending
+websocket      1       3       no      no -- different id
+http2          1       3       no      no -- different id
+proxy          1       3       no      no -- different id
+```
+
+The section above — *"What a no-drift candidate earns: nothing"* — applies, and
+451's question settles the merge: the proxy REPLACES the transport, so its duty
+crosses an object boundary the other two never lose. One shared class would be
+one class with three flags.
+
+What is worth carrying is where the round's only new fact came from:
+
+> **An ablation aimed at one copy is a live test of every copy built on it.** The
+> control here restored `_nextStreamId = 1` in http2 — the reset its own comment
+> says is deliberately absent — to prove the bench could see a collision. It did,
+> AND the proxy arm, which runs over that same transport, stayed clean: its
+> `_idWatermark` carried the sequence across a transport that had rewound. That
+> is what its doc comment claims and what nothing had ever exercised. Read every
+> row of a control run, not only the row you aimed at.
+
+`../rounds/465-three-mechanisms-one-outcome.md`,
+`../probes/P-115-does-an-id-come-back-after-a-reconnect.md`,
+`../checked/C-53-three-id-mechanisms-one-correct-outcome.md`.

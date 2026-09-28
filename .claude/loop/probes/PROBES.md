@@ -38,6 +38,29 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-116](P-116-how-long-until-a-web-client-notices.md)** valid (round 466),
+  rpc_dart_websocket — **a web-platform gap measured without a browser**: the stub
+  `openWebSocket` IS the portable fallback as well as the web one, so both
+  implementations run on the VM against one server, differing in exactly the code
+  under test. **The server has to be RAW** — handshake by hand, then total silence
+  — because a `dart:io` WebSocket server answers a ping inside its own
+  implementation, and against one of those neither arm can detect anything and both
+  read clean. `626ms` versus `NEVER`, with `io` + no interval as the control that
+  also reads NEVER. Second half, for the owner's cost question, is deliberately
+  reported as INCONCLUSIVE: the arm ORDER dominates, and the **ping count** is what
+  exposed the first version as void — at 2000 messages the stream outran the first
+  timer tick and zero pings landed while the row read "free"
+- **[P-115](P-115-does-an-id-come-back-after-a-reconnect.md)** valid (round 465),
+  all three caller-side reconnect machines in one run — mint an id, **leave the
+  call open**, reconnect, mint another, then `finishSending(oldId)`. The open call
+  is load-bearing: an id is only reusable-and-harmful while something still holds
+  it. The second measure is what makes the first mean something — two equal
+  integers are a curiosity, a teardown landing on a live call is the defect the
+  lead describes. Control: `_nextStreamId = 1` restored in http2's reconnect, the
+  reset its own comment says is deliberately absent, which reads `1 / 1 / YES`.
+  **That control also answered a question about another machine**: with http2
+  rewound, the PROXY arm still read `no`, so its `_idWatermark` carries the
+  sequence across a transport that restarts its own
 - **[P-114](P-114-does-a-retry-survive-the-reconnect-window.md)** valid (round 464),
   core + rpc_dart_websocket — **a sentence, measured**: a prior round chose
   FAILED_PRECONDITION for the reconnect window because "a synthetic UNAVAILABLE is

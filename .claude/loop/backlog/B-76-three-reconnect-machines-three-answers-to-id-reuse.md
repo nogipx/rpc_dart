@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 465)
 round: 449 — the silent-drop claim MEASURED and REFUTED; re-scoped to the answer
 commit: 3f88d9fa
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -9,7 +9,32 @@ reason: cost — the three machines tell the caller three different things about
 
 # B-76 — three reconnect machines answer id reuse three different ways
 
-## STEP 2 DONE (round 464). Still open for the ID-REUSE half.
+## CLOSED (round 465) — the id-reuse half is CLEAN
+
+One call left open across one reconnect, then the late `finishSending` this
+lead's own body names as the cost of a collision:
+
+```
+             before  after  collision  late finishSending
+websocket      1       3       no      no -- different id
+http2          1       3       no      no -- different id
+proxy          1       3       no      no -- different id
+```
+
+Control — `_nextStreamId = 1` restored in http2's reconnect — reads
+`1 / 1 / YES / YES`, so the bench can see it. Negative: `checked/C-53`.
+
+**And they must not be merged.** The three are not three answers to one question:
+the websocket keeps its transport object and must REJECT ids from a dead
+connection, http2 keeps its object and need only not rewind, and the proxy
+REPLACES the transport so the sequence has to cross an object boundary. The third
+cannot use either of the first two.
+
+The control also showed the proxy's `_idWatermark` holding across a transport
+that rewinds its own ids — which its doc comment claims and nothing had
+exercised.
+
+## STEP 2 DONE (round 464)
 
 The `## Ask` the owner attached, answered by measurement: **neither machine's
 behaviour, because the question has two answers.** Two arms per machine, a send

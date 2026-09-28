@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the web is a real build target (dart2js)
 breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
-applied: [219, 227, 285, 286, 345, 383, 392, 427, 428]
+applied: [219, 227, 285, 286, 345, 383, 392, 427, 428, 466]
 status: confirmed (round 428)
 ---
 
@@ -158,3 +158,34 @@ listeners and `runRpcIsolateManagerWorker` still need a browser, and moving the
 channel does not change that.
 
 `../rounds/428-the-file-the-test-could-not-import.md`.
+
+## Round 466 — the web implementation is usually the PORTABLE fallback too
+
+428 found the platform-neutral half of a web-only file and moved it. 466 needed
+no move at all, because the thing it had to measure was already importable:
+
+> **A conditional import's "web" arm is very often the STUB arm as well, and a
+> stub runs anywhere.** `ws_open_stub.dart` is the web implementation of
+> `openWebSocket` and the portable fallback, one file. So the web behaviour —
+> `pingInterval` accepted and DROPPED — can be measured on the VM, against the
+> same server as the `dart:io` arm, differing in exactly the implementation under
+> test. Before concluding a web gap needs a browser, check whether its arm is the
+> conditional default.
+
+```
+pingInterval = 300ms, silent peer, cap 5s
+  ws_open_io   (honours it)          626ms
+  ws_open_stub (web, DROPS it)       NEVER
+  CONTROL: ws_open_io, no interval   NEVER
+```
+
+The trap this one had, and it is the mirror of the rule above:
+
+> **A platform-behaviour bench needs a peer that does not supply the behaviour
+> for you.** The first instinct is a `dart:io` WebSocket server, which answers a
+> ping inside its own implementation — against one of those NEITHER arm detects
+> anything and both read clean. The server has to be a raw socket doing the
+> handshake by hand and then going silent.
+
+`../rounds/466-the-gap-measured-and-two-promises-priced.md`,
+`../probes/P-116-how-long-until-a-web-client-notices.md`.
