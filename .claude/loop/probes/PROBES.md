@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-135](P-135-does-the-window-reach-a-direct-object.md)** valid (round 497),
+  rpc_dart — **varies the LIMIT rather than ablating a guard**, which is the only
+  way to separate "unmetered" from "metered with a generous bound": shrink the
+  window 64-fold and the codec path moves 32x while zero-copy does not move at
+  all. Its draining-consumer arm is a control that shows the bench CANNOT see the
+  defect from the paused rows alone, because the library does not throttle
+  producers by decision. Counts in the HANDLER; RSS was tried first and abandoned
+  for negative deltas
 - **[P-134](P-134-what-reassembling-one-large-message-costs.md)** valid (round
   496), rpc_dart — **five message sizes at ONE chunk size, reported as us/KiB**,
   because "is it slow" and "is it quadratic" are different questions and a single

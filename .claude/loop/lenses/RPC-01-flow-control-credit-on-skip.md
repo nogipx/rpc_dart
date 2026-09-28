@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475]
-status: confirmed (round 445)
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497]
+status: confirmed (round 497)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -213,3 +213,38 @@ The fix's shape is the other thing to carry:
 
 `../rounds/475-inside-the-waking-turn.md`,
 `../probes/P-119-inside-the-waking-turn.md`.
+
+## Round 497 — vary the LIMIT, not the guard
+
+Every application above ablates a guard and watches a number move. Round 497 had
+nothing to ablate: the claim was that a payload takes no credit at all, and the
+first four arms of its bench read as though neither path were bounded —
+
+    zeroCopy  PAUSED    window 4096 KiB    produced 247722   received 1
+    codec     PAUSED    window 4096 KiB    produced 189274   received 1
+
+which is the OPPOSITE conclusion, and it is the one the round would have reported.
+The reason those rows say nothing is `checked/C-19`: the library does not throttle
+producers by decision, so "the producer ran far ahead" is expected on every path.
+
+> **When the hypothesis is "this limit does not apply here", the thing to vary is
+> the LIMIT.** Shrink it 64-fold and see which arm moves:
+>
+>     zeroCopy  PAUSED    window 64 KiB    produced 274289   (no change)
+>     codec     PAUSED    window 64 KiB    produced   5960   (32x)
+>
+> That separates *unmetered* from *metered with a generous bound*, which no
+> absolute number can. An ablation removes a mechanism; this is the same move
+> applied to a mechanism's SETTING, and it is available whenever the mechanism is
+> a configurable number.
+
+> **And the control that is not a control.** The draining-consumer arm produced
+> the same order as the paused one, which is what told the round that the paused
+> rows carried no information. A control whose purpose is to show the bench can
+> see the defect can also show that it cannot — read it before reading the case.
+
+The finding itself stayed DEFERRED: metering an arbitrary object needs a nominal
+weight (new public policy, against `RpcSecurityPolicy`'s own warning) or parking
+on credit (reversing rounds 208 and 214). Both are the owner's.
+`../probes/P-135-does-the-window-reach-a-direct-object.md`,
+`../rounds/497-vary-the-limit-to-see-if-it-is-the-limit.md`, B-106, B-195.
