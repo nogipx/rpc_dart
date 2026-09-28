@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 468)
 round: 450
 commit: db96aa72
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
@@ -8,6 +8,33 @@ reason: cost — three homes for one rule, no divergence shown to bite; the ASK 
 ---
 
 # B-89 — the stream-id parity rule has three homes, not one
+
+## CLOSED (round 468) — there are TWO homes, and they never meet
+
+Both questions came back clean, so this closes as the negative the lead itself
+named as the honest end. `checked/C-54`.
+
+**Q1 — no.** `RpcHttp2ResponderTransport implements IRpcTransport,
+IRpcSecurityPolicyAware, IRpcFlowControlled` — **not `IRpcStreamIdSequence`**. No
+`resumeStreamIdsAfter`, no `lastIssuedStreamId`. There is no door, so `2` is an
+initialiser with no rule attached rather than a third implementation.
+
+**Q2 — not from inside this library.** Driven at its own boundary the caller's
+rule is correct at every parity and never rewinds (`2 -> 5, 7`; `100 -> 103,
+105`), and through `RpcClientConnection` across three swaps the ids are
+`[1, 3, 5, … 19]`, no evens, strictly increasing.
+
+Control — the alignment deleted — reports `PARITY BROKEN` on three rows, so the
+bench can see it. **And the proxy arm stayed clean under that same ablation**:
+the alignment is never exercised on that path, because `lastIssuedStreamId` is
+`_nextStreamId - 2` and odd by construction. It is reachable only from the
+PUBLIC transport surface.
+
+**The `## Ask`, answered: not the manager.** `RpcStreamIdManager` also computes a
+max-assignable bound and tracks release, and http2 delegates real id assignment
+to `package:http2` — its `_nextStreamId` is rpc_dart's own handle. Adopting it
+would put a bound and a release ledger on a transport needing neither, for a rule
+four tokens long with no reachable disagreement.
 
 Split out of B-87 in round 450, which verified the `ff930001` sweep's nine
 claimed negatives and found this one false as written. See `checked/C-49`.

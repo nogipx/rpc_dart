@@ -38,6 +38,28 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-118](P-118-the-turn-a-grant-lands.md)** valid (round 469),
+  rpc_dart — **an interleaving CONSTRUCTED rather than raced for**, which is what
+  repaired a 0-of-200 void arm. `RpcFlowController` driven at its own API (it is on
+  no barrel; `channel_transport.dart` is its only importer): spend the window, park
+  a frame, deliver the peer's grant through `handleInbound`, then contend in that
+  same synchronous turn. `fast path took it=true, parked sender resumed=FALSE`
+  against a control at `false/TRUE`. **Two void versions preceded it and the tell
+  was one extra column**: `returnCredit` is the RECEIVE side and never wakes a
+  sender, and `initialSendWindowBytes: null` leaves the sender unseeded so
+  `tryConsume` can never refuse — both read as "the fast path won" while measuring
+  nothing, and `parked sender resumed=true` with the credit exactly spent is what
+  contradicted them
+- **[P-117](P-117-where-the-parity-rules-meet.md)** valid (round 468),
+  rpc_dart_http2 + core — **two arms at different LEVELS, and neither substitutes**:
+  `resumeStreamIdsAfter` driven at its own boundary at every parity (does the rule
+  work?) and through `RpcClientConnection` across three swaps, three ids between
+  each — an ODD count on purpose, so a naive carry lands on an even one (is the
+  rule ever asked?). Control: the alignment deleted, which reports `PARITY BROKEN`
+  on three rows — **and leaves the proxy arm CLEAN**, which is the sharper result.
+  An ablation that cannot reach an arm has said something about that arm:
+  `lastIssuedStreamId` is `_nextStreamId - 2`, odd by construction, so the
+  alignment is never exercised there
 - **[P-116](P-116-how-long-until-a-web-client-notices.md)** valid (round 466),
   rpc_dart_websocket — **a web-platform gap measured without a browser**: the stub
   `openWebSocket` IS the portable fallback as well as the web one, so both

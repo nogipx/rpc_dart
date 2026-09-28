@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468]
 status: confirmed (round 458)
 ---
 
@@ -1107,3 +1107,39 @@ What is worth carrying is where the round's only new fact came from:
 `../rounds/465-three-mechanisms-one-outcome.md`,
 `../probes/P-115-does-an-id-come-back-after-a-reconnect.md`,
 `../checked/C-53-three-id-mechanisms-one-correct-outcome.md`.
+
+## Round 468 — one of the "copies" had no entry point at all
+
+The detector's step 1 is *find a field every sibling declares*, and a field name
+survives differences in mechanism — which is what makes it a good detector and
+also what makes this case slip through. B-89 listed three implementations of the
+stream-id parity rule by pointing at three counters. One of them is not an
+implementation:
+
+```
+RpcHttp2ResponderTransport implements
+    IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled
+```
+
+No `IRpcStreamIdSequence`, so no `resumeStreamIdsAfter` and no
+`lastIssuedStreamId`. `_nextStreamId = 2` is written once and incremented; nothing
+can hand it a value of any parity.
+
+> **A field is a copy of a RULE only if something can drive it.** Step 1 finds
+> declarations, and a bare initialiser declares the same thing a rule does. Before
+> counting a site as an instance, ask what its ENTRY POINT is — the `implements`
+> clause answers it in one line, and answered it here after the lead had carried
+> the site for eighteen rounds.
+
+The same round's second half is the one worth pairing with 465's: the control —
+the caller's alignment deleted — turned three direct rows red and left the PROXY
+arm clean. Two rounds running, an ablation aimed at one arm has answered a
+question about another.
+
+> **A clean arm under an ablation is not a weaker result than a red one.** Red
+> says the rule works; clean says the rule is never asked on that path. Both are
+> findings, and only the second tells you whether a duplication can bite.
+
+`../rounds/468-the-third-home-has-no-door.md`,
+`../probes/P-117-where-the-parity-rules-meet.md`,
+`../checked/C-54-the-parity-rules-never-meet.md`.

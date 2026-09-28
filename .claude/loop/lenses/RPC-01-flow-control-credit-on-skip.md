@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445]
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469]
 status: confirmed (round 445)
 ---
 
@@ -147,3 +147,34 @@ the one path no witness could reach.
 > which operations are not charged at all, and therefore pass a gate that exists
 > to make things wait. `sendDirectObject` never calls `tryConsume`, which is
 > exactly why nothing held it back.
+
+## Round 469 — `credit > 0` rather than FIT makes the window one turn wide
+
+`tryConsume` admits whenever credit is positive, not when the frame fits, and it
+never consults `_sendWaiters`. Combine that with `wakeAll()` completing a parked
+waiter SYNCHRONOUSLY while the waiter's continuation is a MICROTASK, and the
+credit a parked sender was woken for belongs to whoever asks first:
+
+```
+                                    fast path took it   parked sender resumed
+a fast-path send in the waking turn        true                 FALSE
+CONTROL: nobody contends                   false                TRUE
+```
+
+> **A gate that admits on a SIGN rather than on a FIT has no queue, and a wake
+> is not a handover.** Waking a waiter only lets it re-ask. Anything else that
+> asks between the wake and the waiter's turn wins, and nothing in the admission
+> path can see that a sender is waiting. The detector is two questions asked
+> together: what does the gate compare, and does it know who is queued?
+
+Method note, and it is the one this round paid for:
+
+> **An interleaving one microtask wide is CONSTRUCTED, never raced for.** Round
+> 445 attempted this from outside the transport 200 times and every attempt
+> re-measured the other branch, because from outside every entry point is async.
+> Driving the controller directly is what made the turn addressable — and it is
+> also what leaves the transport-level consequence unwitnessed, since the fix
+> changes frame order on the wire.
+
+`../rounds/469-the-void-arm-repaired.md`,
+`../probes/P-118-the-turn-a-grant-lands.md`.
