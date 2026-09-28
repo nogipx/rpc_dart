@@ -41,6 +41,25 @@ abstract interface class IBlobRepository {
   Future<BlobWriteResult> writeBlob(BlobWriteRequest request);
 
   /// Delete a blob; returns `true` when something was removed.
+  ///
+  /// With [expectedVersion], the two outcomes are SPECIFIED, because the four
+  /// adapters gave four answers between them while the contract said nothing:
+  ///
+  /// - the blob is MISSING — returns `false`. Nothing was removed, which is
+  ///   what the sentence above already promised, and it makes a repeated delete
+  ///   idempotent for a caller that lost its response.
+  /// - the blob EXISTS at another version — throws
+  ///   [RpcStatusException] with [RpcStatus.aborted]. The caller's precondition
+  ///   failed and the numbers say what to retry with.
+  ///
+  /// ABORTED and not a `StateError`: `wireStatusFor` is default-deny, so a
+  /// `StateError` reaches a remote caller as INTERNAL "Internal server error"
+  /// with the versions stripped out.
+  ///
+  /// Measured before this was written — `in_memory` threw `StateError` on a
+  /// missing blob, `webdav` and `minio` returned `false`, `sqlite` threw
+  /// ABORTED; on a mismatch the first two threw `StateError` and the last two
+  /// ABORTED. An application picking a backend got a different contract with it.
   Future<bool> deleteBlob(String collection, String id, {int? expectedVersion});
 
   /// Remove several blobs from one collection in as few round trips as the

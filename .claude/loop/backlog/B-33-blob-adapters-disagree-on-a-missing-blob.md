@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 415)
+status: closed (round 478)
 round: 318
 commit: 935d4bc3
 paths: [packages/blob/rpc_blob/lib/src/adapters/**, packages/blob/rpc_blob_webdav/lib/**, packages/blob/rpc_blob_minio/lib/**, packages/blob/rpc_blob_sqlite/lib/**]
@@ -9,7 +9,41 @@ reason: "owner scope decision (round 318) — refactoring is core and transport 
 
 # B-33 — two blob adapters answer a missing blob differently
 
-## Step one is DONE (round 471): the matrix, all four adapters
+## CLOSED (round 478) — and round 471's matrix below was WRONG
+
+Read against today's tree rather than against this lead's prose:
+
+```
+blob MISSING, expectedVersion != null
+  in_memory   throws ABORTED      (not StateError — round 416 converted it)
+  sqlite      throws ABORTED
+  webdav      returns false
+  minio       returns false
+
+blob EXISTS at another version
+  all four    throws ABORTED      <- ALREADY unified, by round 416
+```
+
+So the mismatch axis needed nothing, and only the missing case diverged, 2-2.
+Round 471 reported four answers because it read `minio` and `sqlite` and took
+`in_memory` and `webdav` from the text below — which predates round 416.
+
+**The answer: `false` for a missing blob.** It is what the contract sentence
+already promised, it cannot break a working caller (nothing starts throwing; two
+adapters stop), and it keeps a repeated delete idempotent. ABORTED stays for a
+mismatch, which needed no decision.
+
+Changed: `in_memory` (drop the throw) and `sqlite` (read the version first — a
+conditional `DELETE … AND version = ?` reports `changes() == 0` for both cases,
+so it could not tell them apart). `webdav` and `minio` were already right.
+
+One test per adapter, as the decision required: `rpc_blob +33`,
+`rpc_blob_sqlite +38`, `rpc_blob_webdav +13`, `rpc_blob_minio +24`.
+
+**NOT done**: `IDataStorageAdapter` and `INotifyRepository`, which this lead
+names as having the same structure. Out of its decision's scope.
+
+## Step one, as round 471 recorded it — SUPERSEDED, see above
 
 The owner asked for this before any fix. Input: the blob is MISSING and
 `expectedVersion != null`.

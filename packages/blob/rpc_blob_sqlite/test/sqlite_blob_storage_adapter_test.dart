@@ -171,6 +171,21 @@ void main() {
     expect(head, isNull);
   });
 
+  // The other half of `IBlobStorageAdapter.deleteBlob`'s contract, unified in
+  // round 478. This adapter used to throw ABORTED for a MISSING blob, where
+  // webdav and minio returned false for the same call — `changes() == 0` cannot
+  // tell "gone" from "wrong version", so it read both as the mismatch. The
+  // version is now read first, inside the same transaction.
+  test(
+    'delete of a MISSING blob with a version is false, not a throw',
+    () async {
+      expect(
+        await adapter.deleteBlob('temp', 'never-existed', expectedVersion: 1),
+        isFalse,
+      );
+    },
+  );
+
   test('list paginates with cursor and ordering', () async {
     Future<void> write(String id) async {
       await adapter.writeBlob(

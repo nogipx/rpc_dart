@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478]
 status: confirmed (round 458)
 ---
 
@@ -1143,3 +1143,44 @@ question about another.
 `../rounds/468-the-third-home-has-no-door.md`,
 `../probes/P-117-where-the-parity-rules-meet.md`,
 `../checked/C-54-the-parity-rules-never-meet.md`.
+
+## Round 478 — a matrix read off a LEAD is not a matrix
+
+The lens's whole method is step 3: diff the copies by behaviour. 478 is what
+happens when the diff is taken from prose instead of from code.
+
+B-33 said two adapters disagreed. Round 471 recorded FOUR answers. Both were
+written before round 416 converted this library's `StateError`s, and round 471 —
+mine — read `minio` and `sqlite` with a grep and took `in_memory` and `webdav`
+from the lead's text. Read against the tree:
+
+```
+blob MISSING, expectedVersion != null   in_memory ABORTED   sqlite ABORTED
+                                        webdav    false     minio  false
+blob EXISTS at another version          all four  ABORTED    <- already unified
+```
+
+> **One axis had already been fixed by a round that never mentioned this lead.**
+> Round 416 swept `StateError` out of 17 packages; two of these four adapters
+> were in that sweep, and B-33 went on describing the pre-416 world for
+> twenty-five rounds. A lens that compares copies has to re-read the copies —
+> including when a previous round of the SAME lens claims to have done it.
+
+The choice between the two surviving answers is worth recording too, because it
+is not "pick the majority":
+
+> **Between two defensible unifications, prefer the one that cannot break a
+> working caller.** `false` and ABORTED each had two adapters and a real
+> argument. `false` is what the contract sentence already promised, and choosing
+> it makes two adapters STOP throwing; choosing ABORTED would have added a new
+> throw to two published packages for a case that returns quietly today.
+
+And the implementation asymmetry the sweep exposed:
+
+> **A unified answer can cost one adapter a query.** `sqlite` could not
+> distinguish "gone" from "wrong version" at all — a conditional
+> `DELETE … AND version = ?` reports `changes() == 0` for both — so the two
+> outcomes having different answers forced a read before the write. The other
+> three needed a line or nothing. Count the cost per copy, not per class.
+
+`../rounds/478-one-contract-for-a-conditional-delete.md`.

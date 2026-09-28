@@ -379,27 +379,33 @@ CREATE TABLE IF NOT EXISTS "$_registryTable" (
       return false;
     }
     return _transaction<bool>(() {
-      final args = <Object?>[collection, id];
-      final where = StringBuffer(
-        'DELETE FROM ${_quoteIdentifier(table)} WHERE collection = ? AND id = ?',
-      );
+      // A conditional DELETE reports `changes() == 0` for BOTH "the blob is
+      // gone" and "it is there at another version", and the two now have
+      // different answers — `false` and ABORTED. `changes()` cannot tell them
+      // apart, so the version is read first, inside the same transaction.
       if (expectedVersion != null) {
-        where.write(' AND version = ?');
-        args.add(expectedVersion);
-      }
-      _database.execute(where.toString(), args);
-      final changes = _database.select('SELECT changes() AS count');
-      if (changes.isEmpty) {
-        return false;
-      }
-      final count = changes.first['count'] as int? ?? 0;
-      if (expectedVersion != null && count == 0) {
-        throw RpcStatusException(
-          RpcStatus.aborted,
-          'Expected version $expectedVersion for $id but no rows deleted.',
+        final found = _database.select(
+          'SELECT version FROM ${_quoteIdentifier(table)} '
+          'WHERE collection = ? AND id = ?',
+          [collection, id],
         );
+        if (found.isEmpty) return false;
+        final actual = found.first['version'] as int?;
+        if (actual != expectedVersion) {
+          throw RpcStatusException(
+            RpcStatus.aborted,
+            'Version mismatch for $id: expected $expectedVersion, '
+            'actual $actual.',
+          );
+        }
       }
-      return count > 0;
+      _database.execute(
+        'DELETE FROM ${_quoteIdentifier(table)} WHERE collection = ? AND id = ?',
+        [collection, id],
+      );
+      final changes = _database.select('SELECT changes() AS count');
+      if (changes.isEmpty) return false;
+      return (changes.first['count'] as int? ?? 0) > 0;
     });
   }
 

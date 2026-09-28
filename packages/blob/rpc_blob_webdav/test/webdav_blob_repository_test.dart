@@ -204,6 +204,33 @@ void main() {
     expect(await r.deleteCollection('c'), isFalse);
   });
 
+  // `IBlobStorageAdapter.deleteBlob`'s two conditional outcomes, unified in
+  // round 478. This adapter already answered both correctly — it is one of the
+  // two that returned `false` for a missing blob while `in_memory` and `sqlite`
+  // threw — so this pins it against a future edit rather than fixing anything.
+  test(
+    'a conditional delete: missing is false, a mismatch is ABORTED',
+    () async {
+      final r = repo();
+
+      expect(await r.deleteBlob('c', 'absent', expectedVersion: 1), isFalse);
+
+      await r.writeBlob(
+        BlobWriteRequest(collection: 'c', id: 'v', bytes: _bytes([1])),
+      );
+      await expectLater(
+        r.deleteBlob('c', 'v', expectedVersion: 99),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.aborted,
+          ),
+        ),
+      );
+    },
+  );
+
   test('checksum verification: correct passes, wrong throws', () async {
     final r = repo();
     final data = utf8.encode('verify me');

@@ -206,13 +206,12 @@ class InMemoryBlobRepository implements IBlobRepository {
     }
 
     final existing = collectionMap[id];
+    // MISSING is `false`, not ABORTED — see IBlobStorageAdapter.deleteBlob.
+    // Nothing was removed, which is what this method's contract promises, and
+    // it keeps a repeated delete idempotent for a caller that lost its
+    // response. `webdav` and `minio` already answered this way; this adapter
+    // and `sqlite` threw, so the same call had two contracts.
     if (existing == null) {
-      if (expectedVersion != null) {
-        throw RpcStatusException(
-          RpcStatus.aborted,
-          'Expected version $expectedVersion for $id but blob is missing.',
-        );
-      }
       return false;
     }
 
@@ -220,7 +219,8 @@ class InMemoryBlobRepository implements IBlobRepository {
         existing.descriptor.version != expectedVersion) {
       throw RpcStatusException(
         RpcStatus.aborted,
-        'Expected version $expectedVersion for $id but no rows deleted.',
+        'Version mismatch for $id: expected $expectedVersion, '
+        'actual ${existing.descriptor.version}.',
       );
     }
 
