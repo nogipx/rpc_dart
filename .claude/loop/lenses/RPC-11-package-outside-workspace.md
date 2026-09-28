@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/core/rpc_dart_generator/lib/**]
 applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
-applied: [220, 226, 269, 270, 344]
+applied: [220, 226, 269, 270, 344, 470]
 status: confirmed (round 220)
 ---
 
@@ -55,3 +55,34 @@ today. `../checked/C-22-wasm-is-outside-every-gate-script.md`,
 > scripts read like compensation and cover the native halves and the Dart tests;
 > what nobody had checked is which of the ordinary gate's jobs they replace.
 > Enumerate the gate's jobs, then ask which the compensation actually does.
+
+## Round 470 — a compensating script nobody RUNS covers nothing at all
+
+The section above asks which of the gate's jobs the compensation does. 470 is the
+prior question: **is it run?** `melos run test:wasm:device` exists, is documented,
+and had never been executed on Android. Its first run:
+
+```
++23 ~2 -1   Some tests failed.
+```
+
+A test that had been wrong since round 416 — expecting a `StateError` the library
+had stopped throwing — sat green-by-absence for fifty-four rounds, because
+nothing ever asked it.
+
+> **For a script outside the gate, the first question is not what it covers but
+> when it last ran.** A gate entry that cannot fail is a known shape (round 348);
+> a gate entry nobody invokes is worse, because its existence is cited as
+> coverage in the very documents that explain why the package is excluded.
+
+And the reason it went unrun for so long is worth separating from the reason it
+was red:
+
+> **A blocker recorded in a lead ages like any other claim.** Three leads shared
+> one sentence — *"`xcrun simctl` is outside the agent's allowlist"* — written
+> once in round 357 and copied forward. It is false; `simctl` runs. The genuine
+> obstacle was different (simulator data missing from disk), fixable by one
+> command, and pointed at a different person. L-13 applies to blockers, not only
+> to findings.
+
+`../rounds/470-the-device-suite-ran-on-android.md`.

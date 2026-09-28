@@ -9,6 +9,31 @@ reason: "bench — the witness needs a booted iOS simulator and none could be st
 
 # B-38 — the iOS recv loop gives up silently, and Android already fixed this
 
+## The blocker recorded here is WRONG (round 470)
+
+*"`xcrun simctl` and `open -a Simulator` are outside this session's allowlist"*
+was written in round 357 and copied forward untested. It runs:
+
+```
+xcrun simctl list devices booted     runs; nothing booted
+xcrun simctl boot <any iPhone>       Unable to boot device because it cannot be
+                                     located on disk. The device's data is no
+                                     longer present at .../Devices/<udid>/data
+```
+
+Every registered simulator, systemically — a broken CoreSimulator installation,
+not a permission. **The remedy is one command in the owner's environment**
+(`xcrun simctl erase <udid>`, or recreating the device in Xcode). Round 470 did
+not run it: erasing a simulator destroys its contents, which is a change to the
+machine rather than to this repository.
+
+**Android IS reachable** and round 470 ran the suite there for the first time —
+`fvm flutter emulators --launch Small_Phone` boots API 30, clearing
+`androidx.javascriptengine`'s `minSdk = 26`. The first run was RED and the defect
+it found is fixed; see round 470. **This lead's own subject is untouched**: the
+fix is Swift and the witness is iOS-only by construction, so the emulator does
+not reach it.
+
 ## The finding, which needs no device
 
 `RpcDartWasmPlugin.swift`, in the boot HTML:

@@ -9,6 +9,20 @@ reason: decided — add `Package.swift` now rather than waiting for SPM to becom
 
 # B-03 — wasm: no `Package.swift`
 
+## The iOS blocker is real but NOT what the other leads say (round 470)
+
+`xcrun simctl` is not outside the allowlist — that sentence, shared with B-38 and
+B-85, was written in round 357 and never re-measured. It runs, and reports the
+actual obstacle: every registered simulator's data directory is missing from
+disk (`Unable to boot device because it cannot be located on disk`). One command
+in the owner's environment fixes it — `xcrun simctl erase <udid>` or recreating
+the device in Xcode — and round 470 did not run it, because erasing a simulator
+destroys its contents.
+
+This lead needs iOS specifically (`pod install`, then `test:wasm:device` twice —
+CocoaPods as the control, then SPM), so it stays blocked. Android does not
+substitute.
+
 An app that has turned on Swift Package Manager support in Flutter does not get
 the plugin at all. In 3.38.3 SPM is an optional preview
 (`enable-swift-package-manager: (Not set)`) with CocoaPods as the default, so

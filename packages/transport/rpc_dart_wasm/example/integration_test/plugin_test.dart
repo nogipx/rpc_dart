@@ -16,6 +16,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 /// A guest that boots WITHOUT a real WASM module.
@@ -203,13 +204,29 @@ void main() {
     // <script> tag, so nothing ever posts to rpcBoot and the only thing left
     // is the 30 s watchdog. Measured on an iOS 18.6 simulator: 30051 ms
     // before, 275-961 ms after.
+    //
+    // The TYPE went stale under this test and two things had to line up for
+    // nobody to notice: round 416 replaced the library's `StateError`s with
+    // typed status exceptions, and this suite had never been run on Android,
+    // where round 470's first run caught it. The throw is in SHARED Dart
+    // (`rpc_flutter_wasm_bridge.dart`), so the assertion was stale on iOS too.
+    //
+    // UNAVAILABLE rather than `StateError` is round 416's point, not an
+    // accident: `wireStatusFor` is default-deny, so a `StateError` is redacted
+    // to INTERNAL and a guest author loses the line that says what is wrong.
     final started = DateTime.now();
     await expectLater(
       RpcFlutterWasmBridge.load(
         wasmBytes: Uint8List.fromList([0, 1, 2, 3]),
         mjsCode: 'throw new Error("not a real module");',
       ).timeout(const Duration(seconds: 45)),
-      throwsA(isA<StateError>()),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.unavailable,
+        ),
+      ),
     );
     final ms = DateTime.now().difference(started).inMilliseconds;
     expect(

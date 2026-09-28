@@ -55,6 +55,21 @@ against `git log` before carrying a decision out.
 
 Decided, not carried out. None of these is blocked on a judgement.
 
+**Round 470 re-measured the blocker these three shared and it was WRONG.**
+*"`xcrun simctl` is outside the agent's allowlist"* was written in round 357 and
+copied forward untested. It runs — and reports the real obstacle, which is
+different and fixable: **every registered simulator's data directory is missing
+from disk** (`Unable to boot device because it cannot be located on disk`). One
+command in the owner's environment clears it (`xcrun simctl erase <udid>`, or
+recreating the device in Xcode); round 470 did not run it, because erasing a
+simulator destroys its contents.
+
+**The ANDROID emulator boots** (`fvm flutter emulators --launch Small_Phone`,
+API 30, clearing `androidx.javascriptengine`'s `minSdk = 26`), and round 470 ran
+`melos run test:wasm:device` there for the first time ever. It was RED, on a test
+that had been wrong since round 416 — fixed, `+24 ~2` green. The three leads
+below still need iOS for their own subjects.
+
 - [+] **[B-38](B-38-ios-recv-loop-dies-silently.md)** decided (round 415) — the iOS recv loop gives up silently and Android already fixed this; its own comment describes the iOS behaviour. The four-step patch, the witness design and the two traps are in the lead. **The OWNER boots the simulator** — `xcrun simctl` and `open -a Simulator` are outside the agent's allowlist and five `flutter emulators --launch` attempts registered nothing. Shipping on `analyze:native` alone was offered and DECLINED; round 348 established what a gate never shown to fail is worth, and this is a native change whose whole defect is that it fails silently. Run BOTH platforms
 - [+] **[B-03](B-03-wasm-no-package-swift.md)** decided (round 415) — add `Package.swift` now, not when SPM becomes the Flutter default: the cost is the same either way and nothing in a round's ordinary work would detect the day the default flips. A DEVICE round — the privacy manifest goes in BOTH manifests or the `resource_bundles` defect already caught once comes back, and the evidence is a BUILT app, so `pod install` then `test:wasm:device` on iOS twice: once under CocoaPods as the control, once with SPM
 - [+] **[B-33](B-33-blob-adapters-disagree-on-a-missing-blob.md)** decided (round 415) — unify all four adapters. In scope because B-10's deferral was NARROWED: it covers going LOOKING in data/notify/blob, not fixing a defect already measured there. Order matters — **measure the four-row matrix FIRST** (minio and sqlite were never compared, so "which answer is right" is otherwise decided on half the data), then write the answer onto `IBlobRepository.deleteBlob`, then one test per adapter. **Needs the excluded services up**, or it unifies two adapters and guesses about two

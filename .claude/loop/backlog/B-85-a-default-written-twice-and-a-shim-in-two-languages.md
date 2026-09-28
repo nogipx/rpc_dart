@@ -4,7 +4,7 @@ round: 453 — Dart half DONE; the native half is untouched
 commit: 92bbcff8
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
 probe: —
-reason: owner decision — the native half needs a booted simulator AND emulator, which is the owner's to run (as with B-38 and B-03)
+reason: owner decision — the native half needs a booted simulator AND emulator. Round 470 found the EMULATOR bootable (`flutter emulators --launch Small_Phone`) and the simulators broken on disk, not forbidden; see B-38
 ---
 
 # B-85 — a default written twice, and a shim written in two languages
