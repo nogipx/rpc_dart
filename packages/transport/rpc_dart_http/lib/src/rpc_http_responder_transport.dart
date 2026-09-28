@@ -40,6 +40,14 @@ final class _PendingResponse {
   /// pending entry first, so no second flush can reach the same buffer.
   final BytesBuilder bodyBuffer = BytesBuilder(copy: false);
 
+  /// Set once the response has been answered early — over the buffer ceiling.
+  ///
+  /// The entry STAYS in `_pending` afterwards so the handler's remaining sends
+  /// land on it and are dropped silently. Removing it instead made every later
+  /// frame log "no pending response", which for a stream that runs until
+  /// cancelled is a line per message.
+  bool answered = false;
+
   _PendingResponse(this.shelfRequest);
 }
 
@@ -479,10 +487,47 @@ class RpcHttpResponderTransport
       );
       return;
     }
+    if (pending.answered) return;
     pending.bodyBuffer.add(data);
+    // HTTP/1.1 cannot flush before the end, so a server stream's WHOLE output
+    // is resident until the handler finishes -- and a method that streams until
+    // cancelled never does. Bounded by the same number the request side uses,
+    // and for a stronger reason than symmetry: the caller refuses any body over
+    // it, so every byte past this point is retained to be thrown away.
+    // Measured at 64 KiB: 512/2048/8192 KiB produced cost +8.7/+12.6/+40 MiB of
+    // RSS, and the caller received 0 items in all three.
+    final limit = securityPolicy.maxFramedMessageBytes;
+    if (pending.bodyBuffer.length > limit) {
+      _answerOversizedResponse(streamId, pending);
+      return;
+    }
     if (endStream) {
       await _flushResponse(streamId);
     }
+  }
+
+  /// Ends an over-budget response with RESOURCE_EXHAUSTED and stops buffering.
+  ///
+  /// The status rides ordinary response headers, which is where this wire
+  /// format carries it; a 413 would be translated from the HTTP status instead
+  /// and reaches the caller as whatever `grpcStatusFromHttpStatus` says today.
+  void _answerOversizedResponse(int streamId, _PendingResponse pending) {
+    pending.answered = true;
+    pending.bodyBuffer.clear();
+    _logger?.warning(
+      'Response for [streamId: $streamId] exceeded '
+      '${securityPolicy.maxMessageLengthBytes} bytes and was ended early. '
+      'HTTP/1.1 buffers a whole server stream before sending it.',
+    );
+    pending.responseHeaders.addAll([
+      RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.resourceExhausted}'),
+      RpcHeader(
+        RpcHeaders.grpcMessage,
+        'Response exceeds the ${securityPolicy.maxMessageLengthBytes}-byte '
+        'limit; HTTP/1.1 cannot stream it',
+      ),
+    ]);
+    _completeResponse(streamId, pending);
   }
 
   @override
@@ -493,11 +538,18 @@ class RpcHttpResponderTransport
   Future<void> _flushResponse(int streamId) async {
     final pending = _pending.remove(streamId);
     if (pending == null) return;
+    // Already answered over the ceiling; the entry was kept only so the
+    // handler's remaining sends had somewhere quiet to land.
+    if (pending.answered) return;
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal('Flushing HTTP response [streamId: $streamId]');
     }
+    _completeResponse(streamId, pending);
+  }
 
+  /// Builds the shelf response from [pending] and completes its request.
+  void _completeResponse(int streamId, _PendingResponse pending) {
     // Use Map<String, Object> to support multi-value headers (List<String>).
     final headers = <String, Object>{'content-type': 'application/grpc+proto'};
 

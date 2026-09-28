@@ -1,10 +1,10 @@
 ---
 refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
-applies: an inbound size limit exists, and something buffers before it is consulted
+applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350]
-status: confirmed (round 350)
+applied: [236, 279, 280, 350, 489]
+status: confirmed (round 489)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -184,6 +184,40 @@ that had never asked it.
 > and this site was not on it, because it is not on the inbound parse path; it is
 > the per-stream fan-out the parse path feeds. After fixing a weigher, also ask
 > which queues the weigher is not applied to.
+
+## Round 489 — the OTHER direction, where there was no limit to be late
+
+Every application above is on inbound data. Round 489 is the same file's
+outbound side: `RpcHttpResponderTransport` bounds the request body carefully,
+with a comment explaining exactly which number to use and why — and buffers the
+whole RESPONSE with no ceiling at all, because HTTP/1.1 cannot flush before the
+end.
+
+    produced   peak RSS      caller received
+     512 KiB    +8720 KiB    0    (status 8)
+    2048 KiB   +12608 KiB    0    (status 8)
+    8192 KiB   +40208 KiB    0    (status 8)
+      32 KiB       +0 KiB    4    ok
+
+> **Read the direction the lens does NOT name.** "An inbound size limit exists"
+> was the `applies:` for four rounds, and it made the outbound buffer in the
+> same class invisible. A transport has two sides and a peer can usually make
+> either one grow; the one with a careful limit tells you the author thought
+> about the threat, not that they covered it.
+
+> **The second column is what turns a cost into a defect.** `received 0` says
+> the caller refuses any body over the same ceiling, so every byte past it was
+> retained in order to be thrown away. A bound that can only discard what could
+> never be delivered has no trade to weigh.
+
+**Measuring RSS needs the largest arm FIRST.** RSS does not return, so in
+ascending order every arm after the first reads `+0` whatever happens, and the
+first arm mixes warm-up with retention. Largest-first puts the whole measurement
+where the warm-up is paid, and the ablation becomes a like-for-like comparison
+of that one number: `+57664 KiB` against `+11456 KiB`.
+
+`../probes/P-128-what-an-http1-server-stream-retains.md`,
+`../rounds/489-buffering-bytes-the-caller-will-refuse.md`, B-98.
 
 No catalog shape covers this; a candidate for `catalog/` at the next curate,
 by the usual test — it holds in any code that buffers untrusted input.

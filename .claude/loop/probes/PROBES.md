@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-128](P-128-what-an-http1-server-stream-retains.md)** valid (round 489),
+  rpc_dart_http — peak RSS against production at three scales, plus the caller's
+  delivered item count, which is what turns the cost into a defect (`received 0`
+  in every over-limit arm). **Run it LARGEST FIRST**: RSS never returns, so in
+  ascending order every arm after the first reads `+0` whatever happens and the
+  first mixes warm-up with retention
 - **[P-127](P-127-what-a-cancel-puts-on-the-http1-wire.md)** valid (round 488),
   rpc_dart_http — records every request PATH at the server, because the caller
   reports `RpcCancelledException` whether or not a phantom request went out, so
