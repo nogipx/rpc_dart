@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 494)
+round: 494
+commit: b27c9594
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-132
+reason: "closed — both sources CONFIRMED against paired controls, 29 per 3 s of heartbeat and 50 per 50 cancelled calls against 0 and 0"
 ---
 
 # B-103 — websocket caller: `_peerStreamIds` grows without bound and marks dead ids live
@@ -54,3 +54,44 @@ this).
 ## Owner decision
 
 —
+
+## Closed (round 494) — both sources confirmed, fixed by one clause
+
+```
+                          peer ids
+heartbeat 100ms for 3s    0 -> 29
+no heartbeat, 3s idle     0 -> 0     <- control
+50 cancelled calls        0 -> 50
+50 completed calls        0 -> 0     <- control
+```
+
+Both sources the lead names, at exactly the rates it predicts.
+
+**The set had to be made observable first**: `health()` delegated to the inner
+transport, which cannot see either of the wrapper's own sets. `peerStreamIds` and
+`idsOnThisConnection` are in the details now, which is also what the lead asked
+for.
+
+**None of the three sketched fixes was taken, and the first one cannot work.**
+Removing the entry in `releaseStreamId` loses to ordering — the trailer arrives
+AFTER the release and is re-added. Minting the heartbeat id through the wrapper
+fixes only that half. Parity stays rejected for the reason the field's own
+comment gives.
+
+What shipped is one clause: `m.methodPath != null`. **A methodPath is what
+minting looks like** — it is how a peer opens a call and what the responder
+pipeline itself keys on — so neither a pong nor a trailer qualifies, and a
+genuine reverse call still does.
+
+**The guard carries this round**, because after the fix every witness reads zero,
+which a transport that had stopped recording anything would also read. It drives a
+real reverse call through `RpcPeerEndpoint` and blocks inside the handler: the
+count is `1` while the peer's stream is open and `0` once answered.
+
+Left standing: the heartbeat still mints and releases through `_inner`, bypassing
+the wrapper's sets. It no longer leaks and never needed `_liveHere`, but it is the
+same bypass B-130 is about from the other side.
+
+Reasoned but not witnessed: that each stale entry made `_liveHere` true for a dead
+id. It follows from that method's two-line body; nothing here drives a send on a
+dead id to watch it admitted.

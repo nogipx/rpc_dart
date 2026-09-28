@@ -336,7 +336,18 @@ class RpcWebSocketCallerTransport
         // An id this transport did not mint is one the peer did, and the only
         // place that fact is observable is here. Recorded by MEMBERSHIP rather
         // than by parity so the rule survives a change of id scheme.
-        if (!_idsOnThisConnection.contains(m.streamId)) {
+        //
+        // A methodPath is what MINTING looks like: it is how a peer opens a
+        // call, and it is what the responder pipeline itself keys on. Without
+        // that clause any inbound frame on an id not currently ours was
+        // recorded — so the heartbeat's own pongs (it mints through `_inner`,
+        // bypassing `_idsOnThisConnection`) and the late trailer of every
+        // cancelled call became permanent entries. Measured: 29 after three
+        // seconds of a 100 ms heartbeat, 50 after 50 cancelled calls, against
+        // controls of 0. Each entry also made `_liveHere` true for a dead id,
+        // inverting the guard this set exists to provide.
+        if (m.methodPath != null &&
+            !_idsOnThisConnection.contains(m.streamId)) {
           _peerStreamIds.add(m.streamId);
         }
         if (!_incomingCtl.isClosed) _incomingCtl.add(m);
@@ -506,7 +517,21 @@ class RpcWebSocketCallerTransport
         details: const {'supported': true},
       );
     }
-    return _inner.health();
+    final inner = await _inner.health();
+    // The wrapper's OWN two sets, which no inner health can see. Both are
+    // supposed to track streams live on THIS connection, so both must return to
+    // zero on an idle connection — and reading them is the only way to tell that
+    // from "grows once per call forever".
+    return RpcHealthStatus(
+      component: inner.component,
+      level: inner.level,
+      message: inner.message,
+      details: {
+        ...inner.details,
+        'idsOnThisConnection': _idsOnThisConnection.length,
+        'peerStreamIds': _peerStreamIds.length,
+      },
+    );
   }
 
   /// The attempt currently in flight, so concurrent callers join it instead of

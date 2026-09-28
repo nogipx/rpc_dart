@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-132](P-132-does-the-peer-id-set-return-to-zero.md)** valid (round 494),
+  rpc_dart_websocket — reads `peerStreamIds` out of `health().details`, which the
+  round had to ADD (the wrapper delegated health to its inner transport, which
+  cannot see either of the wrapper's own sets). **Measures an INVARIANT, not a
+  size**: the set means "streams the peer minted and this side is still
+  answering", so on an idle connection the answer is zero or it is wrong — no
+  threshold needed. Built through the transport's CONSTRUCTOR, not `connect()`,
+  because only that takes `platformHandlesPing` and so puts the rig on the
+  app-level heartbeat a browser is on
 - **[P-131](P-131-does-a-large-host-to-guest-frame-keep-its-place.md)** valid
   (round 492), rpc_dart_wasm — 5 frames of 192 KiB and 50 small ones issued in
   ONE turn, three bursts, on a device. **Its `_CountingBridge` decorator asserts

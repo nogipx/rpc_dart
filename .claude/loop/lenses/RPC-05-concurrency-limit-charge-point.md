@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something is HELD and must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate, or a request the caller of a lifecycle method is awaiting
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491]
-status: confirmed (round 491)
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494]
+status: confirmed (round 494)
 ---
 
 # RPC-05 — Where a concurrency limit is charged
@@ -303,3 +303,39 @@ teardown decrements cannot report work the teardown abandoned.**
 
 `../probes/P-130-does-a-reclaimed-stream-answer-its-request.md`,
 `../rounds/491-the-call-ended-and-the-request-did-not.md`, B-100.
+
+## Round 494 — ask the ACQUIRE side, not just the release
+
+Round 491 asked what a release fails to give back. Round 494 is the mirror: the
+release is correct and the ACQUIRE is too broad, so the set fills with things the
+release was never meant to cover.
+
+`_peerStreamIds` records an inbound id when `!_idsOnThisConnection.contains(id)`
+— "not ours right now", where the invariant wanted "theirs". Two ordinary things
+satisfy the first and not the second:
+
+    heartbeat 100ms for 3s    peer ids 0 -> 29     no heartbeat (control) 0 -> 0
+    50 cancelled calls        peer ids 0 -> 50     50 completed  (control) 0 -> 0
+
+> **A set with an invariant is measured against the invariant, not against a
+> size.** "Streams the peer minted and this side is still answering" means EMPTY
+> on an idle connection, so the bench needs no threshold and no notion of "too
+> many" — it reads zero or it does not. Every leak lead phrased as "grows without
+> bound" has a sharper form hiding in the field's own doc comment.
+
+> **And the release cannot fix an acquire that is wrong.** The sketch's first
+> option — remove the entry in `releaseStreamId` — cannot work here, because the
+> trailer arrives AFTER the release and is re-added. When both an acquire and a
+> release are candidates, check the ORDER of the events that reach them.
+
+The fix is one clause, `m.methodPath != null`: a methodPath is what minting looks
+like, it is how a peer opens a call, and it is what the responder pipeline itself
+keys on.
+
+> **When a fix makes every witness read ZERO, the guard is doing most of the
+> work.** A transport that had stopped recording anything passes all four arms
+> here. The guard drives a real reverse call and blocks inside the handler, so
+> the count is read while the peer's stream is open: `1`, then `0`.
+
+`../probes/P-132-does-the-peer-id-set-return-to-zero.md`,
+`../rounds/494-minting-is-what-a-methodpath-means.md`, B-103.
