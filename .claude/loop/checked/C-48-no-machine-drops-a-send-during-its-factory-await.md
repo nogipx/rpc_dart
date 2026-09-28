@@ -2,9 +2,10 @@
 round: 449
 commit: 3f88d9fa
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: packages/transport/rpc_dart_http2/.dart_tool/probe/send_during_the_factory_await.dart
 scope: [rpc_dart_http2]
 ---
+
+Bench: `packages/transport/rpc_dart_http2/.dart_tool/probe/send_during_the_factory_await.dart`.
 
 > **Read the scope line before reusing this.** http2 was BENCHED; the proxy was
 > settled structurally by reading; the WEBSOCKET arm was not exercised at all.

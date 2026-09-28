@@ -1,13 +1,48 @@
 ---
-status: decided by owner (round 445)
+status: closed (round 462)
 round: 444 — re-read against the tree, never measured
 commit: 67303ea6
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-probe: —
+probe: P-111
 reason: cost — split out of B-70 item 29; which behaviour is RIGHT is a protocol question before it is a code question
 ---
 
 # B-77 — three layers, three behaviours for content-type
+
+## CLOSED (round 462) — three implementations, TWO behaviours
+
+The matrix the lead asked for, measured before any edit:
+
+```
+                          HTTP/1.1      HTTP/2        core (channel)
+(absent)                  415 REFUSED   OK            OK
+application/grpc          200           OK            OK
+application/grpc+proto    200           OK            OK
+text/plain                415 REFUSED   status=3      status=3
+```
+
+**"The http2 responder validates it NOWHERE" is true of its file and false of its
+behaviour.** Its metadata goes up to core's pipeline, so it inherits core's copy.
+The divergence is one cell: absent, on HTTP/1.1.
+
+And the count of three was short. A FOURTH site judges a content-type — the http2
+caller, on the RESPONSE — and a fifth place needed one: the HTTP/1.1 caller had no
+such check, so a proxy's HTML page under a 200 came back as
+`Invalid compression flag in gRPC message: 60`, 60 being `<`.
+
+Shipped: one static rule, `RpcSecurityPolicy.isAcceptableContentType(value,
+mode)`, called from all four sites with the mode named at each;
+`contentTypeValidation: lenient | strict` on the policy, default `lenient` as
+decided. **The HTTP/1.1 responder passes `strict` itself and does not read the
+knob** — the owner's default, applied there, would have loosened it, and the
+POST-only check thirty lines above it rests on an absent content-type being
+refused: a cross-origin `fetch` with a typeless body sends none and needs no
+preflight. What the owner declined — strict everywhere — is untouched.
+
+Left on the table, deliberately: the VALUE axis. All four copies test
+`startsWith('application/grpc')`, so `application/grpc-web` passes and is parsed
+as gRPC. That is a second decision on a second axis and nothing measured its
+reachability.
 
 ```
   rpc_http_responder_transport.dart:231-237

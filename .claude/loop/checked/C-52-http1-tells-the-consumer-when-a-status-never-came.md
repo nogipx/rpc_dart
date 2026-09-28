@@ -2,11 +2,12 @@
 round: 460
 commit: 9f148158
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-probe: packages/transport/rpc_dart_http/.dart_tool/probe/a_200_with_no_grpc_status.dart
 scope: [rpc_dart_http]
 ---
 
 # C-52 — HTTP/1.1 tells the consumer when a status never came
+
+Bench: P-110, `packages/transport/rpc_dart_http/.dart_tool/probe/a_200_with_no_grpc_status.dart`.
 
 > **Scope**: the unary shape over `RpcHttpCallerTransport` against a 200 with no
 > `grpc-status`. The http2 half of the same lead was a REAL defect, fixed in round

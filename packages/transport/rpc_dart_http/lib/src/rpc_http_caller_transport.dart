@@ -367,6 +367,44 @@ class RpcHttpCallerTransport
         return;
       }
 
+      // A 200 whose content-type is not gRPC is not a gRPC response, and its
+      // body is not gRPC frames. The HTTP/2 caller has refused this since it
+      // met a proxy's HTML error page; this one had no such check, so the body
+      // reached the parser and the call failed as
+      // `Invalid compression flag in gRPC message: 60` -- 60 being '<'. Same
+      // status either way, and a diagnostic that names a framing detail instead
+      // of the problem.
+      //
+      // Lenient, like the HTTP/2 caller: a Trailers-Only answer legitimately
+      // carries no content-type.
+      final responseContentType =
+          streamedResponse.headers[RpcHeaders.contentType];
+      if (!RpcSecurityPolicy.isAcceptableContentType(
+        responseContentType,
+        RpcContentTypeValidation.lenient,
+      )) {
+        await _readErrorBody(streamedResponse);
+        _logger?.warning(
+          'Non-gRPC content-type "$responseContentType" for [streamId: $streamId]',
+        );
+        _emit(
+          RpcTransportMessage(
+            streamId: streamId,
+            metadata: RpcMetadata([
+              RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.internal}'),
+              RpcHeader(
+                RpcHeaders.grpcMessage,
+                Uri.encodeComponent(
+                  'Invalid content-type for gRPC: "$responseContentType"',
+                ),
+              ),
+            ]),
+            isEndOfStream: true,
+          ),
+        );
+        return;
+      }
+
       // Split response headers into initial headers and gRPC trailer headers.
       final initialHeaders = <RpcHeader>[];
       final trailerHeaders = <RpcHeader>[];

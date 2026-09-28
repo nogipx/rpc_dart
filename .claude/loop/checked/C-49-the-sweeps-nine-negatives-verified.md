@@ -2,11 +2,12 @@
 round: 450
 commit: db96aa72
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**]
-probe: none — a read, nine greps over `lib/`
 scope: [rpc_dart, rpc_dart_http, rpc_dart_http2, rpc_dart_websocket, rpc_dart_isolate]
 ---
 
 # C-49 — the `ff930001` sweep's nine claimed negatives, verified
+
+No bench: a read, nine greps over `lib/`.
 
 > **Eight hold. One is FALSE as written** and is now `B-89`. The whole list was
 > checked in one pass, because the defect being checked for was "nobody checked

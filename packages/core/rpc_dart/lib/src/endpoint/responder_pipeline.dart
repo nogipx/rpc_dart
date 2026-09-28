@@ -122,6 +122,20 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
+  /// The policy's rule for a request carrying no `content-type` at all.
+  ///
+  /// Same shape as [_respMaxStreams]: a transport that cannot carry a policy
+  /// gets the default, which is the value every channel transport used before
+  /// this was configurable.
+  RpcContentTypeValidation get _respContentTypeValidation {
+    final transport = this.transport;
+    return transport is IRpcSecurityPolicyAware
+        ? (transport as IRpcSecurityPolicyAware)
+              .securityPolicy
+              .contentTypeValidation
+        : const RpcSecurityPolicy().contentTypeValidation;
+  }
+
   /// Streams holding a handler-concurrency slot: dispatched, work not finished.
   ///
   /// Deliberately NOT [_respStreams], which goes away too early. A handler that
@@ -864,13 +878,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
 
     final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
-    if (contentType != null &&
-        !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
+    if (!RpcSecurityPolicy.isAcceptableContentType(
+      contentType,
+      _respContentTypeValidation,
+    )) {
       _detached(
         _sendGrpcErrorAndCleanup(
           streamId: state.id,
           status: RpcStatus.invalidArgument,
-          message: 'Invalid content-type for gRPC',
+          // Names the value, because "invalid" alone left a peer that sent
+          // nothing unable to tell that from a peer that sent the wrong thing.
+          message: contentType == null
+              ? 'Missing content-type for gRPC'
+              : 'Invalid content-type for gRPC: "$contentType"',
         ),
         'grpc error cleanup',
       );

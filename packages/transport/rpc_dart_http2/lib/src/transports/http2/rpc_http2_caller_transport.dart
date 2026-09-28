@@ -1322,13 +1322,15 @@ class RpcHttp2CallerTransport
     // it entirely, and it names a framing detail instead of the problem.
     //
     // Checked only on the INITIAL headers: trailers legitimately carry no
-    // content-type. Absent is accepted rather than rejected, matching the check
-    // the responder pipeline already applies in the other direction -- being
-    // strict here would be a new policy, not a fix.
+    // content-type, so LENIENT is not a policy choice here -- an absent header
+    // on a response is the ordinary case and refusing it would refuse every
+    // Trailers-Only answer.
     if (isInitialHeaders) {
       final contentType = metadata.getHeaderValue(RpcHeaders.contentType);
-      if (contentType != null &&
-          !contentType.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc)) {
+      if (!RpcSecurityPolicy.isAcceptableContentType(
+        contentType,
+        RpcContentTypeValidation.lenient,
+      )) {
         _logger?.warning(
           'Non-gRPC content-type "$contentType" for stream $streamId',
         );

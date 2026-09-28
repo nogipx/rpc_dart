@@ -43,13 +43,15 @@ final class _Svc extends RpcResponderContract {
 
 late HttpServer _server;
 
-Future<int> _statusFor(String contentType) async {
+Future<int> _statusFor(String? contentType) async {
   final client = HttpClient();
   try {
     final request = await client.postUrl(
       Uri.parse('http://127.0.0.1:${_server.port}/Svc/ping'),
     );
-    request.headers.set('content-type', contentType);
+    // dart:io's HttpClient adds none of its own, so null really is absent on
+    // the wire -- checked by reading the header the responder saw.
+    if (contentType != null) request.headers.set('content-type', contentType);
     request.headers.set('te', 'trailers');
     request.add(RpcMessageFrame.encode(_codec.serialize('x'.rpc)));
     final response = await request.close();
@@ -95,4 +97,17 @@ void main() {
     expect(await _statusFor('application/json'), 415);
     expect(await _statusFor('x-application/grpc'), 415);
   });
+
+  // This responder passes RpcContentTypeValidation.strict, not the policy's
+  // mode, and nothing pinned that until now. It is the same argument the
+  // POST-only check rests on: `application/grpc` cannot leave an origin
+  // unprompted, but NO content-type can -- a cross-origin fetch with a typeless
+  // body sends none and needs no preflight. Accepting that puts every unary
+  // method back within reach of an attacker's page.
+  test(
+    'GUARD: a request with NO content-type is refused, whatever the policy',
+    () async {
+      expect(await _statusFor(null), 415);
+    },
+  );
 }

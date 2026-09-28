@@ -68,6 +68,76 @@ final class HangingEndOfStreamTransport implements IRpcTransport {
   Future<RpcHealthStatus> reconnect() => _inner.reconnect();
 }
 
+/// Rewrites `content-type` on every outbound metadata frame.
+///
+/// The header is `RpcHeaders.reserved`, so core strips it from any caller
+/// context: below the endpoint is the only place its value can be varied.
+final class ContentTypeRewritingTransport implements IRpcTransport {
+  final IRpcTransport _inner;
+
+  /// The value to send, or null to send no `content-type` at all.
+  final String? contentType;
+
+  ContentTypeRewritingTransport(this._inner, {required this.contentType});
+
+  @override
+  Future<void> sendMetadata(
+    int streamId,
+    RpcMetadata metadata, {
+    bool endStream = false,
+  }) {
+    final rewritten = <RpcHeader>[
+      for (final h in metadata.headers)
+        if (h.name.toLowerCase() != RpcHeaders.contentType) h,
+      if (contentType != null) RpcHeader(RpcHeaders.contentType, contentType!),
+    ];
+    // `methodPath` is a FIRST-CLASS field, not a header: rebuilt from `headers`
+    // alone it is lost, the responder cannot route, and every arm times out --
+    // control included, which is how the omission announced itself.
+    return _inner.sendMetadata(
+      streamId,
+      RpcMetadata(rewritten, methodPath: metadata.methodPath),
+      endStream: endStream,
+    );
+  }
+
+  @override
+  bool get isClient => _inner.isClient;
+  @override
+  bool get isClosed => _inner.isClosed;
+  @override
+  bool get supportsZeroCopy => _inner.supportsZeroCopy;
+  @override
+  int createStream() => _inner.createStream();
+  @override
+  bool releaseStreamId(int streamId) => _inner.releaseStreamId(streamId);
+  @override
+  Future<void> sendMessage(
+    int streamId,
+    Uint8List data, {
+    bool endStream = false,
+  }) => _inner.sendMessage(streamId, data, endStream: endStream);
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) => _inner.sendDirectObject(streamId, object, endStream: endStream);
+  @override
+  Stream<RpcTransportMessage> get incomingMessages => _inner.incomingMessages;
+  @override
+  Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
+      _inner.getMessagesForStream(streamId);
+  @override
+  Future<void> finishSending(int streamId) => _inner.finishSending(streamId);
+  @override
+  Future<void> close() => _inner.close();
+  @override
+  Future<RpcHealthStatus> health() => _inner.health();
+  @override
+  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+}
+
 final class NoZeroCopyTransport implements IRpcTransport {
   final IRpcTransport _inner;
 

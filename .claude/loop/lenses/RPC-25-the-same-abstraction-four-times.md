@@ -3,7 +3,7 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461]
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462]
 status: confirmed (round 458)
 ---
 
@@ -976,3 +976,56 @@ available cannot be tested against the case it breaks.**
 
 `../rounds/461-the-parser-answers-so-nobody-guesses.md`, and rounds 455 (the wrong
 layer) and 457 (the revert that named this one).
+
+## Round 462 — count the BEHAVIOURS, because that is what this lens is about
+
+The detector says: find a field every sibling declares, read the methods around
+it, diff them by behaviour. Step 3's "by behaviour, not by text" is the whole
+instruction, and a lead that has already done steps 1 and 2 arrives with a table
+of IMPLEMENTATIONS — which is a different number.
+
+B-77 tabulated three, with three verdicts. Measured, four inputs against each:
+
+```
+                          HTTP/1.1      HTTP/2        core (channel)
+(absent)                  415 REFUSED   OK            OK
+application/grpc          200           OK            OK
+text/plain                415 REFUSED   status=3      status=3
+```
+
+Two behaviours. The row the lead read as "http2 validates NOWHERE" is http2
+INHERITING core's copy, because its metadata goes up to the shared pipeline — and
+a fix sized to three implementations would have added a call http2 already makes.
+
+> **A count of implementations is not a count of behaviours, and this lens wants
+> the second one.** Sibling files are where you look; the wire is where you count.
+> The cost of getting it backwards is not wasted effort but a WRONG FIX: the
+> owner's decision here was "the three collapse to one function, and http2 starts
+> calling it", and on a surface of two that instruction makes a live check looser.
+
+Second half, and it is the one the three-way comparison could never produce: the
+count was also SHORT. A fourth site judges a content-type — the http2 caller, on
+the RESPONSE — and reading the four together is what showed the HTTP/1.1 caller
+has no such check at all. Round 444's rule applies again: a missing copy cannot be
+found by comparing the copies you have, and here the missing one was on the
+opposite side of the call from everything the lead listed.
+
+```
+HTTP/1.1 caller, a 200 + text/html   status=13 "Invalid compression flag ... : 60"
+HTTP/2 caller, same answer           status=13 "Invalid content-type ... "text/html""
+```
+
+> **When a duty has two directions, enumerate both before believing a count.** The
+> lead's three sites were all inbound. "Who validates X" asked of the caller side
+> as well doubles the surface and, here, is where the only unguarded site was.
+
+Third, on merging: the unified rule takes the divergent part as a PARAMETER, and
+the site with a reason of its own states it rather than reading the shared
+default. The HTTP/1.1 responder keeps refusing an absent header because a
+cross-origin `fetch` with a typeless body sends none and needs no preflight —
+which is the argument its own POST-only check is built on, thirty lines above.
+That is "What NOT to merge" applied to a DEFAULT rather than to code: one
+implementation, and one call site that names a different argument to it.
+
+`../rounds/462-three-implementations-two-behaviours.md`,
+`../probes/P-111-content-type-across-the-layers.md`.

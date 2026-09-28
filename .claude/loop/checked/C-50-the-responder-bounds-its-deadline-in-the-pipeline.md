@@ -2,11 +2,12 @@
 round: 451
 commit: c60943e2
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-probe: packages/core/rpc_dart/.dart_tool/probe/responder_deadline_is_bounded.dart
 scope: [rpc_dart]
 ---
 
 # C-50 — the responder bounds its deadline, in the pipeline
+
+Bench: `packages/core/rpc_dart/.dart_tool/probe/responder_deadline_is_bounded.dart`.
 
 > **Scope**: the channel-transport path, server-stream shape, cooperative and
 > uncooperative handlers. Other call shapes were not driven, though the

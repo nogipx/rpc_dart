@@ -111,6 +111,41 @@ Two further ways this axis was wrong, both cheap to check and neither checked:
 > audience, reachability and "is this a specimen or a defect" are the ones that
 > decide what to fix first, and no grep will volunteer them.
 
+## The axis can be IMPLEMENTATIONS vs BEHAVIOURS (round 462)
+
+425 counted sites where it should have counted paths; 435 counted files where it
+should have counted audiences. 462 is the same mistake at one more remove, and it
+is the cheapest of the three to make, because the wrong number is the one a lead
+can get by READING.
+
+B-77 listed three implementations of "is this content-type gRPC?" and three
+verdicts. Measured, four inputs per layer:
+
+```
+                          HTTP/1.1      HTTP/2        core (channel)
+(absent)                  415 REFUSED   OK            OK
+text/plain                415 REFUSED   status=3      status=3
+```
+
+**Two behaviours.** The layer whose file validates NOTHING inherits the shared
+one, so "no copy here" read as a third verdict when it is the second one again.
+
+The price is not wasted effort. The owner's decision was sized to the count —
+*"the three implementations collapse to ONE function, and http2 starts calling
+it"* — and on a surface of two that instruction makes a live check LOOSER, because
+the one genuinely divergent site is the strict one. A count taken from files would
+have shipped a security loosening under a refactor's name.
+
+> **Count the class where its effects are, not where its code is.** For anything
+> two-sided — a protocol, an API contract, a permission check — the countable unit
+> is the OUTCOME per input, and the file is only a place to look for candidates.
+> The same run that established this also found the count was SHORT by one, which
+> no comparison of the three listed copies could have shown.
+
+Price: one round, one bench with three harnesses in it. Cheaper than the two
+rounds 333/334 cost, because the count came first this time — which is the rule
+already working.
+
 ## Where it does NOT apply
 
 A round that finds ONE instance of a shape and fixes it is not under-delivering

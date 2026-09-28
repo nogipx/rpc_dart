@@ -37,6 +37,7 @@ Map<String, Object?> _fields(RpcSecurityPolicy p) => {
   'flowControlConnectionWindowBytes': p.flowControlConnectionWindowBytes,
   'initialSendWindowBytes': p.initialSendWindowBytes,
   'initialSendWindowGrace': p.initialSendWindowGrace,
+  'contentTypeValidation': p.contentTypeValidation,
 };
 
 void main() {
@@ -87,6 +88,7 @@ void main() {
         flowControlConnectionWindowBytes: 37 * 1024,
         initialSendWindowBytes: 41 * 1024,
         initialSendWindowGrace: Duration(seconds: 43),
+        contentTypeValidation: RpcContentTypeValidation.strict,
       );
 
       expect(

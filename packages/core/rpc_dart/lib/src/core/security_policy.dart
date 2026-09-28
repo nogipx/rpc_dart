@@ -8,6 +8,21 @@
 import 'channel_frame.dart';
 import 'metadata.dart';
 import 'protocol.dart';
+import 'rpc_headers.dart';
+
+/// How a peer's missing `content-type` is treated.
+///
+/// Only the ABSENT case is a choice. A value that is present and not gRPC is
+/// refused either way.
+enum RpcContentTypeValidation {
+  /// Absent is accepted.
+  lenient,
+
+  /// Absent is refused. The gRPC spec makes `content-type` part of every
+  /// request, so this is the conforming rule; it is not the default because it
+  /// turns away any peer that omits the header today.
+  strict,
+}
 
 /// Centralized security/robustness limits for transports and parsers.
 ///
@@ -187,6 +202,14 @@ final class RpcSecurityPolicy {
   /// advertises unprompted at connection setup, so this is not a per-call wait.
   final Duration? initialSendWindowGrace;
 
+  /// Whether a request with no `content-type` at all is accepted.
+  ///
+  /// Applies to the responder side. Default [RpcContentTypeValidation.lenient],
+  /// which is what core and HTTP/2 do today; the HTTP/1.1 responder passes
+  /// [RpcContentTypeValidation.strict] itself and does not read this, because an
+  /// absent content-type is what lets a cross-origin POST skip its preflight.
+  final RpcContentTypeValidation contentTypeValidation;
+
   // One home per default, because there are TWO routes into this class and they
   // must not disagree: the constructor, and [fromMap] — which is how a policy
   // crosses an isolate or a worker boundary, so a drift would put the two ends
@@ -209,6 +232,8 @@ final class RpcSecurityPolicy {
   static const int _defaultFlowControlConnectionWindowBytes = 64 * 1024 * 1024;
   static const int _defaultInitialSendWindowBytes = 64 * 1024;
   static const Duration _defaultInitialSendWindowGrace = Duration(seconds: 5);
+  static const RpcContentTypeValidation _defaultContentTypeValidation =
+      RpcContentTypeValidation.lenient;
 
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
@@ -229,6 +254,7 @@ final class RpcSecurityPolicy {
         _defaultFlowControlConnectionWindowBytes,
     this.initialSendWindowBytes = _defaultInitialSendWindowBytes,
     this.initialSendWindowGrace = _defaultInitialSendWindowGrace,
+    this.contentTypeValidation = _defaultContentTypeValidation,
   });
 
   /// Serializes this policy to a plain map.
@@ -253,6 +279,7 @@ final class RpcSecurityPolicy {
     'flowControlConnectionWindowBytes': flowControlConnectionWindowBytes ?? 0,
     'initialSendWindowBytes': initialSendWindowBytes ?? 0,
     'initialSendWindowGraceMs': initialSendWindowGrace?.inMilliseconds ?? 0,
+    'contentTypeValidation': contentTypeValidation.name,
   };
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
@@ -330,6 +357,13 @@ final class RpcSecurityPolicy {
         final int _ => null,
         _ => _defaultInitialSendWindowGrace,
       },
+      // Matched by NAME, so an unknown or absent string falls back to the
+      // default instead of throwing on the far side of an isolate boundary.
+      contentTypeValidation: switch (map['contentTypeValidation']) {
+        'strict' => RpcContentTypeValidation.strict,
+        'lenient' => RpcContentTypeValidation.lenient,
+        _ => _defaultContentTypeValidation,
+      },
     );
   }
 
@@ -355,6 +389,34 @@ final class RpcSecurityPolicy {
   /// the two HTTP sites did not compute it at all.
   int get maxFramedMessageBytes =>
       maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+
+  /// Whether [value] is an acceptable gRPC `content-type`, absent included.
+  ///
+  /// **The one home for the rule.** Three copies existed and two behaviours came
+  /// out of them, because each copy chose the absent case for itself: the
+  /// HTTP/1.1 responder read `?? ''` and refused (415), core's pipeline guarded
+  /// on `!= null` and accepted, and HTTP/2's responder has no copy at all — it
+  /// inherits core's, which is why the lead's "validates nowhere" measured as
+  /// lenient rather than as absent. Same request, two verdicts, decided by the
+  /// wire it arrived on.
+  ///
+  /// [mode] is passed by the CALLER, not read from `this`, so a site with a
+  /// reason of its own states it where the reason is written. Sites with no such
+  /// reason pass [contentTypeValidation].
+  ///
+  /// The prefix test on a PRESENT value is kept exactly as all three copies had
+  /// it. Narrowing it to the spec's `application/grpc[+subtype]` grammar would
+  /// turn away `application/grpc-web`, which is a separate decision from
+  /// unifying the copies and which nothing here measured.
+  static bool isAcceptableContentType(
+    String? value,
+    RpcContentTypeValidation mode,
+  ) {
+    if (value == null) return mode == RpcContentTypeValidation.lenient;
+    // RFC 9110 s8.3.1: type and subtype are case-insensitive, so `Application/
+    // GRPC` is legal and must not be refused.
+    return value.toLowerCase().startsWith(RpcHeaders.contentTypeGrpc);
+  }
 
   /// Header-name validation for transport-level metadata.
   ///

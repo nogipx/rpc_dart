@@ -223,18 +223,24 @@ class RpcHttpResponderTransport
       return _reject(503, request);
     }
 
-    // Validate Content-Type: must be a gRPC content type (application/grpc*).
+    // Validate Content-Type through the shared rule, which is the one home for
+    // it: this check and core's pipeline used to be two copies that disagreed on
+    // the ABSENT case, so the same request got 415 here and ran to the handler
+    // over HTTP/2.
     //
-    // LOWERCASED first: RFC 9110 s8.3.1 makes the type and subtype
-    // case-insensitive, so comparing the raw string refuses a legal
-    // `Application/GRPC` with a 415.
-    final contentTypeValue = request.headers[RpcHeaders.contentType] ?? '';
-    if (!contentTypeValue.toLowerCase().startsWith(
-      RpcHeaders.contentTypeGrpc,
+    // STRICT here, not `policy.contentTypeValidation`, and the reason is the one
+    // the POST check above rests on: `application/grpc` cannot leave an origin
+    // unprompted, but NO content-type can — a cross-origin fetch with a typeless
+    // body sends none and needs no preflight. Accepting that would put every
+    // unary method back within reach of an attacker's page, so it is not a knob.
+    final contentTypeValue = request.headers[RpcHeaders.contentType];
+    if (!RpcSecurityPolicy.isAcceptableContentType(
+      contentTypeValue,
+      RpcContentTypeValidation.strict,
     )) {
       _logger?.warning(
         'Rejected request: unsupported Content-Type '
-        '"$contentTypeValue" — expected application/grpc[+subtype]',
+        '"${contentTypeValue ?? ''}" — expected application/grpc[+subtype]',
       );
       return _reject(415, request);
     }

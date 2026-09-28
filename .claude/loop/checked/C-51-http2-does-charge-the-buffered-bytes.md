@@ -2,11 +2,13 @@
 round: 459
 commit: 071cd0e5
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/core/parser.dart]
-probe: none — a read; the claim is about where a charge LIVES, and the answer is a call graph
 scope: [rpc_dart_http2]
 ---
 
 # C-51 — http2 does charge the buffered bytes, in the layer it shares
+
+No bench: a read. The claim is about where a charge LIVES, so the answer is a call
+graph.
 
 > **Scope**: the two buffered-bytes mechanisms named below. It does NOT measure
 > peak RSS under an inbound burst, which was the other half of B-79's bench idea.

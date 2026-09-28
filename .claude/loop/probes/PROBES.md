@@ -38,6 +38,19 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-111](P-111-content-type-across-the-layers.md)** valid (round 462),
+  core + rpc_dart_http + rpc_dart_http2 — the MATRIX is the bench: four inputs
+  against three responder layers in one run, each on its own wire (a real
+  `HttpClient`, a raw http2 client, a channel pair whose caller transport rewrites
+  the header — `content-type` is reserved, so a context cannot reach it). Every row
+  prints what the responder SAW, because an "absent" arm the client library filled
+  in is void rather than clean. **One file imports all three packages**: a pub
+  workspace centralises `package_config.json`, so a probe under any member resolves
+  every member's deps. Controls on three axes — the spelling the library sends, the
+  `+proto` subtype its HTTP/1.1 caller actually sends, and the same input crossed
+  with both policy modes. The core arm's first version rebuilt `RpcMetadata` from
+  `headers` alone, dropped the first-class `methodPath`, and timed out on all four
+  rows INCLUDING the control, which is the only reason it was caught in one run
 - **[P-110](P-110-a-200-with-no-grpc-status.md)** valid (round 460),
   rpc_dart_http — a raw `HttpServer`, because only a non-conforming peer ends a
   response without a status. **200 is the load-bearing choice**: the caller
