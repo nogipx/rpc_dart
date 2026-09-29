@@ -72,18 +72,12 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// Optional predicate to decide if an error counts as a failure.
   ///
   /// When null, [_isServerHealthFailure] applies: only statuses that say the
-  /// SERVER is in trouble count. An application error is not a health signal —
-  /// a server answering NOT_FOUND correctly is a working server — and counting
-  /// one opened the breaker for every method on the endpoint.
+  /// SERVER is in trouble count. An application error is not a health signal — a
+  /// server answering NOT_FOUND correctly is a working server — and state is per
+  /// interceptor instance rather than per method, so counting one opens the
+  /// breaker for every method on the endpoint.
   ///
-  /// Measured at the default threshold of 5, with a second healthy method on the
-  /// same endpoint:
-  ///
-  ///     five NOT_FOUND lookups   -> breaker open, the healthy method refused
-  ///     five INVALID_ARGUMENT    -> breaker open, the healthy method refused
-  ///     five PERMISSION_DENIED   -> breaker open, the healthy method refused
-  ///
-  /// An explicit predicate fully replaces this, as before.
+  /// An explicit predicate fully replaces this.
   final bool Function(Object error)? failureOn;
 
   /// Statuses that mean the SERVER is unhealthy, not that the request was.

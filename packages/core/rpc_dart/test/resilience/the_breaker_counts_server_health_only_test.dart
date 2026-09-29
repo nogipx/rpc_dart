@@ -6,23 +6,15 @@
 // answering application errors CORRECTLY opened the breaker — and one breaker
 // instance covers the whole endpoint, so unrelated methods were refused with it.
 //
-// Measured at the default threshold of 5, with a second healthy method on the
-// same endpoint:
-//
-//                        before                         after
-//   NOT_FOUND            open, healthy method refused   closed, ok
-//   INVALID_ARGUMENT     open, healthy method refused   closed, ok
-//   PERMISSION_DENIED    open, healthy method refused   closed, ok
-//   ALREADY_EXISTS       open, healthy method refused   closed, ok
-//   UNIMPLEMENTED        open, healthy method refused   closed, ok
-//   UNAVAILABLE          open                           open      <- must stay
-//   INTERNAL             open                           open      <- must stay
-//   RESOURCE_EXHAUSTED   open                           open      <- must stay
-//   cancelled (control)  closed                         closed
+// Each arm runs the threshold's worth of failures at one status, then calls a
+// SECOND, healthy method on the same endpoint — which is where the cost of an open
+// breaker is read, since state is per interceptor instance and not per method.
 //
 // The default is deliberately WIDER than `RpcRetryInterceptor`'s transient set: a
 // breaker asks "is this endpoint in trouble", a retry asks "is another attempt
 // worth making". INTERNAL and UNKNOWN answer the first and not the second.
+//
+// The measurements are in `.claude/loop/rounds/501`.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';

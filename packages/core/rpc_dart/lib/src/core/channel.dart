@@ -48,8 +48,7 @@ abstract class IRpcChannel {
   /// reuse one as scratch for the next chunk — emit a fresh list each time.
   /// `RpcFrameMultiplexedChannel` decodes straight out of the chunk when nothing
   /// is buffered, so a decoded message's payload can be a view into it and can
-  /// outlive the `add`. Copying on every chunk to avoid this cost 227 us per
-  /// 1 MiB frame and is what the rule buys back.
+  /// outlive the `add`.
   Stream<Uint8List> get incoming;
 
   /// Close the channel and release all resources.

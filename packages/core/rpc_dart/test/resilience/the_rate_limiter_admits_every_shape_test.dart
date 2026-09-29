@@ -8,19 +8,13 @@
 // server — which made subscriptions unlimited on the component whose job is to
 // limit them.
 //
-// 100 calls against `global: max 5`, one arm per call shape:
+// Every call is now admitted at establishment, and the first message is marked
+// prepaid against that token — so a streaming call costs max(1, messages) rather
+// than 1 + messages. An empty stream can no longer be free, and a stream that does
+// send messages costs what it always did. Charging establishment ON TOP would
+// double the cost of every one-message call, which is what the middle guard reads.
 //
-//                                  before   after
-//   unary                               5       5   <- control
-//   bidi, 1 request message             5       5   <- control
-//   bidi, ZERO request messages       100       5
-//   client-stream, ZERO messages      100       5
-//
-// The fix charges at establishment and marks the first message prepaid, so the
-// cost of a streaming call is max(1, messages) and not 1 + messages: an empty
-// stream can no longer be free, and a stream that does send messages costs
-// exactly what it cost before. Charging establishment ON TOP would have doubled
-// the cost of every one-message call — the middle control is what reads that.
+// The measurements are in `.claude/loop/rounds/502`.
 
 import 'dart:async';
 

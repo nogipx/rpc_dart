@@ -2,22 +2,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Every chunk was copied into `_buf` before being decoded, even when the buffer
-// was empty and the chunk held whole frames — the ordinary case on a
-// message-aligned transport. Decoding in place removes that copy:
+// The channel decodes straight out of the inbound chunk when nothing is buffered,
+// rather than copying it into `_buf` first — the ordinary case on a
+// message-aligned transport, where the chunk already holds whole frames.
 //
-//   1 MiB frames, per frame      appended    decoded in place
-//     receive path alone          227.02 us     0.31 us
-//     plus a consumer copy-out    389.76 us   191.45 us      <- the honest 2x
-//     64 B, receive path alone      0.75 us     0.66 us      <- unchanged, as
-//                                                               per-message cost
-//                                                               dominates there
+// The risk in that is FRAMING, not speed: the buffered path is still needed the
+// moment a chunk does not end on a frame boundary, and the two paths have to
+// agree. These tests drive the boundary cases with payloads whose bytes identify
+// their frame, so an off-by-one in the tail handling shows up as wrong CONTENT and
+// not merely as a wrong count.
 //
-// The risk in decoding in place is FRAMING, not speed: the buffered path is still
-// needed the moment a chunk does not end on a frame boundary, and the two paths
-// now have to agree. These tests drive the boundary cases with payloads whose
-// bytes identify their frame, so an off-by-one in the tail handling shows up as
-// wrong CONTENT and not merely as a wrong count.
+// The measurement behind the change is in `.claude/loop/rounds/507`.
 
 import 'dart:async';
 

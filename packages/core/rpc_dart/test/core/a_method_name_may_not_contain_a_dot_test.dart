@@ -9,19 +9,15 @@
 // wasn't enforced, and two different paths produced one key.
 //
 // Nothing unusual has to be registered — an ordinary package-qualified service
-// with ordinary method names is enough:
-//
-//   registered: service "a.b", methods "c" and "secret"
-//                   before                 after
-//     /a.b/c        reached a.b/c          reached a.b/c   <- control
-//     /a/b.c        reached a.b/c          INVALID_ARGUMENT
-//     /a/b.secret   reached a.b/secret     INVALID_ARGUMENT
-//     /a/c          UNIMPLEMENTED          UNIMPLEMENTED   <- control
+// with ordinary method names is enough, and only the REQUEST is crafted. So the
+// registration below is held fixed and the PATH is what varies.
 //
 // The responder half is checked separately with a hand-built frame, because the
-// caller transport validates outbound metadata against the same policy — so an
+// caller transport validates outbound metadata against the same policy — an
 // ordinary call is refused locally and proves nothing about a peer that is not
 // this library.
+//
+// The measurements are in `.claude/loop/rounds/504`.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';

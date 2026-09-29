@@ -959,17 +959,11 @@ class RpcChannelTransport
     // it. A response on a stream WE opened is already routed to its own
     // controller above, so broadcasting it serves nobody.
     //
-    // It was not free. A caller-only endpoint has nothing to do with these
-    // events, so `startCallerListening` subscribes a no-op listener purely to
-    // keep the buffer drained — and where that is missed, the buffer retains
-    // every response the caller already consumed. With the observer detached,
-    // after a fully consumed server stream a late subscriber was replayed:
-    //
-    //        10 messages consumed -> 11 replayed          0 after
-    //      1000 messages consumed -> 1001 replayed        0 after
-    //
-    // (the extra one is the trailer.) The throughput half is far smaller: 10 000
-    // small messages read a median 5.987 us each against 5.604, about 6%.
+    // Broadcasting it is not free either. The controller buffers while
+    // unlistened, and a caller-only endpoint has nothing to do with these events,
+    // so `startCallerListening` subscribes a no-op listener purely to keep the
+    // buffer drained — where that is missed, it retains every response the caller
+    // already consumed.
     //
     // Errors are unaffected: a channel failure or a policy violation with no
     // known stream goes through `_incoming.addError`, which this does not touch,

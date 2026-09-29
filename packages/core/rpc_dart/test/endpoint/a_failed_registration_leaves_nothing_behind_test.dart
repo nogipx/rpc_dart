@@ -7,15 +7,14 @@
 // registration was half applied — and the obvious recovery (catch, fix the
 // contract, register again) was refused with "already registered".
 //
-//                                         before                    after
-//   setup() throws                 contracts [Svc] methods []     nothing
-//   2nd method key collides        contracts [a, a.b]             nothing
-//                                  methods [a.b.c, a.b.ok]
-//   ... and a.b/ok then answers    'ok'                           UNIMPLEMENTED
-//   retry after either failure     refused, unrecoverable         succeeds
+// `setup()` and every key check now run into a local map before any field is
+// touched, and the contract and its methods are committed in one step at the end.
 //
-// The fix runs `setup()` and reserves every key into a local map before touching
-// any field, and commits in one step at the end.
+// Two failure routes reach this and they are independent: `setup()` throwing needs
+// nothing else to be wrong, while a colliding method key needs the dotted-key
+// ambiguity that `a_method_name_may_not_contain_a_dot_test.dart` is about.
+//
+// The measurements are in `.claude/loop/rounds/503`.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';

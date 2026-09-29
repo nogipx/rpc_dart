@@ -94,9 +94,8 @@ final class RpcEndpointPingExchange {
   /// [cancellationToken], when given, ends the wait as soon as it fires.
   /// Pre-checking it in the caller is not enough: ping exists for the stalled
   /// connection, which is precisely the case where the wait is long enough for a
-  /// token to be cancelled DURING it. Measured against a peer that accepts the
-  /// ping and never answers, a token cancelled at 200 ms left the call running
-  /// until the probe gave up at 3 s.
+  /// token to be cancelled DURING it — against a peer that accepts the ping and
+  /// never answers, a pre-check alone leaves the call running to its timeout.
   Future<RpcEndpointPingResult> execute({
     required RpcMetadata metadata,
     Duration? timeout,

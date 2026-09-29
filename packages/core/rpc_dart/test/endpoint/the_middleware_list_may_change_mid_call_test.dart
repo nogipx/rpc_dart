@@ -8,18 +8,17 @@
 // ConcurrentModificationError into the in-flight call, which is a StateError, so
 // the caller got that instead of an RPC status.
 //
-// One middleware parked 200 ms, disturbed at 100 ms:
+// Each arm parks a call inside the middleware loop and disturbs the list while it
+// is parked, then reads the error TYPE the caller ends up with — which is the whole
+// finding. The close() arm still FAILS, and must: the endpoint is closing. What
+// matters is that it now fails with its own status rather than with a StateError,
+// so a test asking only "did the call succeed" would score the fix as no change.
 //
-//                                  before                          after
-//   nothing disturbs it            OK echo:x                       OK echo:x  <- control
-//   close() while parked           ConcurrentModificationError     RpcCancelledException
-//                                  (length:0)                      'Endpoint closed'
-//   addMiddleware while parked     ConcurrentModificationError     OK echo:x
-//                                  (length:2)
-//   close(), NO middlewares        OK echo:x                       OK echo:x  <- control
+// The arm with NO middleware is what localises this: an empty loop never awaits, so
+// it never observes the mutation, and without it "close() breaks an in-flight call"
+// explains the results just as well.
 //
-// The close() arm still FAILS after the fix, and must: the endpoint is closing.
-// What changed is that it fails with its own status rather than with a bug.
+// The measurements are in `.claude/loop/rounds/505`.
 
 import 'dart:async';
 

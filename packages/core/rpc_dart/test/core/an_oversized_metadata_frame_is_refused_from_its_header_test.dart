@@ -8,18 +8,16 @@
 // flag and the declared length) are header fields, so there was never anything to
 // wait for.
 //
-// Declared payload 10 MiB, which sits between the two ceilings: over
-// maxMetadataBytes (64 KiB) and under maxFramedMessageBytes (16 MiB). Fed in
-// 64 KiB chunks, one microtask turn apart, counting bytes accepted before the
-// refusal:
+// The declared payload here sits between the two ceilings: over maxMetadataBytes
+// (64 KiB) and under maxFramedMessageBytes (16 MiB), so only the metadata limit
+// can refuse it. It is fed in chunks a microtask apart, and what is asserted is
+// how many bytes were accepted before the refusal — the header alone.
 //
-//                                  before        after
-//   METADATA flag set              10485769      9        <- the header alone
-//   data frame, same size          10485769      10485769 <- control, legal
+// The server side is the one that matters: `closeOnOversizedFrame: true` is its
+// default, and that is exactly the setting under which `_refusedFrameHeader`'s
+// early check deliberately does nothing.
 //
-// 9 bytes is the header. The server side is the one that matters:
-// `closeOnOversizedFrame: true` is its default, and that is exactly the setting
-// under which `_refusedFrameHeader`'s early check deliberately does nothing.
+// The measurements are in `.claude/loop/rounds/506`.
 
 import 'dart:async';
 

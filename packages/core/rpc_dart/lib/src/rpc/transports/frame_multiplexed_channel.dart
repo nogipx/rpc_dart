@@ -390,17 +390,9 @@ class RpcFrameMultiplexedChannel
     }
 
     // Decode straight out of the chunk when nothing is buffered, which is the
-    // ordinary case on a message-aligned transport: the chunk holds whole frames
-    // and copying it into `_buf` first bought nothing.
-    //
-    //   1 MiB frames, per frame      appended    decoded in place
-    //     receive path alone          227.02 us     0.31 us
-    //     plus a consumer copy-out    389.76 us   191.45 us
-    //
-    // The first row is the copy this removes; the second is what a receiver that
-    // RETAINS the message still pays, and is the honest end-to-end figure — 2x.
-    // At 64 B it changes nothing (0.75 -> 0.66 us): there the per-message cost
-    // dominates and always did.
+    // ordinary case on a message-aligned transport: the chunk holds whole frames,
+    // so copying it into `_buf` first buys nothing. The buffer is for frames
+    // SPLIT across chunks, and that is the branch below.
     //
     // The payload of a decoded frame is then a view into `data` rather than into
     // `_buf`, so a chunk must not be reused by whoever produced it — stated on

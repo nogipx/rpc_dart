@@ -117,11 +117,11 @@ abstract final class RpcChannelFrame {
     // 16 MiB by default.
     //
     // **Above the completeness check, from the header alone**, which is the whole
-    // point. Below it, an incomplete frame returned null and the caller kept
-    // buffering, so the limit only fired once the payload had ARRIVED in full: a
-    // peer dribbling bytes toward a declared 10 MiB metadata frame got all 10 MiB
-    // buffered — 160x this ceiling — and was then told the frame was too large.
-    // Both inputs here are header fields, so there is nothing to wait for.
+    // point: below it, an incomplete frame returns null and the caller keeps
+    // buffering, so the limit would only fire once the payload had ARRIVED in
+    // full — a peer dribbling bytes could make us hold many times this ceiling
+    // before being told the frame was too large. Both inputs here are header
+    // fields, so there is nothing to wait for.
     if (isMetadata && maxMetadataLen != null && payloadLen > maxMetadataLen) {
       throw RpcFrameException.limit(
         'Incoming metadata frame too large: $payloadLen bytes '
@@ -167,10 +167,7 @@ abstract final class RpcChannelFrame {
   /// offending one are not returned on throw; the caller is expected to treat
   /// the error as a protocol violation and tear down.
   ///
-  /// [maxMetadataLen] is enforced the same way, from the header alone. It used to
-  /// be checked BELOW the completeness check, so an incomplete frame returned null
-  /// and the caller went on buffering until the payload had fully arrived — 10 MiB
-  /// held for a limit of 64 KiB before the refusal fired.
+  /// [maxMetadataLen] is enforced the same way, from the header alone.
   ///
   /// Malformed metadata in an otherwise well-sized frame is different, and
   /// [onMalformedMetadata] is how a caller says so. The framing is INTACT there

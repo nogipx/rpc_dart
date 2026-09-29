@@ -46,17 +46,11 @@ final class _MessageParserState {
 
   /// Appends [data] to the buffer, amortized O(size of data).
   ///
-  /// Every version before this one reallocated and copied the UNCONSUMED TAIL on
-  /// each call, which is O(N^2/C) while one message's body is incomplete: a
-  /// 16 MiB message in 16 KiB chunks is ~1024 growing copies. Measured at a
-  /// fixed 16 KiB chunk, cost per KiB doubling with the message:
-  ///
-  ///     1 MiB    7 ms    6.84 us/KiB
-  ///     4 MiB  122 ms   29.79 us/KiB
-  ///    16 MiB 1515 ms   92.47 us/KiB
-  ///
-  /// Geometric growth is the same shape `RpcFrameMultiplexedChannel` uses one
-  /// layer up, for the same reason and with the same names.
+  /// Reallocating and copying the UNCONSUMED TAIL on each call is O(N^2/C) while
+  /// one message's body is incomplete — a 16 MiB message in 16 KiB chunks is
+  /// ~1024 growing copies. Geometric growth is the same shape
+  /// `RpcFrameMultiplexedChannel` uses one layer up, for the same reason and with
+  /// the same names.
   void addBytes(Uint8List data) {
     // Reclaim the consumed prefix before growing, so a long-lived stream of
     // whole messages reuses one buffer instead of extending it forever.

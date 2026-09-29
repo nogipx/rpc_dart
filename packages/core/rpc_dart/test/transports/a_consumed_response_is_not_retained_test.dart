@@ -10,19 +10,10 @@
 // It was not free. The broadcast buffers while unlistened, so a caller-only
 // endpoint has to subscribe a no-op listener just to drain it
 // (`startCallerListening`, whose own doc says so). Where that is missed, the
-// buffer retains every response the caller already consumed. With the observer
-// detached, after a FULLY CONSUMED server stream a late subscriber was replayed:
+// buffer retained every response the caller had already consumed — which is what
+// the witness below reads, by attaching a late subscriber and counting the replay.
 //
-//                                  before   after
-//     10 messages consumed            11      0
-//    100 messages consumed           101      0
-//   1000 messages consumed          1001      0
-//
-// (the extra one is the trailer.)
-//
-// The throughput half is much smaller and the record says so: 10 000 small
-// messages, median 5.987 us each against 5.604 — about 6%, with the two runs'
-// ranges barely separated.
+// The measurements are in `.claude/loop/rounds/508`.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
