@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 537)
+round: 537
+commit: 6268a40a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-170
+reason: "first half REFUTED again (C-31 reproduced at today's sha: the read does stop, the 408 arrives, the same 384 KiB); second half CONFIRMED as a fact and HARMLESS — the drain throws StateError on the post-read paths and the status arrives regardless. Fixed so the transport stops attempting it and stops hiding the error"
 ---
 
 # B-141 — HTTP/1.1 responder: the body-read timeout does not stop the read, and `_reject`'s drain always fails
@@ -25,15 +25,40 @@ thing a round owes this lead, and it may refute it.
 The defect `_reject`'s own doc describes, present; C-31 measured that the read
 stops accepting after the 408 — the reader itself is still running.
 
-## Witness a round would build
+## What round 537 measured
 
-Slow-body client past `bodyReadTimeout`; is the original read subscription still
-active? Does `_reject`'s drain throw?
+```
+  half two — a second read() on one shelf Request
+    StateError: The 'read' method can only be called once on a shelf.Request/shelf.Response object.
 
-## Fix sketch
+  half one — a slow body, 4 MB promised and 5 bytes sent
+    arm                     the peer saw                  wrote after (KiB)
+    bodyReadTimeout 500ms   HTTP/1.1 408 Request Time-out 384
+    CONTROL no timeout      NOTHING within 6s             4096
+```
 
-Read through a subscription that the timeout cancels; drain from that
-subscription instead of calling `read()` again.
+Bench `../probes/P-170-does-the-rejection-drain-run-at-all.md`.
+
+**First half REFUTED again**, and `checked/C-31` reproduced exactly at today's sha — the same 384 KiB
+of socket buffer, against a control that takes 4096 KiB and answers nothing. The read does stop.
+
+**Second half CONFIRMED as a fact and HARMLESS.** The drain throws on the 408/413/400 paths, and the
+peer still gets its 408: the body is still attached when the response completes and dart:io detaches
+it then, which is C-31's own explanation.
+
+## Fix
+
+Not the sketch. Reading through a cancellable subscription is already what both paths do; the problem
+was calling `read()` at all after the body reader had run. `_reject` now takes `drainBody`, the three
+post-read callers pass false, and the catch narrows so a `StateError` is logged at warning — every
+other failure there is the peer's doing, and that one can only be ours.
+
+Behaviour unchanged. What changed is that the transport stops performing an operation it knows will
+fail, and stops hiding the error when it does.
+
+## Still open
+
+`close()`'s drain, which the lead names in the same sentence and nothing here looked at.
 
 ## Owner decision
 

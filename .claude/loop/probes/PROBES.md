@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-170](P-170-does-the-rejection-drain-run-at-all.md)** valid (round 537),
+  rpc_dart_http — **two claims, two instruments**: a library rule asked of a bare shelf `Request` in
+  three lines, and a re-run of `checked/C-31` against the REAL transport behind `shelf_io`. Its first
+  version used a hand-written stand-in server and reported `closed with nothing` where the transport
+  reports `408` — the two differ in exactly the detail under test, so **a stand-in for the code under
+  test measures its author**. Control: the undeadlined arm, without which `384 KiB` is just a number.
 - **[P-169](P-169-does-abandoning-a-call-stop-the-download.md)** valid (round 536),
   rpc_dart_http — **reads the abandoned side from the OTHER end**, because a dropped future reports
   nothing locally whether the work stopped or not: the server streams a long response and records how

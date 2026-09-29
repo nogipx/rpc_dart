@@ -163,24 +163,45 @@ class RpcHttpResponderTransport
   /// and an undeadlined drain makes a REFUSED request the cheaper attack than an
   /// accepted one. The subscription is CANCELLED on expiry — a `.timeout()` on
   /// the drain future returns the status while the read loop keeps running.
+  /// [drainBody] must be false once the body has ALREADY been read.
+  ///
+  /// `Request.read()` may be called once per request — shelf throws
+  /// `StateError: The 'read' method can only be called once` on a second call —
+  /// so the drain below is not merely redundant after `readBody()`, it raises. The
+  /// 408, 413 and 400 paths all reject a request whose body reader has run, and
+  /// the drain there did nothing but throw into a silent catch.
+  ///
+  /// Not needed there either: the body is still attached when the response
+  /// completes, and dart:io detaches it then. Measured — a slow body past
+  /// `bodyReadTimeout` receives its 408 and the peer can push only what the socket
+  /// buffers afterwards, where the same client against an undeadlined read is
+  /// answered nothing and pushes everything.
   Future<Response> _reject(
     int statusCode,
     Request request, {
     String? body,
     Map<String, String> extraHeaders = const {},
+    bool drainBody = true,
   }) async {
     StreamSubscription<List<int>>? sub;
-    try {
-      sub = request.read().listen(null);
-      final drained = sub.asFuture<void>();
-      await (bodyReadTimeout == null
-          ? drained
-          : drained.timeout(bodyReadTimeout!));
-    } catch (_) {
-      // The peer may have gone already, or spent its budget; the status below
-      // is still worth trying.
-    } finally {
-      await sub?.cancel();
+    if (drainBody) {
+      try {
+        sub = request.read().listen(null);
+        final drained = sub.asFuture<void>();
+        await (bodyReadTimeout == null
+            ? drained
+            : drained.timeout(bodyReadTimeout!));
+      } on StateError catch (e) {
+        // NOT silent. Every other failure here is the peer's doing; this one is
+        // ours -- it can only mean the body was already read, so the caller wanted
+        // `drainBody: false`.
+        _logger?.warning('Rejection drain skipped: ${e.message}');
+      } catch (_) {
+        // The peer may have gone already, or spent its budget; the status below
+        // is still worth trying.
+      } finally {
+        await sub?.cancel();
+      }
     }
     final headers = <String, String>{...extraHeaders};
     corsPolicy?.applyTo(headers, request.headers['origin']);
@@ -425,7 +446,13 @@ class RpcHttpResponderTransport
       };
       if (!pending.completer.isCompleted) {
         pending.completer.complete(
-          _reject(statusCode, request, body: e is _BodyTooLarge ? '$e' : null),
+          _reject(
+            statusCode,
+            request,
+            body: e is _BodyTooLarge ? '$e' : null,
+            // The body reader has already run: see [_reject].
+            drainBody: false,
+          ),
         );
       }
     }

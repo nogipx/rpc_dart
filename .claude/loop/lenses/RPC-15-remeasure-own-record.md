@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537]
 status: confirmed (round 457)
 ---
 
@@ -200,3 +200,27 @@ What made it convincing was a field added AFTER the decision, round 462's
 lead.
 
 `../rounds/474-a-decision-discharged-and-a-tail-split-off.md`.
+
+**Round 537 — an external lead reopened a negative, and the negative held.**
+B-141's first half is C-31's question from round 273, re-run at today's sha rather than
+cited: the same `408` to the peer, the same `384 KiB` of socket buffer, against a control
+that takes `4096 KiB` and answers nothing. Its second half was true as a FACT and harmless
+in effect, for the reason C-31 already gave.
+
+`../probes/P-170-does-the-rejection-drain-run-at-all.md`,
+`../checked/C-31-the-408-really-does-stop-the-read.md`, B-141.
+
+> **An outside audit reopening a negative is a reason to re-run it, not to cite it.**
+> The audit read the same code and reached the older conclusion; what settles it is the
+> number, and a negative worth keeping is one that reproduces.
+
+> **A stand-in for the code under test measures its author.** This round's first probe used
+> a hand-written server in place of the transport and reported `closed with nothing` where
+> the real thing reports `408` — differing in exactly the detail under test. Plausible, and
+> wrong.
+
+> **An over-specified control fails for the right reason and the wrong claim.** The first
+> control asserted a pre-read 415 reaches a slow-body peer. It does not, and deliberately:
+> the drain is deadlined, so a body that never arrives is answered by a teardown. The arm
+> was asking for what an earlier round had chosen to give up — check whether a control
+> contradicts a decision before believing it contradicts the code.
