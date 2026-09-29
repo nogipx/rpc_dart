@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 506)
+round: 506
+commit: acefa601
 paths: [packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-144
+reason: "closed — CONFIRMED and fixed: a declared 10 MiB metadata frame was buffered in full, 10485769 bytes against a 64 KiB ceiling, before the refusal fired. Both of the check's inputs are header fields, so it moved above the completeness check and now refuses at 9 bytes"
 ---
 
 # B-115 — a metadata frame over `maxMetadataBytes` is buffered in full before it is refused
@@ -36,6 +36,44 @@ Feed a frame header declaring a 10 MiB metadata payload, then the payload in
 ## Fix sketch
 
 Move the metadata-size check above the completeness check.
+
+## Outcome (round 506)
+
+**CONFIRMED and fixed**, and the estimate in "Why it matters" was close: the lead
+says 256x, and at a declared 10 MiB the measurement is 160x. The real bound is the
+data ceiling, so 256x is reachable at 16 MiB.
+
+```
+declared 10 MiB, fed in 64 KiB chunks     before      after
+METADATA flag set                         10485769    9        <- the header alone
+CONTROL data frame, same size             10485769    10485769 <- legal, accepted
+```
+
+Fixed as the sketch says. Both of the check's inputs — the metadata flag and the
+declared length — are 9-byte header fields, so there was never anything to wait for;
+`isMetadata` was hoisted to join the other header reads and the check moved above
+`if (data.length < payloadStart + payloadLen) return null;`.
+
+`decodeAll`'s doc promised header-only rejection for `maxPayloadLen` and said nothing
+about `maxMetadataLen`, so it was accurate while naming exactly the guarantee that
+was missing. Now stated for both.
+
+**The sibling already had it right**, which is worth recording: the CLIENT path
+(`_refusedFrameHeader`) applies the metadata ceiling from the header and returns null
+outright when `closeOnOversizedFrame` is true — the server's default. Half the
+codebase had the correct behaviour, which both confirmed the intent and said where to
+look.
+
+## Still open, and not closed by this fix
+
+**A peer that sends the whole frame in ONE chunk.** On `dart:io`'s WebSocket a
+message arrives as a single chunk, so the peak is resident before this class sees a
+byte; `_maxBufferedFrameBytes` bounds that at 16 MiB and is untouched. The lead's own
+"not dart:io websocket" parenthesis says the same thing.
+
+**Two places still implement one rule.** With `_decodeAt` refusing from the header,
+the client's copy is now redundant for metadata frames. Not merged — a refactor with
+no measured failure behind it.
 
 ## Owner decision
 

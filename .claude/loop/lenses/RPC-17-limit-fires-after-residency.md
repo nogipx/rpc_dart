@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489]
+applied: [236, 279, 280, 350, 489, 506]
 status: confirmed (round 489)
 ---
 
@@ -223,3 +223,36 @@ No catalog shape covers this; a candidate for `catalog/` at the next curate,
 by the usual test — it holds in any code that buffers untrusted input.
 
 Imported from private memory in the curate pass after round 234.
+
+## The purest form: the check is present and one line too late (round 506)
+
+`_decodeAt` refused an oversized metadata frame with the right limit and the right
+message — below `if (data.length < payloadStart + payloadLen) return null;`. That
+early return is the "keep buffering" path, so a check underneath it is only reachable
+once the payload is entirely resident. A peer dribbling toward a declared 10 MiB
+metadata frame got all of it held against a 64 KiB ceiling: `10485769` bytes, 160x.
+
+**So the detector gains a cheap, purely syntactic query: for every limit check, what
+is the nearest `return null` / `continue` / `await` ABOVE it, and can untrusted input
+reach that first?** Then ask what the check actually reads. Here both inputs were
+9-byte header fields, so there was nothing to wait for and the fix was moving three
+lines.
+
+> **A test asking "is it refused" passes against this defect.** The limit fires in
+> both worlds; only the peak differs. Measure bytes accepted before the error, not
+> whether the error arrives — and yield a turn between chunks, or the figure measures
+> how fast the probe can write rather than what the buffer held.
+
+And the control must be the SAME size with the limit not applying — here the same
+10 MiB without the metadata flag, legal and accepted in full. That pins the cause to
+the classification rather than the size, and stops a small after-figure from reading
+as a rig that cannot feed the data at all.
+
+> **Check the sibling before designing the fix.** The client path already refused
+> this from the header (`frame_multiplexed_channel.dart`, `_refusedFrameHeader`), and
+> returns null outright when `closeOnOversizedFrame` is true — the server's default.
+> Half the codebase had it right, which both confirms the intended behaviour and says
+> where to look.
+
+`../probes/P-144-how-much-is-held-before-the-refusal.md`,
+`../rounds/506-the-limit-that-waited-for-the-payload.md`, B-115.

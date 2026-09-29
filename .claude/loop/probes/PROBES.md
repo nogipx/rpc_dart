@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-144](P-144-how-much-is-held-before-the-refusal.md)** valid (round 506),
+  rpc_dart — measures the PEAK, not the outcome: the limit fires either way, so "is
+  the frame refused" is the wrong question and a test asking it passes against the
+  defect. Counts bytes accepted before the error, **yielding a microtask turn between
+  chunks** — without that the writer outruns the decoder and the figure measures how
+  fast the probe can call `add`. One bit varies (the metadata flag) at a size chosen
+  to sit between the two ceilings, and the control is that same size without the
+  flag: legal, accepted in full in both tables, which pins the cause to the
+  classification and keeps a small after-figure from reading as a broken rig.
 - **[P-143](P-143-what-a-call-gets-when-the-list-moves.md)** valid (round 505),
   rpc_dart — measures the error TYPE the caller receives, not whether the call
   succeeded, because the defect and the fix agree that a call interrupted by

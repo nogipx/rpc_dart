@@ -103,11 +103,29 @@ abstract final class RpcChannelFrame {
     final streamId = view.getUint32(offset);
     final flags = view.getUint8(offset + 4);
     final payloadLen = view.getUint32(offset + 5);
+    final isMetadata = (flags & flagMetadata) != 0;
 
     if (maxPayloadLen != null && payloadLen > maxPayloadLen) {
       throw RpcFrameException.limit(
         'Incoming frame payload too large: $payloadLen bytes '
         '(max: $maxPayloadLen)',
+      );
+    }
+
+    // A metadata frame carries the encoded header blob, which RpcSecurityPolicy
+    // bounds separately and far more tightly than a data payload: 64 KiB against
+    // 16 MiB by default.
+    //
+    // **Above the completeness check, from the header alone**, which is the whole
+    // point. Below it, an incomplete frame returned null and the caller kept
+    // buffering, so the limit only fired once the payload had ARRIVED in full: a
+    // peer dribbling bytes toward a declared 10 MiB metadata frame got all 10 MiB
+    // buffered — 160x this ceiling — and was then told the frame was too large.
+    // Both inputs here are header fields, so there is nothing to wait for.
+    if (isMetadata && maxMetadataLen != null && payloadLen > maxMetadataLen) {
+      throw RpcFrameException.limit(
+        'Incoming metadata frame too large: $payloadLen bytes '
+        '(max: $maxMetadataLen)',
       );
     }
 
@@ -120,18 +138,6 @@ abstract final class RpcChannelFrame {
       payloadStart + payloadLen,
     );
     final endOfStream = (flags & _flagEndOfStream) != 0;
-    final isMetadata = (flags & flagMetadata) != 0;
-
-    // A metadata frame carries the encoded header blob, which
-    // RpcSecurityPolicy bounds separately (and far more tightly) than a data
-    // payload: 64KB against 16MB by default. Checked before decoding, so a
-    // huge header blob is rejected without being parsed.
-    if (isMetadata && maxMetadataLen != null && payloadLen > maxMetadataLen) {
-      throw RpcFrameException.limit(
-        'Incoming metadata frame too large: $payloadLen bytes '
-        '(max: $maxMetadataLen)',
-      );
-    }
 
     RpcMetadata? metadata;
     String? methodPath;
@@ -160,6 +166,11 @@ abstract final class RpcChannelFrame {
   /// buffered — by throwing [RpcFrameException]. Frames decoded before the
   /// offending one are not returned on throw; the caller is expected to treat
   /// the error as a protocol violation and tear down.
+  ///
+  /// [maxMetadataLen] is enforced the same way, from the header alone. It used to
+  /// be checked BELOW the completeness check, so an incomplete frame returned null
+  /// and the caller went on buffering until the payload had fully arrived — 10 MiB
+  /// held for a limit of 64 KiB before the refusal fired.
   ///
   /// Malformed metadata in an otherwise well-sized frame is different, and
   /// [onMalformedMetadata] is how a caller says so. The framing is INTACT there
