@@ -389,13 +389,30 @@ class RpcFrameMultiplexedChannel
       return;
     }
 
-    _appendToBuffer(data);
+    // Decode straight out of the chunk when nothing is buffered, which is the
+    // ordinary case on a message-aligned transport: the chunk holds whole frames
+    // and copying it into `_buf` first bought nothing.
+    //
+    //   1 MiB frames, per frame      appended    decoded in place
+    //     receive path alone          227.02 us     0.31 us
+    //     plus a consumer copy-out    389.76 us   191.45 us
+    //
+    // The first row is the copy this removes; the second is what a receiver that
+    // RETAINS the message still pays, and is the honest end-to-end figure — 2x.
+    // At 64 B it changes nothing (0.75 -> 0.66 us): there the per-message cost
+    // dominates and always did.
+    //
+    // The payload of a decoded frame is then a view into `data` rather than into
+    // `_buf`, so a chunk must not be reused by whoever produced it — stated on
+    // `IRpcChannel.incoming`, which is the contract this relies on.
+    final bool fastPath = _bufLen == 0;
+    if (!fastPath) _appendToBuffer(data);
 
     // Decode against a view of the valid region. decodeAll is O(1) when no
     // frame is complete (it reads the 9-byte header and bails), so calling it
     // on every chunk is cheap; the cost that used to be quadratic was the
     // per-chunk buffer reallocation, now amortized O(1) via _appendToBuffer.
-    final buffered = Uint8List.sublistView(_buf, 0, _bufLen);
+    final buffered = fastPath ? data : Uint8List.sublistView(_buf, 0, _bufLen);
     final List<RpcDecodedFrame> frames;
     final int consumed;
     try {
@@ -429,7 +446,13 @@ class RpcFrameMultiplexedChannel
       return;
     }
 
-    if (consumed > 0) {
+    if (fastPath) {
+      // Nothing was buffered on entry, so the only thing to keep is whatever of
+      // THIS chunk the decoder did not consume.
+      if (consumed < data.length) {
+        _appendToBuffer(Uint8List.sublistView(data, consumed));
+      }
+    } else if (consumed > 0) {
       // Compact the unconsumed tail into a FRESH buffer. The decoded data
       // frames' payloads are sublistViews into the current `_buf`; copying the
       // tail out and rebinding `_buf` leaves the old buffer untouched, so those

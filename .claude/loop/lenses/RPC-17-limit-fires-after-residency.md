@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506]
+applied: [236, 279, 280, 350, 489, 506, 507]
 status: confirmed (round 489)
 ---
 
@@ -256,3 +256,39 @@ as a rig that cannot feed the data at all.
 
 `../probes/P-144-how-much-is-held-before-the-refusal.md`,
 `../rounds/506-the-limit-that-waited-for-the-payload.md`, B-115.
+
+## Ask what the buffer is FOR, not only what bounds it (round 507)
+
+The same reassembly buffer, one round later, with no limit involved at all. Every
+inbound chunk was copied into it — including when it was EMPTY and the chunk already
+held whole frames, which is the ordinary case on a message-aligned transport. The
+buffer exists for frames split across chunks; where that does not happen the copy went
+in and straight back out as views. `389.76 -> 191.45 us` per 1 MiB frame end-to-end.
+
+So beside "is the limit consulted before the bytes land", ask **"is the buffering
+needed on this path at all"**. A buffer written unconditionally is a buffer whose
+purpose has not been checked against its callers.
+
+Three things this round paid for, all worth carrying:
+
+> **Measure the layer the lead names.** The first bench echoed through
+> `RpcCallerEndpoint`; at 1 MiB the JSON codec dominates everything, so the number
+> would have been real and attributed to the wrong code.
+
+> **A cost fix has no witness, only guards.** Nine framing tests, all of which pass
+> with the fix ablated — as they must, since the old path was also correct. They were
+> labelled WITNESS in the first draft and the ablation corrected it. The witness is
+> the bench; the guards exist so the speed-up cannot be bought with a framing bug.
+
+> **Report the honest row.** Removing a copy made the "nobody reads the payload" arm
+> 725x faster, which is the absence of work rather than throughput. The row that
+> describes a real receiver — one that RETAINS the message and must copy it out —
+> improves 2x, and that is the number the record leads with. Keep a size where the
+> fix must change NOTHING (64 B here) as the control.
+
+And state the reach: the old path sustained 2566 MiB/s where any real link does one to
+two orders less. A measured, free improvement that no user can observe is still worth
+having and should not be written up as if it were a fix to a hang.
+
+`../probes/P-145-what-the-receive-path-copy-costs.md`,
+`../rounds/507-the-copy-that-bought-nothing.md`, B-116.

@@ -42,6 +42,14 @@ abstract class IRpcChannel {
   /// Incoming raw frames from the remote side.
   ///
   /// The stream completes when the channel is closed (locally or remotely).
+  ///
+  /// **A delivered chunk is handed over, not lent.** An implementation must not
+  /// write into a `Uint8List` it has already added to this stream, and must not
+  /// reuse one as scratch for the next chunk — emit a fresh list each time.
+  /// `RpcFrameMultiplexedChannel` decodes straight out of the chunk when nothing
+  /// is buffered, so a decoded message's payload can be a view into it and can
+  /// outlive the `add`. Copying on every chunk to avoid this cost 227 us per
+  /// 1 MiB frame and is what the rule buys back.
   Stream<Uint8List> get incoming;
 
   /// Close the channel and release all resources.

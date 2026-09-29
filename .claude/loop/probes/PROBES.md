@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-145](P-145-what-the-receive-path-copy-costs.md)** valid (round 507),
+  rpc_dart — turns a copy COUNT read off the source into a cost. **Measures the layer
+  the lead names**: a first version echoed through `RpcCallerEndpoint` and the JSON
+  codec dominated at 1 MiB, which would have attributed the time to the wrong layer
+  entirely. Each size is run twice — payload left a view, payload copied out —
+  because a receive path that hands out views reads as infinitely fast per byte, and
+  only the second is the end-to-end figure a receiver pays. Its controls are a raw
+  `setRange` of the same megabyte (so the figures have something to be a fraction of,
+  generously, since it stays cache-hot) and the 64 B rows, which must NOT move.
 - **[P-144](P-144-how-much-is-held-before-the-refusal.md)** valid (round 506),
   rpc_dart — measures the PEAK, not the outcome: the limit fires either way, so "is
   the frame refused" is the wrong question and a test asking it passes against the
