@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-141](P-141-what-a-failed-registration-leaves-behind.md)** valid (round 503),
+  rpc_dart — varies WHERE a failure lands relative to the mutation, and prints
+  three things per arm: what threw, the state the failure left, and whether the one
+  recovery a caller has still works. The third is what turns an untidy internal
+  state into a defect. Its control is a clean contract registered twice, also
+  refused — without it the shared "already registered" message reads as the finding
+  instead of as correct behaviour. Measures the actual KEY SETS, not counts: an
+  early version had the recovery contract reuse a method name the failing contract
+  also declared, so the after-state was identical to the before-state and the arm
+  proved nothing.
 - **[P-140](P-140-what-the-rate-limiter-admits.md)** valid (round 502),
   rpc_dart — holds the LIMIT fixed and varies the call SHAPE, 100 opens per arm
   against `global: max 5`, so every number is comparable and `5` versus `100`

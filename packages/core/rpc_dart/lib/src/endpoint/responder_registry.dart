@@ -94,6 +94,14 @@ final class RpcResponderMethodRegistry {
   }
 
   /// Registers [contract] and indexes all its methods.
+  ///
+  /// **All or nothing.** Everything that can throw — `setup()`, and the
+  /// duplicate-key check for every method — runs before any field is touched, and
+  /// the bindings are built into a local map that is committed in one step at the
+  /// end. Inserting the contract first left a failed registration half-applied:
+  /// the service was present, some of its methods were live and served requests,
+  /// and the obvious recovery (catch, fix, register again) was refused with
+  /// "already registered".
   void registerContract(RpcResponderContract contract, LogScope? logger) {
     if (logger != null) _log = logger;
     final serviceName = contract.serviceName;
@@ -110,7 +118,6 @@ final class RpcResponderMethodRegistry {
     if (_log.isInternal) {
       _log.internal('Registering service contract: $serviceName');
     }
-    _contracts[serviceName] = contract;
 
     // Only if nothing has been declared yet. `setup()` is public and calling it
     // before registering reads as the natural thing to do -- two transport
@@ -125,60 +132,67 @@ final class RpcResponderMethodRegistry {
       contract.setup();
     }
 
-    for (final entry in contract.methods.entries) {
-      final methodName = entry.key;
-      final registration = entry.value;
-      final methodKey = '$serviceName.$methodName';
+    // Built locally, committed at the end. `pending` is also checked against
+    // itself: two of this contract's own methods sharing a key must be refused
+    // here rather than silently collapsing into one binding.
+    final pending = <String, RpcResponderMethodBinding>{};
 
-      if (_methods.containsKey(methodKey)) {
+    void reserve(
+      String methodName,
+      RpcResponderMethodBinding binding, {
+      required String conflictSuffix,
+    }) {
+      final methodKey = '$serviceName.$methodName';
+      if (_methods.containsKey(methodKey) || pending.containsKey(methodKey)) {
         throw RpcStatusException(
           RpcStatus.internal,
-          'Method $methodKey is already registered',
+          'Method $methodKey is already registered$conflictSuffix',
         );
       }
+      pending[methodKey] = binding;
+    }
 
-      if (_log.isInternal) {
-        _log.internal(
-          'Registering method: $methodKey (${registration.type.name})',
-        );
-      }
-
-      _methods[methodKey] = RpcResponderMethodBinding(
-        serviceName: serviceName,
-        methodName: methodName,
-        type: registration.type,
-        codecRegistration: registration,
+    for (final entry in contract.methods.entries) {
+      final registration = entry.value;
+      reserve(
+        entry.key,
+        RpcResponderMethodBinding(
+          serviceName: serviceName,
+          methodName: entry.key,
+          type: registration.type,
+          codecRegistration: registration,
+        ),
+        conflictSuffix: '',
       );
     }
 
     for (final entry in contract.zeroCopyMethods.entries) {
-      final methodName = entry.key;
       final zeroCopyRegistration = entry.value;
-      final methodKey = '$serviceName.$methodName';
-
-      if (_methods.containsKey(methodKey)) {
-        throw RpcStatusException(
-          RpcStatus.internal,
-          'Method $methodKey is already registered (zero-copy conflict)',
-        );
-      }
-
-      if (_log.isInternal) {
-        _log.internal(
-          'Registering zero-copy method: '
-          '$methodKey (${zeroCopyRegistration.type.name}) [ZERO-COPY]',
-        );
-      }
-
-      _methods[methodKey] = RpcResponderMethodBinding(
-        serviceName: serviceName,
-        methodName: methodName,
-        type: zeroCopyRegistration.type,
-        zeroCopyRegistration: zeroCopyRegistration,
+      reserve(
+        entry.key,
+        RpcResponderMethodBinding(
+          serviceName: serviceName,
+          methodName: entry.key,
+          type: zeroCopyRegistration.type,
+          zeroCopyRegistration: zeroCopyRegistration,
+        ),
+        conflictSuffix: ' (zero-copy conflict)',
       );
     }
 
+    // Commit. Nothing above this line has modified any field, so a throw leaves
+    // the registry exactly as it was.
+    _contracts[serviceName] = contract;
+    _methods.addAll(pending);
+
     if (_log.isInternal) {
+      for (final entry in pending.entries) {
+        final binding = entry.value;
+        _log.internal(
+          'Registering method: ${entry.key} (${binding.type.name})'
+          '${binding.usesSerialization ? '' : ' [ZERO-COPY]'}',
+        );
+      }
       _log.internal(
         'Contract $serviceName registered with '
         '${contract.methods.length} methods and '

@@ -3,7 +3,7 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
 breaks: a connection leak; or a running call detached from everything that can stop it.
-applied: [241, 401, 487]
+applied: [241, 401, 487, 503]
 status: confirmed (round 487)
 ---
 
@@ -181,3 +181,31 @@ no running code had.
 
 Imported from private memory in the curate pass after round 234, which is also
 what C-06 had been asking for: it recorded shape U-15 as having no lens.
+
+## Drive it twice where the FIRST attempt FAILED (round 503)
+
+The lens as written drives a step twice and both attempts succeed. There is a
+second variant, and it found `registerContract`: **drive it, make it throw, then
+drive it again.** Every test in the repo registered a contract once and
+successfully, so nothing had ever asked what state a failed registration leaves —
+and the answer was "the contract, plus however many of its methods were processed
+before the throw", with the retry refused as a duplicate.
+
+The detector: for each lifecycle method, list the statements that can throw and the
+statements that mutate, and check the ORDER. Every mutation above a possible throw
+is a partial commit. Then ask the question that turns it into a defect rather than a
+wart — **what recovery does the caller have, and does the debris break it?** Here
+the only recovery is catch-fix-retry, and the debris is exactly what refuses it, so
+a registration failure was terminal for that service name.
+
+> **The control is a successful call made twice.** Both the defect and correct
+> behaviour end in "already registered", so the second error says nothing on its
+> own; only the state distinguishes them. A round that reads the exception and stops
+> concludes the opposite of the truth.
+
+The fix shape is the same every time: build into a local, check everything, commit
+once. Reserving into a `pending` map also lets the operation check itself for
+internal conflicts, which removes a dependence on a guarantee held in another class.
+
+`../probes/P-141-what-a-failed-registration-leaves-behind.md`,
+`../rounds/503-the-throw-that-left-half-a-service.md`, B-112.
