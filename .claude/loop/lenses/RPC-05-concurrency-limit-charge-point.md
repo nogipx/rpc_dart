@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something is HELD and must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate, or a request the caller of a lifecycle method is awaiting
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502]
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502, 508]
 status: confirmed (round 494)
 ---
 
@@ -365,3 +365,39 @@ optional.
 
 `../probes/P-140-what-the-rate-limiter-admits.md`,
 `../rounds/502-the-shape-that-was-never-admitted.md`, B-111.
+
+## When the RELEASE is a listener somebody has to remember (round 508)
+
+A buffered broadcast charges memory on `add` and releases it when a listener takes
+the event. `RpcChannelTransport` added EVERY inbound message to it, including
+responses already routed to their own stream controller — so on a caller-only
+endpoint nothing released, and `startCallerListening` exists to attach a listener
+that does nothing except drain. Its doc says so outright: *"this subscription exists
+to keep the buffer drained."*
+
+**That comment is the detector.** When the release point is a subscription rather
+than a call, the charge is paid by whoever forgets — and forgetting is invisible
+until the buffer is full. Grep for listeners whose body is empty, and for doc
+comments explaining why a subscription that consumes nothing must exist. Each one is
+a charge that should not have happened.
+
+The fix is not to make the release more reliable but to stop charging: skip the
+broadcast for messages already routed. Measured with the observer detached, after a
+server stream was fully consumed — `1001` replayed to a late subscriber for 1000
+delivered, then `0`.
+
+> **Check which SIDE of the stream is charged before writing the skip.** Ownership
+> here is id parity: a client issues odd ids, a server even, so "locally initiated"
+> is `isClient ? id.isOdd : id.isEven`. Invert it and every server silently stops
+> discovering calls — the guard that catches that reads the responder's broadcast off
+> the transport and asserts the ids it sees are odd, which a guard checking only that
+> a call succeeded would not.
+
+> **And separate the two things riding on one stream before believing the fix is
+> safe.** Errors reach the same controller through `addError`, which the skip does
+> not touch — so the subscription is still needed, for a different reason than
+> before. A round that had skipped the whole dispatch would have made a caller deaf
+> to channel failures.
+
+`../probes/P-146-what-the-second-dispatch-costs.md`,
+`../rounds/508-work-added-to-undo-work.md`, B-117.

@@ -953,9 +953,34 @@ class RpcChannelTransport
       // at the window, at the cost of not bounding it.
       _fc.onConsumed(message.streamId, message);
     }
-    // Global dispatch (new-stream routing): the buffered controller retains the
-    // message if the pipeline hasn't subscribed yet, instead of dropping it.
-    _incoming.add(message);
+    // Global dispatch exists for NEW-STREAM ROUTING: the responder pipeline
+    // discovers a peer-initiated call here, and the buffered controller retains
+    // the message if that pipeline has not subscribed yet rather than dropping
+    // it. A response on a stream WE opened is already routed to its own
+    // controller above, so broadcasting it serves nobody.
+    //
+    // It was not free. A caller-only endpoint has nothing to do with these
+    // events, so `startCallerListening` subscribes a no-op listener purely to
+    // keep the buffer drained — and where that is missed, the buffer retains
+    // every response the caller already consumed. With the observer detached,
+    // after a fully consumed server stream a late subscriber was replayed:
+    //
+    //        10 messages consumed -> 11 replayed          0 after
+    //      1000 messages consumed -> 1001 replayed        0 after
+    //
+    // (the extra one is the trailer.) The throughput half is far smaller: 10 000
+    // small messages read a median 5.987 us each against 5.604, about 6%.
+    //
+    // Errors are unaffected: a channel failure or a policy violation with no
+    // known stream goes through `_incoming.addError`, which this does not touch,
+    // so the caller's observer still has something to observe.
+    final locallyInitiated = _idManager.isClient
+        ? message.streamId.isOdd
+        : message.streamId.isEven;
+    final wasRouted = ctl != null && !ctl.isClosed;
+    if (!(locallyInitiated && wasRouted)) {
+      _incoming.add(message);
+    }
     if (message.isEndOfStream) {
       _releaseStream(message.streamId);
       _finishedStreams.remove(message.streamId);

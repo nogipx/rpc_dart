@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-146](P-146-what-the-second-dispatch-costs.md)** valid (round 508),
+  rpc_dart — **two files because the lead makes two claims needing different
+  instruments**, and the one it leads with turned out to be the smaller. Retention is
+  read through the PUBLIC API with no access to private state: a
+  `BufferedBroadcastController` replays to a late subscriber, so attaching one after
+  the stream is fully consumed counts exactly what was held for nobody. The speed arm
+  reports a five-run distribution rather than a figure — a single comparison read 16%
+  where the real effect is 6% — and its control is that per-message cost is NOT flat
+  across counts, which says only the largest arm measures a per-message cost at all.
 - **[P-145](P-145-what-the-receive-path-copy-costs.md)** valid (round 507),
   rpc_dart — turns a copy COUNT read off the source into a cost. **Measures the layer
   the lead names**: a first version echoed through `RpcCallerEndpoint` and the JSON
