@@ -234,6 +234,18 @@ final class ClientStreamCaller<
         wait,
         onTimeout: () {
           _logger.error('Response wait timed out after $wait');
+          // Tell the server before tearing down, which `close()` does not do:
+          // abandoning the wait leaves the handler running for a caller that is
+          // already gone. Measured with no deadline set, the handler saw
+          // `cancelled=0` after the caller gave up at 60 s.
+          //
+          // `notifyPeerOfAbort` exists for exactly this class of ending — its
+          // own doc says `_sendCancellationToServer` is otherwise reachable only
+          // through a cancellation token — and it never throws. Unawaited, as
+          // every streaming sibling sends it.
+          unawaited(
+            _processor.notifyPeerOfAbort('Caller timed out after $wait'),
+          );
           // Free resources on timeout.
           unawaited(close());
           // With a deadline set, two things race to end the call: the call

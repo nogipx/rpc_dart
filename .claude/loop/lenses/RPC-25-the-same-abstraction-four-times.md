@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496]
-status: confirmed (round 496)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498]
+status: confirmed (round 498)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -1212,3 +1212,40 @@ on every chunk:
 
 `../probes/P-134-what-reassembling-one-large-message-costs.md`,
 `../rounds/496-the-sibling-had-solved-it-one-layer-up.md`, B-105.
+
+## Round 498 — the duty was already named in a doc comment
+
+Rounds 384, 386, 389 and 390 each found a duty one copy had forgotten. Round 498
+found one where the SIBLING'S DOC SAYS SO IN ADVANCE.
+
+The duty: *what does a caller owe the server when it stops waiting?*
+`BaseProcessor.notifyPeerOfAbort` exists for it, and its comment reads:
+
+> *"`_sendCancellationToServer` is reachable only through a cancellation token, so
+> a call that ends because its local REQUEST STREAM failed has no way to reach
+> it."*
+
+That sentence enumerates one such ending. TIMEOUT is another, and neither
+`UnaryCaller` nor `ClientStreamCaller` reached the notice from it:
+
+    no deadline, a handler that never answers     cancelled=0  ->  1
+    the same with a 500 ms deadline (control)     cancelled=1      1
+
+> **A doc that says "X is reachable only through Y" is a list with one entry and
+> an invitation to find the others.** Grep the imperative and the exclusive —
+> "only through", "the only path", "nothing else calls" — and then enumerate the
+> endings yourself. The fix is usually the existing method, called from one more
+> place.
+
+And the round's own mistake is the one to carry forward: **the second half's
+canary passed.** Its witness reached `onTimeout` through a short deadline, the only
+fast route — and the deadline path already cancels the handler through the call
+scope, so the test measured machinery that already worked. It is a GUARD now, and
+the half it was meant to witness has only the 60-second probe behind it.
+
+> **When two copies share a duty but not a trigger, a witness for one may be
+> unreachable for the other.** Check that the ablation kills each witness, not
+> just that the suite is green.
+
+`../probes/P-136-what-bounds-a-call-with-no-deadline.md`,
+`../rounds/498-giving-up-without-telling-anyone.md`, B-107.

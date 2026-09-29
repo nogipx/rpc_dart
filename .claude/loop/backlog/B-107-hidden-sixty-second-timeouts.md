@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: awaiting owner
+round: 498
+commit: 3391d5ed
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-136
+reason: "owner decision — every claim CONFIRMED and the abandonment half FIXED in round 498; whether an implicit bound should exist at all changes behaviour for every existing caller, which the lead itself frames as an either/or"
 ---
 
 # B-107 — unary and client-stream calls hide a 60 s timeout, never tell the server, and the other shapes have none
@@ -48,6 +48,51 @@ unary path.
 Either no implicit timeout anywhere (the gRPC default), or one documented default
 applied to every shape, sent as `grpc-timeout`, and followed by a cancel notice on
 expiry.
+
+## Round 498 — every claim confirmed, and the lead splits in two
+
+```
+no deadline
+unary         grpc-timeout=[null]  gave up after 60.0s  TimeoutException  cancelled=0
+clientStream  grpc-timeout=[null]  gave up after 60.0s  TimeoutException  cancelled=0
+serverStream  grpc-timeout=[null]  gave up after 65.0s  <- the PROBE's budget, not a bound
+
+with a 500 ms deadline, as the control
+unary/clientStream/serverStream   grpc-timeout SENT, 0.5s,
+                                  RpcDeadlineExceededException, cancelled=1
+```
+
+Four shapes, three behaviours, exactly as filed. The control matters: with a
+deadline every piece of machinery works, so each no-deadline row is a comparison
+rather than an assertion.
+
+**FIXED in round 498 — the abandonment.** A caller that gave up told the server
+nothing, so the handler ran on: `cancelled=0 -> 1` for unary and client-stream. No
+policy decision was needed for that half, and the duty was already named in
+`notifyPeerOfAbort`'s own doc comment. `serverStream` is unchanged because nothing
+bounds it, so nothing is abandoned.
+
+## What is left, and why it is the owner's
+
+Whether a call with NO deadline should be bounded at all:
+
+1. **No implicit timeout anywhere** (gRPC's own behaviour). Honest, and every
+   caller relying on the current 60 s starts hanging instead.
+2. **One documented default on every shape**, sent as `grpc-timeout` so the server
+   shares it. Consistent, and it picks a number for everyone — and it would bound
+   server-stream and bidi calls that are legitimately long-lived, which is what
+   `halfOpenStreamTimeout`'s own doc says cannot be safe by default.
+
+Either changes behaviour for existing callers. The measurement does not choose.
+
+Two smaller things inside the same question:
+
+- the exception TYPE differs by origin: `TimeoutException` from the implicit
+  fallback and from an explicit `timeout:` argument, `RpcDeadlineExceededException`
+  from a deadline. Deliberate (the 60 s is nobody's deadline) and pinned by a
+  guard, but it means a caller catching the Rpc type misses the fallback.
+- the zero-copy unary path through `_executeUnaryCall` has no bound and was NOT
+  measured.
 
 ## Owner decision
 

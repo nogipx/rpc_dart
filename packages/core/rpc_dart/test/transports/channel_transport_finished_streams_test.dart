@@ -41,6 +41,23 @@ void main() {
       );
     }
 
+    // POLLED, because the release is now chained onto a cancellation notice.
+    //
+    // Round 498 made a timed-out unary call TELL the server before releasing its
+    // id, and that notice rides a frame with `endStream: true` — which marks the
+    // stream finished on the way out. The release that prunes the entry is
+    // chained onto the notice (round 448's ordering: notice first, release after,
+    // bounded), so immediately after the call returns there is one entry still
+    // in flight. It is not accumulation: five abandoned calls read 1, not 5.
+    //
+    // What this test is for — the set returns to zero rather than growing once
+    // per abandoned call — is unchanged, so the assertion is unchanged and only
+    // the instrument waits.
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (await _finishedStreams(client) > 0 &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     expect(
       await _finishedStreams(client),
       0,

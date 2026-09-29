@@ -566,6 +566,23 @@ final class UnaryCaller<TRequest, TResponse> {
           _logger.error(
             'Response timeout: $effectiveTimeout [streamId: $streamId]',
           );
+          // Tell the server, exactly as the cancellation-token path above does
+          // and for the same reason: abandoning the wait without a notice leaves
+          // the handler running for a caller that is already gone. The token
+          // path was given this after a 3 s job cancelled at 100 ms spent 295 of
+          // its 300 work units post-cancellation; a timeout abandons the call
+          // just as completely, and measured with no deadline set the handler
+          // saw `cancelled=0` after the caller gave up at 60 s.
+          //
+          // Assigned to the same variable, so the `finally` below applies the
+          // ordering round 448 built: notice first, release chained onto it,
+          // bounded so a wedged send cannot hold the id.
+          cancellationNotice = _notifyPeerOfCancellation(
+            _transport,
+            streamId,
+            'Caller timed out after $effectiveTimeout',
+            _logger,
+          );
           // A deadline that expires mid-call is the same event as one that had
           // already expired at _checkContextBeforeCall, so report it the same
           // way. An explicit `timeout:` argument is not a deadline and keeps
