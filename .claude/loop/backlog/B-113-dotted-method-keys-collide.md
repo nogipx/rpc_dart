@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
-paths: [packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_registry.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+status: closed (round 504)
+round: 504
+commit: 54382ce7
+paths: [packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
+probe: P-142
+reason: "closed — CONFIRMED and fixed, and the lead's own likelihood estimate was wrong: nothing unusual has to be registered, only the request is crafted. One token pattern served both halves of the path while the key format needs exactly one half to admit dots; split into kServiceTokenPattern and kMethodTokenPattern"
 ---
 
 # B-113 — `/a.b/c` and `/a/b.c` resolve to the same method key
@@ -35,6 +35,47 @@ Register service `a.b` method `c`; call `/a/b.c`. Expected: dispatched to `a.b/c
 
 Key by the (service, method) record, or forbid dots in method names in the
 grammar.
+
+## Outcome (round 504)
+
+**CONFIRMED and fixed. The lead's "low likelihood" is wrong**, and correcting it is
+the useful part. The lead says the defect needs a dotted METHOD name registered. It
+does not — registered `service "a.b", methods "c" and "secret"`, which is an
+ordinary package-qualified gRPC service with ordinary methods, is enough. Only the
+REQUEST is crafted:
+
+```
+                  before                 after
+/a.b/c            reached a.b/c          reached a.b/c   <- control
+/a/b.c            reached a.b/c          status 3
+/a/b.secret       reached a.b/secret     status 3
+/a/c              status 12              status 12       <- control
+```
+
+Fixed by the sketch's second option: `kServiceTokenPattern` keeps the dot,
+`kMethodTokenPattern` loses it. `rpcMethodPathFromKey`'s doc had always STATED this
+invariant — "a service name may contain them, a method name may not" — so the fix
+makes the code enforce what the comment already promised. Not public API; the whole
+repo contained one dotted method name, in a test.
+
+Keying by a `(service, method)` record (the sketch's first option) was not taken:
+`registeredMethodBindings` is a public getter whose keys are that string, so
+changing the key format is a breaking API change for a strictly smaller benefit.
+
+**Checked and refuted: there is no in-process authorisation bypass.** A responder
+interceptor denying service `a.b` by name denied BOTH paths, and saw `a.b/secret`
+for both — the binding is resolved before the middleware context is built, so an
+interceptor never sees the caller's split.
+
+## Still open, and not closed by this fix
+
+**Path-string filtering upstream of the responder.** A reverse-proxy rule, gateway
+ACL or access-log filter matching `/a.b/` did not cover `/a/b.`, because both
+reached the same method. The responder now refuses the second form, which closes it
+going forward and does nothing for rules already trusted or logs already written.
+
+**`rpc_dart_http`'s responder inherits the fix by construction** (it calls
+`policy.isValidMethodPath`) but was not run in round 504.
 
 ## Owner decision
 

@@ -38,6 +38,18 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-142](P-142-which-paths-reach-one-method.md)** valid (round 504),
+  rpc_dart — holds the REGISTRATION fixed and varies the PATH, which is what
+  refuted the lead's "low likelihood": an ordinary package-qualified service is
+  enough and only the request is crafted. **Three levels, and the first two cannot
+  answer what a grammar fix has to answer** — the caller transport validates
+  outbound metadata against the same policy, so an ordinary call is refused locally
+  and says nothing about a foreign peer; the third level hand-builds the frame past
+  it. Its controls include `/a/c` and `/zzz/c` staying UNIMPLEMENTED, and the honest
+  path through the raw level reading "accepted" in both tables — a unary call needs
+  a payload the frame omits, so an accepted path answers nothing and that is
+  otherwise indistinguishable from being ignored. **The interceptor level was built
+  to confirm an auth bypass and refuted it.**
 - **[P-141](P-141-what-a-failed-registration-leaves-behind.md)** valid (round 503),
   rpc_dart — varies WHERE a failure lands relative to the mutation, and prints
   three things per arm: what threw, the state the failure left, and whether the one

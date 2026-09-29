@@ -16,9 +16,28 @@ import 'rpc_headers.dart';
 /// while the responder pipeline enforced a hardcoded 512.
 const int kDefaultMaxMethodPathLength = 1024;
 
-/// Tokens allowed in a service or method name. A dot is legal, so a dotted
-/// service name survives.
-final RegExp kMethodTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
+/// Tokens allowed in a SERVICE name. A dot is legal, so a package-qualified
+/// protobuf name (`myapp.v1.UserService`) survives.
+final RegExp kServiceTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
+
+/// Tokens allowed in a METHOD name. **A dot is NOT legal here**, and the key
+/// format depends on it.
+///
+/// A method binding is keyed `'$service.$method'` and split again on the LAST dot
+/// ([rpcMethodPathFromKey], whose doc has always stated the invariant: a service
+/// name may contain dots, a method name may not). With dots admitted in both
+/// halves the mapping is not injective, so two different paths produce one key and
+/// the responder dispatches one to the other's handler. Measured with an ordinary
+/// package-qualified service and ordinary method names, nothing unusual
+/// registered:
+///
+///     registered: service "a.b", methods "c" and "secret"
+///       /a.b/c      -> reached a.b/c        the honest path
+///       /a/b.c      -> reached a.b/c        names service "a", not "a.b"
+///       /a/b.secret -> reached a.b/secret   names service "a", not "a.b"
+///       /a/c        -> UNIMPLEMENTED        (so the responder is not just
+///       /zzz/c      -> UNIMPLEMENTED         dispatching anything)
+final RegExp kMethodTokenPattern = RegExp(r'^[A-Za-z0-9_-]+$');
 
 /// Splits a valid `/Service/Method` into its two names, or returns null.
 ///
@@ -39,7 +58,9 @@ final RegExp kMethodTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
   final parts = methodPath.split('/');
   if (parts.length != 3 || parts[0].isNotEmpty) return null;
   if (parts[1].isEmpty || parts[2].isEmpty) return null;
-  if (!kMethodTokenPattern.hasMatch(parts[1]) ||
+  // Two patterns, not one: the service half admits dots and the method half does
+  // not. One pattern for both made the key `'$service.$method'` ambiguous.
+  if (!kServiceTokenPattern.hasMatch(parts[1]) ||
       !kMethodTokenPattern.hasMatch(parts[2])) {
     return null;
   }

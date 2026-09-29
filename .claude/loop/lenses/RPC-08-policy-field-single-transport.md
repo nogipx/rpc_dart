@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501]
+applied: [205, 394, 414, 501, 504]
 status: confirmed (round 394)
 ---
 
@@ -166,3 +166,34 @@ fallthrough is the finding.
 > record has the split.
 
 Bench `../probes/P-139-which-errors-open-the-breaker.md`.
+
+## When one of the pair enforces and the other only DOCUMENTS (round 504)
+
+A third kind of pair, twenty lines apart in one file: two functions that are
+documented inverses of each other. `rpcMethodPathFromKey` splits a binding key on
+the LAST dot, and its doc states the invariant that makes that correct — *"a service
+name may contain them, a method name may not"*. `parseRpcMethodPath` applied ONE
+token pattern to both halves of the path, and the pattern admits dots. **The
+invariant was enforced by a sentence**, so `('a', 'b.c')` and `('a.b', 'c')` were
+distinct pairs producing one key, and a request dispatched to a method the caller
+had not named.
+
+So when comparing a pair, do not only ask *do they agree* — ask **which of them
+actually CHECKS.** A precondition stated in the doc of the function that RELIES on
+it is not enforced anywhere. The tell is a doc sentence of the form "X may contain
+this, Y may not" with no code nearby that says so.
+
+> **A round-trip test cannot find this, and it is worth knowing why.** Parse-then-
+> format is the identity for every path legal under BOTH grammars, so the obvious
+> property test guards the fix and could never have witnessed the defect. What finds
+> it is two inputs that must map to different outputs — injectivity, not
+> round-tripping.
+
+**This lens has now paid on three unrelated kinds of pair** — transports (its
+original parity matrix), two interceptors making the same classification decision
+(round 501), and two inverse functions where one carries the rule in prose. Worth a
+curate pass asking whether "compare the places that make the same decision" has
+outgrown the matrix it was derived from and wants its own lens.
+
+`../probes/P-142-which-paths-reach-one-method.md`,
+`../rounds/504-the-invariant-only-the-doc-enforced.md`, B-113.
