@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525]
 status: confirmed (round 394)
 ---
 
@@ -300,3 +300,29 @@ accepted-versus-retained distinction round 506 made about the metadata frame che
 > inlined.
 
 `../rounds/524-the-sum-nobody-was-taking.md`.
+
+## Two limits on one quantity: measure the BAND, not either end (round 525)
+
+A hardcoded 128 in `forClientRequest` against the policy's 1024 path limit. The
+disagreement exists only between them, so neither number read alone shows anything —
+`129` to roughly `1018` characters of service name is routable by the policy and
+refused by the caller.
+
+**So ask both questions per input and let the rows disagree.** "Would this be routed"
+and "will this be built" in one table; the band is the finding, and a count of
+refusals would have said nothing at all.
+
+> **The control is an input past BOTH limits, where the answers turn negative
+> together.** Without it, a column of "routable / refused" is equally consistent with
+> the rig mislabelling one of the two checks. And short inputs where both answers are
+> positive are the other half — they prove neither column is stuck.
+
+> **A sibling disagreement is not always a one-liner, and say so when it is not.** The
+> constant exists because `forClientRequest` is a STATIC with no policy in scope.
+> Fixing it means changing a widely used signature, or removing the check and relying
+> on the parse that already enforces the real limit — a different change with a
+> different risk. And before either: what was the constant MEANT to be? Moving a
+> validation limit without knowing is how it ends up wrong in the other direction.
+
+`../probes/P-160-is-a-routable-name-callable.md`,
+`../rounds/525-routable-and-uncallable.md`, B-198.

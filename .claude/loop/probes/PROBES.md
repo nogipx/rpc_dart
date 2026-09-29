@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-160](P-160-is-a-routable-name-callable.md)** valid (round 525),
+  rpc_dart — **asks BOTH questions per row** — routable by the policy, buildable by the
+  caller — because a disagreement between two limits on one quantity is invisible when
+  either is read alone. The disagreement IS the measurement; a count of refusals would
+  say nothing. Its control is a name past the policy's own limit, where both answers
+  turn negative together, and the short rows are the other half: at 32 characters both
+  are positive, so neither column is stuck.
 - **[P-159](P-159-is-metadata-bounded-in-total.md)** valid (round 523),
   rpc_dart — every header individually LEGAL, varying only how many, which is the
   whole design: one oversized header would make the refusal say nothing about totals.
