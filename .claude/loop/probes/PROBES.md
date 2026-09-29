@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-163](P-163-is-shutdown-linear-in-connections.md)** valid (round 530),
+  rpc_dart_websocket — **fixes the per-item cost small and varies N**, because the property
+  under test is the serialisation and the honest magnitude (dart:io's close timeout for a
+  peer that never answers) needs a raw TCP peer and makes every arm slow. Read as a RATIO to
+  the single-peer arm, so the assertion does not encode the machine. Its control is twenty
+  peers whose close is INSTANT — without it the growth is equally consistent with a
+  per-endpoint bookkeeping cost. Its channel's inbound controller must stay OPEN:
+  `Stream.empty()` tears the endpoint down before `stop()` sees it and every arm reads fast
+  for the wrong reason.
 - **[P-162](P-162-what-status-does-each-ending-give.md)** valid (round 528),
   rpc_dart_websocket — **drives the ENDINGS, not the codes.** Which code a mapping table
   should give is unanswerable from the table; the question is which code a real failure

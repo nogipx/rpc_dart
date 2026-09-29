@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 530)
+round: 530
+commit: e4ba8c6b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-163
+reason: "CONFIRMED, exactly linear, and FIXED with a `Future.wait` whose failures are caught PER endpoint — the group form abandons the remaining closes on the first error"
 ---
 
 # B-134 — RpcWebSocketServer.stop() closes endpoints one at a time
@@ -24,13 +24,31 @@ thing a round owes this lead, and it may refute it.
 
 Shutdown time linear in dead connections.
 
-## Witness a round would build
+## What round 530 measured
 
-20 half-open peers; time `stop()`.
+```
+  arm                                    stop() took
+  1 peers, close takes 300ms             316ms
+  5 peers, close takes 300ms             1512ms
+  20 peers, close takes 300ms            6057ms
+  CONTROL 20 peers, close is instant     1ms
+```
 
-## Fix sketch
+Bench `../probes/P-163-is-shutdown-linear-in-connections.md`. After: `316 / 304 / 304`.
 
-`Future.wait` with per-endpoint error handling.
+**The per-peer cost is a stand-in.** The real one is dart:io's close timeout for a peer that
+never answers, which is seconds; the rig fixes it small and varies N, because the property
+under test is the serialisation. At the real timeout, twenty dead peers is around a hundred
+seconds.
+
+## Fix
+
+The sketch, with one thing it did not say: the failure must be caught **per endpoint**, not by
+the group. `Future.wait` abandons the remaining futures on the first error, which would leave
+endpoints open with nothing left to close them.
+
+The witness also asserts every sink recorded its close was CALLED — fast is what abandoning
+them looks like too.
 
 ## Owner decision
 

@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433, 499, 514]
+applied: [223, 233, 246, 273, 323, 433, 499, 514, 530]
 status: confirmed (round 499)
 ---
 
@@ -262,3 +262,31 @@ either, and then reasoning has to be labelled as reasoning.
 
 `../probes/P-152-how-long-does-a-drain-take.md`,
 `../rounds/514-the-drain-waited-for-a-tick.md`, B-123.
+
+**Round 530 read the lens from the other end.** The timeout there is dart:io's close
+handshake, and it behaves correctly; the defect is that everything else QUEUES behind
+it. `RpcWebSocketServer.stop()` awaited each endpoint's close in a loop, making
+shutdown the SUM of N independent waits on N different peers:
+
+    1 peer, close takes 300ms       316ms
+    5 peers                        1512ms
+    20 peers                       6057ms
+    CONTROL 20 peers, instant         1ms
+
+`../probes/P-163-is-shutdown-linear-in-connections.md`, B-134.
+
+> **Ask what else is waiting on the bounded wait.** The detector's question — who
+> waits on an operation with a deadline — finds the operation. The follow-up is
+> whether anything SEQUENTIAL is behind it that need not be, because a correct
+> per-peer bound becomes an incorrect total the moment it is summed.
+
+> **When the real cost is slow to reproduce, fix it small and vary N.** The honest
+> magnitude here needs a raw TCP peer that completes a WebSocket handshake and then
+> ignores the close frame. The PROPERTY is the serialisation, which a 300 ms stand-in
+> shows in six seconds instead of a hundred — provided the record says the stand-in is
+> one.
+
+> **`Future.wait` is not a drop-in for a loop of awaits.** It abandons the remaining
+> futures on the first error, so the failure has to be caught PER item or a teardown
+> leaves work undone. And the witness needs an arm proving each item was still
+> REACHED: abandoning them is also fast.

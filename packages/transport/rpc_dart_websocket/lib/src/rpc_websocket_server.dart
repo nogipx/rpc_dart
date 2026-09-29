@@ -193,13 +193,21 @@ class RpcWebSocketServer implements IRpcServer {
     // subscription is released by [dispose], the final teardown.
     if (drainTimeout != null) await _drain(drainTimeout);
 
-    for (final endpoint in List.of(_endpoints)) {
-      try {
-        await endpoint.close();
-      } catch (e) {
-        _logger?.warning('Error closing endpoint: $e');
-      }
-    }
+    // CONCURRENTLY, because each close waits on its own peer. A socket close is
+    // a handshake, and a peer that does not answer costs dart:io its whole close
+    // timeout — so closing one at a time makes shutdown the SUM of those waits,
+    // where nothing about them is sequential. One dead connection delayed every
+    // connection behind it.
+    //
+    // Each failure is caught per endpoint rather than by the group: `Future.wait`
+    // abandons the remaining futures on the first error, which would leave
+    // endpoints open with nothing left to close them.
+    await Future.wait([
+      for (final endpoint in List.of(_endpoints))
+        endpoint.close().catchError((Object e) {
+          _logger?.warning('Error closing endpoint: $e');
+        }),
+    ]);
     _endpoints.clear();
   }
 
