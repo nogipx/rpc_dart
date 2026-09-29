@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515]
 status: confirmed (round 490)
 ---
 
@@ -614,3 +614,30 @@ bounded nothing at all, because every body site used the per-message limit.
 
 `../probes/P-129-which-ceiling-stops-a-finite-http1-stream.md`,
 `../rounds/490-the-knob-that-names-the-thing-bounded-nothing.md`, B-99.
+
+## Point it at the project's RULES, not only its comments (round 515)
+
+`CLAUDE.md` is narrative beside the code too, and it can be wrong in the same way a
+doc comment can. Two of its logging claims have now been measured against the code:
+
+- *"the guard is a bool read"* — it was a scan over every configured scope override,
+  235 ns against a real bool read's 1.8 ns (round 512, B-121).
+- *"count calls into a `LogScope` subclass instead"* — **this does not work wherever
+  the code derives a scope.** `LogScope.child()` constructs a plain `LogScope`, so
+  the subclass's overrides are gone, and `UnaryCaller`, `StreamProcessor` and
+  `CallProcessor` all derive. The worked example the rule cites survives only because
+  the flow controller is handed its scope directly. Override `LogController.add`
+  instead; it runs before filtering, so it keeps the property the rule wanted.
+
+**So a convention the project states confidently and repeats at hundreds of sites is
+exactly the kind of claim worth measuring once.** The cost of it being wrong is
+proportional to how widely it is followed.
+
+> Round 515 also shows the other outcome. Aimed at five warning sites the rule says
+> should fire once, the rig produced ZERO warnings — the frames never reached the
+> pipeline — so the lead is UNVERIFIED and nothing was changed. **With no witness
+> there is nothing to switch off, and five one-shot bools would have been five edits
+> with no evidence any of them moves an observable.** Record the inconclusive round
+> and say what the next attempt should do differently.
+
+`../rounds/515-the-rig-never-reached-the-warning.md`, B-124, B-121.

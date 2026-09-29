@@ -35,6 +35,47 @@ Count records from 10k no-op frames on unknown ids (the logging test pattern in
 
 One-shot bools for the peer-driven warnings; application statuses at debug.
 
+## Round 515 tried and could not build the witness
+
+**Still unverified — not refuted.** 10 000 hand-built no-op metadata frames on unknown
+stream ids produced **zero** warnings. The frames never reach
+`_processResponderMessage`: not even its first branch, "Message received but endpoint
+is not started", which is the most trivially peer-reachable of the five sites and was
+tried with the endpoint deliberately unstarted.
+
+By reading, `_opensOrAdvancesStream` returns false for a metadata-only frame with no
+`methodPath`, not end-of-stream, no payload and no `x-client-cancelled` header, so
+`responder_pipeline.dart:739` should fire per frame. It fires never, so the frame is
+gone earlier. Candidates not eliminated: the channel's `_validateInbound` dropping it
+against the policy, the transport declining to route a metadata-only frame with no
+known stream, or the pipeline not subscribing in the configuration the rig built.
+
+Rig: `packages/core/rpc_dart/.dart_tool/probe/b124_peer_warning_flood.dart`.
+
+**Whoever takes this next should get a real peer to send the frame** rather than
+hand-building one — drive it from an `RpcCallerEndpoint` doing something malformed, or
+find which layer drops it first by instrumenting the channel.
+
+## Take the double-logging half FIRST
+
+It needs no peer-reachability argument. `StreamProcessor.sendError` logs every status
+sent at `error`, and `UnaryCaller` logs a failed call at `error` twice — so an
+application NOT_FOUND reads as an incident on both sides. One failing call and a
+count confirms or refutes it, with none of the difficulty above.
+
+## A method note this lead cost, now verified
+
+`CLAUDE.md` says to test log guards by counting calls into a `LogScope` subclass.
+**That does not survive a derived scope**: `LogScope.child()` constructs a plain
+`LogScope`, so the override is lost as soon as the code under test derives one — which
+`UnaryCaller`, `StreamProcessor` and `CallProcessor` all do. The cited worked example,
+`flow_controller_logging_test.dart`, works only because the flow controller is handed
+its scope directly.
+
+Count by overriding `LogController.add` instead. It runs before filtering, so it keeps
+the property the guidance wanted — "did the code decide to log", not "was a record
+delivered".
+
 ## Owner decision
 
 —
