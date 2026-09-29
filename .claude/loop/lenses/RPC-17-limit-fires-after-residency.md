@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511]
 status: confirmed (round 489)
 ---
 
@@ -319,3 +319,37 @@ place, and that machinery is usually the larger half.
 
 `../probes/P-147-what-an-empty-middleware-wrapper-costs.md`,
 `../rounds/509-the-wrapper-around-an-empty-list.md`, B-118.
+
+## Ask what the work is FOR — including a guarantee nobody needs (round 511)
+
+The same question applied to a property rather than a buffer. `_uniqueToken` draws
+from the system entropy source. What are the ids for? Correlating log lines — and
+`_strongRng`'s own doc says exactly that: *"correlation in logs and on the wire, never
+secrets or capability tokens"*. A guarantee the code documents as unnecessary cost
+~40 us of every ~97 us unary call, twice per call.
+
+**So the detector extends past buffers and limits to GUARANTEES: cryptographic
+randomness, ordering, durability, uniqueness. For each, find where the code says what
+it is for, and check whether the guarantee exceeds it.** The justification for
+weakening it is often already written down, because whoever chose it wrote down why
+it did not matter.
+
+> **Ablate the thing itself and re-time the real path.** A microbench of
+> `Random.secure()` is open to the objection that it does not measure what a call
+> pays. Forcing `_strongRng` to null — a path the library already takes on node —
+> and re-timing the whole call is what turns 196x-in-isolation into 40 us-per-call.
+> The microbench then serves as a check: it predicted ~62 us against ~40 us measured,
+> close enough to confirm the mechanism, far enough to show why the end-to-end arm
+> was needed.
+
+> **And a cost measured OUTSIDE the path is not a share of it.** The same probe timed
+> a 6-link context chain and an earlier draft reported it as "37.8% of a call" — a
+> synthetic construction quoted as a fraction of a figure it was never measured
+> inside. Either measure it within the call or say plainly that it is not a share.
+
+Where this ends is often a DEFERRAL rather than a fix: the change was one line, and it
+still belonged to the owner because it alters a documented security posture. Measure
+it anyway — the number is what makes the decision possible.
+
+`../probes/P-149-what-the-id-draws-cost-a-call.md`,
+`../rounds/511-forty-per-cent-of-a-call-is-entropy.md`, B-120.

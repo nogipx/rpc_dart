@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-149](P-149-what-the-id-draws-cost-a-call.md)** valid (round 511),
+  rpc_dart — **ablates the generator in place and re-times the whole call**, because a
+  microbench of `Random.secure()` invites the objection that it is not measuring what
+  a call actually pays. The microbench is supporting evidence only: two tokens at
+  ~31 us predicts ~62 us of saving where ~40 us is measured, and being in the right
+  range without being exact is what says it measures the right thing without
+  substituting for the real path. **One number in it is explicitly NOT a share of
+  anything** and the probe prints that warning itself — the 6-link context chain is a
+  synthetic worst case, and an earlier draft quoted it as "37.8% of a call",
+  double-counting against a figure it was never measured inside.
 - **[P-148](P-148-how-many-frames-is-a-unary-call.md)** valid (round 510),
   rpc_dart — counts frames where one `send` on the byte channel is exactly one frame,
   so nothing inside the library needs instrumenting. **Then DECODES each frame and

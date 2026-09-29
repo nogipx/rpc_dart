@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: awaiting owner
+round: 511
+commit: 231f986c
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/core/metadata.dart]
-probe: none — static read, nothing run
-reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
+probe: P-149
+reason: "CONFIRMED and larger than filed: ~40 us of every ~97 us unary call is OS entropy for two correlation ids, established end-to-end by ablating the generator. The fix is one line and the codebase already documents these ids as 'never secrets' — but it changes what a VM deployment gets today, so it is the owner's by the precedent B-111 and B-116 set"
 ---
 
 # B-120 — each call copies both context maps five to seven times and draws 12 bytes of OS entropy
@@ -37,6 +37,56 @@ Unary calls/s over the in-memory pair with a profiler; share of time in
 Persistent/structural sharing for headers and values, validate once, a
 non-cryptographic id generator seeded once (ids are correlation, not secrets).
 
+## Outcome (round 511) — confirmed, and bigger than filed
+
+```
+token, Random.secure()      30.98 - 37.82 us/token
+token, plain Random()        0.158 - 0.166 us/token
+
+a whole unary call, secure RNG    88.69 / 101.21 / 101.09 / 97.53 us
+a whole unary call, fallback RNG  52.77 /  58.01 /  57.51        us
+```
+
+**About 40 us of every ~97 us unary call is OS entropy for two correlation ids.** The
+sets do not overlap; the gap is ~2x against a ~15% run-to-run spread.
+
+Established END TO END by forcing `_strongRng` to null — which makes every token come
+from `_fallbackRng`, the path the library already takes on node — not by a microbench
+alone, because a microbench of `Random.secure()` invites the objection that it is not
+measuring what a call pays.
+
+An earlier round already cut the draws 12 → 3 and hoisted the generator to a static.
+What it did not revisit is whether the generator should be secure at all.
+
 ## Owner decision
 
-—
+**The change is one line, and the codebase has already written its own justification
+for it.** `_strongRng`'s doc says these ids are *"correlation in logs and on the wire,
+never secrets or capability tokens"*, and records that **on node every token already
+comes from the non-cryptographic generator**, calling that acceptable. Using
+`_fallbackRng` everywhere extends a posture the library already ships and documents
+rather than inventing one.
+
+It is still not a round's call: it changes what a VM or Chrome deployment gets today,
+and B-111 and B-116 set the precedent that a documented security posture is decided
+here, with the number in hand.
+
+1. **`_fallbackRng` for these ids everywhere.** ~40 us per call back. Ids become
+   predictable on every platform rather than on node alone. Wants a CHANGELOG line
+   aimed at anyone who assumed otherwise despite the doc.
+2. **Seed a non-cryptographic generator from ONE secure draw at startup.** Same
+   saving; the sequence is unguessable without the seed. More code than option 1, for
+   a property the doc says is not required.
+3. **Keep it.** The cost is invisible on any network transport. It is visible on
+   in-memory and isolate — which is exactly what this lead predicted.
+
+## Still open, barely measured
+
+**The context half.** A 6-link `with*` chain costs ~35 us, but that is a synthetic
+worst case rather than what a call builds, so it is not a share of a call and the
+probe says so in its own output. `withAdditionalHeaders` re-running the header regex
+over all headers, and `forClientRequest`'s two regexes, were not measured at all.
+
+Whoever takes that half should measure the chain a REAL call builds, not a
+constructed one — the mistake an earlier draft of P-149 made was quoting the
+synthetic number as "37.8% of a call".
