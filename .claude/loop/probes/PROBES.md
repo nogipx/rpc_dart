@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-138](P-138-does-a-cancelled-asstream-detach.md)** valid (round 500),
+  rpc_dart — **twelve lines with no library code in them**, because the lead's
+  mechanism was a claim about `Future.asStream()` rather than about this
+  repository. Its control is the uncancelled arm: `100` fired against `0`, same
+  loop and one line different, which is what makes the zero admissible. Its
+  level-2 arm is a worked example of what NOT to trust — RSS across 20 000 calls,
+  `+24 MiB` against `-25 MiB` with the signs flipping between runs
 - **[P-137](P-137-does-ping-honour-its-context.md)** valid (round 499), rpc_dart
   — a transport decorator that swallows ONLY the ping frame, so nothing ends that
   stream and every arm is a statement about the caller's own bound rather than

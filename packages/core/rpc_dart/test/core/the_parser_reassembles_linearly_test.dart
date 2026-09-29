@@ -21,9 +21,10 @@
 // BEFORE the append, because a geometric buffer would otherwise let a peer past
 // the bound make us allocate twice it first.
 //
-// The assertion is the RATIO, not a duration: wall-clock thresholds on a loaded
-// machine are flakes, and what distinguishes linear from quadratic is that
-// doubling the message does not double the cost per byte.
+// The five-scale curve above is what SHOWED the defect and lives in the probe
+// (P-134). The assertion here is one arm against one absolute bound: a ratio
+// between two timed arms is a flake under parallel load, which this test proved
+// by being one. See the comment on the witness.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -55,26 +56,32 @@ void main() {
   test(
     'WITNESS: reassembly cost per byte does not grow with the message',
     () {
-      // Warm up so the first measured scale does not pay the JIT for the others.
+      // Warm up so the measurement does not pay the JIT.
       _reassemble(256 * 1024);
 
-      final small = _reassemble(2 * 1024 * 1024);
-      final large = _reassemble(16 * 1024 * 1024);
-
-      // 8x the bytes. Linear predicts ~8x the time; quadratic predicts ~64x. A
-      // generous ceiling of 24x separates them by a wide margin and leaves room
-      // for a loaded machine.
+      // ONE arm against an ABSOLUTE bound, not two arms as a ratio.
       //
-      // Guarded against a zero denominator: at these sizes the fixed version can
-      // measure 0 ms for the smaller arm, and 0 would make any ratio infinite.
-      final ratio = large / (small == 0 ? 1 : small);
+      // The first version of this test compared 16 MiB against 2 MiB and required
+      // the ratio under 24x. It failed once in the full `test:unit` run and
+      // passed alone and on re-run: with fifteen packages' suites in parallel the
+      // two arms are scheduled differently, and a descheduled large arm inflates
+      // the ratio without anything being wrong. `methods/tests.md` item 3 names
+      // exactly this — never compare two independently measured runs as a ratio;
+      // check against one absolute bound.
+      //
+      // The bound is wide on purpose. Measured on this machine: 8 ms fixed,
+      // 1515 ms quadratic. 400 ms is 40x the fixed cost and a quarter of the
+      // quadratic one, so load has to make the machine 40x slower before this
+      // reports a defect, and the defect has to get 4x faster before it hides.
+      final us = _reassemble(16 * 1024 * 1024);
+
       expect(
-        ratio,
-        lessThan(24),
+        us,
+        lessThan(400 * 1000),
         reason:
-            'cost per byte grew with the message: 8x the bytes took ${ratio.toStringAsFixed(1)}x '
-            'the time, which is the quadratic tail of copying the unconsumed '
-            'tail on every chunk (small=${small}us large=${large}us)',
+            'reassembling 16 MiB in 16 KiB chunks took ${(us / 1000).toStringAsFixed(0)}ms; '
+            'the quadratic version of this copies the unconsumed tail on every '
+            'chunk and takes about 1515ms, the linear one about 8ms',
       );
     },
     timeout: const Timeout(Duration(minutes: 2)),

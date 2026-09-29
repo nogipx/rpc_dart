@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483]
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500]
 status: confirmed (round 431)
 ---
 
@@ -242,3 +242,35 @@ The distinction is worth checking whenever a lead closes UNFIXED: is the
 evidence in the gate, or in a file someone has to know to run?
 
 `../rounds/443-a-guard-declined-on-its-own-measurement.md`.
+
+## Round 500 — when the lead's mechanism belongs to the LANGUAGE, ask the language
+
+B-109 claimed that cancelling a `Future.asStream()` subscription leaves the
+callback attached, so a reused cancellation token accumulates one per call. That
+is a statement about Dart, not about this library, and it is twelve lines to
+check:
+
+    100 asStream subscriptions, CANCELLED    callbacks fired =   0
+    100 asStream subscriptions, left open    callbacks fired = 100   <- control
+
+> **A lead whose mechanism is a primitive's semantics is the cheapest kind to
+> settle, and the most dangerous to settle by reading.** The audit reasoned about
+> `Future.asStream` and got it backwards. Twelve lines with a control refuted it;
+> a grep over five call sites would have found the shape the lead described and
+> confirmed it.
+
+> **Then census anyway, because the primitive is only half the answer.** A site
+> observing the token with a bare `.then(` really would retain its callback —
+> that is the true version of the concern. Six observers, all using
+> `asStream().listen` with a stored subscription, all cancelling it, and
+> `cancelled.then(` appears nowhere. The negative is worth as much as the
+> refutation: it says the shape cannot creep back in unnoticed.
+
+The round also paid a second instalment on a lesson already bought: its level-2
+arm measured RSS across 20 000 calls and produced `+24 MiB` against `-25 MiB`,
+with the signs flipping between runs of the same code. P-128 had already
+established that RSS across arms is noise.
+
+`../probes/P-138-does-a-cancelled-asstream-detach.md`,
+`../rounds/500-ask-the-primitive-first.md`,
+`../checked/C-58-a-cancelled-asstream-detaches.md`, B-109.
