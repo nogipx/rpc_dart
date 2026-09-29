@@ -288,11 +288,17 @@ class _TokenBucketCounter extends _RateLimitCounter {
 ///
 /// ## What a streaming call costs
 ///
-/// Metering follows the direction of client-driven load:
+/// **Every shape is admitted at establishment**, before the handler runs, so no
+/// call is free. Metering then follows the direction of client-driven load:
 ///
 /// - **Unary** — one token per call.
-/// - **Client-stream / bidirectional** — one token per INBOUND request message.
-///   This is genuine client-driven load, so it cannot be disabled.
+/// - **Client-stream / bidirectional** — one token per INBOUND request message,
+///   MINIMUM ONE: the establishment token covers the first message. So a
+///   ten-message upload costs ten as it always did, and a call that sends no
+///   request messages costs one instead of nothing. That last case is not
+///   hypothetical — a bidi subscription is exactly it, zero requests with the
+///   responses pushed by the server, and per-message metering alone let an
+///   unlimited number of them through. This cannot be disabled.
 /// - **Server-stream** — one token at establishment, like a unary call.
 ///   Responses are server-paced output rather than client load, and charging
 ///   them lets a burst of pushes tear down a long-lived subscription. Set
@@ -559,7 +565,17 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// When the limit is exceeded mid-stream, the wrapped stream emits a
   /// [RpcRateLimitException] error (RESOURCE_EXHAUSTED) and stops forwarding,
   /// consistent with the unary rejection path.
-  Stream<T> _meterStream<T>(RpcMiddlewareContext call, Stream<T> source) {
+  ///
+  /// When [firstIsPrepaid] the first element passes free, because the caller
+  /// already charged a token for establishing the call. That keeps the cost of a
+  /// streaming call at `max(1, messages)` rather than `1 + messages`: the open
+  /// is charged so an empty stream cannot be free, and a stream that does send
+  /// messages costs exactly what it cost before.
+  Stream<T> _meterStream<T>(
+    RpcMiddlewareContext call,
+    Stream<T> source, {
+    bool firstIsPrepaid = false,
+  }) {
     // Probe once up front: if no limit applies to this call at all, forward the
     // source unchanged. The per-element path re-resolves the counter on every
     // message so it always rebinds to the canonical map entry — a long-idle
@@ -574,10 +590,16 @@ class RpcRateLimiter extends IRpcInterceptor {
     // per-element work (counter resolution, LRU touch, an exception plus
     // StackTrace.current) for exactly the load it exists to shed.
     var rejected = false;
+    var prepaid = firstIsPrepaid;
     return source.transform(
       StreamTransformer<T, T>.fromHandlers(
         handleData: (data, sink) {
           if (rejected) return;
+          if (prepaid) {
+            prepaid = false;
+            sink.add(data);
+            return;
+          }
           final counter = _resolveCounter(call);
           if (counter == null || counter.tryAcquire()) {
             sink.add(data);
@@ -637,8 +659,14 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
-    // Default: every inbound request message counts against the limit.
-    return next(call.context, _meterStream(call, requests));
+    // Charge at establishment, BEFORE the handler runs, so a call that sends no
+    // request messages is not free — and mark the first message prepaid, so a
+    // call that does send them costs exactly what it did before.
+    _check(call);
+    return next(
+      call.context,
+      _meterStream(call, requests, firstIsPrepaid: true),
+    );
   }
 
   @override
@@ -647,8 +675,14 @@ class RpcRateLimiter extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
-    // Default: every inbound request message counts against the limit.
-    return next(call.context, _meterStream(call, requests));
+    // Same as client-stream. A bidi SUBSCRIPTION is the case this exists for:
+    // zero request messages, responses pushed by the server, so per-message
+    // metering alone charged nothing at all for the call.
+    _check(call);
+    return next(
+      call.context,
+      _meterStream(call, requests, firstIsPrepaid: true),
+    );
   }
 }
 

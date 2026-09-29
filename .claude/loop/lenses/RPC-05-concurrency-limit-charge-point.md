@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something is HELD and must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate, or a request the caller of a lifecycle method is awaiting
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494]
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502]
 status: confirmed (round 494)
 ---
 
@@ -339,3 +339,29 @@ keys on.
 
 `../probes/P-132-does-the-peer-id-set-return-to-zero.md`,
 `../rounds/494-minting-is-what-a-methodpath-means.md`, B-103.
+
+## The charge whose COUNT can be zero (round 502)
+
+`RpcRateLimiter` charged client-stream and bidi calls inside `handleData`, one
+token per inbound request message. The charge point exists, it is correct, and the
+number of times it runs is the number of messages the client sent — which can be
+none. A bidi subscription sends none by definition, so those calls were never
+charged at all: 100 of 100 admitted against a limit of 5, with no upper bound.
+
+**So a charge point driven by a repeating event has a zero case, and the zero case
+is a bypass.** The detector is not "is it charged" but *what is the minimum number
+of times this can run for one call* — and if that minimum is zero, the call is
+free. Unary and server-stream in the same class charge at establishment, so they
+have no such case; the gap was exactly the two shapes whose driving event is
+optional.
+
+> **Fixing it is where the control earns its place.** The obvious fix — charge at
+> establishment as well — closes the bypass and changes the cost of every call that
+> DOES send messages, halving the effective limit for one-message calls. The arm
+> that reads this is the same shape as the witness with one message added, and
+> without it the additive fix looks like a clean pass. The shipped form prepays the
+> first message against the establishment token, so cost is `max(1, messages)` and
+> only the broken case moves.
+
+`../probes/P-140-what-the-rate-limiter-admits.md`,
+`../rounds/502-the-shape-that-was-never-admitted.md`, B-111.

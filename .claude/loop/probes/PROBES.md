@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-140](P-140-what-the-rate-limiter-admits.md)** valid (round 502),
+  rpc_dart — holds the LIMIT fixed and varies the call SHAPE, 100 opens per arm
+  against `global: max 5`, so every number is comparable and `5` versus `100`
+  needs no reasoning. Three controls covering three different rig failures: unary
+  (the shape known to charge, so a 100 there invalidates every row), the same bidi
+  shape with one message (which is what makes the empty-stream arms about
+  ADMISSION rather than about bidi being unmetered — and it is the arm that reads
+  collateral damage, dropping to 2 under an additive fix), and one call with ten
+  messages (because "the open covers message one" is one edit from "the open
+  covers every message").
 - **[P-139](P-139-which-errors-open-the-breaker.md)** valid (round 501),
   rpc_dart — the arms vary the STATUS a method throws, not the count, so the rig
   is about classification; every arm ends with a call to a DIFFERENT healthy
