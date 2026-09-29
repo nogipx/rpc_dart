@@ -3,7 +3,7 @@ refines: U-05
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/**]
 applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
-applied: [209, 289, 290, 291, 292, 334, 335, 352, 418, 430, 488]
+applied: [209, 289, 290, 291, 292, 334, 335, 352, 418, 430, 488, 539]
 status: confirmed (round 488)
 ---
 
@@ -214,3 +214,26 @@ assignment to `_pending` was unconditional, so the notice replaced the real
 call, method path and 16-byte body included.
 `../probes/P-127-what-a-cancel-puts-on-the-http1-wire.md`,
 `../rounds/488-a-frame-that-names-no-method-cannot-open-a-call.md`, B-97.
+
+**Round 539 — the injected thing was a RESOURCE, and the mishandling was disposal.**
+`RpcHttpCallerTransport` accepts an `http.Client`, documents how to configure one, and
+closed it on `close()` whoever made it. An injected client answered
+`ClientException: Client is already closed` on its next request; it now reads
+`usable (204)`, while a client the transport owns is still released.
+
+`../probes/P-172-who-owns-the-http-client.md`, B-143.
+
+> **`x ?? Default()` erases the question at the moment it is asked.** Nothing
+> downstream of that line can tell an injected dependency from an owned one, so the
+> answer has to be recorded where it is still known. Wherever a constructor defaults
+> an object it may later dispose, ask who closes it — and whether the code can still
+> tell.
+
+> **Read the consequence, not the call.** "Was `close()` invoked" is the correct
+> outcome for one kind of client and the defect for the other, so the witness USES the
+> client afterwards. The observable has to distinguish the two cases the code cannot.
+
+> **A disposal fix needs the opposite arm or it is a trade.** "Stop closing it"
+> satisfies the witness and leaks on every transport that made its own, so the control
+> reads a descriptor across the close — the only reading available for an object
+> nothing outside can reach.

@@ -149,6 +149,11 @@ class RpcHttpCallerTransport
   /// hole rather than a TLS configuration. Against a self-signed or private-CA
   /// server the snippet above is what actually works.
   ///
+  /// **A client you pass in stays yours.** [close] closes only a client this
+  /// transport created, because closing one it was given breaks it for every other
+  /// user — measured: an injected client answered `ClientException` on its next
+  /// request after `transport.close()`. Close yours when you are done with it.
+  ///
   /// [policy] bounds what a RESPONSE may cost this client, and is reported to
   /// the endpoint layers through [IRpcSecurityPolicyAware]. It defaults to
   /// `const RpcSecurityPolicy()`, so the built-in limits apply out of the box.
@@ -161,8 +166,12 @@ class RpcHttpCallerTransport
            ? baseUrl.substring(0, baseUrl.length - 1)
            : baseUrl,
        _httpClient = httpClient ?? http.Client(),
+       _ownsHttpClient = httpClient == null,
        _policy = policy,
        _logger = logger?.child('HttpCallerTransport');
+
+  /// Whether [close] may close [_httpClient]. See the constructor.
+  final bool _ownsHttpClient;
 
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
@@ -663,7 +672,9 @@ class RpcHttpCallerTransport
     _isClosed = true;
     _pending.clear();
     _activeStreams.clear();
-    _httpClient.close();
+    // Only if this transport created it. Closing a client the caller passed in
+    // breaks it for every other user of it, and nothing said who owned it.
+    if (_ownsHttpClient) _httpClient.close();
     // Only the calls actually in flight are told why they ended; the rest just
     // close. See [_closedDuringCall].
     _streams.closeAll(
