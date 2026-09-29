@@ -415,7 +415,16 @@ class RpcWebSocketServer implements IRpcServer {
       // balancing the onConnectionOpened at the top of this method.
       final orphan = created;
       if (orphan != null) _releaseEndpoint(orphan, channel);
-      channel.sink.close();
+      // GUARDED, because this method runs in the accept loop's event handler --
+      // the ROOT ZONE, where an unhandled async error kills the isolate. A bare
+      // `channel.sink.close()` here answered a failed setup by taking the whole
+      // server down with it whenever the close itself rejected, which is exactly
+      // the state a failed setup leaves a socket in. `Future.sync` covers a
+      // SYNCHRONOUS throw from `close` too; the refusal path above is the same
+      // shape.
+      unawaited(
+        Future<void>.sync(channel.sink.close).catchError((Object _) {}),
+      );
     }
   }
 

@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500]
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535]
 status: confirmed (round 431)
 ---
 
@@ -274,3 +274,28 @@ established that RSS across arms is noise.
 `../probes/P-138-does-a-cancelled-asstream-detach.md`,
 `../rounds/500-ask-the-primitive-first.md`,
 `../checked/C-58-a-cancelled-asstream-detaches.md`, B-109.
+
+**Round 535 — the one unguarded close in a file that guards them everywhere.**
+`RpcWebSocketServer._handleConnection` runs in the accept loop's event handler, and its
+own comments name that as the root zone four separate times. Its FAILURE path ended in a
+bare `channel.sink.close()`: unawaited, no error handler. A close rejecting is the state
+a failed setup tends to leave a socket in, so the answer to a broken connection was
+taking the isolate down.
+
+`../rounds/535-the-grab-bag-graded-itself-backwards.md`, B-139.
+
+> **Grep the file for its own guard before trusting the count.** This one already had
+> the correct shape eighty lines above —
+> `unawaited(Future.sync(() => channel.sink.close(...)).catchError(...))` — on the
+> refusal path. The defect is not an unknown idiom; it is one site the idiom did not
+> reach. A file that is careful in nine places is where the tenth hides.
+
+> **`Future.sync` is part of the idiom, not decoration.** `unawaited(x.close())` does
+> not catch a SYNCHRONOUS throw from `close`, and a sink in a bad state is as likely to
+> throw as to reject.
+
+> **The witness has to require the server to still WORK.** "Still running" is a flag an
+> isolate that is about to die still reports. The arm that matters answers a real call
+> after the failure, which is what says the accept loop and the isolate both survived.
+> And the canary's failure names the SINK as the unhandled source rather than any
+> expectation — that is how you tell a root-zone death from a failed assertion.

@@ -1,10 +1,10 @@
 ---
 status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+round: 535 (items 1, 3 and 6's unhandled future examined; four groups left)
+commit: 5e2af858
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_stub.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_responder_transport.dart]
-probe: none — static read, nothing run
-reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
+probe: P-168
+reason: "cost — but the grading is BACKWARDS, twice over: both items the lead calls `behaviour, not style` are the cheap ones (item 1 costs 0 ms, item 3 does not exist) while the real defect was a sub-point inside item 6's bullet list. Split the rest before working it"
 ---
 
 # B-139 — websocket: smaller defects and hygiene
@@ -42,13 +42,45 @@ Close order, dead table rows, a duplicated annotation, headers captured once, an
 
 Small, but items 1 and 6's unhandled future are behaviour, not style.
 
-## Witness a round would build
+## What round 535 found — the grading is backwards
 
-Item 1: time a clean close against a well-behaved peer.
+**Item 1 REFUTED.** The close order costs nothing against a peer that answers:
 
-## Fix sketch
+```
+  arm                                   close() took (min of 5)   all
+  as shipped: cancel, then sink.close    0ms                      [4, 0, 0, 0, 0]
+  swapped:    sink.close, then cancel    0ms                      [0, 0, 0, 0, 12]
+  CONTROL raw dart:io WebSocket.close    0ms                      [0, 0, 0, 0, 12]
+```
 
-One commit per item group.
+Bench `../probes/P-168-what-does-a-clean-close-cost.md`. The control — the raw SDK close, no channel
+— is the same zero, which is what makes the refutation mean something. Cancelling the subscription
+does not stop the handshake: the SDK's close and ping machinery sits BELOW the subscription, in the
+transformer rather than in the listener.
+
+**Item 3 REFUTED by reading**: one `@override` on `sendDirectObject`, not two.
+
+**Item 6's unhandled future FIXED, and it was the real one.** `_handleConnection`'s failure path ended
+in a bare `channel.sink.close()` — unawaited, no error handler — in a method that runs in the accept
+loop's event handler, the ROOT ZONE this file's own comments name four times. A close rejecting is the
+state a failed setup tends to leave a socket in. Now guarded like the refusal path eighty lines above
+it, with `Future.sync` so a synchronous throw is covered too.
+
+## Still open — four groups, and split them first
+
+- **item 2** (mapping rows said to be dead): a judgement call and probably wrong. The rows encode the
+  intended mapping, a test pins them, and deleting them makes `_ => unknown` the answer for a clean
+  close the moment the function gains a second caller. Round 528 also made 1002 reachable, which this
+  item predates.
+- **item 4** (`connect()` captures `headers` once, so an expiring token cannot be refreshed): a
+  FEATURE — a headers callback — not a defect, and the code argues deliberately for reusing them.
+  Features leave the loop by the B-01 precedent.
+- **item 5** (a record allocated to silence the analyzer): a documented deliberate choice, once per
+  connect.
+- **item 6's other five sub-points** (duplicated branches, `onEndpointCreated` ignored in peer mode,
+  `createWithContracts` dropping `logController`, no connection cap) and **item 7** (the responder
+  transport forwarding every member). The connection cap is the one with plausible severity; nothing
+  has measured it.
 
 ## Owner decision
 

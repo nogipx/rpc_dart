@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-168](P-168-what-does-a-clean-close-cost.md)** valid (round 535),
+  rpc_dart_websocket — **its control is the SDK doing the same thing with none of our code in the
+  way**, which is what lets a zero be read as "this line costs nothing" rather than as a broken
+  timer. Three arms, minima of five, because noise here only adds time. Subscribes `incoming` in
+  every arm on purpose: an unlistened single-subscription controller changes what `close()` can do
+  and would make the arms incomparable.
 - **[P-167](P-167-does-pause-reach-the-socket.md)** valid (round 534),
   rpc_dart_websocket — **reframes a memory question as a DEMAND question**, because P-128
   established RSS across arms here is noise: the source is an `async*` generator counting its own
