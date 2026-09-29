@@ -499,13 +499,10 @@ final class UnaryCaller<TRequest, TResponse> {
           'package:rpc_dart_compression).',
         );
       }
-      final useCompression = !RpcGrpcCompression.isIdentity(requestEncoding);
-      final payload = useCompression
-          ? RpcGrpcCompression.compress(
-              serializedRequest,
-              encoding: requestEncoding!,
-            )
-          : serializedRequest;
+      final (payload, useCompression) = RpcGrpcCompression.compressIfSmaller(
+        serializedRequest,
+        encoding: requestEncoding,
+      );
       if (_logger.isInternal) {
         _logger.internal(
           'Request serialized, size: ${serializedRequest.length} bytes '

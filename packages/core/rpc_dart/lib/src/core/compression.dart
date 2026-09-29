@@ -155,6 +155,32 @@ abstract final class RpcGrpcCompression {
     return codec.compress(data);
   }
 
+  /// Compresses [data] with [encoding] only when doing so makes it SMALLER.
+  ///
+  /// Returns the bytes to send and the value for the frame's per-message
+  /// compression flag, which is what makes this safe: the flag is carried on
+  /// every message, so declaring `grpc-encoding: gzip` and then sending an
+  /// individual message uncompressed is ordinary gRPC and every decoder already
+  /// handles it.
+  ///
+  /// Without the comparison, compression applied unconditionally GROWS small
+  /// payloads — gzip's fixed overhead is around twenty bytes, so anything under
+  /// roughly two hundred bytes of incompressible data comes out larger than it
+  /// went in.
+  ///
+  /// A size threshold is the other way to fix that and is worse: it would also
+  /// discard the saving on small COMPRESSIBLE payloads, which is real, and it
+  /// needs a number that is right for one kind of traffic and wrong for another.
+  /// Comparing costs the compression work on payloads that end up sent plain.
+  static (Uint8List bytes, bool compressed) compressIfSmaller(
+    Uint8List data, {
+    required String? encoding,
+  }) {
+    if (isIdentity(encoding)) return (data, false);
+    final compressed = compress(data, encoding: encoding!);
+    return compressed.length < data.length ? (compressed, true) : (data, false);
+  }
+
   /// Decompresses [data] using the specified [encoding].
   ///
   /// When [maxOutputBytes] is non-null, the decompressed output is bounded and

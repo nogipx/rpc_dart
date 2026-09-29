@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513]
 status: confirmed (round 489)
 ---
 
@@ -390,3 +390,36 @@ requiring an API change.
 
 `../probes/P-150-what-the-log-guard-costs.md`,
 `../rounds/512-the-guard-that-was-not-a-bool-read.md`, B-121.
+
+## The work that does the OPPOSITE of what it is for (round 513)
+
+Compression exists to make messages smaller. Applied to every message it made small
+ones bigger: an incompressible 32 B payload went `42 -> 62` bytes, gzip's fixed
+overhead being about twenty. So the lens's question has a third answer beyond "is
+this work needed" and "is it needed HERE" — **does it achieve its own purpose on
+this input?**
+
+**Where an operation can fail its own purpose, the cheapest fix is to check the
+result rather than to guess in advance.** The lead asked for a size threshold; comparing
+the compressed length against the original is strictly better, needs no number to
+tune, and keeps savings a threshold would discard. It is available here only because
+the format carries a per-MESSAGE flag — look for that before designing a cutoff,
+because a format that already lets each message say what it is turns a policy
+question into an `if`.
+
+> **Choose the probe's input from the claim's DIRECTION.** The first version used
+> `'a' * n` — maximally compressible — while testing whether compression makes
+> messages BIGGER. That is the input least likely to grow, and it duly reported a
+> saving at 32 B, which would have refuted a true claim. Ask which input makes the
+> claimed failure most likely, use that, and keep the opposite as the control.
+
+> **That control then earns its keep twice.** The repeated-character rows proved the
+> rig reports savings when they exist, AND supplied the argument against the
+> threshold: gzip beats plain even at 32 B when the bytes repeat.
+
+And a lead filed at `medium` confidence deserves its claims separated before either
+is acted on. Two were bundled here; one was confirmed and one refuted, and a round
+that took them together would have had to call the whole lead one thing or the other.
+
+`../probes/P-151-does-compression-make-a-message-bigger.md`,
+`../rounds/513-the-compression-that-grew-the-message.md`, B-122.

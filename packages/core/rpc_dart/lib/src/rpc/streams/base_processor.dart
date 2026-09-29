@@ -23,10 +23,10 @@ Future<void> _frameAndSend(
   Uint8List serialized,
   String? encoding,
 ) {
-  final useCompression = !RpcGrpcCompression.isIdentity(encoding);
-  final payload = useCompression
-      ? RpcGrpcCompression.compress(serialized, encoding: encoding!)
-      : serialized;
+  final (payload, useCompression) = RpcGrpcCompression.compressIfSmaller(
+    serialized,
+    encoding: encoding,
+  );
   final framed = RpcMessageFrame.encode(payload, compressed: useCompression);
   return transport.sendMessage(streamId, framed);
 }

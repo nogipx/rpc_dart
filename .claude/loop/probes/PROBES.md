@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-151](P-151-does-compression-make-a-message-bigger.md)** valid (round 513),
+  rpc_dart — **its first version would have refuted a true claim**, and the record
+  keeps why: it used `'a' * n` as the payload while testing whether compression makes
+  messages BIGGER, which is the case least likely to grow. Incompressible input is
+  what tests growth; the repeated-character rows survive as the control, and they
+  carry the design argument too — gzip beats plain even at 32 B when bytes repeat, so
+  a size threshold would discard a real saving. The `compression OFF` column makes
+  every row a paired comparison rather than an absolute to be interpreted. Measures
+  bytes only: the lead's CPU half is not instrumented here at all.
 - **[P-150](P-150-what-the-log-guard-costs.md)** valid (round 512),
   rpc_dart — **its control is `LogScope.noop`, whose `isInternal` is a literal
   `false`**, which is what a real bool read costs on this machine; without it "235 ns"

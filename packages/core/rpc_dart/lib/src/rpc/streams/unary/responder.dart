@@ -523,13 +523,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // Serialize and optionally compress response.
       final serializedResponse = _responseSerializer.serialize(response);
-      final useCompression = responseEncoding != null;
-      final payload = useCompression
-          ? RpcGrpcCompression.compress(
-              serializedResponse,
-              encoding: responseEncoding,
-            )
-          : serializedResponse;
+      final (payload, useCompression) = RpcGrpcCompression.compressIfSmaller(
+        serializedResponse,
+        encoding: responseEncoding,
+      );
       final framedResponse = RpcMessageFrame.encode(
         payload,
         compressed: useCompression,
