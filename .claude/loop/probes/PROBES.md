@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-143](P-143-what-a-call-gets-when-the-list-moves.md)** valid (round 505),
+  rpc_dart — measures the error TYPE the caller receives, not whether the call
+  succeeded, because the defect and the fix agree that a call interrupted by
+  `close()` fails; only the type differs (`ConcurrentModificationError` versus
+  `RpcCancelledException`). Two controls, and the second localises the defect: with
+  the collection EMPTY the loop never awaits, so it never observes the mutation —
+  without that arm, "close() breaks an in-flight call" explains the table equally
+  well and the fix gets aimed at the wrong function. Timing is one-sided by
+  construction: a mistimed disturbance shows up as an unexpected `OK`, never as a
+  false positive.
 - **[P-142](P-142-which-paths-reach-one-method.md)** valid (round 504),
   rpc_dart — holds the REGISTRATION fixed and varies the PATH, which is what
   refuted the lead's "low likelihood": an ordinary package-qualified service is

@@ -1,9 +1,9 @@
 ---
 refines: U-07
-paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
-applies: a lifecycle flag is read, then a slow external operation is awaited, then the result is installed
-breaks: a connection leak.
-applied: [235]
+paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/endpoint/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
+applies: something is read, then an operation is awaited, then the read is relied on — a lifecycle flag, or an open iterator over a mutable collection
+breaks: a connection leak; or an in-flight call failing with a StateError instead of its status.
+applied: [235, 505]
 status: confirmed (round 235)
 ---
 
@@ -109,3 +109,37 @@ the reason this lens is worth a round rather than a grep:**
 Imported from private memory in the curate pass after round 234, where it had
 sat outside the journal since the pre-201 rounds: `loop.py` could not route to
 it, and `stale` could not age it.
+
+## What goes stale across the await can be the ITERATOR (round 505)
+
+The lens was written about a lifecycle FLAG read before a suspension and trusted
+after it. The same suspension invalidates something else nobody thinks of as read
+state: an open iterator over a mutable collection.
+
+```dart
+for (final middleware in _middlewares) {
+  current = await ...;              // close() clears the list here
+}
+```
+
+A Dart `List` iterator compares modification counts on every `moveNext()`, so the
+list itself is the thing that had to survive the await. One element is enough — the
+`moveNext()` that ENDS the loop is the one that checks — and `.reversed` is a lazy
+view of the same list, so the mirrored loop carries the identical defect.
+
+**So the detector gains a second query beside the flag reads: every `for (final x in
+<field>)` whose body awaits.** Ask who else writes that field, and remember that
+`clear()` in a `close()` is ordinary, public, and expected.
+
+> **Fixing it changes the error's TYPE, not whether the call fails.** A call
+> interrupted by `close()` cannot succeed either way; before, it failed with a
+> `StateError` from inside the library, and after, with `RpcCancelledException:
+> Endpoint closed`. A round measuring "did the call succeed" scores such a fix as no
+> change. Measure the error, not the outcome.
+
+And the bench needs an arm with the collection EMPTY: an empty loop never awaits, so
+it never observes the mutation. Without that arm, "close() breaks an in-flight call"
+explains the table just as well and the fix gets aimed at `close()`.
+
+`../probes/P-143-what-a-call-gets-when-the-list-moves.md`,
+`../rounds/505-the-list-moved-under-the-call.md`, B-114.

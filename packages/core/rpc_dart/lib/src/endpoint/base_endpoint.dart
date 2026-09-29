@@ -261,13 +261,31 @@ abstract base class RpcEndpointBase {
     );
   }
 
+  /// Both middleware loops iterate a SNAPSHOT.
+  ///
+  /// The loop body awaits, so the list can be mutated between two `moveNext()`
+  /// calls, and both mutators are ordinary API: [close] does `_middlewares
+  /// .clear()` and [addMiddleware] appends. Iterating the list itself threw
+  /// `ConcurrentModificationError` into the in-flight call — a `StateError`, so the
+  /// caller got that instead of an RPC status:
+  ///
+  ///     close() while parked        ConcurrentModificationError (length:0)
+  ///     addMiddleware while parked  ConcurrentModificationError (length:2)
+  ///
+  /// One middleware is enough: the second `moveNext()` is the one that checks.
+  /// `.reversed` is a lazy view of the same list, so the response half needs the
+  /// copy just as much.
+  ///
+  /// The empty check is not just an optimisation for the common case — it is what
+  /// keeps a call with no middleware free of a per-call allocation.
   Future<TRequest> _applyRequestMiddlewares<TRequest>(
     RpcMiddlewareContext context,
     TRequest request,
   ) async {
+    if (_middlewares.isEmpty) return request;
     var current = request;
 
-    for (final middleware in _middlewares) {
+    for (final middleware in List.of(_middlewares)) {
       current = await Future<TRequest>.value(
         middleware.processRequest<TRequest>(context, current),
       );
@@ -280,9 +298,10 @@ abstract base class RpcEndpointBase {
     RpcMiddlewareContext context,
     TResponse response,
   ) async {
+    if (_middlewares.isEmpty) return response;
     var current = response;
 
-    for (final middleware in _middlewares.reversed) {
+    for (final middleware in List.of(_middlewares.reversed)) {
       current = await Future<TResponse>.value(
         middleware.processResponse<TResponse>(context, current),
       );
