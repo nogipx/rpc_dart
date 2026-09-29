@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: awaiting owner
+round: 522
+commit: 7cdaabf6
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: none — no witness is possible while id resume masks it
+reason: "structure confirmed by reading (the field is re-read after the await) but UNWITNESSABLE: id resume makes the stale release name an id that was never minted, so there is nothing to observe. The one-line fix has nothing to canary; whether to remove the coupling anyway is the owner's"
 ---
 
 # B-130 — websocket heartbeat releases its id on whatever `_inner` is current by then
@@ -33,6 +33,36 @@ Reconnect during a probe; assert which transport receives the release.
 
 Capture `final inner = _inner;` for the probe.
 
+## Round 522 — structure confirmed, no witness possible as it stands
+
+The shape is exactly as filed, in four lines: `_inner.createStream()` at `:172`,
+`await ... execute(...)`, then `_inner.releaseStreamId(streamId)` at `:188`. `_inner`
+is re-read after the suspension.
+
+**But it cannot be witnessed, for the reason this lead already gives:** *"harmless
+only because id resume keeps the ranges apart."* The new transport resumes numbering
+past the old one's last issued id, so the stale release names an id it has never
+minted — a no-op. There is nothing to observe.
+
+A witness would have to disable id resume first, and would then be demonstrating a
+defect in a configuration the library does not ship. That is a legitimate ablation but
+a different claim: *"safe only because of X"* rather than *"broken"*.
+
+**So the one-line fix was NOT applied.** `final inner = _inner;` is obviously correct
+and has nothing to canary, and a change with no evidence behind it is the one thing
+the loop does not do.
+
 ## Owner decision
 
-—
+The fix buys **independence, not a repair**: the heartbeat would stop relying on id
+resume for its safety. That is this lead's own argument — *"any change to id resume
+makes the heartbeat release a live call's id"* — and it is an argument for changing
+code whose behaviour is correct today.
+
+Two ways:
+
+1. **Apply the one-line capture** on the coupling argument alone. Cheap, safe, and
+   removes a dependency between two unrelated mechanisms.
+2. **Ask for the ablation round first** — disable id resume, show the release landing
+   on a live id, and fix on evidence. More expensive, and it measures the coupling
+   rather than a defect.

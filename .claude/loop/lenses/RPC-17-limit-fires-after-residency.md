@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519]
 status: confirmed (round 489)
 ---
 
@@ -423,3 +423,33 @@ that took them together would have had to call the whole lead one thing or the o
 
 `../probes/P-151-does-compression-make-a-message-bigger.md`,
 `../rounds/513-the-compression-that-grew-the-message.md`, B-122.
+
+## Count it where ALL of it is visible (round 519)
+
+One deadline is one fact about a call, and the machinery for it is per-OWNER. Three
+layers each arm their own timer, and no one of them can report the total — so a Zone,
+which sees every `Timer` whoever creates it, is the instrument. Counting by reading
+would mean trusting the reading found them all, which is the thing this lens is
+usually about in the other direction.
+
+> **Put the whole system inside the instrument.** A subscription creates its timers in
+> the zone it was registered in, so building the endpoints outside the counted zone
+> left every RESPONDER timer uncounted — the half the lead was about. The rig reported
+> `1.0 timers/call` with the deadline apparently free. **A measurement that makes a
+> claim VANISH deserves the same suspicion as one that confirms it too easily**, and
+> the tell was the same: two arms reading identically.
+
+> **The control is what makes a count attributable.** The lead asks what a DEADLINE
+> costs, so the no-deadline arm is the measurement; an absolute `4.0` leaves open how
+> much of it the deadline caused. Here the control also produced the larger finding —
+> nine timers on a server stream before any deadline exists, bigger than the subject
+> and outside it.
+
+**And a count is not a design.** Knowing a deadline costs 2 or 5 timers does not say
+which of three arming sites is redundant; that needs each creation attributed to its
+stack. Declining the fix on those grounds is the same judgement round 518 made, for
+the same reason: a plausible change to one layer of a multi-layer mechanism can be a
+regression rather than a partial win.
+
+`../probes/P-156-how-many-timers-does-a-call-arm.md`,
+`../rounds/519-nine-timers-before-the-deadline.md`, B-127.

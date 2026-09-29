@@ -78,6 +78,45 @@ None — read and delete.
 
 One cleanup commit per file group.
 
+## Round 521 — item 13 measured, and the LEAD needs splitting
+
+**Item 13 is NOT confirmed as filed.** `maxAttempts: 5`, backoff pinned at 4 s:
+
+```
+cancel DURING the backoff     status 1 (CANCELLED)     after 2118 ms
+CONTROL cancel immediately    status 1 (CANCELLED)     after 1504 ms
+CONTROL no cancel at all      status 14 (UNAVAILABLE)  after 5237 ms
+```
+
+The call does not sit out `maxDelay`. **Two numbers are unexplained and round 521 did
+not explain them**: a ~1.5-1.8 s lag between cancelling and completing, present even
+at t=0; and an uncancelled baseline of 5237 ms where five attempts at 4 s implies
+roughly 16 s, so something ends the sequence early. `P-158`.
+
+## This is not one lead, and its framing sets the wrong severity
+
+*"Each is small; together they are the reading cost"* / witness *"None — read and
+delete"* is true of the hygiene items and false of at least four others. **A round
+taking this lead at its word would delete dead code and leave a DoS surface in
+place.**
+
+Worth their own leads, read on their own merits:
+
+- **item 14** — `validateMetadata` never enforces `maxMetadataBytes` in TOTAL; 128
+  headers of 8 KiB each pass. Only the channel frame decoder bounds it, so the HTTP
+  transports do not. A DoS surface.
+- **item 15** — `forClientRequest` caps each token at 128 characters while the
+  policy's path limit is 1024, so a long dotted service name the server accepts
+  cannot be called. A reachable interop failure.
+- **item 16** — `break` after the first decoded response silently drops further
+  messages in the chunk, and the "extra response" warning below it is unreachable.
+- **item 13** — measured above; claim refuted, two timings unexplained.
+
+The genuine hygiene remains: the unused parameter, the no-op branches, the
+try/throw/catch around a bool, the merged doc comments, the eight copies of the policy
+getter, the pinned last payload, payloads interpolated into internal logs despite the
+redaction machinery, and the wrong dart2js claim.
+
 ## Owner decision
 
 —

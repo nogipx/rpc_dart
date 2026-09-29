@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504]
+applied: [205, 394, 414, 501, 504, 517, 518, 523]
 status: confirmed (round 394)
 ---
 
@@ -197,3 +197,91 @@ outgrown the matrix it was derived from and wants its own lens.
 
 `../probes/P-142-which-paths-reach-one-method.md`,
 `../rounds/504-the-invariant-only-the-doc-enforced.md`, B-113.
+
+## Siblings that agree, and the negative that arrives too easily (round 517)
+
+The lens's other outcome. Three builders assemble request metadata; B-125 claimed
+they had drifted and named the case. They had not: the same header set from all
+three, including the null-context row the lead pointed at.
+
+**Read the siblings' OUTPUT, not their source, and read it where a peer would.** Two
+of these three are private, so the diff had to be taken on the wire — and that is the
+better place anyway, since a builder can agree while its caller sends something else.
+
+> **A negative that arrives too easily deserves a second look.** The first rig
+> reported three identical rows and they were all `x-rpc-conn-window-update`: the
+> transport's own connection window-update is a metadata frame and precedes the
+> request, so "the first metadata frame" was never the one under test. Three matching
+> rows is the expected shape of the TRUE answer and of that bug, which is exactly why
+> it passed unnoticed until the rows were read rather than counted.
+>
+> The control that catches it is a dimension that MUST differ: here the with-context
+> arms, where `grpc-timeout` appears. If nothing in the table varies, the rig has not
+> been shown capable of seeing a difference.
+
+**And separate a lead's argument from its evidence.** B-125's structural point — three
+copies, so the next header rule lands in one — survives intact. Only the claim that
+drift had already happened is refuted. That moves the refactor from "fix a defect" to
+"the owner's preference", which is a different decision with a different owner.
+
+`../probes/P-154-do-the-three-header-builders-agree.md`,
+`../rounds/517-the-drift-that-had-not-happened.md`, `../checked/C-59`, B-125.
+
+## When one sibling's tolerance is the whole finding (round 518)
+
+The four CALL SHAPES are siblings too. Against a channel splitting every frame in
+two, `unary status 13` while server-stream and client-stream both answered — same
+transport, channel, codec and payload in the same run, only the responder differing.
+**That simultaneity is what makes "unary only" a measurement rather than a reading**,
+and it is free: the battery was going to run anyway.
+
+> **A sibling that TOLERATES something is also evidence about how to fix the one that
+> does not.** The streaming shapes cope because their parser accumulates across
+> messages — which is exactly what the lead's sketch proposed for unary, and exactly
+> what failed.
+
+**The round's real lesson is about partial fixes.** Making the unary responder
+accumulate turned an immediate INTERNAL into a hang, because two further layers drop
+the later fragment: the pipeline feeds only `preBindMessages.first`, and
+`_cleanupStream` runs straight after. Three layers, of which the lead named two.
+
+> **When a defect spans layers, a fix to one is not a smaller improvement — it can be
+> a regression.** A clear error is better than a hang. Revert, and say what the
+> complete fix would cost. Check `git diff` afterwards to prove `lib/` really is back.
+
+And the cheap alternative is worth naming whenever a sibling comparison ends this
+way: the behaviour being relied on may simply be an undocumented INVARIANT. Round 507
+stated one on `IRpcChannel.incoming` for the same reason. Documenting it is a
+different, much cheaper decision than defending against its violation — and it is the
+owner's.
+
+`../probes/P-155-does-unary-survive-a-fragmented-frame.md`,
+`../rounds/518-the-fix-that-turned-an-error-into-a-hang.md`, B-126.
+
+## A policy field bounded by a DIFFERENT field, on one transport only (round 523)
+
+`maxMetadataBytes` is never enforced in total — `validateMetadata` checks each header
+and never accumulates. `64 headers x 8192 B = 524818 B` is ACCEPTED, 8x the limit, and
+the 128-header row is refused **by the header COUNT, not by size**. So the effective
+ceiling is `maxHeaders x maxHeaderValueBytes`, and the field bounds nothing that
+another field does not already bound worse.
+
+Then the lens's usual half: the channel transports ARE covered, by
+`RpcChannelFrame._decodeAt` bounding the encoded blob; the HTTP transports validate
+through the policy and never reach that decoder. One name, one promise, one transport.
+
+> **Check WHICH field produced a refusal, not just that one occurred.** The last row
+> refusing looks like the bound working. Printing the reason is what showed it was a
+> different limit, and that the one under test never fires at all.
+
+> **And the control has to be the thing that DOES work.** One oversized header is
+> refused, so the accepted rows are about totals rather than about nothing being
+> validated — without it the finding would have been much larger and wrong.
+
+This also names a second-order question worth carrying into any fix: when two layers
+bound "the same" quantity, do they count the same bytes? Here the policy counts header
+text and the decoder counts the encoded blob. Round 520 found the same confusion in
+`maxActiveStreams`, where two sides counted different intervals under one name.
+
+`../probes/P-159-is-metadata-bounded-in-total.md`,
+`../rounds/523-the-knob-that-is-off-by-sixteen.md`, B-197, B-129.

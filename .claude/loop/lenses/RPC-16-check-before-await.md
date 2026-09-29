@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/endpoint/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: something is read, then an operation is awaited, then the read is relied on — a lifecycle flag, or an open iterator over a mutable collection
 breaks: a connection leak; or an in-flight call failing with a StateError instead of its status.
-applied: [235, 505, 510]
+applied: [235, 505, 510, 522]
 status: confirmed (round 235)
 ---
 
@@ -180,3 +180,35 @@ each condition it appears in.
 
 `../probes/P-148-how-many-frames-is-a-unary-call.md`,
 `../rounds/510-one-call-answered-three-times.md`, B-119.
+
+## The third instance, masked by something else (round 522)
+
+The same shape a third time — a field read, an `await`, the field read again as
+though it were the same object:
+
+```dart
+final streamId = _inner.createStream();
+await ...;
+_inner.releaseStreamId(streamId);   // a reconnect makes this a DIFFERENT _inner
+```
+
+**This one cannot be witnessed, and the reason is worth the lens's space.** A second
+mechanism sits in front of it: after a reconnect the new transport resumes numbering
+past the old one's last issued id, so the stale release names an id that was never
+minted and does nothing.
+
+> **When a shape this lens finds is masked, say so and stop — do not fix it anyway.**
+> A one-line capture with no observable behaviour has nothing to canary, and the
+> canary is not negotiable precisely because a change that cannot be shown to do
+> anything also cannot be shown to be safe.
+
+> **And distinguish the two claims.** "This is broken" is refuted by the masking.
+> "This is safe only because of X" is true, unmeasured, and a different thing to
+> decide — it argues for removing a coupling between unrelated mechanisms rather than
+> for repairing a fault. That decision belongs to whoever owns the coupling.
+
+The ablation that WOULD justify a fix is available: disable id resume, show the
+release landing on a live call's id. It measures the coupling, not the defect, and it
+is honest about which.
+
+`../rounds/522-a-defect-masked-by-a-second-mechanism.md`, B-130.

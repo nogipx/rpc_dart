@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516, 521]
 status: confirmed (round 490)
 ---
 
@@ -671,3 +671,29 @@ sides look locally correct.
 
 `../probes/P-153-what-an-application-status-logs.md`,
 `../rounds/516-an-answer-that-read-as-an-incident.md`, B-124.
+
+## A LEAD is narrative too, and its framing carries a severity claim (round 521)
+
+B-129 bundles eighteen items under *"Each is small; together they are the reading
+cost"*, with witness *"None — read and delete"*. That is true of the unused parameter
+and the merged doc comments. It is false of at least four of its items — a metadata
+bound that is never enforced in total (a DoS surface on the HTTP transports), a token
+cap that makes a legal service name uncallable, a `break` that silently drops
+messages.
+
+**A grab-bag lead sets a severity for everything inside it, and the round inherits
+that severity unless it re-reads the items on their own.** Taking B-129 at its word
+would have meant a tidy-up commit that deleted dead code and left the DoS surface in
+place — and the lead would then be CLOSED.
+
+> **So read the items, not the summary, and split when the summary is wrong.** The
+> test is the one the loop already uses for filing: would this item, encountered
+> alone, be filed at this severity with this witness? Four of these would have been
+> filed as defects with benches.
+
+This is the same failure mode the lens names in comments — a narrative that was true
+of the thing it was written about, generalised to things it was not — appearing in
+the journal's own records rather than in `lib/`. The journal is not exempt.
+
+`../probes/P-158-does-a-cancel-cut-the-retry-backoff.md`,
+`../rounds/521-a-cleanup-list-with-defects-in-it.md`, B-129.

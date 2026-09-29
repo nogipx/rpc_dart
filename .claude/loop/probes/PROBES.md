@@ -38,6 +38,57 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-159](P-159-is-metadata-bounded-in-total.md)** valid (round 523),
+  rpc_dart — every header individually LEGAL, varying only how many, which is the
+  whole design: one oversized header would make the refusal say nothing about totals.
+  **Prints the REASON for each refusal**, and that is what makes the last row readable
+  — it is refused by the header COUNT, not by size, so it is not evidence of a size
+  bound. Its control is one header past the per-header limit, which IS refused;
+  without it, four rows of ACCEPTED are equally consistent with `validateMetadata`
+  checking nothing at all.
+- **[P-158](P-158-does-a-cancel-cut-the-retry-backoff.md)** valid (round 521),
+  rpc_dart — **its never-cancelled control was added second and is what made the table
+  readable**: with only the two cancel arms both read ~1.7 s and the result was
+  uninterpretable, because there was nothing for them to be shorter THAN. Against
+  `5237 ms` it is clear cancellation shortens the call. Reports the STATUS as well as
+  the time — `1` says cancellation won, `14` says the retries were exhausted — and
+  leaves two numbers explicitly unexplained rather than rounding them off.
+- **[P-157](P-157-what-the-client-ceiling-counts.md)** valid (round 520),
+  rpc_dart — **each SIDE carries its own policy, over a hand-built byte pipe, and that
+  is the rig's whole correctness.** `RpcChannelTransport.pair(policy:)` gives both
+  sides the same one, and from the caller a server refusing at ITS ceiling is
+  indistinguishable from a client doing so — the first run produced `4 refused` and
+  the lead looked refuted. The both-sides run is now kept as the CONTROL: it proves
+  the mechanism works and the rig can provoke a refusal, so `0 refused` on the
+  client-only run is the client declining to count rather than the probe failing to
+  fill anything.
+- **[P-156](P-156-how-many-timers-does-a-call-arm.md)** valid (round 519),
+  rpc_dart — a Zone is the only place that sees every `Timer` whoever creates it, so
+  counting by reading would mean trusting the reading found them all. **Everything
+  runs inside ONE zone, endpoints included, and that is the rig's whole
+  correctness**: a subscription creates its timers in the zone it was registered in,
+  so endpoints built outside it leave every RESPONDER timer uncounted — which is the
+  half the lead is about. The first version did that and reported `1.0 timers/call`
+  with the deadline apparently free. Its controls are the no-deadline arms, which
+  make the figure attributable — and which produced the larger finding, a nine-timer
+  floor on a server stream.
+- **[P-155](P-155-does-unary-survive-a-fragmented-frame.md)** valid (round 518),
+  rpc_dart — the lead's own note says no shipped transport can show this, so the
+  fragmenting channel is BUILT: every DATA frame re-framed as two on the same stream,
+  with the end-of-stream bit kept on the second only. **Its second control is the
+  other two call shapes in the same run** — same transport, channel, codec and
+  payload, only the responder differs — which is what makes "unary only" a
+  measurement rather than a reading. A **fresh context per call** matters more than
+  it looks: one shared context is one deadline, so the first arm to time out left the
+  others none and all three read TIMEOUT for a single arm's failure.
+- **[P-154](P-154-do-the-three-header-builders-agree.md)** valid (round 517),
+  rpc_dart — diffs three builders by reading the WIRE, because two of them are private
+  and what a peer receives is what the claim is about. **Its false start is the
+  lesson**: the transport's connection window-update is itself a metadata frame and
+  precedes the request, so the first version reported `x-rpc-conn-window-update` alone
+  from all three arms — three identical rows, which is exactly what the true answer
+  also looks like. The with-context arms are the control that catches it, since
+  `grpc-timeout` varying is what proves the rig can see a difference at all.
 - **[P-153](P-153-what-an-application-status-logs.md)** valid (round 516),
   rpc_dart — **counts by overriding `LogController.add`, which is the method round
   515 paid for**: `LogScope.child()` returns a plain scope, so a subclass override is
