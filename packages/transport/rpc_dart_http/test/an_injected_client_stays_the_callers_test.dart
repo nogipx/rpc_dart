@@ -34,13 +34,19 @@ Future<HttpServer> _server() async {
   return server;
 }
 
-Future<int?> _tcpFds() async {
+/// Sockets connected to [port] only.
+///
+/// A process-wide TCP count cannot be used: `dart test` runs suites as isolates in
+/// ONE process, so every other file's sockets land in it and the number moves for
+/// reasons that have nothing to do with this test. Filtering on our own port makes
+/// the reading local.
+Future<int?> _fdsToPort(int port) async {
   try {
     final out = await Process.run('lsof', ['-p', '$pid', '-nP']);
     if (out.exitCode != 0) return null;
     return '${out.stdout}'
         .split('\n')
-        .where((line) => line.contains('TCP'))
+        .where((line) => line.contains('TCP') && line.contains(':$port'))
         .length;
   } catch (_) {
     return null;
@@ -83,8 +89,7 @@ void main() {
   test(
     'CONTROL: a client the transport created is still closed',
     () async {
-      final baseline = await _tcpFds();
-      if (baseline == null) {
+      if (await _fdsToPort(0) == null) {
         markTestSkipped('lsof unavailable: nothing here can be counted');
         return;
       }
@@ -107,10 +112,10 @@ void main() {
           .catchError((Object _) {});
       await Future<void>.delayed(const Duration(milliseconds: 300));
 
-      final during = (await _tcpFds())!;
+      final during = (await _fdsToPort(server.port))!;
       await transport.close();
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      final after = (await _tcpFds())!;
+      final after = (await _fdsToPort(server.port))!;
 
       expect(
         after,

@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-173](P-173-do-repeated-metadata-values-survive.md)** valid (round 540),
+  rpc_dart_http — **quotes and COUNTS every value, because the question is how many there are and
+  Dart's list printing cannot answer it**: `['Mon', '29 Sep …']` and `['Mon, 29 Sep …']` have the
+  same `toString()`, and the first reading of this probe called a split intact for that reason.
+  Its response arm uses two standard fields whose comma sits INSIDE one value (`date`,
+  `www-authenticate`), with single-value headers in the same table as the control. Passes
+  `methodPath:` explicitly — rebuilding `RpcMetadata` from `.headers` drops it and no request
+  fires.
 - **[P-172](P-172-who-owns-the-http-client.md)** valid (round 539),
   rpc_dart_http — **two directions, two instruments.** Whether an injected client survives is asked by
   USING it afterwards, because "was `close()` called" is the correct outcome for one kind of client and

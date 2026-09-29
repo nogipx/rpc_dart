@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 540)
+round: 540
+commit: 7fe7351c
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-173
+reason: "both halves CONFIRMED. The request half is FIXED — values are joined with the delimiter the response side already splits on. The response half is split to B-200, because both ways of fixing it change what applications observe"
 ---
 
 # B-144 — HTTP/1.1: repeated headers are last-wins on requests and every response header is split on commas
@@ -25,14 +25,37 @@ Caller `packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart:
 
 Metadata differs from what was sent, in both directions.
 
-## Witness a round would build
+## What round 540 measured
 
-Send two values of one custom key; read them server-side. Server sends
-`grpc-message: a, b` via a raw handler.
+```
+  half one — two values of `x-tag` on the request
+    the server received: [second]
 
-## Fix sketch
+  half two — every header the caller ended up holding
+    date                   2 value(s): "Mon" + "29 Sep 2026 12:00:00 GMT"
+    www-authenticate       2 value(s): "Basic realm="one" + "two""
+    content-type           1 value(s): "application/grpc+proto"
+    grpc-status            1 value(s): "0"
+```
 
-Join on send; split only custom keys, never `grpc-message` or standard headers.
+Bench `../probes/P-173-do-repeated-metadata-values-survive.md`. Both halves CONFIRMED; the
+single-value rows are the control for the second.
+
+## Fix — the send half
+
+"Join on send", as the sketch says: values grouped by name and joined with `,`, the delimiter
+PROTOCOL-HTTP2 names and the one the response side already splits on. Half one now reads
+`[first,second]`. RPC-08's shape exactly — one direction implemented the rule the other assumed.
+
+## The receive half went to B-200, and the sketch's rule is not available
+
+"Split only custom keys, never `grpc-message` or standard headers" needs a way to tell a custom
+key from a standard one, and the wire carries no such marker — it needs a maintained list of
+standard fields, whose every gap is this defect again. The alternative is to stop splitting, which
+is spec-conformant and changes what every caller observes. Filed for the owner.
+
+`grpc-message` is a non-issue either way: it is percent-encoded over `ALPHA / DIGIT / - . _ ~`, so
+a conforming peer cannot put a comma in it, and the code already records that.
 
 ## Owner decision
 

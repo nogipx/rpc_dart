@@ -403,13 +403,28 @@ class RpcHttpCallerTransport
       // Required by gRPC-over-HTTP/1.1 to signal trailer support.
       request.headers['te'] = 'trailers';
 
+      // JOINED, not last-wins. `request.headers` is a `Map<String, String>`, so
+      // assigning twice for one key silently keeps the second value and drops the
+      // first -- metadata a caller set, gone before the request leaves.
+      //
+      // `,` is the delimiter PROTOCOL-HTTP2 names: duplicate header names "may have
+      // their values joined with ',' as the delimiter and be considered semantically
+      // equivalent". So this is the encoding the field's own definition provides
+      // for, and it is what the response side already splits on.
+      //
+      // A value that must contain a comma has a specified home: a `-bin` key,
+      // base64, whose alphabet has none.
+      final grouped = <String, List<String>>{};
       for (final header in call.requestHeaders) {
         if (header.name.startsWith(':') ||
             header.name == RpcHeaders.contentType) {
           continue;
         }
-        request.headers[header.name] = header.value;
+        (grouped[header.name] ??= []).add(header.value);
       }
+      grouped.forEach((name, values) {
+        request.headers[name] = values.join(',');
+      });
 
       request.bodyBytes = Uint8List.fromList(call.bodyBuffer);
 
