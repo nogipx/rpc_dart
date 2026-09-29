@@ -479,6 +479,16 @@ final class RpcSecurityPolicy {
         invalidValue: metadata.headers.length,
       );
     }
+    // Accumulated as we go, because [maxHeaderValueBytes] bounds each header and
+    // NOTHING bounded the sum: at the defaults, 64 headers of 8 KiB is 8x
+    // [maxMetadataBytes] and passed. The only thing that stopped a peer was
+    // [maxHeaders], so the effective ceiling was `maxHeaders * maxHeaderValueBytes`
+    // — about 1 MiB, 16x the value an operator set to bound exactly this.
+    //
+    // The channel transports were covered by a different mechanism
+    // ([RpcChannelFrame] bounds the encoded blob); the HTTP transports validate
+    // here and reach no such check.
+    var totalBytes = 0;
     for (final header in metadata.headers) {
       if (!isValidHeaderName(header.name)) {
         throw RpcMetadataViolation(
@@ -492,6 +502,14 @@ final class RpcSecurityPolicy {
           'Invalid metadata header value for: ${header.name}',
           name: 'metadata.headers.value',
           invalidValue: header.name,
+        );
+      }
+      totalBytes += header.name.length + header.value.length;
+      if (totalBytes > maxMetadataBytes) {
+        throw RpcMetadataViolation(
+          'Metadata too large: $totalBytes bytes > $maxMetadataBytes',
+          name: 'metadata.headers',
+          invalidValue: totalBytes,
         );
       }
     }

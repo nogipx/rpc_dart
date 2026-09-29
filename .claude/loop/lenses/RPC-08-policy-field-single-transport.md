@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524]
 status: confirmed (round 394)
 ---
 
@@ -285,3 +285,18 @@ text and the decoder counts the encoded blob. Round 520 found the same confusion
 
 `../probes/P-159-is-metadata-bounded-in-total.md`,
 `../rounds/523-the-knob-that-is-off-by-sixteen.md`, B-197, B-129.
+
+Round 524 shipped the fix: a running total INSIDE the header loop, so a megabyte of
+legal headers is refused at 64 KiB rather than after all of it is resident — the same
+accepted-versus-retained distinction round 506 made about the metadata frame check.
+
+> **For a fix that TIGHTENS a limit, the guards are the whole review.** Four of them,
+> and each blocks a different way of "fixing" it wrongly: metadata within the limit
+> must still pass (or the check refuses everything); an oversized single header must
+> still be refused for its OWN reason (or the new check swallows the old one); too many
+> headers must still be refused BY COUNT (or two distinct faults collapse into one
+> message); and a policy configured with a LARGER limit must admit correspondingly more
+> — which is what proves the bound follows the field rather than a constant somebody
+> inlined.
+
+`../rounds/524-the-sum-nobody-was-taking.md`.

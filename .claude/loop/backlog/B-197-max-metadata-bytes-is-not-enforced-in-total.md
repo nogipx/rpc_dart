@@ -1,10 +1,10 @@
 ---
-status: open
-round: 523
+status: closed (round 524)
+round: 524
 commit: 7cdaabf6
-paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**]
-probe: packages/core/rpc_dart/.dart_tool/probe/b129_14_total_metadata_bound.dart
-reason: "bench — CONFIRMED with a number in round 523: validateMetadata bounds each header but never the TOTAL, so the effective ceiling is maxHeaders x maxHeaderValueBytes (~1 MiB), 16x the configured maxMetadataBytes. Split out of B-129, which files it as a hygiene item"
+paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart]
+probe: P-159
+reason: "closed — fixed in round 524 with a running total inside the existing header loop, so 8 headers of 8 KiB now refuse at 65620 > 65536 where they previously passed at 8x the limit. The count check still refuses BY COUNT and a larger configured limit still admits more"
 ---
 
 # B-197 — `maxMetadataBytes` is never enforced in total, so the real ceiling is 16x it
@@ -58,6 +58,40 @@ application sending many large headers would start failing.
 
 Worth checking while there: whether the sum should count the encoding's overhead, so
 that the policy's number means the same thing at both layers.
+
+## Outcome (round 524) — fixed
+
+```
+   8 headers x 8192 B  ->  refused (Metadata too large: 65620 bytes > 65536)
+  64 headers x 8192 B  ->  refused (Metadata too large: 65620 bytes > 65536)
+ 128 headers x 8192 B  ->  refused (Too many metadata headers: 129 > 128)
+   1 headers x 8192 B  ->  ACCEPTED
+CONTROL one header of 8193 B  ->  refused (Invalid metadata header value)
+```
+
+A running total inside the existing loop, checked after each header — so a peer
+sending a megabyte of legal headers is refused at 64 KiB rather than after all of it
+is resident. Same reasoning as round 506: bound what is ACCEPTED, not what is
+retained.
+
+The count check still runs first and keeps its own message, because many tiny headers
+is a different fault from too many bytes.
+
+## Still open
+
+**The two layers count different bytes.** `validateMetadata` counts header name and
+value text; `RpcChannelFrame` bounds the ENCODED blob, which includes the JSON
+framing. So `maxMetadataBytes` means slightly different things at the two layers —
+smaller here than there. Reconciling them is a decision about which quantity the field
+names, and round 520 found the same confusion in `maxActiveStreams`.
+
+**This tightens a limit**, so an application sending many large headers starts
+receiving a metadata violation where it previously succeeded. It wants a CHANGELOG
+line aimed at that case.
+
+**The HTTP transports were never driven.** The fix is in the shared policy so they
+inherit it, but "a policy that does not bound" was never turned into a measured DoS
+through an HTTP transport.
 
 ## Owner decision
 
