@@ -117,14 +117,32 @@ class RpcWebSocketCallerTransport
 
   /// Drives [_startAppLevelHeartbeat]; null means no heartbeat.
   ///
-  /// The SAME value the platform was given, so `pingInterval` means one thing on
-  /// both: on the VM dart:io pings and closes the socket itself, and where it
-  /// cannot this runs the library's own ping at the same cadence.
+  /// Null exactly when something ELSE is already pinging this socket — which is
+  /// knowable only where this transport opened it. Via
+  /// [RpcWebSocketCallerTransport.connect] that is dart:io on the VM and nothing
+  /// on the web; for a channel handed to the constructor it is nobody, so the
+  /// interval stands and this library's own ping runs.
   final Duration? _heartbeatInterval;
 
   Timer? _heartbeat;
   bool _heartbeatProbeInFlight = false;
 
+  /// Wraps an already-built [channel].
+  ///
+  /// [pingInterval] runs THIS library's keepalive at that cadence, on every
+  /// platform — not the socket's own. A [WebSocketChannel] does not expose the
+  /// socket underneath (`IOWebSocketChannel` keeps it private), so this
+  /// constructor can neither apply a native ping to it nor ask whether one is
+  /// already running. Running its own is the only answer available, and the
+  /// alternative was silence: `platformHonoursPingInterval` describes what
+  /// `openWebSocket` does, and nothing here called `openWebSocket`.
+  ///
+  /// If you built the channel with a native ping — `IOWebSocketChannel.connect(
+  /// url, pingInterval: ...)` — leave this null, or pass
+  /// `platformHandlesPing: true`, and the socket's own keepalive is the only one.
+  ///
+  /// [RpcWebSocketCallerTransport.connect] opens the socket itself, so it knows
+  /// the answer and passes it: native on the VM, this library's ping on the web.
   RpcWebSocketCallerTransport(
     WebSocketChannel channel, {
     Future<WebSocketChannel> Function()? reconnectFactory,
@@ -133,13 +151,12 @@ class RpcWebSocketCallerTransport
     bool? platformHandlesPing,
   }) : _reconnectFactory = reconnectFactory,
        _policy = policy,
-       // Only where the platform DROPPED it. On the VM dart:io already pings
-       // and closes on a missing pong, and running both would double the wire
-       // cost for nothing. `platformHandlesPing` overrides the compile-time
-       // constant so the web behaviour is reachable from a VM test — the stub
-       // is the portable fallback as well as the web implementation, but the
-       // constant is chosen by conditional import and cannot be varied.
-       _heartbeatInterval = (platformHandlesPing ?? platformHonoursPingInterval)
+       // Defaults to "nobody is pinging this socket", because for a channel
+       // handed in that is all this constructor can know. `connect()` passes
+       // `platformHonoursPingInterval` explicitly, which is the only place that
+       // constant's premise holds -- it describes `openWebSocket`, and a caller
+       // who built the channel never went through it.
+       _heartbeatInterval = (platformHandlesPing ?? false)
            ? null
            : pingInterval {
     _attach(channel);
@@ -301,6 +318,10 @@ class RpcWebSocketCallerTransport
       // VM lets dart:io handle it, the web runs the library's own ping at the
       // same cadence. Before this it was accepted and silently dropped there.
       pingInterval: pingInterval,
+      // Stated HERE, because this is the only path where the constant applies:
+      // `openWebSocket` above is what it describes. The constructor cannot
+      // assume it -- see its doc.
+      platformHandlesPing: platformHonoursPingInterval,
     );
   }
 

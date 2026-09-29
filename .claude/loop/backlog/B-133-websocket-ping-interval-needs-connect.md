@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 529)
+round: 529
+commit: f086c61c
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: none — a witness and three controls, no numbers to compare
+reason: "CONFIRMED and FIXED. The constructor now defaults to `nobody is pinging this socket`, which is all it can know, and `connect()` passes `platformHonoursPingInterval` — the one call site where that constant's premise holds. The lead's fix sketch was not implementable: the channel packages keep the socket private"
 ---
 
 # B-133 — websocket `pingInterval` does nothing when the transport is constructed directly on the VM
@@ -24,15 +24,36 @@ On the VM `platformHonoursPingInterval` is true, so the app-level heartbeat is o
 
 A documented keepalive silently absent for one construction path.
 
-## Witness a round would build
+## What round 529 measured
 
-Construct directly with `pingInterval: 1s` over a half-open path; is the loss
-detected?
+```
+  hand-built channel, pingInterval: 200ms       never noticed (capped at 5s)
+```
 
-## Fix sketch
+CONFIRMED: both keepalives off. After the fix that arm notices, while three controls hold —
+the same construction with no interval notices nothing, an explicit
+`platformHandlesPing: true` still switches ours off, and `connect()` gains no second probe.
 
-Apply the interval to the passed socket when it is a dart:io `WebSocket`, or
-reject the parameter on that path.
+**A trap the round hit and recorded**: a dart:io `WebSocket` answers a ping frame ITSELF,
+before any listener sees it, so a server that answers no RPC is still a live path for a
+native keepalive. A control asserting native detection against such a server fails for a
+reason unrelated to the fix.
+
+## Fix
+
+**The sketch was not implementable.** "Apply the interval to the passed socket when it is a
+dart:io `WebSocket`" needs the socket, and `IOWebSocketChannel` / `AdapterWebSocketChannel`
+expose no accessor for it — so the constructor can neither set a native ping nor ask whether
+one is running.
+
+What was done instead: the constructor defaults to "nobody is pinging this socket", which is
+all it can know, and `connect()` passes `platformHonoursPingInterval` explicitly — the one
+call site where that constant's premise holds, since it describes `openWebSocket`.
+`platformHandlesPing` stops being a test hook and becomes how a caller who built the socket
+with a native ping says so.
+
+**Behaviour change on a published package**: a direct construction with `pingInterval` now
+runs an RPC-level probe on the VM where it previously ran nothing. Wants a CHANGELOG line.
 
 ## Owner decision
 
