@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414]
+applied: [205, 394, 414, 501]
 status: confirmed (round 394)
 ---
 
@@ -142,3 +142,27 @@ and `.dart_tool/probe/advertised_settings.dart`.
 
 The clean results from this battery are
 `../checked/C-28-sibling-batteries-that-came-back-clean.md`.
+
+## The siblings need not be transports (round 501)
+
+Shape 1 paid on a pair with no transport in it: two interceptors in one
+directory, both classifying an error to decide whether to act on it.
+`RpcRetryInterceptor`'s default predicate is narrow, documented and chosen;
+`RpcCircuitBreakerInterceptor`'s was `failureOn == null ||`, i.e. everything
+except cancellation. **Read alone, either file is a plausible design. Read side by
+side, one of the two never had the decision made** — the fallback is what the `||`
+does when the field is absent, not an answer anybody wrote down.
+
+So the detector generalises past "N implementations of one interface" to **N
+places that make the same KIND of decision**. Two defaults, two limits, two
+retry-vs-give-up rules: if one is argued for and the other is a fallthrough, the
+fallthrough is the finding.
+
+> **And do not finish by copying the sibling.** The fix here is deliberately
+> WIDER than the retry interceptor's set — a breaker asks "is this endpoint in
+> trouble", a retry asks "is another attempt worth making", and INTERNAL/UNKNOWN
+> answer the first and not the second. The comparison is what locates the
+> unconsidered default; it is not the source of the right value. Round 501's
+> record has the split.
+
+Bench `../probes/P-139-which-errors-open-the-breaker.md`.

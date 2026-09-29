@@ -70,8 +70,44 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   final Duration resetTimeout;
 
   /// Optional predicate to decide if an error counts as a failure.
-  /// Defaults to counting all errors except cancellation.
+  ///
+  /// When null, [_isServerHealthFailure] applies: only statuses that say the
+  /// SERVER is in trouble count. An application error is not a health signal —
+  /// a server answering NOT_FOUND correctly is a working server — and counting
+  /// one opened the breaker for every method on the endpoint.
+  ///
+  /// Measured at the default threshold of 5, with a second healthy method on the
+  /// same endpoint:
+  ///
+  ///     five NOT_FOUND lookups   -> breaker open, the healthy method refused
+  ///     five INVALID_ARGUMENT    -> breaker open, the healthy method refused
+  ///     five PERMISSION_DENIED   -> breaker open, the healthy method refused
+  ///
+  /// An explicit predicate fully replaces this, as before.
   final bool Function(Object error)? failureOn;
+
+  /// Statuses that mean the SERVER is unhealthy, not that the request was.
+  ///
+  /// Deliberately WIDER than `RpcRetryInterceptor`'s transient set, which is
+  /// UNAVAILABLE and RESOURCE_EXHAUSTED: a breaker is asking "is this endpoint
+  /// in trouble", where a retry asks "is another attempt worth making". INTERNAL
+  /// and UNKNOWN are worth counting for the first question and not the second —
+  /// they are what a crashing handler produces — and DEADLINE_EXCEEDED is the
+  /// shape of a server too slow to answer at all.
+  ///
+  /// A non-RPC throw counts: an error with no status is not an application
+  /// answering, it is something failing.
+  static bool _isServerHealthFailure(Object error) {
+    if (error is RpcCancelledException) return false;
+    if (error is RpcStatusException) {
+      return error.statusCode == RpcStatus.unavailable ||
+          error.statusCode == RpcStatus.resourceExhausted ||
+          error.statusCode == RpcStatus.internal ||
+          error.statusCode == RpcStatus.unknown ||
+          error.statusCode == RpcStatus.deadlineExceeded;
+    }
+    return true;
+  }
 
   CircuitBreakerState _state = CircuitBreakerState.closed;
   int _failureCount = 0;
@@ -337,10 +373,13 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   }
 
   void _onFailure(Object error) {
-    // Don't count cancellations as failures, nor anything failureOn rejects.
+    // Don't count cancellations as failures, nor anything the predicate rejects.
+    // The default predicate excludes cancellation itself, and an explicit one is
+    // still guarded against it: a caller's own predicate should not have to know
+    // that a cancelled call is not evidence about the server.
     final counts =
         error is! RpcCancelledException &&
-        (failureOn == null || failureOn!(error));
+        (failureOn ?? _isServerHealthFailure)(error);
 
     if (!counts) {
       // Inconclusive: it says nothing about whether the service recovered. The

@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
-paths: [packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+status: closed (round 501)
+round: 501
+commit: 70372049
+paths: [packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart, packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart]
+probe: P-139
+reason: "closed — CONFIRMED and fixed: the null-failureOn fallback counted every non-cancellation error, so five correct NOT_FOUND answers opened the breaker and an unrelated healthy method was refused; replaced by a named server-health default"
 ---
 
 # B-110 — the circuit breaker opens on NOT_FOUND by default, for every method at once
@@ -42,6 +42,25 @@ Expected today: the sixth is refused with the breaker open.
 
 Default `failureOn` to transport/server-health statuses (UNAVAILABLE, INTERNAL,
 UNKNOWN, DEADLINE_EXCEEDED, RESOURCE_EXHAUSTED); consider per-method breakers.
+
+## Outcome (round 501)
+
+**CONFIRMED and fixed.** The witness was built as sketched and read
+`breaker=open failures=5`, with the healthy method answering `BREAKER OPEN`, for
+NOT_FOUND, INVALID_ARGUMENT, PERMISSION_DENIED, ALREADY_EXISTS and UNIMPLEMENTED.
+The cancellation control read `closed`/`0` in the same run.
+
+The fix is the sketch's first half: a named `_isServerHealthFailure` default
+covering UNAVAILABLE, RESOURCE_EXHAUSTED, INTERNAL, UNKNOWN and DEADLINE_EXCEEDED,
+plus anything that is not an `RpcStatusException` at all. Note it is DELIBERATELY
+wider than `RpcRetryInterceptor`'s transient set rather than equal to it — the two
+interceptors are asking different questions, and the round record says why.
+
+**The sketch's second half — per-method breakers — is not done.** P-139's third
+column measures what it would buy: one unhealthy method still costs every other
+method on the endpoint, because state is per interceptor instance. The
+classification fix removes the cheap way to trigger that, not the property itself.
+It is an API change with a policy question inside it.
 
 ## Owner decision
 

@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-139](P-139-which-errors-open-the-breaker.md)** valid (round 501),
+  rpc_dart — the arms vary the STATUS a method throws, not the count, so the rig
+  is about classification; every arm ends with a call to a DIFFERENT healthy
+  method, which is how the blast radius of one shared breaker instance gets
+  measured at all. Its control is the cancellation arm: `closed`/`0` where every
+  other row reads `open`/`5`, so the rig demonstrably distinguishes the two
+  states. Also answers two questions a regression test needed: an unregistered
+  method returns `RpcStatusException(12)` rather than timing out, and a throwing
+  response codec arrives as a bare `StateError`.
 - **[P-138](P-138-does-a-cancelled-asstream-detach.md)** valid (round 500),
   rpc_dart — **twelve lines with no library code in them**, because the lead's
   mechanism was a claim about `Future.asStream()` rather than about this
