@@ -1,5 +1,6 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
+release: breaking
 round: 498
 commit: 3391d5ed
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
@@ -96,4 +97,22 @@ Two smaller things inside the same question:
 
 ## Owner decision
 
-—
+**REMOVE the implicit barrier** — no deadline means no timeout, as the streaming shapes
+already behave. Taken in the round-540 owner review.
+
+The argument: a hidden limit the server never hears about is worse than no limit. It turns a
+slow answer into a client-side error while the server still believes the call is live, and it
+does that unevenly — unary and client-stream carry it, the other shapes do not.
+
+**Verified still present at review time**: `_noDeadlineFallback = Duration(seconds: 60)` in
+`client/caller.dart`, and `timeout ?? remainingTime ?? const Duration(seconds: 60)` in
+`unary/caller.dart`.
+
+**BREAKING, and the CHANGELOG line is the deliverable as much as the code.** A caller relying
+on the implicit 60 s gets a hanging call where it used to get an error. The line has to say
+that plainly and name the remedy — pass a deadline.
+
+**What the round owes.** The witness is a call with no deadline against a server that never
+answers: today it fails at 60 s, after the fix it waits. The canary is the same call WITH a
+deadline, which must still fail at that deadline — otherwise the change removed more than the
+implicit fallback.

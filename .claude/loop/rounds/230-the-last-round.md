@@ -110,7 +110,7 @@ Left for whoever picks it up, in the order I would take them:
 - **[B-11](../backlog/archive/B-11-endpoint-reachability-needs-latency.md)** — needs a
   bench with real latency; three shapes failed on an in-memory pair.
 - **[B-21](../backlog/archive/B-21-reconnectable-transport-type.md)**, next major.
-- **[B-10](../backlog/B-10-layers-without-lenses.md)** — deferred by the owner
+- **[B-10](../backlog/archive/B-10-layers-without-lenses.md)** — deferred by the owner
   until core and transport are exhausted; 234 files with no lens.
 
 ## Links

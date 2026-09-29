@@ -71,7 +71,7 @@ sent plain is ordinary gRPC and the existing decoder already handles it.
 whether compression makes messages BIGGER — the case least likely to grow. It
 reported a saving at 32 B and would have refuted a true claim.
 
-## Still open, not measured
+## Split out to B-206 (cost) and B-207 (the zlib sink) — not measured
 
 **CPU, which is half of "grow and cost CPU".** The growth is fixed; comparing pays
 slightly MORE CPU, since compression still runs on payloads that end up sent plain.

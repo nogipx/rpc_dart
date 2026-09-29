@@ -67,7 +67,7 @@ interceptor denying service `a.b` by name denied BOTH paths, and saw `a.b/secret
 for both — the binding is resolved before the middleware context is built, so an
 interceptor never sees the caller's split.
 
-## Still open, and not closed by this fix
+## Split out to B-201 — not closed by this fix
 
 **Path-string filtering upstream of the responder.** A reverse-proxy rule, gateway
 ACL or access-log filter matching `/a.b/` did not cover `/a/b.`, because both

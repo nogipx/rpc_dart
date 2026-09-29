@@ -73,7 +73,7 @@ locally-initiated stream, by id parity. Errors are untouched — `_incoming.addE
 is a different path — so `startCallerListening` is still needed for its
 error-observing half, just not to drain routed responses.
 
-## Still open, not measured here
+## Split out to B-203 — not measured here
 
 **The websocket transport's second broadcast**, which this lead also names:
 `websocket_caller_transport.dart` re-broadcasting into `_incomingCtl` with a set

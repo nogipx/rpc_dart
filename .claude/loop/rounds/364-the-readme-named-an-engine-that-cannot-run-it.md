@@ -116,7 +116,7 @@ itself is worth more than one quietly extrapolated from the other platform.
 
 Tracked with the other simulator-blocked work in
 `../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md` and
-`../backlog/B-38-ios-recv-loop-dies-silently.md`.
+`../backlog/archive/B-38-ios-recv-loop-dies-silently.md`.
 
 ## Links
 

@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: closed (round 540)
 round: 519
 commit: eb42e917
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/contracts/call_scope.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
@@ -61,6 +61,18 @@ work that cannot block.
 reported `1.0 timers/call` for unary, deadline apparently free. A subscription
 creates its timers in the zone it was registered in, so every RESPONDER timer was
 uncounted — the half this lead is about.
+
+## DECIDED in the round-540 review
+
+**The nine-timers finding is split out as B-210 and this lead closes.** Its filed claim —
+three timers per deadline — is refuted by its own measurement (2 on unary, 5 on a server
+stream), and what remains of the deadline-ownership question is the undesignable part below.
+The owner's call was that the interesting number is the one about calls with NO deadline, and
+that it should not close attached to a refuted arithmetic.
+
+The three separable pieces below are NOT carried into B-210: B-210 is about attributing nine
+timers to their stacks, and the disposer-timeout items are a different change. They are left
+here as a reading, and whoever wants them can file one.
 
 ## Owner decision
 

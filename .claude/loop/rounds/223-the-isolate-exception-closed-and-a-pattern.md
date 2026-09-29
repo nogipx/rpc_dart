@@ -172,5 +172,5 @@ Leads `../backlog/archive/B-17-watermark-lost-through-a-decorator.md`,
 `../backlog/archive/B-02-wasm-android-promise-rejection.md`,
 `../backlog/archive/B-19-close-the-gate-over-wasm.md`,
 `../backlog/archive/B-18-web-guard-is-a-census-not-a-sweep.md`,
-`../backlog/B-10-layers-without-lenses.md` — all answered, all re-ranked in
+`../backlog/archive/B-10-layers-without-lenses.md` — all answered, all re-ranked in
 `../backlog/BACKLOG.md`.

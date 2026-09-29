@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-04
 bench: P-172 — new
 commit: yes
+release: breaking
 ---
 
 # Round 539 — the client it did not create

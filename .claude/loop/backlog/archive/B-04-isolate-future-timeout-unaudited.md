@@ -30,7 +30,7 @@ Not opened as a new lead, because the harness that would express it already
 exists in this package — `close_releases_the_isolate_test.dart` asserts on a
 SUBPROCESS's exit — and the extension is small: fail the handshake in the child,
 then assert the child exits rather than hanging on a live isolate. Worth doing
-alongside `../backlog/B-20-detached-guard-has-no-witness.md`, which needs the
+alongside `B-20-detached-guard-has-no-witness.md`, which needs the
 same shape for core and is now owner-approved.
 
 ## Owner decision

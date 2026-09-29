@@ -59,7 +59,7 @@ rather than a `DateTime.now()` comparison, so the budget half lands in the same 
 returns early when the id had no state, but what a drain waits for is the COUNT
 reaching zero, which is true either way.
 
-## Still open
+## Split out to B-208
 
 **`drainUntilIdle` still polls at 25 ms**, so "two copies of one mechanism" is still
 two. Its budget is now a `Stopwatch`, but it is generic over a `pending()` callback

@@ -1,10 +1,11 @@
 ---
-status: closed (round 534)
+status: open
 round: 534
 commit: cbca6a2b
-paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
+paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
 probe: P-167
-reason: "CONFIRMED and FIXED as a CONTRACT gap: pause is now forwarded, but nothing in rpc_dart ever pauses a channel, so no behaviour in this library changed. The lead's real subject — what bounds a foreign peer's flood — is named in round 534's `Not fixed` and still open"
+reason: "bench — REOPENED in the round-540 bookkeeping pass. Round 534 closed the CONTRACT half (pause is forwarded now) and that changed no behaviour, because nothing in rpc_dart pauses a channel. The lead's real subject — what bounds an inbound flood from a peer outside rpc_dart's flow control — is unmeasured, and a closed lead's remainder is routed to by nothing"
+continuation: yes
 ---
 
 # B-138 — the websocket channel does not propagate pause to the socket

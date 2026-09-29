@@ -1,7 +1,8 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
 round: 540
 commit: 7fe7351c
+release: breaking
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
 probe: P-173
 reason: "owner decision — CONFIRMED, and both ways of fixing it change what applications observe: maintain a standard-field list, or stop splitting and let metadata carry the joined value"
@@ -61,5 +62,23 @@ rule the owner picks should apply there too, and nothing has measured it.
 
 ## Owner decision
 
-Which of the two, and whether the responder direction follows. Both change observable metadata,
-so both want a CHANGELOG line.
+**STOP SPLITTING** — hand the joined value over as it arrived. Taken in the round-540 review.
+
+Not the standard-field list: every gap in it would be this same defect for that field, silently,
+and the list has to track HTTP's own evolution. Stopping is spec-conformant on the spec's own
+terms — PROTOCOL-HTTP2 calls joined and repeated semantically equivalent — and round 540 already
+made the SEND side agree with that by joining on `,`, so the two directions end up consistent
+rather than one compensating for the other.
+
+**The responder direction follows the same rule**: shelf joins repeated request headers and the
+responder leaves them joined, which is now the intended behaviour rather than an oversight, and
+the doc should say so.
+
+**BREAKING.** An application receiving two values today for a repeated custom key receives one
+joined value. The CHANGELOG line has to say that splitting is now the receiver's job and name
+the delimiter, because a caller that wants the parts can still get them — it just has to ask.
+
+**What the round owes.** The witness is P-173's table with the response arm inverted: `date`
+must arrive as ONE value. The canary is a repeated CUSTOM key, which must also arrive as one —
+that is the part an application notices, and asserting only `date` would pass a fix that special-cased
+standard fields after all.

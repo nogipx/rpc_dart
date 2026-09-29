@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
 round: 497
 commit: 60e4d3f8
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
@@ -98,4 +98,36 @@ rather than its subject and is now **B-195**.
 
 ## Owner decision
 
-—
+**MEASURE FIRST, then decide** — taken in the round-540 review.
+
+The owner's question was the right one and it is not answered by this record: **why does
+backpressure mean anything on a path that exchanges objects rather than byte frames?** The
+honest parts of the answer are that `bufferedBytes` is 0 for a `directPayload` and the code
+says queuing one "costs a pointer" — true for an object the process ALREADY retains — and
+that round 497's own arm mints a fresh 1 KiB per message precisely so nothing else holds it.
+
+So the decision waits on one measurement, and the fix options are ranked differently by its
+outcome:
+
+**Separate a MINTING producer from a HOLDING one.** Same rig as P-135, two arms:
+
+1. the handler creates a new object per message (what 497 drove) — the queue is as large as
+   everything produced;
+2. the handler sends an object the process already retains and keeps retaining — the queue
+   really is a list of pointers, and the memory is not attributable to it.
+
+If (2) is the rare shape, in-memory's severity rises and a count-based ceiling is obviously
+right. If (2) is the common shape, the bound belongs only where the object is COPIED, which
+is isolate.
+
+**What is already established and must not be re-derived.** `SendPort.send` deep-copies
+everything but deeply-immutable values, and the isolate transport's own doc says
+`supportsZeroCopy` there means "sendDirectObject works", not "the peer sees the same
+instance". So on isolate the pointer argument does not apply even in principle — that half
+needs no further measurement, only a decision.
+
+**And the nominal per-object weight is off the table.** It is a fiction an operator cannot
+set meaningfully; if a bound is wanted, it is a per-stream EVENT ceiling — a queue depth,
+which is what every other queue here is bounded by and needs nothing invented. That still
+creates a public field whose meaning has to be pinned exactly, which is the B-209 / B-128
+trap seen from a third side.

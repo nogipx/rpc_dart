@@ -1,5 +1,6 @@
 ---
-status: awaiting owner
+status: open
+release: breaking
 round: 507
 commit: cc218edc
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/core/channel.dart, packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/core/protocol.dart]
@@ -103,3 +104,20 @@ sends one frame per chunk.
   rewrote the parser's buffering; these two copies were not part of that.
 - **The gRPC 5-byte prefix duplicating the channel frame's own length** on a
   message-aligned channel. A wire change, and the lead already marks it the owner's.
+
+## DECIDED in the round-540 review: the shipped change is APPROVED
+
+**Round 507's receive-path fix stands.** Making a payload a view into the transport's chunk is
+accepted as a requirement on `IRpcChannel` implementers, on the grounds that the contract is
+already written on `IRpcChannel.incoming` in words ("a delivered chunk is handed over, not
+lent"), all six shipped transports satisfy it, and the gain is `389.76 -> 191.45 us` per 1 MiB
+frame — the only one of the four copies anybody managed to remove.
+
+**A CHANGELOG line is owed and its audience is unusual**: not callers, but anyone who has
+written their own `IRpcChannel`. For them this is a behaviour change with a silent failure mode
+— reuse a buffer after `add` and data corrupts with nothing to say so. The line has to name the
+rule, not the speedup.
+
+**THIS LEAD STAYS OPEN.** The sign-off answers one of three things in it; the send path's two
+copies and the 5-byte-prefix wire question are untouched and unmeasured, so the lead keeps them
+rather than closing with a remainder nothing routes to.

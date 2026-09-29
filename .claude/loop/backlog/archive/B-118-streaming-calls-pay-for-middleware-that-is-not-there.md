@@ -63,7 +63,7 @@ and looked settled; the next fixed set's median was `5.949`, which would have
 reversed it. The minima never overlap and are the right statistic, since noise here
 only adds time.
 
-## Still open, not measured — a different change
+## Split out to B-204 — not measured, a different change
 
 The remaining ~4.4 us per message lives in the layers this lead also names, none of
 which were varied: `handleServerStream`, `_withHandlerSlotStream`, `StreamBridge`,

@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
 round: 527
 commit: c47683d3
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
@@ -76,6 +76,20 @@ nothing to act on.
 
 ## Owner decision
 
-Which of the last two, or neither. The first costs per-frame work on the receive path of
-the priority transport; the second changes when inbound calls are torn down. A round should
-not pick between those on its own.
+**Make the dropped connection's peer state unreachable before the new one can mint
+anything** — the third option, not the id translation. Taken in the round-540 review.
+
+So NOT the per-frame map lookup: the cost of translating every peer id in both directions
+on the priority transport was the reason to prefer this, and round 224 already closed the
+same shape this way in the OUTBOUND direction, which makes it a known pattern here rather
+than a new design.
+
+**What the round that carries this out owes.** The failure mode of "unreachable" is the
+opposite of the one being fixed: an inbound call torn down slightly earlier than today, and
+an answering handler that must get a STATUS rather than silence. So the witness is not only
+"the stale teardown no longer lands" — it needs an arm where a handler is mid-answer when
+the socket drops, asserting what it receives. Round 518's lesson applies directly: a fix
+that turns an error into a hang is worse than the error.
+
+Round 224's own record is the reading to start from; `_idsOnThisConnection`'s doc already
+describes the outbound half of this mechanism.

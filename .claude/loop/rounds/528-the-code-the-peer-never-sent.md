@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-23
 bench: P-162 — new
 commit: yes
+release: breaking
 ---
 
 # Round 528 — the code the peer never sent

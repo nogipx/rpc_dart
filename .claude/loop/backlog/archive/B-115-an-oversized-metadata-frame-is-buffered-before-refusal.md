@@ -64,7 +64,7 @@ outright when `closeOnOversizedFrame` is true — the server's default. Half the
 codebase had the correct behaviour, which both confirmed the intent and said where to
 look.
 
-## Still open, and not closed by this fix
+## Split out to B-202 — not closed by this fix
 
 **A peer that sends the whole frame in ONE chunk.** On `dart:io`'s WebSocket a
 message arrives as a single chunk, so the peak is resident before this class sees a

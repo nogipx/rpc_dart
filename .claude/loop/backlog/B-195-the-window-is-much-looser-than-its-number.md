@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 540)
 round: 497
 commit: 60e4d3f8
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
@@ -73,4 +73,23 @@ and the doc's own promise suggests (1).
 
 ## Owner decision
 
-—
+**DOCUMENT what the number means** — the window is credit for what is UNCONSUMED, not a
+ceiling on residency. Taken in the round-540 review.
+
+So not the tightening: that reaches into rounds 208 and 214, which chose to refuse a stalled
+call rather than throttle a producer, and it would cost throughput wherever clients rely on the
+slack today.
+
+**What the round owes, and it is more than a comment.** Count the multiplier and write it down
+— `185 MiB retained at a 4 MiB window` is the reading, and the doc has to say what the ratio
+depends on, not just quote one number. **And a canary that the field bounds anything at all**:
+set the window tiny and show retention moves. A documentation round with no canary is the shape
+this journal refuses, and here one is available cheaply — round 497's own table has the arm
+(shrinking the window 64x moved the codec path 32x).
+
+**Verified still present at review time**: `_window => _policy.flowControlWindowBytes` in
+`flow_controller.dart`, unchanged.
+
+No CHANGELOG line for behaviour, but the field's documentation is public API surface and the
+wording is worth reading as such: an operator who set 4 MiB to bound memory is the person this
+text has to reach.

@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
 round: 518
 commit: 9c69500d
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
@@ -75,3 +75,27 @@ Two ways, and they are not close in cost.
 The lead's own note argues for (1): *"Every shipped transport delivers whole frames,
 so nothing fails today."* What (2) buys is tolerance of a third-party transport that
 does not — which is a capability decision rather than a defect repair.
+
+## DECIDED in the round-540 review: option 2, the unary lifecycle change
+
+Against this record's own recommendation, and deliberately: tolerating a transport that
+fragments is a capability the library should have, and unary being the ONE shape that
+cannot take it is the wrong asymmetry to write down as intended.
+
+**What the round must not repeat.** Round 518 implemented the sketch's accumulate half and
+REVERTED it, because two further layers drop the later fragment — so accumulating in the
+unary responder ALONE turns an immediate INTERNAL into a HANG. That is measured, not feared.
+All three parts of option 2 are load-bearing:
+
+- feed every buffered pre-bind message, not just the first;
+- keep the request stream alive until the request completes or the peer half-closes;
+- route post-bind data frames to a responder with `listensToTransport: false`.
+
+**A hang is worse than the error being fixed**, so the witness needs both arms: a fragmented
+frame ANSWERED, and a peer that stops mid-frame answered with a status rather than left
+waiting. The second arm is the canary for the failure this fix can introduce.
+
+**Take the reachability reading first if it is cheap** — which shipped transport can be made
+to fragment at all. It does not change the decision, but it sizes the risk of touching a hot
+path and tells the round whether an end-to-end witness is constructible without a
+hand-written transport.

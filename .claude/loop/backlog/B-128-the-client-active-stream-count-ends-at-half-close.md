@@ -1,7 +1,8 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
 round: 520
 commit: 7cdaabf6
+release: breaking
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
 probe: P-157
 reason: "CONFIRMED — with the ceiling on the CLIENT only, four calls parked awaiting responses leave four slots free and a second batch of four is admitted in full. With the same policy on both sides the SERVER refuses those four, so the two sides count different intervals under one field name. Releasing later is hot-path stream accounting whose failure mode is refusing every subsequent call"
@@ -54,6 +55,28 @@ server refusing at its own ceiling is indistinguishable from a client doing so.
 
 With each side over a hand-built byte pipe carrying its own policy, the client refuses
 nothing. **The two sides count different intervals under one field name.**
+
+## DECIDED in the round-540 review: option 2 — count until COMPLETION
+
+The slot is held until the call completes, not until half-close, so both sides count the same
+interval and `maxActiveStreams` bounds client concurrency the way its name says. This also
+settles the class: B-209 was answered the same way in the same review — a policy field names
+what is OBSERVABLE, not what is convenient for the layer enforcing it.
+
+**The failure mode runs the wrong way and the canary must be aimed at it.** A slot released too
+early admits too much; a slot NEVER released refuses every subsequent call for the life of the
+connection. So the witness (four parked calls must leave zero slots free, where today they leave
+four) is the easy half — the load-bearing arm is a call that ends in each possible way
+(completion, error, cancel, peer reset, transport close) and returns its slot every time. Round
+536's own record notes the sibling shape: freeing a slot without stopping the work inverts the
+limit.
+
+**BREAKING.** A client that gets eight concurrent calls today at `maxActiveStreams: 4` gets
+four. The CHANGELOG line has to name the ceiling as the thing that changed, not the accounting.
+
+**Which event is the right end is still not established by measurement** — `releaseStreamId`,
+the terminal inbound frame, or both — and that is the first thing the round settles. The note
+below already names the candidates.
 
 ## Owner decision
 

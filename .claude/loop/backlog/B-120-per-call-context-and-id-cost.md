@@ -1,7 +1,8 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
 round: 511
 commit: 231f986c
+release: changelog
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/core/metadata.dart]
 probe: P-149
 reason: "CONFIRMED and larger than filed: ~40 us of every ~97 us unary call is OS entropy for two correlation ids, established end-to-end by ablating the generator. The fix is one line and the codebase already documents these ids as 'never secrets' — but it changes what a VM deployment gets today, so it is the owner's by the precedent B-111 and B-116 set"
@@ -59,6 +60,29 @@ An earlier round already cut the draws 12 → 3 and hoisted the generator to a s
 What it did not revisit is whether the generator should be secure at all.
 
 ## Owner decision
+
+**DECIDED in the round-540 review: cut the NUMBER of draws first, and leave the generator
+alone until that is done.** None of the three options above was taken.
+
+The reasoning: a call draws for TWO correlation ids, and one of them is minted by the
+responder only to be replaced. If that draw is unnecessary, removing it takes half the ~40 us
+while keeping `Random.secure()` — so the security posture never has to be traded at all, and
+whatever remains afterwards is a smaller number to decide about.
+
+**The constraint that makes this harder than it reads.** The two ids are not interchangeable.
+`requestId` is minted by the caller and travels on the wire; the responder's trace id is minted
+locally, and the round has to establish WHY it is minted before it is replaced — whether
+something reads it in the window between, in a log line, in a metric, or in the
+opentelemetry package, which is a separate package the lead's `paths:` do not name. Removing a
+draw whose value is read by something else is a silent behaviour change in a diagnostic, and
+diagnostics are where a missing value is least likely to be noticed.
+
+So the round's first arm is not a benchmark. It is: how many secure draws does one unary call
+make, where does each land, and is any of them dead on arrival. P-149 already ablates the
+generator end-to-end, so it can price whatever the sweep removes.
+
+**The three options below stay on the record and are NOT closed** — they are the decision that
+comes after this one, against a smaller number.
 
 **The change is one line, and the codebase has already written its own justification
 for it.** `_strongRng`'s doc says these ids are *"correlation in logs and on the wire,

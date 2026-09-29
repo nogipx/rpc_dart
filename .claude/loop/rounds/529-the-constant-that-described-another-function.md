@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-23
 bench: none — a witness and three controls, no numbers to compare
 commit: yes
+release: breaking
 ---
 
 # Round 529 — the constant that described another function

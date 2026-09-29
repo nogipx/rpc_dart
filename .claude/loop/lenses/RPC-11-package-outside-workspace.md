@@ -117,7 +117,7 @@ And the reason this one hid for 55 rounds is a second, sharper thing:
 > against what it says it is for.
 
 `../rounds/471-the-other-suite-nobody-runs.md`,
-`../backlog/B-92-round-416-went-stale-in-the-suites-nobody-runs.md`.
+`../backlog/archive/B-92-round-416-went-stale-in-the-suites-nobody-runs.md`.
 
 ### Round 472 — the device arrived, and the LEAD was what failed
 

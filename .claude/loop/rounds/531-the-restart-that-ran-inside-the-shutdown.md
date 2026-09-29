@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-19
 bench: P-164 — new
 commit: yes
+release: breaking
 ---
 
 # Round 531 — the restart that ran inside the shutdown

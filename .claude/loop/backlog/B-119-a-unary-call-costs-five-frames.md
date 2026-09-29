@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: closed (round 540)
 round: 510
 commit: 49d79ed8
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart]
@@ -64,6 +64,14 @@ reader was not. Fixed by gating on set membership alone.
 
 **Printing what each frame IS, rather than counting, is what found it.** A count of 4
 for that row is unremarkable beside the success row's 4.
+
+## DECIDED in the round-540 review: CLOSED
+
+The filed arithmetic is refuted by measurement (7 frames per call, 5 of them metadata — not
+5 and 3), and the real defect the counting found, one call to an unregistered method answered
+THREE times, is already fixed. What remains is protocol design — folding initial headers into
+the first response, Trailers-Only, a binary header encoding — and that is the owner's, not a
+round's.
 
 ## Owner decision — what is left is protocol
 

@@ -1,5 +1,6 @@
 ---
-status: awaiting owner
+status: decided by owner (round 540)
+release: breaking
 round: 502
 commit: 33551cce
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
@@ -64,8 +65,33 @@ which the `CONTROL bidi, 1 request message` arm reads as 2 instead of 5.
 
 ## Owner decision
 
-**The per-method/global half. Measured and unchanged: `global: 5` with `perMethod: {'Feed.hot': 1000}` admits
-100 of 100 calls to `Feed.hot`.** The global cap does not apply.
+**DECIDED in the round-540 review: `global` must be a CEILING** — checked always, in addition
+to whichever specific counter matched. The code changes; the doc that described the old
+behaviour changes with it.
+
+The argument: the word means what it says. An operator who sets `global` as a last line of
+defence does not have one today, and a generous `perMethod` beside it turns that into a DoS
+surface rather than a naming quibble.
+
+**BREAKING for anyone who has both set**, and in the direction that starts REFUSING traffic
+that flows today — which is the worse direction for a surprise. The CHANGELOG line has to be
+explicit that a configuration which worked will now reject, and say how to get the old
+behaviour (raise `global`, or drop it).
+
+**What the round owes.** The witness is the measured arm inverted: `global: 5` with
+`perMethod: {'Feed.hot': 1000}` must now admit 5 of 100, not 100 of 100. Two canaries, because
+this fix can overshoot in two ways: a call matching only `global` must still be admitted at the
+global rate, and a `perMethod` STRICTER than `global` must still be the binding one.
+
+**Read the eviction case first.** The note below records that the counter is re-resolved per
+message deliberately, to rebind after an eviction; a change here that touches resolution order
+has to keep that working.
+
+---
+
+The measurement this decision rests on, unchanged: **`global: 5` with
+`perMethod: {'Feed.hot': 1000}` admits 100 of 100 calls to `Feed.hot`.** The global cap does
+not apply.
 
 **But the class doc states this as the contract, in words:** *`perMethod[key]` >
 `perService[key]` > `perKeyFallback[key:method]` > [global] — the first that

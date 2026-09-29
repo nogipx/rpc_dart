@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-08
 bench: P-173 — new
 commit: yes
+release: changelog
 ---
 
 # Round 540 — the value that never left

@@ -109,7 +109,7 @@ Chrome. One had booted earlier in the same session.
 
 > **The lens applies to the round, not only to the code.** Its whole point is
 > that compiling is not running; a round that stops at compiling and ships
-> anyway has failed its own detector. `../backlog/B-38-ios-recv-loop-dies-silently.md`
+> anyway has failed its own detector. `../backlog/archive/B-38-ios-recv-loop-dies-silently.md`
 > holds the patch so the next round with a device spends its time measuring
 > rather than rediscovering.
 

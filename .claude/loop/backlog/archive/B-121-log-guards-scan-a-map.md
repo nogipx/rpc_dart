@@ -69,7 +69,7 @@ more machinery for ~11 ns.
 and the noop's `isInternal` is a literal `false`. What this fixes is the instrumented
 build with overrides configured, which is the case the guard exists for.
 
-## Still open, not measured
+## Split out to B-205 — not measured
 
 `child()` and `withContext()` allocate a new scope and concatenate names per call, at
 `UnaryCaller`, `StreamProcessor`, `CallProcessor` and `_cacheContext`. Nothing was

@@ -77,7 +77,7 @@ retained.
 The count check still runs first and keeps its own message, because many tiny headers
 is a different fault from too many bytes.
 
-## Still open
+## Split out to B-209
 
 **The two layers count different bytes.** `validateMetadata` counts header name and
 value text; `RpcChannelFrame` bounds the ENCODED blob, which includes the JSON

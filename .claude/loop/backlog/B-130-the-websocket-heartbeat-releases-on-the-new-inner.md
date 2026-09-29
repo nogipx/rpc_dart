@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: closed (round 540)
 round: 522
 commit: 7cdaabf6
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
@@ -51,6 +51,17 @@ a different claim: *"safe only because of X"* rather than *"broken"*.
 **So the one-line fix was NOT applied.** `final inner = _inner;` is obviously correct
 and has nothing to canary, and a change with no evidence behind it is the one thing
 the loop does not do.
+
+## DECIDED in the round-540 review: CLOSED, no change
+
+Nothing to observe, so nothing to canary — and a fix with no canary on a correct path is the
+shape this journal refuses. The structure is real and read correctly: the field IS re-read
+after the await. What makes it unwitnessable is another mechanism doing its job — id resume
+means the stale release names an id that was never minted.
+
+**What would reopen it**: any change to id resume, which is exactly the coupling this lead
+names. Whoever touches `resumeStreamIdsAfter` should read this record first — that is what it
+is for now.
 
 ## Owner decision
 

@@ -1,10 +1,11 @@
 ---
-status: closed (round 537)
+status: open
 round: 537
 commit: 6268a40a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
 probe: P-170
-reason: "first half REFUTED again (C-31 reproduced at today's sha: the read does stop, the 408 arrives, the same 384 KiB); second half CONFIRMED as a fact and HARMLESS — the drain throws StateError on the post-read paths and the status arrives regardless. Fixed so the transport stops attempting it and stops hiding the error"
+reason: "bench — REOPENED in the round-540 bookkeeping pass. Round 537 answered both filed claims (first REFUTED, second confirmed and harmless, fixed) and left `close()`'s drain, which the lead names in the same sentence and nothing has looked at. A closed lead's remainder is routed to by nothing"
+continuation: yes
 ---
 
 # B-141 — HTTP/1.1 responder: the body-read timeout does not stop the read, and `_reject`'s drain always fails

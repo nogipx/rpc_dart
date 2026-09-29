@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-08
 bench: P-159 — reused
 commit: yes
+release: breaking
 ---
 
 # Round 524 — the sum nobody was taking
