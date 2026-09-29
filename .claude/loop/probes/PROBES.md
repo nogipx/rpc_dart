@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-165](P-165-what-does-a-health-check-cost.md)** valid (round 532),
+  rpc_dart_websocket — **reads the noise and the ANSWER from one run**, because a fix can trade
+  one for the other and a server that went quiet by not answering would score perfectly on the
+  first. Counts error records inside a `LogController` subclass rather than off a filtered
+  record stream — the guard around a log call cannot be seen downstream of the filter. Its
+  control is ten real handshakes, without which `0 errors` is equally consistent with a counter
+  that counts nothing.
 - **[P-164](P-164-what-happens-to-a-connection-accepted-mid-shutdown.md)** valid (round 531),
   rpc_dart_websocket — **reads the KIND of ending, not a boolean**: refused, torn down, or
   never closed. A shutdown has two phases and each wrecks a connection differently, so one

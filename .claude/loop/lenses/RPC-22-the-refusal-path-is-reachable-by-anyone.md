@@ -3,7 +3,7 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397, 399, 400]
+applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397, 399, 400, 532]
 status: confirmed (round 397)
 ---
 
@@ -250,3 +250,26 @@ The cancellation is processed before the pipeline reaches dispatch.
 `../checked/C-32-rapid-reset-dispatches-nothing.md`. The CPU half of the CVE —
 HPACK decode and stream churn at a rate nothing bounds — is named there and not
 measured.
+
+**Round 532 — the refusal was correct and the REPORT was the cost.** A plain GET to
+the websocket port is answered 400, which is right, and dart:io's transformer then
+puts a `WebSocketException` on its output stream — the server's `connections` stream
+— so every one reached `onError`: an error-level record and an `onConnectionError`,
+at whatever rate the requester chooses. Ten GETs, ten of each, against a control of
+zero for ten real handshakes.
+`../probes/P-165-what-does-a-health-check-cost.md`, B-136.
+
+> **A refusal has a second output nobody budgets: the operator's log.** The lens's
+> usual question is what a refusal COSTS the server. Ask also what it WRITES —
+> anything an unauthenticated caller can make appear in an error log at its own rate
+> is the same shape, and the cheapest instance of it is a load balancer doing its
+> job.
+
+> **Measure the answer alongside the noise.** Silencing a report and removing it are
+> indistinguishable from the log side, and the second is worse. Every arm here reads
+> the status code the peer actually received.
+
+> **Fixing a reporting path can move a bound.** Rejecting non-upgrade requests
+> ourselves means DRAINING them ourselves, so a hold that existed only on servers
+> with a gate configured now exists on all of them. Bounded, and the same bound — but
+> the round that widens a surface owes the note.

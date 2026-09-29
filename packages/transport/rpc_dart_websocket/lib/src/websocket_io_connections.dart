@@ -64,28 +64,64 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   Set<String>? allowedOrigins,
   bool Function(HttpRequest request)? allowUpgrade,
 }) {
+  // Lower-cased ONCE. `_upgradeAllowed` ran `trim().toLowerCase()` over every
+  // configured origin on every handshake, which allocates a string per entry per
+  // connection to answer a question whose answer never changes.
+  final permittedOrigins = allowedOrigins
+      ?.map((origin) => origin.trim().toLowerCase())
+      .toSet();
+
   // Filtered BEFORE the transformer rather than after: once WebSocketTransformer
   // has upgraded the request the response is already committed, and the only
   // thing left to do would be to close a socket the peer believes is open.
-  final gated = allowedOrigins == null && allowUpgrade == null
-      ? server
-      : server.where((request) {
-          // This runs inside the accept loop's event handler, which is the ROOT
-          // ZONE: anything thrown here is an unhandled async error and kills
-          // the isolate -- unauthenticated, in one request. The origin read is
-          // safe now, but [allowUpgrade] is USER code and cannot be, so failing
-          // closed keeps a throwing predicate to a refused connection instead
-          // of a dead server.
-          bool allowed;
-          try {
-            allowed = _upgradeAllowed(request, allowedOrigins, allowUpgrade);
-          } catch (_) {
-            allowed = false;
-          }
-          if (allowed) return true;
-          _refuse(request);
-          return false;
-        });
+  //
+  // Unconditional, where this used to hand `server` straight through when no gate
+  // was configured. A non-upgrade request has to be caught here, and that is not
+  // a gate the caller opted into — see below.
+  final gated = server.where((request) {
+    // The GATE comes first, and the shape check second. A forbidden origin is
+    // told 403 whatever the request looked like -- that is the contract
+    // `origin_guard_test` pins, and reversing the two answers a cross-origin
+    // probe 400 instead, which says "wrong shape" about a request that was
+    // refused on identity.
+    //
+    // This runs inside the accept loop's event handler, which is the ROOT
+    // ZONE: anything thrown here is an unhandled async error and kills
+    // the isolate -- unauthenticated, in one request. The origin read is
+    // safe now, but [allowUpgrade] is USER code and cannot be, so failing
+    // closed keeps a throwing predicate to a refused connection instead
+    // of a dead server.
+    if (permittedOrigins != null || allowUpgrade != null) {
+      bool allowed;
+      try {
+        allowed = _upgradeAllowed(request, permittedOrigins, allowUpgrade);
+      } catch (_) {
+        allowed = false;
+      }
+      if (!allowed) {
+        _answer(request, HttpStatus.forbidden, 'WebSocket upgrade refused');
+        return false;
+      }
+    }
+
+    // Answered HERE, because the transformer reports it as a STREAM ERROR.
+    // `_upgrade` sends 400 and then completes with a `WebSocketException`, which
+    // `bind` forwards to the output controller -- the server's `connections`
+    // stream -- so every one reaches `onError`: an error-level record and an
+    // `onConnectionError`, at whatever rate a load balancer probes. A health
+    // check is not an error, and nothing downstream can tell it from one.
+    //
+    // A probe sends no `Origin`, so it passes the gate above and lands here.
+    if (!WebSocketTransformer.isUpgradeRequest(request)) {
+      _answer(
+        request,
+        HttpStatus.badRequest,
+        'Expected a WebSocket upgrade request',
+      );
+      return false;
+    }
+    return true;
+  });
 
   return gated
       .transform(
@@ -102,12 +138,13 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
       });
 }
 
+/// [permittedOrigins] is already trimmed and lower-cased by the caller.
 bool _upgradeAllowed(
   HttpRequest request,
-  Set<String>? allowedOrigins,
+  Set<String>? permittedOrigins,
   bool Function(HttpRequest request)? allowUpgrade,
 ) {
-  if (allowedOrigins != null) {
+  if (permittedOrigins != null) {
     // `headers[...]`, not `headers.value(...)`: dart:io's `value()` THROWS
     // HttpException when a header carries more than one value, and this runs
     // in the root zone (see the caller).
@@ -121,44 +158,48 @@ bool _upgradeAllowed(
       // origin to their own and walk straight through the check.
       if (origins.length > 1) return false;
       final normalized = origins.single.trim().toLowerCase();
-      final permitted = allowedOrigins.any(
-        (allowed) => allowed.trim().toLowerCase() == normalized,
-      );
-      if (!permitted) return false;
+      if (!permittedOrigins.contains(normalized)) return false;
     }
   }
   if (allowUpgrade != null && !allowUpgrade(request)) return false;
   return true;
 }
 
-/// How long a refused request's body is drained before the peer is cut off.
+/// How long a rejected request's body is drained before the peer is cut off.
 ///
-/// Not a knob: a client that has just been told 403 has no reason to be sending
-/// a slow body, so there is nothing here for an operator to tune. Generous
-/// enough that an ordinary body finishes.
+/// Not a knob: a client that has just been told 403 or 400 has no reason to be
+/// sending a slow body, so there is nothing here for an operator to tune.
+/// Generous enough that an ordinary body finishes.
 const Duration _refusalDrainBudget = Duration(seconds: 5);
 
-void _refuse(HttpRequest request) {
-  unawaited(_drainThenRefuse(request));
+void _answer(HttpRequest request, int status, String message) {
+  unawaited(_drainThenAnswer(request, status, message));
 }
 
-/// Drains [request] under a deadline, then answers 403.
+/// Drains [request] under a deadline, then answers [status].
 ///
 /// Draining is necessary: dart:io tears the connection down before the status
-/// is flushed if the request body is left unread, which turns a clean 403 into
-/// a SocketException at the peer.
+/// is flushed if the request body is left unread, which turns a clean answer
+/// into a SocketException at the peer.
 ///
 /// It is also the cheapest attack on this file, so the drain is BOUNDED:
-/// `_refuse` is `unawaited`, so the accept loop takes the next connection at
+/// [_answer] is `unawaited`, so the accept loop takes the next connection at
 /// once and any number of these run in parallel, counted by nothing. A socket
 /// that promises a body and then sends five bytes holds one for as long as it
-/// likes. Reachable exactly on the servers that turned the origin check on,
-/// because `_upgradeAllowed` gates EVERY request while an upgrade-shaped one
-/// carries no body to stall on.
+/// likes.
+///
+/// Reachable on EVERY server now, not only those with a gate configured: a
+/// non-upgrade request is rejected here too, and a non-upgrade request is the only
+/// kind that carries a body at all (dart:io hands a connection-upgrade request
+/// none). The bound is what makes that acceptable, and it is the same bound.
 ///
 /// The subscription is CANCELLED on expiry: a `.timeout()` on the drain future
 /// would answer while the read loop kept running.
-Future<void> _drainThenRefuse(HttpRequest request) async {
+Future<void> _drainThenAnswer(
+  HttpRequest request,
+  int status,
+  String message,
+) async {
   // Object? rather than the element type, so this file needs no dart:typed_data
   // import; StreamSubscription is covariant.
   StreamSubscription<Object?>? sub;
@@ -172,9 +213,9 @@ Future<void> _drainThenRefuse(HttpRequest request) async {
     await sub?.cancel();
   }
   try {
-    request.response.statusCode = HttpStatus.forbidden;
+    request.response.statusCode = status;
     request.response.headers.contentType = ContentType.text;
-    request.response.write('WebSocket upgrade refused');
+    request.response.write(message);
     await request.response.close();
   } catch (_) {
     // The peer is gone, or the response was already committed. Either way there
