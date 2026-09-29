@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533]
+applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533, 536]
 status: confirmed (round 499)
 ---
 
@@ -321,3 +321,33 @@ half it did not: a connect that never arrives.
 > `connectionTimeout` removed — because each left the other mechanism standing. Only
 > reverting to the SHARED client failed. Ablate the thing you claim, and if it passes,
 > suspect the claim before the rig.
+
+**Round 536 — a teardown that freed the ACCOUNTING and not the work.** The third form
+of this lens in seven rounds: 530 found work queued behind a bounded wait, 533 a timeout
+with nothing to cancel, and here `releaseStreamId` on the HTTP/1.1 caller removed
+`_pending`, `_activeStreams` and the id while the POST and the body read ran to
+completion.
+
+    call abandoned at 300ms    40 of 40 chunks written    server finished
+    CONTROL not abandoned      40 of 40 chunks written    server finished
+
+`../probes/P-169-does-abandoning-a-call-stop-the-download.md`, B-140.
+
+> **When both arms agree, that IS the finding — provided the arms differ.** Two
+> identical rows usually mean a broken rig (round 531 hit exactly that). Here they mean
+> abandoning changed nothing, and what makes the difference legible is that the control
+> separates AFTER the fix: `21 of 40 / not finished` against `40 of 40 / finished`.
+
+> **Read the abandoned side from the OTHER end.** A dropped future reports nothing
+> locally whether the work stopped or not, so the client cannot answer the question at
+> all. The server's own progress can.
+
+> **Freeing a slot without stopping the work inverts the limit.** `maxActiveStreams` is
+> returned by the same call that abandons the socket, so a cancelling client gets its
+> concurrency back while still holding the connection — the ceiling stops bounding real
+> sockets exactly when it matters most.
+
+> **Cancellation must report NOTHING.** The abort is this side's own doing, so it gets
+> its own catch branch above the general handler. Surfacing it would answer a stream the
+> endpoint has stopped listening to, and logging it at error would make ordinary
+> teardown look like breakage — which is the guard, and it is as load-bearing as the fix.

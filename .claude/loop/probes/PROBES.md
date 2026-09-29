@@ -38,6 +38,12 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-169](P-169-does-abandoning-a-call-stop-the-download.md)** valid (round 536),
+  rpc_dart_http — **reads the abandoned side from the OTHER end**, because a dropped future reports
+  nothing locally whether the work stopped or not: the server streams a long response and records how
+  far it got and whether it finished. Two readings, since "wrote fewer" alone also describes a server
+  that crashed. Its control (a call nobody abandons) is identical BEFORE the fix — which is the finding
+  — and separates after it, which is what says the transport still completes ordinary calls.
 - **[P-168](P-168-what-does-a-clean-close-cost.md)** valid (round 535),
   rpc_dart_websocket — **its control is the SDK doing the same thing with none of our code in the
   way**, which is what lets a zero be read as "this line costs nothing" rather than as a broken

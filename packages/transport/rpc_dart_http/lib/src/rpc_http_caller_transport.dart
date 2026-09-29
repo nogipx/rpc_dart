@@ -282,9 +282,27 @@ class RpcHttpCallerTransport
     return streamId;
   }
 
+  /// Abort triggers for requests currently on the wire, one per stream.
+  ///
+  /// Releasing an id used to free bookkeeping ONLY: the POST and the body read
+  /// carried on to the end, so a cancelled or timed-out call kept its socket and
+  /// its bandwidth until the server finished — measured at the server, which wrote
+  /// every chunk of a long response after the client had abandoned it. The
+  /// `maxActiveStreams` slot is returned at the same moment, so the ceiling stops
+  /// bounding real sockets exactly when it matters most.
+  ///
+  /// `package:http`'s [http.Abortable] is what makes the request itself
+  /// cancellable; completing the trigger is what [releaseStreamId] now does.
+  final Map<int, Completer<void>> _abortTriggers = {};
+
   @override
   bool releaseStreamId(int streamId) {
     _pending.remove(streamId);
+    // Stops the request, not just the bookkeeping. Removed as well as completed:
+    // the entry's only purpose is this one signal, and `_fireRequest`'s `finally`
+    // cannot be relied on to have run yet.
+    final abort = _abortTriggers.remove(streamId);
+    if (abort != null && !abort.isCompleted) abort.complete();
     _activeStreams.remove(streamId);
     return _idManager.releaseId(streamId);
   }
@@ -362,7 +380,16 @@ class RpcHttpCallerTransport
 
     final uri = Uri.parse('$_baseUrl${call.methodPath}');
     try {
-      final request = http.Request('POST', uri);
+      // ABORTABLE, so abandoning the call abandons the work. See
+      // [_abortTriggers]. The trigger is registered before the send, because
+      // `releaseStreamId` can land on the very next turn.
+      final abort = Completer<void>();
+      _abortTriggers[streamId] = abort;
+      final request = http.AbortableRequest(
+        'POST',
+        uri,
+        abortTrigger: abort.future,
+      );
       request.headers[RpcHeaders.contentType] = 'application/grpc+proto';
       // Required by gRPC-over-HTTP/1.1 to signal trailer support.
       request.headers['te'] = 'trailers';
@@ -520,6 +547,16 @@ class RpcHttpCallerTransport
           isEndOfStream: true,
         ),
       );
+    } on http.RequestAbortedException {
+      // The call was abandoned BY THIS SIDE, so there is nobody left to tell and
+      // nothing went wrong: `releaseStreamId` is the only thing that completes the
+      // trigger, and whoever called it has already torn the call down. Reporting
+      // it would answer a stream the endpoint has stopped listening to, and
+      // logging it at error would make every ordinary cancellation look like a
+      // failure.
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal('HTTP request aborted [streamId: $streamId]');
+      }
     } catch (e, st) {
       _logger?.error(
         'HTTP request failed for [streamId: $streamId]',
@@ -528,6 +565,7 @@ class RpcHttpCallerTransport
       );
       _emitError(streamId, _asRpcStatus(e, call.methodPath), st);
     } finally {
+      _abortTriggers.remove(streamId);
       _inFlight.remove(streamId);
       // The second give-back, matching both siblings: core prunes on a terminal
       // inbound frame as well as in releaseStreamId, and http2 removes at four
