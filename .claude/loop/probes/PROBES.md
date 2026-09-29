@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-162](P-162-what-status-does-each-ending-give.md)** valid (round 528),
+  rpc_dart_websocket — **drives the ENDINGS, not the codes.** Which code a mapping table
+  should give is unanswerable from the table; the question is which code a real failure
+  actually produces, and one of them does not come from the peer at all. Its reset arm
+  PRODUCES an RST (Dart has no SO_LINGER, so it relays bytes, stops draining, then destroys
+  a socket with unread bytes queued) and **asserts the close code it got**, so a rig that
+  degraded to FIN cannot read as a pass. Controls: a code the peer really sent, and a clean
+  goodbye. Note it does not EXIT — the table prints and the process hangs, so piping it
+  through `tail` shows nothing.
 - **[P-161](P-161-does-a-stale-id-reach-the-new-socket.md)** valid (round 527),
   rpc_dart_websocket — **puts the same question to a GUARDED operation and an unguarded
   one, for the same stale id at the same moment**, and varies the one thing the guard

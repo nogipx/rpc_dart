@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 528)
+round: 528
+commit: f53f3c46
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-162
+reason: "CONFIRMED in both halves and FIXED. dart:io sets 1002 on any socket error, so a TCP reset was non-retryable INTERNAL naming a peer that said nothing; and a raw channel error reached the caller as the channel package's own exception type"
 ---
 
 # B-132 — websocket: a local connection reset surfaces as INTERNAL "closed by peer 1002"
@@ -26,14 +26,37 @@ Dart:io sets close code 1002 itself on a socket error (to verify on the SDK); 10
 The commonest network failure, a TCP reset, becomes INTERNAL (final) instead of
 UNAVAILABLE (retryable).
 
-## Witness a round would build
+## What round 528 measured
 
-Kill the server process mid-call (RST) and read the caller's status; check
-`WebSocket.closeCode` in dart:io's `_WebSocketImpl` for the error path.
+```
+  how                            closeCode   the call got
+  TCP RESET mid-call             1002        status 13 — WebSocket closed by peer with code 1002
+  CONTROL peer vanishes (FIN)    1005        status 14 — The stream closed before the peer sent a status
+  CONTROL peer closes 1001       1001        status 14 — The stream closed before the peer sent a status
+  CONTROL peer closes 1011       1011        status 13 — WebSocket closed by peer with code 1011: server fault
+  raw channel error (the web path)           raw WebSocketChannelException
+```
 
-## Fix sketch
+Bench `../probes/P-162-what-status-does-each-ending-give.md`. The reset is produced, not
+simulated: Dart has no SO_LINGER, so the rig relays bytes, stops draining the client, then
+destroys the socket — closing with unread bytes in the receive queue is what sends RST.
 
-Map local-error closes and raw channel errors to UNAVAILABLE.
+**Mechanism read from the SDK.** `websocket_impl.dart`'s socket `onError` calls
+`_close(WebSocketStatus.protocolError)`, assigns it to `_closeCode` and closes the controller
+WITHOUT an error, so a socket failure is indistinguishable from a protocol close. And this
+library never sends 1002 itself (its own framing-violation code is 4400), so between two
+rpc_dart peers the local path is the only source.
+
+## Fix
+
+1002 moved to `unavailable` with the platform reason recorded next to it, and the message no
+longer names the peer for that one code — every other code reaching that point was sent by
+the peer. `onError` wraps a non-`RpcException` in `RpcStatusException(unavailable, ...)`;
+`RpcException`s pass through so the advisory non-binary-frame report is not turned into a
+dead connection.
+
+**Loosens one thing**: a peer that genuinely sends 1002 is now retried, bounded by the retry
+policy. Behaviour change on a published package — wants a CHANGELOG line at release.
 
 ## Owner decision
 

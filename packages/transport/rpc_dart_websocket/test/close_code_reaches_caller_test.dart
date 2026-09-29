@@ -158,13 +158,21 @@ void main() {
         grpcStatusFromWebSocketCloseCode(1009),
         RpcStatus.resourceExhausted,
       );
-      for (final code in [1002, 1003, 1007, 1010, 1011]) {
+      for (final code in [1003, 1007, 1010, 1011]) {
         expect(
           grpcStatusFromWebSocketCloseCode(code),
           RpcStatus.internal,
           reason: 'close $code is a protocol or server fault',
         );
       }
+      // 1002 is deliberately NOT in that list, and the reason is a platform
+      // one: dart:io closes with it on any socket error, so it is what a TCP
+      // reset looks like. See the mapping's own doc.
+      expect(
+        grpcStatusFromWebSocketCloseCode(1002),
+        RpcStatus.unavailable,
+        reason: 'a reset must be retryable',
+      );
       // Private/library ranges carry no agreed meaning.
       expect(grpcStatusFromWebSocketCloseCode(3001), RpcStatus.unknown);
       expect(grpcStatusFromWebSocketCloseCode(4001), RpcStatus.unknown);

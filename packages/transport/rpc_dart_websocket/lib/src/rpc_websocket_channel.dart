@@ -23,17 +23,25 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///   default interceptor and the resend fails identically; set `retryOn` if
 ///   that matters. The semantically correct code is preferred over hiding it
 ///   as INTERNAL.
-/// - 1002/1003/1007/1010/1011 are protocol or server faults: `internal`, NOT
-///   retried.
+/// - 1003/1007/1010/1011 are protocol or server faults: `internal`, NOT retried.
+/// - 1002 protocol error is `unavailable` — a PLATFORM fact, not what RFC 6455
+///   says. dart:io answers any socket error on an open WebSocket by closing with
+///   `WebSocketStatus.protocolError`, so a TCP reset arrives here as 1002 with
+///   the peer having said nothing at all; and this library never sends 1002
+///   itself (see `_protocolErrorCloseCode`), so between two rpc_dart peers it is
+///   ALWAYS the local error path. Reading it as the peer's judgement makes the
+///   commonest transient network failure non-retryable. The rare genuine case
+///   costs a bounded number of retries and then the same failure.
 /// - 3000-4999 are library/application codes with no fixed meaning, so
 ///   `unknown`. Same rule as `grpcStatusFromHttpStatus`.
 int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
   null => RpcStatus.unavailable,
   1000 || 1001 || 1005 || 1006 => RpcStatus.unavailable,
+  1002 => RpcStatus.unavailable,
   1012 || 1013 || 1014 => RpcStatus.unavailable,
   1008 => RpcStatus.permissionDenied,
   1009 => RpcStatus.resourceExhausted,
-  1002 || 1003 || 1007 || 1010 || 1011 => RpcStatus.internal,
+  1003 || 1007 || 1010 || 1011 => RpcStatus.internal,
   _ => RpcStatus.unknown,
 };
 
@@ -129,7 +137,25 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
         }
       },
       onError: (Object e) {
-        if (!_incoming.isClosed) _incoming.addError(e);
+        if (_incoming.isClosed) return;
+        // A raw error here is a TRANSPORT failure and has to arrive as a status,
+        // or nothing above can act on it: a retry interceptor keys off the gRPC
+        // code and an application catching `RpcStatusException` never sees this
+        // at all. It is the web path — `HtmlWebSocketChannel` reports a socket
+        // failure as an error on the stream where dart:io reports a close — so
+        // the same failure must reach a caller the same way on both.
+        //
+        // `RpcException`s pass through: the advisory non-binary-frame report
+        // above is one, and wrapping it would make a discarded frame look like a
+        // dead connection.
+        _incoming.addError(
+          e is RpcException
+              ? e
+              : RpcStatusException(
+                  RpcStatus.unavailable,
+                  'WebSocket connection failed: $e',
+                ),
+        );
       },
       onDone: () {
         // Report WHY the peer went away before tearing the pipe down. Without
@@ -154,11 +180,18 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
             code == 1005 ||
             code == 1006;
         if (!_closed && !saidNothing && !_incoming.isClosed) {
+          final reason = _ws.closeReason;
+          final tail = reason == null || reason.isEmpty ? '' : ': $reason';
           _incoming.addError(
             RpcStatusException(
               grpcStatusFromWebSocketCloseCode(code),
-              'WebSocket closed by peer with code $code'
-              '${_ws.closeReason == null || _ws.closeReason!.isEmpty ? '' : ': ${_ws.closeReason}'}',
+              // Every code reaching this point was sent by the peer EXCEPT 1002,
+              // which dart:io also invents for a local socket error -- so naming
+              // the peer there sends a reader after something that never
+              // happened. See [grpcStatusFromWebSocketCloseCode].
+              code == 1002
+                  ? 'WebSocket connection failed with code 1002$tail'
+                  : 'WebSocket closed by peer with code $code$tail',
             ),
           );
         }
