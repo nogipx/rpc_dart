@@ -555,11 +555,19 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         );
       }
     } catch (e, stackTrace) {
-      _logger.error(
-        'Request processing failed [streamId: $streamId]',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      // A handler that THROWS a status is answering, not failing: NOT_FOUND is
+      // the documented way to say "no such record". Only a genuine fault, or a
+      // throw carrying no status at all, is an incident worth an error record.
+      final code = e is RpcStatusException ? e.statusCode : null;
+      if (code == null || RpcStatus.isFault(code)) {
+        _logger.error(
+          'Request processing failed [streamId: $streamId]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      } else if (_logger.isDebug) {
+        _logger.debug('Handler answered $code: $e [streamId: $streamId]');
+      }
 
       // Send initial headers if not already sent.
       if (!state.initialHeadersSent) {

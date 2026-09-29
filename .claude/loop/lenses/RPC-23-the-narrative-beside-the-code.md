@@ -3,7 +3,7 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515]
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516]
 status: confirmed (round 490)
 ---
 
@@ -641,3 +641,33 @@ proportional to how widely it is followed.
 > and say what the next attempt should do differently.
 
 `../rounds/515-the-rig-never-reached-the-warning.md`, B-124, B-121.
+
+## A level is a CLAIM, and the code can contradict its own taxonomy (round 516)
+
+The same lens on what an `error` record asserts. Three sites logged at `error` on the
+SHAPE of the control flow — the handler threw, so `catch` ran — while the project has
+a status taxonomy saying what the throw MEANT. NOT_FOUND is how a gRPC handler reports
+a missing record, so a correct answer produced three error records: `caller 2,
+responder 1`.
+
+**So treat a log LEVEL as a claim to be checked against the project's own
+vocabulary.** `error` asserts "something is broken". Where the code already has a way
+of saying what happened — a status enum, an exception hierarchy — a level chosen by
+control flow will contradict it, and the contradiction is invisible because both
+sides look locally correct.
+
+> **When you add a classifier, check whether a sibling already classifies the same
+> values — and then make them differ ON PURPOSE.** `RpcStatus.isFault` is narrower
+> than round 501's `_isServerHealthFailure`: a breaker asks "is this endpoint in
+> trouble", a log level asks "did something break", and DEADLINE_EXCEEDED answers the
+> first and not the second. A guard pins the difference, because the natural later
+> edit is to "unify" them and start paging on a slow server.
+
+> **For a silencing fix, the controls must run the other way.** Both witnesses here
+> assert that nothing is logged — which silencing everything would satisfy perfectly.
+> INTERNAL and a status-less `StateError` are what make the round mean anything, and
+> the status-less case is its own arm because an unclassifiable failure must not fall
+> through a "not a fault" branch.
+
+`../probes/P-153-what-an-application-status-logs.md`,
+`../rounds/516-an-answer-that-read-as-an-incident.md`, B-124.

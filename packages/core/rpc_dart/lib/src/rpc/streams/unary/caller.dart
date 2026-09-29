@@ -334,10 +334,20 @@ final class UnaryCaller<TRequest, TResponse> {
                       message.metadata!,
                       code,
                     );
-                    _logger.error(
-                      'gRPC error: $code - ${error.message} '
-                      '[streamId: $streamId]',
-                    );
+                    // A handler answering NOT_FOUND is a working server, so the
+                    // level follows the STATUS: `error` only for a genuine
+                    // fault, `debug` for an application's answer.
+                    if (RpcStatus.isFault(code)) {
+                      _logger.error(
+                        'gRPC error: $code - ${error.message} '
+                        '[streamId: $streamId]',
+                      );
+                    } else if (_logger.isDebug) {
+                      _logger.debug(
+                        'Call answered $code - ${error.message} '
+                        '[streamId: $streamId]',
+                      );
+                    }
                     completer.completeError(error);
                   } else if (hasPendingResponse) {
                     if (_logger.isInternal) {
@@ -597,11 +607,18 @@ final class UnaryCaller<TRequest, TResponse> {
         },
       );
     } catch (e, stackTrace) {
-      _logger.error(
-        'Unary call $_methodPath failed [streamId: $streamId]',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      // The trailer branch above already reported a status it received, so this
+      // logged the SAME failure a second time — two error records on the caller
+      // for one answer. Report here only what that branch cannot see: a failure
+      // with no status of its own, or a genuine fault.
+      final code = e is RpcStatusException ? e.statusCode : null;
+      if (code == null || RpcStatus.isFault(code)) {
+        _logger.error(
+          'Unary call $_methodPath failed [streamId: $streamId]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
       rethrow;
     } finally {
       // Always cancel response stream subscription.

@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-153](P-153-what-an-application-status-logs.md)** valid (round 516),
+  rpc_dart — **counts by overriding `LogController.add`, which is the method round
+  515 paid for**: `LogScope.child()` returns a plain scope, so a subclass override is
+  lost wherever code derives one, and both endpoints here do. Prints the SCOPE and
+  MESSAGE, not just a count — that is what showed the caller's two records came from
+  different sites rather than one firing twice. **Two of its three controls run the
+  other way**: INTERNAL and a bare `StateError` must still log, because silencing
+  everything would pass the witness perfectly.
 - **[P-152](P-152-how-long-does-a-drain-take.md)** valid (round 514),
   rpc_dart — a poll interval is invisible in any measurement that lets the work take
   longer than the interval, so the handler parks on a completer and the moment it

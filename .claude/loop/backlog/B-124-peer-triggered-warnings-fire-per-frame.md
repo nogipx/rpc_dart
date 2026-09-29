@@ -56,7 +56,37 @@ Rig: `packages/core/rpc_dart/.dart_tool/probe/b124_peer_warning_flood.dart`.
 hand-building one — drive it from an `RpcCallerEndpoint` doing something malformed, or
 find which layer drops it first by instrumenting the channel.
 
-## Take the double-logging half FIRST
+## Round 516 took the double-logging half — CONFIRMED and fixed
+
+```
+                               caller   responder      after
+a handler throws NOT_FOUND        2          1         0 / 0
+a call that succeeds              0          0         0 / 0   <- control
+a handler throws INTERNAL         2          1         2 / 1   <- control
+a handler throws StateError       2          1         2 / 1   <- control
+```
+
+Three `error` records for a server answering correctly. The caller's two came from
+DIFFERENT sites — the non-OK trailer branch and the surrounding `catch` — which is
+what the printed scope and message made visible.
+
+`RpcStatus.isFault` now names the codes that mean something broke (UNKNOWN, INTERNAL,
+UNAVAILABLE, DATA_LOSS) and the three sites consult it; a throw with no status counts
+as a fault, since an unclassifiable failure is not an application answering.
+**Deliberately narrower than `RpcCircuitBreakerInterceptor`'s health set** from round
+501, which also counts DEADLINE_EXCEEDED and RESOURCE_EXHAUSTED — a breaker asks "is
+this endpoint in trouble", this asks "did something break", and a slow server is not a
+broken one. A guard pins the difference.
+
+**Still not fixed: the caller logs twice for a genuine FAULT** (`caller 2` for
+INTERNAL). The two records carry different information — status and message versus
+method path and stack trace — so collapsing them loses something and needs a decision
+about which site owns the report.
+
+**And the streaming shapes are untouched**: `StreamProcessor.sendError` logs every
+status sent at `error` and was not varied.
+
+## The flooding half is what remains
 
 It needs no peer-reachability argument. `StreamProcessor.sendError` logs every status
 sent at `error`, and `UnaryCaller` logs a failed call at `error` twice — so an

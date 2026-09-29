@@ -77,6 +77,25 @@ abstract interface class RpcStatus {
 
   /// Unauthenticated.
   static const int unauthenticated = 16;
+
+  /// Whether [status] means something went WRONG, as opposed to a server
+  /// answering a request it understood.
+  ///
+  /// This is a LOGGING question, not a control-flow one: a handler returning
+  /// NOT_FOUND is a working server, and logging it at `error` makes an ordinary
+  /// answer read as an incident on both sides of the call. The faults below are
+  /// the ones an operator should be paged about — a crashed handler, a peer that
+  /// cannot be reached, corrupted data.
+  ///
+  /// Deliberately NARROWER than `RpcCircuitBreakerInterceptor`'s server-health
+  /// set, which also counts DEADLINE_EXCEEDED and RESOURCE_EXHAUSTED: a breaker
+  /// asks "is this endpoint in trouble", where this asks "did something break".
+  /// A slow or throttled server is not broken, and a log line saying so is noise.
+  static bool isFault(int status) =>
+      status == unknown ||
+      status == internal ||
+      status == unavailable ||
+      status == dataLoss;
 }
 
 /// Packs and unpacks the 5-byte gRPC message prefix: one compression-flag byte
