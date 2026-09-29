@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512]
 status: confirmed (round 489)
 ---
 
@@ -353,3 +353,40 @@ it anyway — the number is what makes the decision possible.
 
 `../probes/P-149-what-the-id-draws-cost-a-call.md`,
 `../rounds/511-forty-per-cent-of-a-call-is-entropy.md`, B-120.
+
+## The work that exists to AVOID work (round 512)
+
+The sharpest version of this lens's question. `if (_log.isInternal)` is prescribed
+around every interpolating log call, and `CLAUDE.md` calls it "a bool read". It walked
+every configured scope override with a `startsWith`: `235.5 ns` at twenty overrides
+against a real bool read's `1.8 ns`.
+
+**So when a guard exists to be cheaper than what it guards, measure it against what it
+is CLAIMED to be, not against what it guards.** It will always beat the thing it
+avoids; that is not the question. The question is whether it is what the surrounding
+convention promises, because that promise is why it was put at hundreds of sites.
+
+> **The control has to be the claimed thing, literally.** `LogScope.noop`'s
+> `isInternal` is a literal `false`, so it measures the bool read the doc describes.
+> It gave the 235 a scale AND kept the round honest afterwards: the fix reaches
+> 12.6 ns, which is 7x a bool read, not 1x, so the convention's wording is still not
+> true and the record says so.
+
+> **The same control says who was paying.** The library's idiom is
+> `_log = logger ?? LogScope.noop`, so an application configuring no logger got the
+> 1.8 ns path everywhere. A round that reported "235 ns per guard, hundreds of sites"
+> without that would be describing a cost almost nobody paid.
+
+**A cache is a fix that adds a risk the defect did not have, so it needs TWO
+ablations.** Bypass the cache: the bench returns and — the useful part — every test
+still passes, because the slow version was correct, which is what proves they are all
+guards. Then remove the invalidation: the staleness tests fail, which is what proves
+they guard the new risk. A round doing only the first would ship a cache with
+untested invalidation.
+
+And look for the configuration field with no setter to hook. `minLevel` here is a
+public mutable field; the cache remembers which value it was built under rather than
+requiring an API change.
+
+`../probes/P-150-what-the-log-guard-costs.md`,
+`../rounds/512-the-guard-that-was-not-a-bool-read.md`, B-121.

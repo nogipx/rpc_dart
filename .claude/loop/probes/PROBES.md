@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-150](P-150-what-the-log-guard-costs.md)** valid (round 512),
+  rpc_dart — **its control is `LogScope.noop`, whose `isInternal` is a literal
+  `false`**, which is what a real bool read costs on this machine; without it "235 ns"
+  has no scale, and with it the round could say honestly that its own fix reaches 7x
+  a bool read rather than 1x. The 20 overrides are deliberately NON-matching, which is
+  both the worst case for a longest-prefix scan and the ordinary one. Reported in
+  nanoseconds because microseconds would round the quantity away. The noop arm is also
+  the honest reminder that most deployments never pay this at all.
 - **[P-149](P-149-what-the-id-draws-cost-a-call.md)** valid (round 511),
   rpc_dart — **ablates the generator in place and re-times the whole call**, because a
   microbench of `Random.secure()` invites the objection that it is not measuring what

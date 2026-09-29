@@ -26,6 +26,30 @@ class LogController {
 
   final Map<String, RpcLogLevel> _scopeLevels = {};
   final Map<String, RpcLogLevel> _tagLevels = {};
+
+  /// Resolved level per scope name, so `isInternal` is a map read rather than a
+  /// scan of every override.
+  ///
+  /// The library's logging idiom guards every interpolating call with
+  /// `if (_log.isInternal)`, so this runs at hundreds of sites whether or not
+  /// logging is on, and its cost is proportional to how many overrides the
+  /// application configured.
+  ///
+  /// Keyed by SCOPE alone even though resolution also takes a tag: a tag override
+  /// is an O(1) map read taken before this cache is consulted, so when it misses
+  /// the answer depends on the scope only.
+  final Map<String, RpcLogLevel> _resolvedByScope = {};
+
+  /// [minLevel] is a public mutable field, so it can change with no hook to
+  /// invalidate anything. Remembering what the cache was built under makes that
+  /// one comparison per lookup instead of a correctness bug.
+  RpcLogLevel? _resolvedUnderMinLevel;
+
+  /// Bound on [_resolvedByScope]. Scope names are built by `child()`, which
+  /// concatenates, so a caller that creates many short-lived child scopes would
+  /// otherwise grow this without limit. Clearing wholesale rather than evicting
+  /// one entry keeps the lookup a plain map read.
+  static const int _maxResolvedScopes = 512;
   final List<LogOutput> _outputs;
   final List<LogEnricher> _enrichers;
   LogRedactor? _redactor;
@@ -59,11 +83,13 @@ class LogController {
   /// Set minimum level for a specific scope prefix.
   void setScopeLevel(String scope, RpcLogLevel level) {
     _scopeLevels[scope] = level;
+    _resolvedByScope.clear();
   }
 
   /// Remove scope-specific level override.
   void clearScopeLevel(String scope) {
     _scopeLevels.remove(scope);
+    _resolvedByScope.clear();
   }
 
   /// Set minimum level for a specific tag.
@@ -230,6 +256,14 @@ class LogController {
       if (tagLevel != null) return tagLevel;
     }
 
+    // Past the tag, the answer depends on the scope alone — so it can be cached.
+    if (_resolvedUnderMinLevel != minLevel) {
+      _resolvedByScope.clear();
+      _resolvedUnderMinLevel = minLevel;
+    }
+    final cached = _resolvedByScope[scope];
+    if (cached != null) return cached;
+
     // Check scope overrides (longest prefix match)
     RpcLogLevel? best;
     int bestLength = -1;
@@ -239,9 +273,13 @@ class LogController {
         bestLength = entry.key.length;
       }
     }
-    if (best != null) return best;
+    final resolved = best ?? minLevel;
 
-    return minLevel;
+    if (_resolvedByScope.length >= _maxResolvedScopes) {
+      _resolvedByScope.clear();
+    }
+    _resolvedByScope[scope] = resolved;
+    return resolved;
   }
 
   LogRecord _enrich(LogRecord record) {
