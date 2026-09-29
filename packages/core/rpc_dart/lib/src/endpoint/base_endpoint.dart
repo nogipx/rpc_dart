@@ -264,17 +264,13 @@ abstract base class RpcEndpointBase {
   /// Both middleware loops iterate a SNAPSHOT.
   ///
   /// The loop body awaits, so the list can be mutated between two `moveNext()`
-  /// calls, and both mutators are ordinary API: [close] does `_middlewares
-  /// .clear()` and [addMiddleware] appends. Iterating the list itself threw
-  /// `ConcurrentModificationError` into the in-flight call — a `StateError`, so the
-  /// caller got that instead of an RPC status:
-  ///
-  ///     close() while parked        ConcurrentModificationError (length:0)
-  ///     addMiddleware while parked  ConcurrentModificationError (length:2)
-  ///
-  /// One middleware is enough: the second `moveNext()` is the one that checks.
-  /// `.reversed` is a lazy view of the same list, so the response half needs the
-  /// copy just as much.
+  /// calls, and both mutators are ordinary API: [close] does
+  /// `_middlewares.clear()` and [addMiddleware] appends. Iterating the list
+  /// itself throws `ConcurrentModificationError` into the in-flight call — a
+  /// `StateError`, so the caller gets that instead of an RPC status. One
+  /// middleware is enough, because the `moveNext()` that ENDS the loop is the one
+  /// that checks, and `.reversed` is a lazy view of the same list rather than a
+  /// copy.
   ///
   /// The empty check is not just an optimisation for the common case — it is what
   /// keeps a call with no middleware free of a per-call allocation.
@@ -310,7 +306,23 @@ abstract base class RpcEndpointBase {
     return current;
   }
 
+  /// Both stream helpers hand the source back UNCHANGED when there is no
+  /// middleware, rather than wrapping it in an `async*` that forwards each
+  /// message: the wrapper costs a hop and an allocation per message to iterate
+  /// an empty list.
+  ///
+  /// **The middleware set is therefore fixed when the stream is BUILT**, which
+  /// is the same rule interceptors follow — their chain is built once,
+  /// synchronously, at call start.
   Stream<TRequest> _applyRequestMiddlewaresToStream<TRequest>(
+    RpcMiddlewareContext context,
+    Stream<TRequest> requests,
+  ) {
+    if (_middlewares.isEmpty) return requests;
+    return _mapRequests(context, requests);
+  }
+
+  Stream<TRequest> _mapRequests<TRequest>(
     RpcMiddlewareContext context,
     Stream<TRequest> requests,
   ) async* {
@@ -320,6 +332,14 @@ abstract base class RpcEndpointBase {
   }
 
   Stream<TResponse> _applyResponseMiddlewaresToStream<TResponse>(
+    RpcMiddlewareContext context,
+    Stream<TResponse> responses,
+  ) {
+    if (_middlewares.isEmpty) return responses;
+    return _mapResponses(context, responses);
+  }
+
+  Stream<TResponse> _mapResponses<TResponse>(
     RpcMiddlewareContext context,
     Stream<TResponse> responses,
   ) async* {

@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507]
+applied: [236, 279, 280, 350, 489, 506, 507, 509]
 status: confirmed (round 489)
 ---
 
@@ -292,3 +292,30 @@ having and should not be written up as if it were a fix to a hang.
 
 `../probes/P-145-what-the-receive-path-copy-costs.md`,
 `../rounds/507-the-copy-that-bought-nothing.md`, B-116.
+
+## A fix that empties a loop rarely removes it (round 509)
+
+Round 505 gave the scalar middleware helpers an `isEmpty` early return. Round 509
+found the `async*` STREAM wrappers around them still iterating an empty list once per
+message — the work inside the loop was gone, the loop was not. ~1.03 us per message,
+19%.
+
+**So after any "skip the work when there is nothing to do" fix, ask what still runs
+to discover there is nothing to do.** An early return inside a callback leaves the
+per-element machinery — the `async*`, the `await for`, the awaited call — entirely in
+place, and that machinery is usually the larger half.
+
+> **Such a fix often moves a decision from per-element to once, and that is a
+> contract change.** Bypassing the wrapper means `_middlewares` is read when the
+> stream is BUILT rather than per message, so a middleware added mid-stream no longer
+> joins the call. Write it as a test with the reasoning, not as a footnote — round
+> 505 had recorded the per-message re-read as *preserved, not decided*, which is
+> exactly the note that let 509 decide it deliberately.
+
+> **And two run sets are not a measurement.** The first comparison read `4.710`
+> against `5.763` medians and looked settled; the next set's median of `5.949` would
+> have reversed it. Report run-set MINIMA when noise only ever adds time, and collect
+> enough sets that the two never overlap.
+
+`../probes/P-147-what-an-empty-middleware-wrapper-costs.md`,
+`../rounds/509-the-wrapper-around-an-empty-list.md`, B-118.

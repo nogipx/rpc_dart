@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 509)
+round: 509
+commit: 61b4205a
 paths: [packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-147
+reason: "closed — the middleware half is CONFIRMED and fixed: ~1.03 us per message, 19%, for wrapping a stream to apply an empty list. The other layers named here are untouched and are where the remaining ~4.4 us lives; closed rather than split because they are a different change with no measurement behind them yet"
 ---
 
 # B-118 — streaming calls wrap every message in several async* layers even with no middleware
@@ -38,6 +38,44 @@ before and after a fast path.
 
 Return the stream unchanged when there are no middlewares; replace the no-op
 controllers with a direct call; collapse the bridge stack.
+
+## Outcome (round 509) — the middleware half
+
+**CONFIRMED and fixed.** Server stream of 10 000 tiny messages, run-set minima:
+
+```
+always wrapped      5.647 / 5.582 / 5.456           us/message
+bypassed if empty   4.438 / 4.564 / 4.419 / 4.520   us/message
+```
+
+About 1.03 us per message, ~19%. Round 505 had given the SCALAR helpers an `isEmpty`
+early return, which removed the work inside the loop but not the loop — the `async*`
+still iterated an empty list once per message.
+
+**It changes a contract**, stated as a test rather than left to be found: the
+middleware set is now fixed when the stream is BUILT, so one added mid-stream does
+not join the call. That matches interceptors, whose chain is built once and
+synchronously at call start. Round 505's record had noted the per-message re-read as
+preserved-not-decided; this is the decision.
+
+**Seven run sets were needed to say this.** Two read `4.710` against `5.763` medians
+and looked settled; the next fixed set's median was `5.949`, which would have
+reversed it. The minima never overlap and are the right statistic, since noise here
+only adds time.
+
+## Still open, not measured — a different change
+
+The remaining ~4.4 us per message lives in the layers this lead also names, none of
+which were varied: `handleServerStream`, `_withHandlerSlotStream`, `StreamBridge`,
+`_bridgeCallerResponses`, the bidi controller and its `.transform`, and the
+`StreamProcessor`/`CallProcessor` controllers that only a no-op listener reads.
+
+The lead also ties these to the dart2js cancel problems the bridges were added to
+work around — so collapsing the bridge stack is not only a cost question, and
+whatever touches it owes the web target a measurement.
+
+Closed rather than left open, because what remains is a different change with no
+measurement behind it yet; it should be filed fresh when someone has one.
 
 ## Owner decision
 

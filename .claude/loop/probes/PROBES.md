@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-147](P-147-what-an-empty-middleware-wrapper-costs.md)** valid (round 509),
+  rpc_dart — **the same FILE as P-146, registered under its own number**, because
+  round 508's bench already measured this exact quantity and rebuilding it would have
+  been the waste. Reports run-set MINIMA rather than medians, and says why: noise here
+  only ever adds time, so the floor is closest to the quantity. That mattered — two
+  run sets read `4.710` against `5.763` and looked conclusive, and the next set's
+  median of `5.949` would have reversed it; seven sets later the minima never overlap.
 - **[P-146](P-146-what-the-second-dispatch-costs.md)** valid (round 508),
   rpc_dart — **two files because the lead makes two claims needing different
   instruments**, and the one it leads with turned out to be the smaller. Retention is
