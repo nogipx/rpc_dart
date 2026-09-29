@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 533)
+round: 533
+commit: 53cc91a7
 paths: [packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-166
+reason: "CONFIRMED at one descriptor per abandoned attempt and FIXED by giving a bounded open its OWN HttpClient — which the ablation shows is the part that matters, not either of the settings on it"
 ---
 
 # B-137 — websocket connect timeout abandons the wait, not the TCP attempt
@@ -24,13 +24,33 @@ thing a round owes this lead, and it may refute it.
 
 Descriptor build-up under a reconnect loop against an unreachable host.
 
-## Witness a round would build
+## What round 533 measured
 
-Connect to a black-holed address 100 times with a 100 ms timeout; count open fds.
+```
+  baseline TCP fds                      0
 
-## Fix sketch
+  arm                                   settled as        TCP fds after
+  CONTROL 40 opens that SUCCEED and close   40 opened         1
+  40 opens to a BLACK HOLE             40 timed out      40
+```
 
-Pass `customClient: HttpClient()..connectionTimeout = connectTimeout`.
+Bench `../probes/P-166-does-a-timed-out-connect-hold-its-descriptor.md`. After: `0`.
+
+Counted with `lsof` from outside Dart — the process keeps working, the socket is invisible to
+Dart, and the attempt reports failure on time. The arm asserts its own premise (all forty settled
+as `TimeoutException`), and a missing `lsof` exits 2.
+
+## Fix
+
+The sketch works, and the ablation says why — but not for the reason the sketch gives.
+**Reverting the forced close to a plain one leaves the witness passing. Removing
+`connectionTimeout` leaves it passing. Passing the SHARED client fails it at 20 of 20.** So what
+matters is OWNING the client; the settings on it are belt-and-braces, and neither can be separated
+from the other because both bounds are the same duration.
+
+The client is closed on both exits: forced on failure, plain on success — where the upgraded
+socket has already been detached from it. Two guards bound that: a successful connect still answers
+an RPC after its client is closed, and an unbounded open (no private client) is unchanged.
 
 ## Owner decision
 

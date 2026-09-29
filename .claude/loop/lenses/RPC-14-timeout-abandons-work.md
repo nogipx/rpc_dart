@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433, 499, 514, 530]
+applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533]
 status: confirmed (round 499)
 ---
 
@@ -290,3 +290,34 @@ shutdown the SUM of N independent waits on N different peers:
 > futures on the first error, so the failure has to be caught PER item or a teardown
 > leaves work undone. And the witness needs an arm proving each item was still
 > REACHED: abandoning them is also fast.
+
+**Round 533 — the canonical shape, and the file's comment had already named it.**
+`openWebSocket`'s `connectTimeout` said out loud that `Future.timeout` abandons the
+AWAIT and not the WORK, then handled only the half where the work succeeds LATE. The
+half it did not: a connect that never arrives.
+
+    baseline TCP fds                              0
+    CONTROL 40 opens that succeed and close       1   (the local listener)
+    40 opens to a BLACK HOLE, 100ms timeout      40
+
+`../probes/P-166-does-a-timed-out-connect-hold-its-descriptor.md`, B-137.
+
+> **A comment that states the lens is not a fix for it.** This one is unusually good —
+> it names the mechanism and cites where core learned it — and it covered one of two
+> directions. Read what a correct explanation DOES, not what it knows.
+
+> **Count the leaked thing from outside the runtime.** A held descriptor leaves the
+> process working, the socket invisible to Dart, and the attempt failing on time. Every
+> in-process observable sits behind a retry schedule the OS owns, so the count came
+> from `lsof` — and both of the rig's assumptions (lsof exists, the address really is a
+> black hole) are ASSERTED, because either failing silently yields zero.
+
+> **Cancelling needs something that owns the work.** A `Future` owns nothing. The fix
+> was to give the attempt its own `HttpClient`, because that is the object a timeout can
+> take down; the shared one leaves the timeout with nothing to do but stop waiting.
+
+> **The canary has to remove the FIX, and the fix is not always the newest-looking
+> line.** Two ablations here read green — plain close instead of forced, and
+> `connectionTimeout` removed — because each left the other mechanism standing. Only
+> reverting to the SHARED client failed. Ablate the thing you claim, and if it passes,
+> suspect the claim before the rig.

@@ -38,9 +38,15 @@ const bool platformHonoursPingInterval = true;
 /// client can authenticate: there is no second round trip to attach a token to.
 ///
 /// [connectTimeout] bounds the whole open — TCP connect, HTTP upgrade and
-/// `ready`. Without it a peer that accepts the connection and never answers
-/// holds the caller until the OS gives up, which on a black hole (a firewall
-/// that DROPs, a balancer with no backend) is minutes.
+/// `ready` — and ABANDONS it, rather than merely stopping the wait. Without it a
+/// peer that accepts the connection and never answers holds the caller until the
+/// OS gives up, which on a black hole (a firewall that DROPs, a balancer with no
+/// backend) is minutes.
+///
+/// Setting it gives the attempt a private [HttpClient], because that is the only
+/// thing there is to cancel: `WebSocket.connect` otherwise uses a process-wide
+/// one, and a `Future.timeout` over it leaves the connect running with its
+/// descriptor held.
 ///
 /// The raw dart:io WebSocket is opened here rather than through
 /// [IOWebSocketChannel.connect], which passes no compression argument and so
@@ -53,7 +59,7 @@ Future<WebSocketChannel> openWebSocket(
   Map<String, Object>? headers,
   Duration? connectTimeout,
 }) async {
-  Future<WebSocketChannel> open() async {
+  Future<WebSocketChannel> open(HttpClient? client) async {
     final webSocket = await WebSocket.connect(
       uri.toString(),
       protocols: protocols,
@@ -61,6 +67,7 @@ Future<WebSocketChannel> openWebSocket(
       compression: enableCompression
           ? CompressionOptions.compressionDefault
           : CompressionOptions.compressionOff,
+      customClient: client,
     );
     webSocket.pingInterval = pingInterval;
     final channel = IOWebSocketChannel(webSocket);
@@ -68,15 +75,33 @@ Future<WebSocketChannel> openWebSocket(
     return channel;
   }
 
-  if (connectTimeout == null) return open();
+  // Null hands `WebSocket.connect` its own process-wide client, which is right:
+  // with no timeout there is nothing to cancel and nothing to own.
+  if (connectTimeout == null) return open(null);
 
-  // `Future.timeout` abandons the AWAIT, not the WORK: the socket keeps opening
-  // and, on a merely slow peer, arrives afterwards with nobody holding it. Core
-  // learned this on RpcClientConnection's connectTimeout -- an abandoned connect
-  // that later succeeds is a live socket nothing can close. So the late arrival
-  // is closed here rather than dropped.
+  // Its OWN client, so the timeout has something to CANCEL. Without one,
+  // `WebSocket.connect` uses a static shared client and the only thing a timeout
+  // can do is stop waiting -- see below.
+  final client = HttpClient()..connectionTimeout = connectTimeout;
+
+  // `Future.timeout` abandons the AWAIT, not the WORK, and that cuts two ways.
+  //
+  // A socket that arrives LATE is a live socket nobody holds, which core learned
+  // on RpcClientConnection's connectTimeout; the late arrival is closed below
+  // rather than dropped.
+  //
+  // A socket that never arrives is worse, because nothing marks it as finished:
+  // against a black hole the OS retries the SYN for over a minute, holding one
+  // descriptor per abandoned attempt. A reconnect loop against an unreachable
+  // host accumulates them.
+  //
+  // OWNING the client is what releases it — closing it takes the pending connect
+  // with it, where a `Future.timeout` over the shared client can only stop
+  // waiting. `connectionTimeout` states the same bound inside the client; the
+  // two cannot be told apart by measurement here, since both bounds are this
+  // same duration.
   var timedOut = false;
-  final opening = open();
+  final opening = open(client);
   unawaited(
     opening
         .then((channel) {
@@ -84,14 +109,24 @@ Future<WebSocketChannel> openWebSocket(
         })
         .catchError((Object _) {}),
   );
-  return opening.timeout(
-    connectTimeout,
-    onTimeout: () {
-      timedOut = true;
-      throw TimeoutException(
-        'WebSocket connect to $uri timed out',
-        connectTimeout,
-      );
-    },
-  );
+  try {
+    final channel = await opening.timeout(
+      connectTimeout,
+      onTimeout: () {
+        timedOut = true;
+        throw TimeoutException(
+          'WebSocket connect to $uri timed out',
+          connectTimeout,
+        );
+      },
+    );
+    // Not forced: this closes IDLE connections, and an upgraded WebSocket has
+    // been detached from the client by `WebSocket.connect`, so the live socket is
+    // unaffected. Skipping it would leak the client object itself, one per call.
+    client.close();
+    return channel;
+  } catch (_) {
+    client.close(force: true);
+    rethrow;
+  }
 }

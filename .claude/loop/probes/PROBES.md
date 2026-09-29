@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-166](P-166-does-a-timed-out-connect-hold-its-descriptor.md)** valid (round 533),
+  rpc_dart_websocket — **counts the leaked thing from OUTSIDE the runtime** (`lsof` against this
+  process), because a held descriptor leaves the process working, the socket invisible to Dart and
+  the attempt failing on time: every in-process observable sits behind a retry schedule the OS
+  owns. **Both of its assumptions are asserted, not assumed** — every attempt must settle as
+  `TimeoutException` (or the address is not a black hole here) and a missing `lsof` exits 2 —
+  because either failing silently yields the answer the fix is supposed to produce. Control: forty
+  opens that succeed and close.
 - **[P-165](P-165-what-does-a-health-check-cost.md)** valid (round 532),
   rpc_dart_websocket — **reads the noise and the ANSWER from one run**, because a fix can trade
   one for the other and a server that went quiet by not answering would score perfectly on the
