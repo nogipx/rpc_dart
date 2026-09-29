@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 499)
+round: 499
+commit: d5cfdf8a
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/ping.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-137
+reason: "closed — the deadline and token halves CONFIRMED (3003ms and 3002ms against a 3 s probe budget, now 204ms and 203ms) and all four items addressed"
 ---
 
 # B-108 — ping() bounds its wait only by `timeout:`, never by the context it was given
@@ -41,6 +41,47 @@ Ping with `RpcContext.withTimeout(200ms)` against a responder that never answers
 
 Derive the local wait from the context deadline when `timeout` is null, listen to
 the token, `completer.future.ignore()`, measure with a `Stopwatch`.
+
+## Closed (round 499) — two halves measured, all four items addressed
+
+```
+                              before    after
+timeout: 200ms                 222ms     217ms   TimeoutException
+context deadline 200ms        3003ms     204ms   TimeoutException
+token cancelled at 200ms      3002ms     203ms   RpcCancelledException
+nothing asked                 3002ms    3004ms   <- correct, see below
+CONTROL, a peer that answers    32ms      20ms   ok
+```
+
+The 3 s rows are the probe's budget, not a library bound. The rig swallows ONLY
+the ping frame, so nothing ends that stream and each arm is a statement about the
+caller's own bound.
+
+**A deadline SENT is not a deadline ENFORCED**, which is why this was easy to
+miss: the `grpc-timeout` header made the intent visible on the wire and bounded
+the server, so everything about the call said 200 ms except the code that waits.
+
+Fixed as the sketch says, all four:
+
+- `timeout ?? routingContext.remainingTime` — the explicit argument still wins.
+- `execute` takes a `cancellationToken`, completes `RpcCancelledException`, and
+  cancels that subscription in the same `finally` as the stream's.
+- `Stopwatch` for the round trip; `sentAt`/`receivedAt` stay on the result because
+  they are what went on the wire.
+- `completer.future.ignore()` before the awaited send.
+
+**The clock half has a real witness after all**: `sentAt` is a constructor
+parameter, so injecting an hour in the past stands in for a wall-clock step, and
+the ablation reads `1:00:00.012557`.
+
+**`.ignore()` is the one change with no failing test behind it** — the race needs
+an error arriving while `sendMetadata` is still awaiting, which nothing here can
+drive. Shipped because the pattern is established in `UnaryCaller`, where the cost
+was a dead isolate.
+
+Deliberately unchanged: a ping with NO bound requested still waits forever. A
+guard pins it, because inventing a bound would answer B-107's policy question by
+the back door.
 
 ## Owner decision
 

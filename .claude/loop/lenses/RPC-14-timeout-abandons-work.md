@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433]
-status: swept here (round 433, 7ee3e602)
+applied: [223, 233, 246, 273, 323, 433, 499]
+status: confirmed (round 499)
 ---
 
 # RPC-14 — A timeout abandons the wait, not the work
@@ -191,3 +191,37 @@ running*. Ten of the eleven sites remain unwitnessed, which is what
 `## What the sweep does NOT establish` says and still says.
 
 `../rounds/433-the-count-that-did-not-move.md`.
+
+## Round 499 — the mirror: a wait with no timeout at all
+
+Every earlier application asks what a FIRED timeout leaves running. Round 499 is
+the other side: a wait that could not fire, on the one path whose entire purpose
+is to notice a peer that has stopped answering.
+
+`ping()` pre-checks its context — `throwIfCancelled()`, `isExpired` — and then
+never reads it again. The deadline goes out as `grpc-timeout` and bounds the
+SERVER; locally `execute` bounds the wait only `if (timeout != null)`, meaning the
+explicit argument alone:
+
+    timeout: 200ms              222ms   bounded
+    context deadline 200ms     3003ms   the PROBE's budget
+    token cancelled at 200ms   3002ms   the PROBE's budget
+
+> **A deadline SENT is not a deadline ENFORCED.** The header made the intent
+> visible on the wire, which is what made the gap easy to miss: everything about
+> the call said 200 ms except the code that waits. For every place a bound is
+> transmitted, ask who applies it locally.
+
+> **Sweep the keepalive first.** This lens's targets are ordinary calls, where an
+> unbounded wait is one hung call. On a health check it is the mechanism that was
+> supposed to detect the hang — the failure and the detector share a code path,
+> so the detector fails exactly when it is needed.
+
+A method note worth reusing: the RTT was two `DateTime.now()` readings, and a
+clock step cannot be caused in a test — but `sentAt` is a CONSTRUCTOR PARAMETER,
+so injecting an hour in the past stands in for the step and the ablation reads
+`1:00:00.012557`. **When a clock cannot be moved, look for the timestamp that is
+already injectable.**
+
+`../probes/P-137-does-ping-honour-its-context.md`,
+`../rounds/499-the-keepalive-hung-on-the-case-it-exists-for.md`, B-108.

@@ -346,12 +346,26 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         for (final e in headerMap.entries) RpcHeader(e.key, e.value),
       ], methodPath: baseMetadata.methodPath);
 
+      // The context's deadline bounds the wait LOCALLY too, not only as the
+      // `grpc-timeout` header built above. It was pre-checked once and then
+      // ignored, so `ping(context: withTimeout(200ms))` against a peer that
+      // accepts the ping and never answers ran until the probe gave up at 3 s —
+      // and ping IS the keepalive, so the stalled peer is the case it exists for.
+      //
+      // An explicit `timeout:` still wins: it is the caller's own bound on this
+      // one call, where the deadline belongs to the whole context.
+      final effectiveTimeout = timeout ?? routingContext.remainingTime;
+
       return await RpcEndpointPingExchange(
         transport: transport,
         logger: _log,
         streamId: streamId,
         sentAt: sentAt,
-      ).execute(metadata: metadata, timeout: timeout);
+      ).execute(
+        metadata: metadata,
+        timeout: effectiveTimeout,
+        cancellationToken: routingContext.cancellationToken,
+      );
     } finally {
       // A ping that reaches the wire frees its id implicitly -- it sends with
       // endStream: true and the transport releases finished streams -- but the

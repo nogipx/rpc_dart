@@ -90,12 +90,26 @@ final class RpcEndpointPingExchange {
   }) : _log = logger ?? LogScope.noop;
 
   /// Sends the ping and waits for the pong response.
+  ///
+  /// [cancellationToken], when given, ends the wait as soon as it fires.
+  /// Pre-checking it in the caller is not enough: ping exists for the stalled
+  /// connection, which is precisely the case where the wait is long enough for a
+  /// token to be cancelled DURING it. Measured against a peer that accepts the
+  /// ping and never answers, a token cancelled at 200 ms left the call running
+  /// until the probe gave up at 3 s.
   Future<RpcEndpointPingResult> execute({
     required RpcMetadata metadata,
     Duration? timeout,
+    RpcCancellationToken? cancellationToken,
   }) async {
     final completer = Completer<RpcEndpointPingResult>();
+    // The wait is measured on a MONOTONIC clock. `sentAt` stays a wall-clock
+    // timestamp because it goes on the wire as a header, but a round trip
+    // computed from two `DateTime.now()` readings is negative or huge across an
+    // NTP step or a DST change.
+    final elapsed = Stopwatch()..start();
     StreamSubscription<RpcTransportMessage>? subscription;
+    StreamSubscription<void>? tokenSubscription;
 
     Map<String, String> metadataToMap(RpcMetadata metadata) {
       final map = <String, String>{};
@@ -178,7 +192,11 @@ final class RpcEndpointPingExchange {
             final result = RpcEndpointPingResult(
               sentAt: sentAt,
               receivedAt: receivedAt,
-              roundTrip: receivedAt.difference(sentAt),
+              // The Stopwatch, not `receivedAt.difference(sentAt)`: both of those
+              // are wall-clock readings, and a step between them makes the round
+              // trip negative or hours long. `sentAt`/`receivedAt` stay on the
+              // result because they are what went on the wire.
+              roundTrip: elapsed.elapsed,
               responderTimestamp: responderTimestamp,
               responderDebugLabel:
                   headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
@@ -215,6 +233,21 @@ final class RpcEndpointPingExchange {
           },
         );
 
+    // Before the send, because the send is awaited and an error delivered while
+    // it is still in flight completes a future nobody is listening to yet — an
+    // unhandled async error in the root zone, which is the pattern UnaryCaller
+    // was fixed for after it killed an isolate. `ignore()` marks the completer's
+    // future as having an owner; the real `await` is below.
+    completer.future.ignore();
+
+    if (cancellationToken != null) {
+      tokenSubscription = cancellationToken.cancelled.asStream().listen((_) {
+        completeError(
+          RpcCancelledException(cancellationToken.reason ?? 'Ping cancelled'),
+        );
+      });
+    }
+
     try {
       if (_log.isInternal) {
         _log.internal('Sending ping request [streamId: $streamId]');
@@ -222,6 +255,7 @@ final class RpcEndpointPingExchange {
       await transport.sendMetadata(streamId, metadata, endStream: true);
     } catch (error, stackTrace) {
       await subscription.cancel();
+      await tokenSubscription?.cancel();
       _log.error(
         'Error sending ping [streamId: $streamId]',
         error: error,
@@ -253,6 +287,7 @@ final class RpcEndpointPingExchange {
       return await future;
     } finally {
       await subscription.cancel();
+      await tokenSubscription?.cancel();
     }
   }
 }

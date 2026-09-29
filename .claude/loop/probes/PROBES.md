@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-137](P-137-does-ping-honour-its-context.md)** valid (round 499), rpc_dart
+  — a transport decorator that swallows ONLY the ping frame, so nothing ends that
+  stream and every arm is a statement about the caller's own bound rather than
+  about the peer. **Two controls pulling opposite ways**: a peer that answers must
+  stay fast, and a ping with NO bound asked for must STILL hang — without the
+  second, "everything returns quickly" reads as success while the fix has
+  invented a bound nobody requested
 - **[P-136](P-136-what-bounds-a-call-with-no-deadline.md)** valid (round 498),
   rpc_dart — a handler that never answers, a transport decorator recording the
   `grpc-timeout` header, and two counters inside the handler. **Its own budget is
