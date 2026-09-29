@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433, 499]
+applied: [223, 233, 246, 273, 323, 433, 499, 514]
 status: confirmed (round 499)
 ---
 
@@ -225,3 +225,40 @@ already injectable.**
 
 `../probes/P-137-does-ping-honour-its-context.md`,
 `../rounds/499-the-keepalive-hung-on-the-case-it-exists-for.md`, B-108.
+
+## Round 514 — a wait that does not notice it is over
+
+The third reading of this lens. Not a wait that gives up too early, nor one with no
+bound at all, but one that **finishes late because nothing tells it to stop**. The
+responder's drain polled every 50 ms, so work that completed 1 ms in still took
+`52 ms`.
+
+**The detector: for every wait, is it signalled or asked?** A polled wait has two
+costs — the latency up to one interval, and the interval being a compromise somebody
+chose between latency and waste. A signal removes the compromise. Look for
+`Future.delayed` inside a `while` whose condition reads a field that some other code
+path already updates; that other path is where the signal belongs.
+
+> **Place the signal where the CONDITION becomes true, not where it is convenient.**
+> Here `_cleanupStream` returns early when the id had no state — but the drain waits
+> on the COUNT reaching zero, which is true either way, so the signal goes above that
+> return.
+
+> **The guards go on the opposite failure.** Replacing a poll with a signal risks a
+> wait that ends too soon, which is worse than the latency: a drain that abandoned
+> in-flight calls, or a completer that replaced the deadline so a stuck handler hung
+> the deploy. Both get their own arm.
+
+> **And the control may pay twice.** The arm where the work genuinely takes longer
+> than the interval exists to prove the wait still waits — and it also showed polling
+> added ~36 ms of rounding even THERE (`156 ms` against `122 ms`), which is a finding
+> the lead did not contain.
+
+The wall-clock half of the same lead was fixed without evidence, and the record says
+so: `DateTime.now()` deadlines became a Timer and a `Stopwatch` on the argument
+`RpcCircuitBreakerInterceptor` already documents. Compare the note above about
+`sentAt` — when a clock cannot be moved, sometimes there is no injectable stand-in
+either, and then reasoning has to be labelled as reasoning.
+
+`../probes/P-152-how-long-does-a-drain-take.md`,
+`../rounds/514-the-drain-waited-for-a-tick.md`, B-123.

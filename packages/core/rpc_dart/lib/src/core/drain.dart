@@ -76,13 +76,19 @@ Future<void> drainUntilIdle({
   LogScope? logger,
   String unit = 'call',
 }) async {
-  final deadline = DateTime.now().add(budget);
+  // A Stopwatch, not `DateTime.now()`: the budget is an elapsed duration, and a
+  // wall-clock step — an NTP correction, an operator setting the clock — would
+  // otherwise shorten or extend it arbitrarily, exactly when a deploy is in
+  // progress. The same reason `RpcCircuitBreakerInterceptor` keeps one.
+  final elapsed = Stopwatch()..start();
   var remaining = await pending();
   if (remaining == 0) return;
 
   logger?.info('Draining $remaining in-flight $unit(s) before shutdown');
 
-  while (remaining > 0 && DateTime.now().isBefore(deadline)) {
+  // Still polled, unlike the responder pipeline's drain: this helper is generic
+  // over a `pending()` callback, so it has nothing to be signalled BY.
+  while (remaining > 0 && elapsed.elapsed < budget) {
     await Future<void>.delayed(const Duration(milliseconds: 25));
     remaining = await pending();
   }

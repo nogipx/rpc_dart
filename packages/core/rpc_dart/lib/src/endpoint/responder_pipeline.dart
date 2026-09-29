@@ -88,6 +88,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// The drain currently in progress, shared by every concurrent caller.
   Future<void>? _respDrainInFlight;
 
+  /// Completed by [_cleanupStream] when the last active stream goes away, so
+  /// [_runDrain] can wait to be told rather than poll for it.
+  Completer<void>? _respDrainIdle;
+
   /// Stream ids already torn down.
   ///
   /// Tearing a stream down does not stop the peer: its request payload races
@@ -625,10 +629,24 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       }
     }
 
-    // Wait for streams to finish.
-    final deadline = DateTime.now().add(timeout);
-    while (_respStreams.length > 0 && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+    // Wait for streams to finish — SIGNALLED, not polled.
+    //
+    // Polling every 50 ms meant a server whose last call finished a millisecond
+    // into the drain still waited for the next tick, so shutdown paid up to a
+    // full interval on every deploy for work that was already done.
+    //
+    // `timeout` here is a Timer rather than a `DateTime.now()` comparison, so a
+    // wall-clock step cannot shorten or extend the budget.
+    if (_respStreams.length > 0) {
+      final idle = _respDrainIdle = Completer<void>();
+      try {
+        await idle.future.timeout(timeout);
+      } on TimeoutException {
+        // Fall through to the forced cleanup below, which is what the budget
+        // expiring means.
+      } finally {
+        _respDrainIdle = null;
+      }
     }
 
     if (_respStreams.length > 0) {
@@ -1894,6 +1912,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _releaseHandlerSlot(streamId);
 
     final state = _respStreams.take(streamId);
+
+    // Tell a waiting drain, BEFORE the early return: whether this id had state or
+    // not, what a drain is waiting for is the count reaching zero.
+    if (_respStreams.length == 0) {
+      final idle = _respDrainIdle;
+      if (idle != null && !idle.isCompleted) idle.complete();
+    }
+
     if (state == null) return;
 
     // The one check that can see a request vanishing between the peer and the

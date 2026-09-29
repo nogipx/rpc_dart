@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-152](P-152-how-long-does-a-drain-take.md)** valid (round 514),
+  rpc_dart — a poll interval is invisible in any measurement that lets the work take
+  longer than the interval, so the handler parks on a completer and the moment it
+  finishes is controlled exactly. **Its control did more than validate the rig**: the
+  120 ms arm read `156 ms` before against `122 ms` after, which is how the round
+  learned polling added ~36 ms of rounding even when the work dominated — a fact the
+  lead does not mention. A 60 ms settle before the drain starts, because a drain with
+  nothing yet in flight returns immediately and measures nothing.
 - **[P-151](P-151-does-compression-make-a-message-bigger.md)** valid (round 513),
   rpc_dart — **its first version would have refuted a true claim**, and the record
   keeps why: it used `'a' * n` as the payload while testing whether compression makes
