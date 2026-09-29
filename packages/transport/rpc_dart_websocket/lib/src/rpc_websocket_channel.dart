@@ -198,6 +198,22 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
         if (!_closed) close();
       },
     );
+
+    // Read backpressure, which the layer BELOW already honours: dart:io wires its
+    // own controller's onPause/onResume to the socket subscription, so pausing
+    // here reaches the socket. Without these two lines a paused consumer got no
+    // chunks while every one of them was still read off the wire and buffered in
+    // `_incoming` — the pause bounded delivery and nothing else.
+    //
+    // rpc_dart's own stack never pauses this stream, so what this serves is a
+    // caller holding the channel directly, and the [IRpcChannel] contract that
+    // `incoming` is an ordinary Stream. **A long pause is not free**: dart:io
+    // answers pings inside the subscription this suspends, so a consumer that
+    // stays paused stops answering them and a peer with a keepalive will
+    // eventually call the connection dead.
+    _incoming
+      ..onPause = _sub.pause
+      ..onResume = _sub.resume;
   }
 
   @override

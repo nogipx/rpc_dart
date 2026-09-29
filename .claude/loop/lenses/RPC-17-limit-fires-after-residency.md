@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534]
 status: confirmed (round 489)
 ---
 
@@ -453,3 +453,32 @@ regression rather than a partial win.
 
 `../probes/P-156-how-many-timers-does-a-call-arm.md`,
 `../rounds/519-nine-timers-before-the-deadline.md`, B-127.
+
+**Round 534 — a paused consumer IS a limit, and it bounded only delivery.**
+`RpcWebSocketChannel`'s `_incoming` had no `onPause`/`onResume`, so pausing it stopped
+hand-over and nothing else: every chunk was still read off the wire and held in a
+controller bounded by nothing.
+
+    consumer PAUSED             5000 pulled    0 delivered
+    CONTROL not paused          5000 pulled    5000 delivered
+    CONTROL paused then resumed 5000 pulled    5000 delivered
+
+`../probes/P-167-does-pause-reach-the-socket.md`, B-138.
+
+> **When the obvious reading is memory, reframe to DEMAND.** P-128 established RSS
+> across arms here is noise. "Did the limit reach the producer" is a count instead: an
+> `async*` source increments before each yield and suspends while paused, so the
+> counter answers the question with no allocator in the loop.
+
+> **Read both sides of the limit.** `pulled` and `delivered` are the whole finding —
+> the defect is precisely that they disagree, and either alone is consistent with a
+> channel that works or one that has stopped reading entirely.
+
+> **A contract gap is worth closing and worth GRADING as one.** Nothing in rpc_dart
+> pauses a channel, so this changed no behaviour in the library; it closes the
+> `IRpcChannel` promise that `incoming` is an ordinary Stream. Say which of the two a
+> round did, because "fixed" over an unexercised path reads like a defect repaired.
+
+> **Check the layer below before blaming the layer.** dart:io already wires its own
+> controller's pause to the socket subscription; the chain was complete except for one
+> link. That is also the argument that forwarding is safe rather than novel.

@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 534)
+round: 534
+commit: cbca6a2b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-probe: none — static read, nothing run
-reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
+probe: P-167
+reason: "CONFIRMED and FIXED as a CONTRACT gap: pause is now forwarded, but nothing in rpc_dart ever pauses a channel, so no behaviour in this library changed. The lead's real subject — what bounds a foreign peer's flood — is named in round 534's `Not fixed` and still open"
 ---
 
 # B-138 — the websocket channel does not propagate pause to the socket
@@ -24,13 +24,46 @@ thing a round owes this lead, and it may refute it.
 
 Unbounded buffering below the transport against a peer outside the protocol.
 
-## Witness a round would build
+## What round 534 measured
 
-Legacy peer (flow control off) flooding a paused consumer; RSS.
+```
+  arm                          chunks pulled from source   delivered
+  consumer PAUSED              5000                        0
+  CONTROL not paused           5000                        5000
+  GUARD paused then resumed    5000                        5000
+```
 
-## Fix sketch
+Bench `../probes/P-167-does-pause-reach-the-socket.md`. After: the paused arm reads `1`.
 
-Forward pause/resume.
+**The witness the lead asked for would not have worked.** "RSS" is the reading P-128 established is
+noise across arms here, and "a paused consumer" does not exist anywhere in rpc_dart. Reframed from
+memory to DEMAND: the source is an `async*` generator counting its own yields, which suspends while
+its subscription is paused, so the answer is a count. Both columns are read because the defect is
+that they disagree.
+
+## Fix
+
+Forward pause/resume, as the sketch says — and the layer BELOW already did it: dart:io wires its own
+controller's `onPause`/`onResume` to the socket subscription, so the chain was complete except for
+this link.
+
+**This closes a CONTRACT, not an observed failure.** Nothing in rpc_dart pauses a channel's
+`incoming` — neither `RpcFrameMultiplexedChannel` nor `RpcChannelTransport` — so no behaviour in the
+library changed. What it serves is a caller holding the channel directly and the `IRpcChannel`
+promise that `incoming` is an ordinary Stream. The `cost` grading on this lead was right.
+
+**A long pause is not free**: dart:io answers pings inside the subscription this suspends, so a
+consumer that stays paused stops answering them and a peer with a keepalive calls the connection
+dead. Stated in the code, not measured.
+
+## Still open, and it is the lead's real subject
+
+What bounds an inbound flood from a peer OUTSIDE rpc_dart's flow control. With flow control off the
+bounds are `_admitToStreamBuffer` and `maxMessageLengthBytes` above the transport, and round 534
+measured neither. Belongs with RPC-17's existing work and `../checked/C-29-the-real-scope-of-the-stream-limits.md`.
+
+Also unswept: `IRpcChannel` is a documented ~50-line extension point whose own example has this same
+gap, and the isolate and wasm channels were not checked (RPC-08's shape).
 
 ## Owner decision
 

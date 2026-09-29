@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-167](P-167-does-pause-reach-the-socket.md)** valid (round 534),
+  rpc_dart_websocket — **reframes a memory question as a DEMAND question**, because P-128
+  established RSS across arms here is noise: the source is an `async*` generator counting its own
+  yields, which suspends while its subscription is paused, so "did the pause reach the producer" is
+  a count with no allocator in the loop. Reads BOTH sides — pulled and delivered — since the defect
+  is that they disagree. Controls: unpaused, and paused-then-resumed, which rule out a channel that
+  stopped reading and a pause that never lifts.
 - **[P-166](P-166-does-a-timed-out-connect-hold-its-descriptor.md)** valid (round 533),
   rpc_dart_websocket — **counts the leaked thing from OUTSIDE the runtime** (`lsof` against this
   process), because a held descriptor leaves the process working, the socket invisible to Dart and
