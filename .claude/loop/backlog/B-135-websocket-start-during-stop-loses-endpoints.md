@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 531)
+round: 531
+commit: cbfaa66a
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-164
+reason: "CONFIRMED in both halves, one per shutdown phase, and FIXED by serialising: `stop()` publishes its attempt before the first await and `start()` awaits it"
 ---
 
 # B-135 — RpcWebSocketServer.start() during a draining stop()
@@ -24,13 +24,40 @@ thing a round owes this lead, and it may refute it.
 
 Leaked endpoints and dropped fresh connections on a quick restart.
 
-## Witness a round would build
+## What round 531 measured
 
-`stop(drainTimeout: 1s)` unawaited, `start()`, connect a client; is it served?
+```
+  fresh connection arrives   server running   the fresh one   endpoints held
+  drain                      true             torn down       0
+  close                      true             never           0
+  after                      true             never           1
+  nothing                    true             never           1
+```
 
-## Fix sketch
+Bench `../probes/P-164-what-happens-to-a-connection-accepted-mid-shutdown.md`. After the fix
+every row reads `never / 1`.
 
-Serialise start/stop, or refuse start while stopping.
+Both halves confirmed, one per phase. The close-phase row is the worse one: nothing holds that
+endpoint, so no later `stop()` or `dispose()` can reach it.
+
+**The drain arm was silently wrong first.** With no in-flight call `_drain` returns on its
+first poll, so the arm became a second copy of the close arm — two identical rows reading as a
+consistent result rather than as a broken rig. The lead's FIRST claim was only confirmed once a
+real slow call was built.
+
+## Fix
+
+The first option: serialise. `stop()` publishes its attempt in `_stopping` before its first
+await, and `start()` awaits it. A peer arriving in between is refused by `_handleConnection`,
+which already ANSWERS it — so "refuse start while stopping" was unnecessary, the refusal is
+already at the right layer.
+
+**Behaviour change**: `start()` can now block for the whole drain budget. Wants a CHANGELOG
+line.
+
+Not done: single-flighting overlapping `stop()` calls. A second stop with a different budget
+returns immediately because `_isRunning` is already false, so its budget is ignored — deciding
+what that should mean is a design question.
 
 ## Owner decision
 

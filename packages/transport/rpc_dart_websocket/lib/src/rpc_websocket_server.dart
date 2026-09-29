@@ -96,8 +96,27 @@ class RpcWebSocketServer implements IRpcServer {
   @override
   bool get isRunning => _isRunning;
 
+  /// The [stop] currently in flight, so [start] waits for it instead of racing
+  /// it.
+  ///
+  /// `_isRunning = false` is set at the TOP of a stop and the work — the drain,
+  /// then the closes — happens after it. A start landing in that window flips the
+  /// flag back and the stop carries on regardless, so the connections it accepts
+  /// are the stop's to destroy: one accepted before the close snapshot is torn
+  /// down while this server reports running, and one accepted after it is dropped
+  /// by `_endpoints.clear()` with nobody left to close it.
+  Future<void>? _stopping;
+
   @override
   Future<void> start() async {
+    // Finish the shutdown first. The caller asked for a stop and then for a
+    // start, and that is what they get in that order -- a restart, not a start
+    // overlapping a teardown. Peers arriving in the meantime are refused by
+    // `_handleConnection`, which ANSWERS them; being accepted and then destroyed
+    // is what this replaces.
+    final stopping = _stopping;
+    if (stopping != null) await stopping;
+
     if (_isRunning) return;
 
     // A subscription survives [stop], which is what makes a restart possible
@@ -174,8 +193,19 @@ class RpcWebSocketServer implements IRpcServer {
   /// transport cannot forbid that, so a peer that keeps calling would otherwise
   /// hold shutdown open forever.
   @override
-  Future<void> stop({Duration? drainTimeout}) async {
-    if (!_isRunning) return;
+  Future<void> stop({Duration? drainTimeout}) {
+    if (!_isRunning) return Future<void>.value();
+    // Published BEFORE the first await, so a start on the very next turn already
+    // sees it. See [_stopping].
+    late final Future<void> attempt;
+    attempt = _stopOnce(drainTimeout: drainTimeout).whenComplete(() {
+      if (_stopping == attempt) _stopping = null;
+    });
+    _stopping = attempt;
+    return attempt;
+  }
+
+  Future<void> _stopOnce({Duration? drainTimeout}) async {
     _isRunning = false;
 
     // The subscription is KEPT, and `_isRunning = false` above is what stops

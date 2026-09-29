@@ -3,7 +3,7 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495]
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531]
 status: confirmed (round 495)
 ---
 
@@ -335,5 +335,35 @@ then reads alike and nothing can be told apart.
 
 `../probes/P-133-which-part-of-reconnect-answers-what.md`,
 `../rounds/495-the-whole-method-is-one-window.md`, B-104.
+
+**Round 531 — the flag can be flipped BACK inside the window.** `RpcWebSocketServer`'s
+`_isRunning` means both "accept connections" and "no shutdown is in progress", and
+`stop()` clears it before doing any of its work. A `start()` in that gap set it again
+and returned, while the stop carried on from where it was — so the restarted server's
+new connections belonged to the old shutdown:
+
+    fresh arrives during the drain    torn down, server reports running
+    fresh arrives during the close    never closed, and held by NOTHING
+    CONTROL after the stop            held
+    CONTROL no stop at all            held
+
+`../probes/P-164-what-happens-to-a-connection-accepted-mid-shutdown.md`, B-135.
+
+> **A conflated flag has two failure modes, not one, and they need separate arms.**
+> The two shutdown phases wreck a connection differently — closed by the wrong owner,
+> and forgotten entirely — so one "did it break" arm describes neither. Read the KIND
+> of ending, not a boolean: refused, torn down, and never are three states a `bool`
+> collapses to two.
+
+> **A phase that ends early is a phase the rig never entered.** The drain arm had no
+> in-flight call, so the drain returned on its first poll and the arm became a
+> duplicate of the next one — two identical rows, which read as a consistent finding
+> rather than as a broken rig. Same family as the `Stream.empty()` trap above: when
+> two arms agree suspiciously, check whether one of them ran.
+
+> **The fix may already exist one layer down.** "Refuse start while stopping" was
+> unnecessary here: `_handleConnection` already refuses and ANSWERS a peer while the
+> flag is false, so serialising `start()` behind the stop was enough. Look for the
+> guard before adding one.
 
 Imported from private memory in the curate pass after round 234.

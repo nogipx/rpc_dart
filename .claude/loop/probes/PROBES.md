@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-164](P-164-what-happens-to-a-connection-accepted-mid-shutdown.md)** valid (round 531),
+  rpc_dart_websocket — **reads the KIND of ending, not a boolean**: refused, torn down, or
+  never closed. A shutdown has two phases and each wrecks a connection differently, so one
+  "did it break" arm describes neither. **Its drain arm needs a REAL in-flight call** — the
+  first version had none, so the drain returned on its first poll and the arm became a
+  duplicate of the next one, two identical rows reading as a consistent finding rather than a
+  broken rig. Controls: a restart that WAITS, and a server that never stops — without them
+  "held nothing" is indistinguishable from "delivered nothing".
 - **[P-163](P-163-is-shutdown-linear-in-connections.md)** valid (round 530),
   rpc_dart_websocket — **fixes the per-item cost small and varies N**, because the property
   under test is the serialisation and the honest magnitude (dart:io's close timeout for a
