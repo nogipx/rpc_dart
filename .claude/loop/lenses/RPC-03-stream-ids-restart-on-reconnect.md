@@ -3,7 +3,7 @@ refines: U-18
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
 applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
-applied: [217, 218, 224, 234]
+applied: [217, 218, 224, 234, 527]
 status: confirmed (round 234)
 ---
 
@@ -93,3 +93,32 @@ transport that has already closed itself. Bench
 > event that starts a reconnect — deleted it. The doc that said "read it BEFORE
 > closing" made this look handled; it is advice the layer above cannot follow
 > when the close is not its own.
+
+**Round 527 — the INBOUND direction, which the note above named and nobody had
+swept.** 217, 224 and 234 all asked about ids THIS side issues, where the
+watermark exists. The peer's ids have no watermark available at all: the peer
+chooses them and restarts at the bottom on every socket.
+
+The websocket caller's guard is membership in two sets, cleared on reconnect. The
+same stale operation, the same id, differing only in whether the peer reopened the
+number:
+
+    peer id, peer REUSES it        stale teardown DELIVERED
+    peer id, not reused            dropped
+    own id (space resumed)         dropped
+    CONTROL no reconnect           DELIVERED
+
+Bench `../probes/P-161-does-a-stale-id-reach-the-new-socket.md`. Round 527 fixed
+what membership CAN cover — two flow-credit forwards that had no guard at all —
+and filed the rest as B-199, because prevention is again the only route and both
+remaining forms of it are design changes.
+
+> **Ask the detector's question in both directions.** The three sweeps read as
+> exhaustive because they covered every swap SITE; they covered one id SPACE. A
+> lens whose fix is "carry the watermark" is silent wherever there is no watermark
+> to carry, and that silence looks like coverage.
+
+> **Membership cannot substitute for disjointness.** A set of live ids answers
+> "was this ever mine" and the question is "is this the same call" — identical
+> until the numbers repeat, which is exactly the case the guard exists for. 218
+> measured this for a ledger; 527 measured it for the set.

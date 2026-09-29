@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-161](P-161-does-a-stale-id-reach-the-new-socket.md)** valid (round 527),
+  rpc_dart_websocket — **puts the same question to a GUARDED operation and an unguarded
+  one, for the same stale id at the same moment**, and varies the one thing the guard
+  cannot see: whether the peer reopened the number. Read at the WIRE, by counting frames
+  written to the new socket, because the guard is membership in two sets the reconnect
+  clears and the traffic refills — every bookkeeping observable sits downstream of that.
+  The connection pool is switched off so a returned credit is exactly one frame. Its
+  control is an arm with no reconnect, without which `dropped` is equally consistent with
+  a pipe that never carried anything.
 - **[P-160](P-160-is-a-routable-name-callable.md)** valid (round 525),
   rpc_dart — **asks BOTH questions per row** — routable by the policy, buildable by the
   caller — because a disagreement between two limits on one quantity is invisible when

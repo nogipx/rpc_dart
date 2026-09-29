@@ -384,12 +384,28 @@ class RpcWebSocketCallerTransport
   void resumeStreamIdsAfter(int streamId) =>
       _inner.resumeStreamIdsAfter(streamId);
 
+  /// Guarded like the send paths below, and for the same reason.
+  ///
+  /// Both take a bare stream id and resolve it on whatever `_inner` is NOW, so a
+  /// consumer still draining the previous connection's buffers credits the new
+  /// one: the returned bytes go into the new controller's ledger, where they
+  /// grant a window nothing consumed and credit a pool nothing drew from.
+  ///
+  /// A stale id is DROPPED rather than raised on — a consumption tail is a
+  /// teardown path like the sends, and the stream it belonged to is gone either
+  /// way. What the drop costs is nothing: the inner transport repays whatever an
+  /// abandoned stream still owes the pool when it forgets it.
   @override
-  void deferFlowCredit(int streamId) => _inner.deferFlowCredit(streamId);
+  void deferFlowCredit(int streamId) {
+    if (!_liveHere(streamId)) return;
+    _inner.deferFlowCredit(streamId);
+  }
 
   @override
-  void returnFlowCredit(int streamId, int bytes) =>
-      _inner.returnFlowCredit(streamId, bytes);
+  void returnFlowCredit(int streamId, int bytes) {
+    if (!_liveHere(streamId)) return;
+    _inner.returnFlowCredit(streamId, bytes);
+  }
 
   @override
   bool get isClient => true;
@@ -409,8 +425,15 @@ class RpcWebSocketCallerTransport
     // Delegated to the inner transport's per-stream routing, NOT re-filtered off
     // the outer broadcast -- which exists only to keep [incomingMessages] stable
     // across reconnects, and filtering it costs one predicate per active stream
-    // per message. Safe because a streamId is connection-scoped and never spans
-    // a reconnect.
+    // per message.
+    //
+    // Deliberately NOT behind [_liveHere], unlike the sends and the flow-credit
+    // pair. A subscription is taken at call setup, so a stale id can only get
+    // here from a call set up on a connection that no longer exists, and the
+    // inner transport already answers that with a controller nobody feeds. The
+    // one case a guard would have to catch is the one membership cannot tell
+    // apart (see [_liveHere]), and failing closed on a DELIVERY path turns a
+    // wasted subscription into a handler that never receives a request.
     return _inner.getMessagesForStream(streamId);
   }
 
@@ -433,6 +456,14 @@ class RpcWebSocketCallerTransport
   /// Whether [streamId] names a stream live on the CURRENT connection, in
   /// either direction: one this transport opened, or one the peer opened and
   /// this transport is answering.
+  ///
+  /// Sound for ids THIS side mints — [_attach] resumes the cursor, so those id
+  /// spaces are disjoint and a stale number is never a live one. It is NOT sound
+  /// for the peer's: the peer numbers its own streams and restarts at the bottom
+  /// on every socket, so a stale operation for a peer id the new connection has
+  /// already reused passes this check and acts on the call that now holds the
+  /// number. Membership cannot tell the two apart, and the bare `int` in the
+  /// interface carries nothing that could.
   bool _liveHere(int streamId) =>
       _idsOnThisConnection.contains(streamId) ||
       _peerStreamIds.contains(streamId);
