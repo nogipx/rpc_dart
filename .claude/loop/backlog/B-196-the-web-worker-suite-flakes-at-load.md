@@ -62,6 +62,36 @@ A cheaper first arm: capture the full dart test output for a failing load, which
 current grep-based invocation throws away. The `[E]` line is the only evidence so far
 and it carries no reason.
 
+## Checked, do not re-try: raising the gate's concurrency (round 509)
+
+Asked for a faster gate, and measured instead of guessing. `test:unit` is `melos
+exec concurrency: 4` over ~15 packages, and CPU sat at 186% of 800% — the suite is
+TIMER-bound, not CPU-bound, so more concurrency looks free.
+
+It is not:
+
+```
+melos 4, dart default   1:33 / 1:22   green, green
+melos 4 x -j 4          1:26          green
+melos 8 x -j 8          1:06 / 1:20 / 1:13   green, FLAKY, FLAKY
+melos 12 x -j 12        1:08          FLAKY in 3 packages
+```
+
+The failures are all timing-sensitive and DIFFERENT each run —
+`graceful_drain_on_stop_test`, `peer_ids_return_to_zero_test`,
+`response_sink_stops_at_the_ending_test`, `isolate_verification_test` ("several
+isolates run in parallel"), `audit_frame_reassembly_linear_test`, and a
+`StreamDistributor` cleanup test. A suite that asserts on elapsed time cannot be
+packed onto a loaded machine.
+
+**So concurrency stays at 4.** The ~15% is not worth buying more of exactly the
+disease this lead is about. What DID land is `--reporter failures-only` in place of
+`expanded`, which changes no timing and removes thousands of lines of output.
+
+This also widens the lead: the web-worker flake is not an isolated bad suite, it is
+the visible end of a gate whose tests are timing-sensitive enough to break under
+load. Whatever fixes B-196 should be checked against that.
+
 ## Fix sketch
 
 Unknown until measured. Candidates, in the order the measurement would rank them:
