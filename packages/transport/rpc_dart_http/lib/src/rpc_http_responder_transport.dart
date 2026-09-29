@@ -274,8 +274,16 @@ class RpcHttpResponderTransport
       return _reject(415, request);
     }
 
-    // Validate method path length.
-    final methodPath = request.requestedUri.path;
+    // `url`, not `requestedUri`: shelf's `url` is the path RELATIVE to wherever
+    // this handler was mounted, and `requestedUri.path` is the whole thing. Mounted
+    // under `/rpc/` — which this class's doc says three times it supports — the full
+    // path is `/rpc/Echo/echo`, which is not a gRPC method path, so the documented
+    // composition answered INVALID_ARGUMENT for every call.
+    //
+    // The leading slash is added back because `url` never carries one and
+    // `parseRpcMethodPath` requires it. Unmounted the two forms are identical, which
+    // is why nothing noticed.
+    final methodPath = '/${request.url.path}';
     if (policy != null && !policy.isValidMethodPath(methodPath)) {
       _logger?.warning('Rejected request: invalid method path "$methodPath"');
       return _reject(400, request);

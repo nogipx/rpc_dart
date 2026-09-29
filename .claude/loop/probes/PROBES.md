@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-171](P-171-does-a-mounted-handler-route.md)** valid (round 538),
+  rpc_dart_http — **the rig IS the documented composition**, not a description of it: the mount is built
+  from shelf's own `Request.change(path:)`, which is what `shelf_router.mount` does, so the real
+  mechanism is exercised with nothing added to the dependency list. Two readings per run — the
+  `methodPath` the transport saw and the caller's outcome — because a wrong path and a missing service
+  give the same status from different causes. Its control is the UNMOUNTED arm, which is also the reason
+  the defect survived: there the two path forms are identical.
 - **[P-170](P-170-does-the-rejection-drain-run-at-all.md)** valid (round 537),
   rpc_dart_http — **two claims, two instruments**: a library rule asked of a bare shelf `Request` in
   three lines, and a re-run of `checked/C-31` against the REAL transport behind `shelf_io`. Its first
