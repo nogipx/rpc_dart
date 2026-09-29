@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-148](P-148-how-many-frames-is-a-unary-call.md)** valid (round 510),
+  rpc_dart — counts frames where one `send` on the byte channel is exactly one frame,
+  so nothing inside the library needs instrumenting. **Then DECODES each frame and
+  prints its stream id, which is what turned a cost item into a defect**: a count of 4
+  is unremarkable, `grpc-status 12` three times on `s3` is one call answered three
+  times. The metadata payload is printed because whether a frame carries a
+  `methodPath` decides if the responder treats it as a new call. One call is made and
+  the counters reset before the measured one, since the first call on a connection
+  pays setup. Its controls are the two arms that must NOT change — a success and a
+  throwing handler — both byte-for-byte identical across the fix.
 - **[P-147](P-147-what-an-empty-middleware-wrapper-costs.md)** valid (round 509),
   rpc_dart — **the same FILE as P-146, registered under its own number**, because
   round 508's bench already measured this exact quantity and rebuilding it would have

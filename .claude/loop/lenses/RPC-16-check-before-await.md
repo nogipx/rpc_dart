@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/endpoint/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: something is read, then an operation is awaited, then the read is relied on — a lifecycle flag, or an open iterator over a mutable collection
 breaks: a connection leak; or an in-flight call failing with a StateError instead of its status.
-applied: [235, 505]
+applied: [235, 505, 510]
 status: confirmed (round 235)
 ---
 
@@ -143,3 +143,40 @@ explains the table just as well and the fix gets aimed at `close()`.
 
 `../probes/P-143-what-a-call-gets-when-the-list-moves.md`,
 `../rounds/505-the-list-moved-under-the-call.md`, B-114.
+
+## A synchronous MARK is only half a fix; check the READER (round 510)
+
+`_sendGrpcErrorAndCleanup` calls `_rememberClosedStream(id)` **before its first
+await**, and its comment — from an earlier round that fixed the two-frame version of
+this — calls that "the whole fix". It was not. The guard consulting the set read:
+
+```dart
+if (_respStreams[message.streamId] == null &&
+    _respClosedStreams.contains(message.streamId)) {
+```
+
+The state is torn down in a detached `finally`, so between the synchronous mark and
+the cleanup `_respStreams[id]` is still non-null, the first condition is false, and
+every further frame walks past. One call to an unregistered method was answered
+THREE times — once per inbound frame, three separate `binding == null` sites, all on
+one stream id.
+
+**So when a round fixes a race by moving a WRITE earlier, follow it to every READ.**
+A reader that ands the new synchronous fact with an old asynchronous one is exactly
+as racy as before, and it now looks guarded. Grep the field the mark writes and read
+each condition it appears in.
+
+> **Removing a condition is the risky direction, so guard the thing it protected.**
+> The dropped clause was what let a genuinely new call reuse a closed id. Two guards
+> cover it: several calls in sequence (the caller reuses ids as they are released),
+> and refuse-then-call-again — because if the closed-set entry were never cleared the
+> next call would be ignored and hang to its deadline, which is worse than the defect
+> being fixed.
+
+> **And this was found by a COST lead.** The bench counted frames and then printed
+> what each one WAS; the count alone (4, against a success's 4) said nothing.
+> Decoding the payload and the stream id is what made three trailers visible as one
+> call rather than three.
+
+`../probes/P-148-how-many-frames-is-a-unary-call.md`,
+`../rounds/510-one-call-answered-three-times.md`, B-119.

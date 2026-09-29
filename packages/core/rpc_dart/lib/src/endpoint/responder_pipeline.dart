@@ -738,8 +738,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // legitimately open a call with metadata and payload in one frame and that
     // must still reuse a released id. A frame with no metadata opens a call on
     // no transport.
-    if (_respStreams[message.streamId] == null &&
-        _respClosedStreams.contains(message.streamId)) {
+    // Membership of the closed set ALONE, not "closed and the state is already
+    // gone". `_sendGrpcErrorAndCleanup` remembers the id synchronously but tears
+    // the state down from a detached `finally`, so between those two points
+    // `_respStreams[id]` is still non-null — and requiring it to be null let every
+    // further frame of the same call walk past this guard and be refused again.
+    if (_respClosedStreams.contains(message.streamId)) {
       if (message.methodPath == null || message.metadata == null) {
         if (_log.isInternal) {
           _log.internal(
