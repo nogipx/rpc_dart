@@ -79,6 +79,14 @@ final class RpcSecurityPolicy {
   /// `rpc_dart_http` on the header lines. It is NOT implied by [maxHeaders] and
   /// [maxHeaderValueBytes]: their defaults together allow 1 MiB.
   ///
+  /// **It counts header name and value TEXT, not a transport's encoded form.**
+  /// Every wire frames that text — the frame channel as JSON, HTTP as
+  /// `name: value\r\n` — so the encoded block is always somewhat larger than the
+  /// number this bounds, and how much larger depends on the wire and, for JSON,
+  /// on the characters in the value. Both directions of that are covered: this
+  /// count can only refuse LATER than the wire would, and each transport bounds
+  /// its own encoded form against this same field.
+  ///
   /// The isolate transport does not apply it, and that is deliberate — reaching
   /// its channel at all means arbitrary code in this process (RPC-10).
   final int maxMetadataBytes;
@@ -479,15 +487,14 @@ final class RpcSecurityPolicy {
         invalidValue: metadata.headers.length,
       );
     }
-    // Accumulated as we go, because [maxHeaderValueBytes] bounds each header and
-    // NOTHING bounded the sum: at the defaults, 64 headers of 8 KiB is 8x
-    // [maxMetadataBytes] and passed. The only thing that stopped a peer was
-    // [maxHeaders], so the effective ceiling was `maxHeaders * maxHeaderValueBytes`
-    // — about 1 MiB, 16x the value an operator set to bound exactly this.
+    // Accumulated as we go: [maxHeaderValueBytes] bounds each header and their
+    // SUM is a different guarantee, which `maxHeaders * maxHeaderValueBytes`
+    // alone puts an order of magnitude above [maxMetadataBytes].
     //
-    // The channel transports were covered by a different mechanism
-    // ([RpcChannelFrame] bounds the encoded blob); the HTTP transports validate
-    // here and reach no such check.
+    // Name + value TEXT, which is what this function can see, and every wire
+    // adds framing on top of it — see [maxMetadataBytes]. So this is a floor on
+    // the wire, never an over-count, and each transport bounds its own encoded
+    // form as well.
     var totalBytes = 0;
     for (final header in metadata.headers) {
       if (!isValidHeaderName(header.name)) {

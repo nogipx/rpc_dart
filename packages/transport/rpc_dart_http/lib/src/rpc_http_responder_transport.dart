@@ -307,20 +307,18 @@ class RpcHttpResponderTransport
       });
 
       if (policy != null) {
-        // The AGGREGATE bound, which `validateMetadata` does not carry: it
-        // checks maxHeaders and the per-header caps, and those do not imply a
-        // total. The defaults allow 128 headers of 8 KiB, which is 1 MiB
-        // against a 64 KiB `maxMetadataBytes` -- measured at 960 KB accepted
-        // with 200 OK, every individual header legal.
+        // The AGGREGATE bound. The per-header caps and `maxHeaders` do not imply
+        // a total: their defaults together allow more than an order of magnitude
+        // over `maxMetadataBytes`, every individual header legal.
         //
-        // Counted here rather than in the policy because each transport knows
-        // its own byte count: the frame channel bounds the serialized payload,
-        // http2 the HPACK block, and this one the header lines. Same rule,
-        // measured where the number is real.
+        // Counted here rather than left to the policy because each transport
+        // knows its own byte count -- the frame channel bounds the serialized
+        // payload, http2 the HPACK block, this one the header lines. Same rule,
+        // applied where the number is real.
         var metadataBytes = 0;
         for (final h in requestHeaders) {
-          // `name: value\r\n` is the wire form; this undercounts by 4 per
-          // header, so it can only ever reject later than the wire would.
+          // `name: value\r\n` is the wire form, so this undercounts by 4 per
+          // header and can only ever reject later than the wire would.
           metadataBytes += h.name.length + h.value.length;
         }
         if (metadataBytes > policy.maxMetadataBytes) {
@@ -559,9 +557,9 @@ class RpcHttpResponderTransport
     // is resident until the handler finishes -- and a method that streams until
     // cancelled never does. Bounded by the same number the request side uses,
     // and for a stronger reason than symmetry: the caller refuses any body over
-    // it, so every byte past this point is retained to be thrown away.
-    // Measured at 64 KiB: 512/2048/8192 KiB produced cost +8.7/+12.6/+40 MiB of
-    // RSS, and the caller received 0 items in all three.
+    // it, so every byte past this point is retained to be thrown away — the
+    // caller receives nothing either way, and the only difference is how much
+    // this side holds first.
     //
     // `maxBufferedBytes`, the same knob the two body reads use: this is a whole
     // STREAM, and bounding it by the per-message limit made raising the knob

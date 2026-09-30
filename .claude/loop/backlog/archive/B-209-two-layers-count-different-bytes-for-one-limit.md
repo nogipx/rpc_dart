@@ -1,8 +1,8 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 544)
 round: 524 (measured as part of B-197; split out in the round-540 bookkeeping pass)
 commit: 6659c0ee
-release: breaking
+release: none
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart]
 probe: P-159
 reason: "owner decision — `maxMetadataBytes` names a different quantity at each of the two layers that enforce it, and reconciling them is a decision about which quantity the field MEANS. Round 520 found the same confusion in `maxActiveStreams`"
@@ -56,3 +56,41 @@ obvious: `validateMetadata` sees headers, not a frame, so the figure has to be d
 measured from the blob. P-159 is the bench. The canary is a payload that passes under the old
 count and must now be refused, plus one well under both, which is what says the change did not
 simply refuse everything.
+
+## Outcome (round 544) — the premise was refuted and the owner revised the decision
+
+`../rounds/544-three-wires-one-field.md`. Bench `P-176`. **The decision above was NOT carried
+out**: the round priced its premise first, and the premise did not hold.
+
+```
+  shape                         text      json      http   json/text  http/text
+  1 x 8192 B                     8194      8231      8198       1.00       1.00
+  128 x 8 B                      1426      2479      1938       1.74       1.36
+
+  per-header framing, derived    json 8.2 B/header    http 4.0 B/header
+
+  100 quote chars in one value   text 101   json 227   ACCEPTED by the policy
+  100 ordinary chars             text 101   json 127
+```
+
+**There is no single wire** — 8.2 B/header as JSON against exactly 4.0 as HTTP header lines, so
+any surcharge in the shared policy is right for at most one transport. **And the JSON size
+depends on the value's CONTENT**, not its length: the same 100 characters cost 127 bytes or 227
+depending on escaping, and a quote is printable ASCII, which the policy permits. So "count the
+same quantity" is not implementable from lengths at all.
+
+**Severity is also far lower than this lead implied.** `frame_multiplexed_channel.dart:222`
+already bounds an inbound metadata frame's DECLARED length against the field before buffering it,
+and `rpc_http_responder_transport.dart:320` carries its own aggregate bound whose comment already
+states the 4-byte undercount. The quantity a peer controls is checked; the gap is `maxHeaders`
+times a wire's per-header framing — 512 bytes on HTTP against a 64 KiB field.
+
+**The owner's revised decision: keep the text count and DOCUMENT it**, the same answer B-195 got.
+Carried out, plus the stale prose the round found on the way — `validateMetadata`'s comment still
+said "the HTTP transports validate here and reach no such check", which round 524 made false in
+that very function and which the HTTP responder never matched. Two measurements left in `lib/`
+moved to the journal.
+
+Pinned by a test with one arm per way the decision could have been implemented. **The first
+canary PASSED**, which showed the witness could not see a per-header surcharge until an arm with
+many small headers was added.

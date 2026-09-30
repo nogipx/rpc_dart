@@ -38,6 +38,17 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-176](P-176-which-wire-does-max-metadata-bytes-mean.md)** valid (round 544),
+  rpc_dart + rpc_dart_http — **prices a decision's PREMISE before it is implemented.** Three
+  counts of the same metadata side by side: the text `validateMetadata` totals, the JSON a frame
+  channel encodes, the header lines HTTP sends. The knob is the SHAPE, not the size — a
+  per-header framing overhead is invisible at few large headers (all three agree within 1%,
+  which is the control) and dominant at many small ones. Two refutations: the framing differs by
+  transport (`8.2` B/header JSON against exactly `4.0` HTTP), and the JSON size depends on a
+  value's CONTENT rather than its length (`127` bytes against `227` for the same 100
+  characters). Its JSON figure copies a private encoder, which is why the round's TEST uses the
+  public `encodeMetadata` instead — a bench may stand in for the code under test to size a
+  question, a regression test may not.
 - **[P-175](P-175-does-compression-enabled-need-a-codec.md)** valid (round 543),
   rpc_dart — **the knob is the REGISTRY, not the platform.** A platform difference is the
   obvious way to ask whether `compressionEnabled` needs a codec, and the wrong way: it needs a
