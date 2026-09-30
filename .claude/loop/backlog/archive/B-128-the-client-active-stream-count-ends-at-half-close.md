@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 546)
 round: 520
 commit: 7cdaabf6
 release: breaking
@@ -98,3 +98,38 @@ cancelled locally never receives a terminal frame.
 **The streaming shapes.** A client-stream call holds its request stream open, so it
 may already be counted for its whole life — which would mean the field's meaning
 varies by shape as well as by side. Worth knowing before choosing a release point.
+
+## Outcome (round 546) — FIXED, and the open question answered BOTH
+
+`../rounds/546-the-slot-that-came-back-too-soon.md`. Benches `P-157` (reproduced) and `P-177`
+(new, for the opposite failure).
+
+```
+before   after starting 4 MORE: 0 refused   -> the ceiling counts sending
+after    after starting 4 MORE: 4 refused   -> the ceiling bounds outstanding calls
+```
+
+**Five send-side sites released the slot at a half-close.** `_markFinished` did two things and
+only one was premature: recording the ending stops a repeat ending and the parked-send branch
+reaches it without `_claimEnding`, so the record stays and the release goes.
+
+**"Which event is the right end" is answered BOTH, and the canaries are how:**
+
+```
+  completion, an error status   the terminal inbound frame
+  a deadline, a cancel,         releaseStreamId, which the caller
+  a peer that never answers     pipeline performs in a `finally`
+```
+
+Canary B removed the terminal-frame release and ALL SEVEN TESTS PASSED — because
+`releaseStreamId` reaches every arm too. Canary C removed that mask instead, and exactly the
+three endings with no terminal frame failed. Neither mechanism is redundant; one covers the
+endings the other cannot see.
+
+**Canary A first failed as a TIMEOUT**, which is not a real message: the witness awaited the
+second batch to completion, and with slots freed early all eight are admitted and park. Polled
+with a short timeout instead, it reads `Expected: <4> Actual: <0>`.
+
+**The streaming shapes above are still unmeasured** — the change is shape-agnostic, removing a
+release at the half-close where every shape's request side ends, but no arm drives a
+client-stream or bidi call.

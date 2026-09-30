@@ -462,7 +462,9 @@ class RpcChannelTransport
         streamId: streamId,
       ),
     );
-    if (endStream) _releaseStream(streamId);
+    // Recorded, not released: see [_markFinished]. A trailer is this side's last
+    // word, and on a CALLER the response has not arrived yet.
+    if (endStream) _markFinished(streamId);
   }
 
   @override
@@ -585,7 +587,9 @@ class RpcChannelTransport
         streamId: streamId,
       ),
     );
-    _releaseStream(streamId);
+    // The half-close, which is where this defect lived: the slot stays charged
+    // until the call actually ends. See [_markFinished].
+    _markFinished(streamId);
   }
 
   /// Claims the right to end [streamId] and waits for anything parked on it.
@@ -816,9 +820,18 @@ class RpcChannelTransport
   void returnFlowCredit(int streamId, int bytes) =>
       _fc.returnCredit(streamId, bytes);
 
+  /// Records that this side has ended its half of [streamId].
+  ///
+  /// Does NOT release the stream. Half-closing means "I have finished SENDING",
+  /// and the call is outstanding until its response arrives — so releasing here
+  /// made [RpcSecurityPolicy.maxActiveStreams] count senders rather than calls,
+  /// and a client parked on four responses had its whole ceiling free again.
+  ///
+  /// The slot comes back on the terminal INBOUND frame (see [_onMessage]), on
+  /// [releaseStreamId] for a call that ends without one — cancelled, failed, or
+  /// abandoned — and on [close] for all of them at once.
   void _markFinished(int streamId) {
     _rememberFinished(streamId);
-    _releaseStream(streamId);
   }
 
   /// Records [streamId] as finished, keeping [_finishedStreams] bounded.
