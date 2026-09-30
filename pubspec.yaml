@@ -308,13 +308,23 @@ melos:
         # succeeded. Serialised, the same files pass every time; a single
         # cold start can still take ~70s here, hence --timeout 3x.
         #
+        # ONE FILE PER INVOCATION, because `-j 1` serialises TESTS and not
+        # BROWSERS. Within one `dart test` the second file's Chrome starts while
+        # the first is still shutting down and misses its deadline: measured, each
+        # file passes alone (34 s and 6 s) and the two together fail on the second
+        # with "Failed to load". This was invisible until round 543 -- `set -e`
+        # aborts at the first failing package, and core's suite had been red since
+        # round 513, so the script never reached this line.
+        #
         # `test/web_smoke_test.dart` is NOT listed: this package does not have
         # one. It was named here anyway, and `dart test` answers a missing path
         # by starting a browser that then never connects -- so the failure reads
         # as the cold-start flake the comment above describes, and survived
         # every retry and every raised timeout.
         (cd packages/transport/rpc_dart_isolate \
-          && fvm dart test -p chrome -j 1 --timeout 3x test/web_worker/echo_worker_test.dart test/web_worker/worker_startup_failure_test.dart)
+          && fvm dart test -p chrome -j 1 --timeout 3x test/web_worker/echo_worker_test.dart)
+        (cd packages/transport/rpc_dart_isolate \
+          && fvm dart test -p chrome -j 1 --timeout 3x test/web_worker/worker_startup_failure_test.dart)
 
     # --- Code generation (build_runner) ---
     gen:

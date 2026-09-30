@@ -76,6 +76,16 @@ Future<_Rig> _serve() async {
   return (paths: paths, port: server.port);
 }
 
+/// Polls until the server has recorded a request, so a cancel can be aimed at a
+/// call that is genuinely on the wire.
+Future<void> _waitForArrival(List<String> paths) async {
+  for (var i = 0; i < 300; i++) {
+    if (paths.isNotEmpty) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  fail('the request never reached the server');
+}
+
 void main() {
   test(
     'WITNESS: cancelling costs no second request',
@@ -98,7 +108,17 @@ void main() {
         context: RpcContext.withCancellation(token),
       );
 
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      // Cancel once the request has ARRIVED, not after a fixed delay.
+      //
+      // `releaseStreamId` completes an abort trigger, so a cancel that lands
+      // before the POST is accepted aborts it and the server records nothing at
+      // all — which is the abort working, and is not what this test is about. A
+      // 100 ms sleep was enough on an idle machine and not under load: measured
+      // over five runs each, `[]` every time at 0 and 1 ms, once in five at 5 ms,
+      // never at 20 ms and above. Waiting for arrival makes the premise a fact
+      // instead of a bet, and keeps the cancel inside the window the phantom
+      // request used to fire in (the handler sleeps 2 s).
+      await _waitForArrival(rig.paths);
       token.cancel('user asked');
       await expectLater(call, throwsA(isA<RpcCancelledException>()));
       await Future<void>.delayed(const Duration(milliseconds: 600));

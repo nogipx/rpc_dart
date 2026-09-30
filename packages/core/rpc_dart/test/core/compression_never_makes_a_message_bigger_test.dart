@@ -16,6 +16,18 @@
 // here pins.
 //
 // The measurements are in `.claude/loop/rounds/513`.
+//
+// VM ONLY, because every arm needs a codec that actually compresses and core
+// registers none on dart2js — the built-in gzip is backed by dart:io. The two GUARD
+// arms fail outright there, and the four witnesses would pass VACUOUSLY (nothing is
+// declared, so `on == off`), which reads as coverage and is not.
+//
+// Not because gzip is unavailable on the web: `RpcGzipCodec` in
+// `rpc_dart_compression` is cross-platform, and that package's suite already runs on
+// node. Whether compare-and-keep-smaller holds against THAT codec's ratios is worth
+// asserting and belongs there, where the codec lives.
+@TestOn('vm')
+library;
 
 import 'dart:async';
 

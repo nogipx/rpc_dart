@@ -220,6 +220,21 @@ abstract final class RpcGrpcCompression {
     return [identity, ..._codecs.keys];
   }
 
+  /// The encoding to DECLARE for outbound messages, or null for identity.
+  ///
+  /// Asks the registry, which is the point: declaring [gzip] from a constant made
+  /// every call fail wherever no gzip codec is registered — dart2js by
+  /// construction, since the built-in one is backed by dart:io — because the peer
+  /// refuses an encoding neither side can perform. A caller cannot compress with a
+  /// codec it does not have.
+  ///
+  /// Prefers [gzip] when it is registered, so the shipped default is unchanged;
+  /// otherwise the first other registered encoding.
+  static String? requestEncoding() {
+    if (_codecs.containsKey(gzip)) return gzip;
+    return _codecs.keys.isEmpty ? null : _codecs.keys.first;
+  }
+
   /// Cached comma-joined `grpc-accept-encoding` value.
   ///
   /// Invalidated on [register]/[unregister]. Built lazily by

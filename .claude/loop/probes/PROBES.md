@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-175](P-175-does-compression-enabled-need-a-codec.md)** valid (round 543),
+  rpc_dart — **the knob is the REGISTRY, not the platform.** A platform difference is the
+  obvious way to ask whether `compressionEnabled` needs a codec, and the wrong way: it needs a
+  browser, takes minutes, and conflates "fails on the web" with "fails because the registry is
+  empty". `unregister('gzip')` puts a VM run into dart2js's shipped state in under a second.
+  Reads the DECLARED encoding off the responder's inbound metadata rather than inferring it
+  from the outcome, since a call can fail for many reasons and only one is the header. **Its
+  first version used `memoryPair` and reported every arm healthy** — the declaration is guarded
+  by `!supportsZeroCopy`, so a zero-copy pair never reaches it, and an arm that cannot touch the
+  code under test reads exactly like a pass.
 - **[P-174](P-174-what-a-reused-peer-id-answers.md)** valid (round 541),
   rpc_dart_websocket + rpc_dart — **measures the ANSWER a caller gets, not a frame count.** Two
   callers on two connections share one stream number, and the only way to say the wrong one was

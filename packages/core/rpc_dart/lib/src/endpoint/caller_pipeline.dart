@@ -150,9 +150,17 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     if (compressionEnabled &&
         !transport.supportsZeroCopy &&
         !result.headers.containsKey(RpcHeaders.grpcEncoding)) {
-      result = result.withAdditionalHeaders({
-        RpcHeaders.grpcEncoding: RpcGrpcCompression.gzip,
-      });
+      // From the REGISTRY, like the accept-encoding header below. This was the
+      // constant `gzip`, and the two lines then disagreed about what this endpoint
+      // can do: where no gzip codec is registered the caller declared an encoding
+      // it could not perform, the peer refused it UNIMPLEMENTED, and every call
+      // failed. Null means nothing is registered, so nothing is declared.
+      final encoding = RpcGrpcCompression.requestEncoding();
+      if (encoding != null) {
+        result = result.withAdditionalHeaders({
+          RpcHeaders.grpcEncoding: encoding,
+        });
+      }
     }
 
     if (!transport.supportsZeroCopy &&
