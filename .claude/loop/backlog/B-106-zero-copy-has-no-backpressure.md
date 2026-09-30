@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: awaiting owner (round 549)
 round: 497
 commit: 60e4d3f8
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
@@ -131,3 +131,42 @@ set meaningfully; if a bound is wanted, it is a per-stream EVENT ceiling — a q
 which is what every other queue here is bounded by and needs nothing invented. That still
 creates a public field whose meaning has to be pinned exactly, which is the B-209 / B-128
 trap seen from a third side.
+
+## The measurement (round 549) — both claims are true, of different shapes
+
+`../rounds/549-a-pointer-or-a-payload.md`. Bench `P-178`.
+
+```
+  arm        RSS before   after building   after queueing   queue cost   (nominal 400 MiB)
+  HOLDING       220 MiB          616 MiB          615 MiB       -1 MiB
+  MINTING       217 MiB          217 MiB          530 MiB      313 MiB
+```
+
+**−1 MiB against 313 MiB.** Queuing a direct object the process already holds really does cost a
+pointer, exactly as the code claims. Queuing one nobody else holds costs its whole payload, and
+the queue is then the only thing retaining it. The claim was never wrong — it was a statement
+about the SHAPE, and nothing said so.
+
+The `after building` column is the control and it caught the rig twice: a zero-filled `Uint8List`
+is not resident until written (400 MiB of allocation moved RSS by 6), and running both arms in
+one process made the second arm's baseline the first arm's high-water mark. One arm per PROCESS
+now, baselines agreeing to 3 MiB.
+
+## What is still the owner's, and it is narrower now
+
+The decision's fork — *is holding the rare shape or the common one* — **cannot be resolved by
+measurement here**: which shape an application uses is a fact about applications, and no probe in
+this repository reaches it.
+
+**But the fork may not need resolving.** A per-stream EVENT ceiling, the queue depth this lead
+already named as the only bound an operator can set meaningfully, is correct for BOTH arms:
+
+- on MINTING it is the only thing bounding memory at all, and 313 MiB from 400 messages is what
+  is at stake;
+- on HOLDING it costs nothing real — the objects exist either way, so refusing the 1001st is
+  honest backpressure about the QUEUE, whose own cost measures `-1 MiB`.
+
+So the question put back is not "which shape is common" but: **add a per-stream queue-depth
+ceiling for direct objects, given it is safe under both shapes?** It is a new public policy
+field, and pinning what it counts is the B-209 / B-128 trap from a third side — which is why it
+is asked rather than taken.

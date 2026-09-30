@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-178](P-178-minting-against-holding.md)** valid (round 549),
+  rpc_dart — **measures ATTRIBUTION, not a count**: how much memory exists because the queue holds
+  these objects, over and above what exists anyway. `HOLDING -1 MiB` against `MINTING 313 MiB` for
+  400 direct objects of 1 MiB, which settles that "a directPayload weighs nothing" is a statement
+  about the SHAPE rather than the mechanism. **Its `after building` control caught the rig twice**
+  — a zero-filled `Uint8List` is not resident until written, so 400 MiB of allocation moved RSS by
+  6 and the queue cost read `1 MiB`; and both arms in one process made the second's baseline the
+  first's high-water mark, so the deltas were not comparable. One arm per PROCESS, selected by
+  argument. Cannot answer which shape applications actually use — that is not a fact about this
+  library.
 - **[P-177](P-177-does-every-ending-return-the-slot.md)** valid (round 546),
   rpc_dart — **the instrument for the OPPOSITE failure**, built because holding a slot until
   completion turns "admits too much" into "refuses everything for the life of the connection" if
