@@ -75,3 +75,29 @@ arrive on.
 
 Does NOT cover bidirectional calls, direct/zero-copy payloads, or fragmentation of
 metadata frames rather than data.
+
+## Two arms added in round 547
+
+Both exist because B-126's decision demanded them, and each answers a question the original
+three arms could not.
+
+**`truncate`** — the first half carries the half-close and the rest never comes, which is the
+peer that stops mid-frame. It is the arm for the failure a fix INTRODUCES: tolerating an
+incomplete frame must not mean waiting for one forever.
+
+```
+peer stops mid-frame
+   unary         status 3 with the fix / status 4 Deadline with its guard ablated
+   server stream status 4: Deadline exceeded          <- B-216, and unchanged either way
+   client stream got:0                                <- treats it as zero messages
+```
+
+That middle row is a finding of its own: the same input leaves a server stream waiting to its
+deadline, with the fix in place and with it removed. Filed as B-216.
+
+**`reorderMetadata`** — the opening metadata frame is held until after the data frames, which is
+the documented broadcast-reorder case and the only shape in which BOTH fragments are buffered
+before the responder is dispatched. It was built to witness "feed every buffered message, not
+just the first" and **it does not**: ablating that part changes no arm, because the routing
+reaches every case. Recorded so a third attempt does not mistake that part for verified.
+

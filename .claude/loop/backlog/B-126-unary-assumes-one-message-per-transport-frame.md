@@ -99,3 +99,59 @@ waiting. The second arm is the canary for the failure this fix can introduce.
 to fragment at all. It does not change the decision, but it sizes the risk of touching a hot
 path and tells the round whether an end-to-end witness is constructible without a
 hand-written transport.
+
+## Attempt 2 (round 547) — built, both arms passing, REVERTED
+
+`../rounds/547-the-second-revert.md`. `lib/` is byte-identical to its committed state. **The
+decision is not reversed**; what follows is the constraint any third attempt must satisfy.
+
+**The reachability reading, as asked.** No shipped transport fragments: http2's responder keeps a
+per-stream `RpcMessageParser` with `emitFramed: true`, the frame channel reassembles, HTTP/1.1
+buffers the whole body. The witness must be built, and this is a capability change.
+
+**Five parts, not three** — the decision's three plus two it did not name: keep the per-stream
+state (it owns the parser) while a frame is incomplete, and answer INVALID_ARGUMENT when the peer
+half-closes mid-frame. Both witnesses passed:
+
+```
+each frame split in two   unary got:64
+peer stops mid-frame      unary status 3: ... the last gRPC frame is incomplete
+```
+
+### THE BLOCKER, and it is not a detail
+
+**`RpcMessageParser` returning no messages does not mean "incomplete".** It also means
+"refused". A 32 MB payload compressed against a **1 MB configured policy**:
+
+```
+expected  contains 'max: 1048576'      (RESOURCE_EXHAUSTED, the operator's limit)
+actual    status 3 'Request stream closed mid-message ... the last gRPC frame is incomplete'
+```
+
+A security control reporting the wrong status and no longer naming the limit it enforces —
+worse than the INTERNAL this lead is about. The whole design rested on a distinction the parser
+does not expose.
+
+**A third attempt must take that distinction FROM the parser**, which knows whether it holds a
+partial frame, and not from the emptiness of its result. Adding that is the first step, not the
+fix.
+
+### What the canaries established, so it is not re-derived
+
+- the half-close answer is what prevents the HANG (round 518's regression reproduced exactly by
+  ablating it: `status 4: Deadline exceeded`);
+- the fragment ROUTING is what makes the call succeed rather than fail cleanly;
+- **"feed every buffered message" is unwitnessed** — a bench arm was built for it (fragments
+  reordered ahead of their metadata) and ablating it changed nothing, because the routing reaches
+  every case. Keep it or drop it on judgement, not on evidence.
+
+### Ready to reuse
+
+`test/streams/unary_tolerates_a_fragmented_frame_test.dart` is in the tree with both witnesses
+SKIPPED and the condition in the skip reason; its two guards run. `P-155` gained the `truncate`
+and `reorderMetadata` arms.
+
+**And one trap worth knowing before touching this again**: `requestHandled` read the per-stream
+state, which `handleMessage`'s `finally` removes — so a COMPLETED call reported "still arriving"
+and the pipeline skipped the teardown it owed. That surfaced as an undisposed call scope and an
+unreleased http2 endpoint, two failures away from the code that caused them.
