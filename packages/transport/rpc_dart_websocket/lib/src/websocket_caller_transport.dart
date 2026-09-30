@@ -386,6 +386,9 @@ class RpcWebSocketCallerTransport
           // Un-closed but NOT silent: see [_disconnected]. Reached by any server
           // restart or dropped network, with no reconnect call involved.
           _disconnected = true;
+          // The peer-started drop, which is the earliest this wrapper can learn
+          // of one. See [_abandonPeerStreams].
+          _abandonPeerStreams('WebSocket connection lost');
           return;
         }
         close();
@@ -488,6 +491,39 @@ class RpcWebSocketCallerTransport
   bool _liveHere(int streamId) =>
       _idsOnThisConnection.contains(streamId) ||
       _peerStreamIds.contains(streamId);
+
+  /// Ends the peer-initiated calls of a connection that is gone, before a new
+  /// one can mint anything.
+  ///
+  /// The peer restarts its numbering on every socket, so an answer still being
+  /// written for the dropped connection's stream N lands on whatever call now
+  /// holds N: the new caller receives the OLD call's response, and its own
+  /// request is never dispatched, because the old stream state is still there
+  /// and a second opening frame on a bound stream is ignored. [_liveHere] cannot
+  /// tell the two apart — the interface carries a bare `int`.
+  ///
+  /// Said in the protocol the responder already speaks, the peer's cancellation
+  /// notice, so the handler's token is cancelled, its responder closed and its
+  /// stream state reclaimed. Emitted BEFORE the reconnect's awaits, or the
+  /// cleanup races the new socket's first frame.
+  void _abandonPeerStreams(String reason) {
+    if (_peerStreamIds.isEmpty || _incomingCtl.isClosed) return;
+    final abandoned = _peerStreamIds.toList(growable: false);
+    _peerStreamIds.clear();
+    for (final streamId in abandoned) {
+      _incomingCtl.add(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata([
+            RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+            RpcHeader(RpcHeaders.xCancellationReason, reason),
+            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
+          ]),
+          isEndOfStream: true,
+        ),
+      );
+    }
+  }
 
   /// Forgets a peer-initiated stream once this side has finished answering it.
   ///
@@ -651,6 +687,10 @@ class RpcWebSocketCallerTransport
       // Safe to set before `_reconnecting` is assigned in [reconnect]: nothing
       // runs between this line and that one, the prologue here having no await.
       _disconnected = true;
+      // Here too, and before the awaits below, which is what gives the
+      // responder's cleanup the whole handshake to run in. Idempotent: the
+      // peer-started path above has already emptied the set.
+      _abandonPeerStreams('WebSocket reconnecting');
       // Read as early as possible, but the value must survive `_inner` being
       // closed either way -- on a peer-started drop it closed itself before
       // this method was ever called. See [_attach].

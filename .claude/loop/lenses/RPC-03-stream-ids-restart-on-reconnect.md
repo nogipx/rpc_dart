@@ -3,7 +3,7 @@ refines: U-18
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
 applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
-applied: [217, 218, 224, 234, 527]
+applied: [217, 218, 224, 234, 527, 541]
 status: confirmed (round 234)
 ---
 
@@ -122,3 +122,17 @@ remaining forms of it are design changes.
 > "was this ever mine" and the question is "is this the same call" — identical
 > until the numbers repeat, which is exactly the case the guard exists for. 218
 > measured this for a ledger; 527 measured it for the set.
+
+Round 541 carried the owner's decision out and found the lens's shape **three layers
+deep**, not one. A caller on the reused number was handed another call's ANSWER, and its
+own request was never dispatched, because the transport's stable stream hides the drop
+from the responder pipeline. Bench
+`../probes/P-174-what-a-reused-peer-id-answers.md`.
+
+> **A bare `int` in an interface is a teardown's only argument, and it stops
+> identifying a call at the connection boundary.** Every layer that resolves one
+> LATE is a site: the transport's send guard, a closed responder still writing, and
+> the pipeline's own `_cleanupStream` — which took the state it was issued for
+> rather than looking the id up again. Where the state object exists, identity is
+> the answer and costs one `identical`; where only the int exists, the answer is to
+> make the old state unreachable first.

@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-174](P-174-what-a-reused-peer-id-answers.md)** valid (round 541),
+  rpc_dart_websocket + rpc_dart — **measures the ANSWER a caller gets, not a frame count.** Two
+  callers on two connections share one stream number, and the only way to say the wrong one was
+  served is to read what each was told: row 1 handed the caller asking `two` the answer to `one`.
+  The collision is the server's ordinary behaviour, not staged — a dropped connection gets a FRESH
+  endpoint, which numbers from the bottom. Captures the client pipeline's own records at `internal`,
+  because ignored-as-a-repeat, served, and torn-down-by-the-old-call all look identical from
+  outside. Supersedes `P-161`'s open question: that bench said in its own record that it never drove
+  a pipeline.
 - **[P-173](P-173-do-repeated-metadata-values-survive.md)** valid (round 540),
   rpc_dart_http — **quotes and COUNTS every value, because the question is how many there are and
   Dart's list printing cannot answer it**: `['Mon', '29 Sep …']` and `['Mon, 29 Sep …']` have the

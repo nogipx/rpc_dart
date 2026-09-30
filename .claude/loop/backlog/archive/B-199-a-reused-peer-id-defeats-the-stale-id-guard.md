@@ -1,9 +1,10 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 541)
 round: 527
 commit: c47683d3
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 probe: P-161
+release: changelog
 reason: "owner decision — CONFIRMED and measured; the two fixes that work are both design changes with a per-frame cost, and RPC-03 round 218 already measured that the cheap one cannot work"
 ---
 
@@ -93,3 +94,33 @@ that turns an error into a hang is worse than the error.
 
 Round 224's own record is the reading to start from; `_idsOnThisConnection`'s doc already
 describes the outbound half of this mechanism.
+
+## Outcome (round 541) — FIXED, and the pipeline made it worse than filed
+
+`../rounds/541-the-number-that-belonged-to-somebody-else.md`. Bench `P-174`, which drives
+the real responder — the thing `P-161` said in its own record it did not do.
+
+```
+  arm                                   "two" got       handler started / cancelled
+  reconnect, id REUSED, old answer late  answered one   [one]         / []
+  reconnect, first call already done     answered two   [one, two]    / []
+  CONTROL no reconnect (ids 2 and 4)     answered two   [one, two]    / []
+```
+
+The caller asking `two` was handed the answer to `one`, and its own request was never
+dispatched. That is worse than the trailer this lead predicted: a RESPONSE crossing between
+two callers on two connections.
+
+**Three mechanisms, not one**, each found by fixing the previous and re-measuring, each with
+its own canary: the wrapper never told the responder the socket dropped, so the old stream
+state survived and the new call read as a repeat opening frame; a CLOSED `UnaryResponder`
+still wrote its late CANCELLED trailer; and the old call's tail `_cleanupStream` tore down
+whatever the number named by then.
+
+The owner's decision was carried out as decided — the peer state is made unreachable, not
+translated — by saying it in the protocol the responder already speaks (the peer's own
+`x-client-cancelled` notice), emitted before the reconnect's awaits.
+
+**The remainder is B-212**, not left here: the streaming shapes got the same `only:` guard by
+inspection rather than by measurement, and whether the reclamation can lose its race against
+the new socket's first frame is unpriced.

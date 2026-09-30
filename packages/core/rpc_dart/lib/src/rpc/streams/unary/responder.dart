@@ -206,6 +206,19 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// was not.
   bool get _callIsOver => _context?.cancellationToken?.isCancelled ?? false;
 
+  /// Whether the pipeline has torn this responder down.
+  ///
+  /// A closed responder writes NOTHING, not even the CANCELLED notice
+  /// [_dropLateResponse] exists for: the stream is no longer this call's to write
+  /// on. Over a reconnecting transport the peer restarts its numbering on each
+  /// socket, so a late trailer on the old id reaches whichever call now holds
+  /// that number — and the new caller is answered CANCELLED for a call it never
+  /// cancelled.
+  ///
+  /// The other shapes have this already: [StreamProcessor.close] clears
+  /// `_isActive`, which gates every write it makes.
+  bool _closed = false;
+
   /// Drops a finished handler's answer and tells the caller the call ended.
   ///
   /// A status, not silence. Dropping the response and returning left the caller
@@ -516,6 +529,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // See [_callIsOver]: the handler is the only slow part of a unary call,
       // so this is where a cancel, deadline, drain or close lands.
+      if (_closed) return;
       if (_callIsOver) {
         await _dropLateResponse(streamId);
         return;
@@ -674,6 +688,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       final response = await _handler(request);
 
       // See [_callIsOver]. Same window as the codec branch.
+      if (_closed) return;
       if (_callIsOver) {
         await _dropLateResponse(streamId);
         return;
@@ -757,6 +772,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// Closes the responder; transport remains open.
   @override
   Future<void> close() async {
+    _closed = true;
     await _subscription?.cancel();
     await _cancellationSubscription?.cancel();
     if (_logger.isInternal) {

@@ -299,7 +299,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     state.armHalfOpen(timeout, () {
       // Dispatched in the meantime: nothing to reclaim.
       if (state.responder != null) return;
-      if (_respStreams[state.id] == null) return;
+      // Identity, not presence: across a reconnect the id can already name a
+      // different call, and reclaiming that one answers it DEADLINE_EXCEEDED for
+      // a deadline it never had. See [_cleanupStream]'s `only`.
+      if (!identical(_respStreams[state.id], state)) return;
       _log.warning(
         'Reclaiming stream ${state.id}: half-open for '
         '${timeout.inMilliseconds}ms without a request message',
@@ -998,7 +1001,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         _respPingHandler.respond(
           streamId: state.id,
           context: context,
-          onComplete: () => _cleanupStream(state.id),
+          onComplete: () => _cleanupStream(state.id, only: state),
         ),
         'ping response',
       );
@@ -1192,7 +1195,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         state.endOfStreamPending = true;
         return;
       }
-      _detached(_cleanupStream(state.id), 'stream cleanup');
+      _detached(_cleanupStream(state.id, only: state), 'stream cleanup');
       return;
     }
     if (_isPingMethodKey(methodKey)) return;
@@ -1271,7 +1274,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     final responder = state.responder;
     if (responder != null) await _closeResponder(responder);
-    await _cleanupStream(state.id);
+    await _cleanupStream(state.id, only: state);
   }
 
   // ---------------------------------------------------------------------------
@@ -1382,7 +1385,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             );
             await processor.send(response);
             await processor.finishSending();
-            await _cleanupStream(streamId);
+            await _cleanupStream(streamId, only: state);
           } catch (error, stackTrace) {
             contextLogger.error(
               'Error in zero-copy unary handler',
@@ -1395,7 +1398,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
               wire.message,
               statusDetailsBin: wire.detailsBin,
             );
-            await _cleanupStream(streamId);
+            await _cleanupStream(streamId, only: state);
           }
         },
         onError: (Object error, StackTrace stackTrace) async {
@@ -1419,7 +1422,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             wire.message,
             statusDetailsBin: wire.detailsBin,
           );
-          await _cleanupStream(streamId);
+          await _cleanupStream(streamId, only: state);
         },
       );
 
@@ -1474,7 +1477,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       }
     }
 
-    await _cleanupStream(streamId);
+    await _cleanupStream(streamId, only: state);
   }
 
   Future<void> _ensureClientStreamResponder(
@@ -1513,7 +1516,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
       state.responder = responder;
       _detached(
-        responder.done.whenComplete(() => _cleanupStream(streamId)),
+        responder.done.whenComplete(
+          () => _cleanupStream(streamId, only: state),
+        ),
         'responder completion',
       );
 
@@ -1561,7 +1566,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     state.responder = responder;
     _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId)),
+      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
       'responder completion',
     );
 
@@ -1611,7 +1616,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
       state.responder = responder;
       _detached(
-        responder.done.whenComplete(() => _cleanupStream(streamId)),
+        responder.done.whenComplete(
+          () => _cleanupStream(streamId, only: state),
+        ),
         'responder completion',
       );
       responder.bindToMessageStream(
@@ -1645,7 +1652,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     state.responder = responder;
     _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId)),
+      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
       'responder completion',
     );
     responder.bindToMessageStream(
@@ -1678,7 +1685,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
       state.responder = responder;
       _detached(
-        responder.done.whenComplete(() => _cleanupStream(streamId)),
+        responder.done.whenComplete(
+          () => _cleanupStream(streamId, only: state),
+        ),
         'responder completion',
       );
       responder.bindToMessageStream(
@@ -1732,7 +1741,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     state.responder = responder;
     _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId)),
+      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
       'responder completion',
     );
     responder.bindToMessageStream(
@@ -1838,7 +1847,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         stackTrace: stackTrace,
       );
     } finally {
-      await _cleanupStream(state.id);
+      await _cleanupStream(state.id, only: state);
     }
   }
 
@@ -1899,7 +1908,37 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   // Stream management
   // ---------------------------------------------------------------------------
 
-  Future<void> _cleanupStream(int streamId) async {
+  /// Tears [streamId] down; [only] restricts that to one particular call.
+  ///
+  /// **Every teardown that runs after an await must pass it.** A stream id does
+  /// not identify a call for longer than a connection: a peer numbers its own
+  /// streams and restarts at the bottom on each socket, so across a reconnect the
+  /// same number names a DIFFERENT call — and a handler parked when the socket
+  /// dropped reaches this line with the old number in hand. Without the check it
+  /// closed the new call's responder, released its id and remembered it as torn
+  /// down, mid-answer, and the new caller waited out its own deadline.
+  ///
+  /// Nothing here can be done for a call that is already gone, so an id whose
+  /// state has moved on is left entirely alone: remembering it as closed would
+  /// make the pipeline ignore the live call's own frames, and releasing the slot
+  /// would give away a slot that call is holding.
+  ///
+  /// The bulk teardowns ([_abortActiveStreams], [closeResponderResources], the
+  /// drain's forced cleanup) do NOT pass it, and do not need to: they run when the
+  /// connection or the endpoint is ending, so no new call can take the number.
+  Future<void> _cleanupStream(
+    int streamId, {
+    RpcResponderStreamState? only,
+  }) async {
+    if (only != null && !identical(_respStreams[streamId], only)) {
+      if (_log.isInternal) {
+        _log.internal(
+          'Skipping a stale cleanup for stream $streamId: the id now names '
+          'another call',
+        );
+      }
+      return;
+    }
     // Remember the id even when there was no state: the rejection path can run
     // before the peer's payload frame arrives, and that frame must not open a
     // fresh, never-cleaned entry.
@@ -2157,12 +2196,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // stream state and responder forever, on every call shape -- and with
     // maxActiveStreams enforced that leak becomes a hard outage at the ceiling.
     state.armReclaim(_reclaimGrace, () {
-      if (_respStreams[state.id] == null) return;
+      if (!identical(_respStreams[state.id], state)) return;
       _log.warning(
         'Stream ${state.id} still open ${_reclaimGrace.inSeconds}s after its '
         'deadline — reclaiming',
       );
-      _detached(_cleanupStream(state.id), 'stream cleanup');
+      _detached(_cleanupStream(state.id, only: state), 'stream cleanup');
     });
   }
 
