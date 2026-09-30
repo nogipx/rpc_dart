@@ -193,19 +193,16 @@ final class ClientStreamCaller<
     await _processor.send(request);
   }
 
-  /// Default bound on the response wait for a call with no deadline of its own.
-  static const Duration _noDeadlineFallback = Duration(seconds: 60);
-
   /// Completes sending requests and waits for a single response.
   ///
   /// Returns the single server response. The wait is bounded by the context
-  /// deadline when one is set, and by [_noDeadlineFallback] otherwise — the
-  /// same rule [UnaryCaller] applies.
+  /// deadline when one is set and is UNBOUNDED otherwise — the same rule
+  /// [UnaryCaller] applies, and the one the streaming shapes always had.
   ///
-  /// The fallback used to apply unconditionally, so a deadline LONGER than it
-  /// was silently truncated: measured against a server that never responds, a
-  /// 90s deadline ended the unary call at 90s and the client-stream call at
-  /// 60s. A streaming upload given ten minutes died after one.
+  /// There was a 60 s fallback here for a call with no deadline. A hidden limit
+  /// the server never hears about is worse than no limit: no `grpc-timeout` was
+  /// sent for it, so the caller gave up while the server still believed the call
+  /// was live. Set a deadline on the context to bound this.
   Future<TResponse> finishSending() async {
     if (_sendingFinished) {
       throw RpcStatusException(
@@ -224,7 +221,10 @@ final class ClientStreamCaller<
       // Computed here, not at construction: requests may have taken a while to
       // send, and remainingTime already accounts for that.
       final deadline = _context?.deadline;
-      final wait = _context?.remainingTime ?? _noDeadlineFallback;
+      final wait = _context?.remainingTime;
+
+      // No deadline, no bound. See the doc above.
+      if (wait == null) return await _responseCompleter.future;
 
       // RpcLongTimer.timeout, not Future.timeout: `wait` comes from a deadline,
       // which a peer can set, and a bare Timer past the JS ceiling fires at

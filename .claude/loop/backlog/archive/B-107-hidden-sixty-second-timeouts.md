@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 548)
 release: breaking
 round: 498
 commit: 3391d5ed
@@ -107,6 +107,39 @@ does that unevenly — unary and client-stream carry it, the other shapes do not
 **Verified still present at review time**: `_noDeadlineFallback = Duration(seconds: 60)` in
 `client/caller.dart`, and `timeout ?? remainingTime ?? const Duration(seconds: 60)` in
 `unary/caller.dart`.
+
+## Outcome (round 548) — FIXED, and all four shapes now agree
+
+`../rounds/548-no-deadline-no-bound.md`. Bench `P-136`.
+
+```
+no deadline, BEFORE            unary 60.0s   clientStream 60.0s   serverStream 65.0s
+no deadline, AFTER             unary 65.0s   clientStream 65.0s   serverStream 65.0s
+                               ^ all three are the PROBE's budget, not a bound
+
+CONTROL, 500ms deadline        grpc-timeout SENT, 0.5s, RpcDeadlineExceededException, cancelled=1
+```
+
+Both constants removed and the effective timeout made nullable, with an early return when
+nothing set a bound — **including the zero-copy unary branch**, which this lead listed as never
+measured and which carried the same fallback.
+
+**`cancelled` goes 1 -> 0 on the no-deadline rows and that is correct**: round 498 taught the
+caller to notify when it abandoned a call at the implicit bound, and with no abandonment there is
+nothing to notify.
+
+**The witness cannot see the shipped constant**, which is stated in the test: a 60 s bound is
+invisible to an assertion that waits 400 ms. The canaries restore each fallback at 250 ms so a
+millisecond-scale witness observes the mechanism, and the 60 s instance stays the probe's job.
+
+**Three comments described the bound as current behaviour** and were corrected — one in
+`UnaryCaller` itself and two test headers. The remaining `seconds: 60` hits are a different thing
+(`halfOpenStreamTimeout`, backoff `maxDelay`).
+
+**Still open from this lead's own list, and deliberately**: the exception TYPE still differs by
+origin. With the fallback gone, `TimeoutException` now has exactly one source — the explicit
+`timeout:` argument — instead of two, which is less surprising than before but not the unified
+type the lead mused about.
 
 **BREAKING, and the CHANGELOG line is the deliverable as much as the code.** A caller relying
 on the implicit 60 s gets a hanging call where it used to get an error. The line has to say

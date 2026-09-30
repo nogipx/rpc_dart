@@ -5,7 +5,8 @@
 // UnaryCaller subscribed to its response stream with onError but NO onDone. So
 // when the stream ended without a response -- transport closed, responder shut
 // down, connection lost -- nothing ever completed the caller's completer, and
-// the call hung until the 60s fallback, or forever if it had a longer deadline.
+// the call hung for as long as its deadline allowed — and, with no deadline, for
+// ever.
 //
 // Found by tearing each layer down under four in-flight calls, one per shape:
 //

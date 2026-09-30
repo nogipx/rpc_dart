@@ -13,7 +13,7 @@
 //
 // The caller got nothing back at all. _handleClientCancellation tears down
 // without replying (correct for a real cancellation, where the client already
-// knows), so the call sat until the 60s default timeout.
+// knows), so the call sat until its deadline — and with none, indefinitely.
 //
 // Two defences: the key is now reserved, so it cannot be set from context
 // metadata; and a call-OPENING frame can no longer be a cancellation, since

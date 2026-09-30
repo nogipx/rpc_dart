@@ -86,10 +86,18 @@ final class UnaryCaller<TRequest, TResponse> {
     // Check cancellation and deadline from context.
     _checkContextBeforeCall();
 
-    // Determine timeout: parameter, context, or default.
+    // An explicit argument, then the context's deadline, and then NOTHING.
+    //
+    // There was a `?? const Duration(seconds: 60)` here. A hidden limit the server
+    // never hears about is worse than no limit: it turned a slow answer into a
+    // client-side error while the server still believed the call was live, no
+    // `grpc-timeout` was ever sent for it, and it applied unevenly — unary and
+    // client-stream carried it, server-stream and bidi never had it.
+    //
+    // No deadline now means no bound, which is what gRPC does and what the two
+    // streaming shapes already did.
     final remainingTime = _context?.remainingTime;
-    final effectiveTimeout =
-        timeout ?? remainingTime ?? const Duration(seconds: 60);
+    final effectiveTimeout = timeout ?? remainingTime;
 
     // The call's own deadline, when that is what bounds the wait — an explicit
     // [timeout] argument takes precedence and is not a deadline. Used below to
@@ -380,8 +388,8 @@ final class UnaryCaller<TRequest, TResponse> {
               // The stream ended without a response. There was no handler here
               // at all, so a transport or responder dying mid-call left the
               // caller waiting on a completer nothing would ever complete --
-              // until the 60s fallback, or forever if the call had a longer
-              // deadline. Measured by tearing each layer down under four
+              // for as long as its deadline allowed, and with no deadline,
+              // forever. Measured by tearing each layer down under four
               // in-flight calls: the other three shapes settled and unary hung
               // every time. ClientStreamCaller has always had this handler;
               // unary simply lacked it.
@@ -477,6 +485,8 @@ final class UnaryCaller<TRequest, TResponse> {
             if (!completer.isCompleted) completer.completeError(error, stack);
           }),
         );
+        // The zero-copy branch, unbounded for the same reason as the codec one.
+        if (effectiveTimeout == null) return await completer.future;
         return await RpcLongTimer.timeout(
           completer.future,
           effectiveTimeout,
@@ -560,9 +570,13 @@ final class UnaryCaller<TRequest, TResponse> {
       // Await response with timeout if provided.
       if (_logger.isInternal) {
         _logger.internal(
-          'Response timeout set to $effectiveTimeout [streamId: $streamId]',
+          effectiveTimeout == null
+              ? 'No response timeout: no deadline was set [streamId: $streamId]'
+              : 'Response timeout set to $effectiveTimeout [streamId: $streamId]',
         );
       }
+      // Unbounded when nothing set a bound — see [effectiveTimeout] above.
+      if (effectiveTimeout == null) return await completer.future;
       // RpcLongTimer.timeout, not Future.timeout: effectiveTimeout can come
       // from a peer-set deadline, and a bare Timer past the JS ceiling fires
       // immediately. See [RpcLongTimer].

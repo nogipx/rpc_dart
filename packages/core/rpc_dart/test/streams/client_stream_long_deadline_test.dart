@@ -141,7 +141,8 @@ void main() {
   });
 
   test('no deadline still returns normally', () async {
-    // The 60s fallback path: unchanged for a call with no deadline of its own.
+    // A call with no deadline of its own, which since round 548 has NO implicit
+    // bound at all. This one is answered, so it never needed one.
     final rig = _connect();
     expect(
       (await _call(
