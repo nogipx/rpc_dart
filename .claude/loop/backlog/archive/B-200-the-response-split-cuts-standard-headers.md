@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 545)
 round: 540
 commit: 7fe7351c
 release: breaking
@@ -82,3 +82,29 @@ the delimiter, because a caller that wants the parts can still get them — it j
 must arrive as ONE value. The canary is a repeated CUSTOM key, which must also arrive as one —
 that is the part an application notices, and asserting only `date` would pass a fix that special-cased
 standard fields after all.
+
+## Outcome (round 545) — FIXED, and the canary the decision asked for earned its place
+
+`../rounds/545-splitting-is-the-receivers-job.md`. Bench `P-173`, one arm added.
+
+```
+  date                   2 value(s): "Mon" + "29 Sep …"      ->  1 value(s): "Mon, 29 Sep …"
+  www-authenticate       2 value(s): "Basic realm="one" + …  ->  1 value(s): "Basic realm="one, two""
+  x-repeated             (new arm)                               1 value(s): "one, two"
+  the request half       [first,second]                          unchanged
+```
+
+**The decision's canary requirement was exactly right.** Implementing the rejected option — a
+list exempting `date` and `www-authenticate` — fails ONE test, the repeated custom key, while the
+standard-field witness PASSES. So that arm pins the choice and the other only pins the symptom.
+
+**Three existing tests were pinning the removed behaviour**, from round 540's own delimiter fix.
+Their harness was the valuable part and stayed; the assertions inverted and the file is renamed
+`a_joined_response_header_is_not_split_test.dart`.
+
+**The send side's comment was the subtle part.** It justified joining by pointing at the receive
+side — "it is what the response side already splits on" — a justification that is a mirror of the
+other direction and breaks silently when one side moves. It now states the rule itself.
+
+The responder direction was already correct and now says so, naming the caller's receive path as
+its matching half.

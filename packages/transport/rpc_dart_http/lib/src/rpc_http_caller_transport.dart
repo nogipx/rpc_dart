@@ -31,12 +31,6 @@ const int _maxReasonChars = 200;
 /// UTF-8, and an HTML page usually puts its interesting words after some markup.
 const int _maxReasonBytes = 8 * 1024;
 
-/// Separates values a receiver combined into one field line.
-///
-/// gRPC names the bare `,`; RFC 9110 only RECOMMENDS comma-SP, so whitespace
-/// either side is optional and a peer following gRPC's own text emits none.
-final RegExp _headerValueDelimiter = RegExp(r'\s*,\s*');
-
 /// A single-line, bounded, printable rendering of an error [body], or null when
 /// there is nothing worth repeating.
 ///
@@ -410,7 +404,12 @@ class RpcHttpCallerTransport
       // `,` is the delimiter PROTOCOL-HTTP2 names: duplicate header names "may have
       // their values joined with ',' as the delimiter and be considered semantically
       // equivalent". So this is the encoding the field's own definition provides
-      // for, and it is what the response side already splits on.
+      // for, and writing `map[name] = value` instead dropped every value but the
+      // last.
+      //
+      // The receive path does NOT split this back apart -- see there. Joined and
+      // repeated are equivalent on the wire, and only the receiver knows whether a
+      // given key's comma separates values or belongs to one.
       //
       // A value that must contain a comma has a specified home: a `-bin` key,
       // base64, whose alphabet has none.
@@ -511,35 +510,34 @@ class RpcHttpCallerTransport
       final initialHeaders = <RpcHeader>[];
       final trailerHeaders = <RpcHeader>[];
       streamedResponse.headers.forEach((name, value) {
-        // Split repeated field lines back apart. package:http has already
-        // combined them -- `BaseResponse.headers` is a `Map<String, String>` --
-        // and RFC 9110 s5.3 permits that only for a field whose definition
-        // allows the values to be recombined as a comma-separated list.
+        // ONE value per field line, exactly as `package:http` combined it --
+        // `BaseResponse.headers` is a `Map<String, String>`, so repeated lines
+        // arrive already joined and they are handed on that way.
         //
-        // Custom-Metadata IS that field: PROTOCOL-HTTP2 says duplicate header
-        // names "may have their values joined with ',' as the delimiter and be
-        // considered semantically equivalent". So splitting is the recombination
-        // the field's own definition provides for, not a lossy guess -- and NOT
-        // splitting would collapse values the spec calls equivalent.
+        // NOT split back apart, although PROTOCOL-HTTP2 calls joined and repeated
+        // Custom-Metadata "semantically equivalent" and so permits it. Telling a
+        // joined LIST from one value containing a comma needs the field's
+        // definition, and the wire carries no marker for that: `date`'s comma
+        // follows the weekday and `www-authenticate`'s sits inside a quoted
+        // string, so splitting every field cut those in half. The alternative was
+        // a list of standard fields to exempt, whose every missing entry is that
+        // same defect for that field, silently, and which has to track HTTP's own
+        // evolution.
         //
-        // The DELIMITER is ',' with optional surrounding whitespace, not ', '.
-        // gRPC names the bare comma; RFC 9110 only recommends comma-SP ("For
-        // consistency, use comma SP"). Splitting on ', ' alone never split a
-        // peer that joined the way gRPC's own text describes.
+        // So splitting is the RECEIVER's job, where the key's meaning is known.
+        // The delimiter is ',' with optional surrounding whitespace: gRPC names
+        // the bare comma, RFC 9110 only recommends comma-SP.
         //
-        // A metadata value that must carry a comma has a specified home: a
-        // `-bin` key, base64, whose alphabet contains no comma.
-        //
-        // grpc-status and grpc-message are unaffected either way: the status is
-        // numeric, and grpc-message is percent-encoded over ALPHA/DIGIT/-/./_/~,
-        // so a comma can never appear in it.
-        for (final v in value.split(_headerValueDelimiter)) {
-          final header = RpcHeader(name, v);
-          if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
-            trailerHeaders.add(header);
-          } else {
-            initialHeaders.add(header);
-          }
+        // A metadata value that must carry a comma of its own has a specified
+        // home: a `-bin` key, base64, whose alphabet contains none.
+        final header = RpcHeader(name, value);
+        if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
+          // Unaffected either way: the status is numeric and grpc-message is
+          // percent-encoded over ALPHA/DIGIT/-/./_/~, so neither can contain a
+          // comma.
+          trailerHeaders.add(header);
+        } else {
+          initialHeaders.add(header);
         }
       });
 

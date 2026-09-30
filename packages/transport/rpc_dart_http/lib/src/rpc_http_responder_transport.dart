@@ -301,6 +301,11 @@ class RpcHttpResponderTransport
 
     try {
       // Collect and validate request headers.
+      // One value per field line, as shelf combined it. A peer that sent a key
+      // twice arrives here JOINED with ',' and is handed to the handler that way,
+      // which is the same rule the caller's receive path follows: joined and
+      // repeated are equivalent on the wire, and only the receiver knows whether
+      // a given key's comma separates values or belongs inside one.
       final requestHeaders = <RpcHeader>[];
       request.headers.forEach((name, value) {
         requestHeaders.add(RpcHeader(name, value));
