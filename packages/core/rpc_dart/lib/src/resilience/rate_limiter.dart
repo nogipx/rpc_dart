@@ -6,9 +6,6 @@ import 'dart:async';
 
 import '../_internal.dart';
 
-/// gRPC status code for RESOURCE_EXHAUSTED (rate limit exceeded).
-const int _statusResourceExhausted = 8;
-
 // ---------------------------------------------------------------------------
 // Public rate-limit algorithm spec
 // ---------------------------------------------------------------------------
@@ -176,6 +173,14 @@ abstract class _RateLimitCounter {
   }
 
   bool _doAcquire();
+
+  /// Gives back a slot taken by [tryAcquire].
+  ///
+  /// Two counters can apply to one call, so one of them is charged before the
+  /// other has answered. Without a refund a call refused by the second still
+  /// costs the first, and a limit that is never reached silently drains — which
+  /// tightens it under exactly the load it is meant to shed.
+  void refund();
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +223,12 @@ class _SlidingWindowCounter extends _RateLimitCounter {
     _current++;
     return true;
   }
+
+  /// Only the CURRENT bucket, which is the only one [_doAcquire] increments.
+  @override
+  void refund() {
+    if (_current > 0) _current--;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -255,6 +266,12 @@ class _TokenBucketCounter extends _RateLimitCounter {
     _tokens -= 1.0;
     return true;
   }
+
+  /// Clamped, so a refund cannot put the bucket above its burst capacity.
+  @override
+  void refund() {
+    _tokens = (_tokens + 1.0).clamp(0.0, burst.toDouble());
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -273,10 +290,17 @@ class _TokenBucketCounter extends _RateLimitCounter {
 /// )
 /// ```
 ///
-/// ## Which counter a call charges
+/// ## Which counters a call charges
 ///
-/// `perMethod[key]` > `perService[key]` > `perKeyFallback[key:method]` >
-/// [global] — the first that matches, and only that one.
+/// **[global] is a CEILING, not a fallback.** It applies to every call, and one
+/// more specific limit applies alongside it: `perMethod[key]` >
+/// `perService[key]` > `perKeyFallback[key:method]`, the first that matches and
+/// only that one. BOTH must admit, so the tighter of the two binds and a call
+/// refused by either costs nothing in the other.
+///
+/// So `global: 5/s` with `perMethod: {'Feed.hot': 1000/s}` admits 5 calls to
+/// `Feed.hot` per second, not 1000. Set `global` above every specific limit, or
+/// leave it unset, if that is not what you want.
 ///
 /// Without [keyExtractor] every slot is ONE shared counter. With it, each key
 /// gets independent [perService] and [perMethod] counters, so one caller cannot
@@ -501,10 +525,17 @@ class RpcRateLimiter extends IRpcInterceptor {
     return slots.putIfAbsent(slotKey, () => spec._createCounter(_nowMicros));
   }
 
-  /// Resolves the counter that applies to [call] (or null if no limit applies
-  /// or the limiter is disposed). The same resolution is used for unary calls
-  /// and for per-message accounting on streaming calls.
-  _RateLimitCounter? _resolveCounter(RpcMiddlewareContext call) {
+  /// The most SPECIFIC counter that applies to [call], not counting [global]
+  /// (or null if none does, or the limiter is disposed).
+  ///
+  /// [global] is deliberately absent: it is a ceiling checked alongside whatever
+  /// this returns, not the last entry in a first-match chain. Returning it here
+  /// is what left an operator with a `global` and a looser `perMethod` beside it
+  /// with no global bound at all.
+  ///
+  /// The same resolution is used for unary calls and for per-message accounting
+  /// on streaming calls.
+  _RateLimitCounter? _resolveSpecific(RpcMiddlewareContext call) {
     // After dispose the cleanup timer is cancelled; creating new dynamic
     // counters here would grow unbounded. No-op instead.
     if (_disposed) return null;
@@ -534,13 +565,36 @@ class RpcRateLimiter extends IRpcInterceptor {
             userKey,
             methodKey,
             _perKeyFallbackSpec,
-          ) ??
-          _globalCounter;
+          );
     }
     return _staticMethodCounters[methodKey] ??
-        _staticServiceCounters[call.serviceName] ??
-        _globalCounter;
+        _staticServiceCounters[call.serviceName];
   }
+
+  /// Takes one slot from every counter that applies to [call], or from none.
+  ///
+  /// Two can apply: the most specific match and [global]. BOTH must admit, so
+  /// the tighter of the two is always the binding one and `global` is a ceiling
+  /// rather than a fallback.
+  ///
+  /// The specific counter is charged first and refunded if [global] then refuses,
+  /// because a refused call must cost nothing anywhere — see
+  /// [_RateLimitCounter.refund].
+  bool _tryAcquireAll(RpcMiddlewareContext call) {
+    final specific = _resolveSpecific(call);
+    final global = _disposed ? null : _globalCounter;
+    if (specific != null && !specific.tryAcquire()) return false;
+    if (global != null && !global.tryAcquire()) {
+      specific?.refund();
+      return false;
+    }
+    return true;
+  }
+
+  /// Whether ANY counter applies to [call], so a call no limit touches can skip
+  /// the metering machinery entirely.
+  bool _anyLimitApplies(RpcMiddlewareContext call) =>
+      !_disposed && (_globalCounter != null || _resolveSpecific(call) != null);
 
   RpcRateLimitException _exceededException(RpcMiddlewareContext call) {
     final methodKey = '${call.serviceName}.${call.methodName}';
@@ -548,16 +602,12 @@ class RpcRateLimiter extends IRpcInterceptor {
     return RpcRateLimitException(
       'Rate limit exceeded for $methodKey'
       '${userKey != null ? ' (key: $userKey)' : ''}'
-      ' (gRPC status $_statusResourceExhausted: RESOURCE_EXHAUSTED)',
+      ' (gRPC status ${RpcStatus.resourceExhausted}: RESOURCE_EXHAUSTED)',
     );
   }
 
   void _check(RpcMiddlewareContext call) {
-    final counter = _resolveCounter(call);
-    if (counter == null) return;
-    if (!counter.tryAcquire()) {
-      throw _exceededException(call);
-    }
+    if (!_tryAcquireAll(call)) throw _exceededException(call);
   }
 
   /// Wraps [source] so that EVERY element counts against the rate limit.
@@ -582,7 +632,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     // live stream whose counter was evicted by _cleanup then recreated by a
     // concurrent stream stays bound to the single shared counter instead of a
     // stale captured instance (which would double the effective limit).
-    if (_resolveCounter(call) == null) return source;
+    if (!_anyLimitApplies(call)) return source;
     // Once the limit trips the stream is done: emit ONE error and close.
     // Without this latch every remaining element was metered again and pushed
     // its own error, so a client that kept sending got an unbounded storm of
@@ -600,8 +650,7 @@ class RpcRateLimiter extends IRpcInterceptor {
             sink.add(data);
             return;
           }
-          final counter = _resolveCounter(call);
-          if (counter == null || counter.tryAcquire()) {
+          if (_tryAcquireAll(call)) {
             sink.add(data);
             return;
           }
@@ -698,5 +747,5 @@ class RpcRateLimiter extends IRpcInterceptor {
 class RpcRateLimitException extends RpcStatusException {
   /// Creates an [RpcRateLimitException].
   RpcRateLimitException(String message)
-    : super(_statusResourceExhausted, message);
+    : super(RpcStatus.resourceExhausted, message);
 }

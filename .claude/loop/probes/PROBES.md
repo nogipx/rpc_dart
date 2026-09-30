@@ -320,7 +320,7 @@ after the change, which is what the status is for.
   early version had the recovery contract reuse a method name the failing contract
   also declared, so the after-state was identical to the before-state and the arm
   proved nothing.
-- **[P-140](P-140-what-the-rate-limiter-admits.md)** valid (round 502),
+- **[P-140](P-140-what-the-rate-limiter-admits.md)** valid (round 502, extended 542),
   rpc_dart — holds the LIMIT fixed and varies the call SHAPE, 100 opens per arm
   against `global: max 5`, so every number is comparable and `5` versus `100`
   needs no reasoning. Three controls covering three different rig failures: unary
@@ -329,7 +329,10 @@ after the change, which is what the status is for.
   ADMISSION rather than about bidi being unmetered — and it is the arm that reads
   collateral damage, dropping to 2 under an additive fix), and one call with ten
   messages (because "the open covers message one" is one edit from "the open
-  covers every message").
+  covers every message"). Round 542 added a clock the run MOVES: the only way to read what a
+  refused call cost the counter that did admit it is to roll the binding window over and ask
+  what budget is left, since an admission count alone cannot see a counter draining behind a
+  tighter one.
 - **[P-139](P-139-which-errors-open-the-breaker.md)** valid (round 501),
   rpc_dart — the arms vary the STATUS a method throws, not the count, so the rig
   is about classification; every arm ends with a call to a DIFFERENT healthy

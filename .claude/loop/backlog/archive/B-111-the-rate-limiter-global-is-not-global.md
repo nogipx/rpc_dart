@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 542)
 release: breaking
 round: 502
 commit: 33551cce
@@ -122,10 +122,36 @@ A fourth, orthogonal to all three: rename `global` to something that does not
 promise universality (`defaultLimit`, `fallback`). Breaking at the API level,
 honest at the conceptual one.
 
-## Still open, not measured here
+## Outcome (round 542) — FIXED, in two halves
 
-- `_statusResourceExhausted = 8` duplicates `RpcStatus.resourceExhausted`.
-- `_resolveCounter` rebuilds the method-key string and re-runs `_keyExtractor` on
-  every message. The re-resolution is deliberate and commented (it rebinds to the
-  canonical counter after an eviction), so any change needs the eviction case
-  measured first. Cost, not correctness.
+`../rounds/542-the-ceiling-that-was-a-fallback.md`.
+
+```
+unary, global 5 + perMethod 1000   admitted 100 / 100   ->   5 / 100
+global 5/s + perMethod 10/h        10, then 0           ->   5, then 5
+```
+
+`_resolveCounter` became `_resolveSpecific` and no longer falls through to the global
+counter; `_tryAcquireAll` requires BOTH to admit, so the tighter of the two binds in either
+direction.
+
+**The second half is the one the decision did not name.** Two counters cannot be consulted
+at the same instant, so the specific one is charged before global has answered — and a call
+global then refuses had already spent a token that will never be used. Under sustained
+overload that drains a limit which was never reached, tightening it: the opposite of the
+defect. `refund()` gives the slot back, inverting `tryAcquire` exactly for both algorithms.
+
+The two canaries the decision asked for both hold: a call matching only `global` still gets
+the full global rate, and a `perMethod` stricter than `global` is still binding. The
+eviction case the decision said to read first is untouched — resolution still happens per
+message.
+
+`_statusResourceExhausted = 8` is gone too; it was a second home for
+`RpcStatus.resourceExhausted` in the same file.
+
+## Split out to B-213
+
+The per-message resolution cost, which is the remainder of the note this section used to
+hold, plus the construction-time warning B-111's option 2 described — no longer
+load-bearing, since the looser configuration is now harmless, but still a config whose
+author believed something false.

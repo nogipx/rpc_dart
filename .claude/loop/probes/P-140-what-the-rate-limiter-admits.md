@@ -1,7 +1,7 @@
 ---
 file: packages/core/rpc_dart/.dart_tool/probe/b111_rate_limiter_admission.dart
-round: 502
-commit: 33551cce
+round: 502, extended 542
+commit: d799f43d
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
 status: valid
 ---
@@ -85,18 +85,42 @@ prepaid.
 message one" is one edit away from "the open covers every message", and without
 this arm that edit reads as a pass everywhere else.
 
+## Extended in round 542 — three arms for the ceiling
+
+The five arms above are repeated first, unchanged, as the control that says the bench still
+works at the new sha; all five read exactly as recorded. Then:
+
+```
+unary, global 5 + perMethod 1000   100 / 100   ->   5 / 100
+unary, global 5 + perMethod 2         2 / 100   ->   2 / 100
+global 5/s + perMethod 10/h        10, then 0  ->   5, then 5
+```
+
+The middle arm is the guard against the fix overshooting into "global decides": a `perMethod`
+tighter than `global` must still be the binding one, and 2 is the only reading that says so.
+
+**The last arm needs a clock the run moves by hand**, which is why one was added. It asks
+what is left of the per-method budget after the global window rolls over — `5, then 5` if a
+call refused by global gave its per-method token back, `5, then 0` if it did not. That is the
+only observable for the refund: while global is the binding counter, the specific one's
+depletion is invisible from the admission count alone.
+
+Its BEFORE reading, `10, then 0`, says the same thing as the first arm from the other side:
+`global: 5/s` let ten calls through in the first second, because only the per-method counter
+was consulted, and then none, because that budget was spent.
+
 ## What it establishes, and what it does not
 
 Establishes: client-stream and bidi were metered per inbound request message and
 nowhere else, so a call sending none was never charged — 100 of 100 admitted
 against a limit of 5. After the fix they are admitted at establishment and read 5,
-while every shape that does send messages costs exactly what it cost before.
+while every shape that does send messages costs exactly what it cost before. And, from round
+542, that `global` is now a ceiling in both directions, with a refused call costing nothing
+in the counter that did admit it.
 
-Does NOT establish anything about the per-method/global resolution. The last arm
-reads 100/100 both before and after, which is the documented contract
-(`perMethod` > `perService` > `perKeyFallback` > `global`, "the first that
-matches, and only that one") and not something this round changed. It is measured
-here so the number exists when the owner decides on it.
+Does NOT say anything about per-key counters, LRU eviction, or the cleanup sweep — every arm
+uses a `keyExtractor`-less limiter, so the dynamic resolution path and the eviction case
+B-213 names are untouched.
 
-Nor does it say anything about per-key counters, LRU eviction, or the cleanup
-sweep — one `keyExtractor`-less limiter throughout.
+Does NOT measure TIME anywhere. Every number is an admission count, so the per-message
+resolution cost B-213 asks about cannot be read from this bench as it stands.
