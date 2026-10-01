@@ -187,7 +187,13 @@ void main() {
     });
 
     test('without it the total scales with the stream count', () async {
-      final rig = _connect(connWindow: null);
+      // 2 MB per stream, so the nominal total is 80 MB against a 30 MB
+      // assertion. The overrun can only ever be a FRACTION of nominal — it
+      // excludes everything already in flight when the 40 pauses land — so an
+      // assertion set close to nominal measures that fraction rather than the
+      // claim, and the fraction moves with anything that changes enforcement
+      // timing.
+      final rig = _connect(connWindow: null, streamWindow: 2 * 1024 * 1024);
       final overrun = await _overrunAcross(
         rig,
         40,

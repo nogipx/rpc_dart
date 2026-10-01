@@ -155,14 +155,27 @@ final class RpcSecurityPolicy {
   /// Per-stream flow-control window in bytes, or null to disable.
   ///
   /// Bounds how many bytes a peer may have unconsumed on one stream before it
-  /// must wait. Without it a producer is throttled only by a consumer that
-  /// never pauses: measured on a server stream, a handler produced 202,600
-  /// messages while the consumer had processed 483, queueing 527MB in 2s.
+  /// must wait, and holds to that within one message — a send is admitted
+  /// whenever any credit remains, so the last one crosses a window too small to
+  /// hold it. Without it a producer is throttled only by a consumer that never
+  /// pauses.
+  ///
+  /// **It counts the bytes a message occupies ON THE WIRE, which is not what the
+  /// receiver will hold.** The same window admits a few large messages or very
+  /// many small ones, and nothing here knows what one decodes to: a type that
+  /// reconstitutes a buffer from a length, or a compressed payload, turns one
+  /// window's worth of wire bytes into an arbitrarily larger backlog once it is
+  /// decoded above the transport. Sizing a deployment from this number means
+  /// sizing the WIRE; multiply by whatever your codec expands by to get memory,
+  /// and use [maxBufferedMessagesPerStream] to bound the queue by depth, which
+  /// is indifferent to both.
   ///
   /// Credit is returned as the receiving side actually consumes, and granted
   /// with [RpcHeaders.xWindowUpdate] on bare metadata frames, which a peer that
   /// predates flow control ignores. What a sender may send BEFORE its first
-  /// grant arrives is [initialSendWindowBytes].
+  /// grant arrives is [initialSendWindowBytes]. A consumer that pauses and later
+  /// resumes releases the producer — the bound is on standing backlog, not a
+  /// limit the stream can exhaust for good.
   ///
   /// Transports with their own flow control (HTTP/2) should disable this rather
   /// than run two windows over each other.
@@ -171,10 +184,10 @@ final class RpcSecurityPolicy {
   /// Connection-wide flow-control window in bytes, or null to disable.
   ///
   /// [flowControlWindowBytes] bounds one stream; this bounds their sum. Without
-  /// it a peer simply opens more streams: measured with 100 concurrent server
-  /// streams whose consumers all paused, each holding a 1 MB window, 361 MB was
-  /// retained, and the default ceiling of 4096 streams at 4 MB each puts the
-  /// reachable total near 17 GB.
+  /// it a peer simply opens more streams, and the per-stream window alone leaves
+  /// the reachable total at [maxActiveStreams] times it — 4096 streams at 4 MiB
+  /// each is 16 GiB. It counts wire bytes and is blind to what they decode to,
+  /// exactly as [flowControlWindowBytes] is.
   ///
   /// Sharing one pool means a stream whose consumer has stalled can hold credit
   /// other streams need -- the same head-of-line coupling HTTP/2's connection

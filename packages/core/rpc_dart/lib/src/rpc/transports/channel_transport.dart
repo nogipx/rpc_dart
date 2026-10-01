@@ -995,9 +995,26 @@ class RpcChannelTransport
       _incoming.add(message);
     }
     if (message.isEndOfStream) {
-      _releaseStream(message.streamId);
-      _finishedStreams.remove(message.streamId);
-      _forgetStream(message.streamId);
+      // Only for a stream WE opened, where an inbound end-of-stream is the
+      // response's last frame and so the end of the call. On one the PEER
+      // opened it is their half-close and we may still be sending the whole
+      // response — dropping the flow-control state there leaves every later
+      // grant looking like one for a call that has ended, so `_onGrant`
+      // discards it and the per-stream window never engages again. A server
+      // stream half-closes its request immediately, so that is every server
+      // stream. The state is pruned by `releaseStreamId` when the call really
+      // ends, which the responder pipeline always calls.
+      if (locallyInitiated) {
+        _releaseStream(message.streamId);
+        _finishedStreams.remove(message.streamId);
+        _forgetStream(message.streamId);
+      } else {
+        // The INBOUND half is over and nothing more will arrive on it, so what
+        // it owes the pool is owed for good — repaying it here is what keeps a
+        // handler that never read from draining the connection window. The
+        // send-side state is NOT the inbound half's to drop.
+        _fc.repayConnection(message.streamId);
+      }
       // A truncated response is an ERROR, not a clean end: a clean end hands
       // the consumer partial data as if it were complete, and a client paging
       // results believes it has them all.

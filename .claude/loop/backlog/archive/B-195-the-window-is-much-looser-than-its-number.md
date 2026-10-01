@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 552)
 round: 497
 commit: 60e4d3f8
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
@@ -93,3 +93,34 @@ this journal refuses, and here one is available cheaply — round 497's own tabl
 No CHANGELOG line for behaviour, but the field's documentation is public API surface and the
 wording is worth reading as such: an operator who set 4 MiB to bound memory is the person this
 text has to reach.
+
+## Outcome (round 552) — CLOSED, and this lead's premise was the artefact
+
+`../../rounds/552-the-window-was-off-not-loose.md`. Bench
+`../../probes/P-180-what-the-window-actually-charges.md`.
+
+**The window is exact, and the overshoot was this lead's own probe.** It charges WIRE bytes:
+`66 messages x 993 B = 65 538` against a 65 536-byte window, and the sweep reads 15 B/msg at
+every window size from 16 KiB to 4 MiB. P-135's `_Blob.toJson` emits `{'n': 1024}`, so every
+"1 KiB message" was 11 bytes on the wire and `185 MiB` is `count x a size that never crossed
+it`. What varies is the CODEC's expansion factor, not the window's slack: 66 messages hold
+66 KiB or 1.0 MiB behind one unchanged window, because the field cannot see what a message
+decodes to.
+
+**Two arms this lead lacked, each of which alone changes the conclusion.** Time: `4372` at 1 s
+and at 2 s is a bound, where `251292 -> 487856` with the field off is a rate — one settle time
+cannot tell those apart. And wire size held while decoded size varies, which is the only arm
+that separates "loose" from "counting something else".
+
+**And carrying the decision out found the field switched OFF in a legal configuration.** With
+`initialSendWindowBytes: null` a server stream was unbounded for its whole life:
+`sendCredit: 0`, no credit entry at all. An inbound end-of-stream was treated as the end of the
+CALL and dropped the stream's flow-control state — but on a peer-opened stream it is the
+peer's half-close, and a server stream half-closes its request immediately. `_advertised` is
+the only record such a stream exists, so `_onGrant` then discarded every grant as one for an
+ended call. `tryConsume`'s seed hid it completely at the defaults. FIXED; the doc the decision
+asked for now describes measured behaviour in every configuration.
+
+What is left is in `../B-218-the-other-half-closes-are-unmeasured.md`: the client-stream
+and bidi shapes, and what a decoded backlog actually costs — the quantity an operator reading
+this field cares about, and the one nothing here measures.

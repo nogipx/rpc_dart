@@ -1,10 +1,10 @@
 ---
 refines: U-18
-paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**]
+paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531]
-status: confirmed (round 495)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552]
+status: confirmed (round 552)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -365,5 +365,43 @@ new connections belonged to the old shutdown:
 > unnecessary here: `_handleConnection` already refuses and ANSWERS a peer while the
 > flag is false, so serialising `start()` behind the stop was enough. Look for the
 > guard before adding one.
+
+## Round 552 — the flag was a DIRECTION, and the conflation switched a limit off
+
+An inbound end-of-stream meant both "the peer has finished sending" and "the call is over".
+For a stream this side opened those coincide — the inbound end IS the response's last frame.
+For one the PEER opened they do not, and a server stream half-closes its request immediately,
+so the end of the call was declared at the start of its response phase.
+
+```
+the window held at 64 KiB, only initialSendWindowBytes moving
+  initial off      510806 msgs   sendCredit: 0  advertised: 0
+  initial 4 KiB      4372 msgs   sendCredit: 1  advertised: 1
+after:  every row 4372           sendCredit: 1  advertised: 1
+```
+
+> **A flag that conflates two LIFECYCLE meanings is the usual shape; this one conflated
+> two DIRECTIONS.** "Finished" is per-direction on anything duplex, and a single
+> end-of-stream signal has no room for that. The discriminator was already computed four
+> lines above the defect — `locallyInitiated`, used for something else — which is the
+> tell worth remembering: when a site needs to know which side owns a thing, look for
+> code nearby that already asked.
+
+> **The conflation was invisible because a SEPARATE mechanism kept re-creating the state
+> it destroyed.** `tryConsume` re-seeds credit from `initialSendWindowBytes` whenever the
+> entry is missing, so at the defaults the window worked and nothing was observable. Turn
+> that unrelated field off — a documented, legal configuration — and the per-stream window
+> was off for the whole connection. **A limit that is restored by accident is a limit with
+> no test**, and the way in was to vary the field that was doing the restoring, not the
+> one under test.
+
+> **Fixing one direction's cleanup deletes the other direction's.** The first version
+> gated the whole block and removed the connection-pool repayment round 206 added — caught
+> by its test, with the number (`sender wedged at call 4 after 1024 KiB`). When a cleanup
+> site serves two concerns, split it by concern: the inbound half really is over and really
+> does owe the pool.
+
+`../rounds/552-the-window-was-off-not-loose.md`,
+`../probes/P-180-what-the-window-actually-charges.md`, B-195, B-218.
 
 Imported from private memory in the curate pass after round 234.

@@ -38,6 +38,18 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-180](P-180-what-the-window-actually-charges.md)** valid (round 552),
+  rpc_dart — **separates WIRE size from DECODED size, which is what B-195's reading was
+  missing**: the message carries a padding string that is serialized and a length the receiver
+  would allocate, so one window can be driven with 18 bytes standing for 1 KiB or 1 KiB standing
+  for 1 KiB. Reports the IMPLIED charge per message, window over count, so "the window is exact"
+  is readable without arithmetic in prose — `66 x 993 B = 65 538` against 65 536. Four controls,
+  each of which alone flips the conclusion: a second settle time (a bound does not move, a rate
+  doubles), the field off, wire held while decoded varies, and resume (a bound releases, a wedge
+  does not). Also reads the SENDER's `flowControlStateSizes`, where `sendCredit: 0` tells a
+  generous window from one never applied — which is how the round's defect was found. Does NOT
+  measure memory: its `nominal` column is size x count and labelled as arithmetic, because the
+  paused messages stop below the decode.
 - **[P-179](P-179-how-many-tokens-one-call-mints.md)** valid (round 551),
   rpc_dart — **counts the secure draws one unary call makes, and identifies each.** The
   instrument needs no instrumentation: every token's last 4 bytes carry a process-wide monotonic
