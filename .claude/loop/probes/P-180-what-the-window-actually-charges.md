@@ -70,6 +70,22 @@ And the sweep, 1 KiB decoded, 2 s:
  256 KiB   17479 msgs  1024 KiB  69908 msgs      15 B/msg throughout
 ```
 
+## The bidi block (round 555)
+
+A fifth thing varied: the SHAPE. A bidi caller half-closes its request side while the responder
+goes on sending, which is the same inbound end-of-stream on a stream whose call is not over.
+
+```
+  bidi, initial off     msgs 4372 -> 4372   charged/msg 15 B   sendCredit: 1  advertised: 1
+  bidi, initial 64 KiB  msgs 4372 -> 4372   charged/msg 15 B   sendCredit: 1  advertised: 1
+
+round 552's fix ablated:
+  bidi, initial off     msgs 250569 -> 496486   sendCredit: 0  advertised: 0
+```
+
+Same `15 B` charge as the server-stream sweep, same bound, and the ablation shows the arm can see
+the defect — which is what makes the clean rows a measurement rather than a restatement.
+
 ## Measures
 
 Messages the handler produced, counted inside the handler — the only place that

@@ -31,6 +31,16 @@ half-close at all. Both reach the same line. What is unestablished:
 The arm already exists: P-180 varies one shape and would take another with a different
 contract method.
 
+**Round 555 discharged the BIDI half of this item for the WINDOW fix.** `bidi 4372 -> 4372,
+charged/msg 15 B, sendCredit: 1` with round 552's fix, against `250569 -> 496486, sendCredit: 0`
+with it ablated — so the shape did have the defect and the one condition covers it. `P-180` gained
+that block, and a witness is in the tree.
+
+**The client-stream half stays open, with its risk now explicit**: 552's change only affects
+streams the PEER opened, and for a client-stream upload the sender is the CALLER, which minted the
+id and holds it in `_activeStreams`, so its liveness never depended on the dropped state. Lower
+risk, not measured.
+
 **Round 554 added one shape to this and left another.** B-216 is closed: a mid-frame half-close
 is now answered on the server-stream and client-stream shapes too, from one place in
 `StreamProcessor`. **Bidi runs through that same helper and is therefore fixed by construction

@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555]
 status: confirmed (round 457)
 ---
 
@@ -224,3 +224,21 @@ in effect, for the reason C-31 already gave.
 > the drain is deadlined, so a body that never arrives is answered by a teardown. The arm
 > was asking for what an earlier round had chosen to give up — check whether a control
 > contradicts a decision before believing it contradicts the code.
+
+**Round 555 — the record to re-measure was THREE ROUNDS old, and what was stale was its COVERAGE.**
+Round 552 changed stream lifecycle and witnessed one shape. Bidi reads `4372 -> 4372, charged/msg
+15 B, sendCredit: 1` with the fix and `250569 -> 496486, sendCredit: 0` with it ablated — so the
+shape DID have the defect and the one condition does cover it.
+
+`../rounds/555-the-shape-nobody-had-measured.md`, B-218.
+
+> **"Fixed by construction" is a prediction, and this lens is for predictions the loop makes about
+> its own fixes.** The argument for bidi was identical to the argument for server-stream, and that
+> argument had already been wrong once — an inbound end-of-stream being the end of the call is
+> "obviously" fine until a shape half-closes early. The cost of checking was one probe block.
+
+> **Report the gate failure you could not reproduce, and file it.** A websocket test failed once
+> under `load average 9.62` on a `health()` key that had answered seconds earlier, with `lib/`
+> byte-identical to its committed state. Re-running until green and saying nothing would have been
+> the easy path; B-219 exists because a diagnostic that can omit a key it documents is a defect in
+> the diagnostic whatever made it fire.

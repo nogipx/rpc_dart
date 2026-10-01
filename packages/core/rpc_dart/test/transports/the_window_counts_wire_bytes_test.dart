@@ -63,6 +63,21 @@ final class _Firehose extends RpcResponderContract {
         }
       },
     );
+    // The same firehose on a BIDI method, where the caller half-closes its
+    // request side while the responder keeps sending. That inbound end-of-stream
+    // is the one this transport must NOT read as the end of the call.
+    addBidirectionalMethod<RpcString, _Blob>(
+      methodName: 'duplex',
+      requestCodec: const RpcCodec(RpcString.fromJson),
+      responseCodec: _codec,
+      handler: (requests, {context}) => (() async* {
+        while (true) {
+          yield _Blob(padding, _payload);
+          _produced[0]++;
+          await Future<void>.delayed(Duration.zero);
+        }
+      })(),
+    );
   }
 }
 
@@ -83,6 +98,7 @@ Future<_Run> _run({
   required int wire,
   int payload = _kib,
   bool resume = false,
+  bool bidi = false,
   Duration settle = const Duration(milliseconds: 250),
 }) async {
   final produced = [0];
@@ -106,15 +122,23 @@ Future<_Run> _run({
   final caller = RpcCallerEndpoint(transport: client);
 
   var received = 0;
-  final sub = caller
-      .serverStream<RpcString, _Blob>(
-        serviceName: 'Svc',
-        methodName: 'firehose',
-        request: 'go'.rpc,
-        requestCodec: const RpcCodec(RpcString.fromJson),
-        responseCodec: _codec,
-      )
-      .listen(null);
+  final responses = bidi
+      ? caller.bidirectionalStream<RpcString, _Blob>(
+          serviceName: 'Svc',
+          methodName: 'duplex',
+          // One request, then the request side ends: the half-close under test.
+          requests: Stream.value('go'.rpc),
+          requestCodec: const RpcCodec(RpcString.fromJson),
+          responseCodec: _codec,
+        )
+      : caller.serverStream<RpcString, _Blob>(
+          serviceName: 'Svc',
+          methodName: 'firehose',
+          request: 'go'.rpc,
+          requestCodec: const RpcCodec(RpcString.fromJson),
+          responseCodec: _codec,
+        );
+  final sub = responses.listen(null);
   sub.onData((_) {
     received++;
     if (received == 1) sub.pause();
@@ -197,6 +221,27 @@ void main() {
       );
     },
   );
+
+  test('WITNESS a BIDI responder keeps its window past the half-close', () async {
+    // The shape round 552 fixed but never witnessed: a bidi caller half-closes
+    // its request side while the responder goes on sending, and that inbound
+    // end-of-stream is exactly what this transport must not read as the end of
+    // the call. Measured, the bidi responder was unbounded without the fix —
+    // `250569 -> 496486` messages against `4372 -> 4372` with it.
+    final r = await _run(window: 64 * _kib, wire: _kib, bidi: true);
+
+    expect(
+      r.second,
+      r.first,
+      reason: 'the window must still bound a responder whose peer has finished',
+    );
+    expect(r.senderState['advertised'], 1);
+    expect(r.senderState['sendCredit'], 1);
+    expect(
+      r.first * _kib,
+      inInclusiveRange(64 * _kib - 2 * _kib, 64 * _kib + 2 * _kib),
+    );
+  });
 
   test('WITNESS the bound tracks the configured value', () async {
     // The witness above passes for any fixed ceiling. This is what ties the
