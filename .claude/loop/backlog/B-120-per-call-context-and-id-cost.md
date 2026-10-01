@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: awaiting owner (round 551)
 round: 511
 commit: 231f986c
 release: changelog
@@ -103,6 +103,49 @@ here, with the number in hand.
    a property the doc says is not required.
 3. **Keep it.** The cost is invisible on any network transport. It is visible on
    in-memory and isolate — which is exactly what this lead predicted.
+
+## The sweep (round 551) — the draws were ALREADY cut
+
+`../rounds/551-the-draws-were-already-cut.md`. Bench `P-179`.
+
+```
+  RpcContext.empty() alone      1 token
+  the call itself               0 tokens
+  one unary call, no context    1 token total
+
+  caller requestId / wire x-request-id / wire x-trace-id /
+  handler requestId / handler traceId      ALL mint 3
+
+  one token  42.4 us        one unary call  264.5 us
+```
+
+**ONE token per call, reused everywhere — the decision's premise does not hold.** The
+consolidation it asked for already exists: `withTracing` mints once and derives both `req_` and
+`trace_`; `traceIdFor` derives from an existing request id with no mint; the responder reuses
+what the caller sent and mints nothing.
+
+**"The responder mints one only to replace it" is this lead's own doc comment on
+`RpcContext.requestId`, and it is false at this sha.** That is how the decision came to rest on
+it — rule one from the inside. The comment is deliberately left in place so a reader can check
+the claim against the code themselves.
+
+**`rpc_dart_opentelemetry` checked**, as the decision required since these `paths:` do not name
+it: it reads `record.requestId` for one log attribute and mints nothing. The pre-replacement
+window the decision worried about does not exist, because the mint it would have contained does
+not.
+
+**The instrument needed no instrumentation**: every token's last 4 bytes carry a process-wide
+monotonic counter, so a token is its own receipt and both the count and the identity of each mint
+are readable through public API.
+
+### So the three options below are the whole question now
+
+One token costs ~42 us, confirmed. Option 1 therefore buys **~42 us, not ~84** — which is the
+only thing this round changes about the choice. Nothing else about it moved.
+
+The cost SHARE is NOT comparable with round 511's `~40 of ~97 us`: this rig reads 42.4 of 264.5
+over a byte pipe with 2000 sequential calls. Only the token cost travels, and it agrees (42.4
+against 30.98-37.82).
 
 ## Still open, barely measured
 

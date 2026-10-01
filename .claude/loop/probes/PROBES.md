@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-179](P-179-how-many-tokens-one-call-mints.md)** valid (round 551),
+  rpc_dart — **counts the secure draws one unary call makes, and identifies each.** The
+  instrument needs no instrumentation: every token's last 4 bytes carry a process-wide monotonic
+  counter, so a token is its own receipt — decode it and bytes 12..16 are its mint number.
+  `RpcContext.empty() 1 token / the call itself 0 / one call with no context 1`, and every id in
+  the call — caller `requestId`, both wire headers, both the handler sees — carries the SAME mint
+  number, which is the control that rules out "one count, several ids". `one token 42.4 us`.
+  Cannot compare its cost SHARE with round 511's (42.4 of 264.5 over a byte pipe against ~40 of
+  ~97), and does not vary the call shape, so streaming is uncovered.
 - **[P-178](P-178-minting-against-holding.md)** valid (round 549),
   rpc_dart — **measures ATTRIBUTION, not a count**: how much memory exists because the queue holds
   these objects, over and above what exists anyway. `HOLDING -1 MiB` against `MINTING 313 MiB` for
