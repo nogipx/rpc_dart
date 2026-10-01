@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572]
-status: confirmed (round 552)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592]
+status: confirmed (round 592)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -405,3 +405,33 @@ after:  every row 4372           sendCredit: 1  advertised: 1
 `../probes/P-180-what-the-window-actually-charges.md`, B-195, B-218.
 
 Imported from private memory in the curate pass after round 234.
+
+## Round 592 — the signal was a MAP, and one key was missing from two answers
+
+Round 353 widened this lens past flags: the object can be an error stream. 592
+widens it once more — the object is a `Map`, and the two meanings are "this key is
+present" and "this key is not".
+
+`RpcWebSocketCallerTransport.health()` assembles `details` from the inner health
+plus two counters only the wrapper can see. Two early returns above it answer
+without them:
+
+```
+_closed        closed(...)                              no details at all
+_disconnected  degraded(details: {"supported": true})     no counters
+```
+
+> **For a map-shaped signal, the detector is not "who writes it" but WHICH KEYS
+> each exit carries.** List the returns of the accessor, then list the keys each
+> one sets, and read the table. Both early returns here had good documented
+> reasons — a closed transport must not delegate, an inner closed mid-reconnect
+> contradicts the wrapper — and neither reason mentions the counters, so they were
+> dropped by omission rather than by decision.
+
+> **And the exits that omit are the states a diagnostic exists FOR.** A supervisor
+> polls `health()` to find out what is wrong, so a key that disappears on the
+> closed and disconnected answers is absent at exactly the moment it is read. That
+> is what turned a missing counter into `Null check operator used on a null value`
+> in a gate run, three seconds after the same call returned 0.
+
+`../rounds/592-the-diagnostic-that-went-quiet-when-it-mattered.md`, B-219, B-104.

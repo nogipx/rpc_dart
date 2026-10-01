@@ -98,8 +98,27 @@ Future<_Rig> _rig({Duration? pingInterval}) async {
   return (transport: transport, caller: caller);
 }
 
-Future<int> _peerIds(RpcWebSocketCallerTransport t) async =>
-    (await t.health()).details['peerStreamIds']! as int;
+/// The counter `health()` reports, or a failure that says what it answered.
+///
+/// Not `details['peerStreamIds']! as int`. The key is absent on the closed and
+/// disconnected answers, and under load — a missed pong closes the socket — this
+/// arm reached that state and reported `Null check operator used on a null value`
+/// instead of the fact it is about. `health()` carries the key on every answer now
+/// and `the counters survive every answer` pins that; this reads the absence as a
+/// failed expectation rather than as a crash.
+Future<int> _peerIds(RpcWebSocketCallerTransport t) async {
+  final health = await t.health();
+  final value = health.details['peerStreamIds'];
+  expect(
+    value,
+    isA<int>(),
+    reason:
+        'health() answered ${health.level} "${health.message}" with details '
+        '${health.details} — a diagnostic a supervisor polls must carry its '
+        'own counters on every answer it can give',
+  );
+  return value! as int;
+}
 
 Future<void> _call(
   RpcCallerEndpoint caller,
@@ -251,6 +270,58 @@ void main() {
       // keeps the set from growing in peer mode too.
       await Future<void>.delayed(const Duration(milliseconds: 300));
       expect(await _peerIds(transport), 0);
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  // The two early returns in `health()` answered without the wrapper's own
+  // counters, so `details['peerStreamIds']` was null exactly when a supervisor
+  // polling it most needs a number — after a close, or while a reconnect is down.
+  // That is how the arms above crashed on a loaded machine: a missed pong closes
+  // the socket, and the next `health()` took the disconnected branch.
+  test(
+    'the counters survive every answer health() can give',
+    () async {
+      final rig = await _rig();
+      expect(await _peerIds(rig.transport), 0, reason: 'the healthy answer');
+
+      // DISCONNECTED: a live socket first, then a reconnect whose factory throws —
+      // `_reconnectOnce` sets the flag before the factory await and leaves it set.
+      final http = await HttpServer.bind('127.0.0.1', 0);
+      http.transform(WebSocketTransformer()).listen((ws) {
+        ws.listen((_) {}, onError: (Object _) {});
+      });
+      final failing = RpcWebSocketCallerTransport(
+        IOWebSocketChannel.connect(Uri.parse('ws://127.0.0.1:${http.port}')),
+        reconnectFactory: () => throw StateError('no socket today'),
+      );
+      addTearDown(() async {
+        await failing.close().catchError((Object _) {});
+        await http.close(force: true);
+      });
+      await failing.reconnect().catchError(
+        (Object _) =>
+            RpcHealthStatus.degraded(component: 'test', message: 'threw'),
+      );
+      final down = await failing.health();
+      expect(
+        down.details['peerStreamIds'],
+        isA<int>(),
+        reason: 'the disconnected answer: ${down.level} ${down.details}',
+      );
+      expect(down.details['idsOnThisConnection'], isA<int>());
+      // The branch's own key is still there; the counters are added, not swapped.
+      expect(down.details['supported'], isTrue);
+
+      // CLOSED.
+      await rig.transport.close();
+      final closed = await rig.transport.health();
+      expect(
+        closed.details['peerStreamIds'],
+        isA<int>(),
+        reason: 'the closed answer: ${closed.level} ${closed.details}',
+      );
+      expect(closed.details['idsOnThisConnection'], isA<int>());
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );

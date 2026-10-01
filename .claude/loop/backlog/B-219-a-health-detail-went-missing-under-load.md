@@ -1,10 +1,10 @@
 ---
-status: open
-round: 555
+status: closed (round 592)
+round: 592
 commit: 5d33d595
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/test/peer_ids_return_to_zero_test.dart]
 probe: —
-reason: "observed once in a loaded gate run and not reproduced: health().details['peerStreamIds'] was NULL where the same call had returned 0 seconds earlier. `lib/` was byte-identical to its committed state, so it is not the round's change — but a diagnostic that can answer `null` for a key it documents is a defect in the diagnostic, and the test asserts through a `!`"
+reason: "CONFIRMED by reading, as the lead prescribed: `health()` has TWO early returns (closed, disconnected) that answer without the wrapper's own counters, so the key is absent exactly while something is wrong. Fixed on all three answers; the test's `!` is gone too. Previously: observed once in a loaded gate run and not reproduced: health().details['peerStreamIds'] was NULL where the same call had returned 0 seconds earlier. `lib/` was byte-identical to its committed state, so it is not the round's change — but a diagnostic that can answer `null` for a key it documents is a defect in the diagnostic, and the test asserts through a `!`"
 ---
 
 # B-219 — a health detail answered null under load
@@ -49,6 +49,43 @@ such path exists, the finding is about the TEST's timing and the `!` is still wr
 
 Do not start by looping the gate: one reproduction under load costs minutes and says nothing a
 reading of the assembly does not say faster.
+
+## Measured — round 592, CONFIRMED by reading
+
+The lead said not to start by looping the gate, and that was right. `health()`'s
+assembly sets the key unconditionally after the spread, so it cannot be missing
+there — which means the call returned from somewhere else. It did, from two early
+returns above it:
+
+```
+_closed        RpcHealthStatus.closed(...)                            no details at all
+_disconnected  RpcHealthStatus.degraded(details: {'supported': true})  no counters
+```
+
+Both exist for documented reasons — a closed transport must not delegate, and
+`_inner` is already closed during a reconnect — and neither reason says anything
+about the wrapper's own counters, the only thing in `details` no inner health can
+see. They were dropped by omission on exactly the two answers a supervisor polls
+for.
+
+Reachable in that very test without touching it: the app-level heartbeat closes the
+socket when a pong misses its one-interval deadline, which at `load average 9.62` is
+what happened.
+
+Fixed: the counters are assembled once (`_ownDetails`) and present on all three
+answers, the degraded branch keeping its own `supported: true`. Canary — the counters
+removed again — reads `Actual: <null>` and names the state: `degraded {supported:
+true}`.
+
+Claim 1 is also done: `_peerIds` no longer asserts through `!`, so the absence reads
+as a failed expectation printing the level, the message and the whole map.
+
+## What this lead does NOT cover
+
+- No arm reproduces the crash under load; the lead forbade starting there.
+- `_reconnectOnce`'s three other `RpcHealthStatus` returns are left alone — that is
+  `reconnect()`'s result, reporting an ATTEMPT, with its own vocabulary.
+- The other transports' wrappers were not asked the same question.
 
 ## Owner decision
 

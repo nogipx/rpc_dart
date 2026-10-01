@@ -593,6 +593,7 @@ class RpcWebSocketCallerTransport
       return RpcHealthStatus.closed(
         component: 'RpcWebSocketCallerTransport',
         message: 'Transport closed',
+        details: _ownDetails,
       );
     }
     // Not delegated while disconnected: `_inner` is a closed transport after a
@@ -602,25 +603,34 @@ class RpcWebSocketCallerTransport
       return RpcHealthStatus.degraded(
         component: 'RpcWebSocketCallerTransport',
         message: 'WebSocket connection is down. Reconnect is required.',
-        details: const {'supported': true},
+        details: {'supported': true, ..._ownDetails},
       );
     }
     final inner = await _inner.health();
-    // The wrapper's OWN two sets, which no inner health can see. Both are
-    // supposed to track streams live on THIS connection, so both must return to
-    // zero on an idle connection — and reading them is the only way to tell that
-    // from "grows once per call forever".
     return RpcHealthStatus(
       component: inner.component,
       level: inner.level,
       message: inner.message,
-      details: {
-        ...inner.details,
-        'idsOnThisConnection': _idsOnThisConnection.length,
-        'peerStreamIds': _peerStreamIds.length,
-      },
+      details: {...inner.details, ..._ownDetails},
     );
   }
+
+  /// The wrapper's OWN two counters, on EVERY answer `health()` can give.
+  ///
+  /// No inner health can see them. Both track streams live on this connection,
+  /// so both must return to zero on an idle one — and reading them is the only
+  /// way to tell that from "grows once per call forever".
+  ///
+  /// **Present on the closed and disconnected answers too, which is the point.**
+  /// A supervisor polls `health()` to find out what is wrong, so the moment a key
+  /// it reads goes missing is exactly the moment it is needed: the early returns
+  /// above are reached when the heartbeat closed the socket or a reconnect
+  /// failed. A number that says `0` because the sets were cleared is a state; an
+  /// absent key is a null-check in the caller.
+  Map<String, Object> get _ownDetails => {
+    'idsOnThisConnection': _idsOnThisConnection.length,
+    'peerStreamIds': _peerStreamIds.length,
+  };
 
   /// The attempt currently in flight, so concurrent callers join it instead of
   /// starting their own. See [reconnect].
