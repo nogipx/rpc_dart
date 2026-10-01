@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498]
-status: confirmed (round 498)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582]
+status: confirmed (round 582)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -1249,3 +1249,37 @@ the half it was meant to witness has only the 60-second probe behind it.
 
 `../probes/P-136-what-bounds-a-call-with-no-deadline.md`,
 `../rounds/498-giving-up-without-telling-anyone.md`, B-107.
+
+## Round 582 — the two homes both wrote, and the merge made it visible
+
+Round 446's variant is a duplicated VALUE whose copies agree. 582 is the same
+variant with the copies DISAGREEING and both reaching the wire.
+
+The duty: *who sets the response `content-type`?* Two answers on HTTP/1.1 —
+`_completeResponse` seeds `application/grpc+proto`, and
+`RpcMetadata.forServerInitialResponse()` adds `application/grpc`, which core's
+unary responder sends on every call. HTTP/2 has one answer: it converts the
+metadata and seeds nothing. That sibling is the control, and it has no second
+home to collide with.
+
+```
+HANDLER  application/grpc+json   2  [application/grpc+proto, application/grpc]
+WIRE     application/grpc+json   1  [application/grpc]
+```
+
+> **A second home for a value is normally silent; what made this one visible is
+> that the surrounding code MERGES rather than overwrites.** The branch turning a
+> repeated header name into a list exists so a repeated custom key survives
+> (round 545) — a correct feature, which promoted an invisible duplicate into two
+> values in the output. Where a collection accumulates by key, ask which keys have
+> two writers; an overwrite would have hidden this for as long as nobody compared
+> the two literals.
+
+And the detector's answer here is not "share the helper" but **pick an owner**.
+`content-type` is a wire concern the transport knows and core cannot — core has no
+request in hand and emits the bare form — so the transport resolves it and skips
+any copy in the metadata. Extracting a shared helper for one caller would have
+been RPC-08's defect instead.
+
+`../probes/P-202-which-content-type-a-grpc-over-http1-response-carries.md`,
+`../rounds/582-two-answers-to-one-question.md`, B-146.

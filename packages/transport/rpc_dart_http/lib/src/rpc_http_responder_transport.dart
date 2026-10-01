@@ -621,10 +621,46 @@ class RpcHttpResponderTransport
     _completeResponse(streamId, pending);
   }
 
+  /// The one `content-type` a gRPC response carries, echoing the request's
+  /// subtype.
+  ///
+  /// gRPC's grammar is `application/grpc` followed by an OPTIONAL `+subtype`
+  /// naming the body's encoding, and the subtype is the CALLER's choice: a
+  /// client that asked for `+json` must not be told its answer is protobuf.
+  /// Core cannot pick it — [RpcMetadata.forServerInitialResponse] has no
+  /// request to look at and emits the bare form — so this transport owns the
+  /// header, which is why [_completeResponse] drops the pipeline's copy.
+  ///
+  /// The request's value is REBUILT rather than echoed. It is peer input, and a
+  /// response header is the one place a control character in it would matter.
+  /// Anything that is not `application/grpc+<token>` degrades to the bare form,
+  /// which is legal for every body — including the `; charset=...` that some
+  /// proxies append, and the absent header that only a null policy admits.
+  static String _responseContentType(String? requestContentType) {
+    const bare = RpcHeaders.contentTypeGrpc;
+    if (requestContentType == null) return bare;
+    var value = requestContentType.toLowerCase();
+    final parameters = value.indexOf(';');
+    if (parameters >= 0) value = value.substring(0, parameters).trimRight();
+    if (!value.startsWith('$bare+')) return bare;
+    final subtype = value.substring(bare.length + 1);
+    if (subtype.isEmpty) return bare;
+    for (final unit in subtype.codeUnits) {
+      final isLetter = unit >= 0x61 && unit <= 0x7A;
+      final isDigit = unit >= 0x30 && unit <= 0x39;
+      if (!isLetter && !isDigit && unit != 0x2E && unit != 0x2D) return bare;
+    }
+    return '$bare+$subtype';
+  }
+
   /// Builds the shelf response from [pending] and completes its request.
   void _completeResponse(int streamId, _PendingResponse pending) {
     // Use Map<String, Object> to support multi-value headers (List<String>).
-    final headers = <String, Object>{'content-type': 'application/grpc+proto'};
+    final headers = <String, Object>{
+      RpcHeaders.contentType: _responseContentType(
+        pending.shelfRequest.headers[RpcHeaders.contentType],
+      ),
+    };
 
     if (corsPolicy != null) {
       final requestOrigin = pending.shelfRequest.headers['origin'];
@@ -635,6 +671,12 @@ class RpcHttpResponderTransport
 
     for (final header in pending.responseHeaders) {
       if (header.name.startsWith(':')) continue;
+      // `content-type` is the transport's, resolved above. Merging the
+      // pipeline's bare `application/grpc` in through the branch below turned
+      // the name into a TWO-element list: dart:io keeps the last, another shelf
+      // adapter may put both on the wire, and the seeded value claimed `+proto`
+      // for a `+json` call.
+      if (header.name.toLowerCase() == RpcHeaders.contentType) continue;
       final existing = headers[header.name];
       if (existing == null) {
         headers[header.name] = header.value;

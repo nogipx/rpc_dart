@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-202](P-202-which-content-type-a-grpc-over-http1-response-carries.md)** valid (round 582),
+  rpc_dart_http — **TWO views of one response, and they disagree, which is the whole point**: shelf's
+  `headersAll` through `transport.handler` reads what the code PRODUCED (`2 [application/grpc+proto,
+  application/grpc]`), `HttpClient.headers[]` through `shelf_io` reads what a peer RECEIVES (`1
+  [application/grpc]` — dart:io keeps the last). The lead asked only for the first; the first alone grades
+  the defect wrongly in BOTH directions, calling a duplicate nobody receives an interop break and missing
+  that every caller was told the bare form whatever it asked for. Cannot see a non-dart:io adapter — none is
+  in this repository's dependency set — so "another host may emit two lines" stays unmeasured
 - **[P-201](P-201-what-the-http1-caller-lets-through.md)** valid (round 581),
   rpc_dart_http — a `dart:io` server answering a real `grpc-status: 9` plus N headers of noise:
   `1000 extra -> 1007 delivered` against a `CONTROL 2 extra -> 9`, now `2`. **It reads TWO things and the
