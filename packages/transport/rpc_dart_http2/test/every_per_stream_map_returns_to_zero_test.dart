@@ -11,12 +11,14 @@
 // This asserts the invariant across ALL of them rather than the race in
 // particular: after calls that have completed, nothing per-stream may remain.
 //
-// WHAT ITS `halfClosedLocal` ROW IS NOT. Ablating BOTH removal paths for that map
-// (`releaseStreamId` and the inline release) changes nothing here, which means the
-// shapes below never populate it — unary and server-stream carry their half-close
-// some other way. So that row is a VACUOUS zero for these shapes and guards
-// nothing; it is kept only for the `containsKey` half, which is what was actually
-// missing. A rig that fills the map is what B-184's remaining item needs.
+// ITS `halfClosedLocal` ROW IS A REAL GUARD, measured: ablating BOTH removal paths
+// for that map (`releaseStreamId` and the inline release) makes this read 10 — one
+// entry per call, since the unary caller passes `endStream: true` to `sendMessage`
+// and the add site is reached on every call.
+//
+// What it does NOT cover is the race: the leak needs the release to land while the
+// send is parked on the peer's window, which a real server cannot be made to do on
+// cue. That arm owns its own file — a_parked_half_close_does_not_leak_its_id_test.
 @TestOn('vm')
 library;
 

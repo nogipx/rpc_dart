@@ -1,10 +1,10 @@
 ---
-status: open (round 558 fixed two of three; the `_halfClosedLocal` leak remains)
-round: 558
-commit: 8253fe8a
+status: closed (round 565)
+round: 565
+commit: 4acd6833
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-187
+reason: "bench — all three filed claims are now measured and fixed: the two pump ones in round 558 (P-183), the `_halfClosedLocal` leak in round 565 (P-187). What the measuring turned up and did not fix is B-221; the `_waiters` ordering item was never part of the three and is noted there"
 ---
 
 # B-184 — http2 caller: sendMessage and finishSending race a disposed or parked pump
@@ -99,15 +99,39 @@ vacuous zero, and without the second canary it would have shipped as coverage.
 sites, with a release driven into the window while the send is parked. `P-183` already parks a pump at
 the pump level and is half of it.
 
-### Still open: the `_halfClosedLocal` leak
+> **REFUTED by round 565, and left standing above as the claim that was acted on.** Both paragraphs
+> are false. The same ablation makes round 564's own test read **10**, and `unary/caller.dart:559-563`
+> passes `endStream: true` to `sendMessage`, so unary fills the map on every call. The rig named in the
+> second paragraph was not needed; what was needed was a window the rig owns.
 
-`sendMessage` re-adds the stream id AFTER its await, so a cleanup that ran in between leaves one entry
-per stream behind. A leak rather than a truncation, in the caller transport's bookkeeping rather than
-the pump's, and it needs its own rig — the pump probe cannot see it.
+### Round 565 — the leak CONFIRMED and FIXED, and round 564's claim refuted
 
-Also named by this lead and unmeasured: `_waiters` can be overtaken by a NEW `add`. A different shape
-from the half-close race, and ordering between two concurrent sends on one stream is the caller's to
-serialise today.
+`../rounds/565-the-canary-that-reported-a-pass.md`. Bench `P-187`.
+
+```
+WITNESS  reset while the endStream send is parked   halfClosedLocal 1 -> 0
+CONTROL  window opens first, send completes         halfClosedLocal 1 (unchanged)
+REACH    a later releaseStreamId                    1 -> 0
+STACK    the same race via RpcCallerEndpoint        0 before and after
+```
+
+**The rig round 564 asked for was not needed, and its central claim is false.** Re-running the
+ablation round 564 describes — both `_halfClosedLocal` removals dropped — makes its own test read
+**10**, one per call, not pass: the unary caller passes `endStream: true` to `sendMessage`
+(`unary/caller.dart:559-563`), so the add site is reached on every unary call. Why its canaries
+reported passes cannot be recovered from the record; nothing changed those lines in between.
+
+**Fixed** with `_activeStreams.containsKey(streamId)` on the re-add, the guard rounds 563 and 564
+both declined for want of a witness. The witness exists because the WINDOW is owned by the rig:
+hand-rolled SETTINGS with `INITIAL_WINDOW_SIZE=64`, which a real server cannot be made to do on cue.
+
+**Severity, measured rather than assumed**: not reachable through `RpcCallerEndpoint`, because the
+pipeline releases the id when the call ends and that removes the entry. The exposure is a direct user
+of the transport — public API, and the `IRpcTransport` contract it implements.
+
+**`_waiters` overtaken by a NEW `add` was never one of the three claims** and is still unmeasured. It
+moves to `B-221` as its third item rather than closing with this lead, since a closed lead's remainder
+is routed to by nothing.
 
 ## Owner decision
 

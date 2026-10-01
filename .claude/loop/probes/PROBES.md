@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-187](P-187-does-a-release-during-a-parked-send-leak-its-id.md)** valid (round 565),
+  rpc_dart_http2 — four arms around one race: a peer RST_STREAM landing while an `endStream: true` send
+  is parked on the window. `WITNESS halfClosedLocal 1 / CONTROL 0 / REACH 1 then 0 after
+  releaseStreamId / STACK 0 through RpcCallerEndpoint`. **The window is owned by the rig** — hand-rolled
+  SETTINGS with `INITIAL_WINDOW_SIZE=64`, because no real server holds a window closed on cue, which is
+  what round 564 could not arrange. **The control's load-bearing row is `window open halfClosedLocal: 1`**,
+  taken between the grant and the reset: it proves the add site is reached, so the witness's 0 after the
+  fix is the guard working rather than a map nothing fills (`L-15`). Two readings it did not vary are
+  `B-221`: the parked send returns `threw=null` after the reset, and the pump survives it
 - **[P-186](P-186-what-bounds-a-connect-into-a-hole.md)** valid (round 563),
   rpc_dart_http2 — times a connect against three addresses: a REFUSED loopback port (10 ms, the control
   that prompt failures stay prompt), a BLACK HOLE with the bound passed explicitly (1730 ms), and the

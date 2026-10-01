@@ -53,6 +53,14 @@ The guard passes, and then the canary says what it is worth.
 
 ## Canary
 
+> **CORRECTED by round 565: both results below are wrong.** Re-running the same two ablations at
+> `4acd6833` makes this round's own test FAIL, `Expected: <0> Actual: <10>` — one entry per call. The
+> map IS populated by unary, because `unary/caller.dart:559-563` passes `endStream: true` to
+> `sendMessage`. Everything this section concludes from the passes, and the rig it names in
+> `## Not fixed`, does not follow. Why the passes were recorded cannot be recovered: nothing changed
+> those lines between the two rounds. Left in place rather than rewritten, because the lead and a test
+> header were both written from it and a reader tracing that needs to see the source.
+
 **Two, and both PASSED — which is the round's actual result.**
 
 ```

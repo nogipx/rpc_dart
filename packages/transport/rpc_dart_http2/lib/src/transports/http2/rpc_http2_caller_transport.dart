@@ -1018,7 +1018,13 @@ class RpcHttp2CallerTransport
       streamId,
       stream,
     ).add(http2.DataStreamMessage(data, endStream: endStream));
-    if (endStream) _halfClosedLocal.add(streamId);
+    // `containsKey`, because this add is the only one of three that sits behind
+    // an await: a peer RST_STREAM arriving while the send was parked clears every
+    // per-stream map and wakes the pump, so without the check the id goes back
+    // into a set nothing will remove again.
+    if (endStream && _activeStreams.containsKey(streamId)) {
+      _halfClosedLocal.add(streamId);
+    }
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal(
