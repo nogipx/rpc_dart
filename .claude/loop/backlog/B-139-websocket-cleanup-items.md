@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 599)
 round: 535 (items 1, 3 and 6's unhandled future examined; four groups left)
 commit: 5e2af858
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_stub.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_responder_transport.dart]
 probe: P-168
-reason: "cost — one owner-requested item left: a headers callback re-evaluated per reconnect (4). The connection cap (6d) landed in round 598; 6a-6c in 597; 2, 5 and 7 closed by reading"
+reason: "DONE: 4 (headersProvider, round 599), 6d (maxConnections, 598), 6a-6c (597), 1 and 6's unhandled future (535); 2, 3, 5 and 7 closed by reading"
 ---
 
 # B-139 — websocket: smaller defects and hygiene
@@ -66,7 +66,7 @@ loop's event handler, the ROOT ZONE this file's own comments name four times. A 
 state a failed setup tends to leave a socket in. Now guarded like the refusal path eighty lines above
 it, with `Future.sync` so a synchronous throw is covered too.
 
-## Still open — four groups, and split them first
+## What round 535 left — four groups, all settled in rounds 597-599
 
 - **item 2** (mapping rows said to be dead): a judgement call and probably wrong. The rows encode the
   intended mapping, a test pins them, and deleting them makes `_ => unknown` the answer for a clean
@@ -88,6 +88,12 @@ it, with `Future.sync` so a synchronous throw is covered too.
 callbacks now throw `ArgumentError` (6b), `createWithContracts` takes
 `logController` (6c), the branches are merged (6a). Closed by reading: 2 (keep the
 rows), 5 (deliberate), 7 (the wrapper hides only `IRpcReconnectableTransport`).
+
+## Rounds 598-599 — the two owner-requested items
+
+598 added `maxConnections`; 599 added `connect(headersProvider:)`, called for every
+upgrade. `../rounds/598-the-connection-nothing-refused.md`,
+`../rounds/599-the-token-captured-once.md`.
 
 ## Owner decision
 

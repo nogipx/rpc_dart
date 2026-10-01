@@ -273,6 +273,10 @@ class RpcWebSocketCallerTransport
   /// parameter. They are ignored there rather than rejected, so one piece of
   /// cross-platform code can pass a token without branching on the platform.
   ///
+  /// [headersProvider] is the alternative for a token that expires: it is
+  /// called for the first upgrade and again for every reconnect. Pass one or
+  /// the other, not both.
+  ///
   /// [connectTimeout] bounds the whole open, on both platforms. Without it a
   /// peer that accepts the connection and never completes the upgrade holds the
   /// caller until the OS gives up — measured on a black hole that accepts TCP
@@ -285,8 +289,12 @@ class RpcWebSocketCallerTransport
     Duration? pingInterval,
     bool enableCompression = false,
     Map<String, Object>? headers,
+    FutureOr<Map<String, Object>> Function()? headersProvider,
     Duration? connectTimeout,
   }) async {
+    if (headers != null && headersProvider != null) {
+      throw ArgumentError('Pass headers or headersProvider, not both');
+    }
     // The reconnect factory carries the SAME keepalive, compression choice,
     // HEADERS and timeout, or a reconnected socket comes back with different
     // settings: blind again after the first drop, silently re-offering an
@@ -301,12 +309,12 @@ class RpcWebSocketCallerTransport
     // no output bound before rpc_dart sees it, turning a fraction of a MiB on
     // the wire into hundreds of MiB of client RSS. Mirrors the server default in
     // rpcWebSocketConnections; enable it only against servers you control.
-    Future<WebSocketChannel> openChannel() => openWebSocket(
+    Future<WebSocketChannel> openChannel() async => openWebSocket(
       uri,
       protocols: protocols,
       pingInterval: pingInterval,
       enableCompression: enableCompression,
-      headers: headers,
+      headers: headersProvider != null ? await headersProvider() : headers,
       connectTimeout: connectTimeout,
     );
 

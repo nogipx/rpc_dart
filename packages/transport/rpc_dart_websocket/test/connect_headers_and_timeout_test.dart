@@ -98,6 +98,43 @@ void main() {
       );
     });
 
+    // WITNESS: a token that expires must be refreshable. Fixed headers are
+    // captured once, so a reconnect after expiry presents the stale token.
+    test('a headers provider is asked again on every reconnect', () async {
+      final (uri, seen) = await _recordingServer();
+      var issued = 0;
+
+      final t = await RpcWebSocketCallerTransport.connect(
+        uri,
+        headersProvider: () async => {'authorization': 'Bearer t${++issued}'},
+      );
+      addTearDown(() => t.close().catchError((Object _) {}));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      await t.reconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(seen.first['authorization'], ['Bearer t1']);
+      expect(
+        seen.last['authorization'],
+        ['Bearer t2'],
+        reason:
+            'the reconnect presented the token minted for the first upgrade',
+      );
+    });
+
+    test('headers and a headers provider together are refused', () async {
+      final (uri, _) = await _recordingServer();
+      await expectLater(
+        RpcWebSocketCallerTransport.connect(
+          uri,
+          headers: {'authorization': 'Bearer a'},
+          headersProvider: () => {'authorization': 'Bearer b'},
+        ),
+        throwsArgumentError,
+      );
+    });
+
     // GUARD: no headers must stay no headers -- the control the witnesses are
     // read against, and proof the assertion is not passing on some default.
     test('GUARD: without headers none is sent', () async {
