@@ -13,8 +13,23 @@ import '../../core/_index.dart';
 /// messages are passed by reference.
 class RpcDirectMultiplexedChannel implements IRpcMultiplexedChannel {
   final StreamController<RpcTransportMessage> _output;
-  final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast(sync: true);
+
+  /// BUFFERED, like `RpcFrameMultiplexedChannel`'s, because this one is fed from
+  /// the constructor and a plain broadcast drops what arrives with no listener
+  /// attached. The peer advertises its connection window from ITS constructor, so
+  /// building the two ends with anything awaited in between lost that grant and
+  /// left the second side with no credit at all: `pair()` plus one event-loop turn
+  /// read `server credit null` against `67108864`.
+  ///
+  /// `memoryPair()` was safe only by accident — it builds both ends in one
+  /// expression, so nothing can interleave.
+  ///
+  /// `sizeOf` is `bufferedBytes`, which is 0 for a `directPayload` by definition:
+  /// queuing one costs a pointer, so the COUNT bound is the one that binds here.
+  final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
+      BufferedBroadcastController<RpcTransportMessage>(
+        sizeOf: (m) => m.bufferedBytes,
+      );
   late final StreamSubscription<RpcTransportMessage> _sub;
   bool _closed = false;
 

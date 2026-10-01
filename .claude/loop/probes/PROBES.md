@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-195](P-195-does-the-direct-channel-keep-early-frames.md)** valid (round 574),
+  rpc_dart — `pair()` with ONE event-loop turn between constructing the two transports, read through an
+  observable that already exists: `flowControlConnectionCredit`, which answers `null` for a side that
+  never got the peer's grant. `WITNESS server null -> 67108864`, with a no-gap arm and `memoryPair()`
+  both reading `67108864` throughout — the two controls are the lead's own point, that `memoryPair` is
+  safe only by building both ends in one expression. Reads BOTH sides, because which one loses is the
+  finding. Drives neither of the buffer's bounds, and cannot drive the byte one at all: a
+  `directPayload` weighs 0
 - **[P-194](P-194-reset-or-503-at-the-end-of-a-drain.md)** valid (round 573),
   rpc_dart_http — a 30 s handler against a 200 ms drain budget, read with a **raw `package:http`
   POST** so the number is the HTTP outcome and not a caller's interpretation of it:

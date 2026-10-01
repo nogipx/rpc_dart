@@ -1,10 +1,11 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 574)
+round: 574
+commit: 3fadccbc
+release: changelog
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-195
+reason: "bench — CONFIRMED exactly as filed: `pair()` with one event-loop turn between the two ends read `server credit null` against `67108864`, so the side built second had flow control off in that direction. Fixed with `BufferedBroadcastController`, the sketch's own answer"
 ---
 
 # B-173 — RpcDirectMultiplexedChannel is a sync broadcast that starts pumping in its constructor
@@ -33,6 +34,37 @@ transport; read the client's `flowControlConnectionCredit`.
 ## Fix sketch
 
 Use `BufferedBroadcastController` like `RpcFrameMultiplexedChannel`.
+
+## Outcome (round 574) — confirmed as filed, down to the mechanism
+
+`../rounds/574-the-grant-nobody-was-listening-for.md`. Bench `P-195`.
+
+```
+                                             before            after
+WITNESS  pair(), one turn between the ends   server null       67108864
+ARM      pair(), no gap                      server 67108864   unchanged
+CONTROL  memoryPair()                        server 67108864   unchanged
+```
+
+**One event-loop turn is the whole difference**, and the side built SECOND is the one that loses:
+`RpcChannelTransport` advertises its window from its constructor, into a broadcast with no listener
+yet. `server credit null` is flow control off in that direction for the life of the connection.
+
+**Both other arms are the lead's own point**: `memoryPair` is safe only because it builds the two ends
+in one expression, and nothing about `pair()` promises that to anyone else.
+
+Fixed with `BufferedBroadcastController`, the sketch's answer and what
+`RpcFrameMultiplexedChannel` already uses. **The swap drops `sync: true`**, so delivery here is now
+asynchronous — a real behaviour change, and 15 green packages including every `memoryPair` test are
+what establish nothing depended on it.
+
+**`sizeOf` cannot bind on this channel**: a `directPayload` weighs 0 by definition, so only the 4096
+count bound applies. `B-217`'s subject on a third queue, stated rather than worked around. No arm
+drives either bound.
+
+**Canary A is recorded for being the WRONG arm**: `maxPendingEvents: 0` ablates so much that even the
+client loses its own inbound grant, failing on a different assertion. The faithful switch-off is the
+original controller in place.
 
 ## Owner decision
 
