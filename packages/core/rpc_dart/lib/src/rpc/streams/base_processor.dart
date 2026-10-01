@@ -478,9 +478,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             'Stream finished: message_stream_completed [methodPath: $_methodPath, streamId: $_streamId]',
           );
         }
-        if (!_requestController.isClosed) {
-          _requestController.close();
-        }
+        _endRequests();
       },
     );
 
@@ -572,10 +570,35 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           'Stream finished: end_of_stream_received [methodPath: $_methodPath, streamId: $_streamId]',
         );
       }
-      if (!_requestController.isClosed) {
-        _requestController.close();
-      }
+      _endRequests();
     }
+  }
+
+  /// Ends the request side, reporting a frame the peer never finished.
+  ///
+  /// A half-close with bytes of a frame still buffered is a MALFORMED request,
+  /// not an empty one, and the parser's leftovers die with the stream — so unless
+  /// it is said here it is never said at all. A server stream carries exactly one
+  /// request, so it waits out its deadline; a client stream's handler is told the
+  /// peer sent nothing where it in fact sent an incomplete something.
+  ///
+  /// Both endings route here because the half-close reaches a processor two ways:
+  /// as a frame carrying end-of-stream, and as the bound message stream simply
+  /// finishing. The rule has to be the same in both or the answer depends on the
+  /// shape of the feed.
+  void _endRequests() {
+    if (_requestController.isClosed) return;
+    if (_parser?.holdsPartialFrame ?? false) {
+      _requestController.addError(
+        RpcStatusException(
+          RpcStatus.invalidArgument,
+          'Request stream closed mid-message: the last gRPC frame is '
+          'incomplete',
+        ),
+        StackTrace.current,
+      );
+    }
+    _requestController.close();
   }
 
   /// Zero-copy: processes a direct object without serialization.

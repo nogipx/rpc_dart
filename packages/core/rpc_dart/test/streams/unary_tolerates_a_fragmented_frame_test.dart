@@ -136,18 +136,31 @@ final class _Svc extends RpcResponderContract {
         yield 'got:${req.value.length}'.rpc;
       },
     );
+    addClientStreamMethod<RpcString, RpcString>(
+      methodName: 'collect',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (requests, {context}) async {
+        var n = 0;
+        await for (final _ in requests) {
+          n++;
+        }
+        return 'got:$n'.rpc;
+      },
+    );
   }
 }
 
-/// The outcome of one unary call over a channel with the given behaviour.
-Future<String> _unary({
+/// A caller and responder over a channel with the given behaviour.
+///
+/// The RESPONDER's policy is the side under test wherever one is passed; the
+/// caller keeps the defaults, so it sends what its peer will refuse.
+RpcCallerEndpoint _rig({
   required bool split,
   bool truncate = false,
   bool lateEnd = false,
-  int requestBytes = 64,
   RpcSecurityPolicy? responderPolicy,
-  Duration timeout = const Duration(seconds: 3),
-}) async {
+}) {
   final client = _Fragmenting(
     split: split,
     truncate: truncate,
@@ -162,10 +175,6 @@ Future<String> _unary({
           transport: RpcChannelTransport(
             channel: RpcFrameMultiplexedChannel(channel: server),
             isClient: false,
-            // The RESPONDER's own, which is the side under test. The caller keeps
-            // the defaults, so it sends what its peer will refuse — a limit that
-            // only ever refuses what this side also refuses to send proves
-            // nothing.
             policy: responderPolicy ?? const RpcSecurityPolicy(),
           ),
         )
@@ -184,6 +193,70 @@ Future<String> _unary({
     await caller.close();
     await responder.close();
   });
+  return caller;
+}
+
+/// The outcome of a SERVER-stream call over a channel with the given behaviour.
+Future<String> _serverStream({
+  required bool split,
+  bool truncate = false,
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final caller = _rig(split: split, truncate: truncate);
+  try {
+    final got = await caller
+        .serverStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'tick',
+          request: ('x' * 64).rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+          context: RpcContext.empty().withTimeout(timeout),
+        )
+        .toList();
+    return got.map((e) => e.value).join(',');
+  } on RpcStatusException catch (e) {
+    return 'status ${e.statusCode}: ${e.message}';
+  }
+}
+
+/// The outcome of a CLIENT-stream call over a channel with the given behaviour.
+Future<String> _clientStream({
+  required bool split,
+  bool truncate = false,
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final caller = _rig(split: split, truncate: truncate);
+  try {
+    final call = caller.clientStream<RpcString, RpcString>(
+      serviceName: 'Svc',
+      methodName: 'collect',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      context: RpcContext.empty().withTimeout(timeout),
+    );
+    final reply = await call(Stream.value(('x' * 64).rpc));
+    return reply.value;
+  } on RpcStatusException catch (e) {
+    return 'status ${e.statusCode}: ${e.message}';
+  }
+}
+
+/// The outcome of one unary call over a channel with the given behaviour.
+Future<String> _unary({
+  required bool split,
+  bool truncate = false,
+  bool lateEnd = false,
+  int requestBytes = 64,
+  RpcSecurityPolicy? responderPolicy,
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final caller = _rig(
+    split: split,
+    truncate: truncate,
+    lateEnd: lateEnd,
+    responderPolicy: responderPolicy,
+  );
 
   try {
     final reply = await caller.unaryRequest<RpcString, RpcString>(
@@ -247,9 +320,57 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
+  // One pipeline, three shapes, and each used to give the peer a different ending
+  // on the same input: unary a status, a server stream its deadline, a client
+  // stream a SUCCESS reporting zero messages where the peer had sent an
+  // incomplete one. Separate tests, because the two failures are different and a
+  // single test stops at whichever assertion fails first.
+
+  test(
+    'WITNESS a server stream answers a mid-frame half-close',
+    () async {
+      expect(
+        await _serverStream(split: true, truncate: true),
+        startsWith('status ${RpcStatus.invalidArgument}'),
+        reason:
+            'a server stream carries exactly one request, so without this the '
+            'handler never runs and the call waits out its deadline',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'WITNESS a client stream does not report a truncated request as empty',
+    () async {
+      expect(
+        await _clientStream(split: true, truncate: true),
+        startsWith('status ${RpcStatus.invalidArgument}'),
+        reason:
+            'got:0 tells the handler the peer sent nothing, where in fact it '
+            'sent an incomplete something — and the call SUCCEEDS',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
   test('GUARD whole frames still work', () async {
     expect(await _unary(split: false), 'got:64');
+    expect(await _serverStream(split: false), 'got:64');
+    expect(await _clientStream(split: false), 'got:1');
   }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test(
+    'GUARD a fragmented request still works on every shape',
+    () async {
+      // The other direction of the same rule: holding a partial frame must not
+      // leak into a call whose frames do arrive, just in pieces.
+      expect(await _unary(split: true), 'got:64');
+      expect(await _serverStream(split: true), 'got:64');
+      expect(await _clientStream(split: true), 'got:1');
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
 
   test(
     'GUARD a REFUSED frame is not reported as a truncated one',

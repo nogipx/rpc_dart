@@ -3,8 +3,8 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553]
-status: confirmed (round 553)
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554]
+status: confirmed (round 554)
 ---
 
 # RPC-08 — A policy field checked on one transport
@@ -356,3 +356,28 @@ channel, codec and payload.
 
 `../rounds/553-the-parser-knew-all-along.md`,
 `../probes/P-181-which-branch-took-the-fragment.md`, B-126.
+
+## Round 554 — the same divergence one round later, and the fix was a PLACE
+
+Round 553 fixed unary's half of this at the pipeline, and B-216 recorded that the other two
+shapes still diverged on the same input: `server stream status 4` (its deadline),
+`client stream got:0` (a SUCCESS reporting zero messages where the peer sent an incomplete one).
+
+> **When N shapes disagree, look for the one component they all run through and put the rule
+> THERE.** Three responders decided separately at three layers, which is why the first fix
+> reached one of them. `StreamProcessor` owns the parser and every request side passes through
+> it, so one helper made all three agree — and the two existing answer paths (a server-stream
+> responder answering an error on its request stream, a client-stream handler's `await for`
+> throwing) needed no change at all. The lead predicted the signal would have to cross the
+> processor/pipeline seam; it did not, because the question is about the processor's own buffer.
+
+> **A rule placed at one layer must cover every way that layer is ENTERED.** A half-close
+> reaches a processor twice over — as a frame carrying end-of-stream, and as the bound message
+> stream simply finishing — and two sites closed the request controller. Left apart, the answer
+> would have depended on the shape of the FEED rather than on the request.
+
+> **A witness covering two shapes in one test can only show one failure.** The canary stopped at
+> the server-stream assertion and the `got:0` regression went unobserved; split per shape, both
+> appear with their own message. Where a fix spans several shapes, so should the witnesses.
+
+`../rounds/554-one-rule-where-the-parser-is.md`, B-216, B-218.

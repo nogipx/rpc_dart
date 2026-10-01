@@ -31,6 +31,12 @@ half-close at all. Both reach the same line. What is unestablished:
 The arm already exists: P-180 varies one shape and would take another with a different
 contract method.
 
+**Round 554 added one shape to this and left another.** B-216 is closed: a mid-frame half-close
+is now answered on the server-stream and client-stream shapes too, from one place in
+`StreamProcessor`. **Bidi runs through that same helper and is therefore fixed by construction
+and measured by nothing** — `P-155` has no bidi column. That is the cheapest item on this lead:
+one more block in an existing probe.
+
 ## 2. What a decoded backlog costs, which is the question the lead was about
 
 P-180's `nominal` column is `size x count` and is labelled as arithmetic. The paused stream's

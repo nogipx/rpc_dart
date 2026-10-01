@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 554)
 round: 547
 commit: c8ce033a
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
@@ -57,6 +57,34 @@ The hard part is where. The processor owns the parse and the pipeline owns the h
 signal has to cross that boundary — which is the same seam round 547 crossed for unary with
 `requestHandled`, and the reason it needed a public getter.
 
-## Owner decision
+## Outcome (round 554) — FIXED, in one place, for all three shapes
 
-—
+`../../rounds/554-one-rule-where-the-parser-is.md`. Bench `P-155`, reused unchanged.
+
+```
+   unary         status 3   (round 553)
+   server stream status 4   ->   status 3
+   client stream got:0      ->   status 3
+```
+
+**The rule went where the PARSER is.** `StreamProcessor` owns it and is the single thing all three
+request sides run through, so placing the question there removes the divergence rather than
+patching each shape: `_endRequests()` raises INVALID_ARGUMENT into the request controller before
+closing it when `holdsPartialFrame` holds. Nothing else needed changing — the server-stream
+responder already answers an error on its request stream, and a client-stream handler's `await
+for` throws into a path that already answers.
+
+**Both endings route through the one helper.** A half-close reaches a processor two ways, as a
+frame carrying end-of-stream and as the bound message stream finishing; left apart, the answer
+would depend on the shape of the FEED rather than on the request.
+
+**This lead's "hard part is where" was answered by round 553's getter.** It predicted the signal
+must cross the processor/pipeline seam. It does not: the processor can answer alone, because the
+question is about its own buffer.
+
+The witness had to be SPLIT per shape — as one test it stopped at the server-stream assertion and
+the client-stream regression went unobserved. The canary shows `status 4` and `got:0` back
+separately, with unary unaffected, which is what confirms this lead's claim that the two fixes are
+independent.
+
+Bidi is fixed by construction and measured by nothing; that column goes to B-218.
