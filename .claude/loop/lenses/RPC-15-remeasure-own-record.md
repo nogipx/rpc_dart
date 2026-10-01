@@ -3,8 +3,8 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559, 561, 579, 588]
-status: confirmed (round 588)
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559, 561, 579, 588, 589]
+status: confirmed (round 589)
 ---
 
 # RPC-15 — Re-measure the loop's own record
@@ -321,3 +321,12 @@ evidence — and the lead it spawns inherits the wrong variable. `L-19`.
 
 `../probes/P-208-how-much-margin-a-timing-assertion-has.md`,
 `../rounds/588-the-gate-oversubscribes-its-own-cores.md`, B-224.
+
+> **Round 589's addition, from ablating the arm 588 had just rewritten: an instrument
+> that reads state AFTER a teardown reports clean whatever happened.** The new
+> observable was the reassembly buffer's size, and both paths that would read it have
+> already reset it — a completed frame compacts the buffer, `_failChannel` drops it
+> outright. So the ablation PASSED, and the replacement instrument was as blind as the
+> proxy it replaced. The fix is a high-water mark. Ablate every rewritten arm, not
+> only the one whose failure started the round: a fix to an instrument is a change to
+> what the test can see, and nothing else checks that.

@@ -46,8 +46,10 @@ class _Counting extends LogController {
 /// transport under them.
 Future<_Counting> _closeUnder({required int calls}) async {
   final server = await HttpServer.bind('127.0.0.1', 0);
+  var parked = 0;
   server.forEach((request) async {
     await request.drain<void>();
+    parked++;
     // Never answered: the request is still in flight when close() lands.
   }).ignore();
 
@@ -78,12 +80,30 @@ Future<_Counting> _closeUnder({required int calls}) async {
     unawaited(transport.finishSending(streamId));
   }
 
-  // Let every request reach the server and park.
-  await Future<void>.delayed(const Duration(milliseconds: 300));
+  // Wait for every request to REACH the server, rather than sleeping a number
+  // that happens to be enough on a quiet machine: under the gate's suite
+  // concurrency a fixed settle leaves a request still in the client, and it then
+  // fails with the transport still OPEN — logged at `error`, correctly, which
+  // reads here as the defect.
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (parked < calls && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+  expect(parked, calls, reason: 'the requests never reached the server');
   expect(counter.errors, 0, reason: 'nothing has failed yet');
 
   await transport.close();
-  await Future<void>.delayed(const Duration(milliseconds: 300));
+  // The close has to reach each parked request. Bounded by the error count
+  // settling rather than by a fixed sleep: `_inFlight` is drained by `close()`
+  // itself, so the observable is the counter going quiet.
+  final settle = DateTime.now().add(const Duration(seconds: 10));
+  var lastSeen = -1;
+  while (DateTime.now().isBefore(settle)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final now = counter.errors + counter.internals;
+    if (now == lastSeen && now > 0) break;
+    lastSeen = now;
+  }
   return counter;
 }
 

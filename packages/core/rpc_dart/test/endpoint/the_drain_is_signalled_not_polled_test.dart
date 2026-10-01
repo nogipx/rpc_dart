@@ -80,26 +80,61 @@ Future<_Rig> _callInFlight() async {
   return (caller: caller, responder: responder, call: call);
 }
 
+/// Drains with one call in flight, releasing the handler after [releaseAfter],
+/// and returns how long the drain took in milliseconds.
+Future<int> _drainReleasingAfter(Duration releaseAfter) async {
+  final rig = await _callInFlight();
+
+  final sw = Stopwatch()..start();
+  final draining = rig.responder.drain(timeout: const Duration(seconds: 5));
+  Future<void>.delayed(releaseAfter, () {
+    if (!_release!.isCompleted) _release!.complete();
+  });
+  await draining;
+  sw.stop();
+  return sw.elapsedMilliseconds;
+}
+
 void main() {
   test(
     'WITNESS: a drain ends when the work does, not on the next tick',
     () async {
-      final rig = await _callInFlight();
-
-      final sw = Stopwatch()..start();
-      final draining = rig.responder.drain(timeout: const Duration(seconds: 5));
-      Future<void>.delayed(const Duration(milliseconds: 1), () {
-        if (!_release!.isCompleted) _release!.complete();
-      });
-      await draining;
-      sw.stop();
+      // Two releases, both inside ONE 50 ms poll interval, and the reading is the
+      // DIFFERENCE between the two drains.
+      //
+      // Polled: both land on the same tick, so both drains take ~50 ms and the
+      // difference is ~0. Signalled: each drain ends when its own release does, so
+      // the difference tracks the gap between them. An absolute ceiling here does
+      // not survive a loaded machine — it read 92 ms against a 35 ms bound at
+      // `--concurrency=32` — while the poll tick is a wall-clock Timer that does
+      // not stretch with contention, so the DISCRIMINATOR holds even when both
+      // numbers inflate.
+      //
+      // BEST of several attempts, because the two releases have to sit inside one
+      // tick for that to work, which caps the signal at ~48 ms — and at enough
+      // oversubscription scheduling noise reaches it. Polling cannot produce the
+      // gap on ANY attempt, so taking the largest costs the test nothing.
+      var widest = 0;
+      final attempts = <String>[];
+      for (var i = 0; i < 3; i++) {
+        final early = await _drainReleasingAfter(
+          const Duration(milliseconds: 2),
+        );
+        final late = await _drainReleasingAfter(
+          const Duration(milliseconds: 30),
+        );
+        attempts.add('${early}ms/${late}ms');
+        if (late - early > widest) widest = late - early;
+        if (widest >= 18) break;
+      }
 
       expect(
-        sw.elapsedMilliseconds,
-        lessThan(35),
+        widest,
+        greaterThanOrEqualTo(18),
         reason:
-            'the handler finished after 1 ms; polling every 50 ms made the drain '
-            'take ~52 ms for work that was already done',
+            'drains took ${attempts.join(', ')} for releases 28 ms apart: a '
+            'polled drain quantises both to the same 50 ms tick, so this '
+            'difference collapsing to zero is the regression',
       );
     },
     timeout: const Timeout(Duration(seconds: 30)),

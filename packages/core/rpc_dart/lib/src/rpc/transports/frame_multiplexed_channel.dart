@@ -92,6 +92,24 @@ class RpcFrameMultiplexedChannel
   @override
   bool get isClosed => _closed;
 
+  /// The largest the reassembly buffer has ever been grown to, in bytes — for
+  /// diagnostics and tests.
+  ///
+  /// A PEAK rather than the current size, because both places that would read it
+  /// have already reset it: a completed frame compacts the buffer, and
+  /// [_failChannel] drops it outright so a refusal does not keep allocating.
+  ///
+  /// Exposed because the cap that bounds this buffer is consulted BEFORE the
+  /// append, and "before" cannot be seen in the error — a chunk refused after
+  /// being copied raises exactly the same [RpcFrameException]. The only other
+  /// observable is the PROCESS's resident size, which under a concurrent test
+  /// runner belongs to every isolate at once rather than to this channel.
+  ///
+  /// Useful beyond a test: against a configured cap it says how much of the
+  /// reassembly budget a peer's framing actually uses.
+  int get peakReassemblyBytes => _peakBufBytes;
+  int _peakBufBytes = 0;
+
   @override
   bool get supportsZeroCopy => false;
 
@@ -179,6 +197,7 @@ class RpcFrameMultiplexedChannel
     final grown = Uint8List(cap);
     grown.setRange(0, _bufLen, _buf);
     _buf = grown;
+    if (cap > _peakBufBytes) _peakBufBytes = cap;
   }
 
   void _appendToBuffer(Uint8List chunk) {
