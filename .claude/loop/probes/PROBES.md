@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-199](P-199-what-the-transfer-costs-by-size.md)** valid (round 578),
+  rpc_dart_isolate — **a SWEEP, because a copy's cost is a function of size and the lead asked for one
+  point**: `32 B 2.71 vs 2.34`, `128 KiB 20.44 vs 14.03`, then inverting at `256 KiB 103.71 vs 160.67` and
+  `1 MiB 383.08 vs 486.63`. Each size is the other arm's control, and the two columns cross between 128 and
+  256 KiB. `fromList` is INSIDE the timed loop, which is the whole question; the worker materialises the
+  TTD so the receiver's share is in the arm; minimum of three runs after 200 warm-up frames. Does NOT
+  measure through the transport — raw ports carrying the two expressions the channel picks between, so the
+  comparison is sound and the absolutes are not a frame's true cost
 - **[P-198](P-198-does-a-failed-spawn-let-the-process-exit.md)** valid (round 577),
   rpc_dart_isolate — **the probe IS the subject**: it fails a spawn, prints, and returns from `main` with
   no `exit()` call, so the verdict is whether the command returns at all. `guard ablated -> no exit at

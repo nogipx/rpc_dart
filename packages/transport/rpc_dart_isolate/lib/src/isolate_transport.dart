@@ -38,9 +38,21 @@ class _IsolateMessage {
 
 // -- Multiplexed channel over SendPort/ReceivePort ----------------------------
 
+/// Payload size at or above which a frame is sent as [TransferableTypedData].
+///
+/// Below it a plain `Uint8List` is faster: `fromList` copies while building and adds
+/// a native allocation and a finaliser, which small frames cannot amortise. 256 KiB
+/// is the first measured size at which the transfer wins — `103.71 us` against
+/// `160.67` per round trip, where 128 KiB reads `20.44` against `14.03` the other
+/// way. The band between the two is not measured.
+const int _transferableThresholdBytes = 256 * 1024;
+
 /// [IRpcMultiplexedChannel] backed by Dart isolate [SendPort]/[ReceivePort].
 ///
-/// Bytes cross without a copy ([TransferableTypedData]); objects do not --
+/// Large payloads cross as [TransferableTypedData], small ones as a plain
+/// `Uint8List` — see [_transferableThresholdBytes], which carries the numbers.
+/// Neither is free: the transfer copies once while building, so "bytes cross without
+/// a copy" was never true of this path. Objects do not cross free either --
 /// `SendPort.send` deep-copies everything but deeply-immutable values (measured:
 /// a mutable instance arrives with a different identity, a const list with the
 /// same one). So `supportsZeroCopy` here means "sendDirectObject works", not
@@ -92,7 +104,24 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
       data = message.directPayload;
     } else if (message.payload != null) {
       type = _IsolateMessageType.data;
-      data = TransferableTypedData.fromList([message.payload!]);
+      final payload = message.payload!;
+      // BY SIZE. `TransferableTypedData.fromList` copies while building and adds a
+      // native allocation plus a finaliser, which costs more than it saves on the
+      // small frames this transport mostly carries -- grants and headers. Measured
+      // round-trip, us/frame, minimum of three runs each:
+      //
+      //        32 B    TTD   2.71   Uint8List   2.34
+      //      1 KiB     TTD   2.66   Uint8List   2.33
+      //     64 KiB     TTD  11.26   Uint8List   7.87
+      //    128 KiB     TTD  20.44   Uint8List  14.03
+      //    256 KiB     TTD 103.71   Uint8List 160.67
+      //      1 MiB     TTD 383.08   Uint8List 486.63
+      //
+      // So the doc's old flat claim was wrong in both directions. The receive side
+      // already accepts either -- see `_materializeBytes`.
+      data = payload.lengthInBytes >= _transferableThresholdBytes
+          ? TransferableTypedData.fromList([payload])
+          : payload;
     } else if (message.metadata != null) {
       type = _IsolateMessageType.metadata;
       data = message.metadata;
