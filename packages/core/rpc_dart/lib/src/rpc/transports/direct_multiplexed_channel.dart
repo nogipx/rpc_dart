@@ -56,6 +56,13 @@ class RpcDirectMultiplexedChannel implements IRpcMultiplexedChannel {
   @override
   Stream<RpcTransportMessage> get incoming => _incomingCtl.stream;
 
+  /// Hands [message] over by REFERENCE, delivered a microtask later.
+  ///
+  /// So the sender must not touch its payload again once this returns -- see
+  /// `RpcTransportMessage.payload`, which carries the rule. Measured here:
+  /// scribbling 0xFF over a 0xAA body after `await sendMessage` made the receiver
+  /// read 0xFF. That is the price of being zero-copy, not an accident, and it is
+  /// why this channel is for in-process use.
   @override
   Future<void> send(RpcTransportMessage message) async {
     if (_closed || _output.isClosed) return;

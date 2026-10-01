@@ -24,6 +24,17 @@ import 'security_policy.dart';
 /// serialization for in-memory transports.
 final class RpcTransportMessage {
   /// Serialized payload bytes.
+  ///
+  /// **HANDED OVER, not lent.** A sender must not touch these bytes again after
+  /// the frame goes out: a zero-copy transport passes the list by reference and
+  /// may deliver it a microtask later, so reusing the buffer rewrites what the
+  /// receiver reads. Measured over `memoryPair`, scribbling 0xFF over the body
+  /// after `await sendMessage` returned: the receiver read `0xFF 0xFF 0xFF 0xFF`
+  /// where it had been given 0xAA.
+  ///
+  /// The mirror of the rule on the receive side, which `IRpcChannel.incoming`
+  /// states for a delivered chunk. Copy before sending if the buffer is a reusable
+  /// scratch area.
   final Uint8List? payload;
 
   /// ZERO-COPY: Direct reference to an object (for in-memory transport).
