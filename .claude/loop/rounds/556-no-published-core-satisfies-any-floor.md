@@ -148,6 +148,7 @@ may also be ahead of its tag; this round read floors, not pub.dev.
 
 ## Links
 
-Lead `../backlog/B-154-transport-pubspec-floors-are-below-the-core-api-they-use.md` — CONFIRMED,
-larger than filed, severity re-graded by the owner, deferred to release.
+Lead `../backlog/archive/B-154-transport-pubspec-floors-are-below-the-core-api-they-use.md` —
+CONFIRMED, larger than filed, severity re-graded by the owner, deferred to a release and then CLOSED
+on their instruction so no round takes it again.
 Lens `../lenses/RPC-08-policy-field-single-transport.md` — `applied: [556]`.

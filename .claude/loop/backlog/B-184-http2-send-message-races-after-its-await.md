@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: open (round 558 fixed two of three; the `_halfClosedLocal` leak remains)
+round: 558
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
 probe: none — static read, nothing run
@@ -33,6 +33,40 @@ server's received count.
 ## Fix sketch
 
 Make disposal fail parked adds; order END_STREAM behind parked data.
+
+## Outcome (round 558) — two of three CONFIRMED and fixed
+
+`../rounds/558-the-half-close-overtook-the-payload.md`. Bench
+`../probes/P-183-what-reaches-the-wire-when-a-parked-send-meets-a-half-close.md`.
+
+```
+  CONTROL drains throughout            data 64B eos=false, data 0B eos=true
+  parked send, then endStreamNow()     data 0B eos=true        <- payload GONE, add returned TRUE
+  parked send, then dispose()          NOTHING                 <- add returned TRUE
+
+after
+  parked send, then endStreamNow()     data 64B eos=false, data 0B eos=true
+  parked send, then dispose()          add throws status 14, naming the stream
+```
+
+**Silent request truncation confirmed**, exactly as filed. The CONTROL is what makes the middle row
+a loss rather than a rig that never delivers payload.
+
+Fixed as two separate mechanisms, each with its own canary: `endStreamNow` now lets parked payload go
+first — it records the request, wakes the waiter, and the woken `add` emits the END_STREAM it owes, so
+nothing waits on the peer and the controller buffers until the window opens — and `add` THROWS instead
+of returning when it cannot deliver, because returning normally is how a dropped payload came to read
+as a completed send.
+
+### Still open: the `_halfClosedLocal` leak
+
+`sendMessage` re-adds the stream id AFTER its await, so a cleanup that ran in between leaves one entry
+per stream behind. A leak rather than a truncation, in the caller transport's bookkeeping rather than
+the pump's, and it needs its own rig — the pump probe cannot see it.
+
+Also named by this lead and unmeasured: `_waiters` can be overtaken by a NEW `add`. A different shape
+from the half-close race, and ordering between two concurrent sends on one stream is the caller's to
+serialise today.
 
 ## Owner decision
 

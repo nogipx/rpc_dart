@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-183](P-183-what-reaches-the-wire-when-a-parked-send-meets-a-half-close.md)** valid (round 558),
+  rpc_dart_http2 — **records three observables, not a verdict**: the sink's contents in arrival order,
+  and whether the parked send returned or threw. `parked send, then endStreamNow() -> data 0B eos=true`
+  against a CONTROL of `data 64B, data 0B` is what makes the missing frame a loss rather than a rig
+  that never delivers. Needs no server: the pump parks because its controller's subscription is
+  paused, so a sink nothing listens to reproduces a closed peer window exactly. The `dispose()` arm
+  is its own control for the second half — the sink is EXPECTED to stay empty there, so an arm that
+  only counted frames would have called that case correct. Does not cover the lead's third claim
+  (`_halfClosedLocal` leaking an entry per stream), which is the caller transport's bookkeeping.
 - **[P-182](P-182-where-terminate-s-error-lands.md)** valid (round 557),
   rpc_dart_http2 — **measures WHERE an error arrives**, by destination: the zone handler, the call
   site's `catch`, or nowhere. Four arms on `terminate()` (healthy or socket destroyed, future

@@ -151,19 +151,45 @@ final class RpcHttp2OutgoingPump {
     }
   }
 
+  /// Set when a half-close was requested while payload was still parked.
+  ///
+  /// The END_STREAM is owed but must not overtake the parked message, so the
+  /// parked [add] emits it on the way out. See [endStreamNow].
+  bool _endRequested = false;
+
   /// Enqueues [message], waiting while the peer's window is closed.
   ///
   /// An end-of-stream message also closes the sink, matching what
   /// `sendData(..., endStream: true)` did.
+  ///
+  /// **THROWS when the message cannot be delivered.** Returning normally here
+  /// told the caller its payload had been sent when the pump had been disposed
+  /// under it, which is silent request truncation — a send that did not reach the
+  /// peer must not read as success.
   Future<void> add(http2.StreamMessage message) async {
     while (_paused && !_disposed) {
       final waiter = Completer<void>();
       _waiters.add(waiter);
       await waiter.future;
     }
-    if (_disposed || _controller.isClosed) return;
+    if (_disposed || _controller.isClosed) {
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'HTTP/2 stream ${_stream.id} was torn down before the message could '
+        'be sent',
+      );
+    }
     _controller.add(message);
-    if (message.endStream) await _finish();
+    if (message.endStream) {
+      await _finish();
+      return;
+    }
+    // A half-close that arrived while this was parked: it waited for the
+    // payload, so end the stream now that the payload is queued.
+    if (_endRequested) {
+      _controller.add(http2.DataStreamMessage(Uint8List(0), endStream: true));
+      await _finish();
+    }
   }
 
   Future<void> _finish() async {
@@ -194,6 +220,17 @@ final class RpcHttp2OutgoingPump {
   /// `stream.sendData(empty, endStream: true)` cannot be left alongside a pump.
   void endStreamNow() {
     if (_disposed || _controller.isClosed) return;
+    // PARKED PAYLOAD GOES FIRST. Adding END_STREAM here while an `add` waits on
+    // the window closed the sink under it, so its message was dropped and its
+    // future completed normally — the request was truncated and the send read as
+    // success. Waking the waiter queues the payload into the controller (which
+    // buffers it; the sink drains when the peer's window opens), and the woken
+    // `add` emits the END_STREAM this requested.
+    if (_waiters.isNotEmpty) {
+      _endRequested = true;
+      _wake();
+      return;
+    }
     _controller.add(http2.DataStreamMessage(Uint8List(0), endStream: true));
     unawaited(_finish());
   }

@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497]
-status: confirmed (round 497)
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497, 558]
+status: confirmed (round 558)
 ---
 
 # RPC-01 — Flow-control credit on the skip path
@@ -248,3 +248,31 @@ weight (new public policy, against `RpcSecurityPolicy`'s own warning) or parking
 on credit (reversing rounds 208 and 214). Both are the owner's.
 `../probes/P-135-does-the-window-reach-a-direct-object.md`,
 `../rounds/497-vary-the-limit-to-see-if-it-is-the-limit.md`, B-106, B-195.
+
+## Round 558 — what parks on a window can be OVERTAKEN, and the overtaking is silent
+
+Every application above is about credit that was not returned. This one is about the queue the
+credit creates: a send parked on the peer's HTTP/2 window, and a half-close that jumped it.
+
+```
+  CONTROL drains throughout         data 64B eos=false, data 0B eos=true
+  parked send, then endStreamNow()  data 0B eos=true     <- payload GONE, add returned TRUE
+```
+
+> **A park is a queue, so everything that can touch that queue has to respect its order.** The
+> half-close was deliberately built not to wait on the peer — correct — and that made it skip
+> payload already queued behind the window. The fix keeps the property: record the request, wake the
+> waiter, and let the woken send emit the END_STREAM it owes. Nothing waits on the peer; the order
+> survives.
+
+> **The silent part is the defect, not the drop.** A pump being disposed under a parked send is
+> legitimate — the owner is tearing the stream down — and returning normally from it is what turned
+> that into data loss nobody could see. `return` on an undeliverable send is the same shape as credit
+> never returned: a quantity that vanishes with no record. Make it throw.
+
+> **One witness per mechanism.** Two canaries, each failing exactly one arm and leaving the other
+> green, is what says these were two defects sharing a method pair rather than one guard written
+> twice. A single combined witness would have passed with half the fix in place.
+
+`../rounds/558-the-half-close-overtook-the-payload.md`,
+`../probes/P-183-what-reaches-the-wire-when-a-parked-send-meets-a-half-close.md`, B-184.

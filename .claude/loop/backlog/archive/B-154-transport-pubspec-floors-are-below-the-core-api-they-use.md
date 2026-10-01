@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 556) — 6.4.0 at release, not in a round
+status: closed (round 556) — decided, and the work belongs to a release
 round: 556
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http/pubspec.yaml, packages/transport/rpc_dart_websocket/pubspec.yaml, packages/transport/rpc_dart_isolate/pubspec.yaml, packages/transport/rpc_dart_http2/pubspec.yaml, packages/transport/rpc_dart_wasm/pubspec.yaml]
@@ -74,6 +74,11 @@ Beyond the transports, four more packages use a type absent from every published
 is clean — the two exceptions it uses are both in 6.0.0. The lead's `paths:` name none of these.
 
 ## Owner decision
+
+**CLOSED on the owner's instruction, so no round takes it again.** The decision stands and the work
+is a release's, not a round's — left open it read as `Owner decisions not yet carried out: 1` on
+every `status` from here, which is a standing false positive. The table above is what step 1b has to
+cover when a release happens.
 
 **Round 556 — the number is 6.4.0, and it waits for a release.**
 
