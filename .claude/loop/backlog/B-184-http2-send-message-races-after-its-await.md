@@ -58,6 +58,29 @@ nothing waits on the peer and the controller buffers until the window opens — 
 of returning when it cannot deliver, because returning normally is how a dropped payload came to read
 as a completed send.
 
+### The `_halfClosedLocal` sweep (round 563, no fix applied)
+
+**Three sites add to the set, and only ONE can leak** — the breadth question answered so the next round
+does not re-derive it:
+
+| site | shape | verdict |
+| --- | --- | --- |
+| `:908` | `_activeStreams[streamId] = stream;` then the add, no await between | safe |
+| `:1059` `finishSending` | `endStreamNow()` and `sendData()` are both synchronous | safe |
+| `:1021` `sendMessage` | `await pump.add(...)` THEN the add | **the only one** |
+
+**Round 558 already narrowed it.** `add` now throws when the pump was disposed, so the teardown path no
+longer reaches that line at all. What remains reachable is a release that lands during a SUCCESSFUL
+send — a peer reset, for instance, where `:1221` clears every per-stream entry while the pump is fine
+and the `add` completes normally. One leaked entry per such stream, and nothing removes it again.
+
+The guard is `_activeStreams.containsKey(streamId)` on the re-add, which is the same identity question
+round 541 used in core (`_cleanupStream(only:)`).
+
+**NOT APPLIED, deliberately.** A one-line guard with no failing witness is not a proven fix, and the
+witness needs a release driven into the window of a successful send — a rig this round did not have room
+to build. Recorded so the next round starts from the sweep rather than the lead's prose.
+
 ### Still open: the `_halfClosedLocal` leak
 
 `sendMessage` re-adds the stream id AFTER its await, so a cleanup that ran in between leaves one entry
