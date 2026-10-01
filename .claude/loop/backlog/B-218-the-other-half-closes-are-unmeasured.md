@@ -4,7 +4,7 @@ round: 552
 commit: 144a7f0e
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/stream_buffer_ledger.dart]
 probe: P-180
-reason: "bench — round 552 fixed the server-stream shape and witnessed only that one; the same line is reached by a client stream and a bidi stream at different moments, and the memory question the whole lead is about is still arithmetic rather than a reading"
+reason: "cost — narrowed in round 601: bidi's mid-frame half-close is now measured (status 3; empty success with the fix ablated) and item 3 is answered by rounds 594/595/600. Left: the client-stream CALLER's reliance on the dropped state (graded low-risk by the lead) and item 2, the RSS a window's worth of decoded bytes becomes — a number for the doc, not a defect"
 ---
 
 # B-218 — the other half-closes, and what a decoded backlog actually costs
@@ -88,6 +88,19 @@ For (1): P-180's rig with a client-stream and a bidi contract, reading
 552's canary B already has.
 
 For (2): RSS, pages written, one arm per process.
+
+## Round 601 — bidi measured, item 3 answered
+
+```
+shape           fix on      fix ablated
+server-stream   status 3    status 4 (deadline)
+client-stream   status 3    got:0
+bidi            status 3    '' (empty success)
+```
+
+Item 3: under an endpoint the per-stream ledger refuses (594), the connection total
+binds (595), and `_incoming` holds nothing (600).
+`../rounds/601-the-bidi-half-close-nobody-measured.md`.
 
 ## Owner decision
 

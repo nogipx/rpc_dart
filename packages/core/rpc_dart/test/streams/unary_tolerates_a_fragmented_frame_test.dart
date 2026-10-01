@@ -148,6 +148,16 @@ final class _Svc extends RpcResponderContract {
         return 'got:$n'.rpc;
       },
     );
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'echoes',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (requests, {context}) async* {
+        await for (final r in requests) {
+          yield 'got:${r.value.length}'.rpc;
+        }
+      },
+    );
   }
 }
 
@@ -237,6 +247,30 @@ Future<String> _clientStream({
     );
     final reply = await call(Stream.value(('x' * 64).rpc));
     return reply.value;
+  } on RpcStatusException catch (e) {
+    return 'status ${e.statusCode}: ${e.message}';
+  }
+}
+
+/// The outcome of a BIDI call over a channel with the given behaviour.
+Future<String> _bidi({
+  required bool split,
+  bool truncate = false,
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final caller = _rig(split: split, truncate: truncate);
+  try {
+    final got = await caller
+        .bidirectionalStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echoes',
+          requests: Stream.value(('x' * 64).rpc),
+          requestCodec: _codec,
+          responseCodec: _codec,
+          context: RpcContext.empty().withTimeout(timeout),
+        )
+        .toList();
+    return got.map((e) => e.value).join(',');
   } on RpcStatusException catch (e) {
     return 'status ${e.statusCode}: ${e.message}';
   }
@@ -350,6 +384,29 @@ void main() {
             'got:0 tells the handler the peer sent nothing, where in fact it '
             'sent an incomplete something — and the call SUCCEEDS',
       );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'WITNESS a bidi stream answers a mid-frame half-close',
+    () async {
+      // The same StreamProcessor path as the two shapes above, so fixed by
+      // construction; this is what measures it.
+      expect(
+        await _bidi(split: true, truncate: true),
+        startsWith('status ${RpcStatus.invalidArgument}'),
+        reason: 'an incomplete frame followed by a half-close must be answered',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'GUARD a fragmented bidi request still works',
+    () async {
+      expect(await _bidi(split: false), 'got:64');
+      expect(await _bidi(split: true), 'got:64');
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
