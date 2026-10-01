@@ -1,6 +1,6 @@
 ---
-status: open (round 560 fixed item one in BOTH packages; four items remain)
-round: 560
+status: open (rounds 560-561 did three of five items; 2 and 4 remain)
+round: 561
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart]
 probe: none — static read, nothing run
@@ -66,17 +66,44 @@ Fixed by claiming the slot synchronously in both (`_binding`, `_starting`), rele
 catch and in `stop()`. **The teardown release is not optional**: without it the first restart is
 refused by the fix, which `server_lifecycle_cleanup_test` caught.
 
-### The four items still open
+### Items 1 and 3 — done in round 561
 
-1. `afterModulesStart` dereferences `_transport!` when `start()` has not run — a null-check crash
-   where a StateError should name the misuse.
-2. `close(force: true)` destroys connections before the promised 503.
-3. `stop()`'s two comments contradict each other.
-4. The drain polls `health().details['pendingRequests']` every 25 ms — the string-keyed metrics
-   pattern `drain.dart` itself criticises.
+`../rounds/561-two-comments-about-one-call-disagreed.md`.
 
-None has a measured consequence yet. Also unmeasured: no TLS arm on http2 (the secure bind is a
-different call behind the same claim), and `shelf_io.serve` is still passed no TLS and no `shared`.
+**Item 3's contradiction is REAL and the two halves are 25 lines apart**, which is why reading the
+method alone does not show it — a doc comment above `stop()` against an inline one inside, about the
+same call:
+
+```
+/// `HttpServer.close(force: false)` is NOT a drain ... completes as
+/// soon as the port is released
+    // `close(force: false)` stops accepting AND waits for what is already running
+```
+
+`dart:io` settles it: `close()` completes when the port is released and only `force: true` touches
+active connections, so the doc comment was right and the inline one false. **The false half is the
+dangerous one because it offers a REASON** — "does double duty" — which makes the explicit
+`_drainRequests` below look redundant, and the `stop()` doc three lines up spells out what deleting it
+does: the endpoint closes under live handlers and the caller hangs with no answer coming.
+
+**Item 1**: `_transport!` now a named local and a `StateError` naming both phases, thrown BEFORE the
+bind claim is set so a corrected caller can just call them in order. Canary: restoring the bare
+dereference gives `threw _TypeError:<Null check operator used on a null value>` where the witness wants
+a StateError naming `start()`.
+
+### The two items still open, with what each needs
+
+2. `close(force: true)` destroying connections before the promised 503 — **the one with a real
+   consequence, and reading the method does not place it**: the force close is the documented cut after
+   the budget expires, so the claim is about what the transport promises a request arriving DURING the
+   drain, not about the close. Needs a request in flight when the budget runs out, and an observation
+   of whether the peer gets a reset or a 503.
+4. The drain polling `health().details['pendingRequests']` every 25 ms — a design change (a typed
+   pending count on the transport) rather than a defect. No failure to measure; `drain.dart` already
+   criticises the pattern.
+
+Also unmeasured: no TLS arm on http2 (the secure bind is a different call behind the same claim), and
+`shelf_io.serve` is still passed no TLS and no `shared`.
 
 ## Owner decision
 

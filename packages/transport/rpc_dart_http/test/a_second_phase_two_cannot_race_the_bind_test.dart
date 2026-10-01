@@ -102,6 +102,39 @@ Future<_Run> _start({required int phaseTwo}) async {
 
 void main() {
   test(
+    'WITNESS phase two without phase one NAMES the mistake',
+    () async {
+      // `_transport!` crashed with `Null check operator used on a null value`,
+      // which says nothing about the two-phase ordering it is about. Same after a
+      // stop(), which clears the transport.
+      final server = RpcHttpServer(
+        host: '127.0.0.1',
+        port: await _freePort(),
+        onEndpointCreated: (e) {},
+      );
+
+      await expectLater(
+        server.afterModulesStart(),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            allOf(contains('start()'), contains('afterModulesStart()')),
+          ),
+        ),
+      );
+
+      // And the claim was released, so the ordinary sequence still works after the
+      // mistake is corrected — the reason the throw happens before the claim is set.
+      await server.start();
+      await server.afterModulesStart();
+      addTearDown(() => server.stop().catchError((Object _) {}));
+      expect(server.isRunning, isTrue);
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
     'CONTROL one phase-two serves calls',
     () async {
       // Without this the witness below cannot tell the race from a broken rig.

@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559, 561]
 status: confirmed (round 457)
 ---
 
@@ -264,3 +264,23 @@ read in title order.
 > re-grade and got no answer, and three more rounds then picked by title. The question that needed
 > answering was narrower than the one asked — what to DO with the parked class — and the pass could
 > have happened at any time without it.
+
+**Round 561 — two comments about ONE call, 25 lines apart, saying opposite things.**
+
+```
+/// `HttpServer.close(force: false)` is NOT a drain ... completes as soon as the port is released
+    // `close(force: false)` stops accepting AND waits for what is already running
+```
+
+`../rounds/561-two-comments-about-one-call-disagreed.md`, B-151.
+
+> **A contradiction between a doc comment and an inline one is invisible to the reading that finds
+> either.** Reading the method shows the inline comment and the code; reading the API shows the doc.
+> Nobody reads both at once, which is how they drifted apart and why the audit's line numbers were
+> the only thing that pointed at it. When checking prose against code, check the prose against the
+> OTHER prose about the same call.
+
+> **The dangerous stale comment is the one that gives a REASON, not the one that misinforms.** "Does
+> double duty" made the explicit drain below it look redundant — so believing it leads to deleting the
+> only thing that waits, and the correct comment three lines above describes exactly the hang that
+> follows. A wrong fact costs a reader a minute; a wrong justification costs the next refactor.

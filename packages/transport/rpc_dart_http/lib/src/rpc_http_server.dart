@@ -179,9 +179,20 @@ class RpcHttpServer implements IRpcServer {
       );
       return;
     }
+    // Named, not dereferenced. `_transport!` crashed with `Null check operator
+    // used on a null value` — a message that says nothing about the mistake,
+    // which is calling phase two without phase one, or after a stop(). The two
+    // phases are an ordering contract and a violation of it should read like one.
+    final transport = _transport;
+    if (transport == null) {
+      _binding = false;
+      throw StateError(
+        'afterModulesStart() needs start() first: there is no transport to '
+        'serve on. A stop() also clears it, so a restart calls both again.',
+      );
+    }
     _binding = true;
 
-    final transport = _transport!;
     final endpoint = RpcResponderEndpoint(
       transport: transport,
       logger: _logController,
@@ -304,10 +315,11 @@ class RpcHttpServer implements IRpcServer {
 
     // Listener first: no new request can arrive while the endpoint is closing.
     //
-    // With a drain this ordering does double duty -- `close(force: false)`
-    // stops accepting AND waits for what is already running, and the endpoint
-    // below stays alive meanwhile, which is what lets those requests be
-    // answered at all.
+    // `close(force: false)` only stops accepting -- it completes as soon as the
+    // port is released and does NOT wait for active connections, which is why
+    // the explicit `_drainRequests` below exists and must not be removed as
+    // redundant. What the ordering buys is that the endpoint stays alive while
+    // that drain runs, so the requests already in flight can still be answered.
     try {
       if (drainTimeout != null && httpServer != null) {
         // Stop accepting without killing what is running...
