@@ -81,6 +81,24 @@ round 541 used in core (`_cleanupStream(only:)`).
 witness needs a release driven into the window of a successful send — a rig this round did not have room
 to build. Recorded so the next round starts from the sweep rather than the lead's prose.
 
+### Round 564 — the map was invisible, and the easy shapes do not fill it
+
+`../rounds/564-the-unreported-map-and-a-vacuous-zero.md`.
+
+**`_halfClosedLocal` was the one per-stream map `health()` did not report**, while every sibling is
+reported precisely because growth in one is the symptom of an entry added and never removed. Now
+exposed as `halfClosedLocal`, so the leak class has an observable at all.
+
+**And two canaries both PASSED, which is what this round established.** Dropping the removal from
+`releaseStreamId`, and then from the inline release as well, changed nothing — so unary and
+server-stream **never populate the map**: neither reaches `sendMessage(endStream: true)` nor
+`finishSending` on this transport. A guard asserting `halfClosedLocal == 0` for those shapes is a
+vacuous zero, and without the second canary it would have shipped as coverage.
+
+**So the rig the fix still needs is now named**: a client-stream or bidi upload, which does reach those
+sites, with a release driven into the window while the send is parked. `P-183` already parks a pump at
+the pump level and is half of it.
+
 ### Still open: the `_halfClosedLocal` leak
 
 `sendMessage` re-adds the stream id AFTER its await, so a cleanup that ran in between leaves one entry

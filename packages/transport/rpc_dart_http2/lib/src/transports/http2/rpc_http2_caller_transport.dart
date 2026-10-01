@@ -1070,6 +1070,12 @@ class RpcHttp2CallerTransport
     'activeStreams': _activeStreams.length,
     'pendingSubscriptions': _streamSubscriptions.length,
     'pendingParsers': _streamParsers.length,
+    // Reported for the same reason as its siblings: growth here is the
+    // observable symptom of a per-stream entry that was added and never removed.
+    // It was the one per-stream map NOT reported, and it is the one whose add in
+    // `sendMessage` happens AFTER an await, so a release landing in that window
+    // leaves an entry nothing removes again (B-184).
+    'halfClosedLocal': _halfClosedLocal.length,
     // Per-stream state that only a TEARDOWN clears, exposed because the three
     // teardown paths clear different subsets and no instrument could see the
     // difference. An outgoing pump left behind is the expensive one: a caller

@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564]
 status: confirmed (round 489)
 ---
 
@@ -482,3 +482,21 @@ controller bounded by nothing.
 > **Check the layer below before blaming the layer.** dart:io already wires its own
 > controller's pause to the socket subscription; the chain was complete except for one
 > link. That is also the argument that forwarding is safe rather than novel.
+
+## Round 564 — the ledger nothing reported, and a zero that guarded nothing
+
+`_halfClosedLocal` was the one per-stream map the http2 caller's `health()` did not report, while every
+sibling is reported precisely because growth in one is the symptom of an entry added and never removed —
+and it is the map whose add sits after an await.
+
+> **A ledger with no observable cannot be measured, so its defect cannot be closed.** Two rounds
+> declined to apply a one-line guard for want of a witness; the thing actually in the way was that
+> nothing could count the set. Exposing it is not the fix and is the precondition for one.
+
+> **A zero is not evidence that something is empty — it can mean nothing ever filled it.** Two canaries
+> dropped BOTH removal paths for the map and the test still passed, which proves the shapes under test
+> never populate it. Asserting `== 0` there would have shipped as coverage for a leak it cannot see, and
+> the lead would have read as guarded. Ablate the REMOVALS, not just the adds: if a count stays at zero
+> with nothing cleaning up, the arm is not driving the mechanism.
+
+`../rounds/564-the-unreported-map-and-a-vacuous-zero.md`, B-184.
