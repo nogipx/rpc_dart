@@ -38,6 +38,10 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-213](P-213-what-the-wrapper-rebroadcasts.md)** valid (round 596),
+  rpc_dart_websocket — events on `incomingMessages` per call over a real socket: `0.00` per unary and per
+  100-message stream for the wrapper and a bare channel transport; `3.00` / `101.00` with round 508's
+  routed-message skip forced off, which is the control
 - **[P-212](P-212-frames-after-a-unary-request.md)** valid (round 594),
   rpc_dart — data frames sent on a unary stream while its handler runs: RSS tracks the bytes 1:1 at three
   scales (`+51/+117/+313 MiB` for 78/156/312 MiB) before the fix, `+57` and a RESOURCE_EXHAUSTED after
