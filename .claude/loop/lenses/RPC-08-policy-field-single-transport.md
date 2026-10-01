@@ -3,8 +3,8 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581]
-status: confirmed (round 554)
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584]
+status: confirmed (round 584)
 ---
 
 # RPC-08 — A policy field checked on one transport
@@ -462,3 +462,41 @@ the same method had nothing, so a dropped SYN waited on the OS.
 
 `../rounds/563-the-bound-the-comment-described-and-did-not-provide.md`,
 `../probes/P-186-what-bounds-a-connect-into-a-hole.md`, B-182.
+
+## Round 584 — the two construction paths were one class and its own example
+
+Round 394 widened the neighbour from a TRANSPORT to a CONSTRUCTION PATH. 584 is
+the cheapest version of that: the two paths are a server and the transport it
+builds, in the same package, and one of them has had the right default and the
+right doc sentence the whole time.
+
+`RpcHttpResponderTransport`'s four own checks — `maxActiveStreams`, the method
+path, the metadata block, the request body — sit behind `if (policy != null)`,
+and the class's example constructs it with no policy before handing the handler
+to `shelf_io.serve`. `RpcHttpServer` defaults the same parameter to
+`const RpcSecurityPolicy()`.
+
+```
+CONTROL  const RpcSecurityPolicy()   413   RSS +37 MiB
+WITNESS  the parameter OMITTED       200   RSS +524 MiB
+```
+
+> **A policy that is OFF by default is inert in exactly the way this lens is
+> about, and the neighbour to compare against can be the same class's other
+> half.** Here the response side reads `securityPolicy` — the non-null getter —
+> so the response was bounded and the request body was not, three hundred lines
+> apart in one file. One object answering "what policy applies" two ways is the
+> finding; which side is wrong is decided by what the DOC promises.
+
+> **An explicit `null` is not the same arm as an omitted parameter**, and a probe
+> that drives only the first measures the OPT-OUT and reports it as the default.
+> Both arms, always, when the fix is a default: the null arm is then the control
+> that says the opt-out still works.
+
+> **And the fix for a default is often a sentence somebody already wrote.** The
+> remedy here is `RpcHttpServer`'s doc line — *"Set to `null` only to disable all
+> limits (not recommended — this allows unbounded request bodies)"* — moved one
+> file over. Grep the SIBLING's parameter docs before writing your own.
+
+`../rounds/584-the-documented-setup-was-the-unsafe-one.md`,
+`../probes/P-204-what-the-documented-shelf-setup-admits.md`, B-150, B-223.

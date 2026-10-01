@@ -93,7 +93,7 @@ the next reader will ask.
   the 408 row from a foreign proxy. Intended — the table exists because the two
   transports disagreeing on retryability was the original defect — but reasoned
   rather than measured.
-- Whether 413's own retry is worth its cost: `B-216`.
+- Whether 413's own retry is worth its cost: `B-222`.
 
 ## Owner decision
 

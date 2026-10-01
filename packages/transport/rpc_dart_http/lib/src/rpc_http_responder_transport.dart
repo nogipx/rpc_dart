@@ -83,12 +83,16 @@ class RpcHttpResponderTransport
   bool _isClosed = false;
   final LogScope? _logger;
 
-  /// Optional security policy: limits concurrent requests, body size, and
-  /// header sizes.
+  /// The security policy this transport's OWN checks read: concurrent requests,
+  /// the method path, metadata size, and the request body.
   ///
-  /// Null means this transport applies none of its OWN checks, which is why it
-  /// is kept nullable here; the pipeline still gets defaults through
-  /// [securityPolicy].
+  /// Nullable, and `null` really does switch all of them off — which is why the
+  /// constructor defaults it to `const RpcSecurityPolicy()` rather than leaving
+  /// it absent. Only this field is nullable; [securityPolicy], which the
+  /// PIPELINE reads, falls back to the same default, so a null here made one
+  /// object answer "what policy applies" two different ways — and the response
+  /// side of this very class reads the non-null getter, so the response was
+  /// bounded while the request body was not.
   final RpcSecurityPolicy? _securityPolicy;
 
   /// The policy the responder PIPELINE reads, via [IRpcSecurityPolicyAware].
@@ -135,9 +139,17 @@ class RpcHttpResponderTransport
   /// mitigation and widens this rejection at the same time.
   final Duration? bodyReadTimeout;
 
+  /// Creates the transport.
+  ///
+  /// [securityPolicy] bounds the request body, the metadata block, the method
+  /// path and concurrent requests. It defaults to a non-null
+  /// [RpcSecurityPolicy] so the built-in limits are enforced out of the box;
+  /// pass an explicit policy to tune them. Set it to `null` only to disable all
+  /// of this transport's own limits (not recommended — this allows unbounded
+  /// request bodies). [RpcHttpServer] takes the same parameter the same way.
   RpcHttpResponderTransport({
     LogScope? logger,
-    RpcSecurityPolicy? securityPolicy,
+    RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
     this.corsPolicy,
     this.bodyReadTimeout,
   }) : _securityPolicy = securityPolicy,

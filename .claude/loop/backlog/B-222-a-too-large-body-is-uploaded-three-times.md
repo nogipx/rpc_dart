@@ -7,7 +7,7 @@ probe: packages/transport/rpc_dart_http/.dart_tool/probe/b147_what_each_rejectio
 reason: "cost — the retry is CONFIRMED (413 -> RESOURCE_EXHAUSTED, 3 attempts) and so is the responder reading and discarding the whole body each time; what is unmeasured is what the three uploads cost, and whether any condition behind a 413 is actually transient"
 ---
 
-# B-216 — a body over the ceiling is uploaded three times
+# B-222 — a body over the ceiling is uploaded three times
 
 Split out of `B-147` in round 583, which measured the retry and did not take it:
 the lead it came from is about a comment and a missing table row, and this is a

@@ -38,6 +38,17 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-204](P-204-what-the-documented-shelf-setup-admits.md)** valid (round 584),
+  rpc_dart_http — **measures RESIDENCY, because the status cannot grade this defect**: the pipeline refuses an
+  over-size body either way, so `413` against `200` only says which layer refused and `RSS +37` against
+  `+524 MiB` says what was resident when it did. 256 MiB streamed from one reused 1 MiB chunk, so the
+  client's own share stays flat. **Four arms, and two are easy to omit**: `securityPolicy: null` is NOT the
+  same arm as omitting the parameter (one measures the opt-out, the other the default), and the policy arm is
+  run both FIRST and LAST because RSS does not come back down — the trailing `+0` is what kills "the second
+  arm inherited the first's heap". Second half re-measures a documented sentence rather than code: an
+  `Expect: 100-continue` client with a 1 s fallback reads `500 ms -> 408` against `30 s -> 200 OK`. Cannot
+  separate a slow upload from a stalled one — that rig deadlocks the process at `socket.close()`, recorded on
+  B-217 rather than quietly dropped
 - **[P-203](P-203-what-each-http1-rejection-becomes-at-the-caller.md)** valid (round 583),
   rpc_dart + rpc_dart_http — **a TABLE, one row per rejection, with two columns because the lead's argument
   is about the second**: the gRPC status an application receives, and how many attempts the default retry

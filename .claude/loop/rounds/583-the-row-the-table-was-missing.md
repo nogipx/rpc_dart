@@ -132,7 +132,7 @@ is reasoned, not measured.
 an over-limit message, each read and discarded by the responder's ceiling. The
 413 row's doc argues RESOURCE_EXHAUSTED tells the caller it hit a SIZE it can
 reduce, which is about the diagnostic rather than the retry; whether the retry is
-worth its cost is a separate question and is filed as `B-216`.
+worth its cost is a separate question and is filed as `B-222`.
 
 **No arm drives 405 or 415 from a conforming rpc_dart caller**, because it cannot
 produce either: the caller hardcodes POST and `application/grpc+proto`. Both rows'
@@ -141,8 +141,10 @@ absence was decided by reading what `unknown` already does.
 ## Links
 
 Lead `../backlog/B-147-http1-status-comments-are-stale.md` — CLOSED.
-Lead `../backlog/B-216-a-too-large-body-is-uploaded-three-times.md` — new, the
-remainder this round names and does not take.
+Lead `../backlog/B-222-a-too-large-body-is-uploaded-three-times.md` — new, the
+remainder this round names and does not take. Filed as `B-216` and renumbered in
+round 584: that number was already an ARCHIVED lead, which `loop.py lint` does not
+check.
 Bench `../probes/P-203-what-each-http1-rejection-becomes-at-the-caller.md` — new.
 Lens `../lenses/RPC-25-the-same-abstraction-four-times.md` — `applied: [583]`.
 Lesson: none. The candidate — "a comment's conclusion can survive its premise" —

@@ -1320,4 +1320,4 @@ right anyway, because the two statuses it confuses have the same retryability.
 property the argument depended on.**
 
 `../probes/P-203-what-each-http1-rejection-becomes-at-the-caller.md`,
-`../rounds/583-the-row-the-table-was-missing.md`, B-147, B-216.
+`../rounds/583-the-row-the-table-was-missing.md`, B-147, B-222.
