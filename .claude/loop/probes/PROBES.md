@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-205](P-205-what-one-buffered-request-body-costs.md)** valid (round 585),
+  rpc_dart_http — **two BARE arms outside the library, there to bracket a number that alone means nothing**:
+  the library's buffer against a bare `List<int>` and a bare `BytesBuilder(copy: false)`. `+205 MiB` for a
+  32 MiB body sat with the list; after the fix `+0` sits with the builder. RSS read THREE times in the
+  library arm — before the payload, after it, after the buffer took it — so the buffer is not charged for
+  bytes the caller had already allocated. **The bare arms are a bracket and NOT a ratio**: `LIST` read `+165`
+  in one run and `+528` in the next on identical input, because RSS for a growable list depends on the heap's
+  state; quote which arm the library matches, never the arms themselves. Reads no TIME, and does not cover the
+  multi-chunk path
 - **[P-204](P-204-what-the-documented-shelf-setup-admits.md)** valid (round 584),
   rpc_dart_http — **measures RESIDENCY, because the status cannot grade this defect**: the pipeline refuses an
   over-size body either way, so `413` against `200` only says which layer refused and `RSS +37` against

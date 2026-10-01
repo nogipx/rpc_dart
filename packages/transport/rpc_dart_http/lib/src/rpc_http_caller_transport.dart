@@ -12,7 +12,22 @@ import 'package:rpc_dart/rpc_dart.dart';
 final class _PendingCall {
   final String methodPath;
   final List<RpcHeader> requestHeaders;
-  final List<int> bodyBuffer = [];
+
+  /// BytesBuilder, not `List<int>`: a Dart list holds WORD-SIZED elements, so
+  /// the buffer costs several times the body and `Uint8List.fromList` copies it
+  /// again — for a body size the APPLICATION chooses, and a client stream over
+  /// this wire format is buffered whole because HTTP/1.1 cannot flush before the
+  /// end. The responder side of this package says the same thing about the
+  /// request it receives.
+  ///
+  /// `copy: false`, so a single-chunk body reaches `bodyBytes` as the caller's
+  /// own `Uint8List` with no copy at all. **The payload is HANDED OVER**: a
+  /// caller that mutates it after `sendMessage` changes what goes on the wire.
+  /// That is already the contract on the channel transports.
+  ///
+  /// Draining it with `takeBytes` is safe because `_fireRequest` removes the
+  /// pending entry first, so no second fire can reach the same buffer.
+  final BytesBuilder bodyBuffer = BytesBuilder(copy: false);
 
   _PendingCall({required this.methodPath, required this.requestHeaders});
 }
@@ -408,7 +423,7 @@ class RpcHttpCallerTransport
         'No pending call for stream $streamId. Call sendMetadata first.',
       );
     }
-    call.bodyBuffer.addAll(data);
+    call.bodyBuffer.add(data);
     if (endStream) {
       await _fireRequest(streamId);
     }
@@ -474,7 +489,7 @@ class RpcHttpCallerTransport
         request.headers[name] = values.join(',');
       });
 
-      request.bodyBytes = Uint8List.fromList(call.bodyBuffer);
+      request.bodyBytes = call.bodyBuffer.takeBytes();
 
       final streamedResponse = await _httpClient.send(request);
 

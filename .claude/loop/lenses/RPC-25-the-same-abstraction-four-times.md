@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583]
-status: confirmed (round 583)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585]
+status: confirmed (round 585)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -1321,3 +1321,35 @@ property the argument depended on.**
 
 `../probes/P-203-what-each-http1-rejection-becomes-at-the-caller.md`,
 `../rounds/583-the-row-the-table-was-missing.md`, B-147, B-222.
+
+## Round 585 — the fixed copy carried the reasoning in a field comment
+
+The cheapest application this lens has had. Two sides of one wire format in one
+package; the responder's body buffer is a `BytesBuilder(copy: false)` with a
+comment saying why, and the caller's was still a growable `List<int>` finished off
+with `Uint8List.fromList`.
+
+```
+LIBRARY   32 MiB payload   the buffer's own  +205 MiB  ->  +0
+LIST      +165 MiB
+BUILDER     +1 MiB
+```
+
+> **When a lens finds a divergence that is a COST rather than a wrong answer, the
+> number needs a bracket and the bracket belongs OUTSIDE the library.** A bare
+> `List<int>` and a bare `BytesBuilder` fed the same bytes say which of the two the
+> library is; the library's own figure says nothing on its own. And read the
+> bracket as a bracket: the `LIST` arm varied `+165` to `+528` across runs on
+> identical input.
+
+> **A performance fix with a deterministic consequence should be pinned by the
+> consequence, not by the measurement.** `takeBytes()` on a single chunk returns
+> that chunk, so `identical(sent, payload)` is the memory claim stated as an
+> assertion — and unlike an RSS threshold it does not fail on a busy machine.
+
+Round 496 found the divergence-as-performance variant first (one reassembly
+amortized, its sibling quadratic). 585 adds that the sibling's comment can be the
+whole diff: nothing here had to be designed.
+
+`../probes/P-205-what-one-buffered-request-body-costs.md`,
+`../rounds/585-the-buffer-the-sibling-had-already-replaced.md`, B-148.
