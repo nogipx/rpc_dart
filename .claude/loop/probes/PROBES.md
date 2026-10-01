@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-200](P-200-is-the-startup-budget-doubled.md)** valid (round 579),
+  rpc_dart_isolate — a worker that never reaches `ready`, timed against three budgets across a 4x range so
+  the answer is a RATIO: `1.04x / 1.00x / 1.00x`, which REFUTES "two phases, so 2x". **The stall must be
+  SYNCHRONOUS** — `ready` is sent immediately after `userEntrypoint(...)` RETURNS, so a stall written as
+  `Future.delayed(...).then(...)` schedules and returns and spawn succeeds in 28 ms. That first version is
+  kept in the record as the negative control it accidentally was: `0.00x` with `thrown == Null` is what
+  this measurement looks like when its subject never happens (`measurement.md` item 8). Reports the thrown
+  TYPE beside each timing, which is the premise check
 - **[P-199](P-199-what-the-transfer-costs-by-size.md)** valid (round 578),
   rpc_dart_isolate — **a SWEEP, because a copy's cost is a function of size and the lead asked for one
   point**: `32 B 2.71 vs 2.34`, `128 KiB 20.44 vs 14.03`, then inverting at `256 KiB 103.71 vs 160.67` and

@@ -611,11 +611,20 @@ abstract interface class RpcIsolateTransport {
       rethrow;
     }
 
-    // Close the transport (which sends the close frame to the worker), then
-    // tear down synchronously so the kill is immediate. The channel's own
-    // onClose reaches teardownConnection() a few microtasks later and finds it
-    // already done -- `connectionTornDown` is what makes the two entry points
-    // idempotent with respect to each other.
+    // The KILL lands first and the close frame does not beat it. `close()` is not
+    // awaited here -- `kill` is `void Function()` -- so it runs as far as its first
+    // await, `_channelSub.cancel()`, and yields; `teardownConnection()` then kills
+    // the isolate synchronously, and the frame `_channel.close()` would send goes out
+    // afterwards, to an isolate that is already gone.
+    //
+    // That is the intended trade ("the kill is immediate"), not an accident, but the
+    // comment here used to claim the opposite order. Making the frame go first means
+    // awaiting the close, which means `kill` returning a Future -- a public signature
+    // change, so it is not a round's to make.
+    //
+    // The channel's own onClose reaches teardownConnection() a few microtasks later
+    // and finds it already done -- `connectionTornDown` is what makes the two entry
+    // points idempotent with respect to each other.
     void killIsolate() {
       hostTransport?.close();
       teardownConnection();
