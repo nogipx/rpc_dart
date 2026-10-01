@@ -458,8 +458,17 @@ class RpcHttpCallerTransport
         abortTrigger: abort.future,
       );
       request.headers[RpcHeaders.contentType] = 'application/grpc+proto';
-      // Required by gRPC-over-HTTP/1.1 to signal trailer support.
-      request.headers['te'] = 'trailers';
+      // No `te: trailers` here. It signals trailer support and this wire format
+      // sends no trailers -- the class doc above says where the status goes:
+      // every response header, `grpc-status` among them, is an ordinary header.
+      // It is hop-by-hop too, so a proxy strips it and no responder can rely on
+      // it, and it is a forbidden header name in a browser.
+      //
+      // `RpcHttp2Common` sends it and must: the gRPC HTTP/2 spec requires it,
+      // which is why `_createContextFromMessage` excludes it BY NAME from a
+      // handler's context. That exclusion is what hides the header from an
+      // application; what it cannot hide is the request metadata the responder
+      // transport builds, where it is charged to `maxMetadataBytes`.
 
       // JOINED, not last-wins. `request.headers` is a `Map<String, String>`, so
       // assigning twice for one key silently keeps the second value and drops the

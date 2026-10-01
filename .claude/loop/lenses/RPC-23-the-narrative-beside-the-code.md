@@ -3,8 +3,8 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516, 521, 526, 528, 529, 538]
-status: confirmed (round 490)
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516, 521, 526, 528, 529, 538, 586]
+status: confirmed (round 586)
 ---
 
 # RPC-23 — The narrative beside the code
@@ -697,3 +697,35 @@ the journal's own records rather than in `lib/`. The journal is not exempt.
 
 `../probes/P-158-does-a-cancel-cut-the-retry-backoff.md`,
 `../rounds/521-a-cleanup-list-with-defects-in-it.md`, B-129.
+
+## Round 586 — the comment and the class doc, fifty lines apart
+
+Round 364 found the strongest form of this lens: prose naming a component that
+CANNOT do the job, refutable from that component's own capabilities. 586 is the
+cheapest form: prose refutable from the SAME FILE.
+
+```
+:109  "All response headers (including grpc-status) are in HTTP headers."
+:461  "Required by gRPC-over-HTTP/1.1 to signal trailer support."
+```
+
+Fifty lines apart in one class. There are no trailers on this wire format to signal
+support for, and "gRPC-over-HTTP/1.1" is not a specification. The header travelled
+on every call and was charged to the aggregate metadata bound:
+`headers delivered 10 -> 9`.
+
+> **A file's own doc comment is a cheaper oracle than any external document, and it
+> is the one nobody checks against.** The detector is mechanical: for each comment
+> asserting a REQUIREMENT ("required by", "mandated", "the spec says"), find the
+> file's own statement of the format and read the two together. No archaeology, no
+> dependency reading.
+
+> **And measure where the thing STOPS, not only that it happens.** The lead's
+> framing — a useless header reaching the application — was wrong:
+> `_createContextFromMessage` excludes `te` by name, so no handler ever saw it. That
+> filter is load-bearing for `rpc_dart_http2`, which sends the header because the
+> gRPC HTTP/2 spec genuinely requires it — so reading only "the header is sent" would
+> have pointed the fix at the filter, which is the one piece that must not move.
+
+`../probes/P-206-what-te-trailers-reaches.md`,
+`../rounds/586-the-header-core-had-to-filter.md`, B-149.

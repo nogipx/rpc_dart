@@ -38,6 +38,13 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-206](P-206-what-te-trailers-reaches.md)** valid (round 586),
+  rpc_dart_http — **asks where a header GOES, not whether it is sent**: `headers delivered 10, carries te YES`
+  -> `9, no`, read on the responder TRANSPORT's `incomingMessages` and not on the handler's `RpcContext`,
+  because those are two different sets and the difference IS the finding — core's
+  `_createContextFromMessage` excludes `te` by name, so no handler ever saw it. The other nine names are the
+  control. Substitutes for the lead's prescribed browser console, which `B-215` puts out of reach; the "XHR
+  refuses it" half stays a spec citation rather than a reading, and is moot once the header is gone
 - **[P-205](P-205-what-one-buffered-request-body-costs.md)** valid (round 585),
   rpc_dart_http — **two BARE arms outside the library, there to bracket a number that alone means nothing**:
   the library's buffer against a bare `List<int>` and a bare `BytesBuilder(copy: false)`. `+205 MiB` for a
