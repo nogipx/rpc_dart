@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556]
 status: confirmed (round 554)
 ---
 
@@ -381,3 +381,27 @@ shapes still diverged on the same input: `server stream status 4` (its deadline)
 > appear with their own message. Where a fix spans several shapes, so should the witnesses.
 
 `../rounds/554-one-rule-where-the-parser-is.md`, B-216, B-218.
+
+## Round 556 — the divergent thing was a PUBSPEC, and the lens's own audience was the question
+
+Same shape outside the code: five transports each declaring an `rpc_dart` floor separately, where
+seven of eight swept core symbols are in no published core at all — `IRpcReconnectableTransport`,
+used by all five, appears at the `rpc_dart-6.3.0` tag only inside this journal's files.
+
+> **A green gate is silent about anything the workspace resolves locally.** The pub workspace always
+> takes core from source, so `analyze`, `test` and `prepare` all pass over a floor no published core
+> satisfies. Where a property only binds OUTSIDE the build you run, the gate is not weak evidence —
+> it is no evidence, and the detector has to be the published artefact (`git show <tag>`).
+
+> **Check who the victim is before grading severity.** This lens keeps finding "the transport nobody
+> picked", and that framing assumes somebody picks one. The owner's answer here was that nobody but
+> they consume these packages, which drops the finding to near zero — and the same question hangs
+> over much of the audit intake, whose failures are written for third-party implementers and pub.dev
+> resolvers. Ask it first; it is cheaper than the round.
+
+> **Running the repo's own bulk tool is not the same as fixing what you measured.**
+> `bump:rpc_dart` raises all 20 packages by design; it was run where 9 had been proven to need it,
+> on the reasoning that a type-level sweep could not prove the rest safe. That reasoning is a gap in
+> the method, not evidence about those packages — and it widened a change past its measurement.
+
+`../rounds/556-no-published-core-satisfies-any-floor.md`, B-154.
