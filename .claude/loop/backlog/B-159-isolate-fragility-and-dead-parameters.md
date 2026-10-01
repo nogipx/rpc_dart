@@ -1,10 +1,11 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: open (round 580 answered four of eight claims; three unexamined, one documented not removed)
+round: 580
+commit: 2275b2ab
+release: none
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart, packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart]
-probe: none — static read, nothing run
-reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
+probe: none — the witness line reads "None"; these are dead-surface claims a sweep settles
+reason: "cost — what remains is three claims needing their own arm (microtask-draining startup, the extra async-broadcast hop, `close()` unawaited in handlers), the closure-to-top-level refactor, and the whole web half, which round 580 did not read"
 ---
 
 # B-159 — isolate: a spawned closure in a large scope, implicit startup ordering, dead parameters and branches
@@ -33,6 +34,43 @@ None.
 
 Top-level entrypoint, remove the hop and dead code, document or implement the
 ignored parameters.
+
+## Outcome (round 580) — four of eight, one per claim
+
+`../rounds/580-eight-claims-and-what-each-was-worth.md`. No bench: the witness line above reads "None",
+and these are dead-surface claims a sweep settles.
+
+```
+1 entrypointWrapper is a local closure, capture hazard   TRUE, latent -> documented
+2 startup relies on the VM draining microtasks           not examined
+3 an extra async-broadcast hop per message               not examined
+4 isolateId unused                                        HALF TRUE   -> arg removed
+5 workerUri ignored on the VM                             TRUE        -> documented
+6 runRpcIsolateManagerWorker a no-op                      ALREADY DOCUMENTED
+7 the finish message type is unreachable                   TRUE        -> documented
+8 close() unawaited in handlers                            not examined
+```
+
+**Claim 4's one-word summary could not say what was wrong.** `isolateId` is NOT unused — it builds
+`debugName`. What was dead is the COPY of it crossing the isolate boundary in the spawn args, which no
+reader on the worker side ever touched. The arg is gone and the wrapper's indices moved down with it; since
+the layout is positional and read by index, the suite passing (`+93`) is what says nothing depended on the
+removed slot.
+
+**Claim 6 is refuted as a defect**: that function already carries "No-op on the VM ... Exists so the
+signature matches `isolate_transport_web.dart`". Dead surface that says why is documented.
+
+**Claim 7 is documented rather than deleted, deliberately**: the branch below it DROPS whatever falls
+through, so removing an unreachable branch would turn a bare end-of-stream message — if anything ever
+sends one — from a frame into a silent loss. A reading is enough to call it unreachable, not enough to make
+deletion safe.
+
+### What remains
+
+Claims 2, 3 and 8 each need their own arm and were not examined. Claim 1 is documented rather than
+structurally fixed: a top-level wrapper would make the capture hazard impossible, but it is a refactor of
+the one function that knows the arg layout, with no failing arm, in a round that had already changed that
+layout. **The web half (`web_bridge.dart:163, 248, 254`) was not read at all.**
 
 ## Owner decision
 

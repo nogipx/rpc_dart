@@ -126,6 +126,12 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
       type = _IsolateMessageType.metadata;
       data = message.metadata;
     } else if (message.isEndOfStream) {
+      // NOT REACHED through `RpcChannelTransport`, which is the only thing that uses
+      // this channel: its own half-close attaches `RpcMetadata([])`, so such a frame
+      // takes the metadata branch above. Kept rather than deleted because the branch
+      // below DROPS whatever falls through, so removing this one would turn a
+      // bare-end-of-stream message -- if anything ever sends one -- into a silent
+      // loss instead of a frame.
       type = _IsolateMessageType.finish;
       data = null;
     } else {
@@ -252,17 +258,27 @@ abstract interface class RpcIsolateTransport {
     String isolateId = 'default',
     String? debugName,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    // WEB ONLY, and ignored here. The web variant resolves a Worker script from it
+    // (`isolate_transport_web.dart`'s `_resolveWorkerUri`); a VM isolate has no
+    // script to fetch. The parameter is on both signatures so one call site compiles
+    // for either target, which is why it is not an error to pass it.
     Uri? workerUri,
     Duration startupTimeout = const Duration(seconds: 30),
   }) async {
     final name = debugName ?? 'rpc-isolate-$isolateId';
 
+    // A LOCAL closure that captures NOTHING, and must stay that way: everything it
+    // needs arrives in `args`. Capturing an outer variable would either make
+    // `Isolate.spawn` throw -- the capture has to be sendable -- or silently copy
+    // host state into the worker, which is the harder failure to notice. A
+    // top-level function cannot capture at all and so cannot regress; this one is
+    // local only because it is the one place that knows the arg layout.
     void entrypointWrapper(List<dynamic> args) {
       final hostSendPort = args[0] as SendPort;
-      final customParams = args[2] as Map<String, dynamic>;
-      final userEntrypoint = args[3] as RpcIsolateEntrypoint;
+      final customParams = args[1] as Map<String, dynamic>;
+      final userEntrypoint = args[2] as RpcIsolateEntrypoint;
       final policy = RpcSecurityPolicy.fromMap(
-        (args[4] as Map).cast<String, Object?>(),
+        (args[3] as Map).cast<String, Object?>(),
       );
 
       final receivePort = ReceivePort();
@@ -354,13 +370,10 @@ abstract interface class RpcIsolateTransport {
     try {
       isolate = await Isolate.spawn(
         entrypointWrapper,
-        [
-          initPort.sendPort,
-          isolateId,
-          customParams ?? {},
-          entrypoint,
-          policy.toMap(),
-        ],
+        // POSITIONAL, and the wrapper reads them by index -- keep the two in step.
+        // `isolateId` used to ride along here and nothing on the worker side ever
+        // read it; it is used host-side for `debugName` and stays there.
+        [initPort.sendPort, customParams ?? {}, entrypoint, policy.toMap()],
         debugName: name,
         onError: errorPort.sendPort,
         onExit: exitPort.sendPort,
