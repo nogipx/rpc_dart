@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593]
 status: confirmed (round 489)
 ---
 
@@ -500,3 +500,32 @@ and it is the map whose add sits after an await.
 > with nothing cleaning up, the arm is not driving the mechanism.
 
 `../rounds/564-the-unreported-map-and-a-vacuous-zero.md`, B-184.
+
+## Round 593 — the window was never on the reading side
+
+An INCONCLUSIVE application, kept because it corrects a premise this lens shares
+with the lead it came from.
+
+`B-138` says "only rpc_dart's own flow control bounds a peer". Measured against a
+flooding peer with the consumer paused:
+
+```
+                                      PULLED   refused   resident
+CONTROL  flow control ON, 64 KiB      20001       0      +34 MiB
+WITNESS  flow control OFF             20001       0      +40 MiB
+```
+
+> **A credit protocol bounds what you SEND, not what you READ.** rpc_dart's window
+> asks the peer to stop by withholding grants, so it has no effect on a peer that
+> ignores grants and no effect on the reading side at all. When this lens asks
+> "when does the limit fire", check first whether the limit is even on the path
+> the bytes arrive by — here the control not differing is the whole answer.
+
+> **And residency far BELOW what was offered, with nothing refused, is not a
+> bound — it is a discard.** `+34 MiB` against 320 MiB pulled says the frames went
+> nowhere, which on this rig means a peer-minted stream with no responder attached.
+> Before reading a low number as a limit working, ask what would have retained the
+> bytes if it were not.
+
+`../probes/P-210-what-the-transport-pulls-from-a-flooding-peer.md` (broken, fix named),
+`../rounds/593-the-pull-is-not-what-flow-control-bounds.md`, B-138.

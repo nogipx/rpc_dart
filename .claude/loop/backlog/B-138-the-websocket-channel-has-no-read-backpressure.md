@@ -3,7 +3,7 @@ status: open
 round: 534
 commit: cbca6a2b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-probe: P-167
+probe: P-167, P-210
 reason: "bench — REOPENED in the round-540 bookkeeping pass. Round 534 closed the CONTRACT half (pause is forwarded now) and that changed no behaviour, because nothing in rpc_dart pauses a channel. The lead's real subject — what bounds an inbound flood from a peer outside rpc_dart's flow control — is unmeasured, and a closed lead's remainder is routed to by nothing"
 continuation: yes
 ---
@@ -62,6 +62,41 @@ dead. Stated in the code, not measured.
 What bounds an inbound flood from a peer OUTSIDE rpc_dart's flow control. With flow control off the
 bounds are `_admitToStreamBuffer` and `maxMessageLengthBytes` above the transport, and round 534
 measured neither. Belongs with RPC-17's existing work and `../checked/C-29-the-real-scope-of-the-stream-limits.md`.
+
+### Round 593 narrowed it and did not settle it (INCONCLUSIVE)
+
+```
+                                      PULLED   delivered   errors   resident
+CONTROL  flow control ON, 64 KiB      20001        0          0      +34 MiB
+WITNESS  flow control OFF             20001        0          0      +40 MiB
+```
+
+320 MiB offered as 20000 frames of 16 KiB on one peer-minted stream, consumer paused. `P-210`.
+
+**Established: the transport reads every frame and flow control does not change that.** Not a defect
+by itself, and it corrects this lead's own framing — rpc_dart's flow control is a SEND-side credit
+protocol. It bounds what this side sends and asks the peer to stop by withholding grants, so against
+a peer that ignores grants it does nothing, and it never throttles READING.
+
+**Not established: whether `_admitToStreamBuffer` is reached at all.** `+34 MiB` against 320 MiB
+offered with nothing refused means the frames are DISCARDED, and the likeliest cause is the rig — a
+peer-minted stream with no `RpcResponderEndpoint` attached has nowhere to be dispatched.
+
+**Three rig failures, recorded so the next round does not repeat them:**
+
+1. A `StreamController` source measures the BENCH: `+316 MiB` with flow control ON, `+300` with it
+   OFF, which is the controller queueing 320 MiB with no peer waiting for credit.
+2. A data frame for a stream nothing opened is silently dropped, so an arm feeding only data frames
+   reads `delivered 0, errors 0` everywhere and looks like a bound.
+3. `health().details` carries no buffer depth — `activeStreams` counts streams THIS side opened,
+   `streamControllers` counts `getMessagesForStream` calls.
+
+**What the next round needs, precisely:** attach an `RpcResponderEndpoint` with a handler that never
+returns, so a peer-minted stream is dispatched and buffered where `_admitToStreamBuffer` can refuse
+it. Then read `PULLED`, the first error and residency across flow control off,
+`maxBufferedMessagesPerStream` default and lifted, and N streams against `maxActiveStreams` — the
+per-stream bound TIMES the stream ceiling is the total a peer can command, and that product is the
+number this lead is asking for.
 
 Also unswept: `IRpcChannel` is a documented ~50-line extension point whose own example has this same
 gap, and the isolate and wasm channels were not checked (RPC-08's shape).

@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-210](P-210-what-the-transport-pulls-from-a-flooding-peer.md)** **broken** (round 593),
+  rpc_dart — reads the transport's DEMAND via an `async*` generator counting its own yields:
+  `PULLED 20001 of 20001` with flow control ON and OFF alike, 320 MiB offered, consumer paused. The control
+  not differing IS the reading — flow control is a SEND-side credit protocol and never throttles reading.
+  **Marked broken because residency of `+34 MiB` against 320 MiB offered with nothing refused means the frames
+  are DISCARDED**, and the likeliest cause is the rig: a peer-minted stream with no responder endpoint has
+  nowhere to be dispatched, so `_admitToStreamBuffer` is not shown to have been reached. Attach a responder
+  with a parked handler before reuse. Carries three rig failures that each read as a result — a
+  `StreamController` source measuring the bench (`+316 MiB`), a data frame for an unopened stream being
+  silently dropped, and `health().details` having no buffer depth
 - **[P-209](P-209-what-a-refused-bomb-leaves-behind.md)** valid (round 591),
   rpc_dart — **the control is the arm that GROWS, which is the whole reading**: 20000 successful
   decompressions (reaching `close()`) against 20000 refusals (skipping it) give `+12/+12`, `+30/+6`,
