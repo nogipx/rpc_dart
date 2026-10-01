@@ -152,37 +152,51 @@ final class RpcResponderStreamState {
   /// True when a bound responder is being fed by the pipeline.
   bool get hasRequestSink => _requestSink != null;
 
-  /// Ceilings on what [_requestSink] may hold un-consumed; see [pushRequest].
-  int _sinkLimitBytes = 0;
-  int _sinkLimitEvents = 0;
+  /// What [_requestSink] holds un-consumed; see [pushRequest].
   int _sinkHeldBytes = 0;
   int _sinkHeldEvents = 0;
   bool _sinkOverflowed = false;
 
+  /// The connection's budget, set by whichever of [attachRequestSink] and
+  /// [storePayload] runs first; [releaseBuffered] returns this state's share.
+  RpcResponderBufferBudget? _budget;
+
   /// Attaches [sink] as the live request feed and marks the stream bound.
   ///
-  /// [limitBytes] and [limitEvents] bound what the sink holds un-consumed —
-  /// the per-stream buffer bound the transport applies to every other shape,
-  /// which never sees this one because the pipeline feeds it directly.
+  /// [budget] bounds what the sink holds un-consumed — the per-stream bound
+  /// the transport applies to every other shape, which never sees this one
+  /// because the pipeline feeds it directly.
   void attachRequestSink(
     StreamController<RpcTransportMessage> sink, {
-    required int limitBytes,
-    required int limitEvents,
+    required RpcResponderBufferBudget budget,
   }) {
     _requestSink = sink;
     _requestSinkEnded = false;
     _boundToMessageStream = true;
-    _sinkLimitBytes = limitBytes;
-    _sinkLimitEvents = limitEvents;
-    _sinkHeldBytes = 0;
-    _sinkHeldEvents = 0;
+    _budget = budget;
     _sinkOverflowed = false;
   }
 
   /// Releases [message]'s charge as the handler takes it.
+  ///
+  /// Clamped: the handler may drain after [releaseBuffered] already returned
+  /// the charge, and the connection total must not go negative.
   void releaseRequest(RpcTransportMessage message) {
-    _sinkHeldBytes -= message.bufferedBytes;
-    _sinkHeldEvents--;
+    final bytes = message.bufferedBytes.clamp(0, _sinkHeldBytes);
+    _sinkHeldBytes -= bytes;
+    _budget?.heldBytes -= bytes;
+    if (_sinkHeldEvents > 0) _sinkHeldEvents--;
+  }
+
+  /// Returns everything this state still holds to the connection budget.
+  ///
+  /// Called once the stream is torn down: nothing will consume it now.
+  void releaseBuffered() {
+    _budget?.heldBytes -= _sinkHeldBytes + _preBindBytes;
+    _sinkHeldBytes = 0;
+    _sinkHeldEvents = 0;
+    _preBindBytes = 0;
+    _preBindEvents = 0;
   }
 
   /// Request payload frames the pipeline ACCEPTED for this stream.
@@ -218,22 +232,24 @@ final class RpcResponderStreamState {
       droppedRequests++;
       return;
     }
-    if (_sinkHeldBytes + message.bufferedBytes > _sinkLimitBytes ||
-        _sinkHeldEvents + 1 > _sinkLimitEvents) {
+    final budget = _budget!;
+    final bytes = message.bufferedBytes;
+    if (!budget.admits(_sinkHeldBytes, _sinkHeldEvents, bytes)) {
       _sinkOverflowed = true;
       droppedRequests++;
       sink.addError(
         RpcStatusException(
           RpcStatus.resourceExhausted,
-          'Stream $id buffered more than $_sinkLimitEvents messages or '
-          '$_sinkLimitBytes bytes without being consumed',
+          'Stream $id buffered too much without consuming it '
+          '(${budget.describe()})',
         ),
       );
       unawaited(sink.close());
       return;
     }
-    _sinkHeldBytes += message.bufferedBytes;
+    _sinkHeldBytes += bytes;
     _sinkHeldEvents++;
+    budget.heldBytes += bytes;
     if (message.payload != null || message.isDirect) deliveredRequests++;
     sink.add(message);
     // A frame may carry both the last payload and the half-close.
@@ -303,16 +319,15 @@ final class RpcResponderStreamState {
   bool storePayload(
     RpcTransportMessage message, {
     required bool bufferForClientStream,
-    required int limitBytes,
-    required int limitEvents,
+    required RpcResponderBufferBudget budget,
   }) {
     if (!_boundToMessageStream) {
-      if (_preBindBytes + message.bufferedBytes > limitBytes ||
-          _preBindEvents + 1 > limitEvents) {
-        return false;
-      }
-      _preBindBytes += message.bufferedBytes;
+      _budget = budget;
+      final bytes = message.bufferedBytes;
+      if (!budget.admits(_preBindBytes, _preBindEvents, bytes)) return false;
+      _preBindBytes += bytes;
       _preBindEvents++;
+      budget.heldBytes += bytes;
     }
     lastPayloadMessage = message;
 
@@ -390,8 +405,10 @@ final class RpcResponderStreamState {
 
   void _releasePreBind(List<RpcTransportMessage> taken) {
     for (final message in taken) {
-      _preBindBytes -= message.bufferedBytes;
-      _preBindEvents--;
+      final bytes = message.bufferedBytes.clamp(0, _preBindBytes);
+      _preBindBytes -= bytes;
+      _budget?.heldBytes -= bytes;
+      if (_preBindEvents > 0) _preBindEvents--;
     }
   }
 
@@ -447,6 +464,45 @@ final class RpcResponderStreamState {
   void cacheContext(RpcContext context) {
     _cachedContext = context;
   }
+}
+
+/// Request bytes a connection's responder holds that no handler has taken:
+/// the client-stream sinks and the pre-bind lists.
+///
+/// The per-stream ceilings alone multiply by the stream count; [connectionBytes]
+/// is what bounds the product.
+final class RpcResponderBufferBudget {
+  /// Creates a budget with per-stream and connection-wide ceilings.
+  RpcResponderBufferBudget({
+    required this.streamBytes,
+    required this.streamEvents,
+    this.connectionBytes,
+  });
+
+  /// Ceiling on un-consumed bytes per stream.
+  final int streamBytes;
+
+  /// Ceiling on un-consumed messages per stream.
+  final int streamEvents;
+
+  /// Ceiling on un-consumed bytes across the connection, or null for none.
+  final int? connectionBytes;
+
+  /// Bytes currently held across the connection.
+  int heldBytes = 0;
+
+  /// Whether a stream holding [held] bytes in [events] messages may take
+  /// [bytes] more.
+  bool admits(int held, int events, int bytes) {
+    if (held + bytes > streamBytes || events + 1 > streamEvents) return false;
+    final total = connectionBytes;
+    return total == null || heldBytes + bytes <= total;
+  }
+
+  /// The ceilings, for a refusal message.
+  String describe() =>
+      'max: $streamEvents messages, $streamBytes bytes per stream'
+      '${connectionBytes == null ? '' : ', $connectionBytes per connection'}';
 }
 
 /// Manages the set of active [RpcResponderStreamState] instances.

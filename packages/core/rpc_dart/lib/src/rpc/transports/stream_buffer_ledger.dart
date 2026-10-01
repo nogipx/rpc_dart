@@ -10,6 +10,10 @@ enum RpcBufferAdmission {
   /// This message crossed the limit. The caller fails the stream once.
   overflowed,
 
+  /// This message crossed the CONNECTION total; the stream is failed as for
+  /// [overflowed].
+  overflowedConnection,
+
   /// The stream is already failed; drop without re-reporting.
   refused,
 }
@@ -27,8 +31,24 @@ enum RpcBufferAdmission {
 /// Fails THE STREAM, never the connection: a peer flooding one call must not
 /// take down the others sharing the socket.
 final class RpcStreamBufferLedger {
-  /// Creates a ledger admitting [limitBytes] and [limitEvents] per stream.
-  RpcStreamBufferLedger({required this.limitBytes, required this.limitEvents});
+  /// Creates a ledger admitting [limitBytes] and [limitEvents] per stream, and
+  /// [limitTotalBytes] across all of them.
+  RpcStreamBufferLedger({
+    required this.limitBytes,
+    required this.limitEvents,
+    this.limitTotalBytes,
+  });
+
+  /// Ceiling on un-consumed bytes summed over every stream, or null for none.
+  ///
+  /// Without it the per-stream bound multiplies by the stream count: a peer
+  /// ignoring flow control parks [limitBytes] on each stream it opens.
+  final int? limitTotalBytes;
+
+  int _total = 0;
+
+  /// Un-consumed bytes held across all streams, for diagnostics and tests.
+  int get totalBytes => _total;
 
   /// Ceiling on un-consumed bytes held for a single stream.
   final int limitBytes;
@@ -63,8 +83,14 @@ final class RpcStreamBufferLedger {
       _failed.add(streamId);
       return RpcBufferAdmission.overflowed;
     }
+    final totalLimit = limitTotalBytes;
+    if (totalLimit != null && _total + bytes > totalLimit) {
+      _failed.add(streamId);
+      return RpcBufferAdmission.overflowedConnection;
+    }
     _held[streamId] = next;
     _events[streamId] = nextEvents;
+    _total += bytes;
     return RpcBufferAdmission.admitted;
   }
 
@@ -87,14 +113,16 @@ final class RpcStreamBufferLedger {
     final left = held - bytes;
     if (left <= 0) {
       _held.remove(streamId);
+      _total -= held;
     } else {
       _held[streamId] = left;
+      _total -= bytes;
     }
   }
 
   /// Drops every trace of [streamId]; called when its call ends.
   void forget(int streamId) {
-    _held.remove(streamId);
+    _total -= _held.remove(streamId) ?? 0;
     _events.remove(streamId);
     _failed.remove(streamId);
   }
@@ -104,6 +132,7 @@ final class RpcStreamBufferLedger {
     _held.clear();
     _events.clear();
     _failed.clear();
+    _total = 0;
   }
 
   /// Bytes currently charged to [streamId], for diagnostics and tests.

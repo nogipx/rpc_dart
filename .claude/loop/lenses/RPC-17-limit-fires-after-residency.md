@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593, 594]
-status: confirmed (round 594)
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593, 594, 595]
+status: confirmed (round 595)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -547,3 +547,18 @@ peer sent.
 `../probes/P-211-a-flood-into-a-stalled-handler.md`,
 `../probes/P-212-frames-after-a-unary-request.md`,
 `../rounds/594-the-two-buffers-the-stream-bound-never-saw.md`.
+
+## Round 595 — a per-stream bound is a per-connection bound times N
+
+The detector's "which DIMENSION does each limit measure" applied to the limits
+round 594 added: both are per stream, so a peer chooses the total by choosing
+how many streams to open — `8184` messages at 8 streams, `16368` at 16. Now
+capped at the connection window in both layers: `4093` at either count.
+
+> **A cap on a shared total turns every un-released charge into an outage for
+> the whole connection.** Before adding one, list the paths that RELEASE, and
+> witness each: here a refused message stayed owed to the flow-control pool and
+> wedged an honest sender, and a stream torn down with frames held would have
+> refused every later call.
+
+`../rounds/595-the-product-the-per-stream-bound-left.md`.

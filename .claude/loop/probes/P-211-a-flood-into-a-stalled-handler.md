@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b138_a_flood_into_a_stalled_handle
 round: 594
 commit: 017f4c88
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid (round 594)
+status: valid (round 595)
 ---
 
 # P-211 — a flood into a stalled handler
@@ -36,6 +36,18 @@ CONTROL  client-stream, peer honours window    258      257  (~4 MiB)
 WITNESS  client-stream, before the fix       20000    19999  (~312 MiB)
 WITNESS  client-stream, after the fix        20000     1023  (~16 MiB)
 SIBLING  bidi, peer ignores window           20000     1023  (~16 MiB)
+```
+
+## Round 595 — N streams on one connection
+
+Arms `multi N`, `multihonest N`, `multibidi N`, 2000 messages per stream:
+
+```
+                                   streams   before    after
+client-stream, peer ignores window    8       8184     4093
+client-stream, peer ignores window   16      16368     4093
+bidi, peer ignores window            16          -     4093
+client-stream, honest peer            8       2056     2056
 ```
 
 ## Measures

@@ -41,7 +41,8 @@ after the change, which is what the status is for.
 - **[P-212](P-212-frames-after-a-unary-request.md)** valid (round 594),
   rpc_dart — data frames sent on a unary stream while its handler runs: RSS tracks the bytes 1:1 at three
   scales (`+51/+117/+313 MiB` for 78/156/312 MiB) before the fix, `+57` and a RESOURCE_EXHAUSTED after
-- **[P-211](P-211-a-flood-into-a-stalled-handler.md)** valid (round 594),
+- **[P-211](P-211-a-flood-into-a-stalled-handler.md)** valid (round 595; N-stream arms added: `8184/16368`
+  at 8/16 streams before, `4093` after),
   rpc_dart — P-210's repair: a real responder with a parked client-stream handler, a peer with its windows
   off. **RETAINED is counted by releasing the handler with the producer stopped**, so it is what the
   responder side held; RSS read `+202` and `-145` MiB for one arm. Control 257, witness 19999 before and

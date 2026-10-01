@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 595)
 round: 534
 commit: cbca6a2b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
 probe: P-167, P-210, P-211, P-212
-reason: "bench — round 594 bounded every per-stream request buffer (client-stream sink and unary pre-bind were unbounded against a peer ignoring grants, both fixed). What is left is the CONNECTION total: 4096 streams × 16 MiB per stream, arithmetic and not measured, plus the unswept IRpcChannel example and the isolate and wasm channels"
-continuation: yes
+reason: "FIXED in two rounds. 594 bounded every per-stream request buffer (client-stream sink and unary pre-bind had none against a peer ignoring grants); 595 bounded the connection total at the connection window, by the owner's decision. What remains is filed as B-225: the two layers count separately, zero-copy weighs nothing, and the other channels' pause contract is unswept"
 ---
 
 # B-138 — the websocket channel does not propagate pause to the socket
@@ -57,7 +56,7 @@ promise that `incoming` is an ordinary Stream. The `cost` grading on this lead w
 consumer that stays paused stops answering them and a peer with a keepalive calls the connection
 dead. Stated in the code, not measured.
 
-## Still open, and it is the lead's real subject
+## The lead's real subject, answered in rounds 593-595
 
 What bounds an inbound flood from a peer OUTSIDE rpc_dart's flow control. With flow control off the
 bounds are `_admitToStreamBuffer` and `maxMessageLengthBytes` above the transport, and round 534
@@ -116,6 +115,16 @@ Nothing bounds the connection's total of un-consumed request bytes except the
 connection window, which such a peer ignores. Unmeasured — the next round's
 witness is N parked streams against P-211's rig.
 
+### Round 595 — the connection total, FIXED
+
+Measured on P-211: `8184` messages held on 8 parked client-streams and `16368` on
+16, linear; honest control 8 streams `2056`. After: `4093` (64 MiB) at 8 and 16,
+client-stream and bidi alike; honest control unchanged and never refused.
+`../rounds/595-the-product-the-per-stream-bound-left.md`. Remainder in
+`B-225-what-the-connection-total-does-not-see.md`.
+
 ## Owner decision
 
-—
+Round 595: cap total un-consumed request bytes per connection at
+`flowControlConnectionWindowBytes` (an honest peer cannot exceed it; no cap when
+the operator sets it to null). Chosen over a new policy knob and over leaving it.

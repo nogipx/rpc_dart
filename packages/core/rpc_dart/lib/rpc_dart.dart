@@ -34,6 +34,7 @@ export 'src/_index.dart'
         RpcResponderMethodRegistry,
         RpcResponderPingHandler,
         RpcResponderPipelineMixin,
+        RpcResponderBufferBudget,
         RpcResponderStreamState,
         RpcResponderStreamStore,
         SinkPump,

@@ -86,9 +86,13 @@ class RpcChannelTransport
   /// Kept SEPARATE from [_fc] on purpose: metadata walks past flow control by
   /// design, so the window cannot be the bound here. See
   /// [RpcStreamBufferLedger].
+  ///
+  /// The connection total is the connection window: an honest peer cannot
+  /// have more outstanding, so only one ignoring the window is refused.
   late final RpcStreamBufferLedger _buffers = RpcStreamBufferLedger(
     limitBytes: _policy.effectiveMaxBufferedBytes,
     limitEvents: _policy.maxBufferedMessagesPerStream,
+    limitTotalBytes: _policy.flowControlConnectionWindowBytes,
   );
 
   /// Credit accounting for both levels. See [RpcFlowController].
@@ -340,19 +344,25 @@ class RpcChannelTransport
     StreamController<RpcTransportMessage> ctl,
   ) {
     final streamId = message.streamId;
-    switch (_buffers.admit(streamId, message.bufferedBytes)) {
+    final admission = _buffers.admit(streamId, message.bufferedBytes);
+    switch (admission) {
       case RpcBufferAdmission.admitted:
         return true;
       case RpcBufferAdmission.refused:
         return false;
       case RpcBufferAdmission.overflowed:
-        // WHICH ceiling, because there are two and they bound different things: a
-        // zero-copy payload weighs 0 bytes, so a message-count overflow reported
-        // as a byte overflow names a number the stream never approached.
+      case RpcBufferAdmission.overflowedConnection:
+        // WHICH ceiling, because there are three and they bound different
+        // things: a zero-copy payload weighs 0 bytes, so a message-count
+        // overflow reported as a byte overflow names a number the stream never
+        // approached.
         final byCount =
             _buffers.eventsFor(streamId) >= _buffers.limitEvents ||
             message.bufferedBytes == 0;
-        final reason = byCount
+        final reason = admission == RpcBufferAdmission.overflowedConnection
+            ? 'past the connection total of ${_buffers.limitTotalBytes} '
+                  'bytes un-consumed'
+            : byCount
             ? 'more than ${_buffers.limitEvents} un-consumed messages'
             : 'more than ${_buffers.limitBytes} bytes un-consumed';
         // The consumer gets the error; without this the OPERATOR gets nothing,
@@ -983,9 +993,15 @@ class RpcChannelTransport
         : _streamControllers[message.streamId];
     if (ctl != null && !ctl.isClosed) {
       // Credited by _metered when the consumer takes it; outstanding against
-      // the connection pool until then, and repaid if it never does.
-      _fc.oweConnection(message.streamId, message.payload?.length ?? 0);
-      if (!_admitToStreamBuffer(message, ctl)) return;
+      // the connection pool until then, and repaid if it never does. A refused
+      // message is dropped, so its bytes go straight back to the pool, or the
+      // refusal wedges every other stream's sender.
+      final bytes = message.payload?.length ?? 0;
+      if (!_admitToStreamBuffer(message, ctl)) {
+        if (bytes > 0) _fc.credit(message.streamId, bytes);
+        return;
+      }
+      _fc.oweConnection(message.streamId, bytes);
       if (!truncatedEnd) {
         ctl.add(message);
       } else if (message.payload != null || message.isDirect) {

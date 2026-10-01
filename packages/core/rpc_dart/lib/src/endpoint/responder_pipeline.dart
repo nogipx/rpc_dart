@@ -126,14 +126,23 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
-  /// The transport's policy, or the default for one that cannot carry it.
-  RpcSecurityPolicy? _respPolicyCache;
+  /// Un-consumed request bytes held for handlers, per stream and per
+  /// connection. The connection ceiling is the connection window: an honest
+  /// peer cannot have more outstanding than it was granted.
+  RpcResponderBufferBudget? _respBudgetCache;
 
-  RpcSecurityPolicy get _respPolicy {
+  RpcResponderBufferBudget get _respBudget {
+    final cached = _respBudgetCache;
+    if (cached != null) return cached;
     final transport = this.transport;
-    return _respPolicyCache ??= transport is IRpcSecurityPolicyAware
+    final policy = transport is IRpcSecurityPolicyAware
         ? (transport as IRpcSecurityPolicyAware).securityPolicy
         : const RpcSecurityPolicy();
+    return _respBudgetCache = RpcResponderBufferBudget(
+      streamBytes: policy.effectiveMaxBufferedBytes,
+      streamEvents: policy.maxBufferedMessagesPerStream,
+      connectionBytes: policy.flowControlConnectionWindowBytes,
+    );
   }
 
   /// The policy's rule for a request carrying no `content-type` at all.
@@ -1161,12 +1170,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    final policy = _respPolicy;
+    final budget = _respBudget;
     if (!state.storePayload(
       message,
       bufferForClientStream: binding.type == RpcMethodType.clientStream,
-      limitBytes: policy.effectiveMaxBufferedBytes,
-      limitEvents: policy.maxBufferedMessagesPerStream,
+      budget: budget,
     )) {
       _log.warning(
         'Refusing stream ${state.id}: too much buffered before its responder '
@@ -1178,8 +1186,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           status: RpcStatus.resourceExhausted,
           message:
               'Too much buffered before the responder took it '
-              '(max: ${policy.maxBufferedMessagesPerStream} messages, '
-              '${policy.effectiveMaxBufferedBytes} bytes)',
+              '(${budget.describe()})',
         ),
         'grpc error cleanup',
       );
@@ -2097,6 +2104,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // A stream torn down while still holding pre-method frames must return its
     // share of the connection budget, or the ceiling ratchets down over time.
     _releasePreMethodBytes(state);
+    // Same for the handler-side buffers, against the connection ceiling.
+    state.releaseBuffered();
     state.cancelDeadline();
     // End the client-stream request feed first: a handler parked in
     // `await for (requests)` has to be released before its responder is closed.
@@ -2145,12 +2154,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     required Iterable<RpcTransportMessage> initialMessages,
   }) {
     final controller = StreamController<RpcTransportMessage>();
-    final policy = _respPolicy;
-    state.attachRequestSink(
-      controller,
-      limitBytes: policy.effectiveMaxBufferedBytes,
-      limitEvents: policy.maxBufferedMessagesPerStream,
-    );
+    state.attachRequestSink(controller, budget: _respBudget);
 
     // Take over flow-control metering for this stream. The transport meters
     // what it hands out through getMessagesForStream, and this responder is fed
