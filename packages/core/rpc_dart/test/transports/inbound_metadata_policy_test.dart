@@ -56,6 +56,28 @@ RpcMetadata _hostile({int headers = 200, int valueLength = 20}) => RpcMetadata([
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 100));
 
+/// A CLIENT-role transport plus the channel a server writes trailers on.
+///
+/// The client role is the one that can lose something: a responder refusing a
+/// request answers it with a status of its own, where a client has only what the
+/// server sent.
+({RpcChannelTransport client, IRpcMultiplexedChannel peer}) _clientFacing(
+  List<RpcTransportMessage> delivered,
+  List<Object> errors,
+) {
+  const policy = RpcSecurityPolicy(maxHeaders: 4, maxHeaderValueBytes: 16);
+  final (peerChannel, clientChannel) = RpcFrameMultiplexedChannel.pair(
+    policy: policy,
+  );
+  final client = RpcChannelTransport(
+    channel: clientChannel,
+    isClient: true,
+    policy: policy,
+  );
+  client.incomingMessages.listen(delivered.add, onError: errors.add);
+  return (client: client, peer: peerChannel);
+}
+
 void main() {
   const strict = RpcSecurityPolicy(maxHeaders: 4, maxHeaderValueBytes: 16);
 
@@ -289,6 +311,117 @@ void main() {
     await peerChannel.close();
     await client.close();
   });
+
+  // WITNESS. The refusal above used to apply to a server's TRAILERS too, so a
+  // policy tripped by one detail header destroyed the status the call was about:
+  // a server attaching 10 KiB of `grpc-status-details-bin` -- grpc-go's rich error
+  // model -- had its FAILED_PRECONDITION turn into an RpcFrameException. The frame
+  // is decoded and resident by then, so dropping it buys no memory; it only
+  // decided whose answer ended the call.
+  test('a trailer over the policy keeps its grpc-status', () async {
+    final delivered = <RpcTransportMessage>[];
+    final errors = <Object>[];
+    final c = _clientFacing(delivered, errors);
+
+    await c.peer.send(
+      RpcTransportMessage.withMetadata(
+        metadata: RpcMetadata([
+          const RpcHeader(RpcHeaders.grpcStatus, '9'),
+          // Short enough for this policy's 16-byte value limit, so the arm below
+          // can pin that a CONFORMING message rides along.
+          const RpcHeader(RpcHeaders.grpcMessage, 'no good'),
+          RpcHeader('grpc-status-details-bin', 'A' * 64),
+        ]),
+        streamId: 2,
+      ),
+    );
+    await _settle();
+
+    expect(
+      errors,
+      isEmpty,
+      reason: 'the call must end with the server status, not with our refusal',
+    );
+    expect(delivered, hasLength(1));
+    expect(
+      delivered.single.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
+      '9',
+    );
+    expect(
+      delivered.single.metadata?.getHeaderValue(RpcHeaders.grpcMessage),
+      'no good',
+    );
+    expect(
+      delivered.single.metadata?.getHeaderValue('grpc-status-details-bin'),
+      isNull,
+      reason: 'the offending header is dropped; only the status is kept',
+    );
+
+    await c.peer.close();
+    await c.client.close();
+  });
+
+  // The other half of the rule: `grpc-message` may itself BE the offending value,
+  // and a status without an explanation is still the server's answer.
+  test(
+    'an oversized grpc-message is dropped and the status still lands',
+    () async {
+      final delivered = <RpcTransportMessage>[];
+      final errors = <Object>[];
+      final c = _clientFacing(delivered, errors);
+
+      await c.peer.send(
+        RpcTransportMessage.withMetadata(
+          metadata: RpcMetadata([
+            const RpcHeader(RpcHeaders.grpcStatus, '9'),
+            RpcHeader(RpcHeaders.grpcMessage, 'x' * 64),
+          ]),
+          streamId: 2,
+        ),
+      );
+      await _settle();
+
+      expect(errors, isEmpty);
+      expect(
+        delivered.single.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
+        '9',
+      );
+      expect(
+        delivered.single.metadata?.getHeaderValue(RpcHeaders.grpcMessage),
+        isNull,
+        reason: 'passing it on would hand up a value this policy refuses',
+      );
+
+      await c.peer.close();
+      await c.client.close();
+    },
+  );
+
+  // CONTROL. The same frame WITHOUT a status is still refused outright, so the
+  // witness above is about the status and not about the limit having stopped
+  // applying to trailers.
+  test(
+    'CONTROL: a trailer over the policy with NO status is refused',
+    () async {
+      final delivered = <RpcTransportMessage>[];
+      final errors = <Object>[];
+      final c = _clientFacing(delivered, errors);
+
+      await c.peer.send(
+        RpcTransportMessage.withMetadata(
+          metadata: RpcMetadata([RpcHeader('x-detail', 'A' * 64)]),
+          streamId: 2,
+        ),
+      );
+      await _settle();
+
+      expect(delivered, isEmpty);
+      expect(errors.single, isA<RpcFrameException>());
+
+      await c.peer.close();
+      await c.client.close();
+    },
+  );
 
   test('conforming metadata still passes untouched', () async {
     final p = _pair(const RpcSecurityPolicy());

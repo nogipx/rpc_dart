@@ -1289,6 +1289,31 @@ class RpcHttp2CallerTransport
 
   int _policyViolations = 0;
 
+  /// The status [headers] carry, alone, or null if they carry none.
+  ///
+  /// Raw headers rather than converted metadata: the converter refuses on
+  /// `maxHeaders` partway through its walk, so there is nothing to read a status
+  /// out of by then. `grpc-message` rides along only when it passes the check the
+  /// peer just failed -- it may BE the offending value.
+  RpcMetadata? _peerStatusOnly(List<http2.Header> headers) {
+    String? status;
+    String? message;
+    for (final header in headers) {
+      final name = String.fromCharCodes(header.name);
+      if (name == RpcHeaders.grpcStatus) {
+        status = String.fromCharCodes(header.value);
+      } else if (name == RpcHeaders.grpcMessage) {
+        message = String.fromCharCodes(header.value);
+      }
+    }
+    if (status == null || !_policy.isValidHeaderValue(status)) return null;
+    return RpcMetadata([
+      RpcHeader(RpcHeaders.grpcStatus, status),
+      if (message != null && _policy.isValidHeaderValue(message))
+        RpcHeader(RpcHeaders.grpcMessage, message),
+    ]);
+  }
+
   /// Handles an incoming HEADERS frame (initial response or trailers).
   void _handleHeadersMessage(
     int streamId,
@@ -1338,11 +1363,44 @@ class RpcHttp2CallerTransport
 
     // Pseudo-headers are filtered out by the converter.
     // A client is exposed to the same flood from the server it dialled.
-    final metadata = http2HeadersToRpcMetadata(
-      message.headers,
-      policy: _policy,
-    );
-    _policy.validateMetadata(metadata);
+    final RpcMetadata metadata;
+    try {
+      metadata = http2HeadersToRpcMetadata(message.headers, policy: _policy);
+      _policy.validateMetadata(metadata);
+    } on RpcMetadataViolation catch (violation) {
+      // Our limits must not be able to destroy a status the PEER sent. Read from
+      // the RAW headers, because the converter throws DURING its walk on
+      // `maxHeaders` and never returns metadata to read the status out of.
+      //
+      // The frame is decoded and resident by the time this runs, so refusing it
+      // buys no memory; it only decided whose answer ended the call. A grpc-go
+      // server attaching 10 KiB of `grpc-status-details-bin` -- its rich error
+      // model -- had FAILED_PRECONDITION replaced by our INVALID_ARGUMENT.
+      final reduced = _peerStatusOnly(message.headers);
+      if (reduced == null) rethrow;
+      _logger?.warning(
+        'Peer headers on stream $streamId violate the policy '
+        '(${violation.message}); keeping their grpc-status and dropping the rest',
+      );
+      // Charged here because this path does not reach the catch that charges it,
+      // and a peer that does this 256 times is not one rich error.
+      if (++_policyViolations > _maxPolicyViolations) {
+        _logger?.warning(
+          'Peer sent $_policyViolations policy violations; closing',
+        );
+        unawaited(close());
+      }
+      _statusReceived.add(streamId);
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: reduced,
+          isEndOfStream: true,
+          methodPath: methodPath,
+        ),
+      );
+      return;
+    }
 
     // Trailers-Only responses carry the status on the FIRST headers frame, so
     // key on the header rather than on the frame's position.

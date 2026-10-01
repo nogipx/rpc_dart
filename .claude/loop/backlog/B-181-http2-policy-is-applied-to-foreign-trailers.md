@@ -1,10 +1,11 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
-paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+status: closed (round 567)
+round: 567
+commit: 79ac607e
+release: breaking
+paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
+probe: P-189
+reason: "bench — CONFIRMED against a control and fixed at BOTH sites of the class: the http2 caller this lead names, and core's `_validateInbound`, which it does not and which websocket, isolate and in-memory inherit"
 ---
 
 # B-181 — http2 caller: our header policy is enforced on the peer's trailers and destroys the real status
@@ -32,6 +33,44 @@ grpc-go server returning a status with 10 KiB of details.
 
 Always extract `grpc-status`/`grpc-message` first; apply limits as caps, not
 refusals, on trailers.
+
+## Outcome (round 567) — CONFIRMED, and the class has two sites
+
+`../rounds/567-our-limit-on-their-answer.md`. Bench `P-189`.
+
+```
+http2 caller, a server answering grpc-status 9
+  CONTROL  details-bin 16 B      status 9 -- the precondition failed
+  WITNESS  details-bin 10 KiB    status 3 -> status 9
+  WITNESS  200 trailer headers   status 3 -> status 9
+
+core channel transport, client role (NOT named by this lead)
+  CONTROL  details 16 B          [frame(no status), status 9]   errors none
+  WITNESS  details 10 KiB        [frame(no status)] + RpcFrameException
+                              -> [frame(no status), status 9]   errors none
+```
+
+**The confidence line was right and the prediction was half right.** The status IS destroyed —
+`status 3`, naming our own limit, where the server said 9. What was NOT observed is the
+synthesised UNAVAILABLE behind it: the violation reaches the caller first and fails the call, so
+the second terminal event never surfaces (`B-189`'s subject, and an instance of why it is hard
+to see).
+
+**The second site is core's `RpcChannelTransport._validateInbound`**, which websocket, isolate
+and in-memory all inherit, and which dropped the whole trailer frame. Found by sweeping
+`validateMetadata` across every `lib/` before touching anything. HTTP/1.1's caller validates
+only OUTBOUND; that it does not check inbound response headers at all is `B-145`, the opposite
+defect.
+
+**The fix is the lead's own sketch, with one correction.** "Apply limits as caps, not refusals"
+is not what landed — a cap would hand the application a value the policy refuses. Instead a
+response frame carrying `grpc-status` is REDUCED to that status: the status survives,
+`grpc-message` rides along only if it passes the same check, everything else is dropped, and the
+violation is still charged to the 256-violation budget. In core it is gated on the CLIENT role,
+so a hostile client cannot put `grpc-status` on a request to get a frame delivered.
+
+The limits never protected anything on this path: the frame is decoded and resident before
+either check runs.
 
 ## Owner decision
 

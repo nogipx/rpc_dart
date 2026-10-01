@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-189](P-189-whose-answer-ends-the-call.md)** valid (round 567),
+  rpc_dart + rpc_dart_http2 — what a call ends with when the peer's trailers break our policy, at
+  BOTH sites of the class in one file: `http2 details-bin 10 KiB status 3 -> 9`,
+  `200 trailer headers status 3 -> 9`, `core channel [frame] + RpcFrameException -> [frame, status 9]`,
+  against a 16-byte-details CONTROL reading 9 throughout. **No grpc-go needed** — what the defect
+  turns on is a server answering a status with one header we refuse, and `package:http2`'s own
+  `ServerTransportConnection` sends arbitrary trailers. The core half gives the two sides SEPARATE
+  policy objects, or the sender's own outbound check refuses the frame before the victim sees it.
+  Connection health is read in every arm, which separates a lost status from a dead socket
 - **[P-188](P-188-what-the-responder-mints-for-a-foreign-peer.md)** valid (round 566),
   rpc_dart — counts the tokens the RESPONDER mints for a peer that sends no correlation headers:
   `neither header 2 -> 1 / both headers 0 / a foreign x-request-id 1`, with each id's mint number

@@ -727,18 +727,42 @@ class RpcChannelTransport
   /// own controller and on the broadcast, so a waiting caller fails fast rather
   /// than hanging, and `closeOnProtocolError` additionally tears the transport
   /// down.
-  bool _validateInbound(RpcMetadata metadata, int streamId) {
+  /// What to dispatch for this frame, or null to drop it.
+  ///
+  /// Not a bool, because a refusal on the CLIENT must not be able to destroy a
+  /// status the server sent: a response frame carrying `grpc-status` is reduced to
+  /// that status rather than dropped. By the time this runs the frame is decoded
+  /// and resident, so dropping it buys no memory -- it only decided whose answer
+  /// ended the call. A server attaching 10 KiB of `grpc-status-details-bin`, which
+  /// is how grpc-go carries rich errors, had its FAILED_PRECONDITION turn into a
+  /// policy exception.
+  RpcMetadata? _validateInbound(RpcMetadata metadata, int streamId) {
     try {
       _policy.validateMetadata(metadata);
-      return true;
+      return metadata;
     } on ArgumentError catch (error) {
       final violation = RpcFrameException.policy(
         'Inbound metadata violates the security policy on stream '
         '$streamId: ${error.message}',
       );
-      final ctl = _streamControllers[streamId];
-      if (ctl != null && !ctl.isClosed) ctl.addError(violation);
-      if (!_incoming.isClosed) _incoming.addError(violation);
+
+      // CLIENT role only. A responder has its own answer to send and sends it
+      // below; and a hostile CLIENT could otherwise put `grpc-status` on a
+      // request to get a frame delivered where this used to refuse it.
+      final reduced = isClient ? _statusOnly(metadata) : null;
+      if (reduced == null) {
+        final ctl = _streamControllers[streamId];
+        if (ctl != null && !ctl.isClosed) ctl.addError(violation);
+        if (!_incoming.isClosed) _incoming.addError(violation);
+      } else {
+        _log.warning(
+          'Peer trailers on stream $streamId violate the policy '
+          '(${error.message}); keeping their grpc-status and dropping the rest',
+        );
+      }
+
+      // The budget is charged either way: a peer that does this 256 times is not
+      // one rich error.
       if (_policy.closeOnProtocolError ||
           ++_policyViolations > _maxPolicyViolations) {
         // Two separate jobs; doing only one of them is a defect.
@@ -789,8 +813,24 @@ class RpcChannelTransport
           ).catchError((_) {}),
         );
       }
-      return false;
+      return reduced;
     }
+  }
+
+  /// [metadata] cut down to the status it carries, or null if it carries none.
+  ///
+  /// `grpc-message` rides along only when it passes the same check the peer just
+  /// failed -- it may BE the offending value, and a status without an explanation
+  /// is still the server's answer.
+  RpcMetadata? _statusOnly(RpcMetadata metadata) {
+    final status = metadata.getHeaderValue(RpcHeaders.grpcStatus);
+    if (status == null || !_policy.isValidHeaderValue(status)) return null;
+    final message = metadata.getHeaderValue(RpcHeaders.grpcMessage);
+    return RpcMetadata([
+      RpcHeader(RpcHeaders.grpcStatus, status),
+      if (message != null && _policy.isValidHeaderValue(message))
+        RpcHeader(RpcHeaders.grpcMessage, message),
+    ]);
   }
 
   // ── Flow control ───────────────────────────────────────────────────────────
@@ -865,15 +905,30 @@ class RpcChannelTransport
     _idManager.releaseId(streamId);
   }
 
-  void _onMessage(RpcTransportMessage message) {
+  void _onMessage(RpcTransportMessage incoming) {
     // The policy applies to INBOUND metadata. Validating only in sendMetadata
     // constrains this side's own honest sender and not the untrusted peer,
     // which is backwards for a security control: the frame layer bounds payload
     // length, so header count and size are bounded only here.
-    final metadata = message.metadata;
-    if (metadata != null && !_validateInbound(metadata, message.streamId)) {
-      return;
+    var message = incoming;
+    final asReceived = message.metadata;
+    if (asReceived != null) {
+      final checked = _validateInbound(asReceived, message.streamId);
+      if (checked == null) return;
+      // Rebuilt rather than mutated, and only when the policy reduced it: every
+      // read below this point must see the same metadata the consumer will.
+      if (!identical(checked, asReceived)) {
+        message = RpcTransportMessage(
+          streamId: message.streamId,
+          payload: message.payload,
+          directPayload: message.directPayload,
+          metadata: checked,
+          isEndOfStream: message.isEndOfStream,
+          methodPath: message.methodPath,
+        );
+      }
     }
+    final metadata = message.metadata;
 
     // Recorded BEFORE dispatch, because trailers arrive as a metadata frame
     // that is itself the end of the stream.
