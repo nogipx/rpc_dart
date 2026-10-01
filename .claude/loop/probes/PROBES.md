@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-198](P-198-does-a-failed-spawn-let-the-process-exit.md)** valid (round 577),
+  rpc_dart_isolate — **the probe IS the subject**: it fails a spawn, prints, and returns from `main` with
+  no `exit()` call, so the verdict is whether the command returns at all. `guard ablated -> no exit at
+  25 s / 60 s / 90 s`, `guard in place -> immediate`. The printed `spawn threw ArgumentError` is the
+  premise check. **Its first version was wrong in a way that read exactly like the defect**: the
+  `ReceivePort` it used as the unsendable value held the process open by itself, so it hung with the fix
+  in place too — bench and subject holding the same kind of handle, `measurement.md` item 6. Does NOT
+  bound the hang: "never exits" means "not within 90 s"
 - **[P-197](P-197-what-a-channel-close-keeps.md)** valid (round 576),
   rpc_dart — **the rig has to create a moment, not measure a quantity**: both ends queue a tagged frame
   in the SAME event-loop turn and then one closes, with nothing awaited between the three calls, because

@@ -313,19 +313,35 @@ abstract interface class RpcIsolateTransport {
     final errorPort = ReceivePort();
     final exitPort = ReceivePort();
 
-    final isolate = await Isolate.spawn(
-      entrypointWrapper,
-      [
-        initPort.sendPort,
-        isolateId,
-        customParams ?? {},
-        entrypoint,
-        policy.toMap(),
-      ],
-      debugName: name,
-      onError: errorPort.sendPort,
-      onExit: exitPort.sendPort,
-    );
+    // The spawn is GUARDED, and `teardownStartup` below cannot do it: that closure
+    // needs `isolate`, which is what this await produces. An open ReceivePort keeps
+    // the event loop alive, so three of them left behind mean the process never
+    // exits -- measured with an unsendable `customParams` value, which makes
+    // `Isolate.spawn` throw ArgumentError while building its message: the probe
+    // printed its last line and then hung past 60 s.
+    //
+    // No subscriptions exist yet, so closing the ports is the whole of it.
+    final Isolate isolate;
+    try {
+      isolate = await Isolate.spawn(
+        entrypointWrapper,
+        [
+          initPort.sendPort,
+          isolateId,
+          customParams ?? {},
+          entrypoint,
+          policy.toMap(),
+        ],
+        debugName: name,
+        onError: errorPort.sendPort,
+        onExit: exitPort.sendPort,
+      );
+    } catch (_) {
+      initPort.close();
+      errorPort.close();
+      exitPort.close();
+      rethrow;
+    }
 
     _IsolateMultiplexedChannel? hostChannel;
     RpcChannelTransport? hostTransport;
