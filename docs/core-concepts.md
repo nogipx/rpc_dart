@@ -113,7 +113,7 @@ business logic.
 import 'package:rpc_dart_transports/rpc_dart_transports.dart';
 
 // Development/Testing
-final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
 // Production HTTP/2 (inside an async function)
 final httpTransport = await RpcHttp2CallerTransport.secureConnect(

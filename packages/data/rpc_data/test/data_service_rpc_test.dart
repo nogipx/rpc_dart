@@ -20,7 +20,8 @@ void main() {
       Iterable<String> allowedBearerTokens = const [],
     }) async {
       repository = repo ?? InMemoryDataRepository();
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final endpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'rpc-server',

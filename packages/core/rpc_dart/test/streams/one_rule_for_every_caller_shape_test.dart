@@ -80,7 +80,7 @@ void _peer(
 }
 
 ({RpcCallerEndpoint caller, IRpcTransport peer}) _rig() {
-  final pair = RpcInMemoryTransport.pair();
+  final pair = RpcChannelTransport.memoryPair();
   final caller = RpcCallerEndpoint(transport: pair.$1);
   addTearDown(caller.close);
   return (caller: caller, peer: pair.$2);
@@ -296,7 +296,7 @@ void main() {
     late RpcCallerEndpoint caller;
 
     setUp(() async {
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       caller = RpcCallerEndpoint(transport: pair.$1);
       await caller.close();
     });

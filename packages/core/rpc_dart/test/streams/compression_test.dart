@@ -45,7 +45,8 @@ void main() {
 
   group('Compression - Server Stream', () {
     test('server_compresses_responses_when_client_advertises_gzip', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       // Server context: advertise that it accepts gzip → enables response compression.
       final serverContext = RpcContext.withHeaders({
@@ -91,7 +92,8 @@ void main() {
     });
 
     test('client_sends_compressed_request_server_stream_responds', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final server = ServerStreamResponder<RpcString, RpcString>(
         id: 1,
@@ -137,7 +139,8 @@ void main() {
     test(
       'client_sends_compressed_requests_server_receives_correctly',
       () async {
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -184,7 +187,8 @@ void main() {
     test(
       'server_compresses_response_when_client_stream_advertises_gzip',
       () async {
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         // Server context: advertise gzip acceptance → compress the single response.
         final serverContext = RpcContext.withHeaders({
@@ -230,7 +234,8 @@ void main() {
 
   group('Compression - Bidirectional Stream', () {
     test('both_sides_compressed_bidirectional_round_trip', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       // Server context: compress responses.
       final serverContext = RpcContext.withHeaders({
@@ -302,7 +307,8 @@ void main() {
     });
 
     test('uncompressed_bidirectional_still_works', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final server = BidirectionalStreamResponder<RpcString, RpcString>(
         id: 1,

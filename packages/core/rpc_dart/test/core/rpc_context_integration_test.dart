@@ -17,7 +17,7 @@ void main() {
 
     setUp(() {
       // Arrange: a transport pair.
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       clientTransport = client;
       serverTransport = server;
 

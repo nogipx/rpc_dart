@@ -143,7 +143,7 @@ void main() {
   late ChatContract contractB; // hosted on peerB, calls peerA
 
   setUp(() {
-    final (transportA, transportB) = RpcInMemoryTransport.pair();
+    final (transportA, transportB) = RpcChannelTransport.memoryPair();
 
     peerA = RpcPeerEndpoint(transport: transportA, debugLabel: 'peerA');
     peerB = RpcPeerEndpoint(transport: transportB, debugLabel: 'peerB');

@@ -75,7 +75,7 @@ void main() {
   late _ParkingService service;
 
   setUp(() {
-    final pair = RpcInMemoryTransport.pair();
+    final pair = RpcChannelTransport.memoryPair();
     caller = RpcCallerEndpoint(transport: pair.$1);
     responder = RpcResponderEndpoint(transport: pair.$2);
     service = _ParkingService();

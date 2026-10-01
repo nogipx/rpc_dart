@@ -19,7 +19,7 @@ void main() {
     late ValidationServiceContract validationService;
 
     setUp(() {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       clientTransport = client;
       serverTransport = server;
 

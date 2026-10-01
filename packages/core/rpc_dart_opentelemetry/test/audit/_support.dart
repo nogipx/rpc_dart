@@ -48,7 +48,7 @@ RpcMiddlewareContext buildCall({
   String method = 'testMethod',
   RpcContext? context,
 }) {
-  final (_, serverTransport) = RpcInMemoryTransport.pair();
+  final (_, serverTransport) = RpcChannelTransport.memoryPair();
   final endpoint = RpcResponderEndpoint(transport: serverTransport);
   return RpcMiddlewareContext(
     endpoint: endpoint,

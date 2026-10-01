@@ -9,7 +9,7 @@ import 'package:test/test.dart';
 
 /// Builds a transport pair for these tests.
 (IRpcTransport, IRpcTransport) createTransportPair() =>
-    RpcInMemoryTransport.pair();
+    RpcChannelTransport.memoryPair();
 
 void main() {
   group('Unary RPC', () {

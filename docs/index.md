@@ -76,7 +76,7 @@ final class CalculatorResponder extends RpcResponderContract {
 }
 
 void main() async {
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 
   final server = RpcResponderEndpoint(transport: responderTransport);
   server.registerServiceContract(CalculatorResponder());

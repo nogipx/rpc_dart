@@ -27,7 +27,7 @@ void main() {
       test(
         'validation errors (codecs required / zero-copy supported)',
         () async {
-          final (client, rawServer) = RpcInMemoryTransport.pair();
+          final (client, rawServer) = RpcChannelTransport.memoryPair();
           final noZeroCopy = NoZeroCopyTransport(rawServer);
 
           expect(
@@ -62,7 +62,7 @@ void main() {
         'bindToMessageStream is idempotent and onError propagates',
         () async {
           final controller = StreamController<RpcTransportMessage>();
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
           final transport = server;
 
           final processor = StreamProcessor<RpcString, RpcString>(
@@ -98,7 +98,7 @@ void main() {
         'cancellation monitoring adds errors and stops processing',
         () async {
           final controller = StreamController<RpcTransportMessage>();
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
           final transport = server;
           final token = RpcCancellationToken();
 
@@ -145,7 +145,7 @@ void main() {
         'direct message branches: cast error, closed controller warning',
         () async {
           final controller = StreamController<RpcTransportMessage>();
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
 
           final processor = StreamProcessor<RpcString, RpcString>(
             transport: server,
@@ -196,7 +196,7 @@ void main() {
         'data message branches: zero-copy REPORTS serialized; parser and deserializer errors',
         () async {
           final controller = StreamController<RpcTransportMessage>();
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
 
           final zeroCopyProcessor = StreamProcessor<RpcString, RpcString>(
             transport: server,
@@ -310,7 +310,7 @@ void main() {
       test(
         'send()/sendError()/finishSending handle cancellation and transport-closed errors',
         () async {
-          final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+          final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
           final transport = ThrowingTransport(rawServer);
 
           final token = RpcCancellationToken.cancelled('cancelled');
@@ -358,7 +358,7 @@ void main() {
       test(
         'sendError sends combined headers when initial metadata not sent',
         () async {
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
 
           final trailers = Completer<RpcTransportMessage>();
           client.incomingMessages.listen((m) {
@@ -401,7 +401,7 @@ void main() {
       test(
         'send/finishSending swallow non-closed transport send errors',
         () async {
-          final (client, rawServer) = RpcInMemoryTransport.pair();
+          final (client, rawServer) = RpcChannelTransport.memoryPair();
           final transport = ThrowingTransport(rawServer)
             ..throwOnSendMessage = true
             ..throwOnSendMetadata = true
@@ -428,7 +428,7 @@ void main() {
 
     group('CallProcessor', () {
       test('constructor throws when context deadline already expired', () {
-        final (client, _) = RpcInMemoryTransport.pair();
+        final (client, _) = RpcChannelTransport.memoryPair();
         expect(
           () => CallProcessor<RpcString, RpcString>(
             transport: client,
@@ -447,7 +447,7 @@ void main() {
       test(
         'null context still sends x-request-id in initial metadata',
         () async {
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
 
           final metadataSeen = Completer<RpcMetadata>();
           server.incomingMessages.listen((m) {
@@ -482,7 +482,7 @@ void main() {
       );
 
       test('context deadline and traceId are forwarded', () async {
-        final (client, server) = RpcInMemoryTransport.pair();
+        final (client, server) = RpcChannelTransport.memoryPair();
 
         final deadline = DateTime.now().add(const Duration(minutes: 1));
         final context = RpcContext.withDeadline(deadline).withTraceId('t');
@@ -520,7 +520,7 @@ void main() {
       });
 
       test('cancellation sends cancellation metadata to server', () async {
-        final (client, server) = RpcInMemoryTransport.pair();
+        final (client, server) = RpcChannelTransport.memoryPair();
         final token = RpcCancellationToken();
         final context = RpcContext.withCancellation(token);
 
@@ -563,7 +563,7 @@ void main() {
       test(
         'response branches: direct cast error and ignore serialized in zero-copy mode',
         () async {
-          final (client, server) = RpcInMemoryTransport.pair();
+          final (client, server) = RpcChannelTransport.memoryPair();
 
           final zeroCopy = CallProcessor<RpcString, RpcString>(
             transport: client,
@@ -603,7 +603,7 @@ void main() {
       );
 
       test('serialized response deserialization error path', () async {
-        final (client, server) = RpcInMemoryTransport.pair();
+        final (client, server) = RpcChannelTransport.memoryPair();
 
         final badResponseCodec = _ThrowingCodec<RpcString>();
         final processor = CallProcessor<RpcString, RpcString>(

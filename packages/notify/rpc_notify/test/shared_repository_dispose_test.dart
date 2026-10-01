@@ -170,8 +170,8 @@ void main() {
       final shared = InMemoryNotifyRepository();
       addTearDown(shared.dispose);
 
-      final (callerA, responderA) = RpcInMemoryTransport.pair();
-      final (callerB, responderB) = RpcInMemoryTransport.pair();
+      final (callerA, responderA) = RpcChannelTransport.memoryPair();
+      final (callerB, responderB) = RpcChannelTransport.memoryPair();
       final endpointA = _serveConnection(responderA, shared, 'connA');
       final endpointB = _serveConnection(responderB, shared, 'connB');
       addTearDown(endpointA.close);

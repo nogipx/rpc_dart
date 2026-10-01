@@ -14,7 +14,7 @@ import '../utils/transport_wrappers.dart';
 void main() {
   group('RpcEndpointPingExchange', () {
     test('throws TimeoutException when no trailers arrive', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       addTearDown(() async {
         await client.close();
         await server.close();
@@ -41,7 +41,7 @@ void main() {
     });
 
     test('fails when stream ends without trailers', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       addTearDown(() async {
         await client.close();
         await server.close();
@@ -93,7 +93,7 @@ void main() {
     });
 
     test('fails when trailers contain non-OK grpc-status', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       addTearDown(() async {
         await client.close();
         await server.close();
@@ -134,7 +134,7 @@ void main() {
     });
 
     test('propagates send errors and cancels subscription', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       final throwingClient = ThrowingTransport(client)
         ..throwOnSendMetadata = true
         ..errorToThrow = StateError('send failed');
@@ -166,7 +166,7 @@ void main() {
 
   group('RpcCallerEndpoint.ping preconditions', () {
     test('throws when cancelled before sending ping', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       final caller = RpcCallerEndpoint(transport: client);
       final responder = RpcResponderEndpoint(transport: server)..start();
       addTearDown(() async {
@@ -184,7 +184,7 @@ void main() {
     });
 
     test('throws when deadline expired before sending ping', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       final caller = RpcCallerEndpoint(transport: client);
       final responder = RpcResponderEndpoint(transport: server)..start();
       addTearDown(() async {

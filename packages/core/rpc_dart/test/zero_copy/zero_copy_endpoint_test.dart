@@ -86,7 +86,7 @@ void main() {
     late TestService testService;
 
     setUp(() {
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       clientTransport = pair.$1;
       serverTransport = pair.$2;
 

@@ -34,7 +34,7 @@ All transports are interchangeable — you can swap them without touching servic
 The built-in in-process transport. Used for testing and for co-located services that run in the same isolate.
 
 ```dart
-final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 ```
 
 `pair()` returns two connected transports. Messages sent to one arrive on the other. When `supportsZeroCopy` is `true` (InMemory always is), the endpoint skips serialization and passes objects directly by reference.

@@ -19,19 +19,19 @@ void main() {
 
     setUp(() {
       // Создаем пары транспортов (клиент <-> сервер)
-      final userPair = RpcInMemoryTransport.pair();
+      final userPair = RpcChannelTransport.memoryPair();
       userClientTransport = userPair.$1;
       userServerTransport = userPair.$2;
 
-      final paymentPair = RpcInMemoryTransport.pair();
+      final paymentPair = RpcChannelTransport.memoryPair();
       paymentClientTransport = paymentPair.$1;
       paymentServerTransport = paymentPair.$2;
 
-      final premiumPair = RpcInMemoryTransport.pair();
+      final premiumPair = RpcChannelTransport.memoryPair();
       premiumClientTransport = premiumPair.$1;
       premiumServerTransport = premiumPair.$2;
 
-      final auditPair = RpcInMemoryTransport.pair();
+      final auditPair = RpcChannelTransport.memoryPair();
       auditClientTransport = auditPair.$1;
       auditServerTransport = auditPair.$2;
     });

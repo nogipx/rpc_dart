@@ -37,7 +37,7 @@ void main() {
         final token = RpcCancellationToken();
         final context = RpcContext.withCancellation(token);
 
-        final (client, rawServer) = RpcInMemoryTransport.pair();
+        final (client, rawServer) = RpcChannelTransport.memoryPair();
 
         // Zero-copy: in-memory transport, no codecs.
         final processor = StreamProcessor<RpcString, RpcString>(
@@ -92,7 +92,7 @@ void main() {
         final token = RpcCancellationToken();
         final context = RpcContext.withCancellation(token);
 
-        final (client, rawServer) = RpcInMemoryTransport.pair();
+        final (client, rawServer) = RpcChannelTransport.memoryPair();
 
         // Zero-copy: in-memory transport, no codecs.
         final processor = CallProcessor<RpcString, RpcString>(

@@ -21,7 +21,7 @@ void main() {
   test(
     'cancelling the serverStream subscription fires the call cancellation token',
     () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       final endpoint = RpcCallerEndpoint(transport: client);
       final codec = RpcCodec(RpcString.fromJson);
 

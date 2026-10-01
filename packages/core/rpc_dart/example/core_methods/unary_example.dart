@@ -15,7 +15,7 @@ class UnaryRpcExample {
     // logging configured via LogController
     print('\n=== Unary RPC with contracts and context ===\n');
     // The transports.
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     // The server endpoint, with its contracts registered.
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,

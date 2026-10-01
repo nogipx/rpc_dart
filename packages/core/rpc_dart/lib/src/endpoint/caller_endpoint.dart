@@ -118,7 +118,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase
           'Received server transport (isClient: false).\n'
           'Client endpoints must use transports with odd Stream IDs (1, 3, 5...).\n\n'
           'Correct usage:\n'
-          '  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();\n'
+          '  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();\n'
           '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
           '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
           'INCORRECT:\n'

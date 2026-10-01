@@ -13,7 +13,7 @@ SPDX-License-Identifier: MIT
 ## Creating a Pair
 
 ```dart
-final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 ```
 
 `pair()` returns two connected transports. Messages sent to one arrive on the other. The returned record is ordered `(caller, responder)`.
@@ -39,7 +39,7 @@ late CalculatorContractCaller caller;
 late RpcResponderEndpoint server;
 
 setUp(() {
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 
   server = RpcResponderEndpoint(transport: responderTransport);
   server.registerServiceContract(CalculatorResponder());
@@ -61,7 +61,7 @@ tearDown(() async {
 For services that run in the same process (e.g., a plugin architecture or a monolith with logical service boundaries):
 
 ```dart
-final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 
 final authServer = RpcResponderEndpoint(transport: responderTransport);
 authServer.registerServiceContract(AuthResponder());

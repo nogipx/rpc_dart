@@ -79,7 +79,7 @@ responder.start();
 ```dart
 
 // Разработка/Тестирование
-final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
 // Продакшн HTTP/2 (внутри async-функции)
 final httpTransport = await RpcHttp2CallerTransport.secureConnect(

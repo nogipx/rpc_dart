@@ -98,7 +98,7 @@ class RpcTestApp {
     }
 
     // In-memory transport pair for server modules.
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
     final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
 

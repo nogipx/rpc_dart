@@ -14,9 +14,11 @@
 // its own — so the fix is to give a timed attempt a private client and force it
 // closed when the timeout fires.
 //
-// Counted with lsof against this process, because an fd is the thing being
-// leaked and every indirect reading of it sits behind a retry the OS controls.
-// If lsof is missing the test SKIPS loudly rather than passing on no data.
+// Counted with lsof, because an fd is the thing being leaked and every indirect
+// reading of it sits behind a retry the OS controls. Counted against the
+// black-hole ADDRESS rather than against every TCP line, so the number belongs to
+// this test and not to whichever suites share the process. If lsof is missing the
+// test SKIPS loudly rather than passing on no data.
 //
 // The guard is the one that makes the fix safe rather than merely effective: a
 // connect that SUCCEEDS has had its socket detached from that client, so closing
@@ -43,13 +45,21 @@ const _timeout = Duration(milliseconds: 100);
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-Future<int?> _tcpFds() async {
+/// TCP descriptors held against the black-hole ADDRESS, not every TCP
+/// descriptor this process holds.
+///
+/// `lsof -p` reports the whole process, and `dart test` runs suites as isolates
+/// inside one — so a count of all TCP lines includes every socket every other
+/// suite has open, and this suite's neighbours open plenty. Filtering on the
+/// address makes the reading this test's own: nothing else in the repository
+/// connects to TEST-NET-1.
+Future<int?> _blackHoleFds() async {
   try {
     final out = await Process.run('lsof', ['-p', '$pid', '-nP']);
     if (out.exitCode != 0) return null;
     return '${out.stdout}'
         .split('\n')
-        .where((line) => line.contains('TCP'))
+        .where((line) => line.contains('TCP') && line.contains('192.0.2.1'))
         .length;
   } catch (_) {
     return null;
@@ -60,7 +70,7 @@ void main() {
   test(
     'WITNESS: a connect that timed out does not keep its descriptor',
     () async {
-      final before = await _tcpFds();
+      final before = await _blackHoleFds();
       if (before == null) {
         markTestSkipped('lsof unavailable: nothing here can be counted');
         return;
@@ -94,7 +104,7 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 2));
 
       expect(
-        (await _tcpFds())! - before,
+        (await _blackHoleFds())! - before,
         lessThan(_attempts ~/ 2),
         reason:
             'one descriptor per abandoned connect, held until the OS gives up — '

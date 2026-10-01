@@ -94,7 +94,8 @@ class NotifyServiceFactory {
     String subscriberLabel = 'NotifySubscriber',
     String publisherLabel = 'NotifyPublisher',
   }) async {
-    final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+    final (callerTransport, responderTransport) =
+        RpcChannelTransport.memoryPair();
 
     final repo = repository ?? InMemoryNotifyRepository();
     final server = createServer(

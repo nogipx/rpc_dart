@@ -93,7 +93,7 @@ Run with in-memory transport:
 
 ```dart
 void main() async {
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
   final responder = RpcResponderEndpoint(transport: serverTransport);
   responder.registerServiceContract(CalculatorResponder());
@@ -338,7 +338,7 @@ Future<Response> handle(Request req, {RpcContext? context}) async {
 
 ```dart
 test('sum', () async {
-  final (ct, st) = RpcInMemoryTransport.pair();
+  final (ct, st) = RpcChannelTransport.memoryPair();
   final responder = RpcResponderEndpoint(transport: st)
     ..registerServiceContract(CalculatorResponder())
     ..start();

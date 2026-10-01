@@ -211,7 +211,7 @@ void main() async {
     outputs: [ConsoleOutput()],
   );
 
-  final (client, server) = RpcInMemoryTransport.pair();
+  final (client, server) = RpcChannelTransport.memoryPair();
   final responder = RpcResponderEndpoint(transport: server, logger: rpcLog);
   final caller = RpcCallerEndpoint(transport: client, logger: rpcLog);
 

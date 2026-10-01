@@ -20,7 +20,8 @@ class CalculatorSerializeResponder
 
 Future<void> main() async {
   // logging configured via LogController
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) =
+      RpcChannelTransport.memoryPair();
 
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
   responderEndpoint.registerServiceContract(CalculatorSerializeResponder());

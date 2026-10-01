@@ -22,7 +22,8 @@ void main() {
   test(
     'cancelled server-stream call() surfaces RpcCancelledException',
     () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       // Handler that never completes — the stream stays open until cancelled.
       final server = ServerStreamResponder<RpcString, RpcString>(

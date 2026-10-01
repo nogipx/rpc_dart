@@ -18,7 +18,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('rate limiter does not keep operating after dispose()', () async {
-    final (clientT, serverT) = RpcInMemoryTransport.pair();
+    final (clientT, serverT) = RpcChannelTransport.memoryPair();
     final endpoint = RpcResponderEndpoint(transport: serverT);
     addTearDown(() async {
       await endpoint.close();

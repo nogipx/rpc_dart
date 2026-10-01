@@ -17,7 +17,7 @@ class ClientStreamingExample {
     // logging configured via LogController
     print('\n=== Client streaming (N requests -> 1 response) ===\n');
     // A connected pair of transports, one end each.
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     // The server endpoint.
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,

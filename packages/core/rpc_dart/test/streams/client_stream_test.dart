@@ -13,7 +13,8 @@ void main() {
     group('ClientStreamClient', () {
       test('sends several requests and gets one answer', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -67,7 +68,8 @@ void main() {
 
       test('handles an empty request stream', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -111,7 +113,8 @@ void main() {
 
       test('throws when the server fails', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -155,7 +158,8 @@ void main() {
 
       test('sends the requests in order', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         final receivedRequests = <RpcString>[];
 
         final server = ClientStreamResponder<RpcString, RpcString>(
@@ -207,7 +211,8 @@ void main() {
     group('ClientStreamServer', () {
       test('reads the request stream and answers once', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         final receivedRequests = <RpcString>[];
 
         final server = ClientStreamResponder<RpcString, RpcString>(
@@ -254,7 +259,8 @@ void main() {
 
       test('a handler that throws is reported', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -295,7 +301,8 @@ void main() {
 
       test('a server answers only its own method', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         var handlerCallCount = 0;
 
         final server = ClientStreamResponder<RpcString, RpcString>(
@@ -357,7 +364,8 @@ void main() {
     group('integration', () {
       test('a full client-streaming round', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -405,7 +413,8 @@ void main() {
 
       test('a large number of requests', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = ClientStreamResponder<RpcString, RpcString>(
           id: 1,

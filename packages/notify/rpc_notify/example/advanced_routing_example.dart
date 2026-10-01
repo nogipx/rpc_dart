@@ -19,13 +19,14 @@ Future<void> _demonstrateRealWorldRouting() async {
   print('-' * 50);
   // === СОЗДАЕМ ТРАНСПОРТЫ ДЛЯ РАЗНЫХ ДОМЕНОВ ===
   // Основные домены
-  final userTransportPair = RpcInMemoryTransport.pair();
-  final paymentV1TransportPair = RpcInMemoryTransport.pair();
-  final paymentV2TransportPair = RpcInMemoryTransport.pair(); // Новая версия
-  final orderTransportPair = RpcInMemoryTransport.pair();
+  final userTransportPair = RpcChannelTransport.memoryPair();
+  final paymentV1TransportPair = RpcChannelTransport.memoryPair();
+  final paymentV2TransportPair =
+      RpcChannelTransport.memoryPair(); // Новая версия
+  final orderTransportPair = RpcChannelTransport.memoryPair();
   // Специальные транспорты
-  final premiumUserTransportPair = RpcInMemoryTransport.pair(); // Для VIP
-  final auditTransportPair = RpcInMemoryTransport.pair(); // Для аудита
+  final premiumUserTransportPair = RpcChannelTransport.memoryPair(); // Для VIP
+  final auditTransportPair = RpcChannelTransport.memoryPair(); // Для аудита
   // === НАСТРАИВАЕМ СЕРВЕРЫ ===
   await _setupDomainServers([
     (userTransportPair.$2, 'UserService', 'Regular User Service'),

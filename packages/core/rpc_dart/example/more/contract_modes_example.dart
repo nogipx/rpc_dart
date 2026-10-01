@@ -196,7 +196,7 @@ final class AutoCaller extends RpcCallerContract {
 Future<void> main() async {
   print('Data transfer modes, chosen centrally\n');
   // A connected pair of transports.
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   // The responder endpoint, over serverTransport.
   final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
   // The caller endpoint, over clientTransport.

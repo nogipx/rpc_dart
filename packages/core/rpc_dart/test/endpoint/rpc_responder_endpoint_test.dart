@@ -122,7 +122,7 @@ void main() {
     late TestService testService;
 
     setUp(() {
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       clientTransport = pair.$1;
       serverTransport = pair.$2;
 
@@ -581,7 +581,7 @@ void main() {
       test('close() calls dispose() on every contract', () async {
         // This test needs an endpoint of its own.
         final (newCallerTransport, newResponderTransport) =
-            RpcInMemoryTransport.pair();
+            RpcChannelTransport.memoryPair();
         final newResponderEndpoint = RpcResponderEndpoint(
           transport: newResponderTransport,
         );

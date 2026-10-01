@@ -61,7 +61,7 @@ typedef _Rig = ({
 });
 
 _Rig _rig() {
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   final serverSaw = <RpcTransportMessage>[];
   serverTransport.incomingMessages.listen(serverSaw.add);
 

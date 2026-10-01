@@ -149,7 +149,8 @@ void main() {
 
   group('Contract unit test (in-memory)', () {
     test('handshake and send via in-memory transport', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final responder = RpcResponderEndpoint(transport: serverTransport);
       final caller = RpcCallerEndpoint(transport: clientTransport);

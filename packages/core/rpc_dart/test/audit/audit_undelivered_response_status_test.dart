@@ -121,7 +121,7 @@ final class _Svc extends RpcResponderContract {
 typedef _Rig = ({RpcCallerEndpoint caller, RpcResponderEndpoint responder});
 
 _Rig _rig() {
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   final responder = RpcResponderEndpoint(transport: serverTransport);
   responder.registerServiceContract(_Svc());
   responder.start();
@@ -305,7 +305,8 @@ void main() {
       required bool failASend,
       required bool sendErrorFirst,
     }) async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final trailers = <String>[];
       final tap = clientTransport.incomingMessages.listen((m) {
         final status = m.metadata?.getHeaderValue(RpcHeaders.grpcStatus);

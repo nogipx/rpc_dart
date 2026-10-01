@@ -9,7 +9,8 @@ import 'package:test/test.dart';
 void main() {
   group('RpcEndpoint health', () {
     test('caller endpoint reports healthy status when active', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final caller = RpcCallerEndpoint(transport: clientTransport);
       final responder = RpcResponderEndpoint(transport: serverTransport);
 
@@ -24,7 +25,8 @@ void main() {
     });
 
     test('responder endpoint health becomes closed after close()', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final caller = RpcCallerEndpoint(transport: clientTransport);
       final responder = RpcResponderEndpoint(transport: serverTransport);
 
@@ -42,7 +44,8 @@ void main() {
     test(
       'reconnect reflects transport status when endpoint already closed',
       () async {
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         final caller = RpcCallerEndpoint(transport: clientTransport);
         final responder = RpcResponderEndpoint(transport: serverTransport);
 

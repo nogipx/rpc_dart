@@ -23,7 +23,7 @@ void main() {
 
     setUp(() {
       // Real in-memory objects, not mocks.
-      final transportPair = RpcInMemoryTransport.pair();
+      final transportPair = RpcChannelTransport.memoryPair();
       serverTransport = transportPair.$2; // the server end
       codec = RpcCodec(RpcString.fromJson);
 

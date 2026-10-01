@@ -56,7 +56,7 @@ class _FakeServer implements IRpcServer {
   @override
   Future<void> start() async {
     _running = true;
-    final (_, serverTransport) = RpcInMemoryTransport.pair();
+    final (_, serverTransport) = RpcChannelTransport.memoryPair();
     final ep = RpcResponderEndpoint(transport: serverTransport);
     endpoint = ep;
     _onEndpoint(ep); // throws if buildContracts fails -> setup never completes

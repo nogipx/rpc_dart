@@ -23,7 +23,8 @@ import 'package:rpc_dart/rpc_dart.dart';
 void main() async {
   print('Using dispose() in RPC responders\n');
   // The transports.
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) =
+      RpcChannelTransport.memoryPair();
   final callerEndpoint = RpcCallerEndpoint(transport: callerTransport);
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
   // Services that own resources.

@@ -14,7 +14,7 @@ class BidirectionalStreamExample {
     // logging configured via LogController
     print('\n=== Bidirectional streaming with contracts ===\n');
     // The transports.
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     // The server endpoint, with its contract registered.
     final serverEndpoint = RpcResponderEndpoint(
       transport: serverTransport,

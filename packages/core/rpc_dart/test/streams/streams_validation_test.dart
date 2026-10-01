@@ -13,7 +13,8 @@ void main() {
     final codec = RpcCodec(RpcString.fromJson);
 
     test('UnaryCaller throws when context cancelled before call', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final token = RpcCancellationToken();
       token.cancel('stop');
       final context = RpcContext.withCancellation(token);
@@ -37,7 +38,8 @@ void main() {
     });
 
     test('UnaryCaller throws when context deadline already expired', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final context = RpcContext.withDeadline(
         DateTime.fromMillisecondsSinceEpoch(0),
       );
@@ -61,7 +63,8 @@ void main() {
     });
 
     test('ServerStreamCaller validates codec combinations', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       expect(
         () => ServerStreamCaller<RpcString, RpcString>(
@@ -90,7 +93,8 @@ void main() {
     });
 
     test('ServerStreamCaller validates zero-copy requirements', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final transport = NoZeroCopyTransport(clientTransport);
       expect(
         () => ServerStreamCaller<RpcString, RpcString>(
@@ -107,7 +111,8 @@ void main() {
     });
 
     test('ServerStreamCaller.send can only be called once', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final server = ServerStreamResponder<RpcString, RpcString>(
         id: 1,
@@ -145,7 +150,8 @@ void main() {
     });
 
     test('ClientStreamCaller.send throws after finishSending', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final server = ClientStreamResponder<RpcString, RpcString>(
         id: 1,
@@ -181,7 +187,8 @@ void main() {
     });
 
     test('ClientStreamCaller.finishSending throws when called twice', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final server = ClientStreamResponder<RpcString, RpcString>(
         id: 1,
@@ -217,7 +224,8 @@ void main() {
     });
 
     test('ClientStreamCaller errors on OK trailer without payload', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       // Emulate a server that ends the stream with OK but no payload.
       serverTransport.incomingMessages.listen((message) async {
@@ -252,7 +260,8 @@ void main() {
     test(
       'BidirectionalStreamCaller validates zero-copy requirements',
       () async {
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         final transport = NoZeroCopyTransport(clientTransport);
         expect(
           () => BidirectionalStreamCaller<RpcString, RpcString>(

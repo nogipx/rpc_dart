@@ -16,7 +16,7 @@ void main() {
     test(
       'UnaryCaller/UnaryResponder use serialized framing when zero-copy off',
       () async {
-        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final clientTransport = NoZeroCopyTransport(rawClient);
         final serverTransport = NoZeroCopyTransport(rawServer);
 
@@ -50,7 +50,7 @@ void main() {
     test(
       'UnaryResponder serialized path sends error trailer on handler throw',
       () async {
-        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final clientTransport = NoZeroCopyTransport(rawClient);
         final serverTransport = NoZeroCopyTransport(rawServer);
 
@@ -86,7 +86,7 @@ void main() {
     test(
       'UnaryResponder.handleDirectMessage falls back to serialization when zero-copy off',
       () async {
-        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final serverTransport = NoZeroCopyTransport(rawServer);
 
         final server = UnaryResponder<RpcString, RpcString>(
@@ -134,7 +134,7 @@ void main() {
     );
 
     test('UnaryResponder ignores messages for other stream id', () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+      final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
       final clientTransport = NoZeroCopyTransport(rawClient);
       final serverTransport = NoZeroCopyTransport(rawServer);
 
@@ -172,7 +172,7 @@ void main() {
     });
 
     test('UnaryResponder.handleMessage early-exit branches', () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+      final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
       final serverTransport = NoZeroCopyTransport(rawServer);
 
       final cancelled = RpcCancellationToken.cancelled('stop');

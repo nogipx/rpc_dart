@@ -13,7 +13,7 @@ void main() {
   group('RpcInMemoryTransport', () {
     group('pair factory', () {
       test('creates two connected transports', () {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
 
         expect(transport1, isA<IRpcTransport>());
         expect(transport2, isA<IRpcTransport>());
@@ -21,7 +21,7 @@ void main() {
       });
 
       test('transports are linked', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -38,7 +38,7 @@ void main() {
       });
 
       test('supports zero copy', () {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
 
         expect(transport1.supportsZeroCopy, isTrue);
         expect(transport2.supportsZeroCopy, isTrue);
@@ -47,7 +47,7 @@ void main() {
 
     group('createStream', () {
       test('creates unique stream IDs', () {
-        final (transport, _) = RpcInMemoryTransport.pair();
+        final (transport, _) = RpcChannelTransport.memoryPair();
 
         final streamId1 = transport.createStream();
         final streamId2 = transport.createStream();
@@ -59,7 +59,7 @@ void main() {
       });
 
       test('generates odd IDs for client', () {
-        final (clientTransport, _) = RpcInMemoryTransport.pair();
+        final (clientTransport, _) = RpcChannelTransport.memoryPair();
 
         final streamIds = List.generate(
           5,
@@ -72,7 +72,7 @@ void main() {
       });
 
       test('generates even IDs for server', () {
-        final (_, serverTransport) = RpcInMemoryTransport.pair();
+        final (_, serverTransport) = RpcChannelTransport.memoryPair();
 
         final streamIds = List.generate(
           5,
@@ -87,7 +87,7 @@ void main() {
 
     group('sendMessage and sendMetadata', () {
       test('sends messages between transports', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -105,7 +105,7 @@ void main() {
       });
 
       test('sends metadata between transports', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -126,7 +126,7 @@ void main() {
       });
 
       test('handles end stream flag', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -145,7 +145,7 @@ void main() {
       });
 
       test('bidirectional messaging', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final messages1 = <RpcTransportMessage>[];
         final messages2 = <RpcTransportMessage>[];
 
@@ -175,7 +175,7 @@ void main() {
 
     group('sendDirectObject', () {
       test('sends objects by reference (zero-copy)', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -193,7 +193,7 @@ void main() {
 
     group('finishSending', () {
       test('sends end stream message', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -210,7 +210,7 @@ void main() {
       });
 
       test('prevents duplicate send', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -230,7 +230,7 @@ void main() {
 
     group('getMessagesForStream', () {
       test('filters messages by stream ID', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final streamId1 = transport1.createStream();
         final streamId2 = transport1.createStream();
 
@@ -272,7 +272,7 @@ void main() {
       });
 
       test('does not receive messages from other streams', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final streamId1 = transport1.createStream();
         final streamId2 = transport1.createStream();
 
@@ -290,14 +290,14 @@ void main() {
 
     group('close', () {
       test('closes transport cleanly', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
 
         await transport1.close();
         await transport2.close();
       });
 
       test('stops receiving messages after close', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -320,7 +320,8 @@ void main() {
 
     group('integration tests', () {
       test('full message exchange cycle', () async {
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         final serverMessages = <RpcTransportMessage>[];
         final clientMessages = <RpcTransportMessage>[];
 
@@ -380,7 +381,7 @@ void main() {
       });
 
       test('multiple streams on one transport', () async {
-        final (transport1, transport2) = RpcInMemoryTransport.pair();
+        final (transport1, transport2) = RpcChannelTransport.memoryPair();
         final receivedMessages = <RpcTransportMessage>[];
 
         transport2.incomingMessages.listen(receivedMessages.add);
@@ -413,7 +414,8 @@ void main() {
 
   group('Partner auto-close', () {
     test('closing client transport closes server', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       expect(clientTransport.isClosed, isFalse);
       expect(serverTransport.isClosed, isFalse);
@@ -426,7 +428,8 @@ void main() {
     });
 
     test('closing server transport closes client', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       expect(clientTransport.isClosed, isFalse);
       expect(serverTransport.isClosed, isFalse);
@@ -439,7 +442,8 @@ void main() {
     });
 
     test('double close does not throw', () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       await Future.wait([clientTransport.close(), serverTransport.close()]);
 
@@ -452,7 +456,7 @@ void main() {
 
     group('health & reconnect', () {
       test('returns healthy when active', () async {
-        final (clientTransport, _) = RpcInMemoryTransport.pair();
+        final (clientTransport, _) = RpcChannelTransport.memoryPair();
 
         final status = await clientTransport.health();
 
@@ -460,7 +464,7 @@ void main() {
       });
 
       test('returns closed after close', () async {
-        final (clientTransport, _) = RpcInMemoryTransport.pair();
+        final (clientTransport, _) = RpcChannelTransport.memoryPair();
 
         await clientTransport.close();
 
@@ -470,7 +474,7 @@ void main() {
       });
 
       test('reconnect returns degraded', () async {
-        final (clientTransport, _) = RpcInMemoryTransport.pair();
+        final (clientTransport, _) = RpcChannelTransport.memoryPair();
 
         final status = await clientTransport.reconnect();
 

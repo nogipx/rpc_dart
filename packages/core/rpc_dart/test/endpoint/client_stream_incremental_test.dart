@@ -145,7 +145,7 @@ typedef _Rig = ({
 
 _Rig _connect({bool zeroCopy = false}) {
   final (client, server) = zeroCopy
-      ? RpcInMemoryTransport.pair()
+      ? RpcChannelTransport.memoryPair()
       : RpcChannelTransport.pair();
   final caller = RpcCallerEndpoint(transport: client);
   final responder = RpcResponderEndpoint(transport: server);

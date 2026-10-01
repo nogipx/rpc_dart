@@ -142,7 +142,7 @@ void main() {
   // tests above prove the rule; this proves the call site was rewired to obey
   // it, which is the half the placeholder broke.
   test('a server-stream caller receives the details message', () async {
-    final pair = RpcInMemoryTransport.pair();
+    final pair = RpcChannelTransport.memoryPair();
     final caller = RpcCallerEndpoint(transport: pair.$1);
     _answerWithForeignTrailer(pair.$2, innerMessage: 'user 42 not found');
     addTearDown(caller.close);

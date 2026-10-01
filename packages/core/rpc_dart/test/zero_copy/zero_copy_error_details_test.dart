@@ -92,7 +92,7 @@ typedef _Rig = ({
 });
 
 _Rig _connect() {
-  final (client, server) = RpcInMemoryTransport.pair();
+  final (client, server) = RpcChannelTransport.memoryPair();
   final caller = RpcCallerEndpoint(transport: client);
   final responder = RpcResponderEndpoint(transport: server);
   responder.registerServiceContract(_Contract());

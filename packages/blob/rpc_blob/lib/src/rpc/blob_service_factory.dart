@@ -101,7 +101,7 @@ class BlobServiceFactory {
     int uploadChunkBytes = BlobServiceClient.defaultChunkBytes,
     int? maxChunkBytes,
   }) async {
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     final server = createServer(
       transport: serverTransport,
       storage: storage,

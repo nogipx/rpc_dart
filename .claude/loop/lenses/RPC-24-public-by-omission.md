@@ -3,8 +3,8 @@ refines: U-23
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a package's public surface comes from a barrel that re-exports wholesale
 breaks: "wrong result: a type nobody meant to publish becomes a compatibility promise, and the implementation starts depending on its own public API."
-applied: [289, 290, 291, 292, 307, 409, 580]
-status: confirmed (round 291)
+applied: [289, 290, 291, 292, 307, 409, 580, 590]
+status: confirmed (round 590)
 ---
 
 # RPC-24 — Public by omission
@@ -98,3 +98,23 @@ greps find it.
 Once the tests moved to the internal barrel, the analyzer flagged their public
 import as redundant in all fourteen. A test that reaches internals has no
 business holding the public API too, and `unnecessary_import` says so for free.
+
+## Round 590 — the cost of a deprecation is the call sites, not the annotation
+
+The owner decided to deprecate one of two public names for one factory. The
+annotation is one line; the change is 225 call sites in 97 files across 9 packages
+plus the docs, because `melos run analyze` runs `--fatal-infos` and every internal
+use of a deprecated member is then fatal.
+
+> **A deprecation cannot be landed separately from its migration on a repository
+> whose gate treats infos as errors.** Count the call sites BEFORE answering how
+> expensive the rename is — `grep -c` is the whole estimate, and it was ten times
+> what the question implied.
+
+> **And the forwarder needs a guard of its own the moment the sweep completes.**
+> Nothing in the repository calls the deprecated name afterwards, so a later
+> cleanup can break it while every un-migrated caller still depends on it. One
+> test, holding the only permitted `ignore:` for that member, with the policy
+> argument ablated to prove it forwards rather than merely compiles.
+
+`../rounds/590-one-factory-one-name.md`, B-174.

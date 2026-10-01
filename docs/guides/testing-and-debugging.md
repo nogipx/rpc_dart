@@ -12,11 +12,11 @@ contracts, transports, and streaming logic in isolation or end-to-end.
 
 ## In-memory end-to-end tests
 
-`RpcInMemoryTransport.pair()` produces a connected client/server transport with
+`RpcChannelTransport.memoryPair()` produces a connected client/server transport with
 zero serialisation overhead. It is the quickest way to run integration tests.
 
 ```dart
-final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
 final responder = RpcResponderEndpoint(transport: serverTransport)
   ..registerServiceContract(CalculatorResponder())

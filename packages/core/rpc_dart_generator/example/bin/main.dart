@@ -33,7 +33,8 @@ class CalculatorResponder extends CalculatorContractResponder {
 }
 
 Future<void> main() async {
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) =
+      RpcChannelTransport.memoryPair();
 
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
   responderEndpoint.registerServiceContract(CalculatorResponder());

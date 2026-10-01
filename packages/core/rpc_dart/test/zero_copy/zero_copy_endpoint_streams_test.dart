@@ -121,7 +121,7 @@ void main() {
     late IRpcTransport serverTransport;
 
     setUp(() async {
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       clientTransport = pair.$1;
       serverTransport = pair.$2;
 

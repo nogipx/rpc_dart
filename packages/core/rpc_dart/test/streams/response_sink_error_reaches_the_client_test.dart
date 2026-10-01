@@ -32,7 +32,7 @@ typedef _Rig = ({
 });
 
 _Rig _pair() {
-  final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+  final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
   final clientTransport = NoZeroCopyTransport(rawClient);
   final serverTransport = NoZeroCopyTransport(rawServer);
 

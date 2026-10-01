@@ -12,7 +12,7 @@ import 'package:test/test.dart';
 // ---------------------------------------------------------------------------
 
 (IRpcReconnectableTransport client, IRpcReconnectableTransport server)
-_pair() => RpcInMemoryTransport.pair();
+_pair() => RpcChannelTransport.memoryPair();
 
 class _TransportQueue {
   _TransportQueue(this._transports);

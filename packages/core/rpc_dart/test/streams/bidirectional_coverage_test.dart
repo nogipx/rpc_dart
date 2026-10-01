@@ -15,7 +15,7 @@ void main() {
     final codec = RpcCodec(RpcString.fromJson);
 
     test('requestSink forwards requests and finishes on close', () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+      final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
       final clientTransport = NoZeroCopyTransport(rawClient);
       final serverTransport = NoZeroCopyTransport(rawServer);
 
@@ -59,7 +59,7 @@ void main() {
     test(
       'responseSink forwards responses and finishReceiving completes done',
       () async {
-        final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+        final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final clientTransport = NoZeroCopyTransport(rawClient);
         final serverTransport = NoZeroCopyTransport(rawServer);
 
@@ -111,7 +111,7 @@ void main() {
     );
 
     test('payloadResponses throws on non-OK gRPC trailer', () async {
-      final (rawClient, rawServer) = RpcInMemoryTransport.pair();
+      final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
       final clientTransport = NoZeroCopyTransport(rawClient);
       final serverTransport = NoZeroCopyTransport(rawServer);
 

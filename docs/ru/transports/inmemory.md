@@ -71,7 +71,7 @@ InMemory транспорт работает с парами транспорт�
 
 ```dart
 // Создаём пару соединённых транспортов
-final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
 // Настраиваем серверный эндпоинт
 final responder = RpcResponderEndpoint(transport: serverTransport);
@@ -222,7 +222,7 @@ class CalculatorCaller extends RpcCallerContract {
 
 void main() async {
   // Создаём пару InMemory транспортов
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   
   // Настраиваем responder эндпоинт
   final responder = RpcResponderEndpoint(transport: serverTransport);
@@ -294,7 +294,7 @@ late RpcCallerEndpoint caller;
 late CalculatorCaller calculator;
 
 setUp(() async {
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   
   responder = RpcResponderEndpoint(transport: serverTransport);
   responder.registerServiceContract(CalculatorResponder());
@@ -331,9 +331,9 @@ test('должен обрабатывать деление на ноль', () as
 ```dart
 void main() async {
   // Создаём пары транспортов для различных сервисов
-  final (userClientTransport, userServerTransport) = RpcInMemoryTransport.pair();
-  final (orderClientTransport, orderServerTransport) = RpcInMemoryTransport.pair();
-  final (paymentClientTransport, paymentServerTransport) = RpcInMemoryTransport.pair();
+  final (userClientTransport, userServerTransport) = RpcChannelTransport.memoryPair();
+  final (orderClientTransport, orderServerTransport) = RpcChannelTransport.memoryPair();
+  final (paymentClientTransport, paymentServerTransport) = RpcChannelTransport.memoryPair();
   
   // Настраиваем все responder'ы сервисов
   final userResponder = RpcResponderEndpoint(transport: userServerTransport);
@@ -477,7 +477,7 @@ InMemory транспорт работает только внутри одно�
 
 ```dart
 // ✅ Это работает - тот же процесс
-final (client, server) = RpcInMemoryTransport.pair();
+final (client, server) = RpcChannelTransport.memoryPair();
 
 // ❌ Это не работает - разные процессы
 // Нельзя использовать InMemory транспорт через границы процессов
@@ -492,8 +492,8 @@ final (client, server) = RpcInMemoryTransport.pair();
 // Используйте HTTP, WebSocket или другие сетевые транспорты
 
 // ✅ Используйте для монолитных приложений
-final (userClient, userServer) = RpcInMemoryTransport.pair();
-final (orderClient, orderServer) = RpcInMemoryTransport.pair();
+final (userClient, userServer) = RpcChannelTransport.memoryPair();
+final (orderClient, orderServer) = RpcChannelTransport.memoryPair();
 ```
 
 ### Соображения времени жизни объектов
@@ -526,7 +526,7 @@ void main() {
 late ServiceCaller service;
 
 setUp(() async {
-  final (client, server) = RpcInMemoryTransport.pair();
+  final (client, server) = RpcChannelTransport.memoryPair();
   // Настройка эндпоинтов...
   service = ServiceCaller(caller);
 });
@@ -561,7 +561,7 @@ return ProcessedImage(
 class HybridApplication {
   void setup() {
 // Внутренняя высокопроизводительная коммуникация
-final (cacheClient, cacheServer) = RpcInMemoryTransport.pair();
+final (cacheClient, cacheServer) = RpcChannelTransport.memoryPair();
 setupCacheService(cacheServer);
 
 // Внешняя API коммуникация через HTTP/2
@@ -610,7 +610,7 @@ abstract interface class ICalculatorContract {
 }
 
 // Настройка один раз
-final (client, server) = RpcInMemoryTransport.pair();
+final (client, server) = RpcChannelTransport.memoryPair();
 // ... настройка эндпоинтов ...
 
 // Использование везде
@@ -623,7 +623,7 @@ final result = await calculator.add(MathRequest(10, 5));
 
 ```dart
 // Разработка с InMemory
-final (client, server) = RpcInMemoryTransport.pair();
+final (client, server) = RpcChannelTransport.memoryPair();
 
 // Продакшн с HTTP/2
 final httpTransport = await RpcHttp2CallerTransport.secureConnect(

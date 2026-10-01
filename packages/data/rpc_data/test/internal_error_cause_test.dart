@@ -102,7 +102,8 @@ void main() {
     Future<void> startServer() async {
       reported = [];
       repository = _ThrowingRepository();
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
       final endpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'rpc-server',

@@ -48,7 +48,8 @@ class CalculatorV3Responder extends CalculatorContractV3Responder {
 }
 
 Future<void> main() async {
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) =
+      RpcChannelTransport.memoryPair();
 
   final responderEndpoint = RpcResponderEndpoint(transport: responderTransport);
   // Each responder handles its own slice of methods.

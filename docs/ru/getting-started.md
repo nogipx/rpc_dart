@@ -122,7 +122,7 @@ return callUnary<AddRequest, AddResponse>(
 
 void main() async {
   // Создаём пару InMemory транспортов
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   
   // Настраиваем responder endpoint
   final responder = RpcResponderEndpoint(transport: serverTransport);

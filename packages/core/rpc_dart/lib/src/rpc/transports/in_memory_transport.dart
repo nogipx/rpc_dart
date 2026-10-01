@@ -6,11 +6,10 @@
 import '../../core/_index.dart';
 import 'channel_transport.dart';
 
-/// High-speed in-memory transport with zero-copy support.
+/// Deprecated second name for [RpcChannelTransport.memoryPair].
 ///
-/// Delegates to [RpcChannelTransport] with a [RpcDirectMultiplexedChannel]
-/// under the hood. Use [pair] to create connected client/server transports
-/// for in-process communication or testing.
+/// This class holds no implementation: `pair` forwards, and it always did. Use
+/// `RpcChannelTransport.memoryPair` — the name whose class owns the code.
 abstract final class RpcInMemoryTransport {
   /// Creates a paired client/server in-memory transport with zero-copy;
   /// closing one side closes both.
@@ -19,6 +18,10 @@ abstract final class RpcInMemoryTransport {
   /// [RpcChannelTransport]s and carry a stream-id cursor. Narrowing the
   /// declared type erases that, and `RpcClientConnection`'s factory then
   /// refuses at compile time a transport that works perfectly at run time.
+  @Deprecated(
+    'Use RpcChannelTransport.memoryPair. One factory had two public names and '
+    'this is the one that only forwarded; it will be removed in the next major.',
+  )
   static (IRpcReconnectableTransport, IRpcReconnectableTransport) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {

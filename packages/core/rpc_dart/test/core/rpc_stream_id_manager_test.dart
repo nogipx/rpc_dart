@@ -136,7 +136,8 @@ void main() {
 
   group('through a transport', () {
     test('RpcInMemoryTransport issues and releases ids', () {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       // Ids issued on the client transport.
       final clientId1 = clientTransport.createStream(); // expected 1

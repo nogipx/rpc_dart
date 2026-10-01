@@ -14,7 +14,7 @@ import '../utils/transport_wrappers.dart';
 void main() {
   group('RpcResponderMethodRegistry', () {
     test('exports zero-copy methods with wrapped handlers', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       final responder = RpcResponderEndpoint(transport: server);
       addTearDown(() async {
         await responder.close();
@@ -65,7 +65,7 @@ void main() {
     });
 
     test('unregister ignores contract dispose errors', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       final responder = RpcResponderEndpoint(transport: server);
       addTearDown(() async {
         await responder.close();
@@ -82,7 +82,7 @@ void main() {
 
   group('RpcResponderPingHandler', () {
     test('responds with timestamps and debug label', () async {
-      final (client, server) = RpcInMemoryTransport.pair();
+      final (client, server) = RpcChannelTransport.memoryPair();
       addTearDown(() async {
         await client.close();
         await server.close();
@@ -131,7 +131,7 @@ void main() {
     });
 
     test('on transport error sends INTERNAL trailers when possible', () async {
-      final (client, serverInner) = RpcInMemoryTransport.pair();
+      final (client, serverInner) = RpcChannelTransport.memoryPair();
 
       final server = _ThrowOnceOnSendMetadata(serverInner)
         ..errorToThrow = StateError('fail once');
@@ -179,7 +179,7 @@ void main() {
     });
 
     test('still completes onComplete when transport fails', () async {
-      final (client, serverInner) = RpcInMemoryTransport.pair();
+      final (client, serverInner) = RpcChannelTransport.memoryPair();
       final server = ThrowingTransport(serverInner)
         ..throwOnSendMetadata = true
         ..errorToThrow = StateError('always fail');

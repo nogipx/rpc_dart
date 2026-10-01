@@ -117,7 +117,7 @@ final class _Svc extends RpcResponderContract {
 void main() {
   test('one listener on the connection, whatever the load', () async {
     for (final parked in [1, 10, 50]) {
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       final counting = _CountingTransport(pair.$2);
       final caller = RpcCallerEndpoint(transport: pair.$1);
       final responder = RpcResponderEndpoint(transport: counting);
@@ -159,7 +159,7 @@ void main() {
   // transport error that does NOT close the stream is still answered -- and
   // this is the half round 393 refused to drop the subscription without.
   test('GUARD: the handler still gets its answer', () async {
-    final pair = RpcInMemoryTransport.pair();
+    final pair = RpcChannelTransport.memoryPair();
     final caller = RpcCallerEndpoint(transport: pair.$1);
     final responder = RpcResponderEndpoint(transport: pair.$2);
     final park = Completer<void>();

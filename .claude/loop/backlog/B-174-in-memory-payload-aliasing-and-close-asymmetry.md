@@ -1,11 +1,11 @@
 ---
-status: awaiting owner (round 576)
+status: closed (round 590)
 round: 576
 commit: b9a491c4
 release: changelog
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/in_memory_transport.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
 probe: P-197
-reason: "owner decision — what is left is claim 4, one factory under two public names (`RpcInMemoryTransport.pair` and `RpcChannelTransport.memoryPair`). Picking one is a breaking rename. Claims 1, 2 and 3 are measured and answered; the `cost` grading was wrong for claim 1, which had a witness"
+reason: "all four claims answered. Claims 1-3 measured in 575-576; claim 4 decided by the owner in the round-590 review (deprecate `.pair`, keep `memoryPair`) and carried out as a 225-site sweep, because `--fatal-infos` makes every internal use of a deprecated member fatal"
 ---
 
 # B-174 — in-memory: payloads are aliased and delivered later; close drops frames asymmetrically; two names for one factory
@@ -113,4 +113,12 @@ Also unmeasured: whether any OTHER transport aliases a sent payload. The rule no
 
 ## Owner decision
 
-—
+**Option 2, round 590: deprecate `RpcInMemoryTransport.pair` in favour of
+`RpcChannelTransport.memoryPair`.** The surviving name is the one whose class owns the
+implementation; removal is a later major.
+
+Cost reported to the owner before carrying it out, because it is not the one-line
+annotation the question implied: `melos run analyze` runs `--fatal-infos`, so every
+internal use of a deprecated member is fatal, and there are **201 call sites in 80
+Dart files across 9 packages** plus the docs. The annotation and the migration are one
+change or the gate is red.

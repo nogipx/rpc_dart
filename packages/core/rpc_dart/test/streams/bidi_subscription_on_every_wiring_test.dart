@@ -104,7 +104,7 @@ void main() {
 
   test('WITNESS: a zero-copy subscription reaches the server', () async {
     // The other branch of _ensureBidirectionalResponder.
-    final (client, server) = RpcInMemoryTransport.pair();
+    final (client, server) = RpcChannelTransport.memoryPair();
     final caller = RpcCallerEndpoint(transport: client);
     final responder = RpcResponderEndpoint(transport: server);
     responder.registerServiceContract(_ZeroCopyContract());

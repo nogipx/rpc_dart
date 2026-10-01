@@ -59,7 +59,7 @@ void main() {
           );
           final logger = controller.scope('test');
 
-          final (client, rawServer) = RpcInMemoryTransport.pair();
+          final (client, rawServer) = RpcChannelTransport.memoryPair();
           final transport = ThrowingTransport(rawServer)
             ..throwOnSendMessage = true
             ..throwOnSendMetadata = true
@@ -105,7 +105,7 @@ void main() {
           );
           final logger = controller.scope('test');
 
-          final (client, rawServer) = RpcInMemoryTransport.pair();
+          final (client, rawServer) = RpcChannelTransport.memoryPair();
           final transport = ThrowingTransport(rawServer)
             ..throwOnSendMessage = true
             ..throwOnSendMetadata = true

@@ -26,7 +26,7 @@ void main() {
         await runZonedGuarded(() async {
           final t = buildTracer();
           final (clientTransport, serverTransport) =
-              RpcInMemoryTransport.pair();
+              RpcChannelTransport.memoryPair();
           final client = RpcCallerEndpoint(transport: clientTransport);
           final server = RpcResponderEndpoint(transport: serverTransport)
             ..addInterceptor(OtelRpcInterceptor(tracer: t.tracer));
@@ -66,7 +66,7 @@ void main() {
         await runZonedGuarded(() async {
           final t = buildTracer();
           final (clientTransport, serverTransport) =
-              RpcInMemoryTransport.pair();
+              RpcChannelTransport.memoryPair();
           final client = RpcCallerEndpoint(transport: clientTransport);
           final server = RpcResponderEndpoint(transport: serverTransport)
             ..addInterceptor(OtelRpcInterceptor(tracer: t.tracer));

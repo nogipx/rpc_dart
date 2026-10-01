@@ -27,7 +27,7 @@ import 'package:test/test.dart';
 void main() {
   test('finding 3: attaching a second incomingMessages listener after start() '
       'must not throw or steal', () async {
-    final (clientT, serverT) = RpcInMemoryTransport.pair();
+    final (clientT, serverT) = RpcChannelTransport.memoryPair();
 
     final responder = RpcResponderEndpoint(transport: serverT);
     responder.start();

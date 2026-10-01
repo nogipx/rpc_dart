@@ -55,7 +55,7 @@ class DataServiceFactory {
     String serverLabel = 'DataResponder',
     String clientLabel = 'DataCaller',
   }) async {
-    final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+    final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     final repo = repository ?? InMemoryDataRepository();
     final server = createServer(
       transport: serverTransport,

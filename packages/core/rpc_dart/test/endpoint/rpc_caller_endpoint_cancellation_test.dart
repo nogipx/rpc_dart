@@ -101,7 +101,8 @@ void main() {
 
     setUp(() async {
       // A transport pair.
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       // The endpoints.
       callerEndpoint = RpcCallerEndpoint(transport: clientTransport);

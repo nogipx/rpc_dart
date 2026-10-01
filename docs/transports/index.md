@@ -48,7 +48,7 @@ The only change required is the transport construction. Everything else stays th
 
 ```dart
 // Testing
-final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 
 // Production — HTTP/2
 final callerTransport = await RpcHttp2CallerTransport.secureConnect(

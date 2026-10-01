@@ -37,7 +37,7 @@ class _ServerWithUnhealthyEndpoint implements IRpcServer {
 
 void main() {
   test('overall health reflects an unhealthy/closed endpoint', () async {
-    final (clientT, serverT) = RpcInMemoryTransport.pair();
+    final (clientT, serverT) = RpcChannelTransport.memoryPair();
     final ep = RpcResponderEndpoint(transport: serverT);
     ep.start();
     // Close the endpoint so its metrics report unhealthy (isActive=false,

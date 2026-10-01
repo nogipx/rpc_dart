@@ -148,7 +148,7 @@ import '../lib/src/calculator_responder.dart';
 
 Future<void> main() async {
   // Transport pair: caller side and responder side
-  final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+  final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 
   // Server
   final server = RpcResponderEndpoint(transport: responderTransport);
@@ -176,14 +176,14 @@ Future<void> main() async {
 
 !!! note "Swapping transports"
     The only thing that changes when moving to production is the transport construction line.
-    Replace `RpcInMemoryTransport.pair()` with a WebSocket, HTTP/2, or Isolate transport —
+    Replace `RpcChannelTransport.memoryPair()` with a WebSocket, HTTP/2, or Isolate transport —
     the service code stays identical.
 
 ---
 
 ## 6. Write a Test
 
-`RpcInMemoryTransport.pair()` creates a fully in-process bidirectional transport — no network, no ports, fast:
+`RpcChannelTransport.memoryPair()` creates a fully in-process bidirectional transport — no network, no ports, fast:
 
 ```dart
 // test/calculator_test.dart
@@ -197,7 +197,7 @@ void main() {
   late RpcResponderEndpoint server;
 
   setUp(() {
-    final (callerTransport, responderTransport) = RpcInMemoryTransport.pair();
+    final (callerTransport, responderTransport) = RpcChannelTransport.memoryPair();
 
     server = RpcResponderEndpoint(transport: responderTransport);
     server.registerServiceContract(CalculatorResponder());

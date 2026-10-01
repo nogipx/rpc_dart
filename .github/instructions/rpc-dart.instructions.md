@@ -69,7 +69,7 @@ Use melos scripts (one-time: `dart pub global activate melos`):
 When creating RPC connections:
 ```dart
 // Local development/testing
-final (client, server) = RpcInMemoryTransport.pair();
+final (client, server) = RpcChannelTransport.memoryPair();
 
 // Endpoints
 final responder = RpcResponderEndpoint(transport: server);
@@ -165,7 +165,7 @@ class MockUserService extends Mock implements UserCaller {}
 
 ### Integration Tests (Real RPC)
 ```dart
-final (client, server) = RpcInMemoryTransport.pair();
+final (client, server) = RpcChannelTransport.memoryPair();
 final endpoint = RpcResponderEndpoint(transport: server);
 endpoint.registerServiceContract(TestService());
 endpoint.start();

@@ -93,7 +93,7 @@ final class _CodecSvc extends RpcResponderContract {
 }
 
 RpcCallerEndpoint _rig() {
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   final responder = RpcResponderEndpoint(transport: serverTransport);
   responder.registerServiceContract(_ZeroCopySvc());
   responder.registerServiceContract(_CodecSvc());

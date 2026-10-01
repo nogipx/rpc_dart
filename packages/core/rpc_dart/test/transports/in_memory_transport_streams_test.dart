@@ -14,7 +14,7 @@ void main() {
     late IRpcTransport serverTransport;
 
     setUp(() {
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       clientTransport = pair.$1;
       serverTransport = pair.$2;
     });
@@ -108,7 +108,7 @@ void main() {
       }
 
       // A fresh transport.
-      final newPair = RpcInMemoryTransport.pair();
+      final newPair = RpcChannelTransport.memoryPair();
       final newClientTransport = newPair.$1;
 
       try {
@@ -151,7 +151,7 @@ void main() {
       await clientTransport.close();
       await serverTransport.close();
 
-      final newPair = RpcInMemoryTransport.pair();
+      final newPair = RpcChannelTransport.memoryPair();
       final newClientTransport = newPair.$1;
 
       try {

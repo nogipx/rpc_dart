@@ -13,7 +13,8 @@ void main() {
     group('BidirectionalStreamClient', () {
       test('the caller sends and receives both ways', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -80,7 +81,8 @@ void main() {
     group('BidirectionalStreamServer', () {
       test('the responder receives and sends both ways', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -152,7 +154,8 @@ void main() {
 
       test('a server answers only its own method', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
         var handlerCallCount = 0;
 
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
@@ -212,7 +215,8 @@ void main() {
     group('integration', () {
       test('a full bidirectional round', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,
@@ -285,7 +289,8 @@ void main() {
 
       test('a large number of messages', () async {
         // Arrange
-        final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+        final (clientTransport, serverTransport) =
+            RpcChannelTransport.memoryPair();
 
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,

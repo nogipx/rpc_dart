@@ -129,7 +129,7 @@ The `RpcInMemoryTransport` makes it trivial to test streaming handlers without a
 network stack:
 
 ```dart
-final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 final responder = RpcResponderEndpoint(transport: serverTransport)
   ..registerServiceContract(ChatContract())
   ..start();

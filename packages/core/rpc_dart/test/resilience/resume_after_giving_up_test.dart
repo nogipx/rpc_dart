@@ -46,7 +46,7 @@ void main() {
       transportFactory: () async {
         calls++;
         if (!peerUp) throw StateError('peer is down');
-        final (client, _) = RpcInMemoryTransport.pair();
+        final (client, _) = RpcChannelTransport.memoryPair();
         made.add(client);
         return client;
       },

@@ -62,7 +62,7 @@ void main() {
         useSSL: useSSL,
         pathStyle: pathStyle,
       );
-      final pair = RpcInMemoryTransport.pair();
+      final pair = RpcChannelTransport.memoryPair();
       caller = pair.$1;
       responder = pair.$2;
       server = BlobServiceFactory.createServer(

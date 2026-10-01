@@ -22,7 +22,8 @@ void main() {
   test(
     'ServerStreamCaller.responses surfaces non-OK trailer as an error',
     () async {
-      final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
 
       final server = ServerStreamResponder<RpcString, RpcString>(
         id: 1,

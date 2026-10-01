@@ -464,7 +464,7 @@ late RpcResponderEndpoint responder;
 late RpcCallerEndpoint caller;
 
 setUp(() async {
-  final (clientTransport, serverTransport) = RpcInMemoryTransport.pair();
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   
   responder = RpcResponderEndpoint(transport: serverTransport);
   responder.registerServiceContract(MockUserService());
