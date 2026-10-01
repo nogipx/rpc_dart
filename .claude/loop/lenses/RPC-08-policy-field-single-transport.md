@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563]
 status: confirmed (round 554)
 ---
 
@@ -435,3 +435,30 @@ http2   TWO concurrent   started + threw   isRunning=false  call -> ok:x  PORT S
 
 `../rounds/560-the-guard-was-behind-the-await.md`,
 `../probes/P-184-a-start-guard-behind-its-own-await.md`, B-151.
+
+## Round 563 — a bound that covered one phase of an operation and not the others
+
+`_proxyHandshakeTimeout` bounds a proxy's CONNECT response. The socket connect and the TLS handshake in
+the same method had nothing, so a dropped SYN waited on the OS.
+
+```
+  refused, bound at 2s        OSError after 10ms
+  black-holed, bound at 2s    OSError after 1730ms
+  black-holed, bound OFF      STILL PENDING at the probe cap of 8s
+```
+
+> **A field whose doc names a risk is evidence that somebody saw the risk, not that they covered it.**
+> `_proxyHandshakeTimeout`'s own comment says "Unbounded, this hangs an application at STARTUP: connect()
+> is what it awaits" — and it bounds one of the three things `connect()` awaits. The sibling that exists
+> is where to look for the ones that do not.
+
+> **`timeout:` and `.timeout()` are not the same fix.** The wrapper abandons the future while the
+> operation carries on, which for a connect means a socket nobody holds and nobody closes. Where the
+> library offers its own parameter, the wrapper is a leak wearing a fix's clothes.
+
+> **A default longer than the probe is indistinguishable from no default.** Capped at 12 s against a 30 s
+> default, the arm read `STILL PENDING` with the fix in place — the exact output the defect produces.
+> Drive the knob by argument; assert the default separately if at all.
+
+`../rounds/563-the-bound-the-comment-described-and-did-not-provide.md`,
+`../probes/P-186-what-bounds-a-connect-into-a-hole.md`, B-182.

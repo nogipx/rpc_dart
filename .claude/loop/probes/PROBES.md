@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-186](P-186-what-bounds-a-connect-into-a-hole.md)** valid (round 563),
+  rpc_dart_http2 — times a connect against three addresses: a REFUSED loopback port (10 ms, the control
+  that prompt failures stay prompt), a BLACK HOLE with the bound passed explicitly (1730 ms), and the
+  same hole with the bound OFF (still pending at 8 s). **That third row is the canary** — without it
+  `1730ms` could be the network answering rather than the timeout firing. `198.51.100.1` is TEST-NET-2,
+  reserved and unrouted, so its SYN is dropped rather than refused, which is the whole difference. **The
+  bound is driven by argument, never from the default**: the shipped default is 30 s, so a probe capped
+  below it reads `STILL PENDING` with the fix already in. **Deliberately NOT in the gate** — whether a
+  network drops or refuses that address is outside this repo's control, and a refusing firewall turns the
+  black-hole rows into the refused row.
 - **[P-185](P-185-two-paths-release-one-connection.md)** valid (round 562),
   rpc_dart_http2 — three instruments for two claims: callback counts per connection, a 200x
   connect-and-RST loop inside a guarded zone **followed by a real call** ("still running" is a flag a

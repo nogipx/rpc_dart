@@ -296,6 +296,7 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration proxyHandshakeTimeout = _proxyHandshakeTimeout,
+    Duration? connectTimeout = _connectTimeout,
     Duration? pingInterval,
     Duration? pingTimeout,
   }) async {
@@ -317,10 +318,13 @@ class RpcHttp2CallerTransport
           logger: logger,
         );
       }
+      // See the h2c path: `timeout:` releases the attempt, an outer wrapper does
+      // not. This one also covers the TLS handshake.
       final socket = await SecureSocket.connect(
         host,
         port,
         supportedProtocols: ['h2'],
+        timeout: connectTimeout,
       );
       // The proxy path below has always done this; the direct path had not, so
       // the same class produced differently configured sockets. See
@@ -416,6 +420,7 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration proxyHandshakeTimeout = _proxyHandshakeTimeout,
+    Duration? connectTimeout = _connectTimeout,
     Duration? pingInterval,
     Duration? pingTimeout,
   }) async {
@@ -437,7 +442,10 @@ class RpcHttp2CallerTransport
           logger: logger,
         );
       }
-      final socket = await Socket.connect(host, port);
+      // `timeout:` rather than an outer `.timeout()`: dart:io abandons the
+      // attempt and releases the socket, where wrapping the future would leave
+      // the connect running with nobody to close what it eventually produces.
+      final socket = await Socket.connect(host, port, timeout: connectTimeout);
       // See disableNagle: same reason as the h2c/TLS and proxy paths.
       disableNagle(socket, logger: logger, what: 'h2c socket to $host:$port');
       return _guardedConnection(
@@ -473,6 +481,19 @@ class RpcHttp2CallerTransport
   /// awaits, and a proxy that accepts the TCP connection and then says nothing
   /// leaves that future pending forever.
   static const Duration _proxyHandshakeTimeout = Duration(seconds: 30);
+
+  /// How long the SOCKET may take to come up, TLS handshake included.
+  ///
+  /// The sibling above bounds a proxy's CONNECT response and nothing else, so an
+  /// address whose SYN is DROPPED rather than refused left `connect()` pending
+  /// with no bound of ours at all — the OS default, which is around 75 s and can
+  /// be longer. Measured: a refused port fails in 10 ms, a black-holed one was
+  /// still pending at 12 s.
+  ///
+  /// This is the bound the proxy field's own doc describes and did not provide:
+  /// `connect()` is what an application awaits at startup. Pass null for the old
+  /// behaviour of waiting on the OS.
+  static const Duration _connectTimeout = Duration(seconds: 30);
 
   /// Ceiling on a proxy's CONNECT response headers.
   ///
