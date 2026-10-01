@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-209](P-209-what-a-refused-bomb-leaves-behind.md)** valid (round 591),
+  rpc_dart — **the control is the arm that GROWS, which is the whole reading**: 20000 successful
+  decompressions (reaching `close()`) against 20000 refusals (skipping it) give `+12/+12`, `+30/+6`,
+  `+31/-53` MiB across three runs. If the skipped close accumulated native filters the witness would be
+  the climbing arm; it is not, and once it handed 53 MiB back mid-arm. **GC is deliberately not encouraged
+  between arms** — the claim is that release happens at a finaliser rather than at the throw, so a forced
+  collection would measure the finaliser working and say nothing about when. Cannot create the one condition
+  that would keep the claim alive (low GC pressure) and explains why: tripping the limit requires allocating
+  up to it. Also prices the sketched fix, which turned out free — `close()` after the throw is clean
 - **[P-208](P-208-how-much-margin-a-timing-assertion-has.md)** valid (round 588),
   rpc_dart — **asks the one question that converts "flaky" into a quantity: what is the MARGIN?** A 250 ms
   settle requiring a parked sender, run at six settles with the counter the test throws away: the park arrives

@@ -3,7 +3,7 @@ refines: U-08
 paths: [packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: a server-side entry point has rejection exits that run before the request is registered
 breaks: DoS.
-applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397, 399, 400, 532]
+applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397, 399, 400, 532, 591]
 status: confirmed (round 397)
 ---
 
@@ -273,3 +273,34 @@ zero for ten real handshakes.
 > ourselves means DRAINING them ourselves, so a hold that existed only on servers
 > with a gate configured now exists on all of them. Bounded, and the same bound — but
 > the round that widens a surface owes the note.
+
+## Round 591 — the refusal that pays for its own cleanup
+
+Round 399 added the Ask's second clause: cheaper for the attacker AND dearer for
+the server. 591 is the first application where the SERVER side comes back negative
+for a structural reason worth keeping.
+
+B-207: the decompression limit throws from inside the sink, so `close()` is skipped
+and the native zlib filter waits for a finaliser — "at a rate the peer chooses".
+
+```
+                 CONTROL   WITNESS
+20000 attempts   +30 MiB    +6 MiB
+20000 attempts   +31 MiB   -53 MiB
+```
+
+> **A refusal path that must do the expensive work in order to decide to refuse
+> cannot be driven cheaply, and that bounds its own cost.** Tripping this limit
+> requires decompressing UP TO the limit, so every refusal generates GC pressure in
+> proportion to the ceiling it is about to breach — which is exactly what runs the
+> finaliser the lead was worried about. Before pricing a refusal, ask what the
+> SERVER had to spend to reach the decision: if that spend is itself the cleanup
+> budget, the leak is self-limiting.
+
+> **And the control is the arm that should GROW.** Here it is the successful
+> decompressions, which reach `close()` properly. Naming which arm is expected to
+> climb before running it is what stops a null result reading as "the instrument
+> saw nothing".
+
+`../probes/P-209-what-a-refused-bomb-leaves-behind.md`,
+`../rounds/591-the-refusal-pays-for-its-own-cleanup.md`, B-207.
