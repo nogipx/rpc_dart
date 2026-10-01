@@ -326,7 +326,16 @@ class RpcHttp2Server implements IRpcServer {
   /// subscriptions) stays held for the life of the process: one leak per client
   /// disconnect.
   void _releaseEndpoint(RpcResponderEndpoint endpoint, Socket socket) {
-    _endpoints.remove(endpoint);
+    // ONCE per connection. Two paths reach this for the same one: the preface
+    // deadline releases the endpoint and then destroys the socket, whose `done`
+    // releases it again — so `onConnectionClosed` fired TWICE for a connection
+    // reclaimed that way and once for an ordinary close. A user's callback
+    // double-counting connections is the visible half; whatever it releases
+    // being released twice is the other.
+    //
+    // `_endpoints.remove` answers it: the list is the registry of live
+    // connections and the second call finds nothing to remove.
+    if (!_endpoints.remove(endpoint)) return;
     _connections.remove(endpoint);
     unawaited(
       endpoint.close().catchError((Object error) {

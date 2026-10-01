@@ -3,7 +3,7 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
 breaks: a connection leak; or a running call detached from everything that can stop it.
-applied: [241, 401, 487, 503]
+applied: [241, 401, 487, 503, 562]
 status: confirmed (round 487)
 ---
 
@@ -209,3 +209,31 @@ internal conflicts, which removes a dependence on a guarantee held in another cl
 
 `../probes/P-141-what-a-failed-registration-leaves-behind.md`,
 `../rounds/503-the-throw-that-left-half-a-service.md`, B-112.
+
+## Round 562 — the lifecycle was driven twice by the CODE, not by a caller
+
+Every application above drives an API twice from outside. Here two internal paths did it: the preface
+deadline released the connection's endpoint and then destroyed the socket, whose `done` released it
+again. A user's `onConnectionClosed` counted two closes for one connection.
+
+```
+  silent, preface deadline    opened=1  closed=2   ->  closed=1
+  speaks h2, closes politely  opened=1  closed=1
+```
+
+> **Two teardown paths for one resource is the same defect as a caller calling close twice, and
+> harder to see — nobody wrote the second call.** The place to look is any teardown that both
+> *reclaims* and *destroys*: the destroy is itself an event something else listens for. Ask what the
+> socket's own `done` does after you have already cleaned up.
+
+> **The registry you remove from is the idempotency guard you already have.** No new flag was needed:
+> `_endpoints` is the list of live connections, so `if (!_endpoints.remove(endpoint)) return;` makes
+> the close, the map removal and the callback fire once. A `bool _released` would have been a second
+> source of truth about the same fact.
+
+> **The paired half of the lead was REFUTED, and the counting control is what made the refutation
+> safe.** `opened=1` in every row says the open callback was never double-fired, so the guard is
+> witnessed on the close half only and is not claimed for the other.
+
+`../rounds/562-one-close-became-two-and-the-crash-was-not-there.md`,
+`../probes/P-185-two-paths-release-one-connection.md`, B-192.

@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-185](P-185-two-paths-release-one-connection.md)** valid (round 562),
+  rpc_dart_http2 — three instruments for two claims: callback counts per connection, a 200x
+  connect-and-RST loop inside a guarded zone **followed by a real call** ("still running" is a flag a
+  dying isolate still reports), and the address read in three socket states. **That third arm is the
+  positive control that turns an absence into a refutation** — `just accepted` and `peer reset, still
+  open` both answer, `after our own destroy()` throws, so the throwing state needs OUR end closed and
+  the accept path cannot be in it. No logger attached anywhere, because the read is unconditional while
+  only being used under `isDebug`. `opened=1` in every row is a third control: the guard added for the
+  close half was never needed for the open half.
 - **[P-184](P-184-a-start-guard-behind-its-own-await.md)** valid (round 560),
   rpc_dart_http + rpc_dart_http2 — two files, one question: what two concurrent starts do to a server
   that is already binding. **A FIXED port is the whole rig** — with `port: 0` each concurrent bind gets

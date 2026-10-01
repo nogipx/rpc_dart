@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: open (round 562 fixed the double close and REFUTED the crash; four items remain)
+round: 562
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
 probe: none — static read, nothing run
@@ -34,6 +34,52 @@ Connect-and-RST loop against the accept path.
 
 Guard `_releaseEndpoint`; move the address read inside the try; `Future.wait` on
 stop.
+
+## Outcome (round 562) — the double close is real; the crash is not
+
+`../rounds/562-one-close-became-two-and-the-crash-was-not-there.md`. Bench
+`../probes/P-185-two-paths-release-one-connection.md`.
+
+```
+  silent, preface deadline    opened=1  closed=2   ->  closed=1
+  speaks h2, closes politely  opened=1  closed=1      (the control)
+
+  200 x connect+RST   escaped=0   then a real call -> ok:x
+```
+
+**Claim 1 CONFIRMED and fixed in one line.** `_endpoints` is the registry of live connections, so
+`if (!_endpoints.remove(endpoint)) return;` makes the whole release idempotent — endpoint close,
+connection map, callback. The polite-close row is the control: without it `closed=1` could mean the
+callback had stopped firing.
+
+**Claim 2 REFUTED, and the lead went wrong by quoting the code correctly.** The comment it cites says
+`remotePort` throws *"ON CLOSE ... because the peer is already gone"*; the accept-path read happens on a
+socket just accepted and not closed. Different states:
+
+```
+  just accepted             127.0.0.1:63895
+  peer reset, still open    127.0.0.1:63895
+  after our own destroy()   THREW SocketException: Socket has been closed
+```
+
+The throwing state needs OUR end closed, which is the close path — where `notifyWithoutDying` already
+wraps the callbacks. A peer resetting cannot produce it, and the accept path has not closed anything
+yet. 200 connect-and-reset cycles put nothing in the zone and the server answered a real call
+afterwards, which is the arm that matters since "still running" is a flag a dying isolate still
+reports.
+
+**Same shape of error as B-178**, in the same package: a true warning attached to the wrong call.
+
+### The four items still open
+
+- `stop()` closes endpoints serially (N x up to 2 s) — a cost; `Future.wait` is the sketch.
+- `start()` is not re-entrant — **round 560 fixed the double-start race in this method**, so what
+  remains here is a different reading of the same code and may be a duplicate. Check before working it.
+- `createWithContracts` drops the ping and preface options.
+- The *"nothing has subscribed yet"* comment the lead calls probably false.
+
+`onConnectionOpened` was never double-fired (`opened=1` in every row), so the guard is witnessed on the
+close half only.
 
 ## Owner decision
 
