@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-190](P-190-what-the-server-sees-when-a-cancel-has-no-stream.md)** valid (round 569),
+  rpc_dart_http2 — a raw `ServerTransportConnection` recording the `:path` of every stream it
+  accepts, which makes a phantom stream a path the client never asked for:
+  `cancel after a completed call [/Svc/Echo, /Unknown/Unknown] -> [/Svc/Echo]`, and
+  `a second OPENING frame on a live id [/Svc/Slow, /Svc/Again] -> [/Svc/Slow]`. **The cheapest route
+  to `resetStream == false` is a COMPLETED call**, not the server-stream setup the lead asked for.
+  Reads `activeStreams` beside the paths because in the overwrite arm the count is 1 before and
+  after while meaning two different streams. Its second arm is kept as documentation of the trap: a
+  second frame after an ANSWERING server ended the stream takes the no-methodPath branch and says
+  nothing about the overwrite, which needs a server that never answers
 - **[P-189](P-189-whose-answer-ends-the-call.md)** valid (round 567),
   rpc_dart + rpc_dart_http2 — what a call ends with when the peer's trailers break our policy, at
   BOTH sites of the class in one file: `http2 details-bin 10 KiB status 3 -> 9`,

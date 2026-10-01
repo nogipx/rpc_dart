@@ -827,7 +827,35 @@ class RpcHttp2CallerTransport
     // alone.
     _policy.validateMetadata(metadata);
 
-    final methodPath = metadata.methodPath ?? '/Unknown/Unknown';
+    // NO methodPath means this is not an opening frame, and on HTTP/2 only an
+    // opening frame can carry client metadata -- `makeRequest` OPENS a stream.
+    // Core sends exactly one such frame, the cancellation notice, and only after
+    // `resetStream` said it could not deliver it, which happens when the id has
+    // no stream. Defaulting the path sent that notice as a request: measured, a
+    // cancel after a completed call made the server see
+    // `[/Svc/Echo, /Unknown/Unknown]`. The same defect the HTTP/1.1 caller fixed,
+    // for the same reason -- see its sendMetadata.
+    final methodPath = metadata.methodPath;
+    if (methodPath == null) {
+      if (_logger?.isInternal ?? false) {
+        _logger?.internal(
+          'No methodPath for stream $streamId; nothing to put on the wire '
+          '(a cancel is an RST_STREAM, see resetStream)',
+        );
+      }
+      return;
+    }
+
+    // An id with a stream already has its opening frame. Overwriting
+    // `_activeStreams[streamId]` stranded the first stream and its subscription
+    // with nothing tracking either.
+    if (_activeStreams.containsKey(streamId)) {
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'HTTP/2 stream $streamId is already open; a second opening frame would '
+        'strand it',
+      );
+    }
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal(
