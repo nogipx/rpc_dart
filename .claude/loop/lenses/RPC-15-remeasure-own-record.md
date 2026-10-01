@@ -3,7 +3,7 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555]
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559]
 status: confirmed (round 457)
 ---
 
@@ -242,3 +242,25 @@ shape DID have the defect and the one condition does cover it.
 > byte-identical to its committed state. Re-running until green and saying nothing would have been
 > the easy path; B-219 exists because a diagnostic that can omit a key it documents is a defect in
 > the diagnostic whatever made it fire.
+
+**Round 559 — the record to re-measure was the SELECTION RULE, and the evidence was three rounds of
+this loop against each other.** `B-154` real and worth nothing, `B-178` severity refuted, `B-184` real
+and severe — all three from one intake, worked consecutively, and the list they came from was being
+read in title order.
+
+`../rounds/559-the-intake-was-unsorted-not-empty.md`,
+`../checked/C-61-the-audit-intake-sorted-by-who-it-hurts.md`.
+
+> **A flat list of leads IS a record, and it ages like one.** Every entity here has a status that
+> `stale` can age, except the ordering among them — so a list assembled by an outside audit keeps its
+> author's grading forever unless someone re-grades it. Three rounds disagreeing with each other is
+> what made the ordering visible as a claim.
+
+> **Grade by CONSEQUENCE, not by subject.** Two entries read as somebody else's problem and are not:
+> one whose two ends are both this library, and one whose cost is every future round's evidence.
+> Sorting by the file a lead names reproduces the audit's own mistake.
+
+> **Sorting needs no owner decision; only acting on the sort does.** Round 556 asked whether to
+> re-grade and got no answer, and three more rounds then picked by title. The question that needed
+> answering was narrower than the one asked — what to DO with the parked class — and the pass could
+> have happened at any time without it.

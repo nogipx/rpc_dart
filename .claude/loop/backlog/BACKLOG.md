@@ -4,6 +4,15 @@ What a lead is and how it links to the rest — [../LOOP.md](../LOOP.md). The
 record format — `../../skills/evidence-loop/specs/backlog-item.md`.
 
 **Closed leads live in [archive/ARCHIVE.md](archive/ARCHIVE.md)** — 128 of them.
+
+**The audit intake is GRADED — read
+[../checked/C-61-the-audit-intake-sorted-by-who-it-hurts.md](../checked/C-61-the-audit-intake-sorted-by-who-it-hurts.md)
+before taking one of the `B-14x`–`B-19x` leads.** They arrived as a flat list, every one
+`round: — (not re-measured)`, and rounds were picking from it by TITLE. Three worked consecutively
+came out real-and-worthless (B-154), severity-refuted (B-178) and real-and-severe (B-184), so the
+list is unsorted rather than uniform. C-61 grades each by whether it can damage traffic through a
+transport as it is used here: **A 23, B 9 (audience currently empty), C 15 (cost, prose, hygiene)**.
+A grade is a reading of a reading and closes nothing — every lead still owes a witness.
 They are not deleted and several have been re-opened by a later measurement; that
 file says how to read one. Keeping them here is what round 232 warns against: an
 archive kept inline reads as live state to anything that does not parse a status
