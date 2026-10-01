@@ -1,10 +1,11 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 572)
+round: 572
+commit: 09aa8e60
+release: breaking
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+probe: P-193
+reason: "bench — CONFIRMED and larger than filed: before the stranding the lead describes, `reconnect()` THREW `Concurrent modification during iteration` with two or more streams in flight and died half-torn-down. Both fixed; `close()` measured as NOT an instance"
 ---
 
 # B-176 — http2 caller: reconnect() cancels stream subscriptions without telling their consumers
@@ -32,6 +33,45 @@ Three in-flight server-stream calls, `reconnect()`; time to error per call.
 
 Fail each stream's router entry with UNAVAILABLE before cancelling; clear the
 maps; make parked sends throw.
+
+## Outcome (round 572) — confirmed, and bigger than filed
+
+`../rounds/572-reconnect-crashed-before-it-stranded-anyone.md`. Bench `P-193`.
+
+```
+BEFORE anything else:
+  reconnect()   Unhandled exception: Concurrent modification during iteration:
+                _Map len:2.   ... _reconnectOnce :1946
+
+with that fixed, the filed claim:
+  call 0  STILL WAITING
+  call 1  error after 10ms: status 14
+  call 2  error after 11ms: status 14
+  maps after  1 controllers
+
+after:
+  call 0, 1, 2  error after 24ms: status 14    0 controllers
+```
+
+**`reconnect()` THREW with two or more streams in flight** — not in this lead, and no round had hit
+it. `_discardConnection` terminates the connection, each ending runs the inline release, the release
+removes its own `_streamSubscriptions` entry, and the loop iterated that live map across an `await`.
+The reconnect died half-torn-down: every map cleared, no new connection, the exception handed to its
+caller.
+
+Then the stranding, exactly as filed and on the FIRST call, with its stream controller left behind.
+
+**`close()` is a measured NEGATIVE** — it strands nobody. But it read a MIXED `14/13/13` for one
+event, which was round 571's status split answering "the peer forgot its trailers" for a hang-up
+this side initiated; `_isClosed` in that test settles it.
+
+Fixed: `List.of` on the loop, `closeAll(error:)` before it, `_fcOutstanding`/`_fcRefused`/
+`_resetStreams` cleared, `_isClosed` in the dying test. The lead's last clause — parked sends
+returning as if sent — was already fixed by rounds 568 and by `dispose()` waking them.
+
+**The `error:` argument has no arm of its own**: disabling only the argument still read three
+errors, because closing the controller and the terminate error race. It is kept because the bare
+form would close a waiting consumer's stream with a CLEAN END, which is worse than the hang.
 
 ## Owner decision
 

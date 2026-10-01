@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-193](P-193-what-in-flight-consumers-are-told-at-a-teardown.md)** valid (round 572),
+  rpc_dart_http2 — three in-flight server streams, then a teardown, recording per consumer what it
+  was told and when. **A hang has no number, so the measurement is the absence**: `STILL WAITING`
+  against a three-second settle where the calls that do fail take ~10 ms. Drives BOTH teardowns,
+  which is how `close()` came out a measured NEGATIVE — and how its MIXED `14/13/13` for one event
+  surfaced. Reads leftover `streamControllers` beside the outcomes. Does NOT separate `closeAll`'s
+  `error:` argument from the call: disabling only the argument still read three errors, because
+  closing the controller and the terminate error race
 - **[P-192](P-192-what-a-status-less-ending-costs.md)** valid (round 571),
   rpc_dart + rpc_dart_http2 — **counts server EXECUTIONS, not statuses**, because the damage is work
   re-run: one unary call named `Charge` went `status 14, ran 3 times -> status 13, ran 1`, with a

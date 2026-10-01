@@ -1242,7 +1242,12 @@ class RpcHttp2CallerTransport
           // `maxAttempts: 3`, that shape made the server execute one unary call
           // THREE times, because UNAVAILABLE is exactly what `RpcRetryInterceptor`
           // retries by design. grpc-go draws the same line.
-          final dying = _drainSignal.goawayReceived || !_connection.isOpen;
+          // `_isClosed` belongs here too: when THIS side is tearing down, the peer
+          // did not forget anything -- we hung up. Without it one close() produced
+          // a mixed answer for one event, `status 14` for the first stream and
+          // `status 13` for the rest, depending on where `isOpen` had got to.
+          final dying =
+              _isClosed || _drainSignal.goawayReceived || !_connection.isOpen;
           final status = dying ? RpcStatus.unavailable : RpcStatus.internal;
           _logger?.warning(
             'Stream $streamId ended without a gRPC status; reporting $status '
@@ -1943,7 +1948,38 @@ class RpcHttp2CallerTransport
     // abandon path; the prologue just never used it.
     _discardConnection(_connection);
 
-    for (final subscription in _streamSubscriptions.values) {
+    // TELL THE CONSUMERS FIRST. `terminate()` above delivers its per-stream errors
+    // asynchronously, and the loop below cancels each subscription -- so the first
+    // subscription was gone before its error arrived and its consumer waited out
+    // its deadline with nothing. Measured with three in-flight server streams:
+    // `call 0 STILL WAITING` while calls 1 and 2 failed in ~10ms, and one stream
+    // controller left behind afterwards.
+    //
+    // `closeAll`'s `error` argument exists for exactly this -- "a transport closing
+    // under its callers wants to tell the ones that were IN FLIGHT why their call
+    // ended" -- and the reconnect path never used it.
+    //
+    // The ARGUMENT is not optional here even though the race above resolves in the
+    // consumers' favour once the loop stops crashing: `closeAll()` bare would close
+    // a waiting consumer's stream with a CLEAN END, turning a hang into silent
+    // truncation. What the call is needed for either way is the entry it drops --
+    // one stream controller was left behind per stranded call.
+    _streams.closeAll(
+      error: (streamId) => RpcStatusException(
+        RpcStatus.unavailable,
+        'HTTP/2 connection to $_host:$_port was replaced by a reconnect while '
+        'stream $streamId was in flight; retry on the new connection',
+      ),
+    );
+
+    // A COPY, and it is load-bearing: `_discardConnection` above terminated the
+    // connection, which ends every stream ASYNCHRONOUSLY, and each ending runs the
+    // inline release -- which removes its own `_streamSubscriptions` entry. The
+    // `await` inside this loop is where those endings land, so iterating the live
+    // map threw `Concurrent modification during iteration` and reconnect() died
+    // half-torn-down, with no new connection and every map already cleared.
+    // Reproduced with two in-flight server streams.
+    for (final subscription in List.of(_streamSubscriptions.values)) {
       try {
         await subscription.cancel();
       } catch (e) {
@@ -1962,6 +1998,12 @@ class RpcHttp2CallerTransport
     _halfClosedLocal.clear();
     _reservedStreams.clear();
     _statusReceived.clear();
+    // The flow-control ledgers and the reset-id memory belong to the connection
+    // that just went: ids on the new one start from scratch, so an entry carried
+    // over meters a stream that no longer exists.
+    _fcOutstanding.clear();
+    _fcRefused.clear();
+    _resetStreams.clear();
 
     // From here until the attach below there is no connection, and saying so is
     // what makes `_ensureUsable` the one that answers. Without it the flag was
