@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-212](P-212-frames-after-a-unary-request.md)** valid (round 594),
+  rpc_dart — data frames sent on a unary stream while its handler runs: RSS tracks the bytes 1:1 at three
+  scales (`+51/+117/+313 MiB` for 78/156/312 MiB) before the fix, `+57` and a RESOURCE_EXHAUSTED after
+- **[P-211](P-211-a-flood-into-a-stalled-handler.md)** valid (round 594),
+  rpc_dart — P-210's repair: a real responder with a parked client-stream handler, a peer with its windows
+  off. **RETAINED is counted by releasing the handler with the producer stopped**, so it is what the
+  responder side held; RSS read `+202` and `-145` MiB for one arm. Control 257, witness 19999 before and
+  1023 after, bidi sibling 1023
 - **[P-210](P-210-what-the-transport-pulls-from-a-flooding-peer.md)** **broken** (round 593),
   rpc_dart — reads the transport's DEMAND via an `async*` generator counting its own yields:
   `PULLED 20001 of 20001` with flow control ON and OFF alike, 320 MiB offered, consumer paused. The control

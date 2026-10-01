@@ -3,8 +3,8 @@ status: open
 round: 534
 commit: cbca6a2b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-probe: P-167, P-210
-reason: "bench — REOPENED in the round-540 bookkeeping pass. Round 534 closed the CONTRACT half (pause is forwarded now) and that changed no behaviour, because nothing in rpc_dart pauses a channel. The lead's real subject — what bounds an inbound flood from a peer outside rpc_dart's flow control — is unmeasured, and a closed lead's remainder is routed to by nothing"
+probe: P-167, P-210, P-211, P-212
+reason: "bench — round 594 bounded every per-stream request buffer (client-stream sink and unary pre-bind were unbounded against a peer ignoring grants, both fixed). What is left is the CONNECTION total: 4096 streams × 16 MiB per stream, arithmetic and not measured, plus the unswept IRpcChannel example and the isolate and wasm channels"
 continuation: yes
 ---
 
@@ -100,6 +100,21 @@ number this lead is asking for.
 
 Also unswept: `IRpcChannel` is a documented ~50-line extension point whose own example has this same
 gap, and the isolate and wasm channels were not checked (RPC-08's shape).
+
+### Round 594 — the per-stream half, FIXED
+
+With a responder attached (`P-211`), the per-stream bound turned out to apply to
+bidi and server-stream only. A parked client-stream handler held `19999` of 20000
+messages (~312 MiB; honest peer `257`, bidi `1023`), and frames sent on a unary
+stream while its handler ran grew RSS 1:1 (`P-212`). Both now apply
+`effectiveMaxBufferedBytes` and `maxBufferedMessagesPerStream` and answer
+RESOURCE_EXHAUSTED. `../rounds/594-the-two-buffers-the-stream-bound-never-saw.md`.
+
+**What remains is the product.** Every per-stream bound multiplies by
+`maxActiveStreams`: 4096 × 16 MiB on one connection from a peer ignoring grants.
+Nothing bounds the connection's total of un-consumed request bytes except the
+connection window, which such a peer ignores. Unmeasured — the next round's
+witness is N parked streams against P-211's rig.
 
 ## Owner decision
 

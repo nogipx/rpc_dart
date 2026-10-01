@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593]
-status: confirmed (round 489)
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593, 594]
+status: confirmed (round 594)
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident
@@ -529,3 +529,21 @@ WITNESS  flow control OFF             20001       0      +40 MiB
 
 `../probes/P-210-what-the-transport-pulls-from-a-flooding-peer.md` (broken, fix named),
 `../rounds/593-the-pull-is-not-what-flow-control-bounds.md`, B-138.
+
+## Round 594 — a bound that lives where only some shapes pass
+
+The per-stream buffer bound sits in the transport and applies to what it routes
+into a per-stream controller. Two shapes never go there: client-stream (fed by
+the pipeline on purpose) and unary (its state is never bound). Against a peer
+ignoring grants a parked client-stream handler held `19999` messages where bidi
+held `1023`, and a running unary handler's stream grew RSS 1:1 with what the
+peer sent.
+
+> **When a limit lives in one layer, list every PATH into the buffer it protects,
+> per shape, and mark which ones pass through that layer.** Here a table of five
+> paths found both instances; reading the guard found neither, because the guard
+> is correct for everything it sees.
+
+`../probes/P-211-a-flood-into-a-stalled-handler.md`,
+`../probes/P-212-frames-after-a-unary-request.md`,
+`../rounds/594-the-two-buffers-the-stream-bound-never-saw.md`.

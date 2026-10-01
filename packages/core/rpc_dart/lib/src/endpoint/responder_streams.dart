@@ -152,11 +152,37 @@ final class RpcResponderStreamState {
   /// True when a bound responder is being fed by the pipeline.
   bool get hasRequestSink => _requestSink != null;
 
+  /// Ceilings on what [_requestSink] may hold un-consumed; see [pushRequest].
+  int _sinkLimitBytes = 0;
+  int _sinkLimitEvents = 0;
+  int _sinkHeldBytes = 0;
+  int _sinkHeldEvents = 0;
+  bool _sinkOverflowed = false;
+
   /// Attaches [sink] as the live request feed and marks the stream bound.
-  void attachRequestSink(StreamController<RpcTransportMessage> sink) {
+  ///
+  /// [limitBytes] and [limitEvents] bound what the sink holds un-consumed —
+  /// the per-stream buffer bound the transport applies to every other shape,
+  /// which never sees this one because the pipeline feeds it directly.
+  void attachRequestSink(
+    StreamController<RpcTransportMessage> sink, {
+    required int limitBytes,
+    required int limitEvents,
+  }) {
     _requestSink = sink;
     _requestSinkEnded = false;
     _boundToMessageStream = true;
+    _sinkLimitBytes = limitBytes;
+    _sinkLimitEvents = limitEvents;
+    _sinkHeldBytes = 0;
+    _sinkHeldEvents = 0;
+    _sinkOverflowed = false;
+  }
+
+  /// Releases [message]'s charge as the handler takes it.
+  void releaseRequest(RpcTransportMessage message) {
+    _sinkHeldBytes -= message.bufferedBytes;
+    _sinkHeldEvents--;
   }
 
   /// Request payload frames the pipeline ACCEPTED for this stream.
@@ -182,12 +208,32 @@ final class RpcResponderStreamState {
 
   /// Forwards a request [message] to the bound responder, counting it as
   /// dropped when there is nothing to forward it to.
+  ///
+  /// Over the sink's ceiling the stream fails with RESOURCE_EXHAUSTED. Without
+  /// it a peer ignoring flow control parks its whole upload behind a handler
+  /// that stopped reading.
   void pushRequest(RpcTransportMessage message) {
     final sink = _requestSink;
-    if (sink == null || sink.isClosed) {
+    if (sink == null || sink.isClosed || _sinkOverflowed) {
       droppedRequests++;
       return;
     }
+    if (_sinkHeldBytes + message.bufferedBytes > _sinkLimitBytes ||
+        _sinkHeldEvents + 1 > _sinkLimitEvents) {
+      _sinkOverflowed = true;
+      droppedRequests++;
+      sink.addError(
+        RpcStatusException(
+          RpcStatus.resourceExhausted,
+          'Stream $id buffered more than $_sinkLimitEvents messages or '
+          '$_sinkLimitBytes bytes without being consumed',
+        ),
+      );
+      unawaited(sink.close());
+      return;
+    }
+    _sinkHeldBytes += message.bufferedBytes;
+    _sinkHeldEvents++;
     if (message.payload != null || message.isDirect) deliveredRequests++;
     sink.add(message);
     // A frame may carry both the last payload and the half-close.
@@ -250,10 +296,24 @@ final class RpcResponderStreamState {
   }
 
   /// Stores a payload [message], optionally buffering it for client-stream methods.
-  void storePayload(
+  ///
+  /// False when buffering it would cross [limitBytes] or [limitEvents]; the
+  /// caller fails the stream. A unary state is never marked bound, so every
+  /// frame a peer sends while its handler runs lands in the pre-bind buffer.
+  bool storePayload(
     RpcTransportMessage message, {
     required bool bufferForClientStream,
+    required int limitBytes,
+    required int limitEvents,
   }) {
+    if (!_boundToMessageStream) {
+      if (_preBindBytes + message.bufferedBytes > limitBytes ||
+          _preBindEvents + 1 > limitEvents) {
+        return false;
+      }
+      _preBindBytes += message.bufferedBytes;
+      _preBindEvents++;
+    }
     lastPayloadMessage = message;
 
     // For bidirectional/server-stream/unary methods we can receive multiple
@@ -274,7 +334,12 @@ final class RpcResponderStreamState {
     if (bufferForClientStream && !_boundToMessageStream) {
       _clientBufferedMessages.add(message);
     }
+    return true;
   }
+
+  /// What [storePayload] has charged to the two pre-bind buffers.
+  int _preBindBytes = 0;
+  int _preBindEvents = 0;
 
   /// Buffers a payload frame that arrived before the method was resolved.
   ///
@@ -319,7 +384,15 @@ final class RpcResponderStreamState {
 
     final messages = List<RpcTransportMessage>.from(_preBindBufferedMessages);
     _preBindBufferedMessages.clear();
+    _releasePreBind(messages);
     return messages;
+  }
+
+  void _releasePreBind(List<RpcTransportMessage> taken) {
+    for (final message in taken) {
+      _preBindBytes -= message.bufferedBytes;
+      _preBindEvents--;
+    }
   }
 
   /// Returns the last payload message and clears it from state.
@@ -350,6 +423,7 @@ final class RpcResponderStreamState {
 
     final messages = List<RpcTransportMessage>.from(_clientBufferedMessages);
     _clientBufferedMessages.clear();
+    _releasePreBind(messages);
 
     if (markEndOfStream && messages.isNotEmpty) {
       final last = messages.last;

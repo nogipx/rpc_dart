@@ -1,0 +1,47 @@
+---
+file: packages/core/rpc_dart/.dart_tool/probe/b138_a_flood_into_a_stalled_handler.dart
+round: 594
+commit: 017f4c88
+paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
+status: valid (round 594)
+---
+
+# P-211 — a flood into a stalled handler
+
+## Why it exists
+
+B-138: what bounds an upload from a peer that ignores flow control, once the
+stream is really dispatched to a handler. P-210 had no responder attached; this is
+its repair.
+
+## The harness
+
+A real `RpcResponderEndpoint` on the default policy and an `RpcCallerEndpoint`
+whose transport has its windows off — separate policy objects, so the peer's
+policy cannot bound the victim. Requests come from an `async*` generator, so
+PULLED is the library's demand. The handler reads one message and parks.
+
+RETAINED is the reading: at the plateau the producer is stopped and the handler
+released, and what it then drains is exactly what the responder side held. RSS
+was tried first and is too noisy across runs at one scale (`+202` and `-145` MiB
+for the same arm).
+
+One arm per process: `control`, `witness [N]`, `bidi`.
+
+## The numbers (round 594)
+
+```
+                                            PULLED    RETAINED
+CONTROL  client-stream, peer honours window    258      257  (~4 MiB)
+WITNESS  client-stream, before the fix       20000    19999  (~312 MiB)
+WITNESS  client-stream, after the fix        20000     1023  (~16 MiB)
+SIBLING  bidi, peer ignores window           20000     1023  (~16 MiB)
+```
+
+## Measures
+
+Messages the responder side held for a parked client-stream handler.
+
+## Control
+
+The same call with the peer honouring the window: 257 against 19999.

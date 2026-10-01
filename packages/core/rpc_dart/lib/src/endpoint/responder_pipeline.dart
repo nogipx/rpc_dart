@@ -126,6 +126,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : const RpcSecurityPolicy().maxActiveStreams;
   }
 
+  /// The transport's policy, or the default for one that cannot carry it.
+  RpcSecurityPolicy? _respPolicyCache;
+
+  RpcSecurityPolicy get _respPolicy {
+    final transport = this.transport;
+    return _respPolicyCache ??= transport is IRpcSecurityPolicyAware
+        ? (transport as IRpcSecurityPolicyAware).securityPolicy
+        : const RpcSecurityPolicy();
+  }
+
   /// The policy's rule for a request carrying no `content-type` at all.
   ///
   /// Same shape as [_respMaxStreams]: a transport that cannot carry a policy
@@ -1139,10 +1149,42 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       state.acceptedRequests++;
     }
 
-    state.storePayload(
+    // The rest of a unary frame that arrived split. `_ensureResponder` returns
+    // early once a responder exists, so without this the later fragment reaches
+    // nothing and the call waits out its deadline. Ahead of `storePayload`: a
+    // fragment fed here is consumed, and charging it to the pre-bind buffer as
+    // well would refuse a request split finely enough.
+    final pending = state.responder;
+    if (state.unaryAwaitingRequest &&
+        pending is UnaryResponder<IRpcSerializable, IRpcSerializable>) {
+      _detachedDispatch(_feedUnaryFragment(state, pending, message), state);
+      return;
+    }
+
+    final policy = _respPolicy;
+    if (!state.storePayload(
       message,
       bufferForClientStream: binding.type == RpcMethodType.clientStream,
-    );
+      limitBytes: policy.effectiveMaxBufferedBytes,
+      limitEvents: policy.maxBufferedMessagesPerStream,
+    )) {
+      _log.warning(
+        'Refusing stream ${state.id}: too much buffered before its responder '
+        'was bound',
+      );
+      _detached(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: RpcStatus.resourceExhausted,
+          message:
+              'Too much buffered before the responder took it '
+              '(max: ${policy.maxBufferedMessagesPerStream} messages, '
+              '${policy.effectiveMaxBufferedBytes} bytes)',
+        ),
+        'grpc error cleanup',
+      );
+      return;
+    }
 
     // Every shape starts its responder on the first request frame, INCLUDING
     // client-stream. Exclude that one and the only thing that starts a
@@ -1156,16 +1198,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // carried no messages.
     if (state.hasRequestSink) {
       state.pushRequest(message);
-      return;
-    }
-
-    // The rest of a unary frame that arrived split. `_ensureResponder` returns
-    // early once a responder exists, so without this the later fragment reaches
-    // nothing and the call waits out its deadline.
-    final pending = state.responder;
-    if (state.unaryAwaitingRequest &&
-        pending is UnaryResponder<IRpcSerializable, IRpcSerializable>) {
-      _detachedDispatch(_feedUnaryFragment(state, pending, message), state);
       return;
     }
 
@@ -2113,7 +2145,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     required Iterable<RpcTransportMessage> initialMessages,
   }) {
     final controller = StreamController<RpcTransportMessage>();
-    state.attachRequestSink(controller);
+    final policy = _respPolicy;
+    state.attachRequestSink(
+      controller,
+      limitBytes: policy.effectiveMaxBufferedBytes,
+      limitEvents: policy.maxBufferedMessagesPerStream,
+    );
 
     // Take over flow-control metering for this stream. The transport meters
     // what it hands out through getMessagesForStream, and this responder is fed
@@ -2134,12 +2171,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (state.clientEnded) state.endRequests();
 
     controller.onCancel = () => state.detachRequestSink();
-    if (flowControlled == null) return controller.stream;
     // `map` is lazy, so a handler that stops consuming stops credit reaching
     // the peer -- the same property the transport's own metering relies on.
     return controller.stream.map((message) {
+      state.releaseRequest(message);
       final bytes = message.payload?.length ?? 0;
-      if (bytes > 0) flowControlled.returnFlowCredit(state.id, bytes);
+      if (bytes > 0) flowControlled?.returnFlowCredit(state.id, bytes);
       return message;
     });
   }
