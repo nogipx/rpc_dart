@@ -1,10 +1,10 @@
 ---
-status: open (read in the round-565 owner review, measurement from round 551)
-round: 551
-commit: 182ec83e
+status: closed (round 566)
+round: 566
+commit: 4541c0c1
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/contracts/context.dart]
-probe: P-179
-reason: "cost — a second ~42 us secure draw per call on every shape where the peer sends no `x-trace-id`, for an id the caller side already derives instead of minting. Read at HEAD in the round-565 owner review; the count is from the code, not from the rig, and P-179 ran only the arm where both headers arrive"
+probe: P-188
+reason: "cost — CONFIRMED at 2 tokens against a control's 0 and FIXED to 1, both ids carrying the same mint number. The stale comment went with it; `base_processor.dart:1302`'s wasteful construction is not this mechanism and moved to B-120's context half"
 ---
 
 # B-220 — the responder mints a trace id it could derive, for any peer that sends no trace header
@@ -77,6 +77,32 @@ mints, which is what the one-line fix above changes.
 P-179's rig with a second arm: a request whose metadata carries neither `x-request-id` nor
 `x-trace-id`, mint count before and after. Expect 2 today and 1 after the fix, with the handler's
 two ids sharing a mint number. The canary is the one-line revert.
+
+## Outcome (round 566) — CONFIRMED at two tokens, fixed to one
+
+`../rounds/566-the-side-that-derived-and-the-side-that-minted.md`. Bench `P-188`.
+
+```
+                          before   after
+  neither header            2        1      <- both ids now carry ONE mint number
+  both headers (rpc_dart)   0        0
+  a foreign x-request-id     1        1
+```
+
+The two mint numbers before — 4 and 5 — are what made it two tokens rather than one count read
+twice; after, both ids carry mint 3. `traceIdFor` at `:2360`, which falls back to a fresh token
+for an id this library did not issue, so the third arm does not move.
+
+**Breadth swept**: three `generateTraceId()` call sites across every package's `lib/`, and this
+was the only defect. The other two are correct by contract — `traceIdFor`'s own fallback, and
+`RpcContextBuilder.withGeneratedTraceId()`, whose name promises a fresh id.
+
+**The stale comment is gone** (`context.dart:27-32`), its evidence role discharged by the
+round-565 review.
+
+**`base_processor.dart:1302` is NOT this mechanism** and moved to `B-120`: its token count is
+already minimal — one id, one token — and what is wasteful there is building a whole
+`RpcContext.empty()` for it, which is the context-copy half.
 
 ## Owner decision
 

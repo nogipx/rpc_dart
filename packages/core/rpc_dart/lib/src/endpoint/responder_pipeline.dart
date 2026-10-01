@@ -2357,7 +2357,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     if (clientTraceId != null) {
       context = context.withTraceId(clientTraceId);
     } else {
-      context = context.withTraceId(RpcContextUtils.generateTraceId());
+      // DERIVE, as the caller side does. A peer that sends no `x-trace-id` sends
+      // no `x-request-id` either -- both are ours, not gRPC's -- so minting here
+      // drew a second token for an id the request id above already names.
+      // `traceIdFor` falls back to a fresh token when that id is not one of ours.
+      context = context.withTraceId(
+        RpcContextUtils.traceIdFor(context.requestId),
+      );
     }
 
     // Attach a cancellation token so drain() can signal active handlers.

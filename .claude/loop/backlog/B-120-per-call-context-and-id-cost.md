@@ -158,6 +158,11 @@ Whoever takes that half should measure the chain a REAL call builds, not a
 constructed one — the mistake an earlier draft of P-149 made was quoting the
 synthetic number as "37.8% of a call".
 
+**One site named for it, from round 566**: `base_processor.dart:1302` builds a whole
+`RpcContext.empty()` to read one id off it, on the null-context branch. Its TOKEN count is
+already minimal, so it is not `B-220`'s mechanism — what it wastes is the constructor's two
+`Map.from` copies, which is exactly this half. Unreachable through `RpcCallerEndpoint`.
+
 ## Owner decision
 
 **DECIDED in the round-565 review: the two ids ARE needed, so the generator stays

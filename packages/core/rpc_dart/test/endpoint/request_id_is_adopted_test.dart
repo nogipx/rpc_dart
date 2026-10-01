@@ -59,6 +59,40 @@ Future<_Rig> _connect() async {
   return (caller: caller, svc: svc);
 }
 
+/// One call from a peer that speaks the frame protocol but is not rpc_dart:
+/// `forClientRequest` carries content-type and grpc-accept-encoding and no
+/// correlation headers at all, so the empty [headers] IS the foreign shape.
+Future<_Svc> _foreignPeerCall(Map<String, String> headers) async {
+  final (clientT, serverT) = RpcChannelTransport.pair();
+  final responder = RpcResponderEndpoint(transport: serverT);
+  final svc = _Svc();
+  responder.registerServiceContract(svc);
+  responder.start();
+  addTearDown(() async {
+    await responder.close();
+    await clientT.close();
+    await serverT.close();
+  });
+
+  final base = RpcMetadata.forClientRequest('Svc', 'echo');
+  final id = clientT.createStream();
+  clientT.getMessagesForStream(id).listen((_) {}, onError: (Object _) {});
+  await clientT.sendMetadata(
+    id,
+    RpcMetadata([
+      ...base.headers,
+      for (final e in headers.entries) RpcHeader(e.key, e.value),
+    ], methodPath: base.methodPath),
+  );
+  await clientT.sendMessage(
+    id,
+    RpcMessageFrame.encode(_codec.serialize('x'.rpc)),
+    endStream: true,
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  return svc;
+}
+
 void main() {
   test('the responder adopts the request id the caller sent', () async {
     final rig = await _connect();
@@ -124,6 +158,43 @@ void main() {
 
     expect(svc.seenRequestId, isNotNull);
     expect(svc.seenRequestId, startsWith('req_'));
+  });
+
+  // WITNESS. The responder used to MINT its trace id whenever none arrived, where
+  // the caller side derives one -- and a peer that sends no `x-trace-id` sends no
+  // `x-request-id` either, since both are ours rather than gRPC's. So a foreign
+  // peer cost the responder two tokens where an rpc_dart peer costs it none.
+  //
+  // Asserted as identity rather than as a count: two tokens are never equal, so a
+  // trace id carrying the request id's own body IS the proof nothing was minted.
+  test('a peer that sends neither header gets a DERIVED trace id', () async {
+    final svc = await _foreignPeerCall(const {});
+
+    expect(svc.seenRequestId, startsWith('req_'));
+    expect(
+      svc.seenTraceId,
+      'trace_${svc.seenRequestId!.substring(4)}',
+      reason:
+          'the trace id must come from the request id just minted, not from a '
+          'second token',
+    );
+  });
+
+  // CONTROL. `traceIdFor` can only derive from an id of ours, so this arm MUST
+  // still mint -- and if it ever stops, the witness above is passing because
+  // nothing mints at all rather than because the derivation works.
+  test('CONTROL: a foreign request id still gets a fresh trace id', () async {
+    final svc = await _foreignPeerCall(const {
+      'x-request-id': 'not-one-of-ours',
+    });
+
+    expect(svc.seenRequestId, 'not-one-of-ours');
+    expect(svc.seenTraceId, startsWith('trace_'));
+    expect(
+      svc.seenTraceId,
+      isNot('trace_one-of-ours'),
+      reason: 'nothing may be derived from an id this library did not mint',
+    );
   });
 
   test('GUARD: a context keeps one id once read', () async {

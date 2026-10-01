@@ -25,11 +25,10 @@ final class RpcContext {
   /// Unique request ID.
   ///
   /// EAGER on purpose. Lazy looks like free savings — a token costs three
-  /// `Random.secure()` draws, and the responder mints one only to replace it —
-  /// but a lazy field copies as UNSET, so every `withX` copy would generate an
-  /// id of its own and the caller's context would disagree with what it sent.
-  /// The cheap version is passing the id in at construction, which
-  /// [RpcContext.withHeaders] allows.
+  /// `Random.secure()` draws — but a lazy field copies as UNSET, so every `withX`
+  /// copy would generate an id of its own and the caller's context would disagree
+  /// with what it sent. The cheap version is passing the id in at construction,
+  /// which [RpcContext.withHeaders] allows.
   final String requestId;
 
   /// Logger scope for this request context.

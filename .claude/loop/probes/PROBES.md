@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-188](P-188-what-the-responder-mints-for-a-foreign-peer.md)** valid (round 566),
+  rpc_dart — counts the tokens the RESPONDER mints for a peer that sends no correlation headers:
+  `neither header 2 -> 1 / both headers 0 / a foreign x-request-id 1`, with each id's mint number
+  decoded beside the count, because a count alone cannot tell one token used twice from two
+  tokens. **The foreign peer needs no fake server**: `RpcMetadata.forClientRequest` carries
+  content-type and grpc-accept-encoding and nothing else, so driving the pair's client side
+  directly IS that shape. Second control is the load-bearing one — a foreign `x-request-id` MUST
+  still mint, since `traceIdFor` can only derive from an id of ours. **Its decoder cuts at the
+  FIRST underscore**, unlike P-179's, which reads `null` for roughly half of all tokens
 - **[P-187](P-187-does-a-release-during-a-parked-send-leak-its-id.md)** valid (round 565),
   rpc_dart_http2 — four arms around one race: a peer RST_STREAM landing while an `endStream: true` send
   is parked on the window. `WITNESS halfClosedLocal 1 / CONTROL 0 / REACH 1 then 0 after

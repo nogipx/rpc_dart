@@ -57,6 +57,15 @@ counts establish the token is the whole of a call's entropy.
 and derives both `req_` and `trace_` from it; `traceIdFor` derives the trace id from the request
 id with no mint at all; the responder reuses what the caller sent.
 
+## Its mint decoder is wrong about half the time (found in round 566)
+
+`_mintOf` takes the token body with `token.split('_').last`, and **base64url's
+alphabet contains `_`** — so for any token whose body holds one, it decodes a
+fragment, gets the wrong length and returns null. The recorded run above was not
+affected (every row shows a mint number, and `_counterNow()`'s `!` would have
+thrown rather than lied), so the numbers stand; what the defect costs is
+reliability, not correctness. P-188 uses `indexOf('_')` instead.
+
 ## Measures
 
 Mints, by counter delta, and mint IDENTITY, by decoding each id. Then one token's cost and one
