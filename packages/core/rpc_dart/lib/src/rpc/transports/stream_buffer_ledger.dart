@@ -27,29 +27,61 @@ enum RpcBufferAdmission {
 /// Fails THE STREAM, never the connection: a peer flooding one call must not
 /// take down the others sharing the socket.
 final class RpcStreamBufferLedger {
-  /// Creates a ledger admitting [limitBytes] per stream.
-  RpcStreamBufferLedger({required this.limitBytes});
+  /// Creates a ledger admitting [limitBytes] and [limitEvents] per stream.
+  RpcStreamBufferLedger({required this.limitBytes, required this.limitEvents});
 
   /// Ceiling on un-consumed bytes held for a single stream.
   final int limitBytes;
 
+  /// Ceiling on un-consumed MESSAGES held for a single stream.
+  ///
+  /// The byte bound cannot see a zero-copy payload: `bufferedBytes` is 0 for a
+  /// `directPayload`, because queuing one costs a pointer for an object the
+  /// process already retains. Measured, that is true of exactly one shape — a
+  /// queue of objects the application holds anyway costs `-1 MiB` — and false of
+  /// the other, where minting one per message put `313 MiB` of payload behind a
+  /// paused consumer with nothing charged for it.
+  ///
+  /// So this counts EVENTS, which is the only quantity that bounds both: an
+  /// operator cannot meaningfully set a nominal weight for someone else's object,
+  /// and a queue depth needs nothing invented.
+  final int limitEvents;
+
   final Map<int, int> _held = {};
+  final Map<int, int> _events = {};
   final Set<int> _failed = {};
 
-  /// Charges [bytes] against [streamId].
+  /// Charges [bytes] and one message against [streamId].
+  ///
+  /// Both dimensions, always: a codec payload has bytes AND is one message, and
+  /// whichever ceiling it reaches first is the one that binds.
   RpcBufferAdmission admit(int streamId, int bytes) {
     if (_failed.contains(streamId)) return RpcBufferAdmission.refused;
     final next = (_held[streamId] ?? 0) + bytes;
-    if (next > limitBytes) {
+    final nextEvents = (_events[streamId] ?? 0) + 1;
+    if (next > limitBytes || nextEvents > limitEvents) {
       _failed.add(streamId);
       return RpcBufferAdmission.overflowed;
     }
     _held[streamId] = next;
+    _events[streamId] = nextEvents;
     return RpcBufferAdmission.admitted;
   }
 
-  /// Drops [bytes] of [streamId]'s charge as its consumer takes them.
+  /// Drops [bytes] and one message of [streamId]'s charge as its consumer takes
+  /// them.
+  ///
+  /// The EVENT count is released even for a message that carried no bytes, or a
+  /// zero-copy stream would be admitted `limitEvents` times and never again.
   void release(int streamId, int bytes) {
+    final events = _events[streamId];
+    if (events != null) {
+      if (events <= 1) {
+        _events.remove(streamId);
+      } else {
+        _events[streamId] = events - 1;
+      }
+    }
     final held = _held[streamId];
     if (held == null) return;
     final left = held - bytes;
@@ -63,18 +95,27 @@ final class RpcStreamBufferLedger {
   /// Drops every trace of [streamId]; called when its call ends.
   void forget(int streamId) {
     _held.remove(streamId);
+    _events.remove(streamId);
     _failed.remove(streamId);
   }
 
   /// Drops every stream's state.
   void clear() {
     _held.clear();
+    _events.clear();
     _failed.clear();
   }
 
   /// Bytes currently charged to [streamId], for diagnostics and tests.
   int heldFor(int streamId) => _held[streamId] ?? 0;
 
+  /// Un-consumed messages currently charged to [streamId], for diagnostics and
+  /// tests.
+  int eventsFor(int streamId) => _events[streamId] ?? 0;
+
   /// How many streams hold a charge, for diagnostics and tests.
-  int get trackedStreams => _held.length;
+  ///
+  /// Counts either dimension: a zero-copy stream holds events and no bytes, and
+  /// reading `_held` alone reported it as tracking nothing.
+  int get trackedStreams => {..._held.keys, ..._events.keys}.length;
 }

@@ -44,6 +44,28 @@ final class RpcSecurityPolicy {
   /// Max number of messages emitted from a single incoming chunk.
   final int maxMessagesPerChunk;
 
+  /// Max UN-CONSUMED messages held for one stream.
+  ///
+  /// A queue DEPTH, counted in messages, and the companion to
+  /// [maxBufferedBytes]: both are charged on every inbound message and whichever
+  /// is reached first binds. It exists because the byte bound cannot see a
+  /// zero-copy payload — `RpcTransportMessage.bufferedBytes` is 0 for a
+  /// `directPayload`, so an in-memory or isolate peer could queue without limit
+  /// against a paused consumer.
+  ///
+  /// **It counts MESSAGES and never their contents.** For a direct object that is
+  /// deliberate rather than approximate: what one weighs is the application's to
+  /// know and not an operator's, and the same object may be retained elsewhere in
+  /// the process or not. Measured, a queue of objects the application holds anyway
+  /// costs nothing beyond pointers, while minting one per message put hundreds of
+  /// megabytes behind a paused consumer — a depth bounds both without having to
+  /// tell them apart.
+  ///
+  /// Default 1024, the same order as the codec path's effective depth at the
+  /// default byte ceiling. Exceeding it fails THAT STREAM with
+  /// RESOURCE_EXHAUSTED, not the connection.
+  final int maxBufferedMessagesPerStream;
+
   /// Max simultaneously active streams, per connection.
   ///
   /// Bounds live stream STATE, not running handlers. A handler that ignores
@@ -242,12 +264,14 @@ final class RpcSecurityPolicy {
   static const Duration _defaultInitialSendWindowGrace = Duration(seconds: 5);
   static const RpcContentTypeValidation _defaultContentTypeValidation =
       RpcContentTypeValidation.lenient;
+  static const int _defaultMaxBufferedMessagesPerStream = 1024;
 
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({
     this.maxMessageLengthBytes = _defaultMaxMessageLengthBytes,
     this.maxBufferedBytes,
     this.maxMessagesPerChunk = _defaultMaxMessagesPerChunk,
+    this.maxBufferedMessagesPerStream = _defaultMaxBufferedMessagesPerStream,
     this.maxActiveStreams = _defaultMaxActiveStreams,
     this.maxConcurrentHandlers,
     this.maxMetadataBytes = _defaultMaxMetadataBytes,
@@ -270,6 +294,7 @@ final class RpcSecurityPolicy {
     'maxMessageLengthBytes': maxMessageLengthBytes,
     'maxBufferedBytes': ?maxBufferedBytes,
     'maxMessagesPerChunk': maxMessagesPerChunk,
+    'maxBufferedMessagesPerStream': maxBufferedMessagesPerStream,
     'maxActiveStreams': maxActiveStreams,
     // Omitted when unset, because absent already means "no limit" for this one.
     'maxConcurrentHandlers': ?maxConcurrentHandlers,
@@ -314,6 +339,10 @@ final class RpcSecurityPolicy {
       maxMessagesPerChunk: readInt(
         'maxMessagesPerChunk',
         _defaultMaxMessagesPerChunk,
+      ),
+      maxBufferedMessagesPerStream: readInt(
+        'maxBufferedMessagesPerStream',
+        _defaultMaxBufferedMessagesPerStream,
       ),
       maxActiveStreams: readInt('maxActiveStreams', _defaultMaxActiveStreams),
       maxConcurrentHandlers: switch (map['maxConcurrentHandlers']) {

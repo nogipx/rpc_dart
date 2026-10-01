@@ -88,6 +88,7 @@ class RpcChannelTransport
   /// [RpcStreamBufferLedger].
   late final RpcStreamBufferLedger _buffers = RpcStreamBufferLedger(
     limitBytes: _policy.effectiveMaxBufferedBytes,
+    limitEvents: _policy.maxBufferedMessagesPerStream,
   );
 
   /// Credit accounting for both levels. See [RpcFlowController].
@@ -345,18 +346,23 @@ class RpcChannelTransport
       case RpcBufferAdmission.refused:
         return false;
       case RpcBufferAdmission.overflowed:
+        // WHICH ceiling, because there are two and they bound different things: a
+        // zero-copy payload weighs 0 bytes, so a message-count overflow reported
+        // as a byte overflow names a number the stream never approached.
+        final byCount =
+            _buffers.eventsFor(streamId) >= _buffers.limitEvents ||
+            message.bufferedBytes == 0;
+        final reason = byCount
+            ? 'more than ${_buffers.limitEvents} un-consumed messages'
+            : 'more than ${_buffers.limitBytes} bytes un-consumed';
         // The consumer gets the error; without this the OPERATOR gets nothing,
         // which is what the http2 responder already avoids for its own version
         // of this bound.
-        _log.warning(
-          'Stream $streamId buffered more than ${_buffers.limitBytes} bytes '
-          'un-consumed; failing the stream',
-        );
+        _log.warning('Stream $streamId buffered $reason; failing the stream');
         ctl.addError(
           RpcStatusException(
             RpcStatus.resourceExhausted,
-            'Stream $streamId buffered more than ${_buffers.limitBytes} bytes '
-            'without being consumed',
+            'Stream $streamId buffered $reason without being consumed',
           ),
         );
         return false;

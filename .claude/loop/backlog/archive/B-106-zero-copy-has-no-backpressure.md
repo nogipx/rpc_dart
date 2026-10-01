@@ -1,5 +1,6 @@
 ---
-status: awaiting owner (round 549)
+status: closed (round 550)
+release: breaking
 round: 497
 commit: 60e4d3f8
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
@@ -170,3 +171,34 @@ So the question put back is not "which shape is common" but: **add a per-stream 
 ceiling for direct objects, given it is safe under both shapes?** It is a new public policy
 field, and pinning what it counts is the B-209 / B-128 trap from a third side — which is why it
 is asked rather than taken.
+
+## Outcome (round 550) — the ceiling is in, and it found a second queue
+
+`../rounds/550-a-queue-depth-for-an-object.md`. **Owner's answer: add it.**
+
+```
+  arm                                      queue cost   (nominal 400 MiB)
+  HOLDING, paused per-stream consumer         -33 MiB
+  MINTING, paused per-stream consumer         270 MiB
+  MINTING, paused, depth 64                    71 MiB   <- 64 messages x 1 MiB
+```
+
+`RpcStreamBufferLedger` gained an EVENT dimension beside its byte one; both are charged on every
+message and whichever is reached first binds. `maxBufferedMessagesPerStream`, default 1024, and
+its doc states what it counts and why nothing else — the lesson B-209 and B-128 both paid for,
+applied before the field shipped.
+
+**Three places needed the count and not just the bytes**, each a defect on its own: `release`
+returns the event charge even for a zero-byte message (or a zero-copy stream is admitted
+`limitEvents` times and refused for ever, the inversion round 536 recorded), `forget`/`clear`
+drop the count, and `trackedStreams` counts either dimension.
+
+**The probe had to be moved, and that is the sharpest part.** There are TWO queues on the receive
+path: `incomingMessages`, the connection-wide broadcast, is also sized by `bufferedBytes` and
+therefore also unbounded for direct objects. Measuring through it read `355 MiB` with a depth of
+64 configured — a ceiling that appeared not to work, because the per-stream ledger was never
+charged at all. Filed as **B-217**; that bound is per-CONNECTION and a different field.
+
+**`P-135` cannot see this fix.** It counts what the producer generated and this bounds residency
+at the receiver — the paused zero-copy arm still reads 314569 produced, because nothing paces the
+producer.
