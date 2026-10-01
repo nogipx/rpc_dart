@@ -128,7 +128,13 @@ final class RpcHttp2OutgoingPump {
     _controller = StreamController<http2.StreamMessage>(
       onPause: () => _paused = true,
       onResume: _wake,
-      onCancel: _wake,
+      onCancel: () {
+        // The SINK let go, which on this stream means package:http2 tore it down
+        // -- a peer RST_STREAM. Distinct from our own `_finish()`, which closes
+        // the controller from this side and is already covered by `isClosed`.
+        _sinkCancelled = true;
+        _wake();
+      },
     );
     _pumping = _stream.outgoingMessages.addStream(_controller.stream);
   }
@@ -139,6 +145,7 @@ final class RpcHttp2OutgoingPump {
 
   bool _paused = false;
   bool _disposed = false;
+  bool _sinkCancelled = false;
   final List<Completer<void>> _waiters = [];
 
   void _wake() {
@@ -172,7 +179,7 @@ final class RpcHttp2OutgoingPump {
       _waiters.add(waiter);
       await waiter.future;
     }
-    if (_disposed || _controller.isClosed) {
+    if (_disposed || _controller.isClosed || _sinkCancelled) {
       throw RpcStatusException(
         RpcStatus.unavailable,
         'HTTP/2 stream ${_stream.id} was torn down before the message could '

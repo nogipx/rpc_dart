@@ -65,11 +65,30 @@ CONTROL
     window open   {activeStreams: 1, halfClosedLocal: 1, outgoingPumps: 1}
 ```
 
+## Extended in round 568 — the wire, and all seven maps
+
+Two additions, neither of which changed an existing arm:
+
+- **a DATA-frame scanner on the server socket**, walking the 9-byte frame headers, because the
+  transport's own maps cannot say whether a payload reached the peer. `WITNESS [(64, false)]`
+  against `CONTROL [(64, false), (453, false), (517, true)]` is what established that a parked
+  send reporting success had put nothing on the wire;
+- **all seven per-stream maps** instead of three, which is what showed `outgoingPumps` to be the
+  only one the inline release leaves behind.
+
+```
+round 568, before      WITNESS  threw=null   outgoingPumps 1   wire [(64,false)]
+round 568, after       WITNESS  threw=RpcStatusException
+                                outgoingPumps 0   wire [(64,false)]  unchanged
+                       CONTROL  threw=null   wire unchanged, all three frames
+```
+
 ## Measures
 
 Set sizes read off the transport's own `health()` — `_halfClosedLocal.length` and its
 siblings — not a bench counter. Plus two facts about the parked send: whether it was still
-parked when the reset landed, and whether it returned or threw.
+parked when the reset landed, and whether it returned or threw. Since round 568, also the DATA
+frames the server actually read.
 
 ## Control
 
@@ -95,8 +114,7 @@ Establishes that **the leak is not reachable through `RpcCallerEndpoint`** — t
 reads 0 both before and after, because the pipeline releases the id when the call ends. The
 exposure is a direct user of the transport, which is public API.
 
-Does NOT measure the wire. `threw=null` on the witness says the parked send reported
-success after its stream was reset; whether its payload reached the peer is not read here
-and is `B-221`.
+Since round 568 it DOES measure the wire, and the answer is that the payload never left: the
+server read `[(64, false)]` against the control's three frames.
 
 Does NOT cover `_waiters` being overtaken by a new `add`, B-184's other unmeasured item.

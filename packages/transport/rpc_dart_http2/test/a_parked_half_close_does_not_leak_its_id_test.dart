@@ -83,6 +83,7 @@ Future<Map<String, Object?>> _maps(RpcHttp2CallerTransport t) async {
   return {
     'activeStreams': d['activeStreams'],
     'halfClosedLocal': d['halfClosedLocal'],
+    'outgoingPumps': d['outgoingPumps'],
   };
 }
 
@@ -92,6 +93,7 @@ Future<Map<String, Object?>> _maps(RpcHttp2CallerTransport t) async {
 Future<
   ({
     bool parked,
+    Object? threw,
     Map<String, Object?> whileParked,
     Map<String, Object?> windowOpen,
     Map<String, Object?> afterReset,
@@ -128,10 +130,16 @@ _parkThenReset({required bool openWindowFirst}) async {
   await Future<void>.delayed(const Duration(milliseconds: 150));
 
   var finished = false;
-  final parked = transport
-      .sendMessage(id, _frame(512), endStream: true)
-      .then((_) => finished = true)
-      .catchError((Object _) => finished = true);
+  Object? threw;
+  final parked = Future<void>(() async {
+    try {
+      await transport.sendMessage(id, _frame(512), endStream: true);
+    } catch (e) {
+      threw = e;
+    } finally {
+      finished = true;
+    }
+  });
   await Future<void>.delayed(const Duration(milliseconds: 150));
 
   final wasParked = !finished;
@@ -154,6 +162,7 @@ _parkThenReset({required bool openWindowFirst}) async {
 
   return (
     parked: wasParked,
+    threw: threw,
     whileParked: whileParked,
     windowOpen: windowOpen,
     afterReset: await _maps(transport),
@@ -201,6 +210,38 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
+  // WITNESS, the send's own answer. A peer RST_STREAM cancels the pump's SINK
+  // without disposing the pump, so the woken `add` used to queue its payload into
+  // a controller whose destination was already gone and return NORMALLY. Measured
+  // on the wire: the server read only the first send's 64 bytes, never the 512
+  // this one carries. Round 558's rule -- a send that did not reach the peer must
+  // not read as success -- on the path its own arm could not reach, because that
+  // arm disposed the pump.
+  test('a parked send fails when the peer resets the stream', () async {
+    final r = await _parkThenReset(openWindowFirst: false);
+
+    expect(r.parked, isTrue);
+    expect(
+      r.threw,
+      isA<RpcStatusException>(),
+      reason:
+          'returning normally told the caller a payload had been sent that '
+          'went nowhere',
+    );
+    expect((r.threw! as RpcStatusException).statusCode, RpcStatus.unavailable);
+  });
+
+  // WITNESS, the pump. Of the seven per-stream maps `health()` reports, this was
+  // the only one the inline release left behind: `releaseStreamId` was the only
+  // path that disposed a pump, so a stream ending any other way kept one until its
+  // id was released -- which a direct transport user need never do.
+  test('the inline release disposes the stream pump too', () async {
+    final r = await _parkThenReset(openWindowFirst: false);
+
+    expect(r.whileParked['outgoingPumps'], 1, reason: 'the arm needs a pump');
+    expect(r.afterReset['outgoingPumps'], 0);
+  });
+
   // CONTROL. Reads 0 before and after the fix, and that is not what it is for:
   // its `windowOpen` row is the proof that the add site runs AT ALL. If that
   // ever reads 0 the witness above is vacuous and proves nothing.
@@ -210,6 +251,13 @@ void main() {
       final r = await _parkThenReset(openWindowFirst: true);
 
       expect(r.parked, isTrue);
+      expect(
+        r.threw,
+        isNull,
+        reason:
+            'a send that DID reach the peer must still read as success -- '
+            'the sink-cancelled signal must not fire on a clean completion',
+      );
       expect(
         r.windowOpen['halfClosedLocal'],
         1,

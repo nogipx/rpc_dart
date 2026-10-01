@@ -1233,6 +1233,13 @@ class RpcHttp2CallerTransport
         _halfClosedLocal.remove(streamId);
         _reservedStreams.remove(streamId);
         _statusReceived.remove(streamId);
+        // The one map this block used to leave behind, measured against the other
+        // six: `releaseStreamId` was the only path that disposed a pump, so a
+        // stream ending here kept one until its id was released -- which a direct
+        // transport user need never do. Disposal also wakes anything parked on the
+        // peer's window, which then fails rather than reporting a send that
+        // cannot go anywhere.
+        _outgoingPumps.remove(streamId)?.dispose();
       },
     );
 
