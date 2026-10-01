@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-207](P-207-what-an-orderly-close-logs-per-in-flight-call.md)** valid (round 587),
+  rpc_dart_http — **a count that SCALES, because "each call" is the claim**: `8 calls -> 8 errors`,
+  `1 -> 1`, `0 -> 0`, so one record would have read as a message rather than a defect, and the 0-call arm
+  says the records come from the calls and not from `close()`. The error count is read BEFORE the close too,
+  so the arm asserts its own setup. **`minLevel: internal` is load-bearing**: with the default the guarded
+  `internal` call is filtered, and a zero at `error` cannot be told from a log DELETED rather than moved —
+  `internal 16` after is what distinguishes them. Does not read the consumer side; the status is unchanged by
+  construction
 - **[P-206](P-206-what-te-trailers-reaches.md)** valid (round 586),
   rpc_dart_http — **asks where a header GOES, not whether it is sent**: `headers delivered 10, carries te YES`
   -> `9, no`, read on the responder TRANSPORT's `incomingMessages` and not on the handler's `RpcContext`,

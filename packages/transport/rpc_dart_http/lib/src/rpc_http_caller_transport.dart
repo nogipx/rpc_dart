@@ -671,11 +671,27 @@ class RpcHttpCallerTransport
         _logger?.internal('HTTP request aborted [streamId: $streamId]');
       }
     } catch (e, st) {
-      _logger?.error(
-        'HTTP request failed for [streamId: $streamId]',
-        error: e,
-        stackTrace: st,
-      );
+      // `close()` sets `_isClosed` before closing the client it owns, so every
+      // request parked at that moment lands here with a `ClientException` this
+      // side caused. At `error` that is one record per in-flight call for an
+      // orderly shutdown, which is the same argument the branch above makes
+      // about an abandoned call: an ordinary event must not read as a failure.
+      //
+      // The call is still ANSWERED either way — only the level moves, and the
+      // status comes from `_closedDuringCall` by way of `closeAll`.
+      if (_isClosed) {
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal(
+            'HTTP request ended by close() [streamId: $streamId]',
+          );
+        }
+      } else {
+        _logger?.error(
+          'HTTP request failed for [streamId: $streamId]',
+          error: e,
+          stackTrace: st,
+        );
+      }
       _emitError(streamId, _asRpcStatus(e, call.methodPath), st);
     } finally {
       _abortTriggers.remove(streamId);

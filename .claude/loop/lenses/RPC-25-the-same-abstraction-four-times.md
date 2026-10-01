@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585]
-status: confirmed (round 585)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585, 587]
+status: confirmed (round 587)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -1353,3 +1353,37 @@ whole diff: nothing here had to be designed.
 
 `../probes/P-205-what-one-buffered-request-body-costs.md`,
 `../rounds/585-the-buffer-the-sibling-had-already-replaced.md`, B-148.
+
+## Round 587 — the sibling was fifteen lines up, in the same `try`
+
+Every earlier application looked for the sibling in another class, package or layer.
+Here it is the PREVIOUS CATCH CLAUSE.
+
+The duty: *what does this transport log when a call ends for a reason this side
+caused?* `http.RequestAbortedException` answers it at `internal` and says why —
+*"logging it at error would make every ordinary cancellation look like a failure"*.
+The generic catch below it answered the same question at `error`, so an orderly
+`close()` produced one record per in-flight call:
+
+```
+8 calls in flight   errors 8  ->  0, internal 16
+1 call              errors 1  ->  0
+0 calls             errors 0      0
+```
+
+> **Two `catch` clauses on one `try` are two copies of a decision, and a diff never
+> shows them side by side because nothing was duplicated — the second one simply
+> never asked.** Detector: for each `try` with more than one handler, state the
+> question every clause is answering and check they agree. Cheaper than any
+> cross-package sweep this lens has run.
+
+> **When a claim says "each", the arm must SCALE.** `8 / 1 / 0` is the measurement;
+> a single run showing one error reads as a message rather than as a defect, and the
+> 0-call arm is what says the records come from the calls and not from the close.
+
+> **And when a fix MOVES a log rather than removing one, the instrument has to admit
+> the lower level.** With the default `minLevel` the guarded `internal` call is
+> filtered, so `errors 0` is the same reading for "moved" and for "deleted".
+
+`../probes/P-207-what-an-orderly-close-logs-per-in-flight-call.md`,
+`../rounds/587-eight-calls-eight-errors.md`, B-143.

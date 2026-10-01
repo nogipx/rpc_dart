@@ -1,10 +1,10 @@
 ---
-status: open
-round: 539 (ownership measured and fixed; the in-flight logging claim untouched)
+status: closed (round 587)
+round: 587 (539 measured and fixed the ownership half; 587 the logging one)
 commit: 11baa648
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-probe: P-172
-reason: "cost — the ownership half is CONFIRMED and FIXED; what remains is the lead's third claim, that in-flight calls each log an error during an orderly close, which nothing has measured"
+probe: P-172, P-207
+reason: "both halves CONFIRMED and FIXED. 539: an injected client answered `Client is already closed` and now reads `usable (204)`. 587: an orderly close logged one error PER in-flight call, 8/1/0 against the call count, now 0 with the event recorded at `internal` instead"
 ---
 
 # B-143 — HTTP/1.1 caller closes an `http.Client` it did not create
@@ -53,11 +53,35 @@ on every transport that made its own.
 **A CHANGELOG line is owed**: a caller who relied on `transport.close()` disposing of their client now
 has to close it themselves.
 
-## Still open — the lead's third claim
+## The third claim — measured in round 587, CONFIRMED and fixed
 
-"In-flight calls each log an error during an orderly close." Nothing here measured how a close is
-reported to calls that were running; `_closedDuringCall` already exists for it, and whether it logs at
-error per call is unasked.
+"In-flight calls each log an error during an orderly close." "Each" is the claim, so
+the arm has to SCALE — one record would be a message:
+
+```
+8 calls in flight   errors before 0   errors after 8
+1 call  in flight   errors before 0   errors after 1
+0 calls             errors before 0   errors after 0
+```
+
+`close()` closes the client it owns, every parked request fails with a
+`ClientException`, and the generic catch at `_fireRequest`'s end logged at `error`.
+The 0-call arm says the records come from the calls and not from `close()` itself.
+
+**The sibling is the next branch down in the same `try`.** `http.RequestAbortedException`
+is already logged at `internal`, with the reason written out: *"logging it at error
+would make every ordinary cancellation look like a failure"*. A close is the same
+event with a different trigger, and `close()` sets `_isClosed` before closing the
+client, so the flag is a reliable signal by the time each request lands.
+
+After: `errors 0, internal 16` for eight calls. The event is still recorded, one
+level down — which is why the probe admits `internal`: with the default level a
+count of zero errors cannot be told from a log that was deleted. The status a
+consumer sees is untouched; it comes from `_closedDuringCall` by way of `closeAll`.
+
+Not covered: the responder half of this package has its own close path, and no arm
+reads the consumer side beyond the suite's GUARD that a real failure with the
+transport OPEN still logs at `error`. `P-207`.
 
 ## Owner decision
 
