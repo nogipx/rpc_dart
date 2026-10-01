@@ -38,6 +38,16 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-184](P-184-a-start-guard-behind-its-own-await.md)** valid (round 560),
+  rpc_dart_http + rpc_dart_http2 — two files, one question: what two concurrent starts do to a server
+  that is already binding. **A FIXED port is the whole rig** — with `port: 0` each concurrent bind gets
+  its own ephemeral port, nothing fails, and the catch under test never runs; the first version hung
+  with no output rather than reporting that. Four observables, because the two packages fail
+  differently: what each start returned, `isRunning`, `endpoints`, a real call, and whether the port
+  is free after `stop()`. **That last one is the only thing that can see http2's defect**, since
+  `stop()` returns normally and `isRunning` is already false — every in-process check says the server
+  is down, and a bind attempt from outside says the listener is still there. `THREE concurrent
+  start()` answering `ok:x` is a second control and a refutation of the lead's own claim.
 - **[P-183](P-183-what-reaches-the-wire-when-a-parked-send-meets-a-half-close.md)** valid (round 558),
   rpc_dart_http2 — **records three observables, not a verdict**: the sink's contents in arrival order,
   and whether the parked send returned or threw. `parked send, then endStreamNow() -> data 0B eos=true`

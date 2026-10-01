@@ -35,6 +35,10 @@ class RpcHttp2Server implements IRpcServer {
   SecureServerSocket? _secureServerSocket;
   bool _isRunning = false;
 
+  /// Claimed by [start] before its first await, so a concurrent second call
+  /// cannot get past the guard while the bind is in flight.
+  bool _starting = false;
+
   /// Whether the server is serving over TLS (`true`) or plaintext h2c (`false`).
   bool get isSecure => _securityContext != null;
   final List<StreamSubscription<void>> _subscriptions = [];
@@ -360,10 +364,22 @@ class RpcHttp2Server implements IRpcServer {
   /// Binds the listening socket and starts accepting connections.
   @override
   Future<void> start() async {
-    if (_isRunning) {
-      _logger?.warning('HTTP/2 server is already running');
+    // `_isRunning` alone cannot hold this: it is assigned AFTER the bind's await,
+    // so two concurrent callers both passed the guard and both bound. The loser's
+    // catch then set it FALSE over the winner's true — measured: the socket is
+    // bound and serving calls while `isRunning` reports false, and `stop()` gives
+    // up on exactly that flag, so the listener is unreachable for the life of the
+    // process.
+    //
+    // The slot is therefore claimed SYNCHRONOUSLY, before anything suspends, and
+    // released in the catch so a retry after "address in use" still works.
+    if (_isRunning || _starting) {
+      _logger?.warning(
+        'HTTP/2 server is already ${_isRunning ? 'running' : 'starting'}',
+      );
       return;
     }
+    _starting = true;
 
     final scheme = isSecure ? 'h2 (TLS)' : 'h2c (plaintext)';
     _logger?.info('Starting HTTP/2 server ($scheme) on $_host:$_port');
@@ -425,6 +441,7 @@ class RpcHttp2Server implements IRpcServer {
         stackTrace: stackTrace,
       );
       _isRunning = false;
+      _starting = false;
       rethrow;
     }
   }
@@ -436,6 +453,8 @@ class RpcHttp2Server implements IRpcServer {
 
     _logger?.info('Stopping the HTTP/2 server');
     _isRunning = false;
+    // Or a server stopped and started again is refused by its own claim.
+    _starting = false;
 
     // Stop ACCEPTING before any drain: draining while still accepting is not a
     // shutdown.

@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560]
 status: confirmed (round 554)
 ---
 
@@ -405,3 +405,33 @@ used by all five, appears at the `rpc_dart-6.3.0` tag only inside this journal's
 > the method, not evidence about those packages — and it widened a change past its measurement.
 
 `../rounds/556-no-published-core-satisfies-any-floor.md`, B-154.
+
+## Round 560 — one cause, two transports, two unrecognisably different disasters
+
+A start guard whose flag is assigned after the bind's await, so two concurrent callers both pass it.
+Filed against the HTTP/1.1 server; present in the HTTP/2 one too.
+
+```
+http    TWO concurrent   bound + threw     isRunning=true   endpoints=0  call -> status 14
+http2   TWO concurrent   started + threw   isRunning=false  call -> ok:x  PORT STILL BOUND
+```
+
+> **The same cause can produce opposite symptoms, and that is why this lens sweeps by SHAPE rather
+> than by symptom.** http ends up bound and answering UNAVAILABLE behind a flag that says healthy;
+> http2 ends up bound and serving traffic behind a flag that says dead, where `stop()` gives up on
+> exactly that flag and the listener leaks for the life of the process. Searching for either
+> description finds nothing in the other file. Searching for "flag assigned after the await" finds
+> both.
+
+> **An observable that lives only outside the process.** http2's `stop()` returns normally and
+> `isRunning` is already false, so every in-process check says the server is down. The only thing
+> that can see the leak is a bind attempt on the port from outside. When a teardown's whole job is
+> to release an OS resource, the witness has to ask the OS.
+
+> **A claim flag has three release points, not one**: the failure path, the teardown, and never on
+> success. The fix was written with the teardown release in one package and without it in the other,
+> and the missing one refused the first restart — caught by an existing lifecycle test, not by the
+> new witness.
+
+`../rounds/560-the-guard-was-behind-the-await.md`,
+`../probes/P-184-a-start-guard-behind-its-own-await.md`, B-151.

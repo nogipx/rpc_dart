@@ -73,6 +73,10 @@ class RpcHttpServer implements IRpcServer {
   HttpServer? _httpServer;
   bool _isRunning = false;
 
+  /// Claimed by [afterModulesStart] before its first await, so a concurrent
+  /// second call cannot get past the guard while the bind is in flight.
+  bool _binding = false;
+
   /// Creates an HTTP/1.1 RPC server.
   ///
   /// [securityPolicy] bounds request body size, header sizes, and concurrent
@@ -158,13 +162,24 @@ class RpcHttpServer implements IRpcServer {
     // reach it. A dead server squatting on a port and answering 503 to
     // everything is worse than a closed one: a supervisor that rebinds cannot,
     // and a health check looking only for a live socket says the port is fine.
-    if (_httpServer != null) {
+    // `_httpServer` alone cannot hold this: it is assigned AFTER the bind's
+    // await, so two concurrent callers both passed the guard, both built an
+    // endpoint over the SAME transport, and the one that lost the bind ran the
+    // catch below — closing the shared transport under the winner and nulling
+    // `_endpoint`. Measured: the socket stays bound, `isRunning` reports true,
+    // `endpoints` is empty and every call is answered UNAVAILABLE.
+    //
+    // So the slot is claimed SYNCHRONOUSLY, before anything can suspend. The
+    // claim is released in the bind's catch, because the documented response to
+    // "address in use" is to call this again.
+    if (_httpServer != null || _binding) {
       _logger?.warning(
-        'afterModulesStart() called again; already listening on '
-        'http://$_host:${_httpServer!.port}',
+        'afterModulesStart() called again; already '
+        '${_httpServer != null ? 'listening on http://$_host:${_httpServer!.port}' : 'binding'}',
       );
       return;
     }
+    _binding = true;
 
     final transport = _transport!;
     final endpoint = RpcResponderEndpoint(
@@ -220,6 +235,8 @@ class RpcHttpServer implements IRpcServer {
         bodyReadTimeout: _bodyReadTimeout,
         logger: _logger,
       );
+      // Released with the rest: the documented recovery is to call this again.
+      _binding = false;
       rethrow;
     }
     _isRunning = true;
@@ -274,6 +291,9 @@ class RpcHttpServer implements IRpcServer {
   @override
   Future<void> stop({Duration? drainTimeout}) async {
     _isRunning = false;
+    // Or a server stopped and started again is refused by its own bind claim:
+    // the claim survives a successful bind, and `_httpServer` is cleared below.
+    _binding = false;
 
     final httpServer = _httpServer;
     final endpoint = _endpoint;
