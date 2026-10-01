@@ -1368,27 +1368,19 @@ class RpcHttp2CallerTransport
 
   /// The status [headers] carry, alone, or null if they carry none.
   ///
-  /// Raw headers rather than converted metadata: the converter refuses on
-  /// `maxHeaders` partway through its walk, so there is nothing to read a status
-  /// out of by then. `grpc-message` rides along only when it passes the check the
-  /// peer just failed -- it may BE the offending value.
+  /// Reads the RAW headers rather than converted metadata, which is this site's whole
+  /// reason to exist: the converter refuses on `maxHeaders` partway through its walk,
+  /// so by then there is nothing to read a status out of. What SURVIVES is
+  /// `RpcSecurityPolicy.statusOnly`'s decision, not a second copy of it.
   RpcMetadata? _peerStatusOnly(List<http2.Header> headers) {
-    String? status;
-    String? message;
+    final found = <RpcHeader>[];
     for (final header in headers) {
       final name = String.fromCharCodes(header.name);
-      if (name == RpcHeaders.grpcStatus) {
-        status = String.fromCharCodes(header.value);
-      } else if (name == RpcHeaders.grpcMessage) {
-        message = String.fromCharCodes(header.value);
+      if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
+        found.add(RpcHeader(name, String.fromCharCodes(header.value)));
       }
     }
-    if (status == null || !_policy.isValidHeaderValue(status)) return null;
-    return RpcMetadata([
-      RpcHeader(RpcHeaders.grpcStatus, status),
-      if (message != null && _policy.isValidHeaderValue(message))
-        RpcHeader(RpcHeaders.grpcMessage, message),
-    ]);
+    return _policy.statusOnly(RpcMetadata(found));
   }
 
   /// Handles an incoming HEADERS frame (initial response or trailers).

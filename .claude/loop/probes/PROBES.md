@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-201](P-201-what-the-http1-caller-lets-through.md)** valid (round 581),
+  rpc_dart_http — a `dart:io` server answering a real `grpc-status: 9` plus N headers of noise:
+  `1000 extra -> 1007 delivered` against a `CONTROL 2 extra -> 9`, now `2`. **It reads TWO things and the
+  second is why it exists**: the header count AND whether the server's status survived — a probe measuring
+  only the count would have called the first fix a success, when it read `headers 4, grpc-status 3`.
+  First-status-wins is load-bearing: a status manufactured on the initial frame arrives ahead of the
+  trailers, and recording the LAST one would have missed it. Does NOT drive a character violation
+  (`HttpServer` will not emit a CR in a value) and models no attacker
 - **[P-200](P-200-is-the-startup-budget-doubled.md)** valid (round 579),
   rpc_dart_isolate — a worker that never reaches `ready`, timed against three budgets across a 4x range so
   the answer is a RATIO: `1.04x / 1.00x / 1.00x`, which REFUTES "two phases, so 2x". **The stall must be

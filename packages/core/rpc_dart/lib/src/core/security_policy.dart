@@ -514,6 +514,34 @@ final class RpcSecurityPolicy {
   bool isValidMethodPath(String? methodPath) =>
       methodPath == null || parseMethodPath(methodPath) != null;
 
+  /// A peer's RESPONSE metadata cut down to the status it carries, or null if it
+  /// carries none this side can use.
+  ///
+  /// What a caller does with metadata that breaks this policy: **not refuse it.**
+  /// These are the peer's headers, already decoded and resident by the time anything
+  /// checks them, so refusing buys no memory — it only decides whose answer ends the
+  /// call. Measured on http2 against a server answering `grpc-status: 9` with 10 KiB
+  /// of `grpc-status-details-bin`, which is how grpc-go carries rich errors: the
+  /// caller reported `status 3`, its own INVALID_ARGUMENT, and the server's status was
+  /// gone.
+  ///
+  /// `grpc-message` rides along only when it passes the check the peer just failed —
+  /// it may BE the offending value — and a status without an explanation is still the
+  /// server's answer.
+  ///
+  /// ONE home for the rule: three call sites had grown their own copy, which is two
+  /// too many for a decision about what a caller is told.
+  RpcMetadata? statusOnly(RpcMetadata metadata) {
+    final status = metadata.getHeaderValue(RpcHeaders.grpcStatus);
+    if (status == null || !isValidHeaderValue(status)) return null;
+    final message = metadata.getHeaderValue(RpcHeaders.grpcMessage);
+    return RpcMetadata([
+      RpcHeader(RpcHeaders.grpcStatus, status),
+      if (message != null && isValidHeaderValue(message))
+        RpcHeader(RpcHeaders.grpcMessage, message),
+    ]);
+  }
+
   /// Best-effort metadata validation.
   ///
   /// Throws [RpcMetadataViolation], which IS an [ArgumentError] — every

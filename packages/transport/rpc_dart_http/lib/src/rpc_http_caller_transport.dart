@@ -197,6 +197,55 @@ class RpcHttpCallerTransport
 
   /// Reads the response body, refusing to buffer more than the policy allows.
   ///
+  /// [metadata] if it satisfies the policy, else the status it carries alone.
+  ///
+  /// This transport is not an `RpcChannelTransport`, so core's `_validateInbound`
+  /// never runs on it and the response headers used to go up unchecked -- measured, a
+  /// server answering with 1000 extra headers had `1007` delivered against a
+  /// `maxHeaders` of 128.
+  ///
+  /// Reduced rather than refused, because refusing destroys the server's status:
+  /// `RpcSecurityPolicy.statusOnly` owns that rule and carries the measurement that
+  /// settled it.
+  ///
+  /// [isTrailer] decides what a violation leaves behind, and getting it wrong
+  /// reproduces the very defect this guards against. **The status lives in the
+  /// TRAILER frame** on this transport — the split above routes `grpc-status` and
+  /// `grpc-message` there — so an offending INITIAL frame has no status to keep and
+  /// must not invent one: a first attempt answered it with this side's
+  /// INVALID_ARGUMENT, which reached the caller BEFORE the server's real
+  /// `grpc-status: 9` and won. An initial frame is therefore reduced to nothing and
+  /// the trailers answer the call.
+  RpcMetadata _checkedResponseMetadata(
+    RpcMetadata metadata,
+    int streamId, {
+    required bool isTrailer,
+  }) {
+    try {
+      _policy.validateMetadata(metadata);
+      return metadata;
+    } on ArgumentError catch (error) {
+      _logger?.warning(
+        'Response metadata on stream $streamId violates the policy '
+        '(${error.message}); dropping what cannot be kept',
+      );
+      if (!isTrailer) return const RpcMetadata([]);
+      return _policy.statusOnly(metadata) ??
+          RpcMetadata([
+            RpcHeader(
+              RpcHeaders.grpcStatus,
+              RpcStatus.invalidArgument.toString(),
+            ),
+            RpcHeader(
+              RpcHeaders.grpcMessage,
+              RpcMetadata.encodeGrpcMessage(
+                'Response metadata violates the security policy',
+              ),
+            ),
+          ]);
+    }
+  }
+
   /// The responder bounds the REQUEST body against the same ceiling; this is the
   /// other direction, and without it whatever a server, a proxy or a captive
   /// portal sends is allocated in full. The frame parser has a limit of its own,
@@ -541,10 +590,24 @@ class RpcHttpCallerTransport
         }
       });
 
+      // THE POLICY APPLIES INBOUND HERE TOO, and it did not: this transport is not an
+      // `RpcChannelTransport`, so core's `_validateInbound` never runs on it, and the
+      // response headers went up with no count, size or character check. Measured
+      // against a server answering with 1000 extra headers: `1007 delivered` on a
+      // `maxHeaders` of 128.
+      //
+      // Reduced, not refused, when it breaks -- `RpcSecurityPolicy.statusOnly` owns
+      // that rule and carries why. Refusing destroys the server's status, which is
+      // what round 567 had to undo on http2.
+      final initial = _checkedResponseMetadata(
+        RpcMetadata(initialHeaders),
+        streamId,
+        isTrailer: false,
+      );
       _emit(
         RpcTransportMessage(
           streamId: streamId,
-          metadata: RpcMetadata(initialHeaders),
+          metadata: initial,
           isEndOfStream: false,
           methodPath: call.methodPath,
         ),
@@ -565,7 +628,11 @@ class RpcHttpCallerTransport
       _emit(
         RpcTransportMessage(
           streamId: streamId,
-          metadata: RpcMetadata(trailerHeaders),
+          metadata: _checkedResponseMetadata(
+            RpcMetadata(trailerHeaders),
+            streamId,
+            isTrailer: true,
+          ),
           isEndOfStream: true,
         ),
       );

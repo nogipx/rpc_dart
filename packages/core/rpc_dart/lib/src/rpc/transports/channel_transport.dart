@@ -749,7 +749,7 @@ class RpcChannelTransport
       // CLIENT role only. A responder has its own answer to send and sends it
       // below; and a hostile CLIENT could otherwise put `grpc-status` on a
       // request to get a frame delivered where this used to refuse it.
-      final reduced = isClient ? _statusOnly(metadata) : null;
+      final reduced = isClient ? _policy.statusOnly(metadata) : null;
       if (reduced == null) {
         final ctl = _streamControllers[streamId];
         if (ctl != null && !ctl.isClosed) ctl.addError(violation);
@@ -815,22 +815,6 @@ class RpcChannelTransport
       }
       return reduced;
     }
-  }
-
-  /// [metadata] cut down to the status it carries, or null if it carries none.
-  ///
-  /// `grpc-message` rides along only when it passes the same check the peer just
-  /// failed -- it may BE the offending value, and a status without an explanation
-  /// is still the server's answer.
-  RpcMetadata? _statusOnly(RpcMetadata metadata) {
-    final status = metadata.getHeaderValue(RpcHeaders.grpcStatus);
-    if (status == null || !_policy.isValidHeaderValue(status)) return null;
-    final message = metadata.getHeaderValue(RpcHeaders.grpcMessage);
-    return RpcMetadata([
-      RpcHeader(RpcHeaders.grpcStatus, status),
-      if (message != null && _policy.isValidHeaderValue(message))
-        RpcHeader(RpcHeaders.grpcMessage, message),
-    ]);
   }
 
   // ── Flow control ───────────────────────────────────────────────────────────
