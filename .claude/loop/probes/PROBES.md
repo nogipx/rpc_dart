@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-191](P-191-does-our-half-close-when-the-server-ends-first.md)** valid (round 570),
+  rpc_dart_http2 — **the observable is at the SERVER**, because every per-stream map on our side
+  reads 0 either way: a raw `ServerTransportConnection` answers as soon as the first DATA frame
+  arrives, and `onDone` on its incoming side fires when the client ends its half and not otherwise.
+  `WITNESS 0 of 3 -> 3 of 3` against a `CONTROL 3 of 3` whose request carries `endStream`. The
+  accepted count is a second control, on the premise. **Its first version read the counts AFTER
+  `transport.close()` and reported the arms backwards**, since close() terminates what the transport
+  still tracks and ended the streams itself
 - **[P-190](P-190-what-the-server-sees-when-a-cancel-has-no-stream.md)** valid (round 569),
   rpc_dart_http2 — a raw `ServerTransportConnection` recording the `:path` of every stream it
   accepts, which makes a phantom stream a path the client never asked for:

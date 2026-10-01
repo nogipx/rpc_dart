@@ -1254,7 +1254,28 @@ class RpcHttp2CallerTransport
           );
         }
 
-        _activeStreams.remove(streamId);
+        // OUR half may still be open: the server answered and ended first, so
+        // nothing else will ever close it -- `releaseStreamId`'s RST branch needs
+        // the entry this line removes, and `finishSending` returns early without
+        // it. Measured against a server answering before the client half-closed:
+        // 3 of 3 streams left half-open at the peer, each holding a
+        // MAX_CONCURRENT_STREAMS slot, with every map on this side reading 0.
+        //
+        // RST_STREAM, not an empty END_STREAM, for the reason `releaseStreamId`
+        // gives: a stream we have NOT half-closed is one the request side never
+        // finished, and RST is the legal way to drop it.
+        final ending = _activeStreams.remove(streamId);
+        if (ending != null && !_halfClosedLocal.contains(streamId)) {
+          try {
+            ending.terminate();
+          } catch (e) {
+            if (_logger?.isInternal ?? false) {
+              _logger?.internal(
+                'Could not reset finished stream $streamId: $e',
+              );
+            }
+          }
+        }
         _streamSubscriptions.remove(streamId);
         _streamParsers.remove(streamId);
         _initialHeadersReceived.remove(streamId);
