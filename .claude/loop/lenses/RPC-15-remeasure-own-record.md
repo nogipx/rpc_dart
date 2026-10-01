@@ -249,7 +249,7 @@ and severe — all three from one intake, worked consecutively, and the list the
 read in title order.
 
 `../rounds/559-the-intake-was-unsorted-not-empty.md`,
-`../checked/C-61-the-audit-intake-sorted-by-who-it-hurts.md`.
+`../checked/C-61-the-audit-intakes-severity-claims-do-not-hold.md`.
 
 > **A flat list of leads IS a record, and it ages like one.** Every entity here has a status that
 > `stale` can age, except the ordering among them — so a list assembled by an outside audit keeps its

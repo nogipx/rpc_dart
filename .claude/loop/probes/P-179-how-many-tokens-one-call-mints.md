@@ -77,6 +77,13 @@ mint numbers across the caller, the wire and the handler rule that out.
 Establishes that a unary call mints ONE token, that the responder does not mint one of its own,
 and therefore that the premise B-120's decision rests on does not hold at this sha.
 
+**Both of those hold for the one PEER this ran against: an rpc_dart caller through
+`RpcCallerEndpoint`, which always sends `x-request-id` AND `x-trace-id`.** The responder adopts
+both and mints nothing. Where no `x-trace-id` arrives — any gRPC client that is not rpc_dart,
+since both headers are this library's own — `responder_pipeline.dart:2360` mints a second token,
+and no arm here reaches that branch. Read in the round-565 owner review and filed as `B-220`; the
+rig needs no change to cover it, only a request carrying neither header.
+
 Does NOT compare its cost SHARE with round 511's. That round read ~40 us of a ~97 us call; the
 call here is 264.5 us over a different rig (a byte pipe, 2000 sequential calls), so only the
 TOKEN cost — ~42 us against its 31-38 us — is comparable. The share is not.

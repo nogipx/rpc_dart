@@ -13,7 +13,8 @@ release: changelog
 
 ## Target
 
-B-182, next on round 559's class-A list: `connect` and `secureConnect` await `Socket.connect` /
+B-182, taken for a filed consequence that hangs the owner's own application at startup: `connect` and
+`secureConnect` await `Socket.connect` /
 `SecureSocket.connect` with no timeout, so *"an application that hangs at startup against a black-holed
 host"*.
 

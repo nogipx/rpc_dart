@@ -165,3 +165,9 @@ round cap: 600
 Publishing, versions, changelog, dependency floors, `publish:dry`, tags (the
 owner, round 150). If one comes up in passing — one line at most, and not up
 front. The loop's target is the code.
+
+**The accrued release debt was put to the owner in the round-565 review and the
+answer was LEAVE IT.** `loop.py owner-review` totals it at the end of every run
+(25 records, 12 of them breaking, at that point) — that total is a fact for the
+release, not a question to re-ask. Do not offer to draft the CHANGELOG again
+unless the owner raises it.

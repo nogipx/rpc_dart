@@ -13,7 +13,8 @@ release: changelog
 
 ## Target
 
-B-192, next on round 559's class-A list, filed with confidence **high** and two claims:
+B-192, taken for the same reason as the last two — a filed consequence that costs the owner's own
+server — and filed with confidence **high** and two claims:
 
 1. the preface timeout releases the endpoint and then destroys the socket, whose `done` releases it
    again — so `onConnectionClosed` fires twice, with no idempotency guard;
@@ -123,6 +124,6 @@ refuted, four items open.
 Bench `../probes/P-185-two-paths-release-one-connection.md` — new.
 Round `557-the-comment-named-a-zone-that-was-not-there.md` — the same shape of error in the same
 package: a true warning attached to the wrong call.
-Negative `../checked/C-61-the-audit-intake-sorted-by-who-it-hurts.md` — the grading that put this lead
-in class A.
+Negative `../checked/C-61-the-audit-intakes-severity-claims-do-not-hold.md` — why this lead's own
+severity line was treated as a hypothesis rather than a fact.
 Lens `../lenses/RPC-21-drive-the-lifecycle-twice.md` — `applied: [562]`.

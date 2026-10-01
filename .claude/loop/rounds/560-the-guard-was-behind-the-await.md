@@ -13,7 +13,8 @@ release: changelog
 
 ## Target
 
-B-151, the first class-A lead taken from round 559's grading, and the highest-severity line in it:
+B-151, taken because its filed consequence is the worst thing on the audit's list that touches the
+owner's own deployment — and the highest-severity line in it:
 *"crash, total outage (everything 503) after a double start"*. The lead bundles five items; this
 round takes the one with a consequence, and the class turned out to span two packages.
 
@@ -129,6 +130,6 @@ the claim precedes the branch, and only the plaintext path was measured.
 Lead `../backlog/B-151-http1-server-lifecycle-defects.md` — item one fixed in both packages, four
 items open.
 Bench `../probes/P-184-a-start-guard-behind-its-own-await.md` — new, two files.
-Negative `../checked/C-61-the-audit-intake-sorted-by-who-it-hurts.md` — the grading that picked this
+Negative `../checked/C-61-the-audit-intakes-severity-claims-do-not-hold.md` — the grading that picked this
 lead first.
 Lens `../lenses/RPC-08-policy-field-single-transport.md` — `applied: [560]`.

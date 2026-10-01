@@ -1,6 +1,6 @@
 ---
-status: open (round 562 fixed the double close and REFUTED the crash; four items remain)
-round: 562
+status: open (562 fixed the double close and refuted the crash; 564 discharged start() re-entrancy; three remain)
+round: 564
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
 probe: none — static read, nothing run
@@ -70,11 +70,17 @@ reports.
 
 **Same shape of error as B-178**, in the same package: a true warning attached to the wrong call.
 
-### The four items still open
+### `start()` re-entrancy — DISCHARGED by round 560, verified not assumed (round 564)
+
+Read at this sha: `start()` opens with `if (_isRunning || _starting)` and claims `_starting` before its
+first await, with the measurement in its own comment. **Both readings of "not re-entrant" are covered** —
+two concurrent calls (the second returns early rather than binding a second socket) and a call after
+`stop()` (which clears `_starting`, the release round 560's own gate caught as missing in the sibling
+package). Nothing left here; it was not merely "possibly a duplicate".
+
+### The three items still open
 
 - `stop()` closes endpoints serially (N x up to 2 s) — a cost; `Future.wait` is the sketch.
-- `start()` is not re-entrant — **round 560 fixed the double-start race in this method**, so what
-  remains here is a different reading of the same code and may be a duplicate. Check before working it.
 - `createWithContracts` drops the ping and preface options.
 - The *"nothing has subscribed yet"* comment the lead calls probably false.
 
