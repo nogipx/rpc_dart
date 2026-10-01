@@ -4,7 +4,7 @@ round: 535 (items 1, 3 and 6's unhandled future examined; four groups left)
 commit: 5e2af858
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_stub.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_responder_transport.dart]
 probe: P-168
-reason: "cost — but the grading is BACKWARDS, twice over: both items the lead calls `behaviour, not style` are the cheap ones (item 1 costs 0 ms, item 3 does not exist) while the real defect was a sub-point inside item 6's bullet list. Split the rest before working it"
+reason: "cost — split and decided in round 597: two owner-requested items left, the connection cap (6d) and a headers callback re-evaluated per reconnect (4). Items 6a-6c fixed in 597; 2, 5 and 7 closed by reading"
 ---
 
 # B-139 — websocket: smaller defects and hygiene
@@ -82,6 +82,14 @@ it, with `Future.sync` so a synchronous throw is covered too.
   transport forwarding every member). The connection cap is the one with plausible severity; nothing
   has measured it.
 
+## Round 597 — split, and three fixed
+
+`../rounds/597-the-callback-that-never-ran.md` has the table. Fixed: both endpoint
+callbacks now throw `ArgumentError` (6b), `createWithContracts` takes
+`logController` (6c), the branches are merged (6a). Closed by reading: 2 (keep the
+rows), 5 (deliberate), 7 (the wrapper hides only `IRpcReconnectableTransport`).
+
 ## Owner decision
 
-—
+Session of round 597: 6b — throw `ArgumentError`; implement 6a, 6c, 6d (connection
+cap) and 4 (headers callback re-evaluated per reconnect).

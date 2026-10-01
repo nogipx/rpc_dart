@@ -58,17 +58,28 @@ class RpcWebSocketServer implements IRpcServer {
        _onPeerEndpointCreated = onPeerEndpointCreated,
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
-       _onConnectionClosed = onConnectionClosed;
+       _onConnectionClosed = onConnectionClosed {
+    // The endpoint is either a peer or a responder, and the two are siblings,
+    // so only one callback could ever run: the other was silently skipped and
+    // its contracts never registered.
+    if (onEndpointCreated != null && onPeerEndpointCreated != null) {
+      throw ArgumentError(
+        'Pass onEndpointCreated or onPeerEndpointCreated, not both',
+      );
+    }
+  }
 
   factory RpcWebSocketServer.createWithContracts({
     required Stream<WebSocketChannel> connections,
     required List<RpcResponderContract> contracts,
     LogScope? logger,
+    LogController? logController,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
     return RpcWebSocketServer(
       connections: connections,
       logger: logger,
+      logController: logController,
       policy: policy,
       onEndpointCreated: (endpoint) {
         for (final contract in contracts) {
@@ -374,35 +385,35 @@ class RpcWebSocketServer implements IRpcServer {
         policy: _policy,
       );
 
-      if (_onPeerEndpointCreated != null) {
-        final endpoint = RpcPeerEndpoint(
+      final label = 'WebSocketEndpoint-$clientLabel';
+      final onPeer = _onPeerEndpointCreated;
+      final RpcEndpointBase endpoint;
+      if (onPeer != null) {
+        final peer = RpcPeerEndpoint(
           transport: transport,
-          debugLabel: 'WebSocketEndpoint-$clientLabel',
+          debugLabel: label,
           logger: _logController,
         );
-        _endpoints.add(endpoint);
-        created = endpoint;
-        _onPeerEndpointCreated(endpoint);
-        endpoint.start();
-
-        channel.sink.done
-            .then((_) => _releaseEndpoint(endpoint, channel))
-            .catchError((Object _) => _releaseEndpoint(endpoint, channel));
+        _endpoints.add(peer);
+        created = peer;
+        onPeer(peer);
+        endpoint = peer;
       } else {
-        final endpoint = RpcResponderEndpoint(
+        final responder = RpcResponderEndpoint(
           transport: transport,
-          debugLabel: 'WebSocketEndpoint-$clientLabel',
+          debugLabel: label,
           logger: _logController,
         );
-        _endpoints.add(endpoint);
-        created = endpoint;
-        _onEndpointCreated?.call(endpoint);
-        endpoint.start();
-
-        channel.sink.done
-            .then((_) => _releaseEndpoint(endpoint, channel))
-            .catchError((Object _) => _releaseEndpoint(endpoint, channel));
+        _endpoints.add(responder);
+        created = responder;
+        _onEndpointCreated?.call(responder);
+        endpoint = responder;
       }
+      endpoint.start();
+
+      channel.sink.done
+          .then((_) => _releaseEndpoint(endpoint, channel))
+          .catchError((Object _) => _releaseEndpoint(endpoint, channel));
     } catch (e, st) {
       _logger?.error(
         'Failed to create WebSocket RPC connection',
