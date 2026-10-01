@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 600)
 round: 550
 commit: 52ad63a0
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart]
 probe: P-178
-reason: "found by the probe for B-106's own fix: there are TWO queues on the receive path, and round 550 bounded one. The connection-wide `BufferedBroadcastController` is sized by `bufferedBytes`, which is 0 for a directPayload, so it holds direct objects without limit — measured at 355 MiB where the per-stream path now stops at 71"
+reason: "REFUTED in round 600: the 355 MiB was the probe's own PAUSED broadcast subscription (dart:async buffers for it); a consuming listener retains +6 MiB of 400. The no-listener case is real and folded into B-225 item 2. Previously: found by the probe for B-106's own fix: there are TWO queues on the receive path, and round 550 bounded one. The connection-wide `BufferedBroadcastController` is sized by `bufferedBytes`, which is 0 for a directPayload, so it holds direct objects without limit — measured at 355 MiB where the per-stream path now stops at 71"
 ---
 
 # B-217 — the connection-wide buffer has no depth either
@@ -62,6 +62,14 @@ drainer is what empties it, the depth is whatever the peer sends between drains.
 
 `BufferedBroadcastController` takes `sizeOf` and has no count bound, so the fix is the same
 shape as round 550's: a second dimension, charged and released together.
+
+## Round 600 — refuted
+
+```
+paused     +392 MiB   draining  +6 MiB   none  +376 MiB   (of 400 MiB)
+```
+
+`../rounds/600-the-queue-was-the-bench.md`, `../checked/C-63-a-consumed-connection-queue-holds-nothing.md`.
 
 ## Owner decision
 

@@ -21,6 +21,9 @@ reason: "cost — round 595 bounded un-consumed request bytes per connection at 
    neither total sees it; only the per-stream EVENT ceiling bounds such a stream,
    and that multiplies by the stream count. Zero-copy is in-process
    (`memoryPair`), so the peer is the same program — reachability first.
+   Round 600 adds the connection-wide side: with NO listener on `incomingMessages`,
+   `BufferedBroadcastController` holds up to 4096 direct objects of any size
+   (`+376 MiB` for 400 x 1 MiB); with a consuming listener, `+6 MiB`.
 3. **The pause contract on the other channels.** B-138's first half (round 534)
    made the websocket channel forward pause; `IRpcChannel`'s own documented
    example, the isolate channel and the wasm channel were never checked

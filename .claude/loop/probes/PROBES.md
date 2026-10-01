@@ -38,6 +38,9 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-214](P-214-who-holds-the-connection-queue.md)** valid (round 600),
+  rpc_dart — 400 minted 1 MiB direct objects, no per-stream consumer: a PAUSED `incomingMessages`
+  subscription `+392 MiB`, a consuming one `+6`, none `+376`; paused against consuming is the control
 - **[P-213](P-213-what-the-wrapper-rebroadcasts.md)** valid (round 596),
   rpc_dart_websocket — events on `incomingMessages` per call over a real socket: `0.00` per unary and per
   100-message stream for the wrapper and a bare channel transport; `3.00` / `101.00` with round 508's
