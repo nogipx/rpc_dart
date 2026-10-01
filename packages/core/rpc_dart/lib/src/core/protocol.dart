@@ -218,20 +218,35 @@ Future<void> sendWireError(Object error, RpcErrorSender send) {
 /// invalidArgument` default contradicted it, and rows like `409`, `410`, `412`
 /// and `501` map statuses no rpc_dart responder emits.
 ///
-/// Two rows are kept beyond grpc-go's, each because something really produces
+/// Three rows are kept beyond grpc-go's, each because something really produces
 /// it:
 ///
+/// - **408**, because the HTTP/1.1 responder answers it when a request body does
+///   not arrive inside `bodyReadTimeout`. UNAVAILABLE, so the attempt is
+///   retried: the condition is a slow or stalled upload, which is the textbook
+///   transient failure, and RFC 9110 says of 408 that the client MAY repeat the
+///   request. Not DEADLINE_EXCEEDED — that names the CALLER's own budget, which
+///   rpc_dart carries in `grpc-timeout` and reports itself; this is the server
+///   giving up waiting.
 /// - **413**, because rpc_dart's OWN responders answer it for a body over
 ///   `maxMessageLengthBytes`, and RESOURCE_EXHAUSTED is what tells the caller
 ///   it hit a SIZE it can reduce rather than sent malformed arguments. The
 ///   http2 sibling answers the same status for the same condition.
 /// - **499**, nginx's "client closed request", whose exact inverse in gRPC's
 ///   own gateway mapping is CANCELLED.
+///
+/// **Two further statuses that responder emits are deliberately NOT rows** — 405
+/// for a request that is not a POST, 415 for a content-type that is not
+/// `application/grpc`. Both are the caller's own bug, and `unknown` already
+/// makes them final, so a row for either would improve the diagnostic and change
+/// no behaviour. Whether a status belongs here at all is decided by
+/// RETRYABILITY: that is the only thing the absent-row default gets wrong.
 int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
   400 => RpcStatus.internal,
   401 => RpcStatus.unauthenticated,
   403 => RpcStatus.permissionDenied,
   404 => RpcStatus.unimplemented,
+  408 => RpcStatus.unavailable,
   413 => RpcStatus.resourceExhausted,
   499 => RpcStatus.cancelled,
   429 || 502 || 503 || 504 => RpcStatus.unavailable,

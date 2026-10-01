@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582]
-status: confirmed (round 582)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583]
+status: confirmed (round 583)
 ---
 
 # RPC-25 — The same abstraction, four times
@@ -1283,3 +1283,41 @@ been RPC-08's defect instead.
 
 `../probes/P-202-which-content-type-a-grpc-over-http1-response-carries.md`,
 `../rounds/582-two-answers-to-one-question.md`, B-146.
+
+## Round 583 — the list to complete was the doc's own exception clause
+
+Round 498 found a duty a doc had named ("X is reachable only through Y" is a list
+with one entry). 583 is the same move on a doc that enumerates its own
+EXCEPTIONS.
+
+`grpcStatusFromHttpStatus` is grpc-go's table plus whatever this library really
+produces, and its doc says exactly that:
+
+> *"Two rows are kept beyond grpc-go's, each because something really produces
+> it."*
+
+So enumerate what this library really produces. `_reject`'s call sites give six
+statuses, three of which had no row — 405, 408, 415 — all falling to
+`_ => unknown`:
+
+```
+405    2  attempts 1    not a POST                              correct
+415    2  attempts 1    content-type is not application/grpc    correct
+408    2  attempts 1    the body did not arrive in time      ->  14, attempts 3
+```
+
+> **An exception clause with N entries is a list to complete, and the completion
+> is decided by one property rather than by taste.** Here it is RETRYABILITY: a
+> missing row makes a status `unknown`, which is final, so a row changes behaviour
+> only where the condition is transient. That test keeps 405 and 415 out and lets
+> 408 in — and it is why "add rows for all three to improve the diagnostic" is the
+> wrong answer rather than a harmless one.
+
+The round's other half is the lens looked at from behind. The comment that filed
+the lead argues from the table and gets the status wrong, and its CONCLUSION is
+right anyway, because the two statuses it confuses have the same retryability.
+**A copy that disagrees with its source is not automatically a defect — ask which
+property the argument depended on.**
+
+`../probes/P-203-what-each-http1-rejection-becomes-at-the-caller.md`,
+`../rounds/583-the-row-the-table-was-missing.md`, B-147, B-216.

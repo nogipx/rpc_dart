@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-203](P-203-what-each-http1-rejection-becomes-at-the-caller.md)** valid (round 583),
+  rpc_dart + rpc_dart_http — **a TABLE, one row per rejection, with two columns because the lead's argument
+  is about the second**: the gRPC status an application receives, and how many attempts the default retry
+  predicate spends. `400 13/1, 405 2/1, 408 2/1, 413 8/3, 415 2/1, 503 14/3`, and 408 becomes `14/3`. The
+  status column alone cannot grade a claim about retry semantics, and the attempts column alone cannot say
+  which rejection it belongs to. Five unmoved rows are the control; the three named statuses at the bottom
+  (`INVALID_ARGUMENT 3/1` against `INTERNAL 13/1`) are the control for the comment's claim, and they are what
+  showed its conclusion never rested on its wrong premise. Fakes each HTTP status with a plain `HttpServer`
+  rather than driving six hostile clients; the 408 premise is pinned by a raw-socket arm in the suite instead
 - **[P-202](P-202-which-content-type-a-grpc-over-http1-response-carries.md)** valid (round 582),
   rpc_dart_http — **TWO views of one response, and they disagree, which is the whole point**: shelf's
   `headersAll` through `transport.handler` reads what the code PRODUCED (`2 [application/grpc+proto,

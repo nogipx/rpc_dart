@@ -444,12 +444,12 @@ class RpcHttpResponderTransport
         error: e,
         stackTrace: st,
       );
-      // 413, not 400, for a body over the ceiling. The caller's
-      // `_httpStatusToGrpcCode` maps 413 -> RESOURCE_EXHAUSTED and 400 ->
-      // INVALID_ARGUMENT, so a 400 here tells a peer its ARGUMENTS were
-      // malformed rather than its message too large -- and inverts the retry
-      // semantics with it, since RpcRetryInterceptor treats RESOURCE_EXHAUSTED
-      // as transient and INVALID_ARGUMENT as final.
+      // 413, not 400, for a body over the ceiling. `grpcStatusFromHttpStatus`
+      // maps 413 -> RESOURCE_EXHAUSTED and 400 -> INTERNAL, so a 400 here tells
+      // a peer something went wrong on this side rather than that its message
+      // was too large -- and inverts the retry semantics with it, since
+      // RpcRetryInterceptor retries RESOURCE_EXHAUSTED and nothing about
+      // INTERNAL.
       final statusCode = switch (e) {
         TimeoutException() => 408,
         _BodyTooLarge() => 413,
