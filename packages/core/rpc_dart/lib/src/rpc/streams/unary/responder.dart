@@ -407,11 +407,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       return;
     }
 
+    var incomplete = false;
     if (message.isDirect && message.directPayload != null) {
       // Zero-copy: handle object directly.
       await handleDirectMessage(message);
     } else if (!message.isMetadataOnly && message.payload != null) {
-      await handleMessage(message);
+      incomplete = await handleMessage(message);
     }
 
     // If the client closed the stream without sending data.
@@ -419,6 +420,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     if (message.isEndOfStream &&
         eosState?.belongsToThisMethod == true &&
         eosState?.requestHandled != true) {
+      // Data DID arrive, just not all of a frame. Saying "closed without data"
+      // sends the peer looking for a request it made.
+      if (incomplete) {
+        await answerIncompleteRequest(streamId);
+        return;
+      }
       eosState!.requestHandled = true;
       _logger.warning(
         'Client closed stream without sending data [streamId: $streamId]',
@@ -441,8 +448,23 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   }
 
   /// Handles a payload message (can be called for pre-received messages).
-  Future<void> handleMessage(RpcTransportMessage message) async {
+  ///
+  /// Returns true when the request is STILL INCOMPLETE: the payload held part of
+  /// a gRPC frame and the rest has not arrived. The caller owns what happens
+  /// next — route further data frames here, and answer the peer if it half-closes
+  /// instead. Everything else returns false, including every failure, because a
+  /// failure has already been answered.
+  ///
+  /// **The answer is returned rather than left on the state** that the `finally`
+  /// below removes. Reading it afterwards is what round 547 got wrong: a
+  /// COMPLETED call reported "still arriving" and its teardown was skipped,
+  /// surfacing two layers away as an undisposed call scope.
+  Future<bool> handleMessage(RpcTransportMessage message) async {
     final streamId = message.streamId;
+    // Set only on the incomplete path, and the `finally` reads it to decide
+    // whether this stream's state -- which OWNS the reassembly parser -- may be
+    // dropped. A local, so it cannot be observed after the fact.
+    var incomplete = false;
 
     // Check cancellation before processing.
     try {
@@ -451,7 +473,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       if (_logger.isInternal) {
         _logger.internal('Message processing cancelled [streamId: $streamId]');
       }
-      return;
+      return false;
     }
 
     // Ensure the message targets this responder (id=0 accepts all for tests).
@@ -461,7 +483,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           'Message for stream $streamId does not belong to this responder (id=$id), skipping',
         );
       }
-      return;
+      return false;
     }
 
     final state = _stateFor(streamId);
@@ -472,12 +494,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           'Message for stream $streamId already handled, skipping',
         );
       }
-      return;
+      return false;
     }
 
     if (message.isMetadataOnly || message.payload == null) {
       _logger.internal('Received message without payload, skipping');
-      return;
+      return false;
     }
 
     // Mark as handling immediately to prevent duplicates.
@@ -511,8 +533,30 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           '[streamId: $streamId]',
         );
       }
-      final messages = _parserFor(state)(message.payload!);
+      final parser = _parserFor(state);
+      final messages = parser(message.payload!);
       if (messages.isEmpty) {
+        // The parser is holding the beginning of a frame, so more input would
+        // complete it. Wait, and let the caller route the rest here: the only
+        // transports that split a frame are third-party ones forwarding raw
+        // chunks, and before this they got INTERNAL on unary alone while both
+        // streaming shapes answered.
+        //
+        // `holdsPartialFrame`, not `messages.isEmpty`: a REFUSED frame also
+        // yields nothing, and waiting for a frame the policy already rejected
+        // would report a truncated request where `maxMessageLengthBytes` fired.
+        if (parser.holdsPartialFrame) {
+          incomplete = true;
+          // Not handled after all: the next fragment must be let through, and
+          // the state (which owns the parser and its buffer) must survive.
+          state.requestHandled = false;
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Request frame incomplete, awaiting the rest [streamId: $streamId]',
+            );
+          }
+          return true;
+        }
         _logger.error(
           'Failed to extract message from payload [streamId: $streamId]',
         );
@@ -529,10 +573,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
       // See [_callIsOver]: the handler is the only slow part of a unary call,
       // so this is where a cancel, deadline, drain or close lands.
-      if (_closed) return;
+      if (_closed) return false;
       if (_callIsOver) {
         await _dropLateResponse(streamId);
-        return;
+        return false;
       }
 
       // Serialize and optionally compress response.
@@ -615,9 +659,68 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       );
     } finally {
       // Clear state for this stream (single call removes all per-stream data).
-      if (_logger.isInternal) {
-        _logger.internal('Clearing state for stream $streamId');
+      //
+      // NOT while a frame is incomplete: this state owns the reassembly parser,
+      // so dropping it here throws away the bytes already received and the next
+      // fragment starts a new frame in the middle of the old one.
+      if (!incomplete) {
+        if (_logger.isInternal) {
+          _logger.internal('Clearing state for stream $streamId');
+        }
+        _streamStates.remove(streamId);
       }
+    }
+    return false;
+  }
+
+  /// Whether [streamId] is waiting for the rest of a gRPC frame RIGHT NOW.
+  ///
+  /// Asked of the parser, which is the only thing that knows. A caller cannot
+  /// use its own "incomplete" bookkeeping for this: that stays true while a later
+  /// fragment is being processed, and the request is no longer waiting then — it
+  /// is running. Answering the peer on that reading closes the responder out from
+  /// under its own handler, which is silent, because a closed responder writes
+  /// nothing.
+  bool isAwaitingRequest(int streamId) {
+    final state = _streamStates[streamId];
+    if (state == null || state.requestHandled) return false;
+    return state.parser?.holdsPartialFrame ?? false;
+  }
+
+  /// Answers a peer that half-closed while a frame was still incomplete.
+  ///
+  /// INVALID_ARGUMENT names the malformed request. Merely waiting is the failure
+  /// this whole mechanism can introduce — round 518's partial version turned an
+  /// immediate error into a hang, which is worse — so the caller must reach this
+  /// on every path where the request can stop short.
+  Future<void> answerIncompleteRequest(int streamId) async {
+    final state = _streamStates[streamId];
+    if (state == null || state.requestHandled) return;
+    state.requestHandled = true;
+    _logger.warning(
+      'Client half-closed mid-frame [streamId: $streamId]; the last gRPC frame '
+      'is incomplete',
+    );
+    try {
+      if (!state.initialHeadersSent) {
+        await _transport.sendMetadata(
+          streamId,
+          RpcMetadata.forServerInitialResponse(),
+        );
+        state.initialHeadersSent = true;
+      }
+      await _transport.sendMetadata(
+        streamId,
+        RpcMetadata.forTrailer(
+          RpcStatus.invalidArgument,
+          message:
+              'Request stream closed mid-message: the last gRPC frame is '
+              'incomplete',
+          maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
+        ),
+        endStream: true,
+      );
+    } finally {
       _streamStates.remove(streamId);
     }
   }

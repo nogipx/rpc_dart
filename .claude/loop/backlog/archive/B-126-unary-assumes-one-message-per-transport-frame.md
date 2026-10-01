@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 540)
+status: closed (round 553)
 round: 518
 commit: 9c69500d
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
@@ -155,3 +155,47 @@ and `reorderMetadata` arms.
 state, which `handleMessage`'s `finally` removes — so a COMPLETED call reported "still arriving"
 and the pipeline skipped the teardown it owed. That surfaced as an undisposed call scope and an
 unreleased http2 endpoint, two failures away from the code that caused them.
+
+## Attempt 3 (round 553) — CLOSED, and the blocker was a getter
+
+`../../rounds/553-the-parser-knew-all-along.md`. Benches
+`../../probes/P-181-which-branch-took-the-fragment.md` (new) and `P-155` (reused).
+
+**The distinction attempt 2 needed was already inside the parser.** Every refusal path calls
+`clear()` before it throws, so leftover bytes mean "incomplete" and nothing else:
+`RpcMessageParser.holdsPartialFrame` is `available > 0`, exact by construction, and eight cases
+pin it including both refusal paths.
+
+```
+WITNESS a fragmented request is answered                     got:64
+a peer that stops mid-frame gets a STATUS, not a hang        status 3
+a LATE half-close mid-frame also gets a status               status 3
+GUARD whole frames still work                                got:64
+GUARD a REFUSED frame is not reported as a truncated one     status 8, 'max: 1029'
+GUARD the streaming shapes are unaffected                    got:64
+```
+
+The refusal guard is the arm that reverted attempt 2, now green for the right reason: only the
+RESPONDER's policy is tightened, so the caller sends what its peer refuses.
+
+**One predicate carries the design, and it is not the one attempt 2 reached for.**
+`isAwaitingRequest` asks the parser, not the pipeline's own bookkeeping — which stays true while
+a later fragment is being PROCESSED, and answering the peer on that reading closes the responder
+out from under its own handler. Silently, because a closed responder writes nothing. Found with
+P-181: three statuses had been read and none said where the fragment went; tracing every record
+showed it delivered AND parsed with no answer after it.
+
+**Canary B passing is what improved the design.** A half-close was being answered at THREE sites
+and whichever won a race answered; the feed's copy covered no ordering the other two do not, so
+it was removed and each ordering now has exactly one answer site. It also forced a new arm — a
+half-close arriving AFTER the responder begins waiting is a different branch from one carried on
+the fragment itself.
+
+**The answer is returned rather than left on the state**, which is what makes round 547's trap
+unreachable by construction.
+
+Behaviour change beyond the lead: a truncated unary request answers INVALID_ARGUMENT where it
+answered INTERNAL. More accurate — the peer half-closed with a frame it never finished — and
+`unary_responder_parser_state_test`'s assertion moved with it.
+
+Left unwitnessed and stated in the code: the pre-bind drain loop's second iteration.

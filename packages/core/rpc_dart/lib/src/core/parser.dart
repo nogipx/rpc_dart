@@ -158,6 +158,20 @@ final class RpcMessageParser {
   /// Internal parser state.
   final _MessageParserState _state = _MessageParserState();
 
+  /// Whether bytes of a frame are buffered that no message has been built from
+  /// yet — so more input would complete one.
+  ///
+  /// **An empty result from [call] does NOT mean that.** It also means the frame
+  /// was REFUSED: every limit here clears the buffer and throws, so a caller
+  /// reading emptiness as "incomplete" reports a truncated request where the
+  /// operator's `maxMessageLengthBytes` fired. That is a security control
+  /// reporting the wrong thing, and it is why this is a question for the parser
+  /// rather than an inference from its output.
+  ///
+  /// True only after [call] stopped for want of bytes: fewer than five of a
+  /// header, or a header whose body has not all arrived.
+  bool get holdsPartialFrame => _state.available > 0;
+
   /// Processes an incoming data fragment and returns complete messages.
   ///
   /// Accumulates data in a buffer and uses the 5-byte prefix to extract

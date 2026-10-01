@@ -1159,6 +1159,16 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // The rest of a unary frame that arrived split. `_ensureResponder` returns
+    // early once a responder exists, so without this the later fragment reaches
+    // nothing and the call waits out its deadline.
+    final pending = state.responder;
+    if (state.unaryAwaitingRequest &&
+        pending is UnaryResponder<IRpcSerializable, IRpcSerializable>) {
+      _detachedDispatch(_feedUnaryFragment(state, pending, message), state);
+      return;
+    }
+
     // A client-stream payload with nowhere to go is only safe when the buffer
     // above took it — `storePayload` buffers while the stream is not yet bound,
     // and the bind replays what it took. Bound with no sink is a DIFFERENT
@@ -1231,6 +1241,24 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         return;
       }
       _detachedDispatch(_ensureResponder(state, binding), state);
+      return;
+    }
+
+    // A unary request that stopped MID-FRAME. Distinct from the case below —
+    // data did arrive, just not all of one message — and it must be answered
+    // rather than awaited: a request that is merely waited for is the hang that
+    // round 518's partial fix produced, which is worse than the error being
+    // fixed here.
+    final awaiting = state.responder;
+    if (awaiting is UnaryResponder<IRpcSerializable, IRpcSerializable> &&
+        awaiting.isAwaitingRequest(state.id)) {
+      state.unaryAwaitingRequest = false;
+      _detached(
+        awaiting
+            .answerIncompleteRequest(state.id)
+            .then((_) => _cleanupStream(state.id, only: state)),
+        'incomplete unary request',
+      );
       return;
     }
 
@@ -1465,19 +1493,73 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
     state.responder = responder;
 
+    // EVERY buffered message, not just the first. One frame can arrive split
+    // across several of them, and the responder's parser reassembles across
+    // calls — handing over `.first` and dropping the rest is what made a
+    // fragmented request fail on unary alone.
     final preBindMessages = state.takePreBindBufferedMessages();
-    final savedMessage = preBindMessages.isNotEmpty
-        ? preBindMessages.first
-        : state.takeLastPayload();
-    if (savedMessage != null) {
-      if (savedMessage.isDirect && savedMessage.directPayload != null) {
-        await responder.handleDirectMessage(savedMessage);
-      } else if (!savedMessage.isMetadataOnly && savedMessage.payload != null) {
-        await responder.handleMessage(savedMessage);
+    var batch = preBindMessages.isNotEmpty
+        ? preBindMessages
+        : <RpcTransportMessage>[?state.takeLastPayload()];
+    var incomplete = false;
+    // DRAINED rather than taken once, and this part is UNWITNESSED — no arm here
+    // makes it fire, and disabling it changes no test. Kept on judgement: this
+    // runs detached from `_onMessage`, so a fragment arriving while the lines
+    // below await is appended to the pre-bind buffer by a path that cannot route
+    // it either, because the flag it keys on is not set until this returns. The
+    // window is three lines wide and its failure mode is a hang.
+    while (batch.isNotEmpty) {
+      for (final message in batch) {
+        if (message.isDirect && message.directPayload != null) {
+          await responder.handleDirectMessage(message);
+          incomplete = false;
+          break;
+        }
+        if (!message.isMetadataOnly && message.payload != null) {
+          incomplete = await responder.handleMessage(message);
+        }
       }
+      if (!incomplete) break;
+      batch = state.takePreBindBufferedMessages();
+    }
+
+    // Still waiting for the rest of a frame: the stream stays alive so the next
+    // data frame can be routed here, and `_handleEndOfStream` answers the peer
+    // if it half-closes instead. Tearing down now is what turned round 518's
+    // partial fix into a hang.
+    if (incomplete) {
+      state.unaryAwaitingRequest = true;
+      // The peer may already have half-closed — the frames and the EOS can all
+      // be buffered before the method is known — in which case nothing further
+      // will arrive and nobody else will look.
+      if (state.clientEnded) {
+        await responder.answerIncompleteRequest(streamId);
+        await _cleanupStream(streamId, only: state);
+      }
+      return;
     }
 
     await _cleanupStream(streamId, only: state);
+  }
+
+  /// Hands a later fragment of an incomplete unary request to its responder.
+  ///
+  /// Reached only while [RpcResponderStreamState.unaryAwaitingRequest] holds, so
+  /// an ordinary unary call never takes this path.
+  Future<void> _feedUnaryFragment(
+    RpcResponderStreamState state,
+    UnaryResponder<IRpcSerializable, IRpcSerializable> responder,
+    RpcTransportMessage message,
+  ) async {
+    final incomplete = await responder.handleMessage(message);
+    // Still waiting: nothing to do. A half-close is answered by exactly one site
+    // per ordering — `_handleEndOfStream` when it arrives after dispatch, and the
+    // dispatch itself when it arrived before. Answering here as well would be a
+    // third, reached only by whichever won a race, and it masked the second well
+    // enough that disabling it changed no test.
+    if (incomplete) return;
+    state.unaryAwaitingRequest = false;
+    await _cleanupStream(state.id, only: state);
   }
 
   Future<void> _ensureClientStreamResponder(

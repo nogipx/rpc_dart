@@ -7,16 +7,16 @@
 // from payload" while both streaming shapes, sharing the same transport, channel,
 // codec and payload, answered normally.
 //
-// Round 518 fixed the parser half alone and REVERTED it: the later fragment had no
-// route, so an immediate INTERNAL became a hang, and a hang is worse than the error.
-// Round 547 built all three parts, got both arms passing, and REVERTED AGAIN — for a
-// reason neither earlier attempt had reached, stated in the skips below.
+// Three things have to hold together, and any two without the third are worse than
+// none: the responder waits for the rest of a frame, later fragments are routed to
+// it, and a peer that half-closes mid-frame is ANSWERED. Waiting without the answer
+// is a hang, which is worse than the error being fixed.
 //
-// The two witnesses are kept SKIPPED rather than deleted: they are the arms a third
-// attempt needs, and re-deriving them costs more than reading them. The two guards
-// describe behaviour that holds today and run.
-//
-// The measurements are in `.claude/loop/rounds/547`.
+// What makes the waiting safe is asking the PARSER whether it holds a partial frame.
+// An empty parse result also means REFUSED — every limit in the parser clears its
+// buffer and throws — so inferring "incomplete" from emptiness turns a
+// `maxMessageLengthBytes` refusal into a truncation report. The refusal guard below
+// is that distinction, and it is the arm that must never go green by accident.
 
 import 'dart:async';
 
@@ -30,12 +30,24 @@ final _codec = RpcCodec(RpcString.fromJson);
 /// per-stream `RpcMessageParser`, the frame channel reassembles, and HTTP/1.1
 /// buffers the whole body — so this has to be built.
 final class _Fragmenting implements IRpcChannel {
-  _Fragmenting({required this.split, this.truncate = false});
+  _Fragmenting({
+    required this.split,
+    this.truncate = false,
+    this.lateEnd = false,
+  });
 
   final bool split;
 
   /// Send only the first half and half-close: the peer that stops mid-frame.
   final bool truncate;
+
+  /// Half-close in a SEPARATE, LATER frame rather than on the fragment itself.
+  ///
+  /// A different ordering, and the two are answered by different code. With the
+  /// half-close on the fragment, the pipeline already knows the peer has finished
+  /// by the time it dispatches the responder. Arriving later, it has to reach a
+  /// responder that is already waiting — which nothing else covers.
+  final bool lateEnd;
 
   final _ctl = StreamController<Uint8List>();
   late _Fragmenting peer;
@@ -70,10 +82,22 @@ final class _Fragmenting implements IRpcChannel {
       RpcChannelFrame.encodeData(
         streamId: streamId,
         payload: Uint8List.sublistView(payload, 0, cut),
-        endOfStream: truncate,
+        endOfStream: truncate && !lateEnd,
       ),
     );
-    if (truncate) return;
+    if (truncate) {
+      if (lateEnd) {
+        // After the responder has had its turn to start waiting.
+        // A BARE half-close, carrying no data. A frame with an empty payload is
+        // still a data frame and reaches the fragment router, which answers it
+        // for its own reasons; this one can only be seen by the end-of-stream
+        // path.
+        Future<void>.delayed(const Duration(milliseconds: 50), () {
+          _deliver(RpcChannelFrame.encodeEndOfStream(streamId));
+        });
+      }
+      return;
+    }
     _deliver(
       RpcChannelFrame.encodeData(
         streamId: streamId,
@@ -119,9 +143,16 @@ final class _Svc extends RpcResponderContract {
 Future<String> _unary({
   required bool split,
   bool truncate = false,
+  bool lateEnd = false,
+  int requestBytes = 64,
+  RpcSecurityPolicy? responderPolicy,
   Duration timeout = const Duration(seconds: 3),
 }) async {
-  final client = _Fragmenting(split: split, truncate: truncate);
+  final client = _Fragmenting(
+    split: split,
+    truncate: truncate,
+    lateEnd: lateEnd,
+  );
   final server = _Fragmenting(split: split);
   client.peer = server;
   server.peer = client;
@@ -131,6 +162,11 @@ Future<String> _unary({
           transport: RpcChannelTransport(
             channel: RpcFrameMultiplexedChannel(channel: server),
             isClient: false,
+            // The RESPONDER's own, which is the side under test. The caller keeps
+            // the defaults, so it sends what its peer will refuse — a limit that
+            // only ever refuses what this side also refuses to send proves
+            // nothing.
+            policy: responderPolicy ?? const RpcSecurityPolicy(),
           ),
         )
         ..registerServiceContract(_Svc())
@@ -153,34 +189,18 @@ Future<String> _unary({
     final reply = await caller.unaryRequest<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
-      request: ('x' * 64).rpc,
+      request: ('x' * requestBytes).rpc,
       requestCodec: _codec,
       responseCodec: _codec,
       context: RpcContext.empty().withTimeout(timeout),
     );
     return reply.value;
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode}: ${e.message}';
   }
 }
 
 void main() {
-  // SKIPPED, and the condition is precise: an implementation may only wait for the
-  // rest of a frame when it can tell "incomplete" from "refused". Round 547's did
-  // not — it read `RpcMessageParser` returning NO messages as "incomplete", and a
-  // frame the parser REFUSES for exceeding `maxMessageLengthBytes` returns nothing
-  // too. A 32 MB compressed payload against a 1 MB policy then answered
-  // INVALID_ARGUMENT "closed mid-message" instead of RESOURCE_EXHAUSTED naming the
-  // operator's limit, which is a security control reporting the wrong thing.
-  //
-  // So a third attempt has to get the distinction FROM the parser — it knows
-  // whether it is holding a partial frame — and not from the emptiness of its
-  // result. Unskip these two when it can.
-  const blocked =
-      'B-126: needs the parser to distinguish an INCOMPLETE frame from a '
-      'REFUSED one; round 547 inferred it from an empty result and broke the '
-      'maxMessageLengthBytes refusal (see rounds/547)';
-
   test(
     'WITNESS a fragmented request is answered',
     () async {
@@ -193,7 +213,6 @@ void main() {
       );
     },
     timeout: const Timeout(Duration(seconds: 60)),
-    skip: blocked,
   );
 
   test(
@@ -204,17 +223,73 @@ void main() {
       // DEADLINE_EXCEEDED (status 4) would mean the call was left waiting.
       expect(
         await _unary(split: true, truncate: true),
-        'status ${RpcStatus.invalidArgument}',
+        startsWith('status ${RpcStatus.invalidArgument}'),
         reason: 'an incomplete frame that is merely awaited is a hang',
       );
     },
     timeout: const Timeout(Duration(seconds: 60)),
-    skip: blocked,
+  );
+
+  test(
+    'a LATE half-close mid-frame also gets a status',
+    () async {
+      // Same failure, different ordering, and a different branch answers it: here
+      // the pipeline has already dispatched a waiting responder when the
+      // half-close arrives. With the fragment carrying its own end-of-stream the
+      // dispatch sees `clientEnded` and answers there instead, so that arm cannot
+      // see this one.
+      expect(
+        await _unary(split: true, truncate: true, lateEnd: true),
+        startsWith('status ${RpcStatus.invalidArgument}'),
+        reason: 'a request left incomplete must be answered, not awaited',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
   );
 
   test('GUARD whole frames still work', () async {
     expect(await _unary(split: false), 'got:64');
   }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test(
+    'GUARD a REFUSED frame is not reported as a truncated one',
+    () async {
+      // The arm that reverted attempt 2. A frame the parser refuses yields no
+      // messages, exactly like an incomplete one — so an implementation reading
+      // emptiness as "incomplete" answers INVALID_ARGUMENT "closed mid-message"
+      // where the operator's limit fired, and the status no longer names what
+      // refused it.
+      final answer = await _unary(
+        split: true,
+        requestBytes: 64 * 1024,
+        responderPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
+      );
+
+      expect(
+        answer,
+        startsWith('status ${RpcStatus.resourceExhausted}'),
+        reason:
+            'the request is past maxMessageLengthBytes, which is a refusal and '
+            'not a truncation',
+      );
+      expect(
+        answer,
+        contains('max:'),
+        reason:
+            'a resource limit must name the limit it enforced — the number is '
+            'the buffer bound derived from maxMessageLengthBytes, not that '
+            'field verbatim',
+      );
+      expect(
+        answer,
+        isNot(contains('mid-message')),
+        reason:
+            'this is the wrong answer attempt 2 gave: a refusal reported as a '
+            'truncation',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
 
   test(
     'GUARD the streaming shapes are unaffected',

@@ -40,6 +40,13 @@ final class RpcResponderStreamState {
   /// stream and which may legitimately carry zero messages.
   bool clientEnded = false;
 
+  /// True while a unary responder holds part of a gRPC frame and needs the rest.
+  ///
+  /// Only a transport that forwards raw chunks produces this; no shipped one
+  /// does. It keeps the stream alive past dispatch, which is otherwise where a
+  /// unary call ends, so later data frames have somewhere to go.
+  bool unaryAwaitingRequest = false;
+
   /// The responder bound to this pending stream.
   IRpcResponder? responder;
   bool _boundToMessageStream = false;

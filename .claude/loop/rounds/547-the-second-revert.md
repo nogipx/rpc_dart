@@ -151,7 +151,8 @@ changed that shape; the arm that revealed it exists because the decision demande
 
 ## Links
 
-Lead `../backlog/B-126-unary-assumes-one-message-per-transport-frame.md` — still open, with the
+Lead `../backlog/archive/B-126-unary-assumes-one-message-per-transport-frame.md` — CLOSED in
+round 553, which took the step this round named. It was still open here, with the
 blocking constraint recorded.
 Lead `../backlog/B-216-a-server-stream-hangs-on-a-truncated-frame.md` — new.
 Bench `../probes/P-155-does-unary-survive-a-fragmented-frame.md` — reused; `truncate` and

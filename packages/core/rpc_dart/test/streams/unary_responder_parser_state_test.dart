@@ -50,10 +50,14 @@ void main() {
       endStream: true,
     );
 
-    // A fails on its own merits — that part is expected and not the bug.
+    // A fails on its own merits — that part is expected and not the bug. It is
+    // answered INVALID_ARGUMENT because the request IS malformed: the peer
+    // half-closed with a frame header promising bytes it never sent. The responder
+    // now waits for the rest of an incomplete frame, so a half-close is what
+    // decides there will be no rest.
     expect(
       await statusA.future.timeout(const Duration(seconds: 5)),
-      RpcStatus.internal.toString(),
+      RpcStatus.invalidArgument.toString(),
     );
 
     // Stream B: a well-formed request sent only after A is fully resolved, so

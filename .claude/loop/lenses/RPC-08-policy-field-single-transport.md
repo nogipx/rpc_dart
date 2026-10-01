@@ -3,8 +3,8 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548]
-status: confirmed (round 394)
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553]
+status: confirmed (round 553)
 ---
 
 # RPC-08 — A policy field checked on one transport
@@ -326,3 +326,33 @@ refusals would have said nothing at all.
 
 `../probes/P-160-is-a-routable-name-callable.md`,
 `../rounds/525-routable-and-uncallable.md`, B-198.
+
+## Round 553 — the divergent sibling was a SHAPE, and the fix took three attempts
+
+Not a policy field this time but a capability: unary could not take a gRPC frame split
+across transport messages, where both streaming shapes could, over the same transport,
+channel, codec and payload.
+
+> **A sibling divergence that two rounds failed to close is usually blocked on a
+> QUESTION nobody can answer, not on work nobody did.** Attempts 1 and 2 were both built
+> in full and both reverted. The thing in the way was that `RpcMessageParser` returning
+> nothing meant two different things — incomplete, and refused — and every design resting
+> on the emptiness of that result reported a `maxMessageLengthBytes` refusal as a
+> truncated request. The third attempt opened by adding the distinction, and it was one
+> getter: the parser clears its buffer on every refusal, so leftover bytes already meant
+> exactly one thing.
+
+> **Ask the component that KNOWS, not the one that is convenient.** The predicate that
+> carries the fix reads the parser's buffer, not the caller's own "awaiting" flag — which
+> stays true while a later fragment is being processed, and answering a peer on that
+> reading closed the responder out from under its own running handler. Silently, because
+> a closed responder writes nothing.
+
+> **A canary that PASSES can be a design finding.** Disabling the half-close answer
+> changed nothing, which meant three sites were answering and a race chose between them.
+> Removing the redundant one made each ordering have exactly one answer site — and only
+> then did the canary fail, on an arm that had to be built because the existing one could
+> not reach that branch.
+
+`../rounds/553-the-parser-knew-all-along.md`,
+`../probes/P-181-which-branch-took-the-fragment.md`, B-126.
