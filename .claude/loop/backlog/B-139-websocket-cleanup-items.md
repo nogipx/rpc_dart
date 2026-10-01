@@ -4,7 +4,7 @@ round: 535 (items 1, 3 and 6's unhandled future examined; four groups left)
 commit: 5e2af858
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_stub.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_responder_transport.dart]
 probe: P-168
-reason: "cost — split and decided in round 597: two owner-requested items left, the connection cap (6d) and a headers callback re-evaluated per reconnect (4). Items 6a-6c fixed in 597; 2, 5 and 7 closed by reading"
+reason: "cost — one owner-requested item left: a headers callback re-evaluated per reconnect (4). The connection cap (6d) landed in round 598; 6a-6c in 597; 2, 5 and 7 closed by reading"
 ---
 
 # B-139 — websocket: smaller defects and hygiene

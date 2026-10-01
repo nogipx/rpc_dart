@@ -21,6 +21,11 @@ class RpcWebSocketServer implements IRpcServer {
   final Stream<WebSocketChannel> _connections;
   final RpcSecurityPolicy _policy;
 
+  /// Ceiling on concurrent connections, or null for none. Counted on
+  /// [_endpoints], which a closed connection leaves on its `sink.done`.
+  final int? _maxConnections;
+  bool _warnedAtCap = false;
+
   final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
   final void Function(RpcPeerEndpoint endpoint)? _onPeerEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
@@ -45,6 +50,7 @@ class RpcWebSocketServer implements IRpcServer {
     LogScope? logger,
     LogController? logController,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    int? maxConnections,
     void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
@@ -54,6 +60,7 @@ class RpcWebSocketServer implements IRpcServer {
        _logger = logger?.child('WebSocketServer'),
        _logController = logController,
        _policy = policy,
+       _maxConnections = maxConnections,
        _onEndpointCreated = onEndpointCreated,
        _onPeerEndpointCreated = onPeerEndpointCreated,
        _onConnectionError = onConnectionError,
@@ -75,12 +82,14 @@ class RpcWebSocketServer implements IRpcServer {
     LogScope? logger,
     LogController? logController,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    int? maxConnections,
   }) {
     return RpcWebSocketServer(
       connections: connections,
       logger: logger,
       logController: logController,
       policy: policy,
+      maxConnections: maxConnections,
       onEndpointCreated: (endpoint) {
         for (final contract in contracts) {
           endpoint.registerServiceContract(contract);
@@ -315,6 +324,7 @@ class RpcWebSocketServer implements IRpcServer {
   /// client disconnect.
   void _releaseEndpoint(RpcEndpointBase endpoint, WebSocketChannel channel) {
     _endpoints.remove(endpoint);
+    _warnedAtCap = false;
     unawaited(
       endpoint.close().catchError((Object error) {
         _logger?.warning('Error closing endpoint on disconnect: $error');
@@ -358,6 +368,26 @@ class RpcWebSocketServer implements IRpcServer {
       unawaited(
         Future<void>.sync(
           () => channel.sink.close(1000, 'server is not accepting'),
+        ).catchError((Object e) {
+          _logger?.warning('Error refusing connection $clientLabel: $e');
+        }),
+      );
+      return;
+    }
+
+    final cap = _maxConnections;
+    if (cap != null && _endpoints.length >= cap) {
+      // Once per stretch at the limit: a client retrying in a loop would
+      // otherwise log every attempt.
+      if (!_warnedAtCap) {
+        _warnedAtCap = true;
+        _logger?.warning(
+          'Refusing connections: at the connection limit ($cap)',
+        );
+      }
+      unawaited(
+        Future<void>.sync(
+          () => channel.sink.close(1000, 'too many connections'),
         ).catchError((Object e) {
           _logger?.warning('Error refusing connection $clientLabel: $e');
         }),
