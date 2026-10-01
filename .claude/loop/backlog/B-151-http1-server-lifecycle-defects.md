@@ -1,10 +1,11 @@
 ---
-status: open (rounds 560-561 did three of five items; 2 and 4 remain)
-round: 561
-commit: 8253fe8a
-paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart]
-probe: none — static read, nothing run
-reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
+status: open (rounds 560, 561 and 573 did four of five; item 4 remains and is not a defect)
+round: 573
+commit: fb7770cd
+release: changelog
+paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
+probe: P-194
+reason: "cost — what is left is item 4, the drain polling `health().details['pendingRequests']` every 25 ms. A typed pending count is a design change with no failure to measure, which is why three rounds have left it; plus the unmeasured TLS/`shared` remainder"
 ---
 
 # B-151 — RpcHttpServer lifecycle: crash on order, racing starts, forced close before 503, polling drain
@@ -91,13 +92,34 @@ bind claim is set so a corrected caller can just call them in order. Canary: res
 dereference gives `threw _TypeError:<Null check operator used on a null value>` where the witness wants
 a StateError naming `start()`.
 
-### The two items still open, with what each needs
+### Item 2 — CONFIRMED and fixed in round 573
 
-2. `close(force: true)` destroying connections before the promised 503 — **the one with a real
-   consequence, and reading the method does not place it**: the force close is the documented cut after
-   the budget expires, so the claim is about what the transport promises a request arriving DURING the
-   drain, not about the close. Needs a request in flight when the budget runs out, and an observation
-   of whether the peer gets a reset or a 503.
+`../rounds/573-the-503-written-to-a-dead-socket.md`. Bench `P-194`.
+
+```
+                                            before                    after
+WITNESS  drain 200ms, handler 30s    ClientException: Connection    HTTP 503
+                                     closed before full header
+ARM      no drainTimeout             ClientException: ... same      HTTP 503
+CONTROL  handler finishes in budget  HTTP 200                       HTTP 200
+```
+
+The ordering is `close()` / drain / **`close(force: true)`** / `endpoint.close() ->
+transport.close()`, and that last step is where "Complete any pending responses with 503" lives — over
+sockets the force close already destroyed. **Both branches had it**: the no-drain one reaches the same
+step after its own force close.
+
+**The yield is the part worth keeping.** Reordering alone still read `ClientException`: completing the
+completer only hands the response to shelf, which still has to WRITE it, and there is nothing to await
+for that, since round 561 established `HttpServer.close()` completes on port release. `Duration.zero`
+reads `HTTP 503` — one event-loop turn, not a wall-clock sleep, which matters because `B-187` is a
+lead about the sibling sleeping a fixed 50 ms.
+
+Not covered: a large pending body, which may not fit the socket buffer in one turn. A 503 does, by
+construction.
+
+### The item still open, and it is not a defect
+
 4. The drain polling `health().details['pendingRequests']` every 25 ms — a design change (a typed
    pending count on the transport) rather than a defect. No failure to measure; `drain.dart` already
    criticises the pattern.

@@ -277,6 +277,29 @@ class RpcHttpServer implements IRpcServer {
     );
   }
 
+  /// Completes every still-pending response BEFORE the sockets carrying them go.
+  ///
+  /// The transport's `close()` answers each one with a 503, and those 503s travel
+  /// over exactly the connections `close(force: true)` destroys -- so in the other
+  /// order the server promised an answer and delivered a reset. Measured with a
+  /// 200 ms drain budget against a handler taking 30 s:
+  /// `ClientException: Connection closed before full header was received`, where it
+  /// now reads `HTTP 503`.
+  ///
+  /// The yield is what gets it onto the wire: completing the future only hands the
+  /// response to shelf, which still has to WRITE it, and there is nothing to await
+  /// for that -- `HttpServer.close()` completes on port release, not on response
+  /// flush. One turn is enough for a 503, which is small by construction; a large
+  /// body could still be cut.
+  ///
+  /// Idempotent, so `endpoint.close()` closing the same transport afterwards is a
+  /// no-op.
+  Future<void> _answerStragglers(RpcHttpResponderTransport? transport) async {
+    if (transport == null) return;
+    await transport.close();
+    await Future<void>.delayed(Duration.zero);
+  }
+
   /// Releases everything this server owns, whichever phase it reached.
   ///
   /// Deliberately NOT guarded on [isRunning]. That flag means "phase two
@@ -326,9 +349,12 @@ class RpcHttpServer implements IRpcServer {
         await httpServer.close();
         // ...then actually wait for it.
         await _drainRequests(transport, drainTimeout);
-        // Anything still going when the budget expires is cut here.
+        // Anything still going when the budget expires is cut here -- AFTER it has
+        // been answered.
+        await _answerStragglers(transport);
         await httpServer.close(force: true);
       } else {
+        await _answerStragglers(transport);
         await httpServer?.close(force: true);
       }
     } catch (e) {

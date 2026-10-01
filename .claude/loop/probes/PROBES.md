@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-194](P-194-reset-or-503-at-the-end-of-a-drain.md)** valid (round 573),
+  rpc_dart_http — a 30 s handler against a 200 ms drain budget, read with a **raw `package:http`
+  POST** so the number is the HTTP outcome and not a caller's interpretation of it:
+  `ClientException: Connection closed before full header was received -> HTTP 503`, against a CONTROL
+  at `HTTP 200` whose handler finishes inside the budget. Reads once while running and once after
+  `stop()`, so a reset is distinguishable from a request that never started. Picks a free port by
+  binding and releasing a `ServerSocket`, since `RpcHttpServer` exposes none. **It also established
+  the yield**: reordering alone still read `ClientException`, because completing the completer only
+  hands the response to shelf and nothing can be awaited for the write
 - **[P-193](P-193-what-in-flight-consumers-are-told-at-a-teardown.md)** valid (round 572),
   rpc_dart_http2 — three in-flight server streams, then a teardown, recording per consumer what it
   was told and when. **A hang has no number, so the measurement is the absence**: `STILL WAITING`
