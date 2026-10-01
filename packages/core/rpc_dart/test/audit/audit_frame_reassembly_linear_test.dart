@@ -55,19 +55,35 @@ Future<(int micros, int count)> dribble(int payloadSize) async {
   return (sw.elapsedMicroseconds, count);
 }
 
-/// Measures [dribble] for [payloadSize] [reps] times and returns the FASTEST
-/// run. A single timed run is sensitive to GC pauses and scheduler jitter,
-/// which only ever ADD time; the minimum is therefore the most stable estimate
-/// of the true (interference-free) cost and keeps the N-vs-2N ratio meaningful.
-Future<(int micros, int count)> dribbleMin(int payloadSize, int reps) async {
-  var best = -1;
-  var count = 0;
+/// Measures N and 2N ALTERNATELY, [reps] times each, and returns the fastest of
+/// each.
+///
+/// The minimum is the stable estimate: GC pauses and scheduler jitter only ever
+/// ADD time, so the fastest run is the closest to the interference-free cost.
+///
+/// **Interleaved, because a minimum per batch is not enough.** Minima suppress
+/// jitter WITHIN a batch and do nothing about contention that RISES between two
+/// batches — that inflates whichever size was measured second and shows up as a
+/// ratio, which is exactly how this arm fails under `dart test`'s own suite
+/// concurrency. Alternating puts both sizes in the same window, so a drift moves
+/// numerator and denominator together.
+Future<((int micros, int count), (int micros, int count))> dribblePair(
+  int n,
+  int reps,
+) async {
+  var bestN = -1;
+  var best2N = -1;
+  var countN = 0;
+  var count2N = 0;
   for (var i = 0; i < reps; i++) {
-    final (us, c) = await dribble(payloadSize);
-    count = c;
-    if (best < 0 || us < best) best = us;
+    final (usN, cN) = await dribble(n);
+    final (us2N, c2N) = await dribble(2 * n);
+    countN = cN;
+    count2N = c2N;
+    if (bestN < 0 || usN < bestN) bestN = usN;
+    if (best2N < 0 || us2N < best2N) best2N = us2N;
   }
-  return (best, count);
+  return ((bestN, countN), (best2N, count2N));
 }
 
 void main() {
@@ -78,10 +94,9 @@ void main() {
       const reps = 5;
 
       // Warm up to stabilize timing (JIT), then take the fastest of several
-      // runs at N and 2N to suppress one-off GC/scheduler noise.
+      // INTERLEAVED runs at N and 2N — see [dribblePair].
       await dribble(n);
-      final (usN, countN) = await dribbleMin(n, reps);
-      final (us2N, count2N) = await dribbleMin(2 * n, reps);
+      final ((usN, countN), (us2N, count2N)) = await dribblePair(n, reps);
       expect(countN, 1);
       expect(count2N, 1);
 

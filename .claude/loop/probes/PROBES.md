@@ -38,6 +38,15 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-208](P-208-how-much-margin-a-timing-assertion-has.md)** valid (round 588),
+  rpc_dart — **asks the one question that converts "flaky" into a quantity: what is the MARGIN?** A 250 ms
+  settle requiring a parked sender, run at six settles with the counter the test throws away: the park arrives
+  at `produced 66` and needs **5-25 ms**, so 10-50x and not the 250x the number looks like. **Its control is
+  what refuted the previous round's explanation** — 14 busy isolates in another process at load `84.76`,
+  eight times the figure blamed, and the arm still reads `waiters 1`. So external CPU pressure is not the
+  variable; `dart test`'s own suite concurrency is, and `--concurrency=24` is the instrument that reproduces.
+  Reports `produced` beside `waiters` deliberately: `waiters 0` means either "never got there" or "got there
+  and was released", and only the counter separates them
 - **[P-207](P-207-what-an-orderly-close-logs-per-in-flight-call.md)** valid (round 587),
   rpc_dart_http — **a count that SCALES, because "each call" is the claim**: `8 calls -> 8 errors`,
   `1 -> 1`, `0 -> 0`, so one record would have read as a message rather than a defect, and the 0-call arm

@@ -88,6 +88,30 @@ typedef _Run = ({
   Map<String, int> senderState,
 });
 
+/// Waits until [done], or until [ceiling] expires.
+///
+/// **The ceiling is not the wait.** The producer needs one event-loop turn per
+/// message and about 66 of them to fill a 64 KiB window at 1 KiB of wire, so a
+/// fixed settle is a bet on timer latency — and that bet loses under `dart test`'s
+/// own suite concurrency, where turn servicing degrades by more than an order of
+/// magnitude. Polling the state an arm is about removes the bet.
+///
+/// It does not weaken anything: when the mechanism under test is broken the
+/// condition never holds, the ceiling expires, and the arm's own `expect` reports
+/// it with its own reason.
+/// 10 s is 400x the ~25 ms the park needs on a quiet machine, and stays inside
+/// `dart test`'s own 30 s per-test timeout so a regression is reported by the
+/// assertion rather than by the runner.
+Future<void> _until(
+  bool Function() done, {
+  Duration ceiling = const Duration(seconds: 10),
+}) async {
+  final deadline = DateTime.now().add(ceiling);
+  while (!done() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+}
+
 /// Runs a firehose into a consumer that pauses after one message, and reports
 /// what the producer reached after one settle and after two.
 ///
@@ -145,12 +169,27 @@ Future<_Run> _run({
   });
   sub.onError((Object _) {});
 
-  await Future<void>.delayed(settle);
+  if (window == null) {
+    // No park ever happens with the field off, and that arm's claim is that more
+    // time buys more messages — so time is the right instrument for it.
+    await Future<void>.delayed(settle);
+  } else {
+    // Sampled AT the park, not at an arbitrary point on the way to it: `first`
+    // used to be whatever the producer had reached when the clock ran out, which
+    // is the window's number only if it got there.
+    await _until(() => server.flowControlStateSizes['waiters'] == 1);
+  }
   final first = produced[0];
   // `server` IS the sender: a server stream flows responder -> caller, so its
   // own credit map is what bounds it.
   final senderState = server.flowControlStateSizes;
-  if (resume) sub.resume();
+  if (resume) {
+    sub.resume();
+    // "Four times more messages" is not a function of 250 ms either. The ceiling
+    // is what makes this an assertion: a resume that releases nothing never
+    // satisfies the condition and the arm fails.
+    await _until(() => produced[0] > first * 5 && received > first);
+  }
   await Future<void>.delayed(settle);
   final second = produced[0];
 

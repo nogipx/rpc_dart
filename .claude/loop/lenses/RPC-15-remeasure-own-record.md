@@ -3,8 +3,8 @@ refines: U-21
 paths: [.claude/loop/backlog/**, .claude/loop/checked/**, .claude/loop/lenses/**]
 applies: the loop has more than a dozen rounds and records older than several of them
 breaks: anything — a real defect hides behind a deferral; on this project that is how data loss was found.
-applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559, 561, 579]
-status: confirmed (round 457)
+applied: [201, 211, 232, 239, 247, 248, 249, 267, 278, 314, 319, 321, 329, 338, 339, 376, 378, 379, 380, 384, 396, 398, 408, 413, 429, 450, 457, 474, 537, 551, 555, 559, 561, 579, 588]
+status: confirmed (round 588)
 ---
 
 # RPC-15 — Re-measure the loop's own record
@@ -284,3 +284,40 @@ read in title order.
 > double duty" made the explicit drain below it look redundant — so believing it leads to deleting the
 > only thing that waits, and the correct comment three lines above describes exactly the hang that
 > follows. A wrong fact costs a reader a minute; a wrong justification costs the next refactor.
+
+## Round 588 — the record to re-measure was the previous round's own GATE section
+
+Every application above re-measures a finding, a negative or a bench. 588
+re-measures a round's `## Gate` — the part nobody treats as a claim.
+
+Round 587 hit a red on a test its change could not reach, and wrote: *"load average
+11.37 against `config.md`'s quiet-machine bar"*. Four true facts were offered with
+it — another package, passes alone, five green runs before, high load. Round 588
+varied the named variable and the explanation collapsed:
+
+```
+14 busy isolates in another process, load 84.76   waiters 1   clean
+dart test --concurrency=24                        waiters 0   RED
+```
+
+Eight times the load that was blamed, and clean. The variable was the test runner's
+own suite concurrency — `~16 suites on 8 cores` — which is not CPU pressure from
+elsewhere and is not what the sentence said.
+
+> **"It is a flake" is a hypothesis that NAMES a variable, and a round that writes
+> one down without varying it has filed a guess as a finding.** The four
+> circumstantial facts all survive into the correct explanation, which is exactly
+> why they feel sufficient: they establish that something environmental is involved
+> and then the first environmental word to hand gets recorded as the cause.
+
+> **Ask for the MARGIN.** The arm slept 250 ms for a park that needs 5-25 ms — 10-50x,
+> not the 250x it reads as. That one number turns "mysteriously flaky" into
+> "insufficient headroom against a named quantity", which is fixable, and it took one
+> probe. Any wall-clock assertion has a margin and almost none of them state it.
+
+The failure mode this lens is for: a `## Gate` section is prose about the
+environment, so nothing in `lint`, `stale` or the round schema ever asks it for
+evidence — and the lead it spawns inherits the wrong variable. `L-19`.
+
+`../probes/P-208-how-much-margin-a-timing-assertion-has.md`,
+`../rounds/588-the-gate-oversubscribes-its-own-cores.md`, B-224.

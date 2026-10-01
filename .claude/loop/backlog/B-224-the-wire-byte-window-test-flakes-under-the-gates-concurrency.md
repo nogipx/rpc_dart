@@ -1,63 +1,93 @@
 ---
 status: open
-round: 587
-commit: 08d2f17c
-paths: [packages/core/rpc_dart/test/transports/the_window_counts_wire_bytes_test.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-probe: none — observed in the round-587 gate, not yet instrumented
-reason: "bench — a gate that fails intermittently trains the reader to re-run rather than to look. Seen twice in one round at load 11.37, green alone and green on the third gate run; the ASSERTION is a park, which is what makes it timing-shaped"
+round: 588 (three of five members fixed; two remain)
+commit: 878c443b
+paths: [packages/core/rpc_dart/test/transports/oversized_chunk_not_copied_test.dart, packages/core/rpc_dart/test/endpoint/the_drain_is_signalled_not_polled_test.dart]
+probe: packages/core/rpc_dart/.dart_tool/probe/b224_how_much_margin_the_park_has.dart
+reason: "bench — the CAUSE is settled (the gate runs ~16 suites on 8 cores) and three members are fixed. The two left measure a shared resource no wait can isolate: the PROCESS's RSS, and a 35 ms latency ceiling. Both need a serial lane, which is a change to the gate's shape"
 ---
 
-# B-224 — `the_window_counts_wire_bytes_test` flakes under the gate's concurrency
+# B-224 — the suite's timing assertions break when the gate oversubscribes its cores
 
-Observed in round 587's gate, whose change was in `rpc_dart_http` and cannot reach
-core's flow control.
+Filed by round 587 as a load flake on one test. Round 588 refuted that explanation
+and found the family.
 
-```
-WITNESS a half-closed request does not end the response's window
-  Expected: <1>
-    Actual: <0>
-  the sender must be parked on the window, not running free
-```
-
-Two `melos run test:unit --no-select` runs in a row, then:
+## The cause, settled in round 588
 
 ```
-the file alone                      7 of 7 pass
-the third full gate run             rpc_dart +1876 ~1, SUCCESS
-load average at the time            11.37
+Platform.numberOfProcessors        8
+dart test default concurrency     ~4
+melos exec --concurrency            4
+gate effective                    ~16 concurrent suites on 8 cores
 ```
 
-`config.md`'s bar for a timing measurement is a quiet machine; B-215 states it as
-`uptime` under 3. This was taken at 11.37, driven by the round's own 256 MiB probe
-runs.
+2x oversubscribed, which is why the gate fails intermittently rather than always.
+Reproducible on demand one step above it:
 
-## Why it is worth a lead rather than a shrug
+```
+melos exec --scope=rpc_dart -- fvm dart test --concurrency=16   green
+                                             --concurrency=24   RED, twice, different members
+                                             --concurrency=32   RED
+```
 
-The assertion is that a sender is PARKED — a state that exists only while something
-has not happened yet. Under `--concurrency 4` on a loaded machine the producer can
-be descheduled long enough for the sampled count to read `0` either because the
-window is working and the send has not been attempted yet, or because the window is
-not working and the send already drained. **Those two are the same reading**, which
-is the same defect shape as `L-15`: an arm that cannot distinguish its own success
-from its own failure.
+**It is NOT CPU load from elsewhere.** 14 busy isolates in another process, load
+average 84.76 — eight times the 11.37 round 587 blamed — and the arm reads clean.
+`P-208`.
 
-Rounds 582-586 ran the same gate green five times, so the frequency is low — and a
-low-frequency red on an assertion that cannot self-distinguish is the worst kind,
-because the next reader re-runs and moves on. This round did exactly that.
+## The family
+
+Each member measures a SHARED resource as if the test owned it.
+
+```
+FIXED    the_window_counts_wire_bytes_test   a fixed settle must cover ~66 timer turns
+FIXED    response_sink_stops_at_the_ending   200 ms must cover >5 turns at a 5 ms pace
+FIXED    audit_frame_reassembly_linear       a wall-clock RATIO between two batches
+OPEN     oversized_chunk_not_copied          a bound on the PROCESS's RSS
+OPEN     the_drain_is_signalled_not_polled   a 35 ms latency ceiling
+```
+
+How the three were fixed, since the same remedies apply to anything new:
+
+- **A settle becomes a condition wait** with a ceiling. The ceiling is not the wait;
+  when the guarded mechanism is broken the condition never holds, the ceiling
+  expires, and the arm's own `expect` reports it. Sample the state AT the condition,
+  not wherever the clock ran out.
+- **A ratio is INTERLEAVED.** Minima over N reps suppress jitter within a batch and
+  do nothing about contention rising between two batches. Alternating N and 2N put
+  both in one window: `concurrency 24` read `15698 / 31040, ratio 1.98` against a
+  quiet `10091 / 19904, ratio 1.97` — both halves inflated 1.56x and the ratio held,
+  with the 3.0 threshold untouched.
+
+## What is left, and why patience does not fix it
+
+```
+oversized_chunk_not_copied     Expected a value less than <16777216>, Actual <31653888>   at 32
+the_drain_is_signalled_not_polled   Expected a value less than <35>, Actual <92>          at 32
+```
+
+With 32 isolates in one process, `currentRss` is not this test's number and no amount
+of waiting changes it; a latency CEILING is a statement about scheduling that
+contention falsifies by definition. Neither can be converted into a condition wait —
+you cannot wait for the absence of an event.
+
+Both appear only ABOVE the gate's effective 16, so neither is what the gate reported.
 
 ## What a round owes this
 
-**A frequency, not an anecdote** — N runs under the gate's concurrency on a quiet
-machine (`uptime` stated), and N on a loaded one, so "load" is shown to be the
-variable rather than assumed.
+**A serial lane.** `dart test` takes `--tags`, so the shape is: tag these arms,
+exclude the tag from the ordinary run, and add one more invocation that runs the tag
+with `--concurrency=1`. That touches the `test`/`test:unit` scripts, which is the
+gate's shape and the owner's call — the memory note already records that raising
+this concurrency was measured and rejected, so the gate's own numbers are not to be
+changed casually.
 
-**Then make the arm self-asserting**, which is the fix whichever way the frequency
-comes out: sample something that is only true when the producer has ATTEMPTED the
-send and been refused, instead of counting what has arrived. `P-64`'s hop check is
-the pattern — assert the setup inside the arm.
+**Or make each self-relative instead of absolute**: an RSS DELTA across a control
+measured in the same run, and a latency compared against an uncontended baseline
+taken beside it. More work per arm, no change to the gate.
 
-**Do not simply raise a delay.** That hides the ambiguity rather than removing it,
-and the next loaded machine is slower than whatever number is chosen.
+**And a frequency at the gate's own 16**, which nothing has: two reds and a green in
+587, two greens in 588, is four data points. The reproduction was done at 24 because
+it is frequent there, and that is a different question from the rate the gate sees.
 
 ## Owner decision
 

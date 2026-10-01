@@ -30,6 +30,29 @@ final _codec = RpcCodec(RpcString.fromJson);
 const _paceMs = 5;
 const _settleMs = 250;
 
+/// How many messages the producer must have sent before the ending is driven.
+///
+/// The arms below require more than five, so that "it stopped" is not vacuous.
+const _started = 6;
+
+/// Waits until [done], or until [ceiling] expires.
+///
+/// **The ceiling is not the wait.** `_paceMs` is a `Future.delayed`, so "200 ms
+/// reaches forty messages" is a bet on timer latency, and that bet loses under
+/// `dart test`'s own suite concurrency — this arm read `2` at
+/// `--concurrency=24`. Waiting for the counter instead removes the bet, and when
+/// the producer genuinely never starts the ceiling expires and the arm's own
+/// `expect` says so.
+Future<void> _until(
+  bool Function() done, {
+  Duration ceiling = const Duration(seconds: 10),
+}) async {
+  final deadline = DateTime.now().add(ceiling);
+  while (!done() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+  }
+}
+
 /// Produced at the ending, and [_settleMs] later.
 typedef _Reading = (int atEnd, int after);
 
@@ -73,7 +96,7 @@ Future<_Reading> _run(
   // test would pass for the wrong reason.
   final sub = caller.responses.listen((_) {}, onError: (Object _) {});
 
-  await Future<void>.delayed(const Duration(milliseconds: 200));
+  await _until(() => produced >= _started);
   await end(responder).catchError((Object _) {});
   final atEnd = produced;
   await Future<void>.delayed(const Duration(milliseconds: _settleMs));
@@ -91,8 +114,13 @@ void main() {
   test('WITNESS: the handler stops producing once it half-closes', () async {
     final (atEnd, after) = await _run((r) => r.finishReceiving());
 
-    // The producer must have STARTED, or "it stopped" is vacuous.
-    expect(atEnd, greaterThan(5), reason: 'the producer never got going');
+    // The producer must have STARTED, or "it stopped" is vacuous. `_run` waits
+    // for this rather than sleeping, so a failure here means it never started.
+    expect(
+      atEnd,
+      greaterThanOrEqualTo(_started),
+      reason: 'the producer never got going, even given the ceiling',
+    );
     expect(
       after - atEnd,
       lessThanOrEqualTo(2),
@@ -109,7 +137,11 @@ void main() {
       (r) => r.sendError(RpcStatus.internal, 'handler gave up'),
     );
 
-    expect(atEnd, greaterThan(5), reason: 'the producer never got going');
+    expect(
+      atEnd,
+      greaterThanOrEqualTo(_started),
+      reason: 'the producer never got going, even given the ceiling',
+    );
     expect(
       after - atEnd,
       lessThanOrEqualTo(2),
