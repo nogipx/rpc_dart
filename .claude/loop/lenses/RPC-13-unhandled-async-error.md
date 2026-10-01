@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535]
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535, 557]
 status: confirmed (round 431)
 ---
 
@@ -299,3 +299,27 @@ taking the isolate down.
 > after the failure, which is what says the accept loop and the isolate both survived.
 > And the canary's failure names the SINK as the unhandled source rather than any
 > expectation — that is how you tell a root-zone death from a failed assertion.
+
+## Round 557 — a dropped future that never carries an error, and a comment that said otherwise
+
+A reported instance of this lens that is not one. `_discardConnection` drops the future
+`terminate()` returns, and `TransportConnection.terminate` really is declared to return one — so
+the shape is exactly what this lens looks for. Measured, it never errors: four arms (healthy or
+socket destroyed, dropped or awaited) all silent, against a POSITIVE CONTROL where `finish()`
+escapes with `Bad state: Cannot add event after closing`.
+
+> **A dropped future is a SHAPE, not a defect; the defect is a dropped future that completes with
+> an error.** This lens can be read off a signature, which makes it cheap to report and cheap to be
+> wrong about. The distinguishing arm is a call in the same rig that is KNOWN to escape — without
+> one, "nothing escaped" and "the rig could not produce it" are the same reading. The first version
+> of this probe had no working control: its peer was a bare TCP listener, against which `finish()`
+> never completed at all.
+
+> **A comment can attach a true fact to the wrong call.** The doc here described `finish()`'s
+> zone-only throw — accurately, and the journal already held it — above a method that calls
+> `terminate()` precisely to avoid it. The prose read as a warning about the line below it, and
+> round 347 had already lost a round to the same confusion. Where two neighbouring calls differ in
+> exactly this property, the comment has to name WHICH one it is about.
+
+`../rounds/557-the-comment-named-a-zone-that-was-not-there.md`,
+`../probes/P-182-where-terminate-s-error-lands.md`, B-178.

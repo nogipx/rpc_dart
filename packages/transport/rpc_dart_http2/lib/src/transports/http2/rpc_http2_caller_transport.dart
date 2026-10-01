@@ -1688,12 +1688,14 @@ class RpcHttp2CallerTransport
 
   /// Shuts down a connection this transport has decided to abandon.
   ///
-  /// Runs inside [runZonedGuarded] rather than behind a `catchError`. Finishing
-  /// a connection whose socket is already gone makes package:http2 throw
-  /// `Bad state: Cannot add event after closing` from its own frame writer,
-  /// asynchronously and OUTSIDE the future returned here — so a `catchError`
-  /// does not see it and it reaches the root zone, where an unhandled async
-  /// error kills the isolate. Observed exactly that while building this path.
+  /// `terminate()`, never `finish()`: finishing a connection whose socket is
+  /// already gone makes package:http2 throw `Bad state: Cannot add event after
+  /// closing` from its own frame writer, asynchronously and after its own future
+  /// has completed — so no handler at a call site can see it and it reaches the
+  /// root zone, where an unhandled async error kills the isolate.
+  /// `finish_throws_into_the_zone_test` characterises that, and the terminate
+  /// rows beside it are why this returned future may be dropped: it stays silent
+  /// on a live socket and on a destroyed one alike.
   void _discardConnection(http2.ClientTransportConnection connection) {
     try {
       connection.terminate();
