@@ -66,11 +66,15 @@ void main() {
         sentAt: DateTime.now().toUtc(),
       );
 
-      // UNAVAILABLE, not StateError. The server here ends the stream without a
-      // grpc-status, which is a truncated response, and the client transport
-      // now says so. Strictly better than what this used to pin: a StateError
-      // is unclassifiable, so retry and circuit-breaker logic -- which keys off
-      // gRPC status -- slid straight past it.
+      // A gRPC STATUS, not a StateError. The server here ends the stream without a
+      // grpc-status, which is a truncated response, and the client transport now
+      // says so. Strictly better than what this used to pin: a StateError is
+      // unclassifiable, so retry and circuit-breaker logic -- which keys off gRPC
+      // status -- slid straight past it.
+      //
+      // INTERNAL rather than UNAVAILABLE since round 571: this peer is alive and
+      // ended without a status, so the work may have run and the call must not be
+      // retried. A connection that DIED still reads UNAVAILABLE.
       await expectLater(
         () => exchange.execute(
           metadata: RpcMetadata.forClientRequest(
@@ -82,7 +86,7 @@ void main() {
           isA<RpcStatusException>().having(
             (e) => e.statusCode,
             'statusCode',
-            RpcStatus.unavailable,
+            RpcStatus.internal,
           ),
         ),
       );

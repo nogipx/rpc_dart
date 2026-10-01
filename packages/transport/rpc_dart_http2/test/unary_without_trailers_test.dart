@@ -94,7 +94,11 @@ void main() {
 
       expect(
         await _call(listener.port),
-        'status ${RpcStatus.unavailable}',
+        // INTERNAL since round 571, and the value carries a requirement: this peer
+        // is alive and forgot its trailers, so the work may have run. With
+        // UNAVAILABLE and `maxAttempts: 3` the server executed one call THREE
+        // times. A connection that DIED still reads UNAVAILABLE.
+        'status ${RpcStatus.internal}',
         reason:
             'a response with no grpc-status is malformed; returning its value '
             'hands the caller possibly-truncated data as if it were complete',

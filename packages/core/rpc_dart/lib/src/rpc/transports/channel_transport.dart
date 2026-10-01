@@ -1082,9 +1082,15 @@ class RpcChannelTransport
       final ended = _streamControllers.remove(message.streamId);
       if (ended != null && !ended.isClosed) {
         if (truncatedEnd) {
+          // INTERNAL, not UNAVAILABLE: the difference is whether the call is
+          // RETRIED. The request reached a peer that answered and then ended
+          // without its status, so the work may have run -- measured with
+          // `maxAttempts: 3`, the peer served one unary call THREE times.
+          // UNAVAILABLE is what `RpcRetryInterceptor` retries by design and
+          // belongs to a connection that died, not to a peer that forgot.
           ended.addError(
             RpcStatusException(
-              RpcStatus.unavailable,
+              RpcStatus.internal,
               'Stream ended without a gRPC status (truncated response)',
             ),
           );

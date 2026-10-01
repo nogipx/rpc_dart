@@ -38,6 +38,14 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-192](P-192-what-a-status-less-ending-costs.md)** valid (round 571),
+  rpc_dart + rpc_dart_http2 — **counts server EXECUTIONS, not statuses**, because the damage is work
+  re-run: one unary call named `Charge` went `status 14, ran 3 times -> status 13, ran 1`, with a
+  no-retry ARM at 1 that attributes the 3 to the interceptor and a trailers-sent CONTROL returning
+  "ok" at 1 that says the interceptor is attached and healthy. Both sites of the class in one file,
+  the second built by writing the shape by hand on a frame-channel pair. Does NOT distinguish a dying
+  channel from a forgetful peer at the CORE site — the http2 half splits on
+  `goawayReceived || !isOpen` and the channel transport has no equivalent
 - **[P-191](P-191-does-our-half-close-when-the-server-ends-first.md)** valid (round 570),
   rpc_dart_http2 — **the observable is at the SERVER**, because every per-stream map on our side
   reads 0 either way: a raw `ServerTransportConnection` answers as soon as the first DATA frame

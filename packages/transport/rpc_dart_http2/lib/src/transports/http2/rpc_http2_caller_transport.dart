@@ -1228,23 +1228,39 @@ class RpcHttp2CallerTransport
           // Reporting a clean end here would hand the consumer partial data as
           // if it were complete -- a server stream truncated by a dead peer
           // looking exactly like one that finished.
+          // A status-less end means TWO different things and only one of them may
+          // be retried, so the status is chosen rather than fixed.
+          //
+          // The connection going away is the retryable one: nothing completed, and
+          // a fresh connection may well succeed -- which is what `server.stop()`
+          // mid-call looks like from here, and the behaviour
+          // `graceful_drain_on_stop_test` requires by name.
+          //
+          // A HEALTHY connection ending a stream cleanly with no trailers is the
+          // other one: the request reached a peer that answered and then forgot its
+          // status, so the work may already have run. Measured with
+          // `maxAttempts: 3`, that shape made the server execute one unary call
+          // THREE times, because UNAVAILABLE is exactly what `RpcRetryInterceptor`
+          // retries by design. grpc-go draws the same line.
+          final dying = _drainSignal.goawayReceived || !_connection.isOpen;
+          final status = dying ? RpcStatus.unavailable : RpcStatus.internal;
           _logger?.warning(
-            'Stream $streamId ended without a gRPC status; reporting '
-            'UNAVAILABLE rather than a clean end',
+            'Stream $streamId ended without a gRPC status; reporting $status '
+            'rather than a clean end',
           );
           _emit(
             RpcTransportMessage(
               streamId: streamId,
               metadata: RpcMetadata([
-                RpcHeader(
-                  RpcHeaders.grpcStatus,
-                  RpcStatus.unavailable.toString(),
-                ),
+                RpcHeader(RpcHeaders.grpcStatus, status.toString()),
                 RpcHeader(
                   RpcHeaders.grpcMessage,
                   RpcMetadata.encodeGrpcMessage(
-                    'Response ended without a gRPC status (connection lost '
-                    'or stream reset before trailers)',
+                    dying
+                        ? 'Response ended without a gRPC status (connection lost '
+                              'or stream reset before trailers)'
+                        : 'Response ended without a gRPC status (the peer closed '
+                              'the stream before sending trailers)',
                   ),
                 ),
               ]),

@@ -66,7 +66,10 @@ void main() {
 
     expect(
       await drained,
-      'status ${RpcStatus.unavailable} after 2',
+      // INTERNAL since round 571: the peer is alive and ended without a status, so
+      // the work may have run and the call must not be retried. With UNAVAILABLE
+      // and `maxAttempts: 3` the peer served one unary call THREE times.
+      'status ${RpcStatus.internal} after 2',
       reason:
           'a clean end here hands the consumer partial data as if it were '
           'complete',
@@ -129,7 +132,7 @@ void main() {
     await server.sendMessage(id, _message('one'), endStream: true);
     await server.sendMetadata(id, RpcMetadata.forTrailer(RpcStatus.ok));
 
-    expect(await drained, 'status ${RpcStatus.unavailable} after 1');
+    expect(await drained, 'status ${RpcStatus.internal} after 1');
   });
 
   test(
