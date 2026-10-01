@@ -73,6 +73,16 @@ class RpcDirectMultiplexedChannel implements IRpcMultiplexedChannel {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    // CANCEL FIRST, which drops whatever the peer had already queued toward this
+    // side while this side's own queued frames still go out. That asymmetry is
+    // measured and documented on `IRpcMultiplexedChannel.close`, and it is kept
+    // deliberately: delivering the queued inbound needs an event-loop turn before
+    // the cancel, and every ordering of that turn delays the close CASCADE -- the
+    // peer's `onDone`, its channel's close, its transport's. `in_memory_transport_test`
+    // requires that cascade to be complete when `close()` returns ("a send with
+    // nowhere to go is refused, not reported sent"), and with the turn in it that
+    // send stopped throwing and started silently succeeding, which is the worse of
+    // the two losses.
     await _sub.cancel();
     if (!_output.isClosed) await _output.close();
     if (!_incomingCtl.isClosed) await _incomingCtl.close();

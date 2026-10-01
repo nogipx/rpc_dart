@@ -1,11 +1,11 @@
 ---
-status: open (round 575 did claim 1 of four)
-round: 575
-commit: e2d84db1
+status: awaiting owner (round 576)
+round: 576
+commit: b9a491c4
 release: changelog
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/in_memory_transport.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
-probe: P-196
-reason: "cost — and the `cost` grading was WRONG for claim 1, which had a witness: the receiver read `0xFF 0xFF 0xFF 0xFF` where it was handed 0xAA. Claims 2, 3 and 4 remain, and those three are decided by reading"
+probe: P-197
+reason: "owner decision — what is left is claim 4, one factory under two public names (`RpcInMemoryTransport.pair` and `RpcChannelTransport.memoryPair`). Picking one is a breaking rename. Claims 1, 2 and 3 are measured and answered; the `cost` grading was wrong for claim 1, which had a witness"
 ---
 
 # B-174 — in-memory: payloads are aliased and delivered later; close drops frames asymmetrically; two names for one factory
@@ -59,13 +59,54 @@ point is not copying — `B-116` priced one such copy at `389.76 -> 191.45 us` p
 path, and that trade was settled there by writing the contract rather than paying it. The standing
 requirement is to ask before trading speed.
 
-### Claims 2, 3 and 4 remain
+### Claims 2 and 3 (round 576) — both CONFIRMED; one pinned, one unfixable at an acceptable price
 
-- **`send` after the peer cancelled reports success.** A comment asserting this is deliberate was
-  written during round 575 and then REMOVED: nothing measured it, and rule one calls such a comment a
-  lead rather than a closed door.
-- **`close()` delivers our queued frames and drops the peer's.**
-- **`RpcInMemoryTransport.pair` is `RpcChannelTransport.memoryPair`** under two public names.
+`../rounds/576-the-fix-that-cost-more-than-the-defect.md`. Bench `P-197`.
+
+```
+CLAIM 3  the CLIENT closes     client [] / server [from-client]
+         the SERVER closes     client [from-server] / server []
+CLAIM 2  send after the peer closed
+         the send  returned normally / the peer received [] / our isClosed TRUE
+```
+
+Claim 3 is symmetric: the CLOSING side loses, not a role. Claim 2 is sharper than filed — `isClosed` is
+already true, so it is not about an unreachable peer but about a send on a channel that knows it is
+closed.
+
+**Claim 3 is NOT fixed and the price is measured.** A one-turn yield before the cancel does deliver the
+peer's frame — round 573's shape — but the turn lands inside the close CASCADE either side of
+`_output.close()`, so the peer's `onDone`, its channel and its transport all shift a turn later, and
+`in_memory_transport_test`'s named requirement *"a send with nowhere to go is refused, not reported
+sent"* fails: the peer's `sendMessage` right after `await close()` stops throwing and succeeds
+silently. That is the worse of the two losses and the class rounds 558, 568 and 571 each fixed. Both
+orderings were tried. **What a future round needs is a way to drain the subscription without putting a
+turn in the cascade**, which `dart:async` does not offer on a `StreamSubscription`.
+
+**Claim 2 is pinned.** 2 of 2 implementations do `if (_closed) return`, `RpcChannelTransport` throws
+`RpcClosedException` for callers who go through it, and changing the channel's error path touches every
+direct user. Both rules are now on `IRpcMultiplexedChannel`, which said nothing about either, with a
+test each.
+
+### Claim 4 is the owner's
+
+**`RpcInMemoryTransport.pair` is `RpcChannelTransport.memoryPair`** under two public names. Picking one
+is a breaking rename, which is the owner's by precedent — and the lead carries `awaiting owner` for that
+alone, so no round can quietly rename public API on its way past.
+
+The question, with its options, for the review:
+
+1. **Keep both and document one as the preferred spelling.** Nothing breaks; the duplication stays in
+   the public surface and in every example a reader copies from.
+2. **Deprecate `RpcInMemoryTransport.pair`** in favour of `RpcChannelTransport.memoryPair`, which is
+   where the implementation lives. A deprecation is visible to every caller at analysis time and the
+   removal is a later major.
+3. **Deprecate the other way**, keeping the shorter name as the public one and making
+   `memoryPair` internal. More churn, and `RpcChannelTransport` is where the type actually is.
+
+My judgement, not a measurement: option 2, because the name that survives should be the one whose class
+owns the code. What I cannot see from here is how much published example and user code spells it the
+other way.
 
 Also unmeasured: whether any OTHER transport aliases a sent payload. The rule now sits on
 `RpcTransportMessage`, which binds all of them, but only the direct channel was driven.
