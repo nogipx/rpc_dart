@@ -75,13 +75,18 @@ void main() {
         return r.value;
       } on RpcStatusException catch (e) {
         return 'status ${e.statusCode}';
+      } on ArgumentError {
+        return 'refused by the caller';
       }
     }
 
+    // The caller refuses a dotted method name before sending, with the grammar
+    // the responder parses by; the responder's own refusal is the hand-built
+    // frame test below.
     test('/a/b.c does not reach a.b/c', () async {
       expect(
         await call('a', 'b.c'),
-        'status ${RpcStatus.invalidArgument}',
+        'refused by the caller',
         reason:
             'the caller named service "a"; reaching service "a.b" means the '
             'key is not injective',
@@ -89,10 +94,7 @@ void main() {
     });
 
     test('/a/b.secret does not reach a.b/secret', () async {
-      expect(
-        await call('a', 'b.secret'),
-        'status ${RpcStatus.invalidArgument}',
-      );
+      expect(await call('a', 'b.secret'), 'refused by the caller');
     });
 
     test('GUARD: the honest path still works', () async {

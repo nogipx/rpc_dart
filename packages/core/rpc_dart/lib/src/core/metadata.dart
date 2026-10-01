@@ -101,8 +101,6 @@ final class RpcHeader {
 /// field — it is never stored as a `:path` header inside [headers].
 final class RpcMetadata {
   static const int _maxGrpcMessageLength = 1024;
-  static const int _maxMethodTokenLength = 128;
-  static final RegExp _methodTokenPattern = RegExp(r'^[A-Za-z0-9_.-]+$');
   static final RegExp _percentTriplet = RegExp(r'%[0-9A-Fa-f]{2}');
 
   /// Headers that comprise the metadata.
@@ -127,15 +125,23 @@ final class RpcMetadata {
   /// [serviceName] Service name (e.g., "ChatService").
   /// [methodName] Method name (e.g., "Send").
   static RpcMetadata forClientRequest(String serviceName, String methodName) {
-    _validateMethodToken(serviceName, 'serviceName');
-    _validateMethodToken(methodName, 'methodName');
+    _validateMethodToken(serviceName, 'serviceName', kServiceTokenPattern);
+    _validateMethodToken(methodName, 'methodName', kMethodTokenPattern);
+    final methodPath = '/$serviceName/$methodName';
+    if (!_isValidMethodPath(methodPath)) {
+      throw ArgumentError.value(
+        methodPath,
+        'methodPath',
+        'Method path longer than $kDefaultMaxMethodPathLength characters',
+      );
+    }
     return RpcMetadata([
       const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
       RpcHeader(
         RpcHeaders.grpcAcceptEncoding,
         RpcGrpcCompression.acceptEncodingHeader(),
       ),
-    ], methodPath: '/$serviceName/$methodName');
+    ], methodPath: methodPath);
   }
 
   /// Creates client metadata when the method path is already computed.
@@ -480,26 +486,22 @@ final class RpcMetadata {
     return null;
   }
 
-  static void _validateMethodToken(String value, String label) {
-    if (value.isEmpty ||
-        value.length > _maxMethodTokenLength ||
-        value.contains('/') ||
-        value.contains('\r') ||
-        value.contains('\n') ||
-        !_methodTokenPattern.hasMatch(value)) {
+  /// Checks one name against the pattern the RESPONDER parses it with, so a
+  /// name this side builds is one the other side routes. No length here: the
+  /// limit is on the whole path, checked by [_isValidMethodPath].
+  static void _validateMethodToken(String value, String label, RegExp pattern) {
+    if (!pattern.hasMatch(value)) {
       throw ArgumentError.value(
         value,
         label,
-        'Invalid name (allowed: A-Z a-z 0-9 _ . -)',
+        pattern == kServiceTokenPattern
+            ? 'Invalid name (allowed: A-Z a-z 0-9 _ . -)'
+            : 'Invalid name (allowed: A-Z a-z 0-9 _ -)',
       );
     }
   }
 
   /// The same grammar the policy enforces, at the default limit.
-  ///
-  /// This was a third answer — `_maxMethodTokenLength * 2 + 2` = 258 — so a
-  /// client built through [forClientRequestWithPath] could never send a path
-  /// that the policy's own 1024 default describes.
   static bool _isValidMethodPath(String methodPath) =>
       parseRpcMethodPath(methodPath) != null;
 }

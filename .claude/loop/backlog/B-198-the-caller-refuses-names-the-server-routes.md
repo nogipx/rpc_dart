@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 602)
 round: 525
 commit: 6659c0ee
 paths: [packages/core/rpc_dart/lib/src/core/metadata.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/b129_15_token_cap.dart
-reason: "bench — CONFIRMED with a band in round 525: 129 to ~1018 characters of service name is routable by the policy and REFUSED by RpcMetadata.forClientRequest, so a responder can register and route a name this client cannot call. Split out of B-129, which files it as a hygiene item"
+reason: "FIXED in round 602: forClientRequest now checks each name with the responder's own pattern and the whole path with parseRpcMethodPath; the 129-1018 band builds, and a dotted METHOD name, which it used to build and the server refused, is refused by the caller. Previously: bench — CONFIRMED with a band in round 525: 129 to ~1018 characters of service name is routable by the policy and REFUSED by RpcMetadata.forClientRequest, so a responder can register and route a name this client cannot call. Split out of B-129, which files it as a hygiene item"
 ---
 
 # B-198 — the caller refuses service names the server routes
@@ -55,6 +55,12 @@ token cap may be redundant rather than merely wrong.
 
 Worth checking which of the two limits the 128 was meant to be: RFC-scale header
 limits, a gRPC constraint, or an arbitrary guard.
+
+## Round 602 — fixed
+
+The band builds; the 1020 row and the control are still refused. A second
+disagreement in the same constructor (a dot admitted in the method name) is fixed
+with it. `../rounds/602-the-name-only-one-side-could-say.md`.
 
 ## Owner decision
 
