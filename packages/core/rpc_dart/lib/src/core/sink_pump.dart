@@ -23,6 +23,9 @@ import '../logger/_index.dart';
 ///   a send on a finished processor returns rather than throwing.
 /// - **Route every failure away from the zone.** These callbacks are unawaited;
 ///   an unhandled async error in the root zone ends a server process.
+/// - **Cancel on a source error too.** `addStream` does not end at an error,
+///   so a source that stays open after one -- a controller, a shared feed --
+///   keeps the `addStream` running, and the close below then throws.
 /// - **Cancel without awaiting, and cancel BEFORE closing the controller.**
 ///   A producer parked in an `async*` never completes its cancellation, and
 ///   `StreamController.close()` throws while an `addStream` is still running.
@@ -93,7 +96,7 @@ final class SinkPump<T> {
           stackTrace: stackTrace,
         );
         if (_finished) return;
-        _finished = true;
+        stop();
         _onSourceFailed(error, stackTrace);
       },
     );
