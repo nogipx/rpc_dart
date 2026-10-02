@@ -124,6 +124,9 @@ class RpcRetryInterceptor extends IRpcInterceptor {
         }
 
         await _backoff(delay, call.context.cancellationToken);
+        // A call cancelled during the backoff neither starts a reconnect nor
+        // waits for one; the next attempt fails CANCELLED at once.
+        if (call.context.cancellationToken?.isCancelled ?? false) continue;
         await _reconnectIfConnectionIsGone(e, call);
       }
     }

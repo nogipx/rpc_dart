@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 628)
+round: 628
+commit: 2ad569c5
 paths: [packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart]
 probe: P-158
-reason: "bench — round 623 made the backoff end on cancel, but the loop then awaits the reconnect before re-checking the token, so the cancel waits out a reconnect the abandoned call started"
+reason: "FIXED in round 628: the token is re-read after the backoff; 3106 ms and one reconnect became under 1500 ms and none. Previously: bench — round 623 made the backoff end on cancel, but the loop then awaits the reconnect before re-checking the token, so the cancel waits out a reconnect the abandoned call started"
 ---
 
 # B-233 — a cancel still waits for the reconnect
