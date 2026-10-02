@@ -36,6 +36,18 @@ malformed request, not the library. The callback-throws case sends no body, so
 it would need a different explanation: the 101 still in the server's buffer
 when the failed setup closes the channel.
 
+## Round 657
+
+The probe beside rpc_dart's suite at `--concurrency=12`, 150 rounds of 8:
+
+```
+with body bytes      1200 of 1200 answered 403
+without body bytes   1200 of 1200 answered 403
+```
+
+The RST hypothesis does not reproduce at this load; the two reds stay
+unexplained, and the gate of rounds 646-650 was green throughout.
+
 ## What a round owes this
 
 A frequency under the gate's own load (the probe run beside `test:unit`), and

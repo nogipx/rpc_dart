@@ -23,6 +23,13 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[657](657-two-suspects-measured-clean.md)** CLEAN, rpc_dart + rpc_dart_websocket — **a handler that stops reading logs nothing; B-241 does not reproduce under load** (2400 of 2400 refusals answered 403). A guard test pins the first
+- **[656](656-force-reconnect-after-disconnect.md)** FIXED, rpc_dart — **forceReconnect() after disconnect() left the connection idle for good** when the stopped loop was still asleep. It now resumes that loop, as connect() does
+- **[655](655-a-zero-base-delay-sleeps-the-maximum.md)** FIXED, rpc_dart — **ExponentialBackoff with a base under 1 ms, or zero, slept maxDelay on every attempt** (60 s by default), and jitter threw past ~50 days. Microseconds, overflow-free, web-safe
+- **[654](654-a-metered-stream-opened-for-free.md)** FIXED, rpc_dart — **with meterServerStreamMessages, a server-stream that emits nothing was free**: ten opened against a limit of two. Charged at opening now, first response prepaid
+- **[653](653-the-breaker-judged-a-call-by-the-wrong-state.md)** FIXED, rpc_dart — **the circuit breaker judged a call by the state it ended in**: a stale success closed it during the probe, a stale cancel let a second probe in, a stale failure dropped the probe's success; a stream probe held the gate for life; an abandoned stream hung its late listener. Admission tickets with a generation
+- **[652](652-a-zero-copy-response-of-the-wrong-type.md)** FIXED, rpc_dart — **a zero-copy response of the wrong type reached the caller as a raw TypeError**, where serialized is INTERNAL. Now INTERNAL on both
+- **[651](651-one-flag-for-every-stream.md)** FIXED, rpc_dart — **a directly-built UnaryResponder failed every later stream after one extra request on any stream.** The flag is per stream now
 - **[650](650-a-client-stream-closed-while-waiting.md)** FIXED, rpc_dart — **close() on a ClientStreamCaller left a waiting finishSending() pending forever** and the server untold. close() now fails the wait with RpcCancelledException and sends the abort notice, once
 - **[649](649-an-empty-chunk-before-a-unary-request.md)** FIXED, rpc_dart — **an empty DATA chunk before a valid unary request failed it INTERNAL** where server-stream and bidi served it. Unary now waits past it
 - **[648](648-two-connect-loops.md)** FIXED, rpc_dart — **a drop during a connect() issued while online started a second connect loop**: 3 transports built, Online twice. The drop handler no longer clears the running loop's guard
