@@ -32,6 +32,12 @@ after,  64 x 1 MiB                      64       1            +11 MiB
 canary (guard admits all)               64       never        +50 MiB
 ```
 
+Round 624 added a second arm: the upgrade request and a header declaring 2^40
+bytes in ONE write. Before: the process exits with `Bad state: Stream is already
+closed`. After: the socket closes and the server stays up. The first arm's
+threshold is `closedAfter <= 8`: Linux CI read 3 where macOS reads 1, the client
+noticing the close a few writes late.
+
 ## Measures
 
 Whether one connection can make the server buffer an unbounded message.

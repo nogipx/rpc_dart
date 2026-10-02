@@ -241,6 +241,10 @@ Each of these was measured as part of a lead that then CLOSED on the item a roun
 - [ ] **[B-193](B-193-http2-header-helpers.md)** open (audit 2026-09-28), cost, high — `_headerValue` re-implements `isValidHeaderValue` after `validateMetadata` already ran; response and trailers-only builders are near-copies and only the latter guarantees content-type; the request path can emit `te` twice and does not filter connection-specific headers; constant headers are re-encoded per call; `extractRequestMethod`/`extractMethodPath`/`extractHttpStatus`/`http2HeadersToRpcMetadata` each `String.fromCharCodes` every header; `filterStreamEvents` is test-only while its doc calls it live; `kGrpcUserAgent = 'rpc-dart/1.0.0'`; keepalive pings a busy connection; the guard and proxy forwarder pass no pause/resume to the socket
 - [ ] **[B-194](B-194-http2-cleanup-items.md)** open (audit 2026-09-28), cost, high — a terminate retried after it threw, duplicate branches and checks, a typo, a drain signal shared across connections, an unreachable log label, a case-insensitive method, an unmatched open callback, a status computed twice, every message broadcast as well as routed
 
+## From the independent audit of 2026-10-02 — seven auditors, every finding reproduced by a round before filing
+
+- [ ] **[B-227](B-227-the-connections-policy-is-a-second-copy.md)** open (round 624), decision, medium — `rpcWebSocketConnections` sizes the frame guard from its OWN `policy:` (default 16 MiB), not the server's: server and client at 32 MiB, connections with none, a `20 MiB` request reads `RpcStatusException(14) ... code 1002` and is retried; with the policy passed twice it is served. A regression from 73590cfb for anyone above 16 MiB, and the README example passes none. `P-216`
+
 ## Notes kept from intakes that are fully closed
 
 No live lead is below this line. Three sections used to sit here — device/service,

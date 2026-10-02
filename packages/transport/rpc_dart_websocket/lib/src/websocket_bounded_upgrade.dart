@@ -91,18 +91,33 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
 
   static Stream<Uint8List> _guarded(Socket socket, int maxMessageBytes) {
     final guard = WebSocketFrameGuard(maxMessageBytes);
-    return socket.transform(
-      StreamTransformer<Uint8List, Uint8List>.fromHandlers(
-        handleData: (data, sink) {
-          if (guard.admit(data)) {
-            sink.add(data);
-          } else {
+    StreamSubscription<Uint8List>? source;
+    late final StreamController<Uint8List> out;
+    out = StreamController<Uint8List>(
+      sync: true,
+      onListen: () {
+        source = socket.listen(
+          (data) {
+            if (guard.admit(data)) {
+              out.add(data);
+              return;
+            }
+            // Bytes read together with the upgrade request are replayed by
+            // dart:http and keep arriving after destroy(); only cancelling
+            // the subscription stops them.
+            unawaited(source?.cancel());
             socket.destroy();
-            sink.close();
-          }
-        },
-      ),
+            unawaited(out.close());
+          },
+          onError: out.addError,
+          onDone: out.close,
+        );
+      },
+      onPause: () => source?.pause(),
+      onResume: () => source?.resume(),
+      onCancel: () => source?.cancel(),
     );
+    return out.stream;
   }
 
   @override

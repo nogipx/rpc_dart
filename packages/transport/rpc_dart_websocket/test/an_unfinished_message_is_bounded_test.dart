@@ -118,4 +118,53 @@ void main() {
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
+
+  // Bytes that arrive in the same read as the upgrade request are replayed by
+  // dart:http after the refusal, so the refused socket keeps delivering.
+  test(
+    'a refusal in the same write as the handshake leaves the server up',
+    () async {
+      final http = await HttpServer.bind('127.0.0.1', 0);
+      final server = RpcWebSocketServer(
+        connections: rpcWebSocketConnections(http),
+        onEndpointCreated: (_) {},
+      );
+      await server.start();
+      addTearDown(() async {
+        await server.stop();
+        await http.close(force: true);
+      });
+
+      final oversized = BytesBuilder()
+        ..addByte(0x82)
+        ..addByte(0x80 | 127)
+        ..add((ByteData(8)..setUint64(0, 1 << 40)).buffer.asUint8List())
+        ..add(const [0, 0, 0, 0])
+        ..add(Uint8List(256 * 1024));
+      final socket = await Socket.connect('127.0.0.1', http.port);
+      final closed = Completer<void>();
+      socket.listen(
+        (_) {},
+        onError: (Object _) {},
+        onDone: closed.complete,
+        cancelOnError: true,
+      );
+      socket.add([
+        ...latin1.encode(
+          'GET / HTTP/1.1\r\n'
+          'Host: 127.0.0.1:${http.port}\r\n'
+          'Upgrade: websocket\r\n'
+          'Connection: Upgrade\r\n'
+          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
+          'Sec-WebSocket-Version: 13\r\n\r\n',
+        ),
+        ...oversized.takeBytes(),
+      ]);
+      await socket.flush().catchError((Object _) {});
+      await closed.future.timeout(const Duration(seconds: 5));
+      socket.destroy();
+      // An error thrown by the refused socket would fail this test as uncaught.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    },
+  );
 }
