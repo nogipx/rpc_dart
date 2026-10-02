@@ -966,6 +966,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   bool _isActive = true;
   bool _initialMetadataSent = false;
 
+  /// A request could not be sent, so the request stream must not end with a
+  /// half-close: the peer would read the requests before it as the whole stream.
+  bool _requestSendFailed = false;
+
   /// `/Service/Method`.
   late final String _methodPath;
 
@@ -1098,6 +1102,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
         try {
           await _sendSequence;
+          if (_requestSendFailed) return;
           await _transport.finishSending(_streamId);
           if (_logger.isInternal) {
             _logger.internal(
@@ -1202,6 +1207,11 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
 
         // Close on the first send failure: the stream is no longer coherent,
         // so further sends would put a gapped request sequence on the wire.
+        // The peer is told the call was abandoned rather than half-closed: a
+        // handler reading the requests would otherwise take the ones before
+        // this as the complete stream and answer OK.
+        _requestSendFailed = true;
+        await _sendCancellationToServer('A request could not be sent');
         if (!_requestController.isClosed) {
           unawaited(_requestController.close());
         }
