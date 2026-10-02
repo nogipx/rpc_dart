@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 632)
+round: 632
+commit: 6e7cacc3
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
 probe: none — audit probe `packages/core/rpc_dart/.dart_tool/probe/correct_shapes_d.dart`, not yet registered
-reason: "cost — after close(), unaryRequest, serverStream and bidirectionalStream throw synchronously; clientStream returns a failed Future"
+reason: "FIXED in round 632: all four shapes fail through what they return. Previously: cost — after close(), unaryRequest, serverStream and bidirectionalStream throw synchronously; clientStream returns a failed Future"
 ---
 
 # B-238 — a closed caller throws before the Future

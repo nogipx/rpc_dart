@@ -407,7 +407,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     /// low-level API keeps the fast path it has always had.
     RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
   }) {
-    if (!isActive) throw RpcClosedException('Endpoint');
+    // Through the Future, as clientStream does: thrown here, it would bypass
+    // `.catchError` and every other non-`try` handler of the call.
+    if (!isActive) return Future.error(RpcClosedException('Endpoint'));
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
     if (isZeroCopy && !transport.supportsZeroCopy) {
@@ -472,7 +474,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
-    if (!isActive) throw RpcClosedException('Endpoint');
+    // Through the stream, for the same reason as unaryRequest's.
+    if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
     final isZeroCopy = requestCodec == null && responseCodec == null;
     if (isZeroCopy && !transport.supportsZeroCopy) {
@@ -571,7 +574,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<R>? responseCodec,
     RpcContext? context,
   }) {
-    if (!isActive) throw RpcClosedException('Endpoint');
+    // Through the stream, for the same reason as unaryRequest's.
+    if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
     final ctx = _prepareCallerContext(context, serviceName, methodName);
 

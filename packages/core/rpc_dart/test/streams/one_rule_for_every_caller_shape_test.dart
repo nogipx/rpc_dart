@@ -289,9 +289,13 @@ void main() {
     // Asserted on `what`, not just the type: the closed TRANSPORT underneath
     // also throws RpcClosedException, so `isA<RpcClosedException>()` alone
     // passes with the endpoint guard removed and witnesses nothing.
-    Matcher refusedByTheEndpoint() => throwsA(
-      isA<RpcClosedException>().having((e) => e.what, 'what', 'Endpoint'),
+    // The streaming shapes report it on the stream they return (round 632).
+    final refusal = isA<RpcClosedException>().having(
+      (e) => e.what,
+      'what',
+      'Endpoint',
     );
+    Matcher refusedByTheEndpoint() => throwsA(refusal);
 
     late RpcCallerEndpoint caller;
 
@@ -311,16 +315,16 @@ void main() {
       await expectLater(call(Stream.value(_Msg('x'))), refusedByTheEndpoint());
     });
 
-    test('bidirectionalStream', () {
-      expect(
-        () => caller.bidirectionalStream<_Msg, _Msg>(
+    test('bidirectionalStream', () async {
+      await expectLater(
+        caller.bidirectionalStream<_Msg, _Msg>(
           serviceName: 'S',
           methodName: 'M',
           requests: Stream.value(_Msg('x')),
           requestCodec: _codec,
           responseCodec: _codec,
         ),
-        refusedByTheEndpoint(),
+        emitsError(refusal),
       );
     });
 
@@ -338,16 +342,16 @@ void main() {
       );
     });
 
-    test('CONTROL: serverStream', () {
-      expect(
-        () => caller.serverStream<_Msg, _Msg>(
+    test('CONTROL: serverStream', () async {
+      await expectLater(
+        caller.serverStream<_Msg, _Msg>(
           serviceName: 'S',
           methodName: 'M',
           request: _Msg('x'),
           requestCodec: _codec,
           responseCodec: _codec,
         ),
-        refusedByTheEndpoint(),
+        emitsError(refusal),
       );
     });
   });
