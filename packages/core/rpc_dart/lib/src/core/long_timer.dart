@@ -66,8 +66,14 @@ class RpcLongTimer implements Timer {
     required FutureOr<T> Function() onTimeout,
   }) {
     final completer = Completer<T>();
+    // Once the timer fires the source is out of the race, as with
+    // `Future.timeout`: an async [onTimeout] that settles after a late source
+    // would otherwise complete the completer twice, from a callback nothing
+    // listens to.
+    var timedOut = false;
     final timer = create(duration, () {
       if (completer.isCompleted) return;
+      timedOut = true;
       try {
         final replacement = onTimeout();
         if (replacement is Future<T>) {
@@ -94,11 +100,11 @@ class RpcLongTimer implements Timer {
       future.then<void>(
         (value) {
           timer.cancel();
-          if (!completer.isCompleted) completer.complete(value);
+          if (!timedOut && !completer.isCompleted) completer.complete(value);
         },
         onError: (Object error, StackTrace stackTrace) {
           timer.cancel();
-          if (!completer.isCompleted) {
+          if (!timedOut && !completer.isCompleted) {
             completer.completeError(error, stackTrace);
           }
         },

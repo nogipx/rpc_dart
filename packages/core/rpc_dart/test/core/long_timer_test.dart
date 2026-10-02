@@ -201,6 +201,40 @@ void main() {
 
       expect(errors, isEmpty);
     });
+
+    // As Future.timeout: once the timer fires, the source is out of the race.
+    // A source settling while an async onTimeout is still running used to win,
+    // and the replacement then completed the completer a second time, from a
+    // callback nothing listens to.
+    for (final fails in [false, true]) {
+      test('a late source does not beat an async onTimeout '
+          '(${fails ? 'it throws' : 'it returns'})', () async {
+        final errors = <Object>[];
+        Object? outcome;
+        await runZonedGuarded(() async {
+          final source = Completer<String>();
+          final bounded = RpcLongTimer.timeout(
+            source.future,
+            const Duration(milliseconds: 10),
+            onTimeout: () async {
+              await Future<void>.delayed(const Duration(milliseconds: 30));
+              if (fails) throw TimeoutException('late');
+              return 'timed out';
+            },
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+          source.complete('source');
+          outcome = await bounded.then<Object>(
+            (v) => v,
+            onError: (Object e) => e,
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }, (error, stack) => errors.add(error))!;
+
+        expect(outcome, fails ? isA<TimeoutException>() : 'timed out');
+        expect(errors, isEmpty);
+      });
+    }
   });
 
   group('deadlines built on it', () {
