@@ -24,6 +24,13 @@ final class ClientStreamCaller<
   /// Marks send completion.
   bool _sendingFinished = false;
 
+  /// Whether anything of this call reached the transport; a call that never
+  /// started has nobody to tell when it is abandoned.
+  bool _started = false;
+
+  /// Set once the server has been told the call is abandoned. See [_notifyAbort].
+  bool _abortNotified = false;
+
   /// The payload, held until the status says what it means.
   ///
   /// gRPC's status is authoritative: a payload followed by an error trailer is
@@ -199,7 +206,16 @@ final class ClientStreamCaller<
     if (_logger.isInternal) {
       _logger.internal('Sending request to client stream: $request');
     }
+    _started = true;
     await _processor.send(request);
+  }
+
+  /// Tells the server the call is abandoned, once, and only if it started.
+  /// Never throws (see [CallProcessor.notifyPeerOfAbort]).
+  Future<void> _notifyAbort(String reason) async {
+    if (_abortNotified || !_started) return;
+    _abortNotified = true;
+    await _processor.notifyPeerOfAbort(reason);
   }
 
   /// Completes sending requests and waits for a single response.
@@ -221,6 +237,7 @@ final class ClientStreamCaller<
     }
 
     _sendingFinished = true;
+    _started = true;
 
     try {
       // Finish sending requests.
@@ -252,9 +269,7 @@ final class ClientStreamCaller<
           // own doc says `_sendCancellationToServer` is otherwise reachable only
           // through a cancellation token — and it never throws. Unawaited, as
           // every streaming sibling sends it.
-          unawaited(
-            _processor.notifyPeerOfAbort('Caller timed out after $wait'),
-          );
+          unawaited(_notifyAbort('Caller timed out after $wait'));
           // Free resources on timeout.
           unawaited(close());
           // With a deadline set, two things race to end the call: the call
@@ -368,16 +383,31 @@ final class ClientStreamCaller<
       // ends on its own; this path has no such signal, so without the notice
       // the handler waits on a request stream that will never produce again.
       if (abortedLocally) {
-        await _processor.notifyPeerOfAbort('client stream request failed');
+        await _notifyAbort('client stream request failed');
       }
       await close();
     }
   }
 
   /// Closes the stream and releases resources.
+  ///
+  /// A response still pending fails with [RpcCancelledException]: once the
+  /// subscription is cancelled nothing else can settle it, and a
+  /// [finishSending] waiting on it with no deadline waited forever. The server,
+  /// which has no answer from this side either, is told the call is abandoned.
   Future<void> close() async {
     _logger.internal('Closing ClientStreamCaller');
     await _subscription?.cancel();
+    if (!_responseCompleter.isCompleted) {
+      await _notifyAbort('Caller closed');
+      if (!_responseCompleter.isCompleted) {
+        _responseCompleter.completeError(
+          const RpcCancelledException(
+            'The call was closed before its response',
+          ),
+        );
+      }
+    }
     await _processor.close();
   }
 }
