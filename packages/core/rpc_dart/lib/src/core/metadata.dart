@@ -392,27 +392,28 @@ final class RpcMetadata {
               ? maxLength
               : _maxGrpcMessageLength);
     if (limit <= 0) return '';
-    final bytes = Uint8List.fromList(utf8.encode(message));
     final out = StringBuffer();
+    final piece = StringBuffer();
 
-    for (final b in bytes) {
-      if (_isUnreservedByte(b)) {
-        out.writeCharCode(b);
-      } else {
-        out.write('%');
-        out.write(_toUpperHex(b >> 4));
-        out.write(_toUpperHex(b & 0x0F));
+    // A whole character at a time: a cut between the bytes of one UTF-8
+    // sequence decodes to U+FFFD on the other side, so the trimmed text would
+    // not be a prefix of the message.
+    for (final rune in message.runes) {
+      piece.clear();
+      for (final b in utf8.encode(String.fromCharCode(rune))) {
+        if (_isUnreservedByte(b)) {
+          piece.writeCharCode(b);
+        } else {
+          piece
+            ..write('%')
+            ..write(_toUpperHex(b >> 4))
+            ..write(_toUpperHex(b & 0x0F));
+        }
       }
-      if (out.length >= limit) {
-        break;
-      }
+      if (out.length + piece.length > limit) break;
+      out.write(piece);
     }
-
-    var encoded = out.toString();
-    if (encoded.length > limit) {
-      encoded = encoded.substring(0, limit);
-    }
-    return _trimIncompletePercentTriplet(encoded);
+    return out.toString();
   }
 
   /// Best-effort decode of percent-encoded `grpc-message`.

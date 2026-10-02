@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 630)
+round: 630
+commit: e78818bf
 paths: [packages/core/rpc_dart/lib/src/core/metadata.dart]
 probe: none — audit probe `packages/core/rpc_dart/.dart_tool/probe/correct_wire_codec_units.dart`, not yet registered
-reason: "bench — encodeGrpcMessage trims the encoded text without respecting UTF-8 sequence boundaries, so a long non-ASCII message arrives as a non-prefix ending in U+FFFD"
+reason: "FIXED in round 630: the message is encoded a character at a time and a character crossing the cap is left out whole; every case decodes to a prefix on VM and node. Previously: bench — encodeGrpcMessage trims the encoded text without respecting UTF-8 sequence boundaries, so a long non-ASCII message arrives as a non-prefix ending in U+FFFD"
 ---
 
 # B-237 — a trimmed message splits a character
