@@ -272,6 +272,16 @@ void main() {
     expect(framing.message, contains('max: 16'));
   });
 
+  test('WITNESS an RpcException subclass\'s toString stays home', () async {
+    // RpcException is public and not final, so "every subclass is ours" does
+    // not hold. rpc_data's RpcDataError appends its cause -- a SQLite error with
+    // the failing statement -- to toString, which is what used to be sent.
+    final wire = wireStatusFor(_WithCause('Unhandled repository error'));
+    expect(wire.status, RpcStatus.internal);
+    expect(wire.message, 'Unhandled repository error');
+    expect(wire.message, isNot(contains('SELECT')));
+  });
+
   test('a redacted error carries no status details either', () async {
     // The message is only half of what reaches a peer: structured details ride
     // grpc-status-details-bin as a separate field, and redacting the text while
@@ -326,4 +336,13 @@ void main() {
 /// `RpcWebSocketNonBinaryFrame` are the real ones.
 class _LibraryAuthored extends RpcException {
   _LibraryAuthored(super.message);
+}
+
+/// The shape of rpc_data's RpcDataError: a message, and a cause in toString.
+class _WithCause extends RpcException {
+  _WithCause(super.message);
+
+  @override
+  String toString() =>
+      '${super.toString()}: SqliteException in SELECT ssn FROM users';
 }

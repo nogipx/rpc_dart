@@ -14,42 +14,49 @@ client-side feedback.
 
 | Status | Constant | Typical meaning |
 | --- | --- | --- |
-| `0` | `RpcStatus.OK` | Success |
-| `1` | `RpcStatus.CANCELLED` | Caller cancelled the operation |
-| `4` | `RpcStatus.DEADLINE_EXCEEDED` | Deadline expired before completion |
-| `5` | `RpcStatus.NOT_FOUND` | Requested resource does not exist |
-| `7` | `RpcStatus.PERMISSION_DENIED` | Authenticated caller lacks permissions |
-| `13` | `RpcStatus.INTERNAL` | Unhandled server-side failure |
-| `14` | `RpcStatus.UNAVAILABLE` | Transport is down or service is restarting |
+| `0` | `RpcStatus.ok` | Success |
+| `1` | `RpcStatus.cancelled` | Caller cancelled the operation |
+| `4` | `RpcStatus.deadlineExceeded` | Deadline expired before completion |
+| `5` | `RpcStatus.notFound` | Requested resource does not exist |
+| `7` | `RpcStatus.permissionDenied` | Authenticated caller lacks permissions |
+| `13` | `RpcStatus.internal` | Unhandled server-side failure |
+| `14` | `RpcStatus.unavailable` | Transport is down or service is restarting |
 
-`RpcMetadata.forTrailer(status, message: ...)` attaches the final status to the
-response stream. Caller endpoints parse the trailer and surface structured
-errors.
+The responder sends the final status in the call's trailer; the caller reads it
+and fails the call with an `RpcStatusException` carrying that code and message.
 
 ## Throwing responder-side exceptions
+
+Throw `RpcStatusException` to choose the status and the message the caller
+sees:
 
 ```dart
 Future<Order> placeOrder(PlaceOrderRequest request, {RpcContext? context}) async {
   final inventory = await inventoryClient.reserve(request.items, context: context);
 
   if (!inventory.isSuccess) {
-    throw RpcException('Inventory check failed: ${inventory.reason}');
+    throw RpcStatusException(
+      RpcStatus.failedPrecondition,
+      'Inventory check failed: ${inventory.reason}',
+    );
   }
 
   try {
     return await payments.charge(request.paymentMethod);
   } on PaymentDeclined catch (error) {
     // Let the caller know the request was valid but could not be processed.
-    throw RpcException('Payment declined: ${error.reason}');
+    throw RpcStatusException(
+      RpcStatus.failedPrecondition,
+      'Payment declined: ${error.reason}',
+    );
   }
 }
 ```
 
-`RpcResponderEndpoint` catches any exception and converts it into a trailer with
-`RpcStatus.INTERNAL` by default, using the message you provided. When you need
-more control you can intercept responses in middleware, inspect the thrown
-exception, and call `RpcMetadata.forTrailer` to emit a specific status code
-before letting the endpoint close the stream.
+Any other exception is sent as `RpcStatus.internal` with the message
+`Internal server error`. Its own text is withheld on purpose: an arbitrary
+exception's message can carry anything, and the peer is not the place to learn
+it. Log it on the server instead.
 
 ## Handling timeouts and cancellations
 
@@ -57,7 +64,7 @@ before letting the endpoint close the stream.
   You can catch it and emit compensating actions or retries.
 - `RpcCancellationToken` cooperates with responders through
   `context?.cancellationToken`. Call `token.throwIfCancelled()` inside long
-  loops to abort early and return `RpcStatus.CANCELLED`.
+  loops to abort early and return `RpcStatus.cancelled`.
 
 ```dart
 await for (final chunk in stream) {
@@ -68,9 +75,9 @@ await for (final chunk in stream) {
 
 ## Client-side behaviour
 
-Caller endpoints translate trailers into `RpcException` instances. When you
-await a unary call the future completes with an error whose message includes the
-status code and description supplied by the responder.
+Caller endpoints translate a non-OK trailer into an `RpcStatusException` (an
+`RpcException`) whose `statusCode` and `message` are the responder's. A response
+the caller cannot decode fails the call the same way, with `RpcStatus.internal`.
 
 You can intercept errors centrally by wrapping calls:
 
@@ -94,24 +101,24 @@ production code.
 `RpcEndpointHealth` snapshots expose the transport status, including reconnection
 attempts or protocol violations. When a transport becomes unhealthy:
 
-1. `RpcCallerEndpoint.health()` returns `RpcHealthStatus` with level
-   `unhealthy` or `reconnecting`.
-2. `RpcCallerEndpoint.reconnect()` delegates to `IRpcTransport.reconnect()` if
-   supported; otherwise you can recreate the transport and endpoint.
-3. `RpcTransportRouter` surfaces routing errors (such as missing rules) via
-   thrown `RpcException`s that bubble up to the caller.
+1. `RpcCallerEndpoint.health()` returns an `RpcEndpointHealth` whose transport
+   status has level `unhealthy` or `reconnecting`.
+2. `RpcCallerEndpoint.reconnect()` delegates to `IRpcTransport.reconnect()`; a
+   transport that cannot reconnect says so in the status it returns, and you
+   can recreate the transport and endpoint instead.
 
 Monitoring these signals lets you distinguish between application bugs and
 infrastructure issues quickly.
 
 ## Best practices
 
-- Use descriptive messages in `RpcException` so clients can produce actionable
-  UI feedback.
-- Attach structured details via context headers (`x-error-id`, `x-retry-after`)
-  to implement richer error handling strategies.
-- For idempotent operations consider retrying automatically when you receive
-  `RpcStatus.UNAVAILABLE` and the call has not reached the responder.
+- Use descriptive messages in `RpcStatusException` so clients can produce
+  actionable UI feedback.
+- Attach structured details through `RpcStatusException(..., details: [...])`
+  (`RpcRetryInfo`, `RpcErrorInfo`, `RpcBadRequest`, ...); they travel in
+  `grpc-status-details-bin` and come back on the caller's exception.
+- For idempotent operations consider `RpcRetryInterceptor`, which retries
+  `RpcStatus.unavailable` and reconnects a transport whose connection is gone.
 - Log trailers and context metadata in middleware to build dashboards correlating
   error spikes with specific transports or services.
 

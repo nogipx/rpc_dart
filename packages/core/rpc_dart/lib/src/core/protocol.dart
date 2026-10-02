@@ -339,10 +339,11 @@ const String kInternalErrorWireMessage = 'Internal server error';
 /// - [RpcStatusException] — the handler SPEAKING to its caller. Status, message
 ///   and details are all deliberate, so all three are forwarded intact. This is
 ///   the supported way to say something to a peer.
-/// - rpc_dart's own [RpcException] hierarchy — library-authored diagnostics
-///   ("gRPC frame payload is too large: N (max: M)") that carry no user data and
-///   are what a peer needs in order to correct itself. Every subclass is ours,
-///   so this cannot pick up application data.
+/// - the [RpcException] hierarchy — rpc_dart's own diagnostics ("gRPC frame
+///   payload is too large: N (max: M)") are what a peer needs in order to
+///   correct itself. Only the MESSAGE is sent, never `toString()`: the class
+///   is public, and a subclass may append more there (rpc_data's
+///   `RpcDataError` appends its cause, a SQLite error with the statement).
 ///
 /// Do NOT widen this to [Exception]. An exception is not safe merely because
 /// the thrower chose to signal it: a database driver puts the failing query in
@@ -369,7 +370,7 @@ const String kInternalErrorWireMessage = 'Internal server error';
   if (error is RpcException) {
     return (
       status: RpcStatus.internal,
-      message: error.toString(),
+      message: error.message,
       detailsBin: null,
     );
   }

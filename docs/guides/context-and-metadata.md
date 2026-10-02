@@ -46,11 +46,8 @@ final child = RpcContextBuilder.inheritFrom(parentContext)
 ```dart
 final authCtx = RpcContextUtils.withBearerToken(token);
 final traced = RpcContextUtils.withTracing(traceId: 'trace-1234');
-final domain = RpcContext.forDomainCall(
-  parentContext: traced,
-  fromDomain: 'Order',
-  toDomain: 'User',
-  operation: 'GetUserProfile',
+final forUsers = traced.createChildWith(
+  headers: {'x-operation': 'GetUserProfile'},
 );
 ```
 
@@ -105,25 +102,28 @@ Future.delayed(const Duration(milliseconds: 500), () => token.cancel('User left 
 
 ## Context chains for orchestration
 
-When a workflow spans multiple domains you rarely want to re-create metadata
-from scratch. `RpcContext.createChain` generates a sequence of derived contexts
-with fresh request IDs while preserving headers and trace IDs:
+When a workflow spans several services you rarely want to re-create metadata
+from scratch. `createChildWith` derives a context that keeps the parent's
+headers and trace ID, with a fresh request ID and its own overrides:
 
 ```dart
-final base = RpcContext.forBusinessOperation(
-  operationType: 'PlaceOrder',
-  userId: user.id,
-  sessionId: session.id,
+final base = RpcContextBuilder()
+    .withGeneratedTraceId()
+    .withHeader('x-operation', 'PlaceOrder')
+    .withHeader('x-user-id', user.id)
+    .build();
+
+final inventoryCtx = base.createChildWith(
+  headers: {'x-step': 'Inventory'},
+  timeout: const Duration(seconds: 5),
+);
+final paymentCtx = base.createChildWith(
+  headers: {'x-step': 'Payment'},
+  timeout: const Duration(seconds: 5),
 );
 
-final chain = RpcContext.createChain(
-  base,
-  steps: ['Inventory', 'Payment', 'Notifications'],
-  stepTimeout: const Duration(seconds: 5),
-);
-
-await inventoryCaller.reserve(itemId, context: chain['Inventory']);
-await paymentCaller.charge(paymentId, context: chain['Payment']);
+await inventoryCaller.reserve(itemId, context: inventoryCtx);
+await paymentCaller.charge(paymentId, context: paymentCtx);
 ```
 
 ## Sanitising and merging metadata
@@ -134,12 +134,6 @@ await paymentCaller.charge(paymentId, context: chain['Payment']);
   precedence for overlapping headers or deadlines.
 - Extensions like `RpcContext.createChildWith` make it trivial to fork contexts
   with a few overrides, ideal for fan-out operations.
-
-## Surfacing domain metadata
-
-`RpcContext.extractDomainMetadata` summarises business identifiers (user IDs,
-tenant IDs, operation names, trace IDs). You can feed it to structured logging
-or metrics without manually parsing headers each time.
 
 By embracing `RpcContext` you create a consistent experience across transports
 and services: every RPC carries enough information to authenticate, trace, and

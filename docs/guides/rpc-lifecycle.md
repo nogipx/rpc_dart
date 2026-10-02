@@ -76,7 +76,7 @@ When serialisation is required, RPC Dart wraps your payload with a gRPC-style
   payload messages with end-of-stream markers (`RpcMessage.isEndOfStream`).
   Bidirectional streams use the same infrastructure in both directions.
 - When the handler completes, the endpoint appends a trailer metadata frame with
-  the final gRPC status (usually `RpcStatus.OK`).
+  the final gRPC status (usually `RpcStatus.ok`).
 
 ### 5. Completing the call on the caller side
 

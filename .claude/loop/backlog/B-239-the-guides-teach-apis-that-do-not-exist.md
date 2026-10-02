@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 633)
+round: 633
+commit: 023e4fe5
 paths: [docs/guides/error-handling.md, docs/guides/context-and-metadata.md, docs/guides/rpc-lifecycle.md, packages/core/rpc_dart/lib/src/core/protocol.dart]
 probe: none — audit probes `packages/core/rpc_dart/.dart_tool/probe/correct_wire_doc_constants.dart`, `correct_shapes_docs.dart`, not yet registered
-reason: "cost — the guides name RpcStatus.OK and friends and four RpcContext factories that do not exist, and misstate what message a thrown exception produces"
+reason: "FIXED in round 633: the guides now name only APIs that exist, and the 'every subclass is ours' premise was a leak — wireStatusFor sent an RpcException's toString, which rpc_data's RpcDataError extends with its SQLite cause; it now sends the message. Previously: cost — the guides name RpcStatus.OK and friends and four RpcContext factories that do not exist, and misstate what message a thrown exception produces"
 ---
 
 # B-239 — the guides teach APIs that do not exist
