@@ -1,10 +1,10 @@
 ---
-status: open
-round: 615
-commit: e3c2e4b1
+status: closed (round 616)
+round: 616
+commit: d572e08d
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 probe: P-174
-reason: "round 615 answered the streaming shapes (all served across a reconnect, handler told) and fixed the peer-bidi defect its guard found; what is left is the race against a factory that returns an already-open channel. Previously: the two things round 541 fixed by CONSTRUCTION rather than by measurement: the six streaming `responder.done` cleanups got `only:` by inspection, and whether the reclamation can lose its race against the new socket's first frame is left to the reconnect's own awaits"
+reason: "CLEAN in round 616: the race is refuted by construction — a pre-opened socket carrying the new call's opening frame changes nothing for any shape, and moving the notice after the attach fails all four. Previously: round 615 answered the streaming shapes (all served across a reconnect, handler told) and fixed the peer-bidi defect its guard found; what is left is the race against a factory that returns an already-open channel. Previously: the two things round 541 fixed by CONSTRUCTION rather than by measurement: the six streaming `responder.done` cleanups got `only:` by inspection, and whether the reclamation can lose its race against the new socket's first frame is left to the reconnect's own awaits"
 ---
 
 # B-212 — the streaming shapes and the race round 541 did not price
@@ -39,7 +39,10 @@ argument is a good one. It is still an argument. What is not established:
 P-174 extends to these: give the contract a server-stream and a bidi method and park
 them the same way.
 
-## The race
+## The race — REFUTED in round 616
+
+The notice wins by construction (see the round). What follows is the question as
+it stood.
 
 The notice is emitted before the reconnect's awaits — `_fwdSub.cancel()`,
 `_inner.close()`, then the factory handshake — so the pipeline's reclamation has that

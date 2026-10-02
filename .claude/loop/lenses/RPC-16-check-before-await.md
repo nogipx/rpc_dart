@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/endpoint/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
 applies: something is read, then an operation is awaited, then the read is relied on — a lifecycle flag, or an open iterator over a mutable collection
 breaks: a connection leak; or an in-flight call failing with a StateError instead of its status.
-applied: [235, 505, 510, 522]
+applied: [235, 505, 510, 522, 616]
 status: confirmed (round 235)
 ---
 

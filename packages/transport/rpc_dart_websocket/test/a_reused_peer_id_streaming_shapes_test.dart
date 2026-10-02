@@ -18,10 +18,12 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/io.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-enum _Shape { serverStream, clientStream, bidi }
+enum _Shape { unary, serverStream, clientStream, bidi }
 
 /// Registered on the CLIENT. Every call parks until its own gate opens.
 final class _Answering extends RpcPeerContract {
@@ -40,6 +42,13 @@ final class _Answering extends RpcPeerContract {
 
   @override
   void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Ask',
+      handler: (request, {RpcContext? context}) async =>
+          (await _park(request.value, context)).rpc,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'Watch',
       handler: (request, {RpcContext? context}) async* {
@@ -86,6 +95,13 @@ final class _Asking extends RpcPeerContract {
   Future<String> ask(_Shape shape, String what) async {
     final requests = StreamController<RpcString>()..add(what.rpc);
     switch (shape) {
+      case _Shape.unary:
+        return (await callUnary<RpcString, RpcString>(
+          methodName: 'Ask',
+          request: what.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )).value;
       case _Shape.serverStream:
         return (await callServerStream<RpcString, RpcString>(
           methodName: 'Watch',
@@ -134,7 +150,15 @@ typedef _Run = ({
 });
 
 /// One caller through a reconnect with [shape]'s answer parked across it.
-Future<_Run> _run(_Shape shape, {required bool reconnect}) {
+///
+/// [frameFirst] removes the handshake from the window: the next socket is open
+/// before the reconnect starts, and the new caller's opening frame is already
+/// waiting in it, so it arrives the moment the socket is attached.
+Future<_Run> _run(
+  _Shape shape, {
+  required bool reconnect,
+  bool frameFirst = false,
+}) {
   final stray = <String>[];
   final done = Completer<_Run>();
 
@@ -148,9 +172,20 @@ Future<_Run> _run(_Shape shape, {required bool reconnect}) {
       );
       await server.start();
 
-      final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:${http.port}'),
-      );
+      final uri = Uri.parse('ws://127.0.0.1:${http.port}');
+      Future<WebSocketChannel> openReady() async {
+        final channel = IOWebSocketChannel.connect(uri);
+        await channel.ready;
+        return channel;
+      }
+
+      WebSocketChannel? next;
+      final transport = frameFirst
+          ? RpcWebSocketCallerTransport(
+              await openReady(),
+              reconnectFactory: () async => next!,
+            )
+          : await RpcWebSocketCallerTransport.connect(uri);
       final clientPeer = RpcPeerEndpoint(transport: transport);
       final answering = _Answering(clientPeer);
       clientPeer.registerServiceContract(answering);
@@ -176,16 +211,21 @@ Future<_Run> _run(_Shape shape, {required bool reconnect}) {
           'the first handler',
         );
 
-        final _Asking second;
-        if (reconnect) {
+        final Future<String> secondCall;
+        if (reconnect && frameFirst) {
+          next = await openReady();
+          await _waitFor(() => built.length > 1, 'the second server endpoint');
+          secondCall = _Asking(built[1]).ask(shape, 'two');
+          // Long enough for the opening frame to be sitting in the new socket.
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          await transport.reconnect();
+        } else if (reconnect) {
           await transport.reconnect();
           await _waitFor(() => built.length > 1, 'the second server endpoint');
-          second = _Asking(built[1]);
+          secondCall = _Asking(built[1]).ask(shape, 'two');
         } else {
-          second = first;
+          secondCall = first.ask(shape, 'two');
         }
-
-        final secondCall = second.ask(shape, 'two');
         await _pollFor(() => answering.started.contains('two'));
 
         answering.open('one');
@@ -244,6 +284,22 @@ void main() {
           expect(r.openedOn, [2, 2], reason: 'the premise: $r');
           expect(r.secondGot, 'answered two', reason: '$r');
           expect(r.cancelled, contains('one'), reason: '$r');
+          expect(r.stray, isEmpty, reason: '$r');
+        },
+        timeout: const Timeout(Duration(seconds: 60)),
+      );
+
+      test(
+        'the same when the new call\'s opening frame is waiting in the socket',
+        () async {
+          // The race B-212 left: the notice runs before the reconnect's awaits,
+          // and here nothing after them takes any time. If the opening frame
+          // ever reached the pipeline first, the notice would cancel the NEW
+          // call.
+          final r = await _run(shape, reconnect: true, frameFirst: true);
+          expect(r.openedOn, [2, 2], reason: 'the premise: $r');
+          expect(r.secondGot, 'answered two', reason: '$r');
+          expect(r.cancelled, ['one'], reason: '$r');
           expect(r.stray, isEmpty, reason: '$r');
         },
         timeout: const Timeout(Duration(seconds: 60)),
