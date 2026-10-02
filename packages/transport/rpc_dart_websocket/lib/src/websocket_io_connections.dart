@@ -128,7 +128,18 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
     // check is not an error, and nothing downstream can tell it from one.
     //
     // A probe sends no `Origin`, so it passes the gate above and lands here.
-    if (!WebSocketTransformer.isUpgradeRequest(request)) {
+    //
+    // Guarded: dart:io reads these headers with `value()`, which THROWS on a
+    // repeated one, so two Sec-WebSocket-Key headers made this predicate throw.
+    // With compression on that error reached dart:io's transformer, which has
+    // no error handler, and the process died.
+    bool isUpgrade;
+    try {
+      isUpgrade = WebSocketTransformer.isUpgradeRequest(request);
+    } catch (_) {
+      isUpgrade = false;
+    }
+    if (!isUpgrade) {
       _answer(
         request,
         HttpStatus.badRequest,
