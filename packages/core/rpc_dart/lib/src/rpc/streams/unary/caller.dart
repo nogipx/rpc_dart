@@ -222,15 +222,11 @@ final class UnaryCaller<TRequest, TResponse> {
       TResponse? pendingResponse;
       var hasPendingResponse = false;
 
-      // Once per call: a peer that sends one extra response sends them all.
-      var warnedExtraResponse = false;
-      void warnExtraResponse() {
-        if (warnedExtraResponse) return;
-        warnedExtraResponse = true;
-        _logger.warning(
-          'Extra unary response ignored; the first one stands '
-          '[streamId: $streamId]',
-        );
+      // A second response fails the call; the trailer that follows finds the
+      // completer done and changes nothing.
+      void tooManyResponses() {
+        if (completer.isCompleted) return;
+        completer.completeError(tooManyMessages('response'));
       }
 
       // Subscribe to responses for this stream.
@@ -253,7 +249,7 @@ final class UnaryCaller<TRequest, TResponse> {
                 try {
                   final response = message.directPayload as TResponse;
                   if (hasPendingResponse || completer.isCompleted) {
-                    warnExtraResponse();
+                    tooManyResponses();
                   } else {
                     if (_logger.isInternal) {
                       _logger.internal(
@@ -291,10 +287,10 @@ final class UnaryCaller<TRequest, TResponse> {
                   }
 
                   for (final msgBytes in messages) {
-                    // A unary call has ONE response; the first is kept and any
-                    // other, in this chunk or a later one, is reported.
+                    // A unary call has ONE response; another, in this chunk or
+                    // a later one, fails it.
                     if (hasPendingResponse || completer.isCompleted) {
-                      warnExtraResponse();
+                      tooManyResponses();
                       break;
                     }
                     if (_logger.isInternal) {

@@ -1171,6 +1171,24 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       _detachedDispatch(_feedUnaryFragment(state, pending, message), state);
       return;
     }
+    // A second request on a unary call that already has its first fails the
+    // call at once, INTERNAL, as gRPC does: the teardown cancels the handler
+    // and drops its late answer. Not buffered -- it would wait for a bind that
+    // never comes to a unary call, charged all the while.
+    if (pending is UnaryResponder &&
+        (message.payload != null || message.isDirect)) {
+      final refusal = tooManyMessages('request');
+      _detached(
+        _sendGrpcErrorAndCleanup(
+          streamId: state.id,
+          status: refusal.statusCode,
+          message: refusal.message,
+          context: state.cachedContext,
+        ),
+        'grpc error cleanup',
+      );
+      return;
+    }
 
     final budget = _respBudget;
     if (!state.storePayload(

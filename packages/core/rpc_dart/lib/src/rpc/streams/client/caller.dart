@@ -144,6 +144,11 @@ final class ClientStreamCaller<
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
+          // A client stream has ONE response; another fails the call.
+          if (_pendingResponse != null) {
+            _responseCompleter.completeError(tooManyMessages('response'));
+            return;
+          }
           // Nothing of the value: application data stays out of logs, and a
           // runtimeType says nothing once the build is obfuscated.
           _logger.internal('Response received, held pending status');

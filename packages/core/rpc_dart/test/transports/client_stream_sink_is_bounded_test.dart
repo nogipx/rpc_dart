@@ -184,10 +184,11 @@ void main() {
     );
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  test('frames after a unary request are bounded while its handler '
+  test('frames after a unary request are refused while its handler '
       'runs', () async {
-    // A unary state is never bound to a message stream, so these land in the
-    // pre-bind buffer. Driven at the transport: no caller sends them.
+    // A second request on a unary call fails it INTERNAL at once (round 637),
+    // so nothing is buffered behind the handler. Driven at the transport: no
+    // caller sends them.
     final s = _State();
     final r = _rig(
       s,
@@ -213,7 +214,7 @@ void main() {
     }
     expect(
       status,
-      '${RpcStatus.resourceExhausted}',
+      '${RpcStatus.internal}',
       reason: 'the peer was never refused while the handler held its frames',
     );
     s.hold.complete();
@@ -221,9 +222,10 @@ void main() {
     await r.close();
   }, timeout: const Timeout(Duration(seconds: 60)));
 
-  group('the unary pre-bind charge, at its boundary', () {
-    // The request is charged, then taken by the dispatch. Frames after it must
-    // get the whole limit: a charge left behind refuses one frame early.
+  group('the unary request charge', () {
+    // The request is charged, then taken by the dispatch. A frame after it is a
+    // second request and is refused INTERNAL (round 637); with none, the call
+    // is answered.
     Future<String?> extraFrames(int n) async {
       final s = _State();
       final r = _rig(
@@ -257,12 +259,12 @@ void main() {
       return status;
     }
 
-    test('exactly the limit fits', () async {
-      expect(await extraFrames(16), '${RpcStatus.ok}');
+    test('the request alone is answered', () async {
+      expect(await extraFrames(0), '${RpcStatus.ok}');
     });
 
     test('one more is refused', () async {
-      expect(await extraFrames(17), '${RpcStatus.resourceExhausted}');
+      expect(await extraFrames(1), '${RpcStatus.internal}');
     });
   });
 

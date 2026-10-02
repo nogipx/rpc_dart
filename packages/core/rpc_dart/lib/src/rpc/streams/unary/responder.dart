@@ -219,6 +219,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// `_isActive`, which gates every write it makes.
   bool _closed = false;
 
+  /// Set when a second request reaches this responder while the handler runs
+  /// on the first; the answer is then INTERNAL in place of the response (see
+  /// [tooManyMessages]). The pipeline refuses one it routes itself at once.
+  bool _tooManyRequests = false;
+
   /// Drops a finished handler's answer and tells the caller the call ended.
   ///
   /// A status, not silence. Dropping the response and returning left the caller
@@ -386,7 +391,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     }
 
     if (_streamStates[streamId]?.requestHandled == true) {
-      // Ignore additional messages after first request handled.
+      if (message.payload != null || message.isDirect) {
+        _tooManyRequests = true;
+      }
       if (_logger.isInternal) {
         _logger.internal(
           'Ignoring extra message for stream $streamId (request already handled)',
@@ -566,6 +573,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         );
       }
 
+      if (messages.length > 1) throw tooManyMessages('request');
       final request = _requestSerializer.deserialize(messages.first);
 
       // Handle request.
@@ -578,6 +586,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         await _dropLateResponse(streamId);
         return false;
       }
+      if (_tooManyRequests) throw tooManyMessages('request');
 
       // Serialize and optionally compress response.
       final serializedResponse = _responseSerializer.serialize(response);
@@ -796,6 +805,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         await _dropLateResponse(streamId);
         return;
       }
+      if (_tooManyRequests) throw tooManyMessages('request');
 
       // Zero-copy: send response directly if supported.
       final direct = _transport.supportsZeroCopy;

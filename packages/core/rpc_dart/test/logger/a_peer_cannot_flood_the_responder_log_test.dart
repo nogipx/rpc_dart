@@ -130,14 +130,13 @@ void main() {
   });
 
   test('the pre-bind refusal warns once for five streams', () async {
-    final r = _rig(const RpcSecurityPolicy(maxBufferedMessagesPerStream: 4));
+    // The request itself past the byte bound. Frames AFTER a unary request no
+    // longer reach this buffer: they are refused as a second request (round
+    // 637).
+    final r = _rig(const RpcSecurityPolicy(maxBufferedBytes: 4));
     addTearDown(r.close);
     for (var s = 0; s < 5; s++) {
-      final id = await _openCall(r.client);
-      await _settle();
-      for (var i = 0; i < 8; i++) {
-        await r.client.sendMessage(id, _request);
-      }
+      await _openCall(r.client);
     }
     await _settle();
     expect(

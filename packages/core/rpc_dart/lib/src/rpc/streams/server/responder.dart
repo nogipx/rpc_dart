@@ -206,10 +206,22 @@ final class ServerStreamResponder<
             _completeDone();
           }
         } else {
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Ignoring extra request (first already handled) [id: $id]',
+          // A server stream carries ONE request; another fails the call, and
+          // the handler still producing for it is stopped.
+          if (!_isActive) return;
+          try {
+            await sendWireError(
+              tooManyMessages('request'),
+              _processor.sendError,
             );
+          } catch (e, stackTrace) {
+            _logger.error(
+              'Failed to refuse a second request [id: $id]',
+              error: e,
+              stackTrace: stackTrace,
+            );
+          } finally {
+            await close();
           }
         }
       },

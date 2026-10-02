@@ -330,6 +330,14 @@ final class RpcNoConnectionException extends RpcStatusException {
 /// a caller shows when the peer's trailer carried no message at all.
 const String kInternalErrorWireMessage = 'Internal server error';
 
+/// What a side that carries exactly one message -- the response of unary and
+/// client-stream, the request of unary and server-stream -- answers a second
+/// one, with INTERNAL, as gRPC does. [what] is `request` or `response`.
+RpcStatusException tooManyMessages(String what) => RpcStatusException(
+  RpcStatus.internal,
+  'More than one $what on a call that carries one',
+);
+
 /// Translates an error thrown by a handler into what may go on the wire.
 ///
 /// DEFAULT DENY: nothing reaches the caller unless it is provably safe to send.

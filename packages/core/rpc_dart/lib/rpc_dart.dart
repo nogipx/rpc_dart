@@ -39,4 +39,5 @@ export 'src/_index.dart'
         RpcResponderStreamStore,
         SinkPump,
         StreamBridge,
-        StreamProcessor;
+        StreamProcessor,
+        tooManyMessages;

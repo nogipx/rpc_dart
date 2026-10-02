@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 637)
+round: 637
+commit: d5f76b28
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart]
 probe: none — audit probes `packages/core/rpc_dart/.dart_tool/probe/correct_wire_foreign_server_test.dart`, `correct_wire_foreign_client_test.dart`, not yet registered
-reason: "decision — two responses on unary or client-stream report success (unary keeps the first, client-stream the last), and a second request on unary or server-stream is dropped; gRPC fails such a call"
+reason: "FIXED in round 637 by the owner's decision: a second message on a single-message side fails the call INTERNAL on both sides. Previously: decision — two responses on unary or client-stream report success (unary keeps the first, client-stream the last), and a second request on unary or server-stream is dropped; gRPC fails such a call"
 ---
 
 # B-235 — a second message on a single-message side is accepted

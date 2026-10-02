@@ -308,7 +308,10 @@ void main() {
       while (status == null && DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
-      expect(status, '${RpcStatus.resourceExhausted}');
+      // INTERNAL since round 637: the first frame after the request is a second
+      // request, refused at once, so the stream is torn down holding only the
+      // request -- which is still what must come back.
+      expect(status, '${RpcStatus.internal}');
       s.hold.complete();
 
       final fresh = StreamController<RpcString>();
