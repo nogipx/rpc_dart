@@ -1,10 +1,10 @@
 ---
-status: open
-round: 514 (measured as part of B-123; split out in the round-540 bookkeeping pass)
-commit: 6659c0ee
+status: closed (round 612)
+round: 612
+commit: 73590cfb
 paths: [packages/core/rpc_dart/lib/src/core/drain.dart]
 probe: P-152
-reason: "cost — the responder drain is signalled now; `drainUntilIdle` still polls at 25 ms, so `two copies of one mechanism` is still two. Unifying them changes its signature and every caller"
+reason: "CLEAN in round 612, closed as an accepted cost by the owner: at most 27 ms past the last call, once per shutdown, only with work in flight. Previously: cost — the responder drain is signalled now; `drainUntilIdle` still polls at 25 ms, so `two copies of one mechanism` is still two. Unifying them changes its signature and every caller"
 ---
 
 # B-208 — the generic drain still polls, so there are still two of them
@@ -39,4 +39,4 @@ where the work outruns the interval — a wait that ends too soon is worse than 
 
 ## Owner decision
 
-—
+2026-10-02: close as an accepted cost; no signal parameter.

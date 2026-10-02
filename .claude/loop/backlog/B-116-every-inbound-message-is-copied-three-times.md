@@ -118,6 +118,15 @@ written their own `IRpcChannel`. For them this is a behaviour change with a sile
 — reuse a buffer after `add` and data corrupts with nothing to say so. The line has to name the
 rule, not the speedup.
 
+## DECIDED 2026-10-02: the 5-byte prefix stays
+
+Only its four length bytes duplicate the channel frame's own length. The flag byte
+says whether the message is compressed, and the channel header has nowhere to
+carry that. Dropping the prefix would move the flag, fork the parser and the
+processors per transport family, and break the wire between versions, for four
+bytes a message. What remains here is the send path's two copies and the parser's
+two, with no wire change.
+
 **THIS LEAD STAYS OPEN.** The sign-off answers one of three things in it; the send path's two
 copies and the 5-byte-prefix wire question are untouched and unmeasured, so the lead keeps them
 rather than closing with a remainder nothing routes to.
