@@ -598,7 +598,10 @@ class RpcClientConnection {
     }
     _reconnectAttempts++;
     _emit(const RpcClientOffline());
-    _connectingGuard = null;
+    // A loop already running -- a connect() issued while online, say -- is
+    // building a replacement and is left to finish. Clearing the guard here
+    // started a second loop beside it: two transports built, the first
+    // retired on arrival, and Online reported twice.
     _connectWithBackoff();
   }
 
