@@ -54,16 +54,27 @@ class ExponentialBackoff extends BackoffPolicy {
 
   @override
   Duration delayFor(int attempt) {
-    final maxMs = maxDelay.inMilliseconds;
-    // Clamp exponent to avoid integer overflow.
-    final shift = attempt.clamp(0, 30);
-    final ms = baseDelay.inMilliseconds * (1 << shift);
-    final cappedMs = (ms <= 0 || ms > maxMs) ? maxMs : ms;
+    // Microseconds: in milliseconds a base under 1 ms truncated to 0, which
+    // the overflow guard then read as "too large" and turned into maxDelay --
+    // so `baseDelay: Duration.zero` slept the maximum on every attempt.
+    final baseUs = baseDelay.inMicroseconds;
+    final maxUs = maxDelay.inMicroseconds;
+    if (baseUs <= 0 || maxUs <= 0) return Duration.zero;
 
-    if (!jitter || cappedMs <= 0) return Duration(milliseconds: cappedMs);
+    // Compared before multiplying, so nothing can overflow; and with `~/`
+    // and `*` rather than shifts, which are 32-bit on the web.
+    final factor = 1 << attempt.clamp(0, 30);
+    final cappedUs = baseUs > maxUs ~/ factor ? maxUs : baseUs * factor;
 
-    final jitterMs = _random.nextInt(cappedMs) + 1;
-    return Duration(milliseconds: jitterMs);
+    if (!jitter) return Duration(microseconds: cappedUs);
+
+    // Uniform in [1, cap] whole milliseconds, as it always was; in
+    // microseconds only for a cap under one. nextDouble, not nextInt: nextInt
+    // takes at most 2^32 and threw past ~50 days.
+    final unit = cappedUs >= 1000 ? 1000 : 1;
+    final units = cappedUs ~/ unit;
+    final picked = (_random.nextDouble() * units).floor() + 1;
+    return Duration(microseconds: (picked > units ? units : picked) * unit);
   }
 }
 
