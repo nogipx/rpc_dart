@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 607)
 round: 543
 commit: b566bcb8
 paths: [packages/core/rpc_dart/test/core/compression_never_makes_a_message_bigger_test.dart, packages/core/rpc_dart_compression/test/rpc_dart_compression_test.dart]
 probe: none
-reason: "round 543 made the round-513 file VM-only for a correct reason, which leaves the property it asserts unmeasured against the only gzip codec that exists on the web"
+reason: "CLEAN in round 607: with RpcGzipCodec the property holds on VM and node alike (42/74/138/202 off and on; always-compress control 62/94/155/206 on both). Previously: round 543 made the round-513 file VM-only for a correct reason, which leaves the property it asserts unmeasured against the only gzip codec that exists on the web"
 ---
 
 # B-214 — compare-and-keep-smaller has no web arm
