@@ -1,10 +1,10 @@
 ---
-status: open
-round: 542
-commit: d799f43d
+status: closed (round 618)
+round: 618
+commit: a31639d9
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
 probe: P-140
-reason: "cost, not correctness, and the obvious fix is already known to break something: the per-message re-resolution exists so a live stream rebinds to the canonical counter after an eviction, so caching it needs the eviction case measured first"
+reason: "CLEAN in round 618, by the lead's own rule: the re-resolution a cache could remove is about 120 ns per message, under 3 % of a 4.4 us streamed message and inside the 900 ns run-to-run spread; the eviction case it protects is pinned. Previously: cost, not correctness, and the obvious fix is already known to break something: the per-message re-resolution exists so a live stream rebinds to the canonical counter after an eviction, so caching it needs the eviction case measured first"
 ---
 
 # B-213 — the rate limiter resolves its counters once per message
