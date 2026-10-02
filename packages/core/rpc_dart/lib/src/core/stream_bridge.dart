@@ -104,6 +104,16 @@ final class StreamBridge<T> {
     if (!_controller.isClosed) unawaited(_controller.close());
   }
 
+  /// Owner teardown that says why: drops the source and ends the mirrored
+  /// stream with [error]. A consumer that listens later sees the failure; with
+  /// the source merely cancelled it would wait on a stream that never ends.
+  void fail(Object error, [StackTrace? stackTrace]) {
+    cancelSource();
+    if (_controller.isClosed) return;
+    _controller.addError(error, stackTrace);
+    unawaited(_controller.close());
+  }
+
   void _subscribe() {
     _subscription = _source.listen(
       (event) {

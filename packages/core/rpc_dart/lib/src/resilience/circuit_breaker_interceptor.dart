@@ -143,14 +143,14 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
-    _checkState();
+    final admission = _checkState();
 
     try {
       final response = await next(call.context, request);
-      _onSuccess();
+      _onSuccess(admission);
       return response;
     } catch (e) {
-      _onFailure(e);
+      _onFailure(admission, e);
       rethrow;
     }
   }
@@ -161,8 +161,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
+    final _Admission admission;
     try {
-      _checkState();
+      admission = _checkState();
     } on CircuitBreakerOpenException catch (e, st) {
       // Surface the open-circuit rejection through the stream so consumers
       // observe it the same way as an emitted stream error.
@@ -171,9 +172,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
 
     try {
       final stream = await next(call.context, request);
-      return _wrapStream(stream);
+      return _wrapStream(stream, admission);
     } catch (e) {
-      _onFailure(e);
+      _onFailure(admission, e);
       rethrow;
     }
   }
@@ -184,14 +185,14 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
-    _checkState();
+    final admission = _checkState();
 
     try {
       final response = await next(call.context, requests);
-      _onSuccess();
+      _onSuccess(admission);
       return response;
     } catch (e) {
-      _onFailure(e);
+      _onFailure(admission, e);
       rethrow;
     }
   }
@@ -202,17 +203,18 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {
+    final _Admission admission;
     try {
-      _checkState();
+      admission = _checkState();
     } on CircuitBreakerOpenException catch (e, st) {
       return Stream<TResponse>.error(e, st);
     }
 
     try {
       final stream = await next(call.context, requests);
-      return _wrapStream(stream);
+      return _wrapStream(stream, admission);
     } catch (e) {
-      _onFailure(e);
+      _onFailure(admission, e);
       rethrow;
     }
   }
@@ -230,7 +232,11 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// abandoned probe would pin `_probeInFlight = true` and the breaker would
   /// reject every subsequent call forever. A safety timer additionally releases
   /// the probe if the source never terminates and the stream is never listened.
-  Stream<TResponse> _wrapStream<TResponse>(Stream<TResponse> source) {
+  Stream<TResponse> _wrapStream<TResponse>(
+    Stream<TResponse> source,
+    _Admission admitted,
+  ) {
+    var admission = admitted;
     var failed = false;
     var resolved = false;
     var listened = false;
@@ -247,7 +253,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       resolved = true;
       cancelAbandonTimer();
       if (success) {
-        _onSuccess();
+        _onSuccess(admission);
       }
       // Failures are recorded as they arrive (see handleError below) so the
       // count is exact; here we only release a pending success.
@@ -259,11 +265,30 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       if (resolved) return;
       resolved = true;
       cancelAbandonTimer();
-      _releaseProbe();
+      _releaseProbe(admission);
     }
 
+    // A PROBE stream proves recovery with its first message. Waiting for it to
+    // end held the gate for the stream's whole life, and a subscription-style
+    // stream -- a feed, a notification channel -- never ends: every other call
+    // on the endpoint was rejected for as long as it ran. From the first
+    // message on, the stream is an ordinary call of the closed breaker.
+    final observed = !admission.isProbe
+        ? source
+        : source.transform(
+            StreamTransformer<TResponse, TResponse>.fromHandlers(
+              handleData: (data, sink) {
+                if (admission.isProbe) {
+                  _onSuccess(admission);
+                  admission = _Admission(_generation, isProbe: false);
+                }
+                sink.add(data);
+              },
+            ),
+          );
+
     final bridge = StreamBridge<TResponse>(
-      source: source,
+      source: observed,
       onFirstListen: () {
         listened = true;
         // Stream is being consumed; the abandon safety net is no longer needed.
@@ -273,7 +298,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
         failed = true;
         // Count the failure immediately so the breaker reopens even if the
         // wrapped stream is never listened.
-        _onFailure(error);
+        _onFailure(admission, error);
         resolve(success: false);
       },
       onSourceDone: () {
@@ -297,22 +322,34 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       // so the breaker cannot stay wedged; it stays half-open and the next call
       // takes its turn as the probe, which is a real observation.
       resolveInconclusive();
-      // Drop the dangling source subscription; nothing consumes it. The
-      // controller is left open: this fires only when nobody listened, and a
-      // caller that arrives later should still see the source, not an empty
-      // stream.
-      bridge.cancelSource();
+      // Drop the dangling source subscription; nothing consumes it. Ended
+      // with an error rather than left open: a caller arriving later waited on
+      // a stream that never ended, and an empty one would read as success.
+      bridge.fail(
+        RpcCancelledException(
+          'Stream abandoned: not listened to within $probeAbandonTimeout',
+        ),
+      );
     });
 
     return bridge.stream;
   }
 
-  /// Checks whether a request is allowed based on the current state.
-  /// Throws [CircuitBreakerOpenException] if the circuit is open.
-  void _checkState() {
+  /// Bumped on every state change. An outcome counts only against the
+  /// generation its call was admitted in; see [_Admission].
+  int _generation = 0;
+
+  void _setState(CircuitBreakerState state) {
+    _state = state;
+    _generation++;
+  }
+
+  /// Admits a call, or throws [CircuitBreakerOpenException] if the circuit is
+  /// open, and says what the call was admitted as.
+  _Admission _checkState() {
     switch (_state) {
       case CircuitBreakerState.closed:
-        return; // Allow through.
+        return _Admission(_generation, isProbe: false);
 
       case CircuitBreakerState.open:
         // Check if reset timeout has elapsed (monotonic, clock-jump immune).
@@ -320,9 +357,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
           final elapsed = _sinceLastFailure!.elapsed;
           if (elapsed >= resetTimeout) {
             // Transition to half-open and admit exactly this one probe.
-            _state = CircuitBreakerState.halfOpen;
+            _setState(CircuitBreakerState.halfOpen);
             _probeInFlight = true;
-            return;
+            return _Admission(_generation, isProbe: true);
           }
           throw CircuitBreakerOpenException(retryAfter: resetTimeout - elapsed);
         }
@@ -335,7 +372,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
           throw const CircuitBreakerOpenException();
         }
         _probeInFlight = true;
-        return;
+        return _Admission(_generation, isProbe: true);
     }
   }
 
@@ -343,30 +380,32 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// breaker half-open so the next call takes its turn as the probe. For
   /// outcomes that say nothing about recovery: a cancellation, an error the
   /// [failureOn] predicate rejects, a consumer that cancelled a stream probe.
-  void _releaseProbe() {
-    if (_state == CircuitBreakerState.halfOpen) _probeInFlight = false;
-  }
-
-  void _onSuccess() {
-    switch (_state) {
-      case CircuitBreakerState.halfOpen:
-        // The admitted probe succeeded — close the circuit and clear the gate.
-        _failureCount = 0;
-        _probeInFlight = false;
-        _state = CircuitBreakerState.closed;
-      case CircuitBreakerState.closed:
-        // Normal success breaks the consecutive-failure streak.
-        _failureCount = 0;
-      case CircuitBreakerState.open:
-        // Stale success: this call began (and passed _checkState) while the
-        // breaker was still closed, then completed after other concurrent
-        // failures opened it. It proves nothing about recovery, so it must NOT
-        // re-close the breaker — only a half-open probe may do that.
-        break;
+  ///
+  /// Only the probe's own: a call admitted earlier, while the breaker was
+  /// closed, freed the gate while the real probe was still running and let a
+  /// second one in.
+  void _releaseProbe(_Admission admission) {
+    if (admission.isProbe && admission.generation == _generation) {
+      _probeInFlight = false;
     }
   }
 
-  void _onFailure(Object error) {
+  void _onSuccess(_Admission admission) {
+    // Stale: the call was admitted before the breaker last changed state. A
+    // call that began while the breaker was closed and succeeded after it
+    // opened proves nothing about recovery -- and in half-open it used to be
+    // taken for the probe's result and CLOSE the breaker while the real probe
+    // was still in flight.
+    if (admission.generation != _generation) return;
+    _failureCount = 0;
+    if (admission.isProbe) {
+      // The admitted probe succeeded — close the circuit and clear the gate.
+      _probeInFlight = false;
+      _setState(CircuitBreakerState.closed);
+    }
+  }
+
+  void _onFailure(_Admission admission, Object error) {
     // Don't count cancellations as failures, nor anything the predicate rejects.
     // The default predicate excludes cancellation itself, and an explicit one is
     // still guarded against it: a caller's own predicate should not have to know
@@ -379,9 +418,14 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       // Inconclusive: it says nothing about whether the service recovered. The
       // gate must still be released, or an ordinary cancellation (deadline,
       // caller navigated away) pins the breaker half-open forever.
-      _releaseProbe();
+      _releaseProbe(admission);
       return;
     }
+
+    // Stale, as in [_onSuccess]. A failure from before the breaker opened
+    // reopened it from half-open and restarted the timer, so the real probe's
+    // success then landed in OPEN and was dropped.
+    if (admission.generation != _generation) return;
 
     _failureCount++;
     // Restart the monotonic timer from this failure.
@@ -389,21 +433,31 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       ..reset()
       ..start();
 
-    if (_state == CircuitBreakerState.halfOpen) {
+    if (admission.isProbe) {
       // Probe failed — reopen and release the probe gate.
       _probeInFlight = false;
-      _state = CircuitBreakerState.open;
+      _setState(CircuitBreakerState.open);
     } else if (_failureCount >= failureThreshold) {
-      _state = CircuitBreakerState.open;
+      _setState(CircuitBreakerState.open);
     }
   }
 
   /// Manually resets the circuit breaker to closed state.
   void reset() {
-    _state = CircuitBreakerState.closed;
+    _setState(CircuitBreakerState.closed);
     _failureCount = 0;
     _sinceLastFailure?.stop();
     _sinceLastFailure = null;
     _probeInFlight = false;
   }
+}
+
+/// What one call was admitted as: the probe or an ordinary call, and in which
+/// generation of the breaker's state. Its outcome is judged against that, not
+/// against whatever state the breaker is in when the call ends.
+final class _Admission {
+  _Admission(this.generation, {required this.isProbe});
+
+  final int generation;
+  final bool isProbe;
 }

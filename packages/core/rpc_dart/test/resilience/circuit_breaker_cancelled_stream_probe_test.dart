@@ -74,7 +74,9 @@ void main() {
       return source;
     }
 
-    test('a cancelled server-stream probe releases the gate', () async {
+    // A probe that delivered a message has proved the server answers, so the
+    // first message closes the breaker; see the long-lived stream test.
+    test('a server-stream probe that delivered a message closes it', () async {
       final cb = breaker();
       await tripToOpen(cb);
 
@@ -88,6 +90,23 @@ void main() {
 
       // The consumer takes one item and cancels.
       expect(await probe.first, 'tick');
+      expect(cb.state, CircuitBreakerState.closed);
+    });
+
+    test('a cancelled server-stream probe releases the gate', () async {
+      final cb = breaker();
+      await tripToOpen(cb);
+
+      final source = liveSource();
+      final probe = await cb.interceptServerStream<String, String>(
+        callContext,
+        'req',
+        (ctx, req) async => source.stream,
+      );
+      expect(cb.state, CircuitBreakerState.halfOpen);
+
+      // Cancelled before any message: the probe proved nothing.
+      await probe.listen((_) {}).cancel();
 
       // The breaker must still be probing, not wedged shut.
       expect(cb.state, CircuitBreakerState.halfOpen);
@@ -114,7 +133,7 @@ void main() {
       );
       expect(cb.state, CircuitBreakerState.halfOpen);
 
-      expect(await probe.first, 'tick');
+      await probe.listen((_) {}).cancel();
       expect(cb.state, CircuitBreakerState.halfOpen);
 
       final result = await cb.interceptUnary<String, String>(
