@@ -1,10 +1,10 @@
 ---
-status: open
-round: 504 (measured as part of B-113; split out in the round-540 bookkeeping pass)
-commit: 6659c0ee
+status: closed (round 613)
+round: 613
+commit: 90c3ce74
 paths: [packages/core/rpc_dart/lib/src/core/metadata.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
 probe: P-142
-reason: "cost — the going-forward half is fixed and this is what the fix cannot reach: rules and logs written while `/a.b/c` and `/a/b.c` resolved to one method. Plus one sibling never run"
+reason: "CLEAN in round 613: rpc_dart_http refuses /a/b.c with a policy (400) and without (status 3), handler never runs. The upstream half is a release note. Previously: cost — the going-forward half is fixed and this is what the fix cannot reach: rules and logs written while `/a.b/c` and `/a/b.c` resolved to one method. Plus one sibling never run"
 ---
 
 # B-201 — path filters upstream trusted a grammar the responder has since tightened
