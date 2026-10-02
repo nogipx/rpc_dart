@@ -555,7 +555,17 @@ class RpcClientConnection {
   /// connect loop is already running, or after [dispose].
   void forceReconnect() {
     if (_disposed) return;
-    if (_connectingGuard != null && !_connectingGuard!.isCompleted) return;
+    if (_connectingGuard != null && !_connectingGuard!.isCompleted) {
+      // A loop disconnect() stopped but that has not exited yet -- asleep in
+      // its backoff, or awaiting the factory -- would see the stop when it
+      // woke and leave the connection idle for good. Resume it instead, as
+      // connect() does; a loop still running is left alone.
+      if (_isStopped) {
+        _isStopped = false;
+        _reconnectAttempts = 0;
+      }
+      return;
+    }
     _isStopped = false;
     _reconnectAttempts = 0;
     _proxy.detach().then((_) {
