@@ -4,7 +4,7 @@ round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
 probe: none — static read, nothing run
-reason: "cost — round 603 closed the streaming level half (nine sites, 4/5/2 error records per NOT_FOUND to 0). Left: the per-call peer-triggered warnings in the responder pipeline, and the caller's double record for a genuine fault, which needs a decision on which site owns it"
+reason: "owner decision — everything measurable is fixed: streaming levels (603), five peer-triggerable responder warnings now once per connection (604; the other two are unreachable per round 515). Left: a caller logs a genuine FAULT twice, from two sites carrying different information, and which one owns the report is a choice"
 ---
 
 # B-124 — warnings a peer can trigger fire on every frame, and application errors log at error twice
@@ -116,6 +116,13 @@ bidi               0         2         0 / 0
 ```
 
 `../rounds/603-every-streaming-answer-was-an-incident.md`.
+
+## Round 604 — the flooding half
+
+A raw client transport reaches five of the seven sites; each warned `5` times for
+five refusals and now warns `1`. Endpoint-not-started and the unknown-stream no-op
+stay unguarded: round 515 could not reach them, so a guard would have no witness.
+`../rounds/604-the-peer-chose-how-many-lines.md`.
 
 ## Owner decision
 
