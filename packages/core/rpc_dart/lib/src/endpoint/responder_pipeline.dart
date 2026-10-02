@@ -1967,6 +1967,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcContext context,
     String methodKey,
   ) async {
+    // Before the await, as in [_sendGrpcErrorAndCleanup]: a frame of this call
+    // arriving during the send would otherwise find no responder, refuse the
+    // stream again and put a second trailer on it.
+    _rememberClosedStream(state.id);
     try {
       await transport.sendMetadata(
         state.id,
