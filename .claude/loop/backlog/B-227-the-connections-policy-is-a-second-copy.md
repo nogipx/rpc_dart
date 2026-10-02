@@ -1,10 +1,10 @@
 ---
-status: open
-round: 624
-commit: 89340ce5
+status: closed (round 635)
+round: 635
+commit: f6c03bbe
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_websocket/README.md]
 probe: P-216
-reason: "decision — the frame guard's ceiling comes from rpcWebSocketConnections' own policy (default 16 MiB), not the server's; a server configured above 16 MiB refuses larger messages unless the policy is passed twice"
+reason: "FIXED in round 635: the server hands its policy to the guard at start, raising the ceiling above the default; a 20 MiB request against a 32 MiB server with no connections policy is served. Previously: decision — the frame guard's ceiling comes from rpcWebSocketConnections' own policy (default 16 MiB), not the server's; a server configured above 16 MiB refuses larger messages unless the policy is passed twice"
 ---
 
 # B-227 — the connections' policy is a second copy of the server's

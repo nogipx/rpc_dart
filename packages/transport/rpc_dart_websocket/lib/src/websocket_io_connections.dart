@@ -10,6 +10,7 @@ import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'websocket_bounded_upgrade.dart';
+import 'websocket_server_policy.dart';
 
 /// Turns an [HttpServer] into the `Stream<WebSocketChannel>` that
 /// `RpcWebSocketServer` consumes, applying server-side keepalive.
@@ -49,12 +50,15 @@ import 'websocket_bounded_upgrade.dart';
 ///
 /// A refused request is answered `403` and never upgraded.
 ///
-/// [policy] should be the one given to `RpcWebSocketServer`. dart:io
-/// assembles a whole message before delivering it and has no ceiling of its
-/// own, so a peer that sends fragments and never a final one is buffered for
-/// as long as it writes. With compression off, each frame's header is read
-/// off the socket first, and a message past the largest frame the policy
-/// admits closes the connection before its payload is read.
+/// dart:io assembles a whole message before delivering it and has no ceiling
+/// of its own, so a peer that sends fragments and never a final one is
+/// buffered for as long as it writes. With compression off, each frame's
+/// header is read off the socket first, and a message past the largest frame
+/// the policy admits closes the connection before its payload is read.
+///
+/// That policy is the `RpcWebSocketServer`'s: the server hands it over when it
+/// starts, and a limit raised there raises this one. [policy] overrides it for
+/// a stream consumed by something else.
 ///
 /// ```dart
 /// final http = await HttpServer.bind(host, port);
@@ -73,8 +77,9 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   CompressionOptions compression = CompressionOptions.compressionOff,
   Set<String>? allowedOrigins,
   bool Function(HttpRequest request)? allowUpgrade,
-  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  RpcSecurityPolicy? policy,
 }) {
+  final ceiling = _MessageCeiling(policy);
   // Lower-cased ONCE. `_upgradeAllowed` ran `trim().toLowerCase()` over every
   // configured origin on every handshake, which allocates a string per entry per
   // connection to answer a question whose answer never changes.
@@ -143,23 +148,62 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
         )
       : _upgradeEach(
           gated,
-          maxMessageBytes:
-              policy.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize,
+          maxMessageBytes: () => ceiling.bytes,
           protocolSelector: protocolSelector,
         );
-  return sockets.map((socket) {
-    // Set BEFORE wrapping: once inside IOWebSocketChannel the socket is no
-    // longer reachable.
-    socket.pingInterval = pingInterval;
-    return IOWebSocketChannel(socket);
-  });
+  return _PolicyAwareConnections(
+    sockets.map((socket) {
+      // Set BEFORE wrapping: once inside IOWebSocketChannel the socket is no
+      // longer reachable.
+      socket.pingInterval = pingInterval;
+      return IOWebSocketChannel(socket);
+    }),
+    ceiling,
+  );
+}
+
+/// The frame guard's ceiling: from the policy given to the connections, or
+/// else the server's, adopted when it starts.
+///
+/// An adopted policy only RAISES the ceiling above the default. Below it, a
+/// whole message past the server's limit should still reach the multiplexer,
+/// which closes with 4400 and says why; the guard can only destroy the socket,
+/// which the peer reads as a retryable dropped connection.
+final class _MessageCeiling {
+  _MessageCeiling(RpcSecurityPolicy? own)
+    : _own = own != null,
+      bytes = _bytesFor(own ?? const RpcSecurityPolicy());
+
+  final bool _own;
+  int bytes;
+
+  void adopt(RpcSecurityPolicy policy) {
+    if (_own) return;
+    final adopted = _bytesFor(policy);
+    if (adopted > bytes) bytes = adopted;
+  }
+
+  /// The multiplexer's own reassembly cap: one WebSocket message carries
+  /// exactly one channel frame.
+  static int _bytesFor(RpcSecurityPolicy policy) =>
+      policy.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
+}
+
+final class _PolicyAwareConnections extends StreamView<WebSocketChannel>
+    implements IRpcWebSocketServerPolicyTarget {
+  _PolicyAwareConnections(super.stream, this._ceiling);
+
+  final _MessageCeiling _ceiling;
+
+  @override
+  void adoptServerPolicy(RpcSecurityPolicy policy) => _ceiling.adopt(policy);
 }
 
 /// Upgrades every request concurrently, as [WebSocketTransformer] does, and
 /// reports a failed handshake as a stream error, as it does.
 Stream<WebSocket> _upgradeEach(
   Stream<HttpRequest> requests, {
-  required int maxMessageBytes,
+  required int Function() maxMessageBytes,
   dynamic Function(List<String> protocols)? protocolSelector,
 }) {
   final out = StreamController<WebSocket>();
@@ -170,7 +214,7 @@ Stream<WebSocket> _upgradeEach(
         (request) {
           upgradeBounded(
             request,
-            maxMessageBytes: maxMessageBytes,
+            maxMessageBytes: maxMessageBytes(),
             protocolSelector: protocolSelector,
           ).then(
             (socket) {

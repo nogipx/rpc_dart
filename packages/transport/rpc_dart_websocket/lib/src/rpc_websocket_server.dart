@@ -9,6 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'websocket_responder_transport.dart';
+import 'websocket_server_policy.dart';
 
 /// WebSocket RPC server that consumes an external stream of already-upgraded
 /// WebSocket connections (no HTTP upgrade / dart:io inside).
@@ -154,6 +155,13 @@ class RpcWebSocketServer implements IRpcServer {
     // is what `HttpServer.transform(WebSocketTransformer())` gives you. A
     // server that reports running while accepting nothing is worse than one
     // that failed: nothing upstream can tell there is anything to fix.
+    // Before the first connection is upgraded: the source's frame guard sizes
+    // its ceiling from this server's policy, not from a second copy of it.
+    final Object connections = _connections;
+    if (connections is IRpcWebSocketServerPolicyTarget) {
+      connections.adoptServerPolicy(_policy);
+    }
+
     final StreamSubscription<WebSocketChannel> subscription;
     try {
       subscription = _connections.listen(
