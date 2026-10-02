@@ -75,7 +75,95 @@ final class _Svc extends RpcResponderContract {
       responseCodec: _codec,
       handler: (req, {context}) async => throw StateError('boom'),
     );
+    for (final (name, code) in [
+      ('Missing', RpcStatus.notFound),
+      ('Broken', RpcStatus.internal),
+    ]) {
+      addServerStreamMethod<RpcString, RpcString>(
+        methodName: 'server$name',
+        requestCodec: _codec,
+        responseCodec: _codec,
+        handler: (req, {context}) async* {
+          throw RpcStatusException(code, 'answer');
+        },
+      );
+      addClientStreamMethod<RpcString, RpcString>(
+        methodName: 'client$name',
+        requestCodec: _codec,
+        responseCodec: _codec,
+        handler: (reqs, {context}) async {
+          await reqs.drain<void>();
+          throw RpcStatusException(code, 'answer');
+        },
+      );
+      addBidirectionalMethod<RpcString, RpcString>(
+        methodName: 'bidi$name',
+        requestCodec: _codec,
+        responseCodec: _codec,
+        handler: (reqs, {context}) async* {
+          await reqs.drain<void>();
+          throw RpcStatusException(code, 'answer');
+        },
+      );
+    }
   }
+}
+
+/// The same count for a STREAMING call of [shape] (`server`, `client`, `bidi`).
+Future<_Loud> _stream(String shape, String outcome) async {
+  final callerLog = _Counting();
+  final responderLog = _Counting();
+  final (client, server) = RpcChannelTransport.pair();
+  final responder =
+      RpcResponderEndpoint(transport: server, logger: responderLog)
+        ..registerServiceContract(_Svc())
+        ..start();
+  final caller = RpcCallerEndpoint(transport: client, logger: callerLog);
+  addTearDown(() async {
+    await caller.close();
+    await responder.close();
+  });
+
+  final method = '$shape$outcome';
+  final ctx = RpcContext.empty().withTimeout(const Duration(seconds: 5));
+  try {
+    switch (shape) {
+      case 'server':
+        await caller
+            .serverStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: method,
+              request: 'x'.rpc,
+              requestCodec: _codec,
+              responseCodec: _codec,
+              context: ctx,
+            )
+            .drain<void>();
+      case 'client':
+        await caller.clientStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: method,
+          requestCodec: _codec,
+          responseCodec: _codec,
+          context: ctx,
+        )(Stream.value('x'.rpc));
+      default:
+        await caller
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: method,
+              requests: Stream.value('x'.rpc),
+              requestCodec: _codec,
+              responseCodec: _codec,
+              context: ctx,
+            )
+            .drain<void>();
+    }
+  } on RpcStatusException {
+    // expected
+  }
+  await Future<void>.delayed(const Duration(milliseconds: 100));
+  return (caller: callerLog.loud, responder: responderLog.loud);
 }
 
 typedef _Loud = ({List<String> caller, List<String> responder});
@@ -168,6 +256,32 @@ void main() {
       expect(loud.caller, isEmpty);
       expect(loud.responder, isEmpty);
     }, timeout: const Timeout(Duration(seconds: 30)));
+  });
+
+  group('the streaming shapes', () {
+    for (final shape in ['server', 'client', 'bidi']) {
+      test(
+        'WITNESS $shape: NOT_FOUND is not an incident',
+        () async {
+          final loud = await _stream(shape, 'Missing');
+          // Both sides in one assertion, so a failure names every record.
+          expect([
+            for (final r in loud.caller) 'caller     $r',
+            for (final r in loud.responder) 'responder  $r',
+          ], isEmpty);
+        },
+        timeout: const Timeout(Duration(seconds: 30)),
+      );
+
+      test(
+        'GUARD $shape: INTERNAL still reaches error',
+        () async {
+          final loud = await _stream(shape, 'Broken');
+          expect(loud.responder, isNotEmpty);
+        },
+        timeout: const Timeout(Duration(seconds: 30)),
+      );
+    }
   });
 
   test('GUARD: isFault is narrower than the breaker\'s health set', () {

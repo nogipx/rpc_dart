@@ -128,9 +128,15 @@ final class ServerStreamCaller<
           final status = RpcCallerTrailer.statusOf(response.metadata!);
           if (status != null && status != RpcStatus.ok) {
             final error = RpcCallerTrailer.errorOf(response.metadata!, status);
-            _logger.error(
-              'Server stream ended with error: $status - ${error.message}',
-            );
+            if (RpcStatus.isFault(status)) {
+              _logger.error(
+                'Server stream ended with error: $status - ${error.message}',
+              );
+            } else if (_logger.isDebug) {
+              _logger.debug(
+                'Server stream ended with status $status: ${error.message}',
+              );
+            }
             throw error;
           }
         }
@@ -138,7 +144,9 @@ final class ServerStreamCaller<
 
       _logger.internal('Server stream completed');
     } catch (e) {
-      _logger.error('Server stream call failed', error: e);
+      if (RpcStatus.isFaultError(e)) {
+        _logger.error('Server stream call failed', error: e);
+      }
       rethrow;
     } finally {
       await close();

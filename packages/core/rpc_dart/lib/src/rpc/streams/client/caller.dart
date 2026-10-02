@@ -122,7 +122,11 @@ final class ClientStreamCaller<
               rpcMessage.metadata!,
               status,
             );
-            _logger.error('Received error status code: ${error.message}');
+            if (RpcStatus.isFault(status)) {
+              _logger.error('Received error status code: ${error.message}');
+            } else if (_logger.isDebug) {
+              _logger.debug('Received status $status: ${error.message}');
+            }
             _responseCompleter.completeError(error);
             return;
           }
@@ -261,11 +265,13 @@ final class ClientStreamCaller<
         },
       );
     } catch (e, stackTrace) {
-      _logger.error(
-        'Failed to finish sending',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      if (RpcStatus.isFaultError(e)) {
+        _logger.error(
+          'Failed to finish sending',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      }
 
       if (!_responseCompleter.isCompleted) {
         _responseCompleter.completeError(e, stackTrace);
@@ -347,7 +353,9 @@ final class ClientStreamCaller<
       // Finish sending and get the response.
       return await finishSending();
     } catch (e) {
-      _logger.error('Client stream call failed', error: e);
+      if (RpcStatus.isFaultError(e)) {
+        _logger.error('Client stream call failed', error: e);
+      }
       rethrow;
     } finally {
       // Not awaited: cancelling a stalled producer can block indefinitely, and

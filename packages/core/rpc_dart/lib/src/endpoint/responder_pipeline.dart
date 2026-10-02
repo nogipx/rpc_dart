@@ -1889,11 +1889,13 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         await _pumpBidirectionalResponses(responder, responseStream);
         await responder.finishReceiving();
       } catch (error, stackTrace) {
-        contextLogger.error(
-          'Error in bidi handler',
-          error: error,
-          stackTrace: stackTrace,
-        );
+        if (RpcStatus.isFaultError(error)) {
+          contextLogger.error(
+            'Error in bidi handler',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
         final wire = wireStatusFor(error);
         await responder.sendError(
           wire.status,

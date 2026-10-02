@@ -132,11 +132,13 @@ final class ClientStreamResponder<
           }
         })
         .catchError((Object error, StackTrace stackTrace) async {
-          _logger.error(
-            'Client stream handling failed [id: $id]',
-            error: error,
-            stackTrace: stackTrace,
-          );
+          if (RpcStatus.isFaultError(error)) {
+            _logger.error(
+              'Client stream handling failed [id: $id]',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
           // Nothing awaits this chain, so a throw from the reply path would
           // reach the zone and take a server process with it.
           try {

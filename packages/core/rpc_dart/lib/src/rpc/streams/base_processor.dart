@@ -737,9 +737,17 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       return;
     }
 
-    _logger.error(
-      'Sending error to client: $statusCode - $message [streamId: $_streamId]',
-    );
+    // An application status is an answer, not an incident.
+    if (RpcStatus.isFault(statusCode)) {
+      _logger.error(
+        'Sending error to client: $statusCode - $message [streamId: $_streamId]',
+      );
+    } else if (_logger.isDebug) {
+      _logger.debug(
+        'Sending status to client: $statusCode - $message '
+        '[streamId: $_streamId]',
+      );
+    }
 
     // Wait for pending sends to avoid interleaving the error trailer.
     await _sendSequence;

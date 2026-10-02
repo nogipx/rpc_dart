@@ -195,11 +195,13 @@ final class ServerStreamResponder<
             }
             _completeDone();
           } catch (error, trace) {
-            _logger.error(
-              'Request handling failed [id: $id]',
-              error: error,
-              stackTrace: trace,
-            );
+            if (RpcStatus.isFaultError(error)) {
+              _logger.error(
+                'Request handling failed [id: $id]',
+                error: error,
+                stackTrace: trace,
+              );
+            }
             await sendWireError(error, _processor.sendError);
             _completeDone();
           }

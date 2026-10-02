@@ -96,6 +96,11 @@ abstract interface class RpcStatus {
       status == internal ||
       status == unavailable ||
       status == dataLoss;
+
+  /// [isFault] for a caught [error]. A throw that carries no status is a fault:
+  /// an unclassifiable failure is not an application answering.
+  static bool isFaultError(Object error) =>
+      error is! RpcStatusException || isFault(error.statusCode);
 }
 
 /// Packs and unpacks the 5-byte gRPC message prefix: one compression-flag byte

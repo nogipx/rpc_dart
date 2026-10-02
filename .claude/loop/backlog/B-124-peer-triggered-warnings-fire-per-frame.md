@@ -4,7 +4,7 @@ round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
 probe: none — static read, nothing run
-reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
+reason: "cost — round 603 closed the streaming level half (nine sites, 4/5/2 error records per NOT_FOUND to 0). Left: the per-call peer-triggered warnings in the responder pipeline, and the caller's double record for a genuine fault, which needs a decision on which site owns it"
 ---
 
 # B-124 — warnings a peer can trigger fire on every frame, and application errors log at error twice
@@ -105,6 +105,17 @@ its scope directly.
 Count by overriding `LogController.add` instead. It runs before filtering, so it keeps
 the property the guidance wanted — "did the code decide to log", not "was a record
 delivered".
+
+## Round 603 — the streaming shapes
+
+```
+                 caller   responder    after
+server-stream      2         2         0 / 0
+client-stream      3         2         0 / 0
+bidi               0         2         0 / 0
+```
+
+`../rounds/603-every-streaming-answer-was-an-incident.md`.
 
 ## Owner decision
 
