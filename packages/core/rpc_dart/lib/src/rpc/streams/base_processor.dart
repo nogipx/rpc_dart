@@ -1590,7 +1590,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
         stackTrace: stackTrace,
       );
       if (!_responseController.isClosed) {
-        _responseController.addError(e, stackTrace);
+        _responseController.addError(_undecodableResponse(e), stackTrace);
       }
     }
   }

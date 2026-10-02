@@ -267,7 +267,7 @@ final class UnaryCaller<TRequest, TResponse> {
                       error: e,
                       stackTrace: stackTrace,
                     );
-                    completer.completeError(e);
+                    completer.completeError(_undecodableResponse(e));
                   }
                 }
               } else if (!message.isMetadataOnly && message.payload != null) {
