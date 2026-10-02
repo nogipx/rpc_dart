@@ -38,6 +38,10 @@ final class RpcResponderStreamState {
   /// Fully-qualified method key, set when the metadata message is parsed.
   String? methodKey;
 
+  /// The method this call was opened for, once looked up. Kept for the call:
+  /// a contract unregistered mid-call stops new calls, not this one.
+  RpcResponderMethodBinding? binding;
+
   /// The most recently received metadata message.
   RpcTransportMessage? metadataMessage;
 

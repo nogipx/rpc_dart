@@ -1026,7 +1026,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
-    final binding = _respRegistry.lookup(methodKey);
+    final binding = state.binding ??= _respRegistry.lookup(methodKey);
     if (binding == null) {
       _detached(
         _sendGrpcErrorAndCleanup(
@@ -1140,7 +1140,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
     if (_isPingMethodKey(methodKey)) return;
 
-    final binding = _respRegistry.lookup(methodKey);
+    final binding = state.binding ??= _respRegistry.lookup(methodKey);
     if (binding == null) {
       _detached(
         _sendGrpcErrorAndCleanup(
@@ -1277,7 +1277,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // [_stateBoundStream] replays it (see there).
     state.clientEnded = true;
 
-    final binding = _respRegistry.lookup(methodKey);
+    final binding = state.binding ??= _respRegistry.lookup(methodKey);
     if (binding == null) {
       _detached(
         _sendGrpcErrorAndCleanup(
