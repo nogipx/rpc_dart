@@ -552,7 +552,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         // `holdsPartialFrame`, not `messages.isEmpty`: a REFUSED frame also
         // yields nothing, and waiting for a frame the policy already rejected
         // would report a truncated request where `maxMessageLengthBytes` fired.
-        if (parser.holdsPartialFrame) {
+        //
+        // An EMPTY chunk waits too: it carries nothing to refuse, and a legal
+        // request may follow it, as it does on both streaming shapes.
+        if (parser.holdsPartialFrame || message.payload!.isEmpty) {
           incomplete = true;
           // Not handled after all: the next fragment must be let through, and
           // the state (which owns the parser and its buffer) must survive.
