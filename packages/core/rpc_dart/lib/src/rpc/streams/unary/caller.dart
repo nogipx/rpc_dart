@@ -342,15 +342,10 @@ final class UnaryCaller<TRequest, TResponse> {
                       message.metadata!,
                       code,
                     );
-                    // A handler answering NOT_FOUND is a working server, so the
-                    // level follows the STATUS: `error` only for a genuine
-                    // fault, `debug` for an application's answer.
-                    if (RpcStatus.isFault(code)) {
-                      _logger.error(
-                        'gRPC error: $code - ${error.message} '
-                        '[streamId: $streamId]',
-                      );
-                    } else if (_logger.isDebug) {
+                    // Debug for every status: a genuine fault is reported once,
+                    // by the call's own catch, which also has the method path
+                    // and the stack.
+                    if (_logger.isDebug) {
                       _logger.debug(
                         'Call answered $code - ${error.message} '
                         '[streamId: $streamId]',

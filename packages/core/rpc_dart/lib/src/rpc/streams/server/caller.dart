@@ -128,11 +128,8 @@ final class ServerStreamCaller<
           final status = RpcCallerTrailer.statusOf(response.metadata!);
           if (status != null && status != RpcStatus.ok) {
             final error = RpcCallerTrailer.errorOf(response.metadata!, status);
-            if (RpcStatus.isFault(status)) {
-              _logger.error(
-                'Server stream ended with error: $status - ${error.message}',
-              );
-            } else if (_logger.isDebug) {
+            // Debug for every status; the catch below owns a fault's record.
+            if (_logger.isDebug) {
               _logger.debug(
                 'Server stream ended with status $status: ${error.message}',
               );

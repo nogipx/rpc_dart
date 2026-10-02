@@ -740,6 +740,14 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         }
       },
       onError: (Object e, StackTrace st) {
+        // The call's one error record, as the other shapes keep theirs.
+        if (RpcStatus.isFaultError(e)) {
+          _log.error(
+            'Bidirectional call /$serviceName/$methodName failed',
+            error: e,
+            stackTrace: st,
+          );
+        }
         controller.addError(e, st);
         unawaited(cleanup());
       },

@@ -233,7 +233,9 @@ void main() {
       () async {
         // Without this, silencing everything would pass the witness.
         final loud = await _call('broken');
-        expect(loud.caller, isNotEmpty);
+        // ONE caller record: the call's own, which carries the error, the
+        // method path and the stack. The trailer site logs at debug.
+        expect(loud.caller, hasLength(1), reason: '${loud.caller}');
         expect(loud.responder, isNotEmpty);
       },
       timeout: const Timeout(Duration(seconds: 30)),
@@ -278,6 +280,8 @@ void main() {
         () async {
           final loud = await _stream(shape, 'Broken');
           expect(loud.responder, isNotEmpty);
+          // One caller record per failed call, as for unary.
+          expect(loud.caller, hasLength(1), reason: '${loud.caller}');
         },
         timeout: const Timeout(Duration(seconds: 30)),
       );

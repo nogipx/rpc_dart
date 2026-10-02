@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 605)
 round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
 probe: none — static read, nothing run
-reason: "owner decision — everything measurable is fixed: streaming levels (603), five peer-triggerable responder warnings now once per connection (604; the other two are unreachable per round 515). Left: a caller logs a genuine FAULT twice, from two sites carrying different information, and which one owns the report is a choice"
+reason: "DONE: streaming levels (603), five peer-triggerable responder warnings once per connection (604; the other two unreachable per round 515), and one caller record per genuine fault on every shape, the call's own catch, by the owner's choice (605: 2/2/3/0 -> 1/1/1/1)"
 ---
 
 # B-124 — warnings a peer can trigger fire on every frame, and application errors log at error twice
@@ -124,6 +124,12 @@ five refusals and now warns `1`. Endpoint-not-started and the unknown-stream no-
 stay unguarded: round 515 could not reach them, so a guard would have no witness.
 `../rounds/604-the-peer-chose-how-many-lines.md`.
 
+## Round 605 — one record per fault
+
+`unary 2, server 2, client 3, bidi 0` caller records for a genuine INTERNAL became
+`1` on every shape. `../rounds/605-one-failure-one-record.md`.
+
 ## Owner decision
 
-—
+Round 605's session: the call's own catch record (error, method path, stack) owns
+a fault's report; the trailer sites log at debug.

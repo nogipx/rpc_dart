@@ -122,9 +122,8 @@ final class ClientStreamCaller<
               rpcMessage.metadata!,
               status,
             );
-            if (RpcStatus.isFault(status)) {
-              _logger.error('Received error status code: ${error.message}');
-            } else if (_logger.isDebug) {
+            // Debug for every status; the call's catch owns a fault's record.
+            if (_logger.isDebug) {
               _logger.debug('Received status $status: ${error.message}');
             }
             _responseCompleter.completeError(error);
@@ -265,12 +264,9 @@ final class ClientStreamCaller<
         },
       );
     } catch (e, stackTrace) {
-      if (RpcStatus.isFaultError(e)) {
-        _logger.error(
-          'Failed to finish sending',
-          error: e,
-          stackTrace: stackTrace,
-        );
+      // Rethrown to the call, whose catch owns the record.
+      if (_logger.isDebug) {
+        _logger.debug('Failed to finish sending: $e');
       }
 
       if (!_responseCompleter.isCompleted) {
