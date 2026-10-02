@@ -604,10 +604,13 @@ class _FastCborWriter {
       _writeString(value);
     } else if (value is Uint8List) {
       _writeByteString(value);
-    } else if (value is TypedData && value is List<int>) {
-      // Catch typed int arrays (e.g. Int8List, Uint8ClampedList) that dart2js
-      // may not recognize as Uint8List due to JS interop boundaries.
-      _writeByteString(Uint8List.fromList(value as List<int>));
+    } else if (value is Uint8ClampedList) {
+      // Every element fits a byte. Wider typed int lists fall through to
+      // `List` and go out as arrays: a byte string would keep only the low
+      // byte of each element.
+      _writeByteString(Uint8List.sublistView(value));
+    } else if (value is ByteData) {
+      _writeByteString(Uint8List.sublistView(value));
     } else if (value is List) {
       _writeList(value);
     } else if (value is Map) {
