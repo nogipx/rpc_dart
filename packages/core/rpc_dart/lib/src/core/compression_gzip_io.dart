@@ -10,8 +10,12 @@ import 'dart:typed_data';
 bool get rpcGzipSupported => true;
 
 /// Compresses [data] using dart:io gzip.
-Uint8List rpcGzipCompress(Uint8List data) =>
-    Uint8List.fromList(gzip.encode(data));
+Uint8List rpcGzipCompress(Uint8List data) => _asBytes(gzip.encode(data));
+
+/// [bytes] as a [Uint8List], copying only when the codec did not already
+/// return one.
+Uint8List _asBytes(List<int> bytes) =>
+    bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
 
 /// Decompresses [data] using dart:io gzip.
 ///
@@ -22,7 +26,7 @@ Uint8List rpcGzipCompress(Uint8List data) =>
 /// Throws [FormatException] when the limit is exceeded.
 Uint8List rpcGzipDecompress(Uint8List data, {int? maxOutputBytes}) {
   if (maxOutputBytes == null) {
-    return Uint8List.fromList(gzip.decode(data));
+    return _asBytes(gzip.decode(data));
   }
 
   final builder = BytesBuilder(copy: false);

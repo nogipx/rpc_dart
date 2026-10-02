@@ -68,6 +68,10 @@ abstract final class RpcGrpcCompression {
   /// The `gzip` encoding identifier.
   static const String gzip = 'gzip';
 
+  /// The shortest a gzip member can be (RFC 1952): a 10-byte header, an empty
+  /// final deflate block of 2 bytes, and the 8-byte CRC-32 and size trailer.
+  static const int _gzipMinimumBytes = 20;
+
   /// Codec registry. Populated at startup with the dart:io gzip codec on
   /// native platforms; external codecs can be added via [register].
   static final Map<String, RpcCompressionCodec> _codecs = _initDefaults();
@@ -172,11 +176,19 @@ abstract final class RpcGrpcCompression {
   /// discard the saving on small COMPRESSIBLE payloads, which is real, and it
   /// needs a number that is right for one kind of traffic and wrong for another.
   /// Comparing costs the compression work on payloads that end up sent plain.
+  ///
+  /// The one size that needs no such number is the FORMAT's floor: a gzip
+  /// member is never shorter than [_gzipMinimumBytes], whatever the codec, so a
+  /// payload no longer than that is sent plain without paying for a compress
+  /// whose result could not be used.
   static (Uint8List bytes, bool compressed) compressIfSmaller(
     Uint8List data, {
     required String? encoding,
   }) {
     if (isIdentity(encoding)) return (data, false);
+    if (data.length <= _gzipMinimumBytes && _normalize(encoding!) == gzip) {
+      return (data, false);
+    }
     final compressed = compress(data, encoding: encoding!);
     return compressed.length < data.length ? (compressed, true) : (data, false);
   }
