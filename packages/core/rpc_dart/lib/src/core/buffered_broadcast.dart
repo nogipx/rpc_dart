@@ -49,13 +49,25 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   /// [sizeOf] is optional because this type is generic and cannot know how to
   /// weigh a `T` — but WITHOUT it only the count bound applies, which is the
   /// half that does not bound memory. Supply one.
+  ///
+  /// [sync] delivers a live event from inside [add], for a layer that only
+  /// forwards another stream and must not add a turn of its own. An async
+  /// forward delays every event by one microtask relative to its source, which
+  /// is enough for a consumer to see a call's opening frame only after the
+  /// transport below has already routed that call's next frame. The buffered
+  /// events are replayed one microtask after the first listen, so none is
+  /// delivered from inside `listen()`.
   BufferedBroadcastController({
     this.maxPendingEvents = 4096,
     this.maxPendingBytes = 16 * 1024 * 1024,
     this.sizeOf,
     this.onOverflow,
+    bool sync = false,
   }) {
-    _controller = StreamController<T>.broadcast(onListen: _flush);
+    _controller = StreamController<T>.broadcast(
+      onListen: sync ? () => scheduleMicrotask(_flush) : _flush,
+      sync: sync,
+    );
   }
 
   /// Upper bound on events buffered while no listener is attached.
@@ -110,7 +122,9 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   @override
   void add(T event) {
     if (isClosed) return;
-    if (_controller.hasListener) {
+    // Behind anything still queued, so a replay that is not finished yet keeps
+    // arrival order.
+    if (_controller.hasListener && _pending.isEmpty) {
       _controller.add(event);
     } else {
       _enqueue(_BufferedItem<T>.data(event, sizeOf?.call(event) ?? 0));
@@ -121,7 +135,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   @override
   void addError(Object error, [StackTrace? stackTrace]) {
     if (isClosed) return;
-    if (_controller.hasListener) {
+    if (_controller.hasListener && _pending.isEmpty) {
       _controller.addError(error, stackTrace);
     } else {
       _enqueue(_BufferedItem<T>.error(error, stackTrace));

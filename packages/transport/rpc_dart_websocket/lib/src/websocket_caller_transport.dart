@@ -31,9 +31,17 @@ class RpcWebSocketCallerTransport
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
 
+  /// The stable [incomingMessages] across reconnects, forwarding `_inner`'s.
+  ///
+  /// SYNC, so the forward adds no turn. The responder pipeline binds a call's
+  /// per-stream view when it sees the opening frame, and `_inner` routes a later
+  /// frame to that view only if it exists by then. One extra microtask here let
+  /// `_inner` route a peer's bidi request before the pipeline had bound, so the
+  /// request reached nobody and the handler waited forever.
   final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
       BufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
+        sync: true,
       );
   StreamSubscription<RpcTransportMessage>? _fwdSub;
 

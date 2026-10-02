@@ -1,10 +1,10 @@
 ---
 status: open
-round: 541
-commit: aeebbbfb
+round: 615
+commit: e3c2e4b1
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 probe: P-174
-reason: "the two things round 541 fixed by CONSTRUCTION rather than by measurement: the six streaming `responder.done` cleanups got `only:` by inspection, and whether the reclamation can lose its race against the new socket's first frame is left to the reconnect's own awaits"
+reason: "round 615 answered the streaming shapes (all served across a reconnect, handler told) and fixed the peer-bidi defect its guard found; what is left is the race against a factory that returns an already-open channel. Previously: the two things round 541 fixed by CONSTRUCTION rather than by measurement: the six streaming `responder.done` cleanups got `only:` by inspection, and whether the reclamation can lose its race against the new socket's first frame is left to the reconnect's own awaits"
 ---
 
 # B-212 — the streaming shapes and the race round 541 did not price
@@ -13,7 +13,11 @@ Split out of round 541, which fixed the unary path with a witness and left two t
 argued rather than measured. Bench `../probes/P-174-what-a-reused-peer-id-answers.md`
 drives only unary.
 
-## The streaming shapes
+## The streaming shapes — ANSWERED in round 615
+
+Server-stream, client-stream and bidi each serve the second caller its own answer
+across a reconnect, and each parked handler is told (`P-219`). What follows is the
+question as it stood.
 
 Round 541 found that `_ensureUnaryResponder`'s trailing `await _cleanupStream(streamId)`
 ran with a stale id after a reconnect and tore down the call that held the number by
