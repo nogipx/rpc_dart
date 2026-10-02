@@ -10,9 +10,11 @@
 // `setup()` and every key check now run into a local map before any field is
 // touched, and the contract and its methods are committed in one step at the end.
 //
-// Two failure routes reach this and they are independent: `setup()` throwing needs
-// nothing else to be wrong, while a colliding method key needs the dotted-key
-// ambiguity that `a_method_name_may_not_contain_a_dot_test.dart` is about.
+// Two failure routes reach this and they are independent: `setup()` throwing,
+// and a method refused by the key check after an earlier one was reserved --
+// a name the wire grammar refuses. (The route used to be a dotted method whose
+// key collided with another service's; registration now refuses the dot, so
+// no two services can produce one key.)
 //
 // The measurements are in `.claude/loop/rounds/503`.
 
@@ -59,11 +61,10 @@ final class _Fine extends RpcResponderContract {
   }
 }
 
-/// `ok` registers, then `c` collides with `a`'s dotted method `b.c` — both make
-/// the key `a.b.c`. Insertion order is iteration order, so the throw lands with
-/// one method already reserved.
-final class _CollidesOnItsSecondMethod extends RpcResponderContract {
-  _CollidesOnItsSecondMethod() : super('a.b');
+/// `ok` registers, then `b.c` is refused by the key check. Insertion order is
+/// iteration order, so the throw lands with one method already reserved.
+final class _RefusedOnItsSecondMethod extends RpcResponderContract {
+  _RefusedOnItsSecondMethod() : super('a.b');
 
   @override
   void setup() {
@@ -74,24 +75,10 @@ final class _CollidesOnItsSecondMethod extends RpcResponderContract {
       handler: (req, {context}) async => 'ok'.rpc,
     );
     addUnaryMethod<RpcString, RpcString>(
-      methodName: 'c',
-      requestCodec: _codec,
-      responseCodec: _codec,
-      handler: (req, {context}) async => 'c'.rpc,
-    );
-  }
-}
-
-final class _ServiceAWithDottedMethod extends RpcResponderContract {
-  _ServiceAWithDottedMethod() : super('a');
-
-  @override
-  void setup() {
-    addUnaryMethod<RpcString, RpcString>(
       methodName: 'b.c',
       requestCodec: _codec,
       responseCodec: _codec,
-      handler: (req, {context}) async => 'from a/b.c'.rpc,
+      handler: (req, {context}) async => 'b.c'.rpc,
     );
   }
 }
@@ -118,27 +105,26 @@ void main() {
       expect(responder.registeredMethodBindings.keys, isEmpty);
     });
 
-    test('a colliding method key leaves the earlier methods out too', () async {
+    test('a refused method leaves the earlier methods out too', () async {
       final (_, server) = RpcChannelTransport.pair();
       final responder = RpcResponderEndpoint(transport: server);
       addTearDown(responder.close);
-      responder.registerServiceContract(_ServiceAWithDottedMethod());
 
       expect(
-        () => responder.registerServiceContract(_CollidesOnItsSecondMethod()),
+        () => responder.registerServiceContract(_RefusedOnItsSecondMethod()),
         throwsA(isA<RpcStatusException>()),
       );
 
       expect(
         responder.registeredContracts.keys,
-        ['a'],
+        isEmpty,
         reason: 'a.b must not be registered when its second method was refused',
       );
       expect(
         responder.registeredMethodBindings.keys,
-        ['a.b.c'],
+        isEmpty,
         reason:
-            'a.b.ok was reserved before the collision was found; committing it '
+            'a.b.ok was reserved before the refusal was found; committing it '
             'left half a contract serving requests',
       );
     });
@@ -146,11 +132,10 @@ void main() {
     test('the obvious recovery works after either failure', () async {
       for (final failing in <RpcResponderContract Function()>[
         _SetupThrows.new,
-        _CollidesOnItsSecondMethod.new,
+        _RefusedOnItsSecondMethod.new,
       ]) {
         final (_, server) = RpcChannelTransport.pair();
         final responder = RpcResponderEndpoint(transport: server);
-        responder.registerServiceContract(_ServiceAWithDottedMethod());
         final contract = failing();
         try {
           responder.registerServiceContract(contract);
@@ -177,9 +162,8 @@ void main() {
     test('a half-registered contract does not serve requests', () async {
       final (client, server) = RpcChannelTransport.pair();
       final responder = RpcResponderEndpoint(transport: server);
-      responder.registerServiceContract(_ServiceAWithDottedMethod());
       try {
-        responder.registerServiceContract(_CollidesOnItsSecondMethod());
+        responder.registerServiceContract(_RefusedOnItsSecondMethod());
       } on RpcStatusException {
         // expected
       }
@@ -251,19 +235,18 @@ void main() {
       expect(responder.registeredContracts.keys, ['Svc']);
     });
 
-    test('a duplicate method key across services is still refused', () async {
+    test('a method the key check refuses is still refused', () async {
       final (_, server) = RpcChannelTransport.pair();
       final responder = RpcResponderEndpoint(transport: server);
       addTearDown(responder.close);
-      responder.registerServiceContract(_ServiceAWithDottedMethod());
 
       expect(
-        () => responder.registerServiceContract(_CollidesOnItsSecondMethod()),
+        () => responder.registerServiceContract(_RefusedOnItsSecondMethod()),
         throwsA(
           isA<RpcStatusException>().having(
             (e) => e.message,
             'message',
-            contains('a.b.c'),
+            contains('b.c'),
           ),
         ),
         reason: 'deferring the commit must not defer the CHECK',

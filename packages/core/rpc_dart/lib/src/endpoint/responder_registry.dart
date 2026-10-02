@@ -137,11 +137,32 @@ final class RpcResponderMethodRegistry {
     // here rather than silently collapsing into one binding.
     final pending = <String, RpcResponderMethodBinding>{};
 
+    // The wire's grammar, at registration. The binding key `'$service.$method'`
+    // is unambiguous only because a method name has no dot (see
+    // [kMethodTokenPattern]); registered unchecked, method `a.b` on `S` took
+    // the key of method `b` on service `S.a`, and a call for `/S.a/b` was
+    // served by the wrong service's handler. A name the grammar refuses also
+    // registers a method no caller can reach.
+    if (!kServiceTokenPattern.hasMatch(serviceName)) {
+      throw RpcStatusException(
+        RpcStatus.internal,
+        'Invalid service name "$serviceName": allowed are letters, digits, '
+        '"_", "-" and "."',
+      );
+    }
+
     void reserve(
       String methodName,
       RpcResponderMethodBinding binding, {
       required String conflictSuffix,
     }) {
+      if (!kMethodTokenPattern.hasMatch(methodName)) {
+        throw RpcStatusException(
+          RpcStatus.internal,
+          'Invalid method name "$methodName" in $serviceName: allowed are '
+          'letters, digits, "_" and "-"',
+        );
+      }
       final methodKey = '$serviceName.$methodName';
       if (_methods.containsKey(methodKey) || pending.containsKey(methodKey)) {
         throw RpcStatusException(
