@@ -5,6 +5,28 @@
 
 part of '_index.dart';
 
+/// [message] with a payload that owns its bytes.
+///
+/// A decoded payload is a view into the chunk it arrived in, and holding the
+/// view holds the whole chunk -- while every buffer limit charges only the
+/// payload. A peer packing a one-byte request with a megabyte on a closed
+/// stream id pinned the megabyte per request. Used where a message WAITS; one
+/// handed straight to a reading consumer keeps its view and costs no copy.
+RpcTransportMessage _ownedPayload(RpcTransportMessage message) {
+  final payload = message.payload;
+  if (payload == null ||
+      payload.lengthInBytes == payload.buffer.lengthInBytes) {
+    return message;
+  }
+  return RpcTransportMessage(
+    payload: Uint8List.fromList(payload),
+    metadata: message.metadata,
+    isEndOfStream: message.isEndOfStream,
+    methodPath: message.methodPath,
+    streamId: message.streamId,
+  );
+}
+
 /// Mutable state for a single active responder stream.
 final class RpcResponderStreamState {
   /// Creates state for the stream with the given [id].
@@ -251,7 +273,11 @@ final class RpcResponderStreamState {
     _sinkHeldBytes += bytes;
     _sinkHeldEvents++;
     if (message.payload != null || message.isDirect) deliveredRequests++;
-    sink.add(message);
+    // Waits when the handler is not reading: not listening yet, or paused in
+    // the body of its `await for`.
+    sink.add(
+      sink.hasListener && !sink.isPaused ? message : _ownedPayload(message),
+    );
     // A frame may carry both the last payload and the half-close.
     if (message.isEndOfStream) {
       _requestSinkEnded = true;
@@ -321,6 +347,7 @@ final class RpcResponderStreamState {
     required bool bufferForClientStream,
     required RpcResponderBufferBudget budget,
   }) {
+    if (!_boundToMessageStream) message = _ownedPayload(message);
     if (!_boundToMessageStream) {
       _budget = budget;
       final bytes = message.bufferedBytes;
@@ -366,7 +393,7 @@ final class RpcResponderStreamState {
   /// "first chunk missing metadata" error. These are replayed in arrival order
   /// once [methodKey] is set.
   void bufferPreMethod(RpcTransportMessage message) {
-    _preMethodBufferedMessages.add(message);
+    _preMethodBufferedMessages.add(_ownedPayload(message));
     // `bufferedBytes`, not `payload.length`: a parked frame retains its header
     // block too, and weighing the payload alone charged one byte for a frame
     // that held megabytes. Must stay identical to the pipeline's pre-method
