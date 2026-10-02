@@ -35,4 +35,8 @@ proxy gets the wrong code, or a stream that never ends.
 
 ## Owner decision
 
-—
+2026-10-02: the server answers DEADLINE_EXCEEDED, and the rpc_dart caller maps
+a status-4 trailer to `RpcDeadlineExceededException`, so the race between the
+two cannot change the exception type. Measured first: an rpc_dart caller sees
+`DeadlineExceeded(4)` 40/40 on unary and server-stream today, its own timer
+winning; only foreign clients see the wrong status.

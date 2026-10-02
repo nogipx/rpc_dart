@@ -211,16 +211,14 @@ void main() {
       {'f': 5.960464477539063e-8},
     );
 
-    // { "s": extended simple value 200 (0xf8 0xc8) -> 200 }
-    decodesTo(
-      'extended simple value',
-      [
-        0xa1,
-        0x61, 0x73, // "s"
-        0xf8, 0xc8,
-      ],
-      {'s': 200},
-    );
+    // { "s": extended simple value 200 (0xf8 0xc8) } -- unassigned, so it means
+    // nothing here; read as the int 200 it would pass for a number. Refused by
+    // both entry points.
+    test('extended simple value', () {
+      final bytes = Uint8List.fromList([0xa1, 0x61, 0x73, 0xf8, 0xc8]);
+      expect(() => CborCodec.decode(bytes), throwsFormatException);
+      expect(() => CborCodec.decodeUnsafe(bytes), throwsFormatException);
+    });
 
     // { "l": indefinite array [1, 2, 3] }
     decodesTo(

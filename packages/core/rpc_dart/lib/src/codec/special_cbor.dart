@@ -130,7 +130,9 @@ abstract interface class CborCodec {
   /// Decodes CBOR bytes into Dart objects.
   static Map<String, dynamic> decode(Uint8List bytes) {
     final reader = _FastCborReader(bytes);
-    return reader.readMap();
+    final value = reader.readMap();
+    reader.expectEnd();
+    return value;
   }
 
   /// Unsafe encoding of any value into CBOR bytes.
@@ -147,7 +149,9 @@ abstract interface class CborCodec {
   /// Intended for tests and special cases.
   static dynamic decodeUnsafe(Uint8List bytes) {
     final reader = _FastCborReader(bytes);
-    return reader.readValue();
+    final value = reader.readValue();
+    reader.expectEnd();
+    return value;
   }
 
   /// Builds the header byte.
@@ -181,6 +185,16 @@ class _FastCborReader {
   int _offset = 0;
 
   _FastCborReader(this._bytes);
+
+  /// Refuses bytes after the one data item: RFC 8949 does not call that
+  /// well-formed, and accepting it dropped whatever followed without a word.
+  void expectEnd() {
+    if (_offset != _bytes.length) {
+      throw FormatException(
+        '${_bytes.length - _offset} bytes after the CBOR data item',
+      );
+    }
+  }
 
   /// Reads any top-level value as dynamic (backs decodeUnsafe).
   ///
@@ -487,12 +501,11 @@ class _FastCborReader {
         }
         return byteData.getFloat64(0, Endian.big);
       default:
-        if (additionalInfo >= 0 && additionalInfo <= 19) {
-          return additionalInfo;
-        }
+        // Unassigned simple values (0-19, and 32-255 in the one-byte form) mean
+        // nothing here; returned as ints they read as numbers. The one-byte
+        // form of a value under 32 is not well-formed (RFC 8949 3.3).
         if (additionalInfo == CborCodec._additionalInfoOneByteFollow) {
-          // Extended simple value (1 byte), mirrors the slow reader.
-          return _readByteFast();
+          throw FormatException('Unknown simple value: ${_readByteFast()}');
         }
         throw FormatException('Unknown simple value: $additionalInfo');
     }
@@ -667,8 +680,11 @@ class _FastCborWriter {
     // On dart2js a finite integer-valued double whose magnitude exceeds the
     // CBOR 64-bit integer range (e.g. 1e300) also satisfies `value is int`.
     // It cannot be encoded as a uint64/negative-int; encode it as a double.
+    // -0.0 is an `int` on dart2js too, and the integer encoding has no sign
+    // for zero; the VM sends it as a double, and so must the web.
     if (asNum.isNaN ||
         asNum.isInfinite ||
+        (asNum == 0 && asNum.isNegative) ||
         asNum >= CborCodec._cborIntDoubleThreshold ||
         asNum < -CborCodec._cborIntDoubleThreshold) {
       _writeDouble(asNum.toDouble());

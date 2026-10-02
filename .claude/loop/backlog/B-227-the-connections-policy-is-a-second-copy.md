@@ -52,4 +52,5 @@ above 16 MiB, and the failure reads as a network fault.
 
 ## Owner decision
 
-—
+2026-10-02: direction 1 — the server hands its policy to the guard at upgrade
+time; the connections' own `policy:` becomes optional.

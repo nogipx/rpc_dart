@@ -32,4 +32,4 @@ two callers agree on which message stands.
 
 ## Owner decision
 
-—
+2026-10-02: fail the call INTERNAL, as gRPC does, on both sides.

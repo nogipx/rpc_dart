@@ -48,4 +48,5 @@ batching only; round 614's fast path is not the root cause (views pointed into
 
 ## Owner decision
 
-—
+2026-10-02: direction 1 — copy a payload out of its chunk when it is queued;
+messages delivered at once keep the view.
