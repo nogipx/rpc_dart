@@ -65,6 +65,25 @@ void main() {
     expect(parser.holdsPartialFrame, isTrue);
   });
 
+  test('WITNESS a header whose body has not started is held', () {
+    // The header is consumed and nothing is buffered, so a byte count reads
+    // zero; the frame is still unfinished, and a stream ending here is cut.
+    final parser = RpcMessageParser();
+    final whole = _frame(16);
+
+    expect(parser(Uint8List.sublistView(whole, 0, 5)), isEmpty);
+    expect(parser.holdsPartialFrame, isTrue);
+    expect(parser(Uint8List.sublistView(whole, 5)), hasLength(1));
+    expect(parser.holdsPartialFrame, isFalse);
+  });
+
+  test('GUARD a header for an empty body is a whole frame', () {
+    final parser = RpcMessageParser();
+
+    expect(parser(_frame(0)), hasLength(1));
+    expect(parser.holdsPartialFrame, isFalse);
+  });
+
   test('WITNESS a REFUSED frame holds nothing', () {
     // The arm that matters: this also returns no messages, and treating it as
     // incomplete is what round 547 did.

@@ -163,8 +163,10 @@ final class RpcMessageParser {
   /// rather than an inference from its output.
   ///
   /// True only after [call] stopped for want of bytes: fewer than five of a
-  /// header, or a header whose body has not all arrived.
-  bool get holdsPartialFrame => _state.available > 0;
+  /// header, or a header whose body has not all arrived. That includes a body
+  /// with no byte yet: the header is consumed by then, so nothing is buffered.
+  bool get holdsPartialFrame =>
+      _state.available > 0 || _state.expectedMessageLength != null;
 
   /// Processes an incoming data fragment and returns complete messages.
   ///

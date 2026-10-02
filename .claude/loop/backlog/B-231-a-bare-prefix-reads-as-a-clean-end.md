@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 629)
+round: 629
+commit: e999aaa8
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
 probe: none — audit probe `packages/core/rpc_dart/.dart_tool/probe/audit_consumers_header_only_tail.dart`, not yet registered
-reason: "bench — a request stream cut right after a 5-byte prefix that promises a body ends cleanly: client-stream and bidi answer OK with the message dropped"
+reason: "FIXED in round 629: holdsPartialFrame is true while a header's body is awaited; client-stream and bidi now answer 3 for a bare-prefix tail (server-stream since round 627). Previously: bench — a request stream cut right after a 5-byte prefix that promises a body ends cleanly: client-stream and bidi answer OK with the message dropped"
 ---
 
 # B-231 — a bare prefix reads as a clean end
