@@ -1,11 +1,11 @@
 ---
-status: open
+status: closed (round 614)
 release: breaking
-round: 507
-commit: cc218edc
+round: 614
+commit: e080cd83
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/core/channel.dart, packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/core/protocol.dart]
 probe: P-145
-reason: "the receive path's first copy is CONFIRMED and fixed in round 507 — 389.76 -> 191.45 us per 1 MiB frame end-to-end. It buys that by making a payload a view into the transport's chunk, which is a new requirement on IRpcChannel implementers and needs the owner's sign-off; the send path and the 5-byte-prefix wire question are untouched"
+reason: "FIXED in round 614: the parser decodes a whole-message chunk in place and the send path writes the channel header into reserved room; the prefix stays by the owner's decision. Previously: the receive path's first copy is CONFIRMED and fixed in round 507 — 389.76 -> 191.45 us per 1 MiB frame end-to-end. It buys that by making a payload a view into the transport's chunk, which is a new requirement on IRpcChannel implementers and needs the owner's sign-off; the send path and the 5-byte-prefix wire question are untouched"
 ---
 
 # B-116 — channel transports copy each inbound message three or four times, and frame it twice
@@ -95,7 +95,7 @@ keeps one. The lead complains about the mirror of this (`_buf` doubling pins up 
 so the property is relocated rather than new — but it is not measured, since the bench
 sends one frame per chunk.
 
-## Still open, not measured here
+## What round 507 left (all answered by round 614)
 
 - **The send path**, which the lead also names: `codec -> RpcMessageFrame.encode ->
   RpcChannelFrame._encode`, plus `_encodeMetadataPayload`'s
@@ -127,6 +127,6 @@ processors per transport family, and break the wire between versions, for four
 bytes a message. What remains here is the send path's two copies and the parser's
 two, with no wire change.
 
-**THIS LEAD STAYS OPEN.** The sign-off answers one of three things in it; the send path's two
+**Closed in round 614**, which removed one copy from each pair. Until then: the sign-off answers one of three things in it; the send path's two
 copies and the 5-byte-prefix wire question are untouched and unmeasured, so the lead keeps them
 rather than closing with a remainder nothing routes to.

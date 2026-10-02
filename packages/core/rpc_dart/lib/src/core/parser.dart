@@ -17,7 +17,7 @@ import 'protocol.dart';
 /// Uses a [Uint8List] backing buffer and a read-offset pointer to avoid O(N²)
 /// copies when multiple gRPC messages arrive in a single chunk. One compact()
 /// call at the end of each parse pass drops consumed bytes in a single O(n)
-/// copy, and sublist() on a Uint8List produces a typed copy without boxing.
+/// copy. It holds only what a chunk left incomplete; see [RpcMessageParser].
 final class _MessageParserState {
   /// Capacity buffer. Only `readOffset..[_length]` is valid data; the rest is
   /// spare room grown geometrically.
@@ -63,9 +63,6 @@ final class _MessageParserState {
     _length += data.length;
   }
 
-  /// Returns a typed copy of bytes [from]..[to] — one copy, no boxing.
-  Uint8List sublist(int from, int to) => _bytes.sublist(from, to);
-
   /// Drops consumed bytes from the front, so the buffer does not grow without
   /// bound across messages.
   ///
@@ -81,9 +78,6 @@ final class _MessageParserState {
     _length = remaining;
     readOffset = 0;
   }
-
-  /// Advances the read pointer by [n] bytes without copying.
-  void advance(int n) => readOffset += n;
 
   /// Clears all buffered data and resets the read pointer.
   void clear() {
@@ -215,22 +209,43 @@ final class RpcMessageParser {
         'gRPC frame buffer overflow: $buffered bytes (max: $_maxBufferedBytes)',
       );
     }
-    _state.addBytes(data);
+    // Decode straight out of the chunk when nothing is buffered, which is the
+    // ordinary case: a chunk that holds whole messages is not copied into the
+    // buffer first, and each body is a VIEW into it. Only an incomplete tail is
+    // buffered. A view relies on the chunk not being written into after it is
+    // handed over -- the rule `IRpcChannel.incoming` states one layer down.
+    //
+    // A buffered body is still COPIED out: the buffer is compacted and reused,
+    // so a view into it would change under the receiver.
+    final fromChunk =
+        _state.available == 0 && _state.expectedMessageLength == null;
+    late Uint8List src;
+    var pos = 0;
+    var end = 0;
+    if (fromChunk) {
+      src = data;
+      end = data.length;
+    } else {
+      _state.addBytes(data);
+      src = _state._bytes;
+      pos = _state.readOffset;
+      end = _state._length;
+    }
 
-    // Process buffer while messages can be extracted.
-    // Uses readOffset instead of slicing — O(1) per iteration, O(remaining)
+    // Uses an offset instead of slicing — O(1) per iteration, O(remaining)
     // compact at the end instead of O(N²) copies in the loop.
     while (true) {
       // If length is unknown yet, try to extract it from the header.
       if (_state.expectedMessageLength == null) {
         // Need at least 5 bytes to read the header.
-        if (_state.available < RpcConstants.messagePrefixSize) break;
+        if (end - pos < RpcConstants.messagePrefixSize) break;
 
         try {
           final header = RpcMessageFrame.parseHeader(
-            _state.sublist(
-              _state.readOffset,
-              _state.readOffset + RpcConstants.messagePrefixSize,
+            Uint8List.sublistView(
+              src,
+              pos,
+              pos + RpcConstants.messagePrefixSize,
             ),
           );
           _state.isCompressed = header.isCompressed;
@@ -247,7 +262,7 @@ final class RpcMessageParser {
           }
 
           // Advance past the header — no copy.
-          _state.advance(RpcConstants.messagePrefixSize);
+          pos += RpcConstants.messagePrefixSize;
         } catch (e, trace) {
           _logger.error(
             'Failed to parse frame header: $e',
@@ -261,13 +276,12 @@ final class RpcMessageParser {
       }
 
       // Need the full body before we can emit the message.
-      if (_state.available < _state.expectedMessageLength!) break;
+      if (end - pos < _state.expectedMessageLength!) break;
 
-      // Extract the message body — one typed copy of exactly the payload bytes.
-      var payload = _state.sublist(
-        _state.readOffset,
-        _state.readOffset + _state.expectedMessageLength!,
-      );
+      final bodyEnd = pos + _state.expectedMessageLength!;
+      var payload = fromChunk
+          ? Uint8List.sublistView(src, pos, bodyEnd)
+          : src.sublist(pos, bodyEnd);
       // Whether `payload` is already a complete frame rather than a bare body.
       // Only the compressed-without-a-decompressor branch makes it one, and
       // [_emitFramed] needs to know so it does not wrap it twice -- which loses
@@ -346,15 +360,21 @@ final class RpcMessageParser {
       }
 
       // Advance past the body — no copy.
-      _state.advance(_state.expectedMessageLength!);
+      pos = bodyEnd;
 
       // Reset for the next message.
       _state.reset();
     }
 
-    // Single compact at the end: drop all consumed bytes in one O(remaining) copy
-    // instead of O(N) copies of shrinking buffer inside the loop above.
-    _state.compact();
+    if (fromChunk) {
+      // The unconsumed tail, whose header may already have been read.
+      if (pos < end) _state.addBytes(Uint8List.sublistView(data, pos, end));
+    } else {
+      _state.readOffset = pos;
+      // Single compact at the end: drop all consumed bytes in one O(remaining)
+      // copy instead of O(N) copies of shrinking buffer inside the loop above.
+      _state.compact();
+    }
 
     if (_logger.isInternal) {
       _logger.internal('Chunk processed, messages extracted: ${result.length}');

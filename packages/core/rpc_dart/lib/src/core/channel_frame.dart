@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'errors.dart';
+import 'frame_headroom.dart';
 import 'metadata.dart';
 // For RpcStatus: RpcFrameException carries the status for its kind, so the
 // three kinds stop collapsing into INTERNAL on the wire.
@@ -243,12 +244,15 @@ abstract final class RpcChannelFrame {
   // ── Private helpers ──────────────────────────────────────────────────────
 
   static Uint8List _encode(int streamId, int flags, Uint8List payload) {
-    final frame = Uint8List(headerSize + payload.length);
+    // A gRPC frame from `RpcMessageFrame.encode` has room for this header in
+    // front of it, so the header is written there instead of copying it.
+    final reserved = claimHeadroom(payload);
+    final frame = reserved ?? Uint8List(headerSize + payload.length);
     final view = ByteData.sublistView(frame);
     view.setUint32(0, streamId);
     view.setUint8(4, flags);
     view.setUint32(5, payload.length);
-    frame.setRange(headerSize, frame.length, payload);
+    if (reserved == null) frame.setRange(headerSize, frame.length, payload);
     return frame;
   }
 
@@ -263,7 +267,7 @@ abstract final class RpcChannelFrame {
         for (final h in metadata.headers) [h.name, h.value],
       ];
     }
-    return Uint8List.fromList(utf8.encode(json.encode(map)));
+    return utf8.encode(json.encode(map));
   }
 
   static (RpcMetadata, String?) _decodeMetadataPayload(Uint8List payload) {

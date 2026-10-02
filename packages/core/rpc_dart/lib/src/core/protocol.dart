@@ -6,6 +6,7 @@
 import 'dart:typed_data';
 
 import 'errors.dart';
+import 'frame_headroom.dart';
 
 /// Fixed values of the 5-byte gRPC message prefix.
 abstract interface class RpcConstants {
@@ -108,10 +109,13 @@ abstract interface class RpcStatus {
 abstract interface class RpcMessageFrame {
   /// Prefixes [messageBytes] with the 5-byte gRPC frame header.
   ///
-  /// One allocation, no intermediate copy.
+  /// One allocation, no intermediate copy. It reserves room in front for a
+  /// channel frame header, so a channel transport does not copy it again.
   static Uint8List encode(Uint8List messageBytes, {bool compressed = false}) {
     final length = messageBytes.length;
-    final result = Uint8List(RpcConstants.messagePrefixSize + length);
+    final result = allocateWithHeadroom(
+      RpcConstants.messagePrefixSize + length,
+    );
 
     result[RpcConstants.compressionFlagIndex] = compressed
         ? RpcConstants.compressed
