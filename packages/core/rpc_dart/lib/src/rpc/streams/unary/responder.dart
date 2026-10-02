@@ -10,6 +10,12 @@ part of '../_index.dart';
 /// so that cleanup is a single [Map.remove] call.
 final class _UnaryStreamState {
   bool requestHandled = false;
+
+  /// A second request reached this stream while its handler ran on the
+  /// first; the answer is then INTERNAL in place of the response (see
+  /// [tooManyMessages]). Per stream: one responder with `id == 0` serves
+  /// many, and a flag on the responder failed every later stream's answer.
+  bool tooManyRequests = false;
   bool initialHeadersSent = false;
   bool belongsToThisMethod = false;
   String? clientAcceptEncoding;
@@ -219,11 +225,6 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// `_isActive`, which gates every write it makes.
   bool _closed = false;
 
-  /// Set when a second request reaches this responder while the handler runs
-  /// on the first; the answer is then INTERNAL in place of the response (see
-  /// [tooManyMessages]). The pipeline refuses one it routes itself at once.
-  bool _tooManyRequests = false;
-
   /// Drops a finished handler's answer and tells the caller the call ended.
   ///
   /// A status, not silence. Dropping the response and returning left the caller
@@ -390,9 +391,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       return; // Not for this responder.
     }
 
-    if (_streamStates[streamId]?.requestHandled == true) {
+    // A second request while the pipeline routes the call itself is refused
+    // there at once; this listener is the responder built directly.
+    final handled = _streamStates[streamId];
+    if (handled != null && handled.requestHandled) {
       if (message.payload != null || message.isDirect) {
-        _tooManyRequests = true;
+        handled.tooManyRequests = true;
       }
       if (_logger.isInternal) {
         _logger.internal(
@@ -589,7 +593,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         await _dropLateResponse(streamId);
         return false;
       }
-      if (_tooManyRequests) throw tooManyMessages('request');
+      if (state.tooManyRequests) throw tooManyMessages('request');
 
       // Serialize and optionally compress response.
       final serializedResponse = _responseSerializer.serialize(response);
@@ -808,7 +812,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         await _dropLateResponse(streamId);
         return;
       }
-      if (_tooManyRequests) throw tooManyMessages('request');
+      if (state.tooManyRequests) throw tooManyMessages('request');
 
       // Zero-copy: send response directly if supported.
       final direct = _transport.supportsZeroCopy;
