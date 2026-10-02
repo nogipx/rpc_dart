@@ -5,8 +5,9 @@
 // `flowControlWindowBytes` charges the bytes a message occupies ON THE WIRE, and
 // nothing else: not the message count, and not whatever the decoded object
 // weighs. So the same window admits a few large messages or very many small
-// ones, and a type that expands on decode turns one window's worth of wire bytes
-// into an arbitrarily larger backlog above the transport.
+// ones. The standing backlog is held as wire bytes: the pause stops delivery
+// below the decode, so a type that expands on decode is decoded only as it is
+// consumed.
 //
 // Both halves are witnessed here because an operator reads the field as a bound
 // on memory. The arm that holds the wire size fixed and varies only the decoded
@@ -34,8 +35,13 @@ final class _Blob implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {'w': wire, 'n': payload};
 
-  static _Blob fromJson(Map<String, dynamic> json) =>
-      _Blob(json['w'] as String, json['n'] as int);
+  /// How many have been decoded, across the whole file.
+  static int decoded = 0;
+
+  static _Blob fromJson(Map<String, dynamic> json) {
+    decoded++;
+    return _Blob(json['w'] as String, json['n'] as int);
+  }
 }
 
 const _codec = RpcCodec<_Blob>(_Blob.fromJson);
@@ -85,6 +91,7 @@ typedef _Run = ({
   int first,
   int second,
   int received,
+  int decoded,
   Map<String, int> senderState,
 });
 
@@ -126,6 +133,7 @@ Future<_Run> _run({
   Duration settle = const Duration(milliseconds: 250),
 }) async {
   final produced = [0];
+  final decodedBefore = _Blob.decoded;
   final (client, server) = RpcChannelTransport.pair(
     policy: RpcSecurityPolicy(
       flowControlWindowBytes: window,
@@ -180,6 +188,7 @@ Future<_Run> _run({
     await _until(() => server.flowControlStateSizes['waiters'] == 1);
   }
   final first = produced[0];
+  final decoded = _Blob.decoded - decodedBefore;
   // `server` IS the sender: a server stream flows responder -> caller, so its
   // own credit map is what bounds it.
   final senderState = server.flowControlStateSizes;
@@ -200,6 +209,7 @@ Future<_Run> _run({
     first: first,
     second: second,
     received: received,
+    decoded: decoded,
     senderState: senderState,
   );
 }
@@ -307,6 +317,24 @@ void main() {
           'must not change how many are admitted',
     );
   });
+
+  test(
+    'WITNESS the standing backlog is held as wire bytes, not decoded',
+    () async {
+      // What the window's bytes become in memory. The pause stops delivery below
+      // the decode, so a whole window stands as wire bytes and only what reached
+      // the consumer was decoded -- an expanding type costs nothing extra until
+      // it is consumed.
+      final r = await _run(window: 64 * _kib, wire: _kib, payload: 16 * _kib);
+
+      expect(r.first, greaterThan(32), reason: 'the window must be full: $r');
+      expect(
+        r.decoded,
+        lessThanOrEqualTo(r.received + 1),
+        reason: 'decoded beyond what the consumer took: $r',
+      );
+    },
+  );
 
   test('CONTROL with no window the producer is not bounded at all', () async {
     // Without this the witnesses would also pass against a transport that had

@@ -1,10 +1,10 @@
 ---
-status: open
-round: 552
-commit: 144a7f0e
+status: closed (round 619)
+round: 619
+commit: abdf12dc
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/stream_buffer_ledger.dart]
 probe: P-180
-reason: "cost — narrowed in round 601: bidi's mid-frame half-close is now measured (status 3; empty success with the fix ablated) and item 3 is answered by rounds 594/595/600. Left: the client-stream CALLER's reliance on the dropped state (graded low-risk by the lead) and item 2, the RSS a window's worth of decoded bytes becomes — a number for the doc, not a defect"
+reason: "FIXED in round 619 (documentation): a paused consumer decodes 2 of 4036 standing messages, so the window's backlog is wire bytes and the doc's 'multiply by your codec' was wrong; the client-stream caller parked on its window survives an early answer. Previously: cost — narrowed in round 601: bidi's mid-frame half-close is now measured (status 3; empty success with the fix ablated) and item 3 is answered by rounds 594/595/600. Left: the client-stream CALLER's reliance on the dropped state (graded low-risk by the lead) and item 2, the RSS a window's worth of decoded bytes becomes — a number for the doc, not a defect"
 ---
 
 # B-218 — the other half-closes, and what a decoded backlog actually costs

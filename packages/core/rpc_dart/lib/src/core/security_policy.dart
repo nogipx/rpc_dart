@@ -160,15 +160,15 @@ final class RpcSecurityPolicy {
   /// hold it. Without it a producer is throttled only by a consumer that never
   /// pauses.
   ///
-  /// **It counts the bytes a message occupies ON THE WIRE, which is not what the
-  /// receiver will hold.** The same window admits a few large messages or very
-  /// many small ones, and nothing here knows what one decodes to: a type that
-  /// reconstitutes a buffer from a length, or a compressed payload, turns one
-  /// window's worth of wire bytes into an arbitrarily larger backlog once it is
-  /// decoded above the transport. Sizing a deployment from this number means
-  /// sizing the WIRE; multiply by whatever your codec expands by to get memory,
-  /// and use [maxBufferedMessagesPerStream] to bound the queue by depth, which
-  /// is indifferent to both.
+  /// **It counts the bytes a message occupies ON THE WIRE.** The same window
+  /// admits a few large messages or very many small ones, and nothing here
+  /// knows what one decodes to. Through an endpoint that is also what the
+  /// backlog weighs: a paused consumer stops delivery below the decode, so the
+  /// standing messages are held as wire bytes and each is decoded only as it is
+  /// consumed. A type that reconstitutes a buffer from a length, or a
+  /// compressed payload, costs its decoded size only for what the application
+  /// itself keeps. Use [maxBufferedMessagesPerStream] to bound the queue by
+  /// depth, which is indifferent to both.
   ///
   /// Credit is returned as the receiving side actually consumes, and granted
   /// with [RpcHeaders.xWindowUpdate] on bare metadata frames, which a peer that

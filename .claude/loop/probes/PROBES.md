@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-221](P-221-what-a-window-becomes.md)** valid (round 619), rpc_dart — a 4 MiB window of 1 KiB messages behind a paused caller, with a 1x and a 16x decoded type, one arm per process. 4036 standing, 2 decoded in every arm. B-218
 - **[P-220](P-220-what-the-limiter-costs-a-message.md)** valid (round 618), rpc_dart — the rate limiter's cost per metered message, alone and inside a streamed call. Re-resolution is about 120 ns, under the end-to-end spread. B-213
 - **[P-219](P-219-the-streaming-shapes-across-a-reconnect.md)** valid (round 615), rpc_dart_websocket — P-174's reconnect rig for server-stream, client-stream and bidi. All three are served across a reconnect; the bidi guard found peer bidi requests lost to the caller wrapper's async forward. B-212
 - **[P-218](P-218-the-parser-and-send-copies.md)** valid (round 614), rpc_dart — parser and send-path copies per message. 1 MiB parse+keep `389 -> 257 us`, send `392 -> 232 us`; 64 B flat. B-116
