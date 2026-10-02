@@ -121,6 +121,7 @@ final class ClientStreamCaller<
             final error = RpcCallerTrailer.errorOf(
               rpcMessage.metadata!,
               status,
+              context: _context,
             );
             // Debug for every status; the call's catch owns a fault's record.
             if (_logger.isDebug) {

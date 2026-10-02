@@ -70,8 +70,9 @@ final class ServerStreamCaller<
   ///
   /// Forwards processor messages, but a non-OK grpc-status trailer surfaces as
   /// an [RpcStatusException] error on the stream instead of completing silently.
-  Stream<RpcMessage<TResponse>> get responses =>
-      _processor.responses.transform(_grpcStatusErrorTransformer(_logger));
+  Stream<RpcMessage<TResponse>> get responses => _processor.responses.transform(
+    _grpcStatusErrorTransformer(_logger, context: _context),
+  );
 
   /// Sends the single request; may be called only once.
   Future<void> send(TRequest request) async {
@@ -133,7 +134,11 @@ final class ServerStreamCaller<
         if (response.metadata != null) {
           final status = RpcCallerTrailer.statusOf(response.metadata!);
           if (status != null && status != RpcStatus.ok) {
-            final error = RpcCallerTrailer.errorOf(response.metadata!, status);
+            final error = RpcCallerTrailer.errorOf(
+              response.metadata!,
+              status,
+              context: _context,
+            );
             // Debug for every status; the catch below owns a fault's record.
             if (_logger.isDebug) {
               _logger.debug(
@@ -179,8 +184,9 @@ final class ServerStreamCaller<
 /// to preserve correct pause/resume/cancel semantics over the single-
 /// subscription processor stream — an `async*` blocked in `await for` can
 /// deadlock when a downstream `take(n)` cancels mid-stream.
-StreamTransformer<RpcMessage<T>, RpcMessage<T>>
-_grpcStatusErrorTransformer<T extends Object>(LogScope logger) {
+StreamTransformer<RpcMessage<T>, RpcMessage<T>> _grpcStatusErrorTransformer<
+  T extends Object
+>(LogScope logger, {RpcContext? context}) {
   return StreamTransformer<RpcMessage<T>, RpcMessage<T>>.fromHandlers(
     handleData: (response, sink) {
       sink.add(response);
@@ -190,7 +196,11 @@ _grpcStatusErrorTransformer<T extends Object>(LogScope logger) {
       final status = RpcCallerTrailer.statusOf(metadata);
       if (status == null || status == RpcStatus.ok) return;
 
-      final error = RpcCallerTrailer.errorOf(metadata, status);
+      final error = RpcCallerTrailer.errorOf(
+        metadata,
+        status,
+        context: context,
+      );
       if (logger.isInternal) {
         logger.internal(
           'Raw responses saw error trailer: $status - ${error.message}',

@@ -18,8 +18,11 @@ final class BidirectionalStreamCaller<
   /// Incoming responses from the server (payload or metadata); completes on
   /// end-of-stream, and surfaces a non-OK grpc-status trailer as an
   /// [RpcStatusException] error rather than completing silently.
-  Stream<RpcMessage<TResponse>> get responses =>
-      _processor.responses.transform(_grpcStatusErrorTransformer(_logger));
+  Stream<RpcMessage<TResponse>> get responses => _processor.responses.transform(
+    _grpcStatusErrorTransformer(_logger, context: _context),
+  );
+
+  final RpcContext? _context;
 
   /// Creates a bidirectional stream caller.
   BidirectionalStreamCaller({
@@ -30,7 +33,7 @@ final class BidirectionalStreamCaller<
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
-  }) {
+  }) : _context = context {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy requires transport support.
@@ -118,7 +121,11 @@ final class BidirectionalStreamCaller<
       if (response.metadata != null) {
         final status = RpcCallerTrailer.statusOf(response.metadata!);
         if (status != null && status != RpcStatus.ok) {
-          final error = RpcCallerTrailer.errorOf(response.metadata!, status);
+          final error = RpcCallerTrailer.errorOf(
+            response.metadata!,
+            status,
+            context: _context,
+          );
           if (RpcStatus.isFault(status)) {
             _logger.error(
               'Bidirectional stream ended with error: $status - '

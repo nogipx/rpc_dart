@@ -344,6 +344,7 @@ final class UnaryCaller<TRequest, TResponse> {
                     final error = RpcCallerTrailer.errorOf(
                       message.metadata!,
                       code,
+                      context: _context,
                     );
                     // Debug for every status: a genuine fault is reported once,
                     // by the call's own catch, which also has the method path

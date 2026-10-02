@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 638)
+round: 638
+commit: 7c7ef83d
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart]
 probe: none — audit probe `packages/core/rpc_dart/.dart_tool/probe/correct_wire_deadline_test.dart`, not yet registered
-reason: "bench — when the server's own deadline fires on a cooperative handler, unary answers CANCELLED instead of DEADLINE_EXCEEDED and server-stream usually sends no status at all"
+reason: "FIXED in round 638 by the owner's decision: the server answers DEADLINE_EXCEEDED once on every shape, and the caller maps a status-4 trailer to RpcDeadlineExceededException. Previously: bench — when the server's own deadline fires on a cooperative handler, unary answers CANCELLED instead of DEADLINE_EXCEEDED and server-stream usually sends no status at all"
 ---
 
 # B-234 — a server deadline answers the wrong status

@@ -2330,11 +2330,23 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// rejecting one. Recorded on [RpcSecurityPolicy.maxActiveStreams] too, where
   /// someone configuring a server will read it.
   ///
-  /// Deliberately does NOT answer with a DEADLINE_EXCEEDED trailer, though gRPC
-  /// would: the peer reaches the same deadline at the same moment and reports
-  /// [RpcDeadlineExceededException] locally, so a trailer sent here races that
-  /// and the winner decides which exception type the caller sees.
+  /// Answers DEADLINE_EXCEEDED, as gRPC does, and ends the stream at once.
+  /// Without it a cooperative handler unwound with its token's CANCELLED, and a
+  /// server stream often sent nothing at all: a peer that relies on the
+  /// server's answer -- a foreign client, a proxy -- read the wrong status or
+  /// waited forever. The rpc_dart caller reaches the same deadline locally;
+  /// it maps this trailer to the same [RpcDeadlineExceededException], so the
+  /// race between the two cannot change what it raises.
   void _onDeadlineExceeded(RpcResponderStreamState state) {
+    _detached(
+      _sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.deadlineExceeded,
+        message: 'Deadline exceeded',
+        context: state.cachedContext,
+      ),
+      'grpc error cleanup',
+    );
     final token = state.cachedContext?.cancellationToken;
     if (token != null && !token.isCancelled) {
       token.cancel('deadline exceeded');

@@ -441,7 +441,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
                 context: c,
                 logger: _log,
               );
-              return _executeUnaryCall(processor: processor, request: req);
+              return _executeUnaryCall(
+                processor: processor,
+                request: req,
+                context: c,
+              );
             }
             return UnaryCaller<TRequest, TResponse>(
               serviceName: serviceName,
@@ -821,6 +825,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   _executeUnaryCall<TRequest extends Object, TResponse extends Object>({
     required CallProcessor<TRequest, TResponse> processor,
     required TRequest request,
+    RpcContext? context,
   }) async {
     try {
       await processor.send(request);
@@ -833,6 +838,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
       await for (final response in processor.responses) {
         if (response.payload != null) {
+          // ONE response, as on the codec path.
+          if (pendingResponse != null) throw tooManyMessages('response');
           pendingResponse = response.payload;
           continue;
         }
@@ -842,7 +849,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         if (status == null) continue;
 
         if (status != RpcStatus.ok) {
-          throw RpcCallerTrailer.errorOf(response.metadata!, status);
+          throw RpcCallerTrailer.errorOf(
+            response.metadata!,
+            status,
+            context: context,
+          );
         }
         if (pendingResponse != null) return pendingResponse;
         throw RpcCallerTrailer.noPayload();

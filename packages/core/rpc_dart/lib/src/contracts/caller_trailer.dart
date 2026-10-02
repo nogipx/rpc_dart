@@ -34,14 +34,28 @@ abstract final class RpcCallerTrailer {
   /// Through `fromTrailer`, which owns the precedence between the trailer
   /// message, the one inside `grpc-status-details-bin` and the placeholder —
   /// and carries the peer's structured `details` with it.
-  static RpcStatusException errorOf(RpcMetadata metadata, int status) =>
-      RpcStatusException.fromTrailer(
-        status,
-        RpcMetadata.decodeGrpcMessage(
-          metadata.getHeaderValue(RpcHeaders.grpcMessage) ?? '',
-        ),
-        detailsBin: metadata.statusDetailsBin,
-      );
+  ///
+  /// DEADLINE_EXCEEDED on a call with a deadline is the
+  /// [RpcDeadlineExceededException] this side raises itself when its own timer
+  /// fires: the peer answers the same deadline, and whichever lands first must
+  /// not decide the exception type.
+  static RpcStatusException errorOf(
+    RpcMetadata metadata,
+    int status, {
+    RpcContext? context,
+  }) {
+    final deadline = context?.deadline;
+    if (status == RpcStatus.deadlineExceeded && deadline != null) {
+      return RpcDeadlineExceededException(deadline, Duration.zero);
+    }
+    return RpcStatusException.fromTrailer(
+      status,
+      RpcMetadata.decodeGrpcMessage(
+        metadata.getHeaderValue(RpcHeaders.grpcMessage) ?? '',
+      ),
+      detailsBin: metadata.statusDetailsBin,
+    );
+  }
 
   /// The exception for a peer that answered OK and sent nothing.
   ///
