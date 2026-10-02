@@ -238,18 +238,23 @@ class RpcFrameMultiplexedChannel
     // ceiling and every metadata frame between the two is buffered and then
     // rejected inside decodeAll, which reaches _failChannel -- so refusing a big
     // RESPONSE works while big TRAILERS still kill the connection.
-    final isMetadata = (view.getUint8(4) & RpcChannelFrame.flagMetadata) != 0;
-    final ceiling = isMetadata
-        ? (_policy.maxMetadataBytes < _maxFramePayloadBytes
-              ? _policy.maxMetadataBytes
-              : _maxFramePayloadBytes)
-        : _maxFramePayloadBytes;
-
-    // Only the size ceiling. A frame that fits the ceiling but not a buffer the
-    // caller shrank below it is left to the overflow path, which is what used to
-    // handle it.
-    if (payloadLen <= ceiling) return null;
+    if (!_refuses(view.getUint8(4), payloadLen)) return null;
     return (streamId: view.getUint32(0), payloadLen: payloadLen);
+  }
+
+  /// Whether a frame with these [flags] declaring [payloadLen] is over its
+  /// ceiling.
+  ///
+  /// Only the size ceiling. A frame that fits the ceiling but not a buffer the
+  /// caller shrank below it is left to the overflow path, which is what used to
+  /// handle it.
+  bool _refuses(int flags, int payloadLen) {
+    final isMetadata = (flags & RpcChannelFrame.flagMetadata) != 0;
+    final ceiling =
+        isMetadata && _policy.maxMetadataBytes < _maxFramePayloadBytes
+        ? _policy.maxMetadataBytes
+        : _maxFramePayloadBytes;
+    return payloadLen > ceiling;
   }
 
   /// Notified as skipped bytes ARRIVE, never for bytes merely announced.
@@ -361,7 +366,16 @@ class RpcFrameMultiplexedChannel
       }
 
       final refused = _refusedFrameHeader(data);
-      if (refused == null) break;
+      if (refused == null) {
+        // A refused frame further on, behind frames that fit: decode those
+        // first, then step over it as above. Left in the chunk, it failed the
+        // whole connection inside decodeAll, along with the frames before it.
+        final cut = _nextRefusedFrame(data);
+        if (cut == null) break;
+        if (!_decodeAndEmit(Uint8List.sublistView(data, 0, cut))) return;
+        data = Uint8List.sublistView(data, cut);
+        continue;
+      }
 
       final total = RpcChannelFrame.headerSize + refused.payloadLen;
       final have = _bufLen + data.length;
@@ -385,6 +399,37 @@ class RpcFrameMultiplexedChannel
       data = Uint8List.sublistView(data, consumedFromData);
     }
 
+    _decodeAndEmit(data);
+  }
+
+  /// The offset in [data] of the first frame past logical offset 0 that
+  /// [_refusedFrameHeader] would refuse, or null.
+  ///
+  /// Only the first frame can straddle `_buf` and [data]: the buffer holds an
+  /// incomplete prefix, so every later frame starts inside [data].
+  int? _nextRefusedFrame(Uint8List data) {
+    if (closeOnOversizedFrame) return null;
+    const headerSize = RpcChannelFrame.headerSize;
+    if (_bufLen + data.length < headerSize) return null;
+    int byteAt(int i) => i < _bufLen ? _buf[i] : data[i - _bufLen];
+    final firstLen =
+        (byteAt(5) << 24) | (byteAt(6) << 16) | (byteAt(7) << 8) | byteAt(8);
+
+    var at = headerSize + firstLen - _bufLen;
+    // One frame per chunk, the WebSocket case: nothing further to look at.
+    if (at + headerSize > data.length) return null;
+    final view = ByteData.sublistView(data);
+    while (at + headerSize <= data.length) {
+      final payloadLen = view.getUint32(at + 5);
+      if (_refuses(view.getUint8(at + 4), payloadLen)) return at;
+      at += headerSize + payloadLen;
+    }
+    return null;
+  }
+
+  /// Buffers [data] and emits every complete frame; false once the channel
+  /// has been failed.
+  bool _decodeAndEmit(Uint8List data) {
     // Receive-path cap: never let the reassembly buffer grow past the policy
     // limit. A peer dribbling bytes toward a huge declared frame is stopped here
     // before the per-frame length check fires.
@@ -405,7 +450,7 @@ class RpcFrameMultiplexedChannel
           '(max: $_maxBufferedFrameBytes)',
         ),
       );
-      return;
+      return false;
     }
 
     // Decode straight out of the chunk when nothing is buffered, which is the
@@ -442,7 +487,7 @@ class RpcFrameMultiplexedChannel
       // a connection we have decided to close for. The framing is not
       // trustworthy past that point, so tearing down is the only safe answer.
       _failChannel(error);
-      return;
+      return false;
     }
 
     if (_metadataFloodTripped) {
@@ -454,7 +499,7 @@ class RpcFrameMultiplexedChannel
           '(over $_maxMalformedMetadataFrames on this connection)',
         ),
       );
-      return;
+      return false;
     }
 
     if (fastPath) {
@@ -490,6 +535,7 @@ class RpcFrameMultiplexedChannel
       );
       if (!_incomingCtl.isClosed) _incomingCtl.add(message);
     }
+    return true;
   }
 
   /// Surfaces a typed receive-path error and closes the channel.
