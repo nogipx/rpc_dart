@@ -16,8 +16,13 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   /// Cancellation tokens for active calls.
-  /// Key: "serviceName/methodName", Value: map of requestId -> token.
-  final Map<String, Map<String, RpcCancellationToken>> _callerTokens = {};
+  /// Key: "serviceName/methodName", Value: each call's context -> its token.
+  ///
+  /// Keyed by the call's own context object, not its requestId: a context
+  /// reused across calls gives them all one requestId, and keyed by it the
+  /// later call replaced the earlier one, which then could not be cancelled
+  /// -- not even by close().
+  final Map<String, Map<RpcContext, RpcCancellationToken>> _callerTokens = {};
 
   /// Subscription to the transport's global inbound stream. See
   /// [startCallerListening].
@@ -74,16 +79,24 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   /// Returns the cancellation token for a method/requestId, or null if absent.
+  ///
+  /// Calls sharing a requestId (a reused context) are all cancelled by
+  /// [cancelRequest]; this returns one of their tokens.
   RpcCancellationToken? getCancellationToken(
     String serviceName,
     String methodName,
     String requestId,
   ) {
     final key = _callerMethodKey(serviceName, methodName);
-    return _callerTokens[key]?[requestId];
+    final tokens = _callerTokens[key];
+    if (tokens == null) return null;
+    for (final MapEntry(key: ctx, value: token) in tokens.entries) {
+      if (ctx.requestId == requestId) return token;
+    }
+    return null;
   }
 
-  /// Cancels a specific call by requestId; returns true if found.
+  /// Cancels the calls with [requestId]; returns true if any was found.
   bool cancelRequest(
     String serviceName,
     String methodName,
@@ -92,20 +105,25 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   ]) {
     final key = _callerMethodKey(serviceName, methodName);
     final tokens = _callerTokens[key];
-    if (tokens != null) {
-      final token = tokens[requestId];
-      if (token != null) {
-        token.cancel(reason ?? 'Request cancelled by user');
-        tokens.remove(requestId);
-        if (tokens.isEmpty) _callerTokens.remove(key);
-        if (_log.isInternal) {
-          _log.internal('Request cancelled: $key[$requestId]');
-        }
-        return true;
-      }
+    if (tokens == null) return false;
+    final calls = [
+      for (final ctx in tokens.keys)
+        if (ctx.requestId == requestId) ctx,
+    ];
+    if (calls.isEmpty) return false;
+    for (final ctx in calls) {
+      tokens.remove(ctx)!.cancel(reason ?? 'Request cancelled by user');
     }
-    return false;
+    if (tokens.isEmpty) _callerTokens.remove(key);
+    if (_log.isInternal) {
+      _log.internal('Request cancelled: $key[$requestId]');
+    }
+    return true;
   }
+
+  /// Number of calls of the method in flight.
+  int activeCallCount(String serviceName, String methodName) =>
+      _callerTokens[_callerMethodKey(serviceName, methodName)]?.length ?? 0;
 
   /// Cancels all active calls.
   void cancelAllMethods([String? reason]) {
@@ -217,7 +235,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     final token = ctx.cancellationToken;
     if (token == null) return;
     final key = _callerMethodKey(serviceName, methodName);
-    (_callerTokens[key] ??= {})[ctx.requestId] = token;
+    (_callerTokens[key] ??= Map.identity())[ctx] = token;
   }
 
   String _callerMethodKey(String serviceName, String methodName) =>
@@ -264,7 +282,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     void finish() {
       if (finished) return;
       finished = true;
-      _untrackCallerRequest(serviceName, methodName, ctx.requestId);
+      _untrackCallerRequest(serviceName, methodName, ctx);
     }
 
     return StreamBridge<T>(
@@ -284,12 +302,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   void _untrackCallerRequest(
     String serviceName,
     String methodName,
-    String requestId,
+    RpcContext ctx,
   ) {
     final key = _callerMethodKey(serviceName, methodName);
     final tokens = _callerTokens[key];
     if (tokens == null) return;
-    tokens.remove(requestId);
+    tokens.remove(ctx);
     if (tokens.isEmpty) _callerTokens.remove(key);
   }
 
@@ -463,7 +481,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           },
         );
       } finally {
-        _untrackCallerRequest(serviceName, methodName, ctx.requestId);
+        _untrackCallerRequest(serviceName, methodName, ctx);
       }
     }();
   }
@@ -564,7 +582,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           },
         );
       } finally {
-        _untrackCallerRequest(serviceName, methodName, ctx.requestId);
+        _untrackCallerRequest(serviceName, methodName, ctx);
       }
     };
   }
@@ -595,7 +613,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         responseCodec: responseCodec,
         context: c,
         requests: reqs,
-        requestId: ctx.requestId,
+        tracked: ctx,
       ),
     );
 
@@ -627,7 +645,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     required IRpcCodec<R>? responseCodec,
     required RpcContext context,
     required Stream<C> requests,
-    required String requestId,
+    required RpcContext tracked,
   }) {
     final controller = StreamController<R>();
     final caller = BidirectionalStreamCaller<C, R>(
@@ -690,7 +708,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         );
       }
 
-      _untrackCallerRequest(serviceName, methodName, requestId);
+      _untrackCallerRequest(serviceName, methodName, tracked);
 
       final response = responseSub;
       final request = requestSub;

@@ -460,12 +460,12 @@ abstract class RpcCallerContract implements IRpcContract {
 
   /// Checks whether the method has active calls.
   bool isMethodActive(String methodName) {
-    return getCancellationTokensForMethod(methodName).isNotEmpty;
+    return getActiveCallsCount(methodName) > 0;
   }
 
   /// Number of active calls for the method.
   int getActiveCallsCount(String methodName) {
-    return getCancellationTokensForMethod(methodName).length;
+    return _endpoint.activeCallCount(serviceName, methodName);
   }
 
   /// Returns effective codecs based on the transfer mode.

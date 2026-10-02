@@ -55,13 +55,21 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   // Extra cancellation methods (beyond what the mixin provides)
   // ---------------------------------------------------------------------------
 
-  /// Returns all cancellation tokens for a method (empty map when missing).
+  /// Returns the method's cancellation tokens by requestId (empty map when
+  /// missing).
+  ///
+  /// Calls sharing a requestId (a reused context) appear once; count calls
+  /// with [activeCallCount].
   Map<String, RpcCancellationToken> getCancellationTokensForMethod(
     String serviceName,
     String methodName,
   ) {
     final key = _callerMethodKey(serviceName, methodName);
-    return Map.unmodifiable(_callerTokens[key] ?? {});
+    return Map.unmodifiable({
+      for (final MapEntry(key: ctx, value: token)
+          in (_callerTokens[key] ?? const {}).entries)
+        ctx.requestId: token,
+    });
   }
 
   /// Cancels all active calls for the given method; returns cancelled count.
