@@ -263,12 +263,8 @@ final class RpcMessageParser {
 
           // Advance past the header — no copy.
           pos += RpcConstants.messagePrefixSize;
-        } catch (e, trace) {
-          _logger.error(
-            'Failed to parse frame header: $e',
-            error: e,
-            stackTrace: trace,
-          );
+        } catch (_) {
+          // Reported once, by [call], which every failure here reaches.
           _state.clear();
           _state.reset();
           rethrow;

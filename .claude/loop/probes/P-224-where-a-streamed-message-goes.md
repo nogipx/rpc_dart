@@ -1,7 +1,7 @@
 ---
 file: packages/core/rpc_dart/.dart_tool/probe/b204_where_the_message_goes.dart
 round: 622
-commit: 85ffb7d7
+commit: a8af9626
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
 status: valid (round 622)
 ---

@@ -32,6 +32,15 @@ CONTROL cancel immediately    status 1 (CANCELLED)     after 1504 ms
 CONTROL no cancel at all      status 14 (UNAVAILABLE)  after 5237 ms
 ```
 
+## Round 623 — the numbers above were jitter
+
+`ExponentialBackoff` jitters by default, so each wait is uniform in (0, 4 s] and
+every row is a random draw. At HEAD the same probe read `1748 / 3283 / 11442 ms`.
+With a fixed backoff the cancel waited the backoff out (`3053 ms` for a cancel at
+300 ms of 3 s), which round 521's "refuted" missed. Fixed in round 623: `304 ms`.
+The deterministic arm is `test/resilience/a_cancel_cuts_the_retry_backoff_test.dart`;
+this probe stays as the record of how jitter hid it.
+
 ## Measures
 
 Wall-clock from call start to completion, and the status returned. The status matters

@@ -297,14 +297,6 @@ class RpcFrameMultiplexedChannel
     );
   }
 
-  /// Fails the call a frame with undecodable metadata belonged to.
-  ///
-  /// INTERNAL rather than RESOURCE_EXHAUSTED: nothing about this is a limit,
-  /// the peer simply sent headers that will not parse. Same
-  /// `maxHeaderValueBytes` cap as [_refuseFrame], and for the same reason --
-  /// this trailer is emitted INBOUND and validated like peer traffic, so a
-  /// message longer than the cap would turn the refusal back into a
-  /// connection kill.
   /// How many undecodable metadata frames a connection may cost before it is
   /// treated as hostile rather than buggy.
   ///
@@ -322,6 +314,14 @@ class RpcFrameMultiplexedChannel
   int _malformedMetadata = 0;
   bool _metadataFloodTripped = false;
 
+  /// Fails the call a frame with undecodable metadata belonged to.
+  ///
+  /// INTERNAL rather than RESOURCE_EXHAUSTED: nothing about this is a limit,
+  /// the peer simply sent headers that will not parse. Same
+  /// `maxHeaderValueBytes` cap as [_refuseFrame], and for the same reason --
+  /// this trailer is emitted INBOUND and validated like peer traffic, so a
+  /// message longer than the cap would turn the refusal back into a
+  /// connection kill.
   void _refuseMetadata(int streamId) {
     if (_incomingCtl.isClosed) return;
     if (++_malformedMetadata > _maxMalformedMetadataFrames) {

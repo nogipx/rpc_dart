@@ -31,9 +31,7 @@ final class RpcPeerEndpoint extends RpcEndpointBase
     super.debugLabel,
     LogController? logger,
     this.compressionEnabled = false,
-  }) : _log = logger?.scope('rpc.peer') ?? LogScope.noop {
-    initResponderPipeline();
-  }
+  }) : _log = logger?.scope('rpc.peer') ?? LogScope.noop;
 
   // ---------------------------------------------------------------------------
   // Lifecycle

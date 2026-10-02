@@ -175,6 +175,7 @@ final class RpcResponderStreamState {
     _boundToMessageStream = true;
     _budget = budget;
     _sinkOverflowed = false;
+    lastPayloadMessage = null;
   }
 
   /// Releases [message]'s charge as the handler takes it.
@@ -326,8 +327,10 @@ final class RpcResponderStreamState {
       if (!budget.take(_preBindBytes, _preBindEvents, bytes)) return false;
       _preBindBytes += bytes;
       _preBindEvents++;
+      // Only until the responder is bound: after that every frame reaches it
+      // directly, and keeping the latest one here pinned a payload per call.
+      lastPayloadMessage = message;
     }
-    lastPayloadMessage = message;
 
     // For bidirectional/server-stream/unary methods we can receive multiple
     // payload messages before the responder is bound to the per-stream message
@@ -417,41 +420,16 @@ final class RpcResponderStreamState {
     return message;
   }
 
-  /// Returns and clears all client-stream buffered messages.
   /// Returns and clears the buffered client-stream messages.
   ///
-  /// With [markEndOfStream], the LAST message is re-stamped as end-of-stream —
-  /// and when there are none, a bare end-of-stream message is synthesised. A
-  /// client-streaming RPC may legitimately carry zero messages, and the empty
-  /// list this used to return dropped the marker entirely: the responder's
-  /// request stream never closed, so the handler stayed parked in
-  /// `await for (requests)`, never returned, and the caller waited out its own
-  /// timeout against a handler that HAD started.
-  List<RpcTransportMessage> takeClientBufferedMessages({
-    bool markEndOfStream = false,
-  }) {
-    if (_clientBufferedMessages.isEmpty) {
-      return markEndOfStream
-          ? [RpcTransportMessage(streamId: id, isEndOfStream: true)]
-          : const [];
-    }
-
+  /// The peer's half-close is not stamped onto them: the pipeline-fed request
+  /// stream replays it when the peer has already sent one, which also covers a
+  /// call that carried no messages at all.
+  List<RpcTransportMessage> takeClientBufferedMessages() {
+    if (_clientBufferedMessages.isEmpty) return const [];
     final messages = List<RpcTransportMessage>.from(_clientBufferedMessages);
     _clientBufferedMessages.clear();
     _releasePreBind(messages);
-
-    if (markEndOfStream && messages.isNotEmpty) {
-      final last = messages.last;
-      messages[messages.length - 1] = RpcTransportMessage(
-        payload: last.payload,
-        directPayload: last.directPayload,
-        metadata: last.metadata,
-        isEndOfStream: true,
-        methodPath: last.methodPath,
-        streamId: last.streamId,
-      );
-    }
-
     return messages;
   }
 

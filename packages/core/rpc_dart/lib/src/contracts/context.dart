@@ -526,7 +526,7 @@ abstract final class RpcContextUtils {
   }) {
     final headers = <String, String>{};
 
-    if (traceId != null) headers['x-trace-id'] = traceId;
+    if (traceId != null) headers[RpcHeaders.xTraceId] = traceId;
     if (spanId != null) headers['x-span-id'] = spanId;
     if (parentSpanId != null) headers['x-parent-span-id'] = parentSpanId;
 

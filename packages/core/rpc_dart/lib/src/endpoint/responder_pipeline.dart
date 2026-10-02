@@ -15,9 +15,16 @@ part of '_index.dart';
 /// the headers BY HAND were missed for exactly that reason -- they did not match
 /// the grep. This exists so there is one way to ask.
 int _trailerMessageCap(IRpcTransport transport) =>
+    _policyOfTransport(transport).maxHeaderValueBytes;
+
+/// The policy [transport] carries, or the defaults when it carries none.
+///
+/// Read through [IRpcSecurityPolicyAware] rather than a second knob, so a
+/// transport without that capability gets the safe default.
+RpcSecurityPolicy _policyOfTransport(IRpcTransport transport) =>
     transport is IRpcSecurityPolicyAware
-    ? (transport as IRpcSecurityPolicyAware).securityPolicy.maxHeaderValueBytes
-    : const RpcSecurityPolicy().maxHeaderValueBytes;
+    ? (transport as IRpcSecurityPolicyAware).securityPolicy
+    : const RpcSecurityPolicy();
 
 /// Mixin providing the responder (incoming request handler) pipeline.
 ///
@@ -76,7 +83,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   final RpcResponderMethodRegistry _respRegistry = RpcResponderMethodRegistry();
   final RpcResponderStreamStore _respStreams = RpcResponderStreamStore();
-  late final RpcResponderPingHandler _respPingHandler;
   StreamSubscription<RpcTransportMessage>? _respIncomingSub;
   bool _respIsListening = false;
 
@@ -119,12 +125,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// transport without that capability gets the safe default.
   int? _respMaxStreamsCache;
 
-  int get _respMaxStreams {
-    final transport = this.transport;
-    return _respMaxStreamsCache ??= transport is IRpcSecurityPolicyAware
-        ? (transport as IRpcSecurityPolicyAware).securityPolicy.maxActiveStreams
-        : const RpcSecurityPolicy().maxActiveStreams;
-  }
+  int get _respMaxStreams =>
+      _respMaxStreamsCache ??= _policyOfTransport(transport).maxActiveStreams;
 
   /// Un-consumed request bytes held for handlers, per stream and per
   /// connection. The connection ceiling is the connection window: an honest
@@ -135,9 +137,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final cached = _respBudgetCache;
     if (cached != null) return cached;
     final transport = this.transport;
-    final policy = transport is IRpcSecurityPolicyAware
-        ? (transport as IRpcSecurityPolicyAware).securityPolicy
-        : const RpcSecurityPolicy();
+    final policy = _policyOfTransport(transport);
     return _respBudgetCache = RpcResponderBufferBudget(
       streamBytes: policy.effectiveMaxBufferedBytes,
       streamEvents: policy.maxBufferedMessagesPerStream,
@@ -153,14 +153,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// Same shape as [_respMaxStreams]: a transport that cannot carry a policy
   /// gets the default, which is the value every channel transport used before
   /// this was configurable.
-  RpcContentTypeValidation get _respContentTypeValidation {
-    final transport = this.transport;
-    return transport is IRpcSecurityPolicyAware
-        ? (transport as IRpcSecurityPolicyAware)
-              .securityPolicy
-              .contentTypeValidation
-        : const RpcSecurityPolicy().contentTypeValidation;
-  }
+  RpcContentTypeValidation get _respContentTypeValidation =>
+      _policyOfTransport(transport).contentTypeValidation;
 
   /// Streams holding a handler-concurrency slot: dispatched, work not finished.
   ///
@@ -185,12 +179,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   int? get _respMaxHandlers {
     if (_respMaxHandlersResolved) return _respMaxHandlersCache;
     _respMaxHandlersResolved = true;
-    final transport = this.transport;
-    return _respMaxHandlersCache = transport is IRpcSecurityPolicyAware
-        ? (transport as IRpcSecurityPolicyAware)
-              .securityPolicy
-              .maxConcurrentHandlers
-        : const RpcSecurityPolicy().maxConcurrentHandlers;
+    return _respMaxHandlersCache = _policyOfTransport(
+      transport,
+    ).maxConcurrentHandlers;
   }
 
   /// Releases [streamId]'s slot once nothing is left to wait for.
@@ -281,14 +272,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// one thing be". A breach fails only the stream that overflowed the budget.
   int? _respMaxPreMethodCache;
 
-  int get _respMaxPreMethodBytes {
-    final transport = this.transport;
-    return _respMaxPreMethodCache ??= transport is IRpcSecurityPolicyAware
-        ? (transport as IRpcSecurityPolicyAware)
-              .securityPolicy
-              .maxMessageLengthBytes
-        : const RpcSecurityPolicy().maxMessageLengthBytes;
-  }
+  int get _respMaxPreMethodBytes => _respMaxPreMethodCache ??=
+      _policyOfTransport(transport).maxMessageLengthBytes;
 
   void _releasePreMethodBytes(RpcResponderStreamState state) {
     final parked = state.preMethodBufferedBytes;
@@ -304,13 +289,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   Duration? get _respHalfOpenTimeout {
     if (_respHalfOpenResolved) return _respHalfOpenCache;
     _respHalfOpenResolved = true;
-    final transport = this.transport;
-    _respHalfOpenCache = transport is IRpcSecurityPolicyAware
-        ? (transport as IRpcSecurityPolicyAware)
-              .securityPolicy
-              .halfOpenStreamTimeout
-        : const RpcSecurityPolicy().halfOpenStreamTimeout;
-    return _respHalfOpenCache;
+    return _respHalfOpenCache = _policyOfTransport(
+      transport,
+    ).halfOpenStreamTimeout;
   }
 
   /// Bounds how long [state] may sit half-open before its slot is reclaimed.
@@ -365,14 +346,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// Whether the responder pipeline is currently listening.
   bool get responderIsListening => _respIsListening;
 
-  /// Initializes responder state. Must be called from the endpoint constructor.
-  void initResponderPipeline() {
-    _respPingHandler = RpcResponderPingHandler(
-      transport: transport,
-      logger: _log,
-      debugLabel: debugLabel,
-    );
-  }
+  /// Built per ping, which is rare, so it logs to the endpoint's CURRENT scope:
+  /// `RpcResponderEndpoint.setLogController` replaces that scope after
+  /// construction, and a handler built once kept the old one.
+  RpcResponderPingHandler get _respPingHandler => RpcResponderPingHandler(
+    transport: transport,
+    logger: _log,
+    debugLabel: debugLabel,
+  );
 
   // ---------------------------------------------------------------------------
   // Contract registration
@@ -1671,10 +1652,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         'responder completion',
       );
 
-      // NOT markEndOfStream: the responder now starts on the first request
-      // frame, so the buffer holds a mid-call prefix and stamping its last
-      // message as end-of-stream would close the handler's request stream
-      // after one chunk. _pipelineFedRequestStream replays the half-close when
+      // The responder starts on the first request frame, so the buffer holds a
+      // mid-call prefix. _pipelineFedRequestStream replays the half-close when
       // the peer has already sent one, which covers the zero-message call.
       responder.bindToMessageStream(
         _pipelineFedRequestStream(
@@ -2428,7 +2407,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       }
     }
 
-    final clientTraceId = context.getHeader('x-trace-id');
+    final clientTraceId = context.getHeader(RpcHeaders.xTraceId);
     if (clientTraceId != null) {
       context = context.withTraceId(clientTraceId);
     } else {
@@ -2459,10 +2438,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// `maxMethodPathLength` monotone downward only: raise it past 512 and this
   /// refused the path afterwards.
   (String, String)? _parseMethodPath(String methodPath) =>
-      (transport is IRpcSecurityPolicyAware
-              ? (transport as IRpcSecurityPolicyAware).securityPolicy
-              : const RpcSecurityPolicy())
-          .parseMethodPath(methodPath);
+      _policyOfTransport(transport).parseMethodPath(methodPath);
 
   /// The inverse of [_parseMethodPath]; both rules live in `metadata.dart`.
   String _methodPathFromKey(String methodKey) =>

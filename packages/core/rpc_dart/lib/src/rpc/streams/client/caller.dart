@@ -144,9 +144,9 @@ final class ClientStreamCaller<
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
-          if (_logger.isInternal) {
-            _logger.internal('Received payload: ${rpcMessage.payload}');
-          }
+          // Nothing of the value: application data stays out of logs, and a
+          // runtimeType says nothing once the build is obfuscated.
+          _logger.internal('Response received, held pending status');
           _pendingResponse = rpcMessage.payload;
         }
       },

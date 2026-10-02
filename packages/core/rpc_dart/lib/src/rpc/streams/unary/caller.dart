@@ -222,6 +222,17 @@ final class UnaryCaller<TRequest, TResponse> {
       TResponse? pendingResponse;
       var hasPendingResponse = false;
 
+      // Once per call: a peer that sends one extra response sends them all.
+      var warnedExtraResponse = false;
+      void warnExtraResponse() {
+        if (warnedExtraResponse) return;
+        warnedExtraResponse = true;
+        _logger.warning(
+          'Extra unary response ignored; the first one stands '
+          '[streamId: $streamId]',
+        );
+      }
+
       // Subscribe to responses for this stream.
       if (_logger.isInternal) {
         _logger.internal(
@@ -231,7 +242,7 @@ final class UnaryCaller<TRequest, TResponse> {
       subscription = _transport
           .getMessagesForStream(streamId)
           .listen(
-            (message) async {
+            (message) {
               if (message.isDirect && message.directPayload != null) {
                 // Zero-copy: received object directly.
                 if (_logger.isInternal) {
@@ -241,7 +252,9 @@ final class UnaryCaller<TRequest, TResponse> {
                 }
                 try {
                   final response = message.directPayload as TResponse;
-                  if (!completer.isCompleted) {
+                  if (hasPendingResponse || completer.isCompleted) {
+                    warnExtraResponse();
+                  } else {
                     if (_logger.isInternal) {
                       _logger.internal(
                         'Zero-copy unary response held pending status '
@@ -250,10 +263,6 @@ final class UnaryCaller<TRequest, TResponse> {
                     }
                     pendingResponse = response;
                     hasPendingResponse = true;
-                  } else {
-                    _logger.warning(
-                      'Extra zero-copy response after call completion [streamId: $streamId]',
-                    );
                   }
                 } catch (e, stackTrace) {
                   if (!completer.isCompleted) {
@@ -282,25 +291,23 @@ final class UnaryCaller<TRequest, TResponse> {
                   }
 
                   for (final msgBytes in messages) {
+                    // A unary call has ONE response; the first is kept and any
+                    // other, in this chunk or a later one, is reported.
+                    if (hasPendingResponse || completer.isCompleted) {
+                      warnExtraResponse();
+                      break;
+                    }
                     if (_logger.isInternal) {
                       _logger.internal(
                         'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
                       );
                     }
-                    final response = _responseSerializer.deserialize(msgBytes);
-                    if (!completer.isCompleted) {
-                      if (_logger.isInternal) {
-                        _logger.internal(
-                          'Unary response held pending status '
-                          '[streamId: $streamId]',
-                        );
-                      }
-                      pendingResponse = response;
-                      hasPendingResponse = true;
-                      break; // Only first response is needed for unary call.
-                    } else {
-                      _logger.warning(
-                        'Extra response after call completion [streamId: $streamId]',
+                    pendingResponse = _responseSerializer.deserialize(msgBytes);
+                    hasPendingResponse = true;
+                    if (_logger.isInternal) {
+                      _logger.internal(
+                        'Unary response held pending status '
+                        '[streamId: $streamId]',
                       );
                     }
                   }

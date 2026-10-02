@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import '../_internal.dart';
 
 /// Predicate that decides whether an error is retryable.
@@ -121,12 +123,28 @@ class RpcRetryInterceptor extends IRpcInterceptor {
           break;
         }
 
-        await Future<void>.delayed(delay);
+        await _backoff(delay, call.context.cancellationToken);
         await _reconnectIfConnectionIsGone(e, call);
       }
     }
 
     Error.throwWithStackTrace(lastError!, lastStack!);
+  }
+
+  /// Waits [delay], or less if [token] is cancelled first.
+  ///
+  /// The next attempt reads the token and fails CANCELLED at once, so a cancel
+  /// during the backoff ends the call when it is made, not up to `maxDelay`
+  /// later.
+  static Future<void> _backoff(Duration delay, RpcCancellationToken? token) {
+    if (token == null) return Future<void>.delayed(delay);
+    if (token.isCancelled) return Future<void>.value();
+    final elapsed = Completer<void>();
+    final timer = Timer(delay, elapsed.complete);
+    return Future.any([
+      elapsed.future,
+      token.cancelled,
+    ]).whenComplete(timer.cancel);
   }
 
   /// Re-establishes the connection before an UNAVAILABLE retry.

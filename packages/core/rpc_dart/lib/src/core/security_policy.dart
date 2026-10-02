@@ -477,8 +477,8 @@ final class RpcSecurityPolicy {
   bool isValidHeaderName(String name) {
     if (name.isEmpty || name.length > maxHeaderNameBytes) return false;
     for (final unit in name.codeUnits) {
+      // Covers CR, LF and NUL along with every other control character.
       if (unit <= 0x20 || unit == 0x7F) return false;
-      if (unit == 0x0D || unit == 0x0A || unit == 0x00) return false;
     }
     return true;
   }

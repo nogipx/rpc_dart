@@ -111,25 +111,27 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   // ---------------------------------------------------------------------------
 
   void _validateClientTransport() {
+    // A third-party transport's getter may throw; that is reported, not fatal.
+    final bool isClient;
     try {
-      if (!transport.isClient) {
-        throw ArgumentError(
-          'CRITICAL ERROR: RpcCallerEndpoint requires CLIENT transport!\n'
-          'Received server transport (isClient: false).\n'
-          'Client endpoints must use transports with odd Stream IDs (1, 3, 5...).\n\n'
-          'Correct usage:\n'
-          '  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();\n'
-          '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
-          '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
-          'INCORRECT:\n'
-          '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport);\n',
-        );
-      }
-
-      _log.internal('Transport validated: client (isClient: true)');
+      isClient = transport.isClient;
     } catch (e) {
-      if (e is ArgumentError) rethrow;
       _log.warning('Failed to validate transport role: $e');
+      return;
     }
+    if (!isClient) {
+      throw ArgumentError(
+        'CRITICAL ERROR: RpcCallerEndpoint requires CLIENT transport!\n'
+        'Received server transport (isClient: false).\n'
+        'Client endpoints must use transports with odd Stream IDs (1, 3, 5...).\n\n'
+        'Correct usage:\n'
+        '  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();\n'
+        '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
+        '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
+        'INCORRECT:\n'
+        '  final callerEndpoint = RpcCallerEndpoint(transport: serverTransport);\n',
+      );
+    }
+    _log.internal('Transport validated: client (isClient: true)');
   }
 }

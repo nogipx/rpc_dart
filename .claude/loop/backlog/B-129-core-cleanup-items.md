@@ -1,10 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
-commit: 8253fe8a
+status: closed (round 623)
+round: 623
+commit: 6d03371c
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart, packages/core/rpc_dart/lib/src/endpoint/caller_endpoint.dart, packages/core/rpc_dart/lib/src/endpoint/responder_endpoint.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/in_memory_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/core/protocol.dart, packages/core/rpc_dart/lib/src/codec/special_cbor.dart]
 probe: none — static read, nothing run
-reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
+reason: "FIXED in round 623: every item read at HEAD and done or answered; item 13 was real after all (a cancel waited out the retry backoff, 3053 -> 304 ms), hidden by default jitter in round 521's timings. Item 7 is rpc_notify's. Previously: cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
 ---
 
 # B-129 — core: dead code, misleading docs and duplicated helpers

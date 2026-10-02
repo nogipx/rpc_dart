@@ -166,8 +166,7 @@ abstract interface class RpcMessageFrame {
 
     final isCompressed = compressionFlag == RpcConstants.compressed;
 
-    // getUint32, not a manual `<< 24`: that is a SIGNED 32-bit shift on
-    // dart2js, so a length whose top byte has the high bit set wraps negative.
+    // Big-endian unsigned, which is what the prefix declares.
     final length = ByteData.sublistView(
       headerBytes,
     ).getUint32(RpcConstants.messageLengthIndex);

@@ -17,7 +17,6 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     super.debugLabel,
     LogController? logger,
   }) : _log = logger?.scope('rpc.responder') ?? LogScope.noop {
-    initResponderPipeline();
     _validateServerTransport();
   }
 
@@ -81,25 +80,27 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   }
 
   void _validateServerTransport() {
+    // A third-party transport's getter may throw; that is reported, not fatal.
+    final bool isClient;
     try {
-      if (transport.isClient) {
-        throw ArgumentError(
-          'CRITICAL ERROR: RpcResponderEndpoint requires SERVER transport!\n'
-          'Received client transport (isClient: true).\n'
-          'Server endpoints must use transports with even Stream IDs (2, 4, 6...).\n\n'
-          'Correct usage:\n'
-          '  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();\n'
-          '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
-          '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
-          'INCORRECT:\n'
-          '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport);\n',
-        );
-      }
-
-      _log.internal('Transport validated: server (isClient: false)');
+      isClient = transport.isClient;
     } catch (error) {
-      if (error is ArgumentError) rethrow;
       _log.warning('Failed to validate transport role: $error');
+      return;
     }
+    if (isClient) {
+      throw ArgumentError(
+        'CRITICAL ERROR: RpcResponderEndpoint requires SERVER transport!\n'
+        'Received client transport (isClient: true).\n'
+        'Server endpoints must use transports with even Stream IDs (2, 4, 6...).\n\n'
+        'Correct usage:\n'
+        '  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();\n'
+        '  final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);\n'
+        '  final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);\n\n'
+        'INCORRECT:\n'
+        '  final responderEndpoint = RpcResponderEndpoint(transport: clientTransport);\n',
+      );
+    }
+    _log.internal('Transport validated: server (isClient: false)');
   }
 }
