@@ -248,9 +248,32 @@ final class ServerStreamResponder<
           _completeDone();
         }
       },
-      onDone: () {
+      onDone: () async {
         if (_logger.isInternal) {
           _logger.internal('Request stream completed [id: $id]');
+        }
+        // A payload frame that decoded to no message (an empty one) bound this
+        // responder, so the pipeline's own "no payload" refusal no longer
+        // applies. Ending here with no request means the handler will never
+        // run; without an answer the call holds its slot until disconnect.
+        if (_requestHandled || !_isActive) return;
+        _requestHandled = true;
+        try {
+          await sendWireError(
+            RpcStatusException(
+              RpcStatus.invalidArgument,
+              'Request stream closed without a request message',
+            ),
+            _processor.sendError,
+          );
+        } catch (e, stackTrace) {
+          _logger.error(
+            'Failed to refuse a call with no request [id: $id]',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        } finally {
+          _completeDone();
         }
       },
     );

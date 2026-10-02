@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 627)
+round: 627
+commit: 463fdf60
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: none — audit probes `packages/core/rpc_dart/.dart_tool/probe/audit_consumers_server_stream_silence.dart`, `audit_lifecycle_raw_frames.dart`, not yet registered
-reason: "bench — a server-stream whose bound request stream ends with zero messages gets no status, and keeps its state and handler slot until the connection closes"
+reason: "FIXED in round 627: the responder answers INVALID_ARGUMENT when its request stream ends with no request; four empty-frame calls read [3, 3, 3, 3] and the slot comes back. Previously: bench — a server-stream whose bound request stream ends with zero messages gets no status, and keeps its state and handler slot until the connection closes"
 ---
 
 # B-230 — a server-stream with no request is never answered
