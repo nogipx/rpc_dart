@@ -110,8 +110,11 @@ void main() {
         isNotNull,
         reason: '64 MiB of one message buffered, RSS +$grown MiB',
       );
-      // The first fragment fits the ceiling and the second crosses it.
-      expect(closedAfter, lessThanOrEqualTo(2), reason: 'RSS +$grown MiB');
+      // The server refuses the second fragment, which crosses the ceiling. The
+      // CLIENT learns of it a few writes later, by how long the close takes to
+      // reach it, so this bounds what was sent, not when it was noticed: far
+      // below the 64 an unbounded server accepts without closing at all.
+      expect(closedAfter, lessThanOrEqualTo(8), reason: 'RSS +$grown MiB');
     },
     timeout: const Timeout(Duration(minutes: 2)),
   );
