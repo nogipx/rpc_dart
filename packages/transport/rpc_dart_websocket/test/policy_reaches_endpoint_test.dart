@@ -116,6 +116,7 @@ void main() {
     expect(client, isA<IRpcFlowControlled>());
     expect(serverTransport, isA<IRpcSecurityPolicyAware>());
     expect(serverTransport, isA<IRpcFlowControlled>());
+    expect(serverTransport, isA<IRpcConnectionBufferTotal>());
     expect(
       (serverTransport as IRpcSecurityPolicyAware)
           .securityPolicy

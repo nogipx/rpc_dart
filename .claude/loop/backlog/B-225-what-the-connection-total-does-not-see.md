@@ -1,17 +1,17 @@
 ---
 status: open
-round: 595
+round: 609
 commit: 1d16586c
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/stream_buffer_ledger.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: P-211
-reason: "cost — round 595 bounded un-consumed request bytes per connection at the connection window, in two layers that count separately, so the true ceiling is twice the window; zero-copy payloads weigh 0 bytes and pass under it; and the other channels' pause contract (IRpcChannel's example, isolate, wasm) is unswept. Split out of B-138 when it closed"
+reason: "cost — item 1 is fixed in round 609 (one shared connection total, 252 -> 126 against a ceiling of 128). Left: zero-copy payloads weigh 0 bytes and pass under the total, and the other channels' pause contract (IRpcChannel's example, isolate, wasm) is unswept. Split out of B-138 when it closed"
 ---
 
 # B-225 — what the connection total does not see
 
 ## What round 595 left, three items
 
-1. **Two layers, two counters.** The transport ledger counts what it routes into
+1. **FIXED in round 609.** Two layers, two counters. The transport ledger counts what it routes into
    per-stream controllers (bidi, server-stream); the pipeline budget counts the
    client-stream sinks and the pre-bind lists. Each is capped at the connection
    window, so a peer filling both holds up to twice it. Measured only per layer:

@@ -142,6 +142,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       streamBytes: policy.effectiveMaxBufferedBytes,
       streamEvents: policy.maxBufferedMessagesPerStream,
       connectionBytes: policy.flowControlConnectionWindowBytes,
+      shared: transport is IRpcConnectionBufferTotal
+          ? transport as IRpcConnectionBufferTotal
+          : null,
     );
   }
 

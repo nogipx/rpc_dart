@@ -50,6 +50,18 @@ bidi, peer ignores window            16          -     4093
 client-stream, honest peer            8       2056     2056
 ```
 
+## Round 609 — both layers on one connection
+
+Witnessed in `test/transports/the_connection_total_is_bounded_test.dart`, arm
+`mixed`: 8 streams, even ones bidi, odd ones client-stream, a 128 KiB connection
+window and 1 KiB messages (ceiling 128):
+
+```
+                                     retained
+before (one total per layer)            252
+after  (one shared total)               126
+```
+
 ## Measures
 
 Messages the responder side held for a parked client-stream handler.

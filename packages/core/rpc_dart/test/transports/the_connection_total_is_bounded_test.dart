@@ -129,8 +129,9 @@ Future<({int retained, int errors, String after})> _flood({
   final calls = <Future<void>>[];
   for (var i = 0; i < streams; i++) {
     final requests = _gen(s, 500);
+    final bidi = method == 'bidi' || (method == 'mixed' && i.isEven);
     calls.add(
-      method == 'bidi'
+      bidi
           ? caller
                 .bidirectionalStream<RpcString, RpcString>(
                   serviceName: 'Svc',
@@ -219,6 +220,21 @@ void main() {
     () async {
       final r = await _flood(
         method: 'bidi',
+        streams: 8,
+        peerHonoursWindow: false,
+      );
+      expect(r.retained, lessThanOrEqualTo(ceiling), reason: '$r');
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'client-streams and bidi streams together hold no more than its window',
+    () async {
+      // The two shapes buffer in different layers; each counting only its own
+      // would let a peer mixing them hold the window once per layer.
+      final r = await _flood(
+        method: 'mixed',
         streams: 8,
         peerHonoursWindow: false,
       );

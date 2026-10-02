@@ -94,6 +94,20 @@ final class RpcStreamBufferLedger {
     return RpcBufferAdmission.admitted;
   }
 
+  /// Charges [bytes] held by another layer to the connection total only; false,
+  /// and nothing charged, when they would cross it.
+  bool chargeTotal(int bytes) {
+    final totalLimit = limitTotalBytes;
+    if (totalLimit != null && _total + bytes > totalLimit) return false;
+    _total += bytes;
+    return true;
+  }
+
+  /// Returns [bytes] a [chargeTotal] took.
+  void releaseTotal(int bytes) {
+    _total -= bytes;
+  }
+
   /// Drops [bytes] and one message of [streamId]'s charge as its consumer takes
   /// them.
   ///

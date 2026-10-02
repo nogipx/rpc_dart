@@ -22,7 +22,11 @@ import 'rpc_websocket_channel.dart';
 /// `const RpcSecurityPolicy()`, and client-stream uploads are credited on
 /// arrival instead of on consumption.
 class RpcWebSocketResponderTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
+    implements
+        IRpcTransport,
+        IRpcSecurityPolicyAware,
+        IRpcFlowControlled,
+        IRpcConnectionBufferTotal {
   final RpcChannelTransport _inner;
 
   RpcWebSocketResponderTransport(
@@ -43,6 +47,14 @@ class RpcWebSocketResponderTransport
   @override
   void returnFlowCredit(int streamId, int bytes) =>
       _inner.returnFlowCredit(streamId, bytes);
+
+  @override
+  bool chargeConnectionBuffer(int bytes) =>
+      _inner.chargeConnectionBuffer(bytes);
+
+  @override
+  void releaseConnectionBuffer(int bytes) =>
+      _inner.releaseConnectionBuffer(bytes);
 
   @override
   bool get isClient => false;

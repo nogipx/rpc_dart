@@ -256,6 +256,23 @@ abstract interface class IRpcFlowControlled {
   void returnFlowCredit(int streamId, int bytes);
 }
 
+/// Capability: one connection-wide total of request bytes held un-consumed.
+///
+/// The transport buffers what it routes to per-stream consumers, and the
+/// responder pipeline buffers what it feeds a client-stream handler itself.
+/// Each bounded alone, a peer filling both holds the connection total once per
+/// layer; charging both against this one total bounds the sum.
+///
+/// See [IRpcStreamReset] for why this is a separate interface.
+abstract interface class IRpcConnectionBufferTotal {
+  /// Charges [bytes] against the connection total; false, and nothing
+  /// charged, when they would cross it.
+  bool chargeConnectionBuffer(int bytes);
+
+  /// Returns [bytes] a [chargeConnectionBuffer] took.
+  void releaseConnectionBuffer(int bytes);
+}
+
 /// Transport interface with Stream ID multiplexing.
 ///
 /// Contract for transports over different protocols (HTTP/2, WebSockets,

@@ -27,7 +27,8 @@ class RpcChannelTransport
     implements
         IRpcReconnectableTransport,
         IRpcSecurityPolicyAware,
-        IRpcFlowControlled {
+        IRpcFlowControlled,
+        IRpcConnectionBufferTotal {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;
@@ -859,6 +860,12 @@ class RpcChannelTransport
   @override
   void returnFlowCredit(int streamId, int bytes) =>
       _fc.returnCredit(streamId, bytes);
+
+  @override
+  bool chargeConnectionBuffer(int bytes) => _buffers.chargeTotal(bytes);
+
+  @override
+  void releaseConnectionBuffer(int bytes) => _buffers.releaseTotal(bytes);
 
   /// Records that this side has ended its half of [streamId].
   ///
