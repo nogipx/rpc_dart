@@ -23,6 +23,8 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[659](659-an-interceptor-with-its-own-token.md)** FIXED, rpc_dart — **an interceptor that swapped the cancellation token cut the call off from every tracked cancel**: on the caller cancelAllMethods reached nothing and the call hung uncounted; on the responder a client cancel never reached the handler. The original token now cancels the interceptor's. Files B-242 (honest metadata closes a server connection) and B-243 (ids collide across reconnects after a wrap)
+- **[658](658-a-registered-name-the-wire-refuses.md)** FIXED, rpc_dart — **registration accepted names the wire refuses: method `a.b` on `S` answered calls for `/S.a/b`**, another service's. Both names are checked against the wire grammar at registration
 - **[657](657-two-suspects-measured-clean.md)** CLEAN, rpc_dart + rpc_dart_websocket — **a handler that stops reading logs nothing; B-241 does not reproduce under load** (2400 of 2400 refusals answered 403). A guard test pins the first
 - **[656](656-force-reconnect-after-disconnect.md)** FIXED, rpc_dart — **forceReconnect() after disconnect() left the connection idle for good** when the stopped loop was still asleep. It now resumes that loop, as connect() does
 - **[655](655-a-zero-base-delay-sleeps-the-maximum.md)** FIXED, rpc_dart — **ExponentialBackoff with a base under 1 ms, or zero, slept maxDelay on every attempt** (60 s by default), and jitter threw past ~50 days. Microseconds, overflow-free, web-safe

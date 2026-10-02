@@ -45,7 +45,8 @@ void main() {
     expect(b.delayFor(0), const Duration(milliseconds: 1));
     expect(b.delayFor(5), const Duration(milliseconds: 32));
     expect(b.delayFor(31), max);
-    expect(b.delayFor(1 << 40), max);
+    // A literal, not `1 << 40`: shifts are 32-bit on the web, where that is 0.
+    expect(b.delayFor(1000000000000), max);
     expect(b.delayFor(-1), const Duration(milliseconds: 1));
   });
 

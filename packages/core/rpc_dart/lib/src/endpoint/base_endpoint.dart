@@ -348,14 +348,41 @@ abstract base class RpcEndpointBase {
     }
   }
 
+  /// [ctx] as the handler will get it, still reachable through [origin].
+  ///
+  /// Cancellation is tracked on the token a call STARTED with: the caller's
+  /// registry for `cancelMethod`, `cancelRequest` and `close`; the responder's
+  /// stream state for a client cancel, a deadline, a drain. An interceptor that
+  /// hands `next` a context with its own token -- the only way it can own
+  /// cancellation -- cut every one of those off: the caller's call could not be
+  /// cancelled and went uncounted, and the handler never heard of a cancel.
+  ///
+  /// Linked one way: cancelling [origin] cancels the replacement, and the
+  /// interceptor's own token stays its own to fire.
+  static RpcContext _keepCancellable(
+    RpcCancellationToken? origin,
+    RpcContext ctx,
+  ) {
+    final token = ctx.cancellationToken;
+    if (origin == null || identical(origin, token)) return ctx;
+    if (token == null) return ctx.withCancellation(origin);
+    if (origin.isCancelled) {
+      token.cancel(origin.reason);
+    } else {
+      unawaited(origin.cancelled.then((_) => token.cancel(origin.reason)));
+    }
+    return ctx;
+  }
+
   Future<({TResponse response, RpcContext context})>
   _invokeUnaryInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
     TRequest request,
     Future<TResponse> Function(RpcContext ctx, TRequest request) handler,
   ) async {
+    final origin = context.context.cancellationToken;
     Future<TResponse> invokeHandler(RpcContext ctx, TRequest req) async {
-      context.updateContext(ctx);
+      context.updateContext(_keepCancellable(origin, ctx));
       return handler(context.context, req);
     }
 
@@ -384,8 +411,9 @@ abstract base class RpcEndpointBase {
     FutureOr<Stream<TResponse>> Function(RpcContext ctx, TRequest request)
     handler,
   ) async {
+    final origin = context.context.cancellationToken;
     FutureOr<Stream<TResponse>> invokeHandler(RpcContext ctx, TRequest req) {
-      context.updateContext(ctx);
+      context.updateContext(_keepCancellable(origin, ctx));
       return handler(context.context, req);
     }
 
@@ -417,11 +445,12 @@ abstract base class RpcEndpointBase {
     Future<TResponse> Function(RpcContext ctx, Stream<TRequest> requests)
     handler,
   ) async {
+    final origin = context.context.cancellationToken;
     Future<TResponse> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) async {
-      context.updateContext(ctx);
+      context.updateContext(_keepCancellable(origin, ctx));
       return handler(context.context, reqs);
     }
 
@@ -453,11 +482,12 @@ abstract base class RpcEndpointBase {
     )
     handler,
   ) async {
+    final origin = context.context.cancellationToken;
     FutureOr<Stream<TResponse>> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) {
-      context.updateContext(ctx);
+      context.updateContext(_keepCancellable(origin, ctx));
       return handler(context.context, reqs);
     }
 
