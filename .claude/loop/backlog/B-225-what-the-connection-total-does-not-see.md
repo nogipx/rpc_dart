@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 610)
 round: 609
-commit: 1d16586c
+commit: 5c58f02a
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/stream_buffer_ledger.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: P-211
-reason: "cost — item 1 is fixed in round 609 (one shared connection total, 252 -> 126 against a ceiling of 128). Left: zero-copy payloads weigh 0 bytes and pass under the total, and the other channels' pause contract (IRpcChannel's example, isolate, wasm) is unswept. Split out of B-138 when it closed"
+reason: "CLEAN in round 610: items 2 and 3 are unreachable by an untrusted peer — a direct object's producer is the same process, and nothing in rpc_dart pauses a channel's incoming; IRpcChannel's doc example now forwards pause. Previously: cost — item 1 is fixed in round 609 (one shared connection total, 252 -> 126 against a ceiling of 128). Left: zero-copy payloads weigh 0 bytes and pass under the total, and the other channels' pause contract (IRpcChannel's example, isolate, wasm) is unswept. Split out of B-138 when it closed"
 ---
 
 # B-225 — what the connection total does not see
@@ -17,14 +17,14 @@ reason: "cost — item 1 is fixed in round 609 (one shared connection total, 252
    window, so a peer filling both holds up to twice it. Measured only per layer:
    `4093` messages (64 MiB) for 16 client-streams and for 16 bidi streams. Not
    measured: a mix.
-2. **Zero-copy weighs nothing.** `bufferedBytes` is 0 for a `directPayload`, so
+2. **CLEAN in round 610 — unreachable from outside the process.** Zero-copy weighs nothing. `bufferedBytes` is 0 for a `directPayload`, so
    neither total sees it; only the per-stream EVENT ceiling bounds such a stream,
    and that multiplies by the stream count. Zero-copy is in-process
    (`memoryPair`), so the peer is the same program — reachability first.
    Round 600 adds the connection-wide side: with NO listener on `incomingMessages`,
    `BufferedBroadcastController` holds up to 4096 direct objects of any size
    (`+376 MiB` for 400 x 1 MiB); with a consuming listener, `+6 MiB`.
-3. **The pause contract on the other channels.** B-138's first half (round 534)
+3. **CLEAN in round 610; the doc example is fixed.** The pause contract on the other channels. B-138's first half (round 534)
    made the websocket channel forward pause; `IRpcChannel`'s own documented
    example, the isolate channel and the wasm channel were never checked
    (RPC-08's shape).

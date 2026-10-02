@@ -17,13 +17,19 @@ import 'dart:typed_data';
 /// class WebSocketChannel implements IRpcChannel {
 ///   final WebSocket _ws;
 ///   final _ctl = StreamController<Uint8List>();
+///   late final StreamSubscription<dynamic> _sub;
 ///   bool _closed = false;
 ///
 ///   WebSocketChannel(this._ws) {
-///     _ws.listen(
+///     _sub = _ws.listen(
 ///       (data) => _ctl.add(data is Uint8List ? data : Uint8List.fromList(data)),
 ///       onDone: () { _closed = true; _ctl.close(); },
 ///     );
+///     // Forward a consumer's pause to the socket, or a paused `incoming`
+///     // still reads every chunk off the wire into `_ctl`.
+///     _ctl
+///       ..onPause = _sub.pause
+///       ..onResume = _sub.resume;
 ///   }
 ///
 ///   @override bool get isClosed => _closed;
@@ -42,6 +48,10 @@ abstract class IRpcChannel {
   /// Incoming raw frames from the remote side.
   ///
   /// The stream completes when the channel is closed (locally or remotely).
+  ///
+  /// Pausing it should pause the reads underneath, as the example above does.
+  /// rpc_dart's own stack never pauses it; a caller holding the channel
+  /// directly may.
   ///
   /// **A delivered chunk is handed over, not lent.** An implementation must not
   /// write into a `Uint8List` it has already added to this stream, and must not
