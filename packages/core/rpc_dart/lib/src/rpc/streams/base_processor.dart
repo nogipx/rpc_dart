@@ -64,6 +64,18 @@ RpcMessageParser _policyBoundParser({
   );
 }
 
+/// What a caller is told when its codec cannot decode a response: INTERNAL, as
+/// the server answers the same failure on a request. The codec's own exception
+/// type is not part of the API, and a caller catching [RpcException], or an
+/// interceptor reading a status, would otherwise miss it. Already logged with
+/// the original error where it is caught.
+Object _undecodableResponse(Object error) => error is RpcException
+    ? error
+    : const RpcStatusException(
+        RpcStatus.internal,
+        'Response could not be decoded',
+      );
+
 /// Tells the peer that [streamId] was cancelled, so its handler can stop.
 ///
 /// Prefers a transport-level reset: the metadata fallback rides a frame with
@@ -1635,7 +1647,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
             stackTrace: stackTrace,
           );
           if (!_responseController.isClosed) {
-            _responseController.addError(e, stackTrace);
+            _responseController.addError(_undecodableResponse(e), stackTrace);
           }
         }
       }

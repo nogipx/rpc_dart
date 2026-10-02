@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 631)
+round: 631
+commit: 4bd2c4fd
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart]
 probe: none — audit probe `packages/core/rpc_dart/.dart_tool/probe/correct_wire_foreign_server_test.dart` (garbage body), not yet registered
-reason: "bench — a response the codec cannot decode reaches the caller as a raw FormatException, not an RpcStatusException(INTERNAL); the server maps the same failure on a request to 13"
+reason: "FIXED in round 631: a non-RpcException decode failure reaches the caller as RpcStatusException(INTERNAL) on all four shapes. Previously: bench — a response the codec cannot decode reaches the caller as a raw FormatException, not an RpcStatusException(INTERNAL); the server maps the same failure on a request to 13"
 ---
 
 # B-236 — an undecodable response has no status
