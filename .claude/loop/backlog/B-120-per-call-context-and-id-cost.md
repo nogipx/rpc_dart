@@ -1,11 +1,11 @@
 ---
-status: open (round 565)
-round: 551
-commit: 12669b0f
+status: closed (round 621)
+round: 621
+commit: a8af9626
 release: none
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/core/metadata.dart]
 probe: P-149
-reason: "cost — the GENERATOR half is decided (keep `Random.secure()`, round-565 review) and what remains is the context-copy half: `Map.from` twice per `with*`, `withAdditionalHeaders` re-running the header regex over all headers, `forClientRequest`'s two regexes. None of that has been measured against the chain a real call builds"
+reason: "CLEAN in round 621: in the chain a real unary call builds, context construction, copies and header validation together are about 5 % of a call, against the kept token's 28 %. Previously: cost — the GENERATOR half is decided (keep `Random.secure()`, round-565 review) and what remains is the context-copy half: `Map.from` twice per `with*`, `withAdditionalHeaders` re-running the header regex over all headers, `forClientRequest`'s two regexes. None of that has been measured against the chain a real call builds"
 ---
 
 # B-120 — each call copies both context maps five to seven times and draws 12 bytes of OS entropy
@@ -147,7 +147,9 @@ The cost SHARE is NOT comparable with round 511's `~40 of ~97 us`: this rig read
 over a byte pipe with 2000 sequential calls. Only the token cost travels, and it agrees (42.4
 against 30.98-37.82).
 
-## Still open, barely measured
+## The context half — measured in round 621
+
+About 5 % of a real call (`P-223`); what follows is how it stood before.
 
 **The context half.** A 6-link `with*` chain costs ~35 us, but that is a synthetic
 worst case rather than what a call builds, so it is not a share of a call and the
@@ -201,7 +203,7 @@ touch it.
 `release: changelog` belonged to option 1, which was not taken. The three options above stay on
 the record as the reasoning, not as a live question.
 
-**THIS LEAD STAYS OPEN**, and not for the generator. What is left is the context-copy half in
+**Closed in round 621**: the context half is about 5 % of a real call (`P-223`). Before that round: What is left is the context-copy half in
 `## Still open, barely measured` — ordinary measurable work with nothing of the owner's in it.
 `round:` and `commit:` are moved to round 551's sha, since that is the measurement the lead now
 rests on and the ageing check had been comparing against round 511's.

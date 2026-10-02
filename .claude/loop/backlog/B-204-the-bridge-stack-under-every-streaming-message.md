@@ -1,10 +1,10 @@
 ---
-status: open
-round: 509 (measured as part of B-118; split out in the round-540 bookkeeping pass)
-commit: 6659c0ee
+status: closed (round 622)
+round: 622
+commit: 85ffb7d7
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
 probe: P-147
-reason: "cost — the middleware wrappers are gone when there is no middleware; ~4.4 us per message remains in the bridge stack below them, and not one of those layers was varied"
+reason: "CLEAN in round 622, closed by the owner on the attribution: the endpoints cost 2.8 of 4.4 us per message over a 1.57 us floor, and nearly 60 % of samples are dart:async event delivery, so the cost is the hop count, not one layer. Previously: cost — the middleware wrappers are gone when there is no middleware; ~4.4 us per message remains in the bridge stack below them, and not one of those layers was varied"
 ---
 
 # B-204 — the bridge stack under every streaming message, none of it varied
@@ -39,4 +39,5 @@ bridges are for.
 
 ## Owner decision
 
-—
+2026-10-02: close with the attribution. Collapsing the bridges is separate
+work, not a defect.

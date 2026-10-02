@@ -38,6 +38,8 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-224](P-224-where-a-streamed-message-goes.md)** valid (round 622), rpc_dart — P-147's stream against a no-endpoint floor, plus VM-profiler attribution. `4.44` vs `1.57 us/message`; nearly 60 % of samples in `dart:async`. B-204
+- **[P-223](P-223-what-a-real-call-spends-on-context.md)** valid (round 621), rpc_dart — VM profiler samples over real unary calls, by context and metadata function. Context copies and header validation are about 5 % of a call; the token is 28 %. B-120
 - **[P-222](P-222-what-a-discarded-compress-costs.md)** valid (round 620), rpc_dart — `compressIfSmaller` per call by size and content. About 17 us of every gzip compress is fixed set-up; at 20 bytes or fewer it is now skipped. B-206
 - **[P-221](P-221-what-a-window-becomes.md)** valid (round 619), rpc_dart — a 4 MiB window of 1 KiB messages behind a paused caller, with a 1x and a 16x decoded type, one arm per process. 4036 standing, 2 decoded in every arm. B-218
 - **[P-220](P-220-what-the-limiter-costs-a-message.md)** valid (round 618), rpc_dart — the rate limiter's cost per metered message, alone and inside a streamed call. Re-resolution is about 120 ns, under the end-to-end spread. B-213
