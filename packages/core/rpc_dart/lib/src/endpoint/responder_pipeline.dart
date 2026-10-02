@@ -1292,17 +1292,18 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // A responder bound earlier is fed by the pipeline, so the half-close has
+    // to be handed to it here; _ensureResponder would return early and the
+    // handler would wait forever on a peer that had finished.
+    if (state.hasRequestSink) {
+      state.endRequests();
+      return;
+    }
+
     // Both shapes whose request side is a STREAM may legitimately carry zero
     // messages, so end-of-stream is what starts them, not an error.
     if (binding.type == RpcMethodType.clientStream ||
         binding.type == RpcMethodType.bidirectionalStream) {
-      // A client-stream responder bound earlier is fed by the pipeline, so the
-      // half-close has to be handed to it here; _ensureResponder would return
-      // early and the handler would wait forever on a peer that had finished.
-      if (state.hasRequestSink) {
-        state.endRequests();
-        return;
-      }
       _detachedDispatch(_ensureResponder(state, binding), state);
       return;
     }
@@ -1769,9 +1770,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         ),
         'responder completion',
       );
-      responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, consumePreBindBuffer: true),
-      );
+      responder.bindToMessageStream(_pipelineFedPreBound(state));
       return;
     }
 
@@ -1803,9 +1802,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
       'responder completion',
     );
-    responder.bindToMessageStream(
-      _stateBoundStream(state, streamId, consumePreBindBuffer: true),
-    );
+    responder.bindToMessageStream(_pipelineFedPreBound(state));
   }
 
   Future<void> _ensureBidirectionalResponder(
@@ -1838,9 +1835,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         ),
         'responder completion',
       );
-      responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, consumePreBindBuffer: true),
-      );
+      responder.bindToMessageStream(_pipelineFedPreBound(state));
 
       unawaited(() async {
         try {
@@ -1892,9 +1887,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
       'responder completion',
     );
-    responder.bindToMessageStream(
-      _stateBoundStream(state, streamId, consumePreBindBuffer: true),
-    );
+    responder.bindToMessageStream(_pipelineFedPreBound(state));
 
     unawaited(() async {
       try {
@@ -2167,17 +2160,29 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
   }
 
-  /// Request stream for a client-stream responder, fed by this pipeline.
+  /// [_pipelineFedRequestStream] for a server-stream or bidi responder, seeded
+  /// with what arrived before it was bound.
+  Stream<RpcTransportMessage> _pipelineFedPreBound(
+    RpcResponderStreamState state,
+  ) => _pipelineFedRequestStream(
+    state,
+    initialMessages: state.takePreBindBufferedMessages(),
+  );
+
+  /// Request stream for a streaming responder, fed by this pipeline.
   ///
   /// Unlike [_stateBoundStream] this does NOT subscribe to
-  /// `transport.getMessagesForStream`. A client-stream responder is bound on
-  /// the call's first request frame and then consumes for the rest of the call,
-  /// so it would depend on that per-stream view carrying every LATER frame --
-  /// and the default implementation in [IRpcTransport] is a plain `where` over
-  /// the non-replaying broadcast, which drops whatever the transport dispatched
-  /// before the subscription existed. `RpcChannelTransport` overrides it with
-  /// per-stream buffering, but a transport is a public extension point and the
-  /// pipeline already observes every frame, so it forwards them itself.
+  /// `transport.getMessagesForStream`. A streaming responder is bound on the
+  /// call's first request frame and then consumes for the rest of the call, so
+  /// it would depend on that per-stream view carrying every LATER frame -- and
+  /// the default implementation in [IRpcTransport] is a plain `where` over the
+  /// non-replaying broadcast, which drops whatever the transport dispatched
+  /// before the subscription existed. `RpcChannelTransport` routes a frame to
+  /// the per-stream view only if the view exists when the frame is dispatched,
+  /// so one async hop between it and this pipeline loses the next request: a
+  /// decorator that re-broadcasts `incomingMessages` asynchronously did exactly
+  /// that to every bidi call a peer client was sent. The pipeline already
+  /// observes every frame, so it forwards them itself.
   Stream<RpcTransportMessage> _pipelineFedRequestStream(
     RpcResponderStreamState state, {
     required Iterable<RpcTransportMessage> initialMessages,

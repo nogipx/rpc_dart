@@ -1,10 +1,10 @@
 ---
-status: open
-round: 615
-commit: d572e08d
+status: closed (round 617)
+round: 617
+commit: 3cd9c2d1
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
 probe: P-219
-reason: "bench — round 615 fixed the one in-repo wrapper that broke it; the invariant itself is a microtask ordering, and any IRpcTransport decorator that re-broadcasts asynchronously loses a peer's bidi requests the same way"
+reason: "FIXED in round 617: server-stream and bidi are fed by the pipeline like client-stream, so no shape depends on the order; a timer-delayed decorator lost bidi requests before (TIMEOUT) and serves them after. Previously: bench — round 615 fixed the one in-repo wrapper that broke it; the invariant itself is a microtask ordering, and any IRpcTransport decorator that re-broadcasts asynchronously loses a peer's bidi requests the same way"
 ---
 
 # B-226 — a peer call's bind relies on microtask order
@@ -50,4 +50,5 @@ the undecorated transport as control.
 
 ## Owner decision
 
-—
+2026-10-02: direction 1, feed bidi and server-stream from the pipeline. Carried
+out in round 617.
