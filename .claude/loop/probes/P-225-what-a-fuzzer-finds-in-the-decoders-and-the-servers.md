@@ -2,7 +2,7 @@
 file: packages/core/rpc_dart/.dart_tool/probe/fuzz_decoders.dart
 round: 639
 commit: 2c540e05
-paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/core/error_details.dart, packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
+paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/core/error_details.dart, packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/core/rpc_dart/lib/src/endpoint/peer_endpoint.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 status: valid (round 639)
 ---
 
@@ -41,6 +41,20 @@ Four files, all `fvm dart run <file> [count] [seed]`:
   WebSocket frames (masks, control frames, fragmentation, junk opcodes, RSV
   bits, lying lengths), written in one go, after a pause, or byte by byte; a
   well-formed client checked every ten attacks. `[compression on|off]`.
+- `packages/core/rpc_dart/.dart_tool/probe/fuzz_peer.dart` — an
+  `RpcPeerEndpoint`, which serves and calls on one transport: hostile replies to
+  its outbound calls, hostile requests, requests opened on its own outbound ids,
+  either role; then a valid inbound unary on an id of the right parity.
+- `packages/transport/rpc_dart_websocket/.dart_tool/probe/fuzz_ws_client.dart` —
+  `RpcWebSocketCallerTransport` against a hostile raw server: 200 instead of
+  101, a wrong accept, garbage, silence, or a real 101 followed by close frames
+  (odd codes, long reasons, a one-byte body), pings, masked server frames,
+  RSV bits, junk opcodes and rpc frames for the client's streams.
+
+Two traps the harnesses themselves fell into, both read as defects first: a
+call Future given its error handler only after an `await` is reported uncaught
+by Dart if it fails in between; and a raw `Socket`'s write errors surface on
+`socket.done`, which must be handled by whoever owns it.
 
 ## The numbers (round 639)
 
@@ -54,6 +68,11 @@ websocket, compression off, 300 + 2000 attacks    every check served, 0 in the z
 websocket, compression on, 300 attacks            19 uncaught HttpException: a repeated
                                                   Sec-WebSocket-Key -- round 639
   after the fix, 1000 attacks                     every check served, 0 in the zone
+client, 1500 more sessions                        no call hung, 0 in the zone
+peer, 200 + 1000 sessions                         every call finished, every probe
+                                                  answered, 0 in the zone
+websocket client, 150 + 800 sessions              no connect, call or close hung,
+                                                  0 in the zone
 ```
 
 ## Measures
