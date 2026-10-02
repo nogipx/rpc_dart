@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 608)
 round: 512 (measured as part of B-121; split out in the round-540 bookkeeping pass)
 commit: 6659c0ee
 paths: [packages/core/rpc_dart/lib/src/logger/log_scope.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
 probe: P-150
-reason: "cost — the level lookup is now cached; the OTHER half of the lead, a scope allocated and a name concatenated per call, was never varied"
+reason: "CLEAN in round 608: the five per-call derivations cost 228 ns of a 66.8 us call (0.34 %), and the names are fixed per shape and per registered method, so they cannot churn the level cache. Previously: cost — the level lookup is now cached; the OTHER half of the lead, a scope allocated and a name concatenated per call, was never varied"
 ---
 
 # B-205 — `child()` and `withContext()` allocate a scope and concatenate a name per call
@@ -33,6 +33,10 @@ names being fed an unbounded one.
 P-150's shape with the allocation counted rather than the lookup: scopes created per call at
 each of the four sites, and `_resolvedByScope`'s size across a run of many calls — which
 answers the churn question at the same time.
+
+## Round 608 — measured, not worth it
+
+`228 ns` of `66801 ns` per unary call. `../rounds/608-a-third-of-a-percent.md`.
 
 ## Owner decision
 
