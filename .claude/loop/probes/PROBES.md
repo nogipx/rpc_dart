@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-216](P-216-an-unfinished-websocket-message.md)** valid (round 611), rpc_dart_websocket — a raw socket writes 1 MiB continuation frames without FIN against a 1 MiB policy. Before: never closed, RSS `+147 MiB` at 256 MiB. After: closed after fragment 1. B-202
 - **[P-215](P-215-what-a-scope-costs.md)** valid (round 608),
   rpc_dart — the five `LogScope` derivations one unary call makes, timed against the call itself:
   `228 ns` of `66801 ns`, 0.34 %; medians of five

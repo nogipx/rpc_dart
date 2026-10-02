@@ -1,10 +1,10 @@
 ---
-status: open
-round: 506 (measured as part of B-115; split out in the round-540 bookkeeping pass)
-commit: 6659c0ee
+status: closed (round 611)
+round: 611
+commit: 2d00c669
 paths: [packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
 probe: P-144
-reason: "cost — the metadata limit now refuses from the header, and this is the case that bypasses it entirely: a peer whose whole frame arrives as ONE chunk is resident before the decoder sees a byte"
+reason: "FIXED in round 611: an unfinished message (fragments, no FIN) was buffered without limit — 256 MiB sent, RSS +147 MiB, never closed. rpcWebSocketConnections now upgrades itself and reads frame headers off the raw socket; closed after fragment 1. The redundant client metadata bound stays unmerged on purpose. Previously: cost — the metadata limit now refuses from the header, and this is the case that bypasses it entirely: a peer whose whole frame arrives as ONE chunk is resident before the decoder sees a byte"
 ---
 
 # B-202 — a frame delivered in one chunk is resident before any limit can refuse it
@@ -40,4 +40,6 @@ with `_maxBufferedFrameBytes` lowered, to establish which limit is actually hold
 
 ## Owner decision
 
-—
+2026-10-02: own the upgrade in `rpcWebSocketConnections` and add `package:crypto`
+as a direct dependency for the accept key; keep dart:io's transformer when
+compression is on. Carried out in round 611.

@@ -5,8 +5,11 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'websocket_bounded_upgrade.dart';
 
 /// Turns an [HttpServer] into the `Stream<WebSocketChannel>` that
 /// `RpcWebSocketServer` consumes, applying server-side keepalive.
@@ -46,6 +49,13 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///
 /// A refused request is answered `403` and never upgraded.
 ///
+/// [policy] should be the one given to `RpcWebSocketServer`. dart:io
+/// assembles a whole message before delivering it and has no ceiling of its
+/// own, so a peer that sends fragments and never a final one is buffered for
+/// as long as it writes. With compression off, each frame's header is read
+/// off the socket first, and a message past the largest frame the policy
+/// admits closes the connection before its payload is read.
+///
 /// ```dart
 /// final http = await HttpServer.bind(host, port);
 /// final server = RpcWebSocketServer(
@@ -63,6 +73,7 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   CompressionOptions compression = CompressionOptions.compressionOff,
   Set<String>? allowedOrigins,
   bool Function(HttpRequest request)? allowUpgrade,
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
 }) {
   // Lower-cased ONCE. `_upgradeAllowed` ran `trim().toLowerCase()` over every
   // configured origin on every handshake, which allocates a string per entry per
@@ -123,19 +134,65 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
     return true;
   });
 
-  return gated
-      .transform(
-        WebSocketTransformer(
+  final Stream<WebSocket> sockets = compression.enabled
+      ? gated.transform(
+          WebSocketTransformer(
+            protocolSelector: protocolSelector,
+            compression: compression,
+          ),
+        )
+      : _upgradeEach(
+          gated,
+          maxMessageBytes:
+              policy.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize,
           protocolSelector: protocolSelector,
-          compression: compression,
-        ),
-      )
-      .map((socket) {
-        // Set BEFORE wrapping: once inside IOWebSocketChannel the socket is no
-        // longer reachable.
-        socket.pingInterval = pingInterval;
-        return IOWebSocketChannel(socket);
-      });
+        );
+  return sockets.map((socket) {
+    // Set BEFORE wrapping: once inside IOWebSocketChannel the socket is no
+    // longer reachable.
+    socket.pingInterval = pingInterval;
+    return IOWebSocketChannel(socket);
+  });
+}
+
+/// Upgrades every request concurrently, as [WebSocketTransformer] does, and
+/// reports a failed handshake as a stream error, as it does.
+Stream<WebSocket> _upgradeEach(
+  Stream<HttpRequest> requests, {
+  required int maxMessageBytes,
+  dynamic Function(List<String> protocols)? protocolSelector,
+}) {
+  final out = StreamController<WebSocket>();
+  StreamSubscription<HttpRequest>? sub;
+  out
+    ..onListen = () {
+      sub = requests.listen(
+        (request) {
+          upgradeBounded(
+            request,
+            maxMessageBytes: maxMessageBytes,
+            protocolSelector: protocolSelector,
+          ).then(
+            (socket) {
+              if (out.isClosed) {
+                unawaited(socket.close());
+              } else {
+                out.add(socket);
+              }
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              if (!out.isClosed) out.addError(error, stackTrace);
+            },
+          );
+        },
+        onError: out.addError,
+        onDone: out.close,
+      );
+    }
+    ..onPause = (() => sub?.pause())
+    ..onResume = (() => sub?.resume())
+    ..onCancel = (() => sub?.cancel());
+  return out.stream;
 }
 
 /// [permittedOrigins] is already trimmed and lower-cased by the caller.
