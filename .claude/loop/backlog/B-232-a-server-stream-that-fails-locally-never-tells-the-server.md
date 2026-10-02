@@ -1,10 +1,10 @@
 ---
-status: open
-round: 625
-commit: ff258470
+status: closed (round 626)
+round: 626
+commit: afc045e6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/server/caller.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
 probe: none — audit probes `packages/core/rpc_dart/.dart_tool/probe/correct_shapes_b.dart`, `correct_shapes_c.dart`, `correct_shapes_h.dart`, not yet registered
-reason: "bench — a server-stream call that fails on the caller side (response decode, response middleware) sends nothing to the server; the handler keeps producing and holds its slot"
+reason: "FIXED in round 626: any ending the server did not cause sends the abort notice before close(); two failed streams under a limit of 2 now leave 0 live handlers. Previously: bench — a server-stream call that fails on the caller side (response decode, response middleware) sends nothing to the server; the handler keeps producing and holds its slot"
 ---
 
 # B-232 — a server-stream that fails locally never tells the server

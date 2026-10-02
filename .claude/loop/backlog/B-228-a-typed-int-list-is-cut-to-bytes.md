@@ -1,7 +1,7 @@
 ---
 status: closed (round 625)
 round: 625
-commit: ff258470
+commit: afc045e6
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart]
 probe: none — audit probe `.dart_tool/probe/correct_serial_focus_test.dart`, superseded by the witness
 reason: "FIXED in round 625: wider typed int lists go out as arrays, Uint8ClampedList and ByteData as their bytes. Previously: bench — the CBOR writer sent every TypedData List<int> as Uint8List.fromList(value), keeping only each element's low byte"

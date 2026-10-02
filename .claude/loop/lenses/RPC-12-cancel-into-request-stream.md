@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**]
 applies: cancellation is delivered into the handler's request stream
 breaks: a process crash in user code that looks like a library bug.
-applied: [202, 203, 204]
+applied: [202, 203, 204, 626]
 status: retracted (round 204)
 ---
 

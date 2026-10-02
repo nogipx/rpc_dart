@@ -143,10 +143,16 @@ void main() {
         ..add(Uint8List(256 * 1024));
       final socket = await Socket.connect('127.0.0.1', http.port);
       final closed = Completer<void>();
+      void markClosed() {
+        if (!closed.isCompleted) closed.complete();
+      }
+
+      // A socket destroyed with unread data may arrive as a reset, and with
+      // cancelOnError a reset ends the subscription without onDone.
       socket.listen(
         (_) {},
-        onError: (Object _) {},
-        onDone: closed.complete,
+        onError: (Object _) => markClosed(),
+        onDone: markClosed,
         cancelOnError: true,
       );
       socket.add([

@@ -18,6 +18,8 @@ final class ServerStreamCaller<
   /// Ensures only one request is sent.
   bool _requestSent = false;
 
+  final RpcContext? _context;
+
   /// Creates a server-stream caller.
   ServerStreamCaller({
     required IRpcTransport transport,
@@ -27,7 +29,7 @@ final class ServerStreamCaller<
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
-  }) {
+  }) : _context = context {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy mode: requires in-memory transport.
@@ -105,6 +107,10 @@ final class ServerStreamCaller<
 
   /// Convenience helper to send a request and yield responses.
   Stream<TResponse> call(TRequest request) async* {
+    // Set once the server has ended the call. Any other way out -- a response
+    // that cannot be decoded, a consumer-side middleware that throws, this
+    // generator being cancelled -- is local, and the server cannot see it.
+    var serverEnded = false;
     try {
       // Send request.
       await send(request);
@@ -134,10 +140,12 @@ final class ServerStreamCaller<
                 'Server stream ended with status $status: ${error.message}',
               );
             }
+            serverEnded = true;
             throw error;
           }
         }
       }
+      serverEnded = true;
 
       _logger.internal('Server stream completed');
     } catch (e) {
@@ -146,6 +154,12 @@ final class ServerStreamCaller<
       }
       rethrow;
     } finally {
+      // Before close(), which drops the processor and with it the transport.
+      // Without the notice the handler keeps producing and holds its slot. A
+      // cancelled token has already told the server.
+      if (!serverEnded && !(_context?.isCancelled ?? false)) {
+        await _processor.notifyPeerOfAbort('server stream abandoned locally');
+      }
       await close();
     }
   }
