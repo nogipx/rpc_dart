@@ -694,12 +694,13 @@ class RpcRateLimiter extends IRpcInterceptor {
     // tailing, large chunked downloads) on a burst — almost never the intent.
     // Opt into per-response accounting with meterServerStreamMessages: true for
     // the rare case of capping client-attributable firehose output.
-    if (!_meterServerStreamMessages) {
-      _check(call);
-      return next(call.context, request);
-    }
+    _check(call);
+    if (!_meterServerStreamMessages) return next(call.context, request);
+    // Charged at establishment here too, before the handler runs; the first
+    // response is then prepaid. Metering responses alone left a stream that
+    // emits nothing free, however many were opened.
     final stream = await next(call.context, request);
-    return _meterStream(call, stream);
+    return _meterStream(call, stream, firstIsPrepaid: true);
   }
 
   @override
