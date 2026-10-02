@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 606)
 round: 519 (measured inside B-127; split out by the owner in the round-540 review)
 commit: 6659c0ee
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/contracts/context.dart]
 probe: P-156
-reason: "bench — a server stream arms NINE timers before any deadline exists. That is not the thing B-127 filed, it is what measuring B-127 found, and the owner split it out rather than let it close with the refuted arithmetic"
+reason: "FIXED in round 606: eight of the nine were RpcCallScope._close wrapping SYNCHRONOUS disposers in .timeout(); now 1.1 timers/call (the half-open guard), 14.1 -> 5.0 with a deadline. The deadline's own timers stay with B-127's ownership question. Previously: bench — a server stream arms NINE timers before any deadline exists. That is not the thing B-127 filed, it is what measuring B-127 found, and the owner split it out rather than let it close with the refuted arithmetic"
 ---
 
 # B-210 — a server stream arms nine timers before any deadline exists
@@ -36,6 +36,16 @@ arm per candidate site, ablated, to see which of the nine are the same bound exp
 **The trap round 519 recorded**: build the endpoints INSIDE the counted zone. Its first run
 built them outside, so every responder timer went uncounted and the deadline looked free at
 `1.0 timers/call`.
+
+## Round 606 — attributed and fixed
+
+```
+no deadline   9.1 -> 1.1 timers/call    with deadline   14.1 -> 5.0
+```
+
+Eight were `RpcCallScope._close` bounding synchronous disposers. The await between
+disposers is load-bearing and stays (dropping it turned twelve cancellation tests
+red). `../rounds/606-eight-timers-for-disposers-that-cannot-hang.md`.
 
 ## Owner decision
 

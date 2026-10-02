@@ -224,9 +224,16 @@ final class RpcCallScope {
         // Future cannot be cancelled -- so it may still be running. Better than
         // never shutting down, and reported rather than hidden.
         //
-        // Future.value handles the FutureOr: a synchronous disposer stays
-        // synchronous and cannot time out.
-        await Future<void>.value(_disposers[i]()).timeout(disposerTimeout);
+        // Only a disposer that returns a Future is bounded: a synchronous one
+        // cannot hang, and wrapping it armed a timer per disposer per call.
+        // The await stays for both: later disposers depend on the turn it
+        // gives the earlier ones (the cancel notice must reach the peer).
+        final result = _disposers[i]();
+        if (result is Future) {
+          await result.timeout(disposerTimeout);
+        } else {
+          await Future<void>.value();
+        }
       } on TimeoutException {
         _log.error(
           'Call-scope disposer did not complete within '
