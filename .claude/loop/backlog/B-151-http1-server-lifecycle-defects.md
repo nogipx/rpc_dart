@@ -1,6 +1,6 @@
 ---
-status: open (rounds 560, 561 and 573 did four of five; item 4 remains and is not a defect)
-round: 573
+status: closed (round 674)
+round: 674
 commit: fb7770cd
 release: changelog
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
@@ -126,6 +126,13 @@ construction.
 
 Also unmeasured: no TLS arm on http2 (the secure bind is a different call behind the same claim), and
 `shelf_io.serve` is still passed no TLS and no `shared`.
+
+## Outcome (round 674)
+
+Item 4 done: the drain reads a typed `pendingRequests` getter instead of a key
+in the health map; forcing it to 0 fails `graceful_drain_on_stop_test`. The TLS
+and `shared` note names features, which leave the loop (B-01).
+`../rounds/674-the-drain-reads-a-number-not-a-map.md`.
 
 ## Owner decision
 

@@ -742,6 +742,9 @@ class RpcHttpResponderTransport
     _streams.add(message);
   }
 
+  /// Requests accepted and not yet answered: what a graceful stop waits on.
+  int get pendingRequests => _pending.length;
+
   @override
   Future<RpcHealthStatus> health() async {
     if (_isClosed) {
@@ -753,7 +756,7 @@ class RpcHttpResponderTransport
     return RpcHealthStatus.healthy(
       component: runtimeType.toString(),
       message: 'HTTP responder transport ready',
-      details: {'pendingRequests': _pending.length},
+      details: {'pendingRequests': pendingRequests},
     );
   }
 

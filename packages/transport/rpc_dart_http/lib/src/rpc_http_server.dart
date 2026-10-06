@@ -273,10 +273,7 @@ class RpcHttpServer implements IRpcServer {
     if (transport == null) return;
 
     return drainUntilIdle(
-      pending: () async {
-        final health = await transport.health();
-        return (health.details['pendingRequests'] as int?) ?? 0;
-      },
+      pending: () => transport.pendingRequests,
       budget: budget,
       logger: _logger,
       unit: 'request',
