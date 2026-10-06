@@ -22,9 +22,12 @@ import 'package:test/test.dart';
 final _codec = RpcCodec(RpcString.fromJson);
 
 final class _Svc extends RpcResponderContract {
-  _Svc(this._status) : super('Svc');
+  _Svc(this._status, {this.pushback = false}) : super('Svc');
 
   final int _status;
+
+  /// Answer with RpcRetryInfo: a limit that frees up, not a size refusal.
+  final bool pushback;
 
   @override
   void setup() {
@@ -33,7 +36,9 @@ final class _Svc extends RpcResponderContract {
       requestCodec: _codec,
       responseCodec: _codec,
       handler: (req, {context}) async {
-        throw RpcStatusException(_status, 'no such record');
+        throw pushback
+            ? RpcStatusException.atCapacity('busy')
+            : RpcStatusException(_status, 'no such record');
       },
     );
     // A DIFFERENT method, entirely healthy: what an open breaker costs is read
@@ -63,10 +68,13 @@ final class _Healthy extends RpcResponderContract {
 
 typedef _Outcome = ({CircuitBreakerState state, int failures, String healthy});
 
-Future<_Outcome> _fiveFailuresThenHealthy(int status) async {
+Future<_Outcome> _fiveFailuresThenHealthy(
+  int status, {
+  bool pushback = false,
+}) async {
   final (client, server) = RpcChannelTransport.pair();
   final responder = RpcResponderEndpoint(transport: server)
-    ..registerServiceContract(_Svc(status)..setup())
+    ..registerServiceContract(_Svc(status, pushback: pushback)..setup())
     ..start();
   final caller = RpcCallerEndpoint(transport: client);
   final breaker = RpcCircuitBreakerInterceptor(failureThreshold: 5);
@@ -111,6 +119,8 @@ void main() {
       // A caller with a typo in the method name is the sharpest case: under the
       // old default it took the whole endpoint down for every OTHER method.
       ('UNIMPLEMENTED', RpcStatus.unimplemented),
+      // No pushback: a message over the size limit, the caller's own doing.
+      ('RESOURCE_EXHAUSTED without pushback', RpcStatus.resourceExhausted),
     ]) {
       test(
         '$name does not open the breaker',
@@ -140,12 +150,15 @@ void main() {
     for (final (name, status) in [
       ('UNAVAILABLE', RpcStatus.unavailable),
       ('INTERNAL', RpcStatus.internal),
-      ('RESOURCE_EXHAUSTED', RpcStatus.resourceExhausted),
+      ('RESOURCE_EXHAUSTED with pushback', RpcStatus.resourceExhausted),
       ('UNKNOWN', RpcStatus.unknown),
       ('DEADLINE_EXCEEDED', RpcStatus.deadlineExceeded),
     ]) {
       test('$name opens the breaker', () async {
-        final out = await _fiveFailuresThenHealthy(status);
+        final out = await _fiveFailuresThenHealthy(
+          status,
+          pushback: status == RpcStatus.resourceExhausted,
+        );
 
         expect(
           out.state,

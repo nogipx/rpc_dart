@@ -181,6 +181,9 @@ abstract class _RateLimitCounter {
   /// costs the first, and a limit that is never reached silently drains — which
   /// tightens it under exactly the load it is meant to shed.
   void refund();
+
+  /// How long one slot takes to come back: the pushback a refusal carries.
+  Duration get retryAfter;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,6 +232,9 @@ class _SlidingWindowCounter extends _RateLimitCounter {
   void refund() {
     if (_current > 0) _current--;
   }
+
+  @override
+  Duration get retryAfter => Duration(microseconds: _windowUs ~/ max);
 }
 
 // ---------------------------------------------------------------------------
@@ -272,6 +278,9 @@ class _TokenBucketCounter extends _RateLimitCounter {
   void refund() {
     _tokens = (_tokens + 1.0).clamp(0.0, burst.toDouble());
   }
+
+  @override
+  Duration get retryAfter => Duration(microseconds: _windowUs ~/ max);
 }
 
 // ---------------------------------------------------------------------------
@@ -583,13 +592,21 @@ class RpcRateLimiter extends IRpcInterceptor {
   bool _tryAcquireAll(RpcMiddlewareContext call) {
     final specific = _resolveSpecific(call);
     final global = _disposed ? null : _globalCounter;
-    if (specific != null && !specific.tryAcquire()) return false;
+    if (specific != null && !specific.tryAcquire()) {
+      _lastRefusal = specific;
+      return false;
+    }
     if (global != null && !global.tryAcquire()) {
       specific?.refund();
+      _lastRefusal = global;
       return false;
     }
     return true;
   }
+
+  /// The counter behind the latest refusal, read by [_exceededException]
+  /// synchronously after [_tryAcquireAll] returns false.
+  _RateLimitCounter? _lastRefusal;
 
   /// Whether ANY counter applies to [call], so a call no limit touches can skip
   /// the metering machinery entirely.
@@ -603,6 +620,7 @@ class RpcRateLimiter extends IRpcInterceptor {
       'Rate limit exceeded for $methodKey'
       '${userKey != null ? ' (key: $userKey)' : ''}'
       ' (gRPC status ${RpcStatus.resourceExhausted}: RESOURCE_EXHAUSTED)',
+      retryAfter: _lastRefusal?.retryAfter,
     );
   }
 
@@ -745,8 +763,16 @@ class RpcRateLimiter extends IRpcInterceptor {
 /// Carries gRPC status RESOURCE_EXHAUSTED so it survives the wire as status 8
 /// (the responder maps a plain [RpcException] to INTERNAL/13, which clients
 /// cannot recognise as retryable) — letting retry policies back off and retry.
+///
+/// [retryAfter] travels as an [RpcRetryInfo] detail. That pushback is what
+/// tells a remote [RpcRetryInterceptor] this RESOURCE_EXHAUSTED is transient; a
+/// size refusal has the same status and none.
 class RpcRateLimitException extends RpcStatusException {
   /// Creates an [RpcRateLimitException].
-  RpcRateLimitException(String message)
-    : super(RpcStatus.resourceExhausted, message);
+  RpcRateLimitException(String message, {Duration? retryAfter})
+    : super(
+        RpcStatus.resourceExhausted,
+        message,
+        details: retryAfter == null ? const [] : [RpcRetryInfo(retryAfter)],
+      );
 }

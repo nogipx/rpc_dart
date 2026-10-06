@@ -831,6 +831,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           streamId: message.streamId,
           status: RpcStatus.resourceExhausted,
           message: 'Too many concurrent streams (max: $_respMaxStreams)',
+          atCapacity: true,
         ),
         'grpc error cleanup',
       );
@@ -1129,6 +1130,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             message:
                 'Too much payload buffered before the method was known '
                 '(max: $_respMaxPreMethodBytes bytes)',
+            atCapacity: true,
           ),
           'grpc error cleanup',
         );
@@ -1405,6 +1407,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           streamId: state.id,
           status: RpcStatus.resourceExhausted,
           message: 'Too many concurrent handlers (max: $maxHandlers)',
+          atCapacity: true,
           context: state.cachedContext,
         );
         return;
@@ -1995,12 +1998,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     }
   }
 
+  /// The [RpcRetryInfo] a capacity refusal carries, so a caller's retry policy
+  /// can tell it from a size refusal with the same status.
+  static final Uint8List _capacityDetails = RpcStatusException.atCapacity(
+    '',
+  ).statusDetailsBin!;
+
   Future<void> _sendGrpcErrorAndCleanup({
     required int streamId,
     required int status,
     required String message,
     RpcContext? context,
     List<RpcHeader> extraHeaders = const [],
+    bool atCapacity = false,
   }) async {
     // SYNCHRONOUSLY, before the first await, and that is the whole fix.
     //
@@ -2029,6 +2039,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         status,
         message: message,
         maxMessageLength: _trailerMessageCap(transport),
+        statusDetailsBin: atCapacity ? _capacityDetails : null,
       );
       await transport.sendMetadata(
         streamId,

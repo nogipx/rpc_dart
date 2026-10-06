@@ -156,7 +156,7 @@ void main() {
         req,
       ) async {
         attempts++;
-        throw RpcStatusException(RpcStatus.resourceExhausted, 'slow down');
+        throw RpcStatusException.atCapacity('slow down');
       });
       fail('should have thrown');
     } on RpcStatusException {

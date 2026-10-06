@@ -154,18 +154,23 @@ void main() {
     );
   });
 
-  test('the rows that exist for this library do so for retryability', () async {
-    // 413 and 499 are the other two beyond grpc-go's table. 413 is emitted by
-    // both responders for a body over the ceiling; 499 is nginx's, and no
-    // rpc_dart responder sends it, so only the mapping is checked.
-    expect(grpcStatusFromHttpStatus(408), RpcStatus.unavailable);
-    expect(grpcStatusFromHttpStatus(413), RpcStatus.resourceExhausted);
-    expect(grpcStatusFromHttpStatus(499), RpcStatus.cancelled);
+  test(
+    'the rows beyond the gRPC table and what each does to retries',
+    () async {
+      // 413 and 499 are the other two beyond grpc-go's table. 413 is emitted by
+      // both responders for a body over the ceiling; 499 is nginx's, and no
+      // rpc_dart responder sends it, so only the mapping is checked.
+      expect(grpcStatusFromHttpStatus(408), RpcStatus.unavailable);
+      expect(grpcStatusFromHttpStatus(413), RpcStatus.resourceExhausted);
+      expect(grpcStatusFromHttpStatus(499), RpcStatus.cancelled);
 
-    final tooLarge = await _call(413);
-    expect(tooLarge.status, RpcStatus.resourceExhausted);
-    expect(tooLarge.requests, 3);
-  });
+      // RESOURCE_EXHAUSTED names a size the caller can reduce; with no pushback
+      // it is final, because the same body fails the same way again.
+      final tooLarge = await _call(413);
+      expect(tooLarge.status, RpcStatus.resourceExhausted);
+      expect(tooLarge.requests, 1);
+    },
+  );
 
   test('GUARD the statuses that must stay final still are', () async {
     // 405 and 415 are emitted by the HTTP/1.1 responder too, and deliberately

@@ -6,6 +6,7 @@
 import 'dart:typed_data';
 
 import 'error_details.dart';
+import 'protocol.dart' show RpcStatus;
 
 /// What a caller shows when the peer's trailer carried no message at all.
 ///
@@ -103,6 +104,19 @@ class RpcStatusException extends RpcException {
     String message, {
     this.details = const [],
   }) : super(message);
+
+  /// RESOURCE_EXHAUSTED for a limit that frees up by itself -- a stream or
+  /// handler ceiling -- with the [RpcRetryInfo] that marks it as such.
+  ///
+  /// The default retry predicate retries RESOURCE_EXHAUSTED only with that
+  /// pushback, because the same status without it means a message over a size
+  /// limit, which fails the same way on every attempt.
+  RpcStatusException.atCapacity(String message)
+    : this(
+        RpcStatus.resourceExhausted,
+        message,
+        details: [RpcRetryInfo(Duration.zero)],
+      );
 
   /// Encodes [details] into a `google.rpc.Status` binary for the
   /// `grpc-status-details-bin` trailer. Returns null if no details.

@@ -748,8 +748,7 @@ class RpcHttp2CallerTransport
     if (_reservedStreams.length >= _policy.maxActiveStreams) {
       // RESOURCE_EXHAUSTED, matching the channel transport: a transient limit
       // the caller can back off from, not a mistake it made.
-      throw RpcStatusException(
-        RpcStatus.resourceExhausted,
+      throw RpcStatusException.atCapacity(
         'Too many active streams: ${_reservedStreams.length} '
         '(max: ${_policy.maxActiveStreams})',
       );
@@ -908,8 +907,7 @@ class RpcHttp2CallerTransport
         );
       }
       if (_activeStreams.isNotEmpty) {
-        throw RpcStatusException(
-          RpcStatus.resourceExhausted,
+        throw RpcStatusException.atCapacity(
           'HTTP/2 connection to $_host:$_port is at the server\'s '
           'MAX_CONCURRENT_STREAMS limit (${_activeStreams.length} in flight); '
           'the connection is healthy, so retry when one completes rather than '
@@ -1562,8 +1560,7 @@ class RpcHttp2CallerTransport
       if (_streamParsers.length >= _policy.maxActiveStreams &&
           !_streamParsers.containsKey(streamId)) {
         // RESOURCE_EXHAUSTED: a limit that frees up as streams finish.
-        throw RpcStatusException(
-          RpcStatus.resourceExhausted,
+        throw RpcStatusException.atCapacity(
           'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
         );
       }

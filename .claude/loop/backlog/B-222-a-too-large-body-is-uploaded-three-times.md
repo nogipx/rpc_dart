@@ -1,9 +1,10 @@
 ---
-status: open
-round: 583
+status: closed (round 669)
+release: changelog
+round: 669
 commit: 680cb188
 paths: [packages/core/rpc_dart/lib/src/core/protocol.dart, packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-probe: packages/transport/rpc_dart_http/.dart_tool/probe/b147_what_each_rejection_becomes.dart
+probe: P-232
 reason: "cost — the retry is CONFIRMED (413 -> RESOURCE_EXHAUSTED, 3 attempts) and so is the responder reading and discarding the whole body each time; what is unmeasured is what the three uploads cost, and whether any condition behind a 413 is actually transient"
 ---
 
@@ -61,6 +62,15 @@ genuine server-side exhaustion, which is the case the default exists for. The
 candidates are therefore: a distinct status for a size refusal, a row change, a
 predicate that reads the message, or nothing. Measure before choosing.
 
+## Outcome (round 669)
+
+FIXED as decided. The retry uploaded 385 KiB for a 128 KiB message and 1921 for
+640; now one upload. Capacity refusals carry `RpcRetryInfo` and are still
+retried. `../rounds/669-resource-exhausted-needs-pushback.md`, `P-232`.
+
 ## Owner decision
 
-—
+Round 669, after the measurement: **retry RESOURCE_EXHAUSTED only with
+pushback** (an `RpcRateLimitException` or `RpcRetryInfo`), and the same in the
+circuit breaker. Chosen over marking size refusals (works only against rpc_dart
+servers) and leaving it documented.

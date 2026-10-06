@@ -421,8 +421,7 @@ class RpcChannelTransport
       // mistake, it has hit a transient limit and can back off. As a StateError
       // `wireStatusFor` redacted it to INTERNAL, so the one thing the caller
       // needed to know -- wait and retry -- was the part that got destroyed.
-      throw RpcStatusException(
-        RpcStatus.resourceExhausted,
+      throw RpcStatusException.atCapacity(
         'Too many active streams: ${_activeStreams.length} '
         '(max: ${_policy.maxActiveStreams})',
       );

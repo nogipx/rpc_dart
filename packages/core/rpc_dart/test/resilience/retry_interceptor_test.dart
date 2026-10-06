@@ -110,7 +110,7 @@ void main() {
       expect(callCount, 1);
     });
 
-    test('default retries RESOURCE_EXHAUSTED', () async {
+    test('default retries RESOURCE_EXHAUSTED with pushback', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
         backoff: FixedBackoff(Duration(milliseconds: 10)),
@@ -123,7 +123,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcStatusException(RpcStatus.resourceExhausted, 'slow down');
+            throw RpcStatusException.atCapacity('slow down');
           },
         );
         fail('Should have thrown');
@@ -132,6 +132,30 @@ void main() {
       }
 
       expect(callCount, 3);
+    });
+
+    test('default does not retry a bare RESOURCE_EXHAUSTED', () async {
+      final interceptor = RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: FixedBackoff(Duration(milliseconds: 10)),
+      );
+      var callCount = 0;
+
+      try {
+        await interceptor.interceptUnary<String, String>(
+          callContext,
+          'request',
+          (ctx, req) async {
+            callCount++;
+            throw RpcStatusException(RpcStatus.resourceExhausted, 'too large');
+          },
+        );
+        fail('Should have thrown');
+      } on RpcStatusException {
+        // expected
+      }
+
+      expect(callCount, 1);
     });
 
     test('succeeds on retry after transient failure', () async {

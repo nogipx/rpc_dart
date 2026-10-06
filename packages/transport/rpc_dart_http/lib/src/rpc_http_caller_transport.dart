@@ -338,8 +338,7 @@ class RpcHttpCallerTransport
     if (_activeStreams.length >= _policy.maxActiveStreams) {
       // RESOURCE_EXHAUSTED and the same wording as the two siblings: a
       // transient limit the caller can back off from, not a mistake it made.
-      throw RpcStatusException(
-        RpcStatus.resourceExhausted,
+      throw RpcStatusException.atCapacity(
         'Too many active streams: ${_activeStreams.length} '
         '(max: ${_policy.maxActiveStreams})',
       );

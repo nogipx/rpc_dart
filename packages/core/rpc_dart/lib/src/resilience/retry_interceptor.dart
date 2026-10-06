@@ -207,11 +207,14 @@ class RpcRetryInterceptor extends IRpcInterceptor {
 
   /// Default transient-only predicate (gRPC-aligned).
   ///
-  /// Retries [RpcStatusException] with UNAVAILABLE (14) or RESOURCE_EXHAUSTED
-  /// (8) — the transport-closed and server-overload signals the framework puts
-  /// on the wire — plus [RpcRateLimitException], the local form of the second.
-  /// Everything else, including a generic [RpcException], an INTERNAL or
-  /// INVALID_* status and any non-RPC throw, is not retried.
+  /// Retries [RpcStatusException] with UNAVAILABLE (14), and RESOURCE_EXHAUSTED
+  /// (8) only with server pushback: an [RpcRateLimitException], or a status
+  /// carrying [RpcRetryInfo]. Everything else, including a generic
+  /// [RpcException], an INTERNAL or INVALID_* status and any non-RPC throw, is
+  /// not retried.
+  ///
+  /// A bare RESOURCE_EXHAUSTED is what a message over the server's size limit
+  /// gets, and that answer is the same on every attempt.
   ///
   /// Does NOT make a non-idempotent call safe: UNAVAILABLE covers both "the
   /// server never saw it" and "the server committed it and the response was
@@ -220,7 +223,8 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     if (error is RpcRateLimitException) return true;
     if (error is RpcStatusException) {
       return error.statusCode == RpcStatus.unavailable ||
-          error.statusCode == RpcStatus.resourceExhausted;
+          (error.statusCode == RpcStatus.resourceExhausted &&
+              error.details.any((d) => d is RpcRetryInfo));
     }
     return false;
   }

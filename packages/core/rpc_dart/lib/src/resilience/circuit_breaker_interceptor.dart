@@ -83,7 +83,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// Statuses that mean the SERVER is unhealthy, not that the request was.
   ///
   /// Deliberately WIDER than `RpcRetryInterceptor`'s transient set, which is
-  /// UNAVAILABLE and RESOURCE_EXHAUSTED: a breaker is asking "is this endpoint
+  /// UNAVAILABLE and RESOURCE_EXHAUSTED with pushback: a breaker is asking "is this endpoint
   /// in trouble", where a retry asks "is another attempt worth making". INTERNAL
   /// and UNKNOWN are worth counting for the first question and not the second —
   /// they are what a crashing handler produces — and DEADLINE_EXCEEDED is the
@@ -95,7 +95,11 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     if (error is RpcCancelledException) return false;
     if (error is RpcStatusException) {
       return error.statusCode == RpcStatus.unavailable ||
-          error.statusCode == RpcStatus.resourceExhausted ||
+          // Only with pushback, as the retry predicate reads it: a bare 8 is a
+          // message over the server's size limit, the caller's fault.
+          (error.statusCode == RpcStatus.resourceExhausted &&
+              (error is RpcRateLimitException ||
+                  error.details.any((d) => d is RpcRetryInfo))) ||
           error.statusCode == RpcStatus.internal ||
           error.statusCode == RpcStatus.unknown ||
           error.statusCode == RpcStatus.deadlineExceeded;
