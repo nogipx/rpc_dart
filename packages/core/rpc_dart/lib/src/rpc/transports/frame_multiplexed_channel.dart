@@ -133,6 +133,16 @@ class RpcFrameMultiplexedChannel
         metadata: message.metadata!,
         endOfStream: message.isEndOfStream,
       );
+      // The policy counts header text; the peer bounds this encoded frame by
+      // the same number, and a server closes the connection over it.
+      final encoded = frame.length - RpcChannelFrame.headerSize;
+      if (_refuses(RpcChannelFrame.flagMetadata, encoded)) {
+        throw RpcMetadataViolation(
+          'Metadata too large once encoded: $encoded bytes > '
+          '${_policy.maxMetadataBytes}',
+          name: 'metadata',
+        );
+      }
     } else if (message.isEndOfStream) {
       frame = RpcChannelFrame.encodeEndOfStream(message.streamId);
     } else {

@@ -1,5 +1,6 @@
 ---
-status: open
+status: closed (round 660)
+release: changelog
 round: 658
 commit: 7718fac6
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
@@ -52,6 +53,21 @@ sender's own check passed.
 
 Recommended: 1.
 
+## Outcome (round 660)
+
+Carried out: `RpcFrameMultiplexedChannel.send` compares the encoded payload with
+the receiver's own ceiling and throws `RpcMetadataViolation`. AT and QUOTES now
+fail at the sender with nothing closed; NEAR and PLAIN unchanged. P-227,
+`../rounds/660-metadata-the-policy-accepts.md`.
+
 ## Owner decision
 
-—
+**Option 1: the sender checks the encoded frame.** On a channel transport,
+metadata whose encoded frame would exceed the receiver's bound fails the call
+locally with `RpcMetadataViolation`; the policy keeps counting text. Taken in
+the owner review after round 659.
+
+Both directions: the RESPONSE row (status 8 instead of the server's 5) is the
+same gap from the server's side. Release `changelog`, not breaking: everything
+the check refuses fails today, only with a closed connection. The per-frame cost
+of the check is unmeasured; the round prices it.

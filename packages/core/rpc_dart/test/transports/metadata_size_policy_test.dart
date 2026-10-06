@@ -13,28 +13,52 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+/// A channel whose inbound bytes the test writes by hand: this library's own
+/// sender refuses the frames the receiver's limit is tested with.
+final class _Pipe implements IRpcChannel {
+  final _ctl = StreamController<Uint8List>();
+
+  @override
+  bool get isClosed => _ctl.isClosed;
+
+  @override
+  Stream<Uint8List> get incoming => _ctl.stream;
+
+  @override
+  Future<void> send(Uint8List data) async {}
+
+  @override
+  Future<void> close() async {
+    if (!_ctl.isClosed) await _ctl.close();
+  }
+
+  void feed(Uint8List chunk) => _ctl.add(chunk);
+}
+
+// Metadata capped far below the data-payload cap, as the defaults are.
+const _policy = RpcSecurityPolicy(
+  maxMessageLengthBytes: 1024 * 1024,
+  maxMetadataBytes: 2048,
+  closeOnProtocolError: false,
+);
+
+// ~15KB of headers: well under maxMessageLengthBytes, well over
+// maxMetadataBytes.
+final _oversized = RpcMetadata([
+  for (var i = 0; i < 300; i++) RpcHeader('h$i', 'v' * 40),
+], methodPath: '/S/M');
+
 void main() {
   test('an oversized metadata frame is rejected at its own limit', () async {
-    // Metadata capped far below the data-payload cap, as the defaults are.
-    const policy = RpcSecurityPolicy(
-      maxMessageLengthBytes: 1024 * 1024,
-      maxMetadataBytes: 2048,
-      closeOnProtocolError: false,
-    );
-    final (peer, server) = RpcFrameMultiplexedChannel.pair(policy: policy);
+    final pipe = _Pipe();
+    final server = RpcFrameMultiplexedChannel(channel: pipe, policy: _policy);
 
     final errors = <Object>[];
     server.incoming.listen((_) {}, onError: errors.add);
 
-    // ~15KB of headers: well under maxMessageLengthBytes, well over
-    // maxMetadataBytes. Before the fix this sailed through.
-    await peer.send(
-      RpcTransportMessage.withMetadata(
-        metadata: RpcMetadata([
-          for (var i = 0; i < 300; i++) RpcHeader('h$i', 'v' * 40),
-        ], methodPath: '/S/M'),
-        streamId: 1,
-      ),
+    // Before the fix this sailed through.
+    pipe.feed(
+      RpcChannelFrame.encodeMetadata(streamId: 1, metadata: _oversized),
     );
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
@@ -48,7 +72,21 @@ void main() {
       ),
     );
 
+    await server.close();
+  });
+
+  test('the sender refuses the same frame before it leaves', () async {
+    final (peer, server) = RpcFrameMultiplexedChannel.pair(policy: _policy);
+
+    await expectLater(
+      peer.send(
+        RpcTransportMessage.withMetadata(metadata: _oversized, streamId: 1),
+      ),
+      throwsA(isA<RpcMetadataViolation>()),
+    );
+
     await peer.close();
+    await server.close();
   });
 
   test('a large DATA frame under the payload cap still passes', () async {

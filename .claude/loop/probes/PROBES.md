@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-227](P-227-metadata-at-the-policy-edge-over-a-channel-pair.md)** valid (round 660), rpc_dart — an honest sender's metadata at and around `maxMetadataBytes` over a channel pair, request and response: before round 660 text at the limit, or 34000 quote characters, closed the server connection and the other call on it; now the sender refuses both. Round 660
 - **[P-226](P-226-a-chaos-run-of-the-core.md)** valid (round 640), rpc_dart — 200 concurrent calls per epoch, all four shapes, chaotic handlers and callers, one epoch in six torn down mid-traffic; pair, in-memory and with resilience interceptors. 23 000 calls clean: none hung or settled twice, no responder left, RSS flat. Round 640
 - **[P-225](P-225-what-a-fuzzer-finds-in-the-decoders-and-the-servers.md)** valid (round 639), rpc_dart + rpc_dart_websocket — four fuzzers: every peer-bytes decoder, a server, a client, a real websocket server. 100 000 inputs per decoder, 3300 server and 150 client sessions, 3600 websocket attacks; one defect, a repeated Sec-WebSocket-Key killing a server with compression on. Round 639
 - **[P-224](P-224-where-a-streamed-message-goes.md)** valid (round 622), rpc_dart — P-147's stream against a no-endpoint floor, plus VM-profiler attribution. `4.44` vs `1.57 us/message`; nearly 60 % of samples in `dart:async`. B-204
