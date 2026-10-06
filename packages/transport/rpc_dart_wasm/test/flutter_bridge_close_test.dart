@@ -24,7 +24,9 @@ import 'package:rpc_dart/rpc_dart.dart' show RpcStatusException;
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 const _channel = MethodChannel('rpc_dart_wasm');
-const _runtimeId = 'rt-1';
+
+/// The id the bridge asked for; the mock grants it, as native does.
+var _runtimeId = '';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +41,7 @@ void main() {
     messenger.setMockMethodCallHandler(_channel, (call) async {
       switch (call.method) {
         case 'loadRuntime':
+          _runtimeId = (call.arguments as Map)['runtimeId'] as String;
           return <Object?, Object?>{'runtimeId': _runtimeId};
         case 'closeRuntime':
           closeRuntimeCalls.add((call.arguments as Map)['runtimeId'] as String);

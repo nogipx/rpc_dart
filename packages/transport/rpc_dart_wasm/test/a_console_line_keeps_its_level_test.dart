@@ -15,7 +15,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 const _channel = MethodChannel('rpc_dart_wasm');
-const _runtimeId = 'rt-1';
+
+/// The id the bridge asked for; the mock grants it, as native does.
+var _runtimeId = '';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +29,7 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(_channel, (call) async {
       if (call.method == 'loadRuntime') {
+        _runtimeId = (call.arguments as Map)['runtimeId'] as String;
         return <Object?, Object?>{'runtimeId': _runtimeId};
       }
       return null;

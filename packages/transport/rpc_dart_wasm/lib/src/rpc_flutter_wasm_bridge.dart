@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -168,28 +169,72 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   /// [mjsCode] is the JavaScript glue file generated next to the `.wasm`.
   /// [jsBootPrefix] is evaluated before the glue code and can install extra
   /// host functions required by the runtime.
+  ///
+  /// The bridge -- and its channel handlers -- exist BEFORE the runtime boots,
+  /// under an id chosen here: native pushes what the guest sends during its
+  /// `main` before `loadRuntime` returns, and Flutter holds one message per
+  /// channel that has no handler, so of three boot frames Dart got the last.
   static Future<RpcFlutterWasmBridge> load({
     required Uint8List wasmBytes,
     required String mjsCode,
     String jsBootPrefix = '',
   }) async {
-    final result = await _channel.invokeMethod<Map<Object?, Object?>>(
-      'loadRuntime',
-      {'wasm': wasmBytes, 'mjs': mjsCode, 'jsBootPrefix': jsBootPrefix},
+    final bridge = RpcFlutterWasmBridge._(
+      _newRuntimeId(),
+      ServicesBinding.instance.defaultBinaryMessenger,
     );
-    final map = (result ?? const <Object?, Object?>{}).cast<String, Object?>();
+    final Map<String, Object?> map;
+    try {
+      final result = await _channel
+          .invokeMethod<Map<Object?, Object?>>('loadRuntime', {
+            'wasm': wasmBytes,
+            'mjs': mjsCode,
+            'jsBootPrefix': jsBootPrefix,
+            'runtimeId': bridge.runtimeId,
+          });
+      map = (result ?? const <Object?, Object?>{}).cast<String, Object?>();
+    } catch (_) {
+      bridge._release();
+      rethrow;
+    }
     final runtimeId = map['runtimeId'] as String?;
     final error = map['error'] as String?;
     if (runtimeId == null || error != null) {
+      bridge._release();
       throw RpcStatusException(
         RpcStatus.unavailable,
         'Failed to load WASM runtime: ${error ?? "no id"}',
       );
     }
-    return RpcFlutterWasmBridge._(
-      runtimeId,
-      ServicesBinding.instance.defaultBinaryMessenger,
-    );
+    if (runtimeId != bridge.runtimeId) {
+      bridge._release();
+      unawaited(
+        _channel.invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId}),
+      );
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'The native plugin ignored the requested runtime id',
+      );
+    }
+    return bridge;
+  }
+
+  static final Random _ids = Random.secure();
+
+  static String _newRuntimeId() => List.generate(
+    16,
+    (_) => _ids.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+
+  /// Drops the handlers and controllers of a bridge whose runtime never came
+  /// up; native has nothing to release.
+  void _release() {
+    _closed = true;
+    _messenger.setMessageHandler(_incomingChannel, null);
+    _messenger.setMessageHandler(_consoleChannel, null);
+    _messenger.setMessageHandler(_diedChannel, null);
+    if (!_incoming.isClosed) unawaited(_incoming.close());
+    if (!_console.isClosed) unawaited(_console.close());
   }
 
   @override

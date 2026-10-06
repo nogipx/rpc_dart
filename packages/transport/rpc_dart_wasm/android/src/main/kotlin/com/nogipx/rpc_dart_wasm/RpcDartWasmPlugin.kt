@@ -69,6 +69,7 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         call.argument("wasm"),
                         call.argument("mjs"),
                         call.argument<String>("jsBootPrefix") ?: "",
+                        call.argument<String>("runtimeId"),
                     ))
                     "closeRuntime" -> {
                         closeRuntime(call.argument<String>("runtimeId")!!)
@@ -136,6 +137,7 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         wasmBytes: ByteArray?,
         mjsCode: String?,
         jsBootPrefix: String,
+        requestedId: String?,
     ): Map<String, Any?> {
         if (wasmBytes == null || mjsCode == null) {
             return mapOf("error" to "Missing wasm or mjs data")
@@ -166,7 +168,11 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             )
         }
 
-        val runtimeId = UUID.randomUUID().toString()
+        // Dart chooses the id so it can install its channel handlers BEFORE the
+        // boot below pushes what the guest sent; Flutter buffers one message per
+        // channel with no handler.
+        val runtimeId = requestedId?.takeIf { it.isNotEmpty() && !runtimes.containsKey(it) }
+            ?: UUID.randomUUID().toString()
         val isolate = sb.createIsolate()
         runtimes[runtimeId] = isolate
         registerByteChannel(runtimeId)
@@ -186,6 +192,9 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 var fn = _microtaskQueue.shift();
                 try { fn(); } catch(e) { console.error(e); }
               }
+              // Every timer and every inbound frame ends here, so a receiver the
+              // guest installed in either gets the frames held for it.
+              _rpcWasmDeliverEarly();
             }
             var _rpcConsoleLog = [];
             var console = {
@@ -327,11 +336,29 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
               }
               return out.join('\n');
             }
+            // Frames that arrive before the guest has installed its receiver --
+            // it may await before RpcWasm.run -- are held, not dropped: the first
+            // is usually the host's flow-control window grant.
+            var _rpcWasmEarly = [];
+            function _rpcWasmReceiver() {
+              if (typeof rpcWasmReceiveBytes === 'function') return rpcWasmReceiveBytes;
+              if (typeof globalThis.rpcWasmReceiveBytes === 'function') return globalThis.rpcWasmReceiveBytes;
+              return null;
+            }
+            function _rpcWasmDeliverEarly() {
+              if (_rpcWasmEarly.length === 0) return;
+              var f = _rpcWasmReceiver();
+              if (!f) return;
+              var held = _rpcWasmEarly;
+              _rpcWasmEarly = [];
+              for (var i = 0; i < held.length; i++) f(held[i]);
+            }
             function _rpcWasmReceiveBytes(bytes) {
-              if (typeof rpcWasmReceiveBytes === 'function') {
-                rpcWasmReceiveBytes(bytes);
-              } else if (typeof globalThis.rpcWasmReceiveBytes === 'function') {
-                globalThis.rpcWasmReceiveBytes(bytes);
+              if (_rpcWasmReceiver()) {
+                _rpcWasmDeliverEarly();
+                _rpcWasmReceiver()(bytes);
+              } else {
+                _rpcWasmEarly.push(bytes);
               }
               _flushMicrotasks();
             }

@@ -1,9 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 675)
+release: changelog
+round: 675
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/lib/src/rpc_flutter_wasm_bridge.dart, packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
-probe: none — static read, nothing run
+probe: packages/transport/rpc_dart_wasm/example/integration_test/boot_frames_test.dart
 reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
 ---
 
@@ -35,6 +36,13 @@ Guest that awaits 100 ms before `run`; host sends immediately.
 
 Buffer natively until Dart signals ready; queue guest-side until the handler is
 installed.
+
+## Outcome (round 675)
+
+FIXED, both claims CONFIRMED on both platforms. Of three frames a guest sent at
+boot Dart received `[3]`; a host frame sent before the guest installed its
+receiver was lost. Now `[1, 2, 3]` and delivered.
+`../rounds/675-frames-sent-before-anyone-listens.md`.
 
 ## Owner decision
 

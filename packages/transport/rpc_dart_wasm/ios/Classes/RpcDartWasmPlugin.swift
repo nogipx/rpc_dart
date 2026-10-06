@@ -31,7 +31,8 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             let wasmData = (args?["wasm"] as? FlutterStandardTypedData)?.data
             let mjsCode = args?["mjs"] as? String
             let prefix = args?["jsBootPrefix"] as? String ?? ""
-            loadRuntime(wasmBytes: wasmData, mjsCode: mjsCode, jsBootPrefix: prefix, result: result)
+            let requestedId = args?["runtimeId"] as? String
+            loadRuntime(wasmBytes: wasmData, mjsCode: mjsCode, jsBootPrefix: prefix, requestedId: requestedId, result: result)
         case "closeRuntime":
             let args = call.arguments as? [String: Any]
             closeRuntime(runtimeId: args?["runtimeId"] as? String ?? "")
@@ -84,6 +85,7 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         wasmBytes: Data?,
         mjsCode: String?,
         jsBootPrefix: String,
+        requestedId: String?,
         result: @escaping FlutterResult
     ) {
         guard let wasmBytes = wasmBytes, let mjsCode = mjsCode else {
@@ -112,7 +114,13 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             return
         }
 
-        let runtimeId = UUID().uuidString
+        // Dart chooses the id so it can install its channel handlers BEFORE
+        // the guest boots: what the guest sends during invokeMain is pushed
+        // before this call returns, and Flutter buffers one message per
+        // channel with no handler -- so of three boot frames Dart got the last.
+        let runtimeId = (requestedId?.isEmpty == false && runtimes[requestedId!] == nil)
+            ? requestedId!
+            : UUID().uuidString
         let runtime = WasmRuntime(
             runtimeId: runtimeId,
             messenger: messenger,
@@ -195,6 +203,9 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             var fn = _microtaskQueue.shift();
             try { fn(); } catch(e) { console.error(e); }
           }
+          // Every timer and every inbound frame ends here, so a receiver the
+          // guest installed in either gets the frames held for it.
+          _rpcWasmDeliverEarly();
         }
         var _origConsole = typeof console !== 'undefined' ? console : {};
         console = {
@@ -261,11 +272,29 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
           fetch('rpc-wasm:///send', {method: 'POST', body: bytes});
         }
         var _recvRunning = false;
+        // Frames that arrive before the guest has installed its receiver -- it
+        // may await before RpcWasm.run -- are held, not dropped: the first is
+        // usually the host's flow-control window grant.
+        var _rpcWasmEarly = [];
+        function _rpcWasmReceiver() {
+          if (typeof rpcWasmReceiveBytes === 'function') return rpcWasmReceiveBytes;
+          if (typeof globalThis.rpcWasmReceiveBytes === 'function') return globalThis.rpcWasmReceiveBytes;
+          return null;
+        }
+        function _rpcWasmDeliverEarly() {
+          if (_rpcWasmEarly.length === 0) return;
+          var f = _rpcWasmReceiver();
+          if (!f) return;
+          var held = _rpcWasmEarly;
+          _rpcWasmEarly = [];
+          for (var i = 0; i < held.length; i++) f(held[i]);
+        }
         function _rpcWasmReceiveBytes(bytes) {
-          if (typeof rpcWasmReceiveBytes === 'function') {
-            rpcWasmReceiveBytes(bytes);
-          } else if (typeof globalThis.rpcWasmReceiveBytes === 'function') {
-            globalThis.rpcWasmReceiveBytes(bytes);
+          if (_rpcWasmReceiver()) {
+            _rpcWasmDeliverEarly();
+            _rpcWasmReceiver()(bytes);
+          } else {
+            _rpcWasmEarly.push(bytes);
           }
           _flushMicrotasks();
         }
