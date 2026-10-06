@@ -15,8 +15,13 @@ enum RpcDataTransferMode {
   /// Works with any transport.
   codec,
 
-  /// Auto mode — picks based on codec presence (codecs → codec mode, otherwise
-  /// zeroCopy).
+  /// Auto mode, the default.
+  ///
+  /// A UNARY call passes objects by reference whenever the transport supports
+  /// it (in-memory, isolate), codecs given or not: the codecs are not called
+  /// and `maxMessageLengthBytes` does not apply, because there are no bytes.
+  /// Elsewhere, and on every streaming shape that has codecs, it serializes.
+  /// Use [codec] to serialize everywhere.
   auto,
 }
 

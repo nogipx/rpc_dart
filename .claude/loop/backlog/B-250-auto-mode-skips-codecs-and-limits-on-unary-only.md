@@ -1,6 +1,7 @@
 ---
-status: decided by owner (round 676)
-round: — (not re-measured)
+status: closed (round 677)
+release: changelog
+round: 677
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/contracts/models.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
 probe: .dart_tool/probe/codec_mode_response.dart
@@ -42,6 +43,12 @@ comment names both effects. A user reading the enum expects neither.
 - Make `auto` mean codec mode when codecs are given, as the enum says.
 
 Either way, decide whether streaming should follow unary.
+
+## Outcome (round 677)
+
+FIXED as decided: the `auto` doc now says what the code does, and a witness
+pins it (`auto` over the limit passes on memory, `codec` reads 8).
+`../rounds/677-what-auto-means.md`.
 
 ## Owner decision
 
