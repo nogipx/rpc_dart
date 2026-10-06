@@ -1,9 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 666)
+release: changelog
+round: 666
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-probe: none — static read, nothing run
+probe: P-230
 reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
 ---
 
@@ -31,6 +32,13 @@ Peer overrunning the window by one frame.
 ## Fix sketch
 
 Drop the message once the stream is refused.
+
+## Outcome (round 666)
+
+FIXED, CONFIRMED on both sides. The caller delivered the overrunning message
+after RESOURCE_EXHAUSTED; the responder's sibling meter delivered it after the
+cancellation. Each `_emit` now drops a payload for a refused stream: 1 -> 0 on
+both. `../rounds/666-the-message-behind-the-refusal.md`, `P-230`.
 
 ## Owner decision
 

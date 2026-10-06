@@ -1753,6 +1753,10 @@ class RpcHttp2CallerTransport
     // discharges immediately afterwards, and crediting a charge that has not
     // happened yet would clamp the counter at zero.
     _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
+    // A reset stream has had its last word: the overrun refusal above, or a
+    // reset whose subscription cancel has not landed. Delivering this would
+    // put data behind the error that ended the call.
+    if (_resetStreams.contains(message.streamId)) return;
     if (!_messageController.isClosed) _messageController.add(message);
     _streams.add(message);
     if (message.isEndOfStream) _fcForget(message.streamId);

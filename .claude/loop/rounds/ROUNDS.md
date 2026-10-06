@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[666](666-the-message-behind-the-refusal.md)** FIXED, rpc_dart_http2 — **the window's refusal was not the call's last event**: caller and responder each delivered the overrunning message behind the RESOURCE_EXHAUSTED or the cancellation. Both `_emit`s drop a refused stream's payload. Closes B-186
 - **[664](664-a-failed-response-keeps-downloading.md)** FIXED, rpc_dart_http2 — **a response the caller had already failed kept downloading**: four exits (non-200, non-gRPC, refused headers, unparseable body) reported and returned, so a transport user got 1024 KiB and 128 ERROR records. Each now resets; a 103 no longer fails the call. Closes B-188
 - **[663](663-the-drain-close-could-never-run.md)** FIXED, rpc_dart_http — **`close()` answered each pending request with a drain shelf refuses**: every pending request is past `read()`, so it logged `Rejection drain skipped` per request. `drainBody: false`; the 503 unchanged. Closes B-141
 - **[662](662-the-refusal-text-nothing-foreign-reaches.md)** CLEAN, rpc_dart_http2 — **B-191 refuted on reachability**: every error that can reach `_answerRejectedStream` is ours, each answered status 3 with our message; an injected foreign error does leak, nothing shipped throws one. `C-65`

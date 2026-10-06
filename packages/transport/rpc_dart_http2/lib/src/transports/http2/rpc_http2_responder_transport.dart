@@ -1009,6 +1009,11 @@ class RpcHttp2ResponderTransport
     // report the credit back, and crediting a charge that has not happened yet
     // would leave the counter permanently negative-then-clamped at zero.
     _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
+    // A refused call has been cancelled; its payload, the overrunning one
+    // included, must not reach the handler behind the cancellation.
+    if (message.payload != null && _fcRefused.contains(message.streamId)) {
+      return;
+    }
     if (!_messageController.isClosed) _messageController.add(message);
     _streams.add(message);
   }
