@@ -100,13 +100,17 @@ To allow any origin (incompatible with `allowCredentials: true`):
 RpcHttpCorsPolicy(allowedOrigins: ['*'])
 ```
 
-### Body read timeout
+### Body timeouts
 
-Limit how long to wait for the full request body:
+`bodyIdleTimeout` (default 30 s) refuses a request body that stops arriving;
+an upload that keeps arriving is never refused by it. `bodyReadTimeout`
+(default none) caps the whole read, and refuses an honest slow upload just as
+it refuses a stalled one:
 
 ```dart
 RpcHttpResponderTransport(
-  bodyReadTimeout: Duration(seconds: 10),
+  bodyIdleTimeout: Duration(seconds: 10),
+  bodyReadTimeout: Duration(minutes: 5), // optional ceiling
 )
 ```
 

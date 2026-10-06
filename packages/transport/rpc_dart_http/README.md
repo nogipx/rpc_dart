@@ -78,8 +78,10 @@ await shelf_io.serve(transport.handler, '127.0.0.1', 8080);
 
 `RpcSecurityPolicy` bounds concurrent requests, body size and header size; pass
 it to the transport or to `RpcHttpServer`. A body over
-`maxMessageLengthBytes` is rejected with `400`. Set `bodyReadTimeout` to bound
-how long a slow or stalled client may hold a request open.
+`maxMessageLengthBytes` is rejected with `400`. A body that stops arriving for
+`bodyIdleTimeout` (30 s by default) is refused with `408`; a body that keeps
+arriving is not, however large. `bodyReadTimeout` adds an optional ceiling on
+the whole read.
 
 The wire format is gRPC-shaped (`application/grpc+proto`, 5-byte length-prefixed
 messages, `grpc-status` in the response), but this is not gRPC-over-HTTP/1.1 —

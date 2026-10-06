@@ -64,6 +64,7 @@ class RpcHttpServer implements IRpcServer {
   final RpcHttpCorsPolicy? _corsPolicy;
   final RpcSecurityPolicy? _securityPolicy;
   final Duration? _bodyReadTimeout;
+  final Duration? _bodyIdleTimeout;
   final void Function(RpcResponderEndpoint) _onEndpointCreated;
   final LogScope? _logger;
   final LogController? _logController;
@@ -85,9 +86,10 @@ class RpcHttpServer implements IRpcServer {
   /// an explicit policy to tune them. Set to `null` only to disable all limits
   /// (not recommended — this allows unbounded request bodies).
   ///
-  /// [bodyReadTimeout] bounds how long the server waits for a full request
-  /// body, rejecting a slow one with `408` instead of buffering it indefinitely
-  /// (slowloris mitigation). It also rejects a client sending
+  /// [bodyIdleTimeout] refuses with `408` a request body that stops arriving
+  /// for that long (slowloris mitigation), 30 seconds by default; a body that
+  /// keeps arriving is never refused by it. [bodyReadTimeout] is an optional
+  /// ceiling on the whole body read. It also rejects a client sending
   /// `Expect: 100-continue`, whose fallback wait runs inside this budget — see
   /// [RpcHttpResponderTransport.bodyReadTimeout] for that trade-off.
   RpcHttpServer({
@@ -97,6 +99,7 @@ class RpcHttpServer implements IRpcServer {
     RpcHttpCorsPolicy? corsPolicy,
     RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
     Duration? bodyReadTimeout,
+    Duration? bodyIdleTimeout = const Duration(seconds: 30),
     LogScope? logger,
     LogController? logController,
   }) : _host = host,
@@ -104,6 +107,7 @@ class RpcHttpServer implements IRpcServer {
        _corsPolicy = corsPolicy,
        _securityPolicy = securityPolicy,
        _bodyReadTimeout = bodyReadTimeout,
+       _bodyIdleTimeout = bodyIdleTimeout,
        _onEndpointCreated = onEndpointCreated,
        _logController = logController,
        _logger = logger?.child('HttpServer');
@@ -139,6 +143,7 @@ class RpcHttpServer implements IRpcServer {
       corsPolicy: _corsPolicy,
       securityPolicy: _securityPolicy,
       bodyReadTimeout: _bodyReadTimeout,
+      bodyIdleTimeout: _bodyIdleTimeout,
       logger: _logger,
     );
     _logger?.debug(
@@ -244,6 +249,7 @@ class RpcHttpServer implements IRpcServer {
         corsPolicy: _corsPolicy,
         securityPolicy: _securityPolicy,
         bodyReadTimeout: _bodyReadTimeout,
+        bodyIdleTimeout: _bodyIdleTimeout,
         logger: _logger,
       );
       // Released with the rest: the documented recovery is to call this again.

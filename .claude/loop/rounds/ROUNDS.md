@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[673](673-a-slow-upload-is-not-a-stalled-one.md)** FIXED, rpc_dart_http — **a whole-body deadline refused an honest slow upload like a stalled client** (408 at 2 s for both). By owner decision a per-chunk `bodyIdleTimeout`, default 30 s; expiring it by cancelling the read lost the 408 (`closed`), so it races the read. Closes B-223
 - **[672](672-a-handshake-with-no-status.md)** FIXED, rpc_dart_http — **a TLS handshake failure reached the HTTP/1.1 caller with no status**, invisible to retry and the breaker; now UNAVAILABLE. `reconnect()` after `close()` now says closed; five shape items with it. Closes B-152
 - **[671](671-a-cors-check-undone-after-construction.md)** FIXED, rpc_dart_http — **the CORS `*`-with-credentials refusal could be undone by mutating the list after construction**: an evil origin then got `*` + credentials. Inputs copied, origins case-insensitive, headers de-duplicated, preflight cached 10 min by default. Closes B-153; files B-247
 - **[670](670-the-body-no-upgrade-carries.md)** FIXED, rpc_dart_websocket (test only) — **the refused-upgrade flake was the test's request**: body bytes after an upgrade read `closed` 9 of 3600 under gate load, 0 of 3600 without. The callback-throws red did not reproduce, 0 of 1000. Closes B-241

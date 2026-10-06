@@ -115,8 +115,21 @@ class RpcHttpResponderTransport
   /// automatically and attaches CORS headers to all responses.
   final RpcHttpCorsPolicy? corsPolicy;
 
+  /// Longest silence allowed while the request body arrives, reset by every
+  /// chunk. Defaults to 30 seconds; null disables it.
+  ///
+  /// This is the bound that tells a stalled client from a slow one: a body that
+  /// keeps arriving is never refused by it, whatever its size, and a client that
+  /// stops is refused this long after its last byte. [bodyReadTimeout] bounds
+  /// the total instead, which is size times throughput.
+  final Duration? bodyIdleTimeout;
+
   /// Maximum time to wait for the full request body to arrive.
   /// If null, no timeout is applied.
+  ///
+  /// A TOTAL: an honest large upload over a slow link is refused at the same
+  /// deadline as a stalled client. [bodyIdleTimeout] is the bound for stalls;
+  /// this is an optional ceiling on top of it.
   ///
   /// CAUTION — this rejects a client that sends `Expect: 100-continue`.
   ///
@@ -152,6 +165,7 @@ class RpcHttpResponderTransport
     RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
     this.corsPolicy,
     this.bodyReadTimeout,
+    this.bodyIdleTimeout = const Duration(seconds: 30),
   }) : _securityPolicy = securityPolicy,
        _logger = logger?.child('HttpResponderTransport');
 
@@ -170,7 +184,8 @@ class RpcHttpResponderTransport
   /// before the status is flushed, so the peer gets a SocketException instead —
   /// the same hazard [_handleRequest]'s body reader documents.
   ///
-  /// Drained under [bodyReadTimeout] rather than unbounded: `_reject` runs
+  /// Drained under [bodyIdleTimeout] and [bodyReadTimeout] rather than
+  /// unbounded: `_reject` runs
   /// BEFORE the stream is registered, so these requests are counted by nothing,
   /// and an undeadlined drain makes a REFUSED request the cheaper attack than an
   /// accepted one. The subscription is CANCELLED on expiry — a `.timeout()` on
@@ -196,10 +211,12 @@ class RpcHttpResponderTransport
     bool drainBody = true,
   }) async {
     StreamSubscription<List<int>>? sub;
+    final idle = _IdleDeadline(bodyIdleTimeout);
     if (drainBody) {
       try {
-        sub = request.read().listen(null);
-        final drained = sub.asFuture<void>();
+        sub = request.read().listen((_) => idle.arm());
+        idle.arm();
+        final drained = Future.any([sub.asFuture<void>(), idle.expired]);
         await (bodyReadTimeout == null
             ? drained
             : drained.timeout(bodyReadTimeout!));
@@ -212,6 +229,7 @@ class RpcHttpResponderTransport
         // The peer may have gone already, or spent its budget; the status below
         // is still worth trying.
       } finally {
+        idle.cancel();
         await sub?.cancel();
       }
     }
@@ -380,17 +398,20 @@ class RpcHttpResponderTransport
       // dart:io tears the connection down before the 400 is flushed, so the
       // client sees "Connection closed before full header was received" rather
       // than the status. Memory stays bounded because the buffer is dropped;
-      // wall-clock is bounded by [bodyReadTimeout] when set.
+      // a stall is bounded by [bodyIdleTimeout], the total by [bodyReadTimeout].
       //
       // BytesBuilder, not `List<int>` + `Uint8List.fromList`: a Dart list holds
       // WORD-SIZED elements, so the buffer costs several times the body and the
       // final copy doubles it again -- for a body size the PEER chooses, bounded
       // only by maxMessageLengthBytes. At the 16 MiB default that was hundreds
       // of MiB of peak for ONE accepted request.
+      final idle = _IdleDeadline(bodyIdleTimeout);
       Future<Uint8List> readBody() async {
         final builder = BytesBuilder(copy: false);
         var exceeded = false;
+        idle.arm();
         await for (final chunk in request.read()) {
+          idle.arm();
           if (exceeded) continue;
           builder.add(chunk);
           // `maxBufferedBytes`, not the per-message limit: this body is a whole
@@ -414,17 +435,21 @@ class RpcHttpResponderTransport
         return builder.takeBytes();
       }
 
-      final Uint8List body;
+      var reading = Future.any([readBody(), idle.expired]);
       if (bodyReadTimeout != null) {
-        body = await readBody().timeout(
+        reading = reading.timeout(
           bodyReadTimeout!,
           onTimeout: () => throw TimeoutException(
             'Body read timed out after $bodyReadTimeout',
             bodyReadTimeout,
           ),
         );
-      } else {
-        body = await readBody();
+      }
+      final Uint8List body;
+      try {
+        body = await reading;
+      } finally {
+        idle.cancel();
       }
 
       // Announced to the pipeline only once the whole request is in hand.
@@ -778,4 +803,32 @@ class RpcHttpResponderTransport
       'HTTP/1.1 transport does not support direct object transfer',
     );
   }
+}
+
+/// A deadline re-armed by every body chunk: [expired] fails once [limit]
+/// passes with none. It RACES the read rather than cancelling it: cancelling
+/// the body subscription makes dart:io drop the connection before the 408 goes
+/// out, measured as `closed` instead of the status.
+final class _IdleDeadline {
+  _IdleDeadline(this.limit) {
+    // Handled even when no read was ever raced against it.
+    _expired.future.ignore();
+  }
+
+  final Duration? limit;
+  final _expired = Completer<Never>();
+  Timer? _timer;
+
+  Future<Never> get expired => _expired.future;
+
+  void arm() {
+    final l = limit;
+    if (l == null || _expired.isCompleted) return;
+    _timer?.cancel();
+    _timer = Timer(l, () {
+      _expired.completeError(TimeoutException('No body bytes for $l', l));
+    });
+  }
+
+  void cancel() => _timer?.cancel();
 }

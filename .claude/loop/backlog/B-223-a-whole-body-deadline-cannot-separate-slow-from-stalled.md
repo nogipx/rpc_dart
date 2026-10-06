@@ -1,9 +1,10 @@
 ---
-status: open
-round: 584
+status: closed (round 673)
+release: changelog
+round: 673
 commit: f3cc2e53
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart]
-probe: packages/transport/rpc_dart_http/.dart_tool/probe/b150_what_the_documented_setup_admits.dart
+probe: packages/transport/rpc_dart_http/.dart_tool/probe/b223_slow_versus_stalled.dart
 reason: "bench — the mechanism is a reading (`readBody().timeout(...)` bounds the whole read) and the rig that would witness it DEADLOCKS the probe process; what a finite default costs an honest slow upload is unmeasured, which is why round 584 defaulted the policy and not the timeout"
 ---
 
@@ -65,6 +66,13 @@ than one claim.
 `RpcHttpServer.bodyReadTimeout` passes straight through, so whatever is decided
 covers both entry points.
 
+## Outcome (round 673)
+
+FIXED as decided. At a 2 s total an honest 4-second upload got the same 408 as
+a stalled client; the new `bodyIdleTimeout` (default 30 s) passes it and
+refuses the stall. `../rounds/673-a-slow-upload-is-not-a-stalled-one.md`.
+
 ## Owner decision
 
-—
+Round 673, after the witness: an idle bound with a default (30 s), the total
+kept as an opt-in ceiling.
