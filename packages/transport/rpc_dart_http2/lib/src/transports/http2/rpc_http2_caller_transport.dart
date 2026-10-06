@@ -1336,6 +1336,7 @@ class RpcHttp2CallerTransport
       );
 
       _emitStreamError(streamId, e, stackTrace);
+      _dropFailedResponse(streamId);
 
       // A client is ground the same way a server is, and the shared layer
       // closes here too -- `RpcChannelTransport._validateInbound` runs on both
@@ -1392,6 +1393,10 @@ class RpcHttp2CallerTransport
     // Check :status pseudo-header (present only in initial response, not trailers).
     final httpStatus = extractHttpStatus(message.headers);
 
+    // An interim response (103 Early Hints): the final one follows on the same
+    // stream, so failing here fails a call the server is about to answer.
+    if (httpStatus != null && httpStatus >= 100 && httpStatus < 200) return;
+
     if (httpStatus != null && httpStatus != 200) {
       // Non-200 HTTP status — map through the gRPC status table.
       //
@@ -1421,6 +1426,7 @@ class RpcHttp2CallerTransport
           methodPath: methodPath,
         ),
       );
+      _dropFailedResponse(streamId);
       return;
     }
 
@@ -1515,6 +1521,7 @@ class RpcHttp2CallerTransport
             methodPath: methodPath,
           ),
         );
+        _dropFailedResponse(streamId);
         return;
       }
     }
@@ -1627,6 +1634,7 @@ class RpcHttp2CallerTransport
       );
 
       _emitStreamError(streamId, e, stackTrace);
+      _dropFailedResponse(streamId);
     }
   }
 
@@ -1716,6 +1724,20 @@ class RpcHttp2CallerTransport
       resetStream(
         streamId,
         reason: 'un-consumed response window exceeded',
+      ).catchError((Object _) => false),
+    );
+  }
+
+  /// Stops a response whose call this side has already failed. Without the
+  /// reset its body -- typically a proxy's HTML page -- keeps downloading and
+  /// every DATA frame is fed to the gRPC parser, one ERROR per frame.
+  ///
+  /// Call AFTER reporting the failure: [resetStream] suppresses later errors.
+  void _dropFailedResponse(int streamId) {
+    unawaited(
+      resetStream(
+        streamId,
+        reason: 'the call has already failed',
       ).catchError((Object _) => false),
     );
   }

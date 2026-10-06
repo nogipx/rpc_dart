@@ -1,9 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 664)
+release: changelog
+round: 664
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-probe: none — static read, nothing run
+probe: P-229
 reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
 ---
 
@@ -31,6 +32,15 @@ Server answering 503 with a 1 MiB HTML body.
 ## Fix sketch
 
 RST after emitting the status; skip 1xx.
+
+## Outcome (round 664)
+
+FIXED, both claims CONFIRMED and the class wider than filed. A transport user got
+the whole 1 MiB body, 128 ERROR records and 64 broadcast errors after the end; a
+valid answer behind a 103 failed with status 2. Two more exits had the same
+shape -- headers the policy refuses and a body that does not parse, 64-65 errors
+to the consumer each. All four now reset right after reporting; 1xx is skipped.
+`../rounds/664-a-failed-response-keeps-downloading.md`, `P-229`.
 
 ## Owner decision
 

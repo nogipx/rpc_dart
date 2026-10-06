@@ -57,10 +57,6 @@ other failure there is the peer's doing, and that one can only be ours.
 Behaviour unchanged. What changed is that the transport stops performing an operation it knows will
 fail, and stops hiding the error when it does.
 
-## Still open
-
-`close()`'s drain, which the lead names in the same sentence and nothing here looked at.
-
 ## Outcome (round 663)
 
 FIXED. Every request `close()` answers is past `read()` -- it enters `_pending`
