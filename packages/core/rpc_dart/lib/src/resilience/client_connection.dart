@@ -120,7 +120,12 @@ final class _ReconnectingTransportProxy
   /// transport wholesale, so it has to carry the watermark across.
   int _idWatermark = -1;
 
-  /// Reads the cursor off [inner] and remembers the max.
+  /// Reads the cursor off [inner] and remembers it.
+  ///
+  /// The latest cursor, not the max: each transport was seeded from the one
+  /// before, so its cursor is behind the watermark only once the id space has
+  /// wrapped -- and then the max would restart the next transport at the ids
+  /// this one is reusing.
   ///
   /// Read as early as the path allows. On [_retire] that is already AFTER the
   /// transport closed itself, since a peer-started drop is reported by that
@@ -129,8 +134,7 @@ final class _ReconnectingTransportProxy
   /// still the safe order for a third-party transport.
   void _noteIdWatermark(IRpcTransport? inner) {
     if (inner is! IRpcStreamIdSequence) return;
-    final cursor = (inner as IRpcStreamIdSequence).lastIssuedStreamId;
-    if (cursor > _idWatermark) _idWatermark = cursor;
+    _idWatermark = (inner as IRpcStreamIdSequence).lastIssuedStreamId;
   }
 
   /// Called by [RpcClientConnection] when the inner transport closes.
@@ -371,17 +375,17 @@ final class _ReconnectingTransportProxy
     }
   }
 
-  /// The highest id ANY transport this proxy has owned handed out.
+  /// The live transport's cursor, or the last one noted when there is none.
   ///
-  /// The live transport's own cursor is behind the watermark right after a
-  /// reconnect, since [attach] seeds it and the seed only moves it forward.
+  /// The live one is already seeded from the watermark by [attach], so it is
+  /// behind it only after a wrap, where it is the right answer. See
+  /// [_noteIdWatermark].
   @override
   int get lastIssuedStreamId {
     final inner = _inner;
-    final live = inner is IRpcStreamIdSequence
+    return inner is IRpcStreamIdSequence
         ? (inner as IRpcStreamIdSequence).lastIssuedStreamId
-        : -1;
-    return live > _idWatermark ? live : _idWatermark;
+        : _idWatermark;
   }
 
   @override

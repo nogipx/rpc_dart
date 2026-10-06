@@ -443,6 +443,69 @@ void main() {
     );
   });
 
+  // Round 661. Once the 31-bit space wraps, the highest id ever issued is the
+  // maximum, and a transport seeded from it restarts at 1 -- the ids the
+  // previous connection is reusing.
+  group('WITNESS: after the id space wraps', () {
+    test('a swap does not replay the ids issued before it', () async {
+      final f = _build();
+      f.connection.connect();
+      await _online(f);
+
+      final before = f.connection.transport;
+      (before as IRpcStreamIdSequence).resumeStreamIdsAfter(
+        RpcStreamIdManager.maxId - 6,
+      );
+      final first = <int>[];
+      for (var i = 0; i < 5; i++) {
+        final id = before.createStream();
+        first.add(id);
+        before.releaseStreamId(id);
+      }
+      expect(first, contains(1), reason: 'the premise: the space wrapped');
+
+      await _swap(f);
+      final second = <int>[];
+      for (var i = 0; i < 5; i++) {
+        final id = f.connection.transport.createStream();
+        second.add(id);
+        f.connection.transport.releaseStreamId(id);
+      }
+
+      expect(second.toSet().intersection(first.toSet()), isEmpty);
+    });
+
+    test('a manager resumed from a recycling one continues after it', () {
+      // A stream held open across the wrap keeps the old manager recycling, so
+      // its sequential cursor stays at the maximum.
+      final old = RpcStreamIdManager(
+        isClient: true,
+        resumeAfter: RpcStreamIdManager.maxId - 4,
+      );
+      old.generateId(); // held open
+      old.releaseId(old.generateId());
+      final recycled = old.generateId();
+      expect(recycled, 1, reason: 'the premise: ids are being recycled');
+
+      final next = RpcStreamIdManager(
+        isClient: true,
+        resumeAfter: old.lastIssuedId,
+      );
+
+      expect(next.generateId(), isNot(recycled));
+    });
+
+    test('GUARD below the top the sequence still continues', () {
+      final old = RpcStreamIdManager(isClient: true, resumeAfter: 1001);
+      expect(old.generateId(), 1003);
+      final next = RpcStreamIdManager(
+        isClient: true,
+        resumeAfter: old.lastIssuedId,
+      );
+      expect(next.generateId(), 1005);
+    });
+  });
+
   // Round 234. Every swap above goes through forceReconnect(), which detaches
   // a transport that is still OPEN and can read its cursor first. A real
   // reconnect begins with the peer going away, and then the transport has

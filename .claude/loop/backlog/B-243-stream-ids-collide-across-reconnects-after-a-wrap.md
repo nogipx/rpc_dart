@@ -1,5 +1,6 @@
 ---
-status: open
+status: closed (round 661)
+release: changelog
 round: 658
 commit: 7718fac6
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -36,6 +37,14 @@ abandoned and expired calls, `wrong=0 hangs=0`.
 A watermark that survives the wrap: track the generation (wrap count) beside
 the id, or reset the watermark when the transport reports a wrap, and a
 witness that drives `resumeStreamIdsAfter` near the top across two reconnects.
+
+## Outcome (round 661)
+
+FIXED. Not the generation counter: the proxy keeps the LATEST transport's cursor
+instead of the max, and `RpcStreamIdManager.lastIssuedId` reports the id issued
+last, recycled ones included (with a stream held across the wrap its sequential
+cursor stays at the top). Reconnected ids `[5..13]` against the replayed five.
+P-228, `../rounds/661-the-watermark-after-the-wrap.md`.
 
 ## Owner decision
 

@@ -381,8 +381,12 @@ final class RpcStreamIdManager {
   /// Determines role (client/server) for ID generation.
   final bool isClient;
 
-  /// Last generated ID.
+  /// Cursor for the next sequential ID; pinned at the maximum while IDs are
+  /// being recycled after a wrap.
   int _lastId;
+
+  /// The ID most recently handed out, recycled ones included.
+  int _lastIssued;
 
   /// Upper bound considering parity.
   final int _maxAssignableId;
@@ -409,6 +413,10 @@ final class RpcStreamIdManager {
     int? customMaxId,
     int? resumeAfter,
   }) : _lastId = _alignedStart(isClient: isClient, resumeAfter: resumeAfter),
+       _lastIssued = _alignedStart(
+         isClient: isClient,
+         resumeAfter: resumeAfter,
+       ),
        _firstAssignableId = isClient ? 1 : 2,
        _maxAssignableId = _computeMaxAssignableId(
          isClient: isClient,
@@ -453,7 +461,7 @@ final class RpcStreamIdManager {
     final nextId = _lastId + 2;
 
     if (nextId <= _maxAssignableId) {
-      _lastId = nextId;
+      _lastId = _lastIssued = nextId;
       _activeIds.add(nextId);
       return nextId;
     }
@@ -461,7 +469,7 @@ final class RpcStreamIdManager {
     // Nothing in flight, so the whole range is free again.
     if (_activeIds.isEmpty) {
       final restartId = _firstAssignableId;
-      _lastId = restartId;
+      _lastId = _lastIssued = restartId;
       _activeIds.add(restartId);
       return restartId;
     }
@@ -478,6 +486,7 @@ final class RpcStreamIdManager {
     }
 
     _activeIds.add(recycledId);
+    _lastIssued = recycledId;
     return recycledId;
   }
 
@@ -494,8 +503,12 @@ final class RpcStreamIdManager {
   /// Number of active IDs.
   int get activeCount => _activeIds.length;
 
-  /// The highest id handed out so far, for a transport that has to CONTINUE
+  /// The id handed out most recently, for a transport that has to CONTINUE
   /// this sequence on a fresh connection rather than restart it.
+  ///
+  /// Most recent, not highest: after the space wraps the highest is the
+  /// maximum, and a manager seeded from it restarts at the first id -- the
+  /// ones the old connection is reusing.
   ///
   /// A reconnecting transport builds a new manager, and a new manager starts
   /// over at 1 — so the call that opens after a reconnect gets the id a dead
@@ -509,7 +522,7 @@ final class RpcStreamIdManager {
   /// Reads as the manager's own "last generated" cursor, so
   /// `RpcStreamIdManager(isClient: ..., resumeAfter: old.lastIssuedId)`
   /// round-trips exactly.
-  int get lastIssuedId => _lastId;
+  int get lastIssuedId => _lastIssued;
 
   /// Moves the cursor forward so the next id follows [streamId].
   ///
@@ -521,7 +534,9 @@ final class RpcStreamIdManager {
   void resumeAfter(int streamId) {
     if (streamId <= _lastId) return;
     final aligned = streamId.isOdd == isClient ? streamId : streamId + 1;
-    _lastId = aligned > _maxAssignableId ? _maxAssignableId : aligned;
+    _lastId = _lastIssued = aligned > _maxAssignableId
+        ? _maxAssignableId
+        : aligned;
   }
 
   /// Frees every active id, keeping the [lastIssuedId] cursor.
@@ -541,7 +556,7 @@ final class RpcStreamIdManager {
   /// a namespace with new calls. Use [releaseAll] to end the calls without that.
   void reset() {
     _activeIds.clear();
-    _lastId = isClient ? -1 : 0;
+    _lastId = _lastIssued = isClient ? -1 : 0;
   }
 
   String get _sideLabel => isClient ? 'client' : 'server';

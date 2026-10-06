@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/**]
 applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
-applied: [217, 218, 224, 234, 527, 541, 643]
-status: confirmed (round 234)
+applied: [217, 218, 224, 234, 527, 541, 643, 661]
+status: confirmed (round 661)
 ---
 
 # RPC-03 — Stream ids that outlive a reconnect
