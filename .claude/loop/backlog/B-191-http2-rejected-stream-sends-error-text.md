@@ -1,5 +1,6 @@
 ---
-status: open
+status: closed (round 662)
+release: none
 round: — (not re-measured) — filed by the external audit of 2026-09-28
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
@@ -32,6 +33,13 @@ Force a non-Rpc error in `_handleIncomingHeaders`; read `grpc-message`.
 ## Fix sketch
 
 `sendWireError` / `wireStatusFor`.
+
+## Outcome (round 662)
+
+REFUTED on reachability. The formatting is as read; no foreign error reaches it.
+GET, an oversized value and 140 headers each answer status 3 with our own
+message; a foreign `StateError` injected in place does reach the wire, so the
+bench could see one. `../checked/C-65-no-foreign-error-reaches-the-http2-header-refusal.md`.
 
 ## Owner decision
 
