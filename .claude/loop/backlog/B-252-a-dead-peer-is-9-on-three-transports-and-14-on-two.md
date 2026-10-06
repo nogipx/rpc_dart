@@ -1,6 +1,7 @@
 ---
-status: decided by owner (round 676)
-round: — (not re-measured)
+status: closed (round 678)
+release: changelog
+round: 678
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/protocol.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
 probe: .dart_tool/probe/parity_matrix.dart (6.call-after-peer-dead)
@@ -31,6 +32,12 @@ retried over HTTP and not over websocket or isolate. That is probably right:
 websocket needs an explicit `reconnect()`, and a dead isolate does not come
 back. But no record says so, and `checked/C-30` covers only the closed-transport
 leniency, not the code.
+
+## Outcome (round 678)
+
+FIXED as decided. Memory and websocket now read 14 after the peer died; a
+worker isolate that exits by itself reads 14; a call after this side's own
+close stays 9 on all five. `../rounds/678-a-dead-peer-is-unavailable-everywhere.md`.
 
 ## Owner decision
 

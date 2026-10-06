@@ -200,7 +200,9 @@ class RpcChannelTransport
         _incoming.addError(e);
       },
       onDone: () {
-        if (!_closed) close();
+        if (_closed) return;
+        _closedByPeer = true;
+        close();
       },
     );
   }
@@ -462,8 +464,15 @@ class RpcChannelTransport
   /// READS and teardown stay lenient: [finishSending] and [releaseStreamId] run
   /// from `finally` blocks, where a throw masks the error that got there.
   void _refuseIfClosed() {
-    if (_closed) throw RpcClosedException('Transport');
+    if (_closed) {
+      throw _closedByPeer
+          ? RpcClosedException.byPeer('Transport')
+          : RpcClosedException('Transport');
+    }
   }
+
+  /// The channel ended under us, rather than this side calling [close].
+  bool _closedByPeer = false;
 
   @override
   Future<void> sendMetadata(

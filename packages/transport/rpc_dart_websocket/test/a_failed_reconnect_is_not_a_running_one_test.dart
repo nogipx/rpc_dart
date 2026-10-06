@@ -2,24 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-// "Disconnected" was two states wearing one word, and the three reconnect
-// machines gave them three answers between them. Measured on a send 200 ms into
-// an 800 ms factory stall:
-//
-//                            websocket   http2
-//   during the factory await     9         14
-//   after a FAILED reconnect     9          9
-//
-// The two want OPPOSITE advice. A reconnect IN FLIGHT will have a connection in
-// tens of milliseconds and the caller can do nothing but wait — UNAVAILABLE,
-// retry. A reconnect that FAILED needs reconnect() called — FAILED_PRECONDITION,
-// whose meaning is "do not retry until the state is fixed".
-//
-// And the difference is not academic. One call through RpcRetryInterceptor,
-// fired 100 ms into an 800 ms window, first backoff 250 ms:
-//
-//   FAILED_PRECONDITION   status=9 after 0ms     never retried
-//   UNAVAILABLE           OK pong after 711ms    retried, succeeded
+// "Disconnected" is two states: a reconnect IN FLIGHT, which resolves itself,
+// and one that FAILED, which needs reconnect() called. Both answer UNAVAILABLE,
+// the status every transport gives for a dead peer -- RpcRetryInterceptor
+// retries it and reconnects before the next attempt -- and
+// `RpcNoConnectionException.reconnecting` says which state it is.
 
 @TestOn('vm')
 library;
@@ -82,9 +69,6 @@ Future<_Rig> _rig() async {
 }
 
 void main() {
-  // WITNESS. Both states answered FAILED_PRECONDITION before this split, so a
-  // standard gRPC retry policy declined to retry a condition that resolves
-  // itself in tens of milliseconds.
   test(
     'a reconnect IN FLIGHT is UNAVAILABLE — retry, do not intervene',
     () async {
@@ -102,12 +86,9 @@ void main() {
     },
   );
 
-  // WITNESS for the other half, and the CONTROL for the one above: the same
-  // transport, the same guard, the same method — only the state differs. Without
-  // this, "the window is UNAVAILABLE" is indistinguishable from "this type is
-  // always UNAVAILABLE".
+  // The other state, through the same guard: only `reconnecting` differs.
   test(
-    'a FAILED reconnect is FAILED_PRECONDITION — the remedy is yours',
+    'a FAILED reconnect is UNAVAILABLE and says no reconnect is running',
     () async {
       final rig = await _rig();
       rig.failNext();
@@ -116,7 +97,7 @@ void main() {
       expect(outcome.level, RpcHealthLevel.unhealthy);
 
       expect(_refusal(rig.transport), (
-        status: RpcStatus.failedPrecondition,
+        status: RpcStatus.unavailable,
         reconnecting: false,
       ));
     },
@@ -141,12 +122,11 @@ void main() {
       await rig.transport.reconnect().timeout(const Duration(seconds: 8));
       expect(rig.transport.createStream(), greaterThan(0));
 
-      // Now fail one, and the answer must be the caller's-remedy shape rather
-      // than a leftover "retry".
+      // Now fail one: `reconnecting` must read false, not a leftover true.
       rig.failNext();
       await rig.transport.reconnect();
       expect(_refusal(rig.transport), (
-        status: RpcStatus.failedPrecondition,
+        status: RpcStatus.unavailable,
         reconnecting: false,
       ));
     },

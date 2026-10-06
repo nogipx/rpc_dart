@@ -270,46 +270,42 @@ int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
 /// the text — so the wording was a contract with no declaration, and the one
 /// site that drifted had already made a clean shutdown log as a real failure.
 ///
-/// FAILED_PRECONDITION, not UNAVAILABLE: closed is terminal. UNAVAILABLE is
-/// retried, and neither the retry nor the `reconnect()` behind it can reopen
-/// something that was closed on purpose — so that spelling spent the caller's
-/// deadline to arrive back here.
+/// FAILED_PRECONDITION when this side closed it: that is terminal, and a retry
+/// cannot reopen something closed on purpose. UNAVAILABLE when the PEER went
+/// away ([RpcClosedException.byPeer]), which is what every transport reports for
+/// a dead peer.
 final class RpcClosedException extends RpcStatusException {
   /// [what] names the thing, e.g. `'Transport'` or `'Endpoint'`.
   RpcClosedException(this.what, {String? detail})
-    : super(
+    : byPeer = false,
+      super(
         RpcStatus.failedPrecondition,
         detail == null ? '$what is closed' : '$what is closed: $detail',
       );
 
+  /// Closed because the peer went away, not by this side.
+  RpcClosedException.byPeer(this.what)
+    : byPeer = true,
+      super(RpcStatus.unavailable, '$what is closed: the peer went away');
+
   /// The thing that was closed, for a caller that wants to branch on it.
   final String what;
+
+  /// Whether the peer, rather than this side, ended it.
+  final bool byPeer;
 }
 
 /// A transport with no live connection — and which of the two such states it is.
 ///
-/// "Disconnected" is two states wearing one word, and they want OPPOSITE advice.
-/// A reconnect IN FLIGHT will very likely have a connection in tens of
-/// milliseconds and nothing the caller does can help, so the answer is
-/// UNAVAILABLE: retry with backoff. A reconnect that FAILED, or was never
-/// started, needs `reconnect()` called — FAILED_PRECONDITION, whose whole
-/// meaning is "do not retry until the state is fixed".
-///
-/// Measured on a send 200 ms into an 800 ms factory stall, before this type:
-///
-///     during the factory await   websocket 9   http2 14
-///     after a FAILED reconnect   websocket 9   http2  9
-///
-/// So one cell disagreed, and BOTH machines got the in-flight case wrong for the
-/// caller: 9 tells a standard gRPC retry policy not to retry, and it then
-/// surfaces a hard failure for a condition that resolves itself. http2 read 14
-/// by accident — it discards the connection before the await, so the send path
-/// threw on its own rather than from any guard.
+/// UNAVAILABLE in both, the status every transport gives for a dead peer:
+/// `RpcRetryInterceptor` retries it and reconnects before the next attempt.
+/// [reconnecting] and the message still say which state it is: a reconnect in
+/// flight resolves itself, a failed one needs `reconnect()`.
 final class RpcNoConnectionException extends RpcStatusException {
   /// [what] names the thing, e.g. `'Transport'`.
   RpcNoConnectionException(this.what, {required this.reconnecting})
     : super(
-        reconnecting ? RpcStatus.unavailable : RpcStatus.failedPrecondition,
+        RpcStatus.unavailable,
         reconnecting
             ? '$what is reconnecting and has no connection; retry.'
             : '$what is disconnected and has no connection; call reconnect(). '
