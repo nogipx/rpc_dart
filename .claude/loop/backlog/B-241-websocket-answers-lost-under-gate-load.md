@@ -1,6 +1,7 @@
 ---
-status: open
-round: 645
+status: closed (round 670)
+release: none
+round: 670
 commit: 9fdb0440
 paths: [packages/transport/rpc_dart_websocket/test/endpoint_released_when_callback_throws_test.dart, packages/transport/rpc_dart_websocket/test/a_refused_upgrade_has_a_deadline_test.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/refused_upgrade_flake.dart
@@ -54,6 +55,13 @@ A frequency under the gate's own load (the probe run beside `test:unit`), and
 the same probe without the body bytes. If `closed` appears only with them, the
 test sends a request no real client sends and should not; if it appears
 without them, the refusal path loses its answer and that is a defect.
+
+## Outcome (round 670)
+
+Under the gate's load the refused upgrade read `closed` 9 of 3600 times with the
+body bytes and 0 of 3600 without: the test's request, not the library. The test
+no longer sends a body on an upgrade. The callback-throws red did not reproduce,
+0 of 1000. `../rounds/670-the-body-no-upgrade-carries.md`.
 
 ## Owner decision
 

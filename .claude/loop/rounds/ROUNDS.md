@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[670](670-the-body-no-upgrade-carries.md)** FIXED, rpc_dart_websocket (test only) — **the refused-upgrade flake was the test's request**: body bytes after an upgrade read `closed` 9 of 3600 under gate load, 0 of 3600 without. The callback-throws red did not reproduce, 0 of 1000. Closes B-241
 - **[669](669-resource-exhausted-needs-pushback.md)** FIXED, rpc_dart + http + http2 — **a message over the size limit was uploaded three times by the default retry** (128 -> 385 KiB, 640 -> 1921) and counted by the breaker as server trouble. By owner decision RESOURCE_EXHAUSTED now needs pushback (`RpcRetryInfo`), which capacity refusals and the rate limiter carry. Closes B-222
 - **[668](668-one-dropped-request-retired-the-connection.md)** FIXED, rpc_dart_http — **one HTTP/1.1 request whose socket dropped retired `RpcClientConnection`** and failed three calls on other sockets `[14,14,14]`; the broadcast copy is now advisory. Closes B-246
 - **[667](667-one-stream-error-fails-every-call.md)** FIXED, rpc_dart + rpc_dart_http2 — **an error about one stream failed every call beside it**: a malformed http2 frame `[13,13,13]`, a request over the channel policy `[3,3,3]`, one server RST through `RpcClientConnection` `[14,14,14]`, against `[ok,ok,ok]`. Such errors now reach the broadcast marked advisory. B-189 measured; B-246 filed

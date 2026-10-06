@@ -14,8 +14,7 @@
 //
 //   plain POST, refused, unbounded :  0 of 16 answered, all draining
 //   plain POST, refused, bounded   : 16 of 16, connection cut at the budget
-//   upgrade-shaped, refused        : 16 of 16 answered 403 -- dart:io hands a
-//                                    CONNECTION-UPGRADE request no body at all
+//   upgrade, refused               : 16 of 16 answered 403
 //
 // The path exists ONLY when allowedOrigins or allowUpgrade is configured, so it
 // is reachable exactly on the servers that turned the origin check on. Same
@@ -48,8 +47,9 @@ Future<int> _serve({required void Function() onUpgrade}) async {
   return http.port;
 }
 
-/// Opens a request that promises a body and sends almost none, then holds the
-/// connection. Completes on the server's first byte, or on close.
+/// Opens a request -- a POST promising a body and sending almost none, or a
+/// plain upgrade -- then holds the connection. Completes on the server's first
+/// byte, or on close.
 Future<String> _slowBody(
   int port,
   String origin, {
@@ -75,7 +75,6 @@ Future<String> _slowBody(
               'sec-websocket-version: 13\r\n'
               'sec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
               'origin: $origin\r\n'
-              'content-length: 100000\r\n'
               '\r\n'
         : 'POST / HTTP/1.1\r\n'
               'host: 127.0.0.1:$port\r\n'
@@ -83,7 +82,10 @@ Future<String> _slowBody(
               'content-length: 100000\r\n'
               '\r\n',
   );
-  socket.add(const <int>[1, 2, 3, 4, 5]);
+  // Not on an upgrade: no websocket client sends a body there, and dart:io does
+  // not read one, so closing with those bytes unread is an RST that can beat
+  // the 403 to the client.
+  if (!upgrade) socket.add(const <int>[1, 2, 3, 4, 5]);
   await socket.flush();
   addTearDown(socket.destroy);
   return settled.future;
