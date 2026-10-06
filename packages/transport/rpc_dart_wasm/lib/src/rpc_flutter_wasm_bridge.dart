@@ -84,9 +84,11 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     sync: true,
   );
 
-  /// Console log stream from WASM JS sandbox.
-  /// Each entry is prefixed with level: "I:", "W:", "E:", "D:".
+  /// Console log stream from WASM JS sandbox, one line per event.
+  /// Each line is prefixed with level: "I:", "W:", "E:", "D:".
   Stream<String> get console => _console.stream;
+
+  static final RegExp _levelPrefix = RegExp('^[IWED]:');
 
   RpcFlutterWasmBridge._(this.runtimeId, this._messenger)
     : _incomingChannel = 'rpc_dart_wasm/$runtimeId/incoming',
@@ -112,8 +114,18 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
         message.lengthInBytes,
       );
       final text = _decodeNativeText(bytes);
+      // Only an entry's first line carries its level; the rest -- a stack
+      // trace -- inherit it, or a filter on `E:` keeps the message and drops
+      // the stack.
+      var level = 'I:';
       for (final line in text.split('\n')) {
-        if (line.isNotEmpty && !_console.isClosed) _console.add(line);
+        if (line.isEmpty || _console.isClosed) continue;
+        if (_levelPrefix.hasMatch(line)) {
+          level = line.substring(0, 2);
+          _console.add(line);
+        } else {
+          _console.add('$level$line');
+        }
       }
       return null;
     });

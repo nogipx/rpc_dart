@@ -1,9 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 665)
+release: changelog
+round: 665
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/lib/src/rpc_flutter_wasm_bridge.dart]
-probe: none — static read, nothing run
+probe: none — the witness test drives the bridge's console channel directly
 reason: "bench — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); the auditing container had no Dart SDK, so nothing here was run and the witness below is unbuilt"
 ---
 
@@ -32,6 +33,14 @@ Guest `console.error('a\nb')`; inspect the console stream.
 ## Fix sketch
 
 Carry the level per message, not per line.
+
+## Outcome (round 665)
+
+FIXED in the bridge. A multi-line entry kept its level on the first line only
+(`['E:boom', '#0 main', '#1 run']`); every continuation line now inherits it.
+A continuation line that itself begins with a level prefix still reads as a new
+entry -- telling them apart needs a native change.
+`../rounds/665-a-stack-trace-without-its-level.md`.
 
 ## Owner decision
 
