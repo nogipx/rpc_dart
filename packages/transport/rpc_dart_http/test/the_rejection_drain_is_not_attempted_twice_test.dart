@@ -137,6 +137,68 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
+
+  test(
+    'WITNESS: close() answers a pending request without draining it again',
+    () async {
+      final run = await _closeWithAPendingRequest();
+
+      expect(run.peerSaw, contains('503'));
+      expect(
+        run.warnings,
+        0,
+        reason:
+            'close() rejected a request whose body had already been read with a '
+            'drain, and shelf refused the second read()',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+}
+
+/// A complete gRPC request nobody answers, then [RpcHttpResponderTransport.close].
+///
+/// The request is pending with its body already read -- every pending request is
+/// past `read()` -- so close()'s 503 must not drain it again.
+Future<_Run> _closeWithAPendingRequest() async {
+  final counter = _Counting();
+  final transport = RpcHttpResponderTransport(
+    bodyReadTimeout: const Duration(milliseconds: 400),
+    logger: LogScope(counter, 'test'),
+  );
+  final arrived = Completer<void>();
+  transport.incomingMessages.listen((m) {
+    if (m.isEndOfStream && !arrived.isCompleted) arrived.complete();
+  }, onError: (Object _) {});
+  final http = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
+  addTearDown(() => http.close(force: true));
+
+  final socket = await Socket.connect('127.0.0.1', http.port);
+  addTearDown(socket.destroy);
+  final seen = Completer<String>();
+  socket.listen((bytes) {
+    if (!seen.isCompleted) {
+      seen.complete(String.fromCharCodes(bytes).split('\r\n').first);
+    }
+  }, onError: (Object _) {});
+  socket.write(
+    'POST /Svc/slow HTTP/1.1\r\n'
+    'host: 127.0.0.1:${http.port}\r\n'
+    'content-type: application/grpc+proto\r\n'
+    'content-length: 5\r\n'
+    '\r\n',
+  );
+  socket.add(const <int>[0, 0, 0, 0, 0]);
+  await socket.flush();
+  await arrived.future.timeout(const Duration(seconds: 5));
+
+  await transport.close();
+  final peerSaw = await seen.future.timeout(
+    const Duration(seconds: 10),
+    onTimeout: () => 'NOTHING within 10s',
+  );
+  await Future<void>.delayed(const Duration(milliseconds: 200));
+  return (peerSaw: peerSaw, warnings: counter.warnings);
 }
 
 /// Counts ONLY the drain's own warning.

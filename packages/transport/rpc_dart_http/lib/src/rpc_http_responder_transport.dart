@@ -746,10 +746,14 @@ class RpcHttpResponderTransport
     if (_isClosed) return;
     _isClosed = true;
 
-    // Complete any pending responses with 503.
+    // Complete any pending responses with 503. A request is pending only from
+    // the synchronous stretch that ends in its body reader's `read()`, so the
+    // drain is never ours to run here: see [_reject].
     for (final pending in _pending.values) {
       if (!pending.completer.isCompleted) {
-        pending.completer.complete(_reject(503, pending.shelfRequest));
+        pending.completer.complete(
+          _reject(503, pending.shelfRequest, drainBody: false),
+        );
       }
     }
     _pending.clear();

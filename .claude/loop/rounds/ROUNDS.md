@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[663](663-the-drain-close-could-never-run.md)** FIXED, rpc_dart_http — **`close()` answered each pending request with a drain shelf refuses**: every pending request is past `read()`, so it logged `Rejection drain skipped` per request. `drainBody: false`; the 503 unchanged. Closes B-141
 - **[662](662-the-refusal-text-nothing-foreign-reaches.md)** CLEAN, rpc_dart_http2 — **B-191 refuted on reachability**: every error that can reach `_answerRejectedStream` is ours, each answered status 3 with our message; an injected foreign error does leak, nothing shipped throws one. `C-65`
 - **[661](661-the-watermark-after-the-wrap.md)** FIXED, rpc_dart — **after the 31-bit id space wrapped, a reconnected transport replayed the ids the old one had just issued** (5 of 5): the reconnect watermark was the max cursor ever seen, and a manager recycling ids reported the top of the space. Both now report the id issued last. Closes B-243
 - **[660](660-metadata-the-policy-accepts.md)** FIXED, rpc_dart — **metadata the sender's policy accepted closed the server connection**: text at the limit, or 34000 quote characters, encoded past the receiver's bound and took the other open call with it. The frame channel's sender now refuses that frame with `RpcMetadataViolation`. Closes B-242

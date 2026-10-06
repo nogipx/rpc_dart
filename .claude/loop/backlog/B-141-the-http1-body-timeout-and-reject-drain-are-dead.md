@@ -1,11 +1,11 @@
 ---
-status: open
+status: closed (round 663)
+release: none
 round: 537
 commit: 6268a40a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
 probe: P-170
 reason: "bench — REOPENED in the round-540 bookkeeping pass. Round 537 answered both filed claims (first REFUTED, second confirmed and harmless, fixed) and left `close()`'s drain, which the lead names in the same sentence and nothing has looked at. A closed lead's remainder is routed to by nothing"
-continuation: yes
 ---
 
 # B-141 — HTTP/1.1 responder: the body-read timeout does not stop the read, and `_reject`'s drain always fails
@@ -60,6 +60,14 @@ fail, and stops hiding the error when it does.
 ## Still open
 
 `close()`'s drain, which the lead names in the same sentence and nothing here looked at.
+
+## Outcome (round 663)
+
+FIXED. Every request `close()` answers is past `read()` -- it enters `_pending`
+and reaches its body reader in one synchronous stretch -- so the drain threw every
+time: one `Rejection drain skipped` warning per pending request, the 503 still
+delivered. `close()` now passes `drainBody: false`; warnings 1 -> 0, 503 unchanged.
+`../rounds/663-the-drain-close-could-never-run.md`.
 
 ## Owner decision
 
