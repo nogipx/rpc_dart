@@ -1,9 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 672)
+release: changelog
+round: 672
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-probe: none — static read, nothing run
+probe: packages/transport/rpc_dart_http/.dart_tool/probe/b152_caller_items.dart
 reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
 ---
 
@@ -43,6 +44,13 @@ None.
 ## Fix sketch
 
 One cleanup commit.
+
+## Outcome (round 672)
+
+FIXED, all seven. The two with behaviour CONFIRMED: `reconnect()` after
+`close()` said healthy (now closed), and a TLS handshake failure reached the
+caller with no status (now UNAVAILABLE). The five shape items done as listed.
+`../rounds/672-a-handshake-with-no-status.md`.
 
 ## Owner decision
 

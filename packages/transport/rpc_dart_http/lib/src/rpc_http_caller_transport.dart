@@ -46,6 +46,9 @@ const int _maxReasonChars = 200;
 /// UTF-8, and an HTML page usually puts its interesting words after some markup.
 const int _maxReasonBytes = 8 * 1024;
 
+final RegExp _controlChars = RegExp(r'[\x00-\x1f\x7f]+');
+final RegExp _whitespaceRuns = RegExp(r'\s{2,}');
+
 /// A single-line, bounded, printable rendering of an error [body], or null when
 /// there is nothing worth repeating.
 ///
@@ -54,16 +57,11 @@ const int _maxReasonBytes = 8 * 1024;
 /// breaks are collapsed rather than forwarded.
 String? _shortReason(Uint8List body) {
   if (body.isEmpty) return null;
-  final String text;
-  try {
-    text = utf8.decode(body, allowMalformed: true);
-  } on FormatException {
-    return null;
-  }
-  final collapsed = text
-      .replaceAll(RegExp(r'[\x00-\x1f\x7f]+'), ' ')
+  final collapsed = utf8
+      .decode(body, allowMalformed: true)
+      .replaceAll(_controlChars, ' ')
       .trim()
-      .replaceAll(RegExp(r'\s{2,}'), ' ');
+      .replaceAll(_whitespaceRuns, ' ');
   if (collapsed.isEmpty) return null;
   return collapsed.length > _maxReasonChars
       ? '${collapsed.substring(0, _maxReasonChars - 3)}...'
@@ -133,7 +131,7 @@ class RpcHttpCallerTransport
   /// error cannot leak onto other concurrent calls' subscribers.
   final RpcStreamRouter _streams = RpcStreamRouter();
   bool _isClosed = false;
-  final LogScope? _logger;
+  final LogScope _log;
 
   /// Creates an HTTP caller transport.
   ///
@@ -177,7 +175,7 @@ class RpcHttpCallerTransport
        _httpClient = httpClient ?? http.Client(),
        _ownsHttpClient = httpClient == null,
        _policy = policy,
-       _logger = logger?.child('HttpCallerTransport');
+       _log = logger?.child('HttpCallerTransport') ?? LogScope.noop;
 
   /// Whether [close] may close [_httpClient]. See the constructor.
   final bool _ownsHttpClient;
@@ -240,7 +238,7 @@ class RpcHttpCallerTransport
       _policy.validateMetadata(metadata);
       return metadata;
     } on ArgumentError catch (error) {
-      _logger?.warning(
+      _log.warning(
         'Response metadata on stream $streamId violates the policy '
         '(${error.message}); dropping what cannot be kept',
       );
@@ -419,7 +417,8 @@ class RpcHttpCallerTransport
     if (call == null) {
       throw RpcStatusException(
         RpcStatus.failedPrecondition,
-        'No pending call for stream $streamId. Call sendMetadata first.',
+        'No pending call for stream $streamId: sendMetadata was not called, '
+        'or finishSending has already sent the request.',
       );
     }
     call.bodyBuffer.add(data);
@@ -438,8 +437,8 @@ class RpcHttpCallerTransport
     if (call == null) return;
 
     _inFlight.add(streamId);
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal(
+    if (_log.isInternal) {
+      _log.internal(
         'Firing HTTP POST ${call.methodPath} [streamId: $streamId]',
       );
     }
@@ -501,16 +500,14 @@ class RpcHttpCallerTransport
 
       final streamedResponse = await _httpClient.send(request);
 
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'HTTP response ${streamedResponse.statusCode} for [streamId: $streamId]',
         );
       }
 
       if (streamedResponse.statusCode != 200) {
-        // Drain before reporting: leaving bytes unread on the socket makes
-        // dart:io tear the connection down, and package:http cannot reuse it.
-        // Bounded by the same ceiling as a 200 body.
+        // At most `_maxReasonBytes`, for the reason text; the rest is not read.
         final errorBody = await _readErrorBody(streamedResponse);
         // Core's table, shared with HTTP/2. This transport used to keep its
         // own, and the two disagreed on six rows -- including 504, where one
@@ -557,7 +554,7 @@ class RpcHttpCallerTransport
         RpcContentTypeValidation.lenient,
       )) {
         await _readErrorBody(streamedResponse);
-        _logger?.warning(
+        _log.warning(
           'Non-gRPC content-type "$responseContentType" for [streamId: $streamId]',
         );
         _emit(
@@ -666,8 +663,8 @@ class RpcHttpCallerTransport
       // it would answer a stream the endpoint has stopped listening to, and
       // logging it at error would make every ordinary cancellation look like a
       // failure.
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal('HTTP request aborted [streamId: $streamId]');
+      if (_log.isInternal) {
+        _log.internal('HTTP request aborted [streamId: $streamId]');
       }
     } catch (e, st) {
       // `close()` sets `_isClosed` before closing the client it owns, so every
@@ -679,13 +676,11 @@ class RpcHttpCallerTransport
       // The call is still ANSWERED either way — only the level moves, and the
       // status comes from `_closedDuringCall` by way of `closeAll`.
       if (_isClosed) {
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal(
-            'HTTP request ended by close() [streamId: $streamId]',
-          );
+        if (_log.isInternal) {
+          _log.internal('HTTP request ended by close() [streamId: $streamId]');
         }
       } else {
-        _logger?.error(
+        _log.error(
           'HTTP request failed for [streamId: $streamId]',
           error: e,
           stackTrace: st,
@@ -722,12 +717,22 @@ class RpcHttpCallerTransport
   /// exactly what makes it retryable. Anything already carrying a status
   /// (including the non-200 mapping above and the frame parser's own errors) is
   /// passed through untouched.
+  ///
+  /// Any other [Exception] is the I/O underneath: a TLS `HandshakeException`
+  /// is not a `ClientException`, and `dart:io` cannot be named here because this
+  /// file compiles for the web. An [Error] is a bug and passes through.
   Object _asRpcStatus(Object error, String methodPath) {
-    if (error is RpcStatusException || error is RpcException) return error;
+    if (error is RpcException) return error;
     if (error is http.ClientException) {
       return RpcStatusException(
         RpcStatus.unavailable,
         'HTTP request to $methodPath failed: ${error.message}',
+      );
+    }
+    if (error is Exception) {
+      return RpcStatusException(
+        RpcStatus.unavailable,
+        'HTTP request to $methodPath failed: $error',
       );
     }
     return error;
@@ -764,16 +769,19 @@ class RpcHttpCallerTransport
     }
   }
 
+  /// A literal: `runtimeType.toString()` is minified on the web.
+  static const _component = 'RpcHttpCallerTransport';
+
   @override
   Future<RpcHealthStatus> health() async {
     if (_isClosed) {
       return RpcHealthStatus.closed(
-        component: runtimeType.toString(),
+        component: _component,
         message: 'HTTP caller transport closed',
       );
     }
     return RpcHealthStatus.healthy(
-      component: runtimeType.toString(),
+      component: _component,
       message: 'HTTP caller transport ready',
       details: {
         'baseUrl': _baseUrl,
@@ -789,8 +797,9 @@ class RpcHttpCallerTransport
 
   @override
   Future<RpcHealthStatus> reconnect() async {
+    if (_isClosed) return health();
     return RpcHealthStatus.healthy(
-      component: runtimeType.toString(),
+      component: _component,
       message: 'HTTP is stateless, no reconnect required',
       details: {'baseUrl': _baseUrl},
     );
