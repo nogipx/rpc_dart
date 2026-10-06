@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[668](668-one-dropped-request-retired-the-connection.md)** FIXED, rpc_dart_http — **one HTTP/1.1 request whose socket dropped retired `RpcClientConnection`** and failed three calls on other sockets `[14,14,14]`; the broadcast copy is now advisory. Closes B-246
 - **[667](667-one-stream-error-fails-every-call.md)** FIXED, rpc_dart + rpc_dart_http2 — **an error about one stream failed every call beside it**: a malformed http2 frame `[13,13,13]`, a request over the channel policy `[3,3,3]`, one server RST through `RpcClientConnection` `[14,14,14]`, against `[ok,ok,ok]`. Such errors now reach the broadcast marked advisory. B-189 measured; B-246 filed
 - **[666](666-the-message-behind-the-refusal.md)** FIXED, rpc_dart_http2 — **the window's refusal was not the call's last event**: caller and responder each delivered the overrunning message behind the RESOURCE_EXHAUSTED or the cancellation. Both `_emit`s drop a refused stream's payload. Closes B-186
 - **[664](664-a-failed-response-keeps-downloading.md)** FIXED, rpc_dart_http2 — **a response the caller had already failed kept downloading**: four exits (non-200, non-gRPC, refused headers, unparseable body) reported and returned, so a transport user got 1024 KiB and 128 ERROR records. Each now resets; a 103 no longer fails the call. Closes B-188

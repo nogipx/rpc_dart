@@ -1,9 +1,10 @@
 ---
-status: open
-round: 667
-commit: ae33d09d
+status: closed (round 668)
+release: changelog
+round: 668
+commit: 3f75f89e
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-probe: none — the round-667 sweep found it by reading; nothing run
+probe: P-231
 reason: "bench — on HTTP/1.1 every call is its own request, so which failures mean the CONNECTION is a question the transport has to answer per exception type, and no witness has been built"
 ---
 
@@ -36,6 +37,12 @@ calls' outcomes and the transports built.
 
 Mark failures that cannot mean the server is unreachable as advisory, the way
 `_emitStreamError(connectionWide:)` does on http2.
+
+## Outcome (round 668)
+
+FIXED. One request whose socket a proxy dropped failed all three innocent calls
+with UNAVAILABLE; the broadcast copy is now advisory and they answer `ok`.
+`../rounds/668-one-dropped-request-retired-the-connection.md`.
 
 ## Owner decision
 

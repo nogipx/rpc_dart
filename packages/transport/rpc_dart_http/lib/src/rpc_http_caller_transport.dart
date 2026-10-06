@@ -751,7 +751,18 @@ class RpcHttpCallerTransport
   /// other calls) while preserving the broadcast for global consumers.
   void _emitError(int streamId, Object error, StackTrace stackTrace) {
     _streams.addError(streamId, error, stackTrace);
-    if (!_incoming.isClosed) _incoming.addError(error, stackTrace);
+    if (!_incoming.isClosed) {
+      _incoming.addError(
+        error is RpcStatusException
+            ? _OneRequestFailure(
+                error.statusCode,
+                error.message,
+                details: error.details,
+              )
+            : error,
+        stackTrace,
+      );
+    }
   }
 
   @override
@@ -845,4 +856,12 @@ class RpcHttpCallerTransport
       'HTTP/1.1 transport does not support direct object transfer',
     );
   }
+}
+
+/// One request's failure, as the broadcast carries it. Advisory: every call is
+/// its own HTTP request, so one failing says nothing about the others, and
+/// `RpcClientConnection` retired the transport on it -- failing all of them.
+final class _OneRequestFailure extends RpcStatusException
+    implements IRpcAdvisoryChannelError {
+  _OneRequestFailure(super.statusCode, super.message, {super.details});
 }

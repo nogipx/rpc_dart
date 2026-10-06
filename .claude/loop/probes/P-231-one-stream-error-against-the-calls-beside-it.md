@@ -26,6 +26,10 @@ with a control that sends the offending stream clean:
 - `rpc_dart_http2/.dart_tool/probe/one_reset_retires_the_connection.dart` --
   `RpcClientConnection` over http2 to a raw peer that RSTs one call.
 
+- `rpc_dart_http/.dart_tool/probe/b246_one_request_failure.dart` (round 668) --
+  `RpcClientConnection` over the HTTP/1.1 caller, a TCP proxy destroying the
+  socket of one request.
+
 ## The numbers
 
 ```
@@ -35,6 +39,7 @@ round 667 before (and with the marker switched off)
   http2 client connection, RST    innocent [14, 14, 14]
 controls (offending stream clean)  innocent [ok, ok, ok]
 round 667 after                   innocent [ok, ok, ok] in all three
+round 668, http1 dropped socket    before [14, 14, 14], after [ok, ok, ok]
 ```
 
 ## Measures
@@ -47,6 +52,5 @@ The same run with the offending stream sent clean.
 
 ## What it establishes, and what it does not
 
-Establishes whether an error about one stream reaches the calls beside it. Does
-NOT cover `rpc_dart_http`'s caller, whose per-request errors also reach the
-broadcast un-marked (`B-246`).
+Establishes whether an error about one stream reaches the calls beside it, on
+every transport that wrote one to the broadcast.
