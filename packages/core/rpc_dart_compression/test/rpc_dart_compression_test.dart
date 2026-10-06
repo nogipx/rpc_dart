@@ -87,7 +87,13 @@ void main() {
       const guarded = RpcGzipCodec(maxDecompressedSize: 1000);
       expect(
         () => guarded.decompress(compressed),
-        throwsA(isA<FormatException>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.resourceExhausted,
+          ),
+        ),
       );
     });
 

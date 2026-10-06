@@ -27,7 +27,9 @@ abstract class RpcCompressionCodec {
   /// Decompresses [data] and returns the original bytes.
   ///
   /// When [maxOutputBytes] is non-null an implementation MUST stop and throw
-  /// (e.g. [FormatException]) BEFORE materializing output past the limit. This
+  /// BEFORE materializing output past the limit -- a RESOURCE_EXHAUSTED
+  /// `RpcStatusException`, which the parser passes through. Anything else it
+  /// throws reads as malformed input and becomes INTERNAL. This
   /// is the only defence against a decompression bomb that acts in time: the
   /// layer above re-checks the length afterwards, by which point the memory is
   /// already allocated, so that check bounds what is RETAINED, not what is

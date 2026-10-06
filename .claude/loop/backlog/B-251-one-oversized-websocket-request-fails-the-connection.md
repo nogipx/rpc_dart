@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 676)
 round: — (not re-measured)
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
@@ -43,4 +43,6 @@ cannot carry it.
 
 ## Owner decision
 
-—
+2026-10-07, round 676's batch: **a dedicated close code for "message too
+large", mapped to RESOURCE_EXHAUSTED on the caller**. The connection still
+closes.

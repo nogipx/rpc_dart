@@ -297,34 +297,21 @@ final class RpcMessageParser {
           // Pass the message-size limit so the decompressor can abort a
           // decompression bomb before fully expanding it. The post-check below
           // remains as a backstop for decompressors that ignore the hint.
-          // A decompressor that honours the hint aborts by throwing, and it
-          // throws whatever ITS library uses -- FormatException from the gzip
-          // codecs, anything at all from a third-party one. `wireStatusFor` is
-          // default-deny, so such a type is redacted and the peer is told only
-          // "Internal server error" for a message IT can fix by sending less.
-          //
-          // The limit is this layer's, so the diagnostic should be too: rewrap
-          // as an RpcException naming the configured maximum. That keeps the
-          // message library-authored (no user data, and provably ours) while
-          // staying independent of whatever the codec chose to throw.
+          // A decompressor that honours the hint aborts with a
+          // RESOURCE_EXHAUSTED RpcStatusException, as both gzip codecs do, and
+          // that passes through. Anything else it throws -- malformed input, or
+          // a third-party codec's own type -- is rewrapped below, because
+          // `wireStatusFor` is default-deny and would redact it.
           try {
             payload = decompressor(payload, maxOutputBytes: _maxMessageLength);
           } catch (e) {
             _state.clear();
             _state.reset();
             if (e is RpcException) rethrow;
-            // NOT "exceeds the limit". A decompressor throws for the bomb it
-            // was asked to stop AND for input that is malformed, truncated or
-            // not compressed at all, and this catch cannot tell them apart --
-            // so naming one of them told a peer with a corrupt frame to send
-            // less, which cannot help. State the fact and leave the cause to
-            // the two possibilities that produce it.
-            //
-            // INTERNAL, not RESOURCE_EXHAUSTED, for the reason above: the
-            // status is a claim about the CAUSE and this site has two. grpc-go
-            // answers a decompression failure INTERNAL ("failed to decompress
-            // the received message") and keeps RESOURCE_EXHAUSTED for the sizes
-            // it can actually measure, which is the split used here.
+            // INTERNAL: what reaches here is malformed input, or a third-party
+            // codec that signals its limit some other way, and this catch
+            // cannot tell those apart. grpc-go answers a decompression failure
+            // INTERNAL too.
             throw RpcStatusException(
               RpcStatus.internal,
               'Compressed gRPC payload could not be decompressed: it is '

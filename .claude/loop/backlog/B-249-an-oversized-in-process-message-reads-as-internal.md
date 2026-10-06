@@ -1,6 +1,7 @@
 ---
-status: open
-round: — (not re-measured)
+status: closed (round 676)
+release: changelog
+round: 676
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
 probe: .dart_tool/probe/parity_matrix.dart (5.stream-item-over-limit), .dart_tool/probe/codec_mode_response.dart
@@ -43,6 +44,14 @@ The same contract behaves differently depending on the transport. Code that
 catches RESOURCE_EXHAUSTED for "message too big" gets INTERNAL on memory and
 isolate. The text then sends the reader looking for a malformed payload.
 
+## Outcome (round 676)
+
+FIXED as decided: every gzip limit overrun is RESOURCE_EXHAUSTED, malformed
+input stays INTERNAL. The oversized stream item now reads 8 on all five
+transports. The request-side text naming the buffer budget is unchanged (status
+already 8). `../rounds/676-a-size-the-decompressor-called-malformed.md`.
+
 ## Owner decision
 
-—
+2026-10-07, round 676's batch: **fix** -- the decompressor reports an expansion
+past the limit as RESOURCE_EXHAUSTED, malformed input stays INTERNAL.

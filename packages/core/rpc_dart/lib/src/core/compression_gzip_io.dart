@@ -6,6 +6,9 @@
 import 'dart:io' show gzip;
 import 'dart:typed_data';
 
+import 'errors.dart';
+import 'protocol.dart' show RpcStatus;
+
 /// Returns true on native platforms where dart:io gzip is available.
 bool get rpcGzipSupported => true;
 
@@ -23,7 +26,8 @@ Uint8List _asBytes(List<int> bytes) =>
 /// manner and aborts as soon as the accumulated output would exceed the
 /// limit. This bounds memory against decompression bombs: a tiny gzip payload
 /// that expands to gigabytes is rejected before being materialized in full.
-/// Throws [FormatException] when the limit is exceeded.
+/// Throws a RESOURCE_EXHAUSTED [RpcStatusException] when the limit is exceeded,
+/// and [FormatException] when the input is not valid gzip.
 Uint8List rpcGzipDecompress(Uint8List data, {int? maxOutputBytes}) {
   if (maxOutputBytes == null) {
     return _asBytes(gzip.decode(data));
@@ -54,7 +58,8 @@ class _LimitedByteSink implements Sink<List<int>> {
   void add(List<int> chunk) {
     _builder.add(chunk);
     if (_builder.length > _maxOutputBytes) {
-      throw FormatException(
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
         'Decompressed gzip payload exceeds limit: '
         '${_builder.length} bytes (max: $_maxOutputBytes)',
       );

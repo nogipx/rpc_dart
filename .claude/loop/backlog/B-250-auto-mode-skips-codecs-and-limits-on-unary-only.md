@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 676)
 round: — (not re-measured)
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/contracts/models.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
@@ -45,4 +45,6 @@ Either way, decide whether streaming should follow unary.
 
 ## Owner decision
 
-—
+2026-10-07, round 676's batch: **fix the enum doc to match the code** -- `auto`
+keeps the object path; only an explicit `codec` serializes and applies the
+limit.

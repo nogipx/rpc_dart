@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 676)
 round: — (not re-measured)
 commit: 81530a7b
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
@@ -49,4 +49,5 @@ Route `grpc-status-details-bin` to the trailer frame with the other two.
 
 ## Owner decision
 
-—
+2026-10-07, round 676's batch: **fix** -- route `grpc-status-details-bin` to
+the trailer frame.

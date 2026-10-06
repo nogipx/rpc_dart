@@ -31,8 +31,9 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   final int level;
 
   /// Maximum allowed decompressed size in bytes. Decompression throws a
-  /// [FormatException] before allocating if the gzip ISIZE trailer declares a
-  /// larger output, guarding against decompression bombs.
+  /// RESOURCE_EXHAUSTED [RpcStatusException] before allocating if the gzip
+  /// ISIZE trailer declares a larger output, guarding against decompression
+  /// bombs. Malformed input throws [FormatException].
   ///
   /// Defaults to unlimited ([_unlimited]). The check is cheap because gzip
   /// already stores the uncompressed size (mod 2^32) in its trailer, so no
@@ -145,9 +146,10 @@ final class RpcGzipCodec implements RpcCompressionCodec {
           (data[n - 2] << 16) |
           (data[n - 1] << 24);
       if (declaredSize > effectiveLimit) {
-        throw FormatException(
-          'Invalid gzip data: declared size $declaredSize exceeds '
-          'limit $effectiveLimit',
+        throw RpcStatusException(
+          RpcStatus.resourceExhausted,
+          'Gzip data declares $declaredSize bytes, over the limit '
+          '$effectiveLimit',
         );
       }
     }
@@ -179,11 +181,25 @@ final class RpcGzipCodec implements RpcCompressionCodec {
         result = GZipDecoder().decodeBytes(data, verify: true);
       }
     } on InflateLimitExceeded {
-      throw FormatException(
-        'Invalid gzip data: decompressed output exceeds limit $effectiveLimit',
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
+        'Decompressed gzip output exceeds the limit $effectiveLimit',
       );
     } catch (e) {
       throw FormatException('Invalid gzip data: $e');
+    }
+
+    // ISIZE is only the size mod 2^32, so a crafted trailer can understate the
+    // real output and slip past the pre-allocation guard above. The bytes are
+    // now materialized, so enforce the limit on the actual length too --
+    // BEFORE the trailer check, which such a payload also fails, so that an
+    // oversized output reads as a size on the web as it does on the VM.
+    if (effectiveLimit != _unlimited && result.length > effectiveLimit) {
+      throw RpcStatusException(
+        RpcStatus.resourceExhausted,
+        'Decompressed gzip output is ${result.length} bytes, over the limit '
+        '$effectiveLimit',
+      );
     }
 
     // The archive web decoder has its CRC/length verification commented out, so
@@ -191,16 +207,6 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // garbage without throwing. Re-check the gzip trailer ourselves so the
     // behaviour matches the VM on every platform.
     _verifyTrailer(data, result);
-
-    // ISIZE is only the size mod 2^32, so a crafted trailer can understate the
-    // real output and slip past the pre-allocation guard above. The bytes are
-    // now materialized, so enforce the limit on the actual length too.
-    if (effectiveLimit != _unlimited && result.length > effectiveLimit) {
-      throw FormatException(
-        'Invalid gzip data: decompressed ${result.length} bytes exceeds '
-        'limit $effectiveLimit',
-      );
-    }
 
     // decodeBytes returns a Uint8List on every platform, so avoid the extra
     // Uint8List.fromList copy. Cast defensively in case a future archive

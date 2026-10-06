@@ -22,7 +22,13 @@ void main() {
           encoding: RpcGrpcCompression.gzip,
           maxOutputBytes: 64 * 1024,
         ),
-        throwsA(isA<FormatException>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.resourceExhausted,
+          ),
+        ),
       );
     });
 

@@ -17,9 +17,8 @@
 // build. What it asserts is the CONTRACT, which must hold everywhere: a payload
 // over the limit is refused, and refused without handing back its bytes.
 
-import 'dart:typed_data';
-
 import 'package:archive/archive.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_compression/rpc_dart_compression.dart';
 import 'package:test/test.dart';
 
@@ -69,7 +68,13 @@ void main() {
       final sw = Stopwatch()..start();
       expect(
         () => codec.decompress(bomb, maxOutputBytes: _limit),
-        throwsA(isA<FormatException>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.resourceExhausted,
+          ),
+        ),
         reason: 'over the limit is over the limit, on the VM and on dart2js',
       );
       sw.stop();

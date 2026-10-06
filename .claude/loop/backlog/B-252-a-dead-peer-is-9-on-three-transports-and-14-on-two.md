@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 676)
 round: — (not re-measured)
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/protocol.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
@@ -34,4 +34,6 @@ leniency, not the code.
 
 ## Owner decision
 
-—
+2026-10-07, round 676's batch: **unify to 14 everywhere** for a call after the
+PEER died. A call after this side's own `close()` is a different event and
+stays 9.

@@ -29,8 +29,8 @@ library;
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_compression/rpc_dart_compression.dart';
 import 'package:test/test.dart';
 
@@ -74,7 +74,13 @@ void main() {
 
       expect(
         () => codec.decompress(bomb, maxOutputBytes: 16 * 1024 * 1024),
-        throwsA(isA<FormatException>()),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.resourceExhausted,
+          ),
+        ),
       );
 
       sw.stop();
@@ -114,7 +120,13 @@ void main() {
 
     expect(
       () => codec.decompress(compressed, maxOutputBytes: 1024),
-      throwsA(isA<FormatException>()),
+      throwsA(
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.resourceExhausted,
+        ),
+      ),
     );
   });
 }

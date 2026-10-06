@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 676)
 round: — (not re-measured)
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/core/rpc_headers.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/**]
@@ -43,4 +43,7 @@ A handler that reads these works on one transport and not on another.
 
 ## Owner decision
 
-—
+2026-10-07, round 676's batch: fix **item 1** (refuse a value with leading or
+trailing whitespace on send) and **item 2** (drop reserved `grpc-*` request
+headers before the handler). Item 3, transport headers in the handler context,
+stays as it is.
