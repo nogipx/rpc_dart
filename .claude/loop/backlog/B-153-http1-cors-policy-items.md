@@ -1,9 +1,10 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 671)
+release: changelog
+round: 671
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_cors_policy.dart]
-probe: none — static read, nothing run
+probe: packages/transport/rpc_dart_http/.dart_tool/probe/b153_cors_claims.dart
 reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
 ---
 
@@ -33,6 +34,14 @@ Mutate `allowedOrigins` to include `*` after constructing with credentials.
 
 Copy and freeze inputs, precompute header strings, default a max-age.
 
+## Outcome (round 671)
+
+FIXED, every claim CONFIRMED. Adding `*` to the caller's list after building a
+credentials policy made an evil origin get `*` + credentials; now nothing. A
+mixed-case configured origin now matches; 12 Allow-Headers entries with 3
+duplicates are now 9; the preflight is cached 600 s by default.
+`../rounds/671-a-cors-check-undone-after-construction.md`.
+
 ## Owner decision
 
-—
+Round 671: `preflightMaxAge` defaults to 10 minutes.

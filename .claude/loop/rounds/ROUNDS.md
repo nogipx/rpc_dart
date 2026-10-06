@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[671](671-a-cors-check-undone-after-construction.md)** FIXED, rpc_dart_http — **the CORS `*`-with-credentials refusal could be undone by mutating the list after construction**: an evil origin then got `*` + credentials. Inputs copied, origins case-insensitive, headers de-duplicated, preflight cached 10 min by default. Closes B-153; files B-247
 - **[670](670-the-body-no-upgrade-carries.md)** FIXED, rpc_dart_websocket (test only) — **the refused-upgrade flake was the test's request**: body bytes after an upgrade read `closed` 9 of 3600 under gate load, 0 of 3600 without. The callback-throws red did not reproduce, 0 of 1000. Closes B-241
 - **[669](669-resource-exhausted-needs-pushback.md)** FIXED, rpc_dart + http + http2 — **a message over the size limit was uploaded three times by the default retry** (128 -> 385 KiB, 640 -> 1921) and counted by the breaker as server trouble. By owner decision RESOURCE_EXHAUSTED now needs pushback (`RpcRetryInfo`), which capacity refusals and the rate limiter carry. Closes B-222
 - **[668](668-one-dropped-request-retired-the-connection.md)** FIXED, rpc_dart_http — **one HTTP/1.1 request whose socket dropped retired `RpcClientConnection`** and failed three calls on other sockets `[14,14,14]`; the broadcast copy is now advisory. Closes B-246

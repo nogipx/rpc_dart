@@ -58,7 +58,7 @@ const _requiredGrpcAllowedHeaders = [
 /// emits a one-time warning, since it lets any web page (including
 /// DNS-rebinding / drive-by attackers) call the server.
 final class RpcHttpCorsPolicy {
-  /// Origins that have already emitted the `['*']` opt-in warning.
+  /// Whether this process has emitted the `['*']` opt-in warning.
   static bool _starWarningEmitted = false;
 
   /// Origins allowed to access the server.
@@ -82,8 +82,9 @@ final class RpcHttpCorsPolicy {
   /// Must be `false` when [allowedOrigins] contains `'*'`.
   final bool allowCredentials;
 
-  /// Value for `Access-Control-Max-Age` (preflight cache duration).
-  /// If null, the header is not sent.
+  /// Value for `Access-Control-Max-Age` (preflight cache duration). Defaults to
+  /// 10 minutes. If null, the header is not sent and browsers fall back to
+  /// about 5 seconds: one extra OPTIONS round trip per call.
   final Duration? preflightMaxAge;
 
   /// Creates a CORS policy.
@@ -95,20 +96,30 @@ final class RpcHttpCorsPolicy {
   /// go straight onto the wire. Browsers reject that pairing outright, so the
   /// result is not a breach but a server whose every cross-origin call fails,
   /// with nothing pointing at the misconfiguration.
+  ///
+  /// The lists are copied: the `'*'` check above runs once, here, so a list the
+  /// caller could still mutate would let it be undone after construction.
   RpcHttpCorsPolicy({
-    this.allowedOrigins = const [],
-    this.allowedHeaders = const [
-      'content-type',
-      'authorization',
-      'x-requested-with',
-      'x-trace-id',
-      'x-request-id',
-    ],
-    this.extraExposedHeaders = const [],
+    List<String> allowedOrigins = const [],
+    List<String> allowedHeaders = const ['authorization', 'x-requested-with'],
+    List<String> extraExposedHeaders = const [],
     this.allowCredentials = false,
-    this.preflightMaxAge,
+    this.preflightMaxAge = const Duration(minutes: 10),
     LogScope? logger,
-  }) {
+  }) : allowedOrigins = List.unmodifiable(allowedOrigins),
+       allowedHeaders = List.unmodifiable(allowedHeaders),
+       extraExposedHeaders = List.unmodifiable(extraExposedHeaders),
+       _originsLower = {
+         for (final origin in allowedOrigins) origin.trim().toLowerCase(),
+       },
+       _allowHeadersValue = {
+         ..._requiredGrpcAllowedHeaders,
+         ...allowedHeaders.map((h) => h.toLowerCase()),
+       }.join(', '),
+       _exposeHeadersValue = {
+         ..._requiredGrpcExposedHeaders,
+         ...extraExposedHeaders.map((h) => h.toLowerCase()),
+       }.join(', ') {
     if (allowCredentials && allowedOrigins.contains('*')) {
       throw ArgumentError.value(
         allowedOrigins,
@@ -143,15 +154,14 @@ final class RpcHttpCorsPolicy {
     }
   }
 
-  List<String> get _allAllowedHeaders => [
-    ..._requiredGrpcAllowedHeaders,
-    ...allowedHeaders,
-  ];
+  /// [allowedOrigins] lower-cased: scheme and host are case-insensitive, and a
+  /// browser sends the lower-case serialization whatever the operator wrote.
+  final Set<String> _originsLower;
 
-  List<String> get _allExposedHeaders => [
-    ..._requiredGrpcExposedHeaders,
-    ...extraExposedHeaders,
-  ];
+  /// The required headers plus the configured ones, de-duplicated and joined
+  /// once rather than per response.
+  final String _allowHeadersValue;
+  final String _exposeHeadersValue;
 
   /// Whether the response actually depends on the request's `Origin`.
   ///
@@ -198,7 +208,7 @@ final class RpcHttpCorsPolicy {
     if (allowCredentials) {
       headers['access-control-allow-credentials'] = 'true';
     }
-    headers['access-control-expose-headers'] = _allExposedHeaders.join(', ');
+    headers['access-control-expose-headers'] = _exposeHeadersValue;
   }
 
   /// Handles an `OPTIONS` preflight [request] and returns the shelf [Response].
@@ -216,8 +226,8 @@ final class RpcHttpCorsPolicy {
     final headers = <String, String>{
       'access-control-allow-origin': origin,
       'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': _allAllowedHeaders.join(', '),
-      'access-control-expose-headers': _allExposedHeaders.join(', '),
+      'access-control-allow-headers': _allowHeadersValue,
+      'access-control-expose-headers': _exposeHeadersValue,
     };
     if (_varies) _addVaryOrigin(headers);
     if (allowCredentials) {
@@ -230,8 +240,9 @@ final class RpcHttpCorsPolicy {
   }
 
   String? _resolveOrigin(String? requestOrigin) {
-    if (allowedOrigins.contains('*')) return '*';
-    if (requestOrigin != null && allowedOrigins.contains(requestOrigin)) {
+    if (_originsLower.contains('*')) return '*';
+    if (requestOrigin != null &&
+        _originsLower.contains(requestOrigin.trim().toLowerCase())) {
       return requestOrigin;
     }
     return null;
