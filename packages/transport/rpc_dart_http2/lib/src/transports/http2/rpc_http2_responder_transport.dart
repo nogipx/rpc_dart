@@ -367,7 +367,12 @@ class RpcHttp2ResponderTransport
           stackTrace: stackTrace,
         );
 
-        _emitStreamError(streamId, error, stackTrace);
+        _emitStreamError(
+          streamId,
+          error,
+          stackTrace: stackTrace,
+          connectionWide: true,
+        );
       },
       onDone: () {
         if (_logger?.isInternal ?? false) {
@@ -433,7 +438,7 @@ class RpcHttp2ResponderTransport
         stackTrace: stackTrace,
       );
 
-      _emitStreamError(streamId, e, stackTrace);
+      _emitStreamError(streamId, e, stackTrace: stackTrace);
       _answerRejectedStream(streamId, e);
     }
   }
@@ -664,7 +669,7 @@ class RpcHttp2ResponderTransport
         stackTrace: stackTrace,
       );
 
-      _emitStreamError(streamId, e, stackTrace);
+      _emitStreamError(streamId, e, stackTrace: stackTrace);
       _answerFramingViolation(streamId, e);
     }
   }
@@ -1020,11 +1025,21 @@ class RpcHttp2ResponderTransport
 
   /// Routes a stream-scoped error: raw on its own stream, enveloped on the
   /// broadcast.
-  void _emitStreamError(int streamId, Object error, [StackTrace? stackTrace]) {
+  ///
+  /// [connectionWide] for an error that means the connection failed; anything
+  /// else is about this stream alone and goes out as [RpcHttp2OneStreamError].
+  void _emitStreamError(
+    int streamId,
+    Object error, {
+    StackTrace? stackTrace,
+    bool connectionWide = false,
+  }) {
     _streams.addError(streamId, error, stackTrace);
     if (!_messageController.isClosed) {
       _messageController.addError(
-        RpcHttp2StreamError(streamId, error, stackTrace),
+        connectionWide
+            ? RpcHttp2StreamError(streamId, error, stackTrace)
+            : RpcHttp2OneStreamError(streamId, error, stackTrace),
       );
     }
   }

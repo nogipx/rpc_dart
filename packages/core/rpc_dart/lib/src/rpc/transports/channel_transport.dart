@@ -12,6 +12,14 @@ import 'flow_controller.dart';
 import 'frame_multiplexed_channel.dart';
 import 'stream_buffer_ledger.dart';
 
+/// A policy violation in ONE stream's metadata. Advisory, because the
+/// endpoints answer every active call on a broadcast error: without the marker
+/// one request with too many headers failed every call beside it.
+final class _OneStreamViolation extends RpcFrameException
+    implements IRpcAdvisoryChannelError {
+  _OneStreamViolation(super.message) : super.policy();
+}
+
 /// Full [IRpcTransport] built from an [IRpcMultiplexedChannel].
 ///
 /// Adds stream-ID management, policy enforcement, flow control and health
@@ -752,7 +760,7 @@ class RpcChannelTransport
       _policy.validateMetadata(metadata);
       return metadata;
     } on ArgumentError catch (error) {
-      final violation = RpcFrameException.policy(
+      final violation = _OneStreamViolation(
         'Inbound metadata violates the security policy on stream '
         '$streamId: ${error.message}',
       );

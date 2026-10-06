@@ -1175,7 +1175,7 @@ class RpcHttp2CallerTransport
               'HTTP/2 stream $streamId was reset by the peer'
               '${code == null ? '' : ' (errorCode: $code)'}',
             ),
-            stackTrace,
+            stackTrace: stackTrace,
           );
           return;
         }
@@ -1209,12 +1209,18 @@ class RpcHttp2CallerTransport
               '$streamId was in flight (errorCode: ${error.errorCode}); '
               'reconnect and retry',
             ),
-            stackTrace,
+            stackTrace: stackTrace,
+            connectionWide: true,
           );
           return;
         }
 
-        _emitStreamError(streamId, error, stackTrace);
+        _emitStreamError(
+          streamId,
+          error,
+          stackTrace: stackTrace,
+          connectionWide: true,
+        );
       },
       onDone: () {
         if (_logger?.isInternal ?? false) {
@@ -1335,7 +1341,7 @@ class RpcHttp2CallerTransport
         stackTrace: stackTrace,
       );
 
-      _emitStreamError(streamId, e, stackTrace);
+      _emitStreamError(streamId, e, stackTrace: stackTrace);
       _dropFailedResponse(streamId);
 
       // A client is ground the same way a server is, and the shared layer
@@ -1633,7 +1639,7 @@ class RpcHttp2CallerTransport
         stackTrace: stackTrace,
       );
 
-      _emitStreamError(streamId, e, stackTrace);
+      _emitStreamError(streamId, e, stackTrace: stackTrace);
       _dropFailedResponse(streamId);
     }
   }
@@ -1764,7 +1770,15 @@ class RpcHttp2CallerTransport
 
   /// Routes a stream-scoped error: raw on the dedicated controller, enveloped
   /// on the broadcast (so it does not leak onto unrelated streams there).
-  void _emitStreamError(int streamId, Object error, [StackTrace? stackTrace]) {
+  ///
+  /// [connectionWide] for an error that means the connection failed; anything
+  /// else is about this stream alone and goes out as [RpcHttp2OneStreamError].
+  void _emitStreamError(
+    int streamId,
+    Object error, {
+    StackTrace? stackTrace,
+    bool connectionWide = false,
+  }) {
     // A stream we reset on purpose reports the abort back to us. Surfacing it
     // would tell a consumer that deliberately cancelled that its own
     // cancellation was a transport failure.
@@ -1779,7 +1793,9 @@ class RpcHttp2CallerTransport
     _streams.addError(streamId, error, stackTrace);
     if (!_messageController.isClosed) {
       _messageController.addError(
-        RpcHttp2StreamError(streamId, error, stackTrace),
+        connectionWide
+            ? RpcHttp2StreamError(streamId, error, stackTrace)
+            : RpcHttp2OneStreamError(streamId, error, stackTrace),
       );
     }
   }

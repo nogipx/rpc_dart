@@ -1,9 +1,9 @@
 ---
 status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+round: 667 (measured, not fixed)
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
-probe: none — static read, nothing run
+probe: packages/transport/rpc_dart_http2/.dart_tool/probe/b189_terminal_events.dart
 reason: "cost — filed from a static read (external audit, 2026-09-28, intake 8253fe8a); a design or hygiene item with no failure to measure, decided by reading"
 ---
 
@@ -34,6 +34,26 @@ Count events on the broadcast for one ordinary call.
 
 Emit one terminal event; check `_resetStreams` before logging; clear
 `onTerminated` on release.
+
+## What round 667 measured
+
+Real endpoints on both sides, both broadcasts tapped:
+
+```
+one unary call      end-of-stream events: caller 2, responder 2   claim 1 CONFIRMED
+bidi, server ends   responder cancel frame for the released id 1  claim 4 CONFIRMED
+own resetStream     caller ERROR records +0                       claim 3 REFUTED
+```
+
+Claim 3 is refuted because `resetStream` cancels the subscription before the
+reset can surface as an error. Claim 2 is unmeasured. Neither confirmed claim
+has shown a consequence yet: the per-stream router closes on the first end, and
+the released id's cancel frame reached a pipeline that holds nothing for it (no
+warning, every transport map at 0). The next round owes the consequence, not the
+count.
+
+While measuring this, round 667 found and fixed a different defect: an error
+about one stream on the broadcast failed every call beside it.
 
 ## Owner decision
 

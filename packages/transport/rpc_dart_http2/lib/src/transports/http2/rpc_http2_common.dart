@@ -314,6 +314,17 @@ class RpcHttp2StreamError extends RpcStatusException {
     : super(wireStatusFor(error).status, wireStatusFor(error).message);
 }
 
+/// An [RpcHttp2StreamError] about one stream only -- its frames, its headers,
+/// its reset -- on a connection that is fine.
+///
+/// Advisory, because the endpoints answer every active call on a broadcast
+/// error and `RpcClientConnection` retires the connection on one: without the
+/// marker one malformed frame failed every call in flight beside it.
+class RpcHttp2OneStreamError extends RpcHttp2StreamError
+    implements IRpcAdvisoryChannelError {
+  RpcHttp2OneStreamError(super.streamId, super.error, [super.stackTrace]);
+}
+
 /// Filters a broadcast transport stream down to a single [streamId].
 ///
 /// - Data messages are passed through only when their `streamId` matches.

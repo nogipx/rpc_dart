@@ -3,7 +3,7 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653]
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653, 667]
 status: confirmed (round 592)
 ---
 
@@ -153,6 +153,17 @@ Fixed with `IRpcAdvisoryChannelError`, a marker checked at the one place that
 amplifies; the report still reaches `incomingMessages`, where both pipelines log
 it, so nothing is dropped. Bench `../probes/P-45-text-frame-blast-radius.md`,
 round `../rounds/353-reported-not-fatal-was-half-true.md`.
+
+## Round 667 — the signal has more than one reader
+
+353 enumerated the WRITERS of one subscription (the channel's) and fixed its
+reader. `incomingMessages` is a second signal with three readers that act
+connection-wide -- the responder pipeline, the unary responder, and
+`RpcClientConnection` -- and three transports wrote one-stream errors to it
+un-marked: a malformed http2 frame failed three innocent calls `[13,13,13]`, a
+request over the channel policy `[3,3,3]`, one server RST through
+`RpcClientConnection` `[14,14,14]`. Enumerate writers AND readers, per signal.
+`../rounds/667-one-stream-error-fails-every-call.md`.
 
 ## Round 359 — the THIRD state, which the flag has no value for
 
