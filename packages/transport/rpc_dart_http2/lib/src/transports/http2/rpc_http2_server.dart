@@ -29,10 +29,14 @@ class RpcHttp2Server implements IRpcServer {
   final IRpcTransport Function(IRpcTransport inner, Socket socket)?
   _transportWrapper;
 
-  // Plaintext (h2c) listener. Mutually exclusive with [_secureServerSocket].
+  // The listener. Under TLS it accepts plain sockets and [_acceptTls] runs the
+  // handshake, so the wait for it can have a deadline: a SecureServerSocket
+  // finishes it before handing the socket over, and a client that connects
+  // and sends nothing is held for as long as it likes.
   ServerSocket? _serverSocket;
-  // TLS (h2) listener. Used when a SecurityContext is provided.
-  SecureServerSocket? _secureServerSocket;
+
+  /// Accepted sockets still in the TLS handshake, destroyed by [stop].
+  final Set<Socket> _handshaking = {};
   bool _isRunning = false;
 
   /// Claimed by [start] before its first await, so a concurrent second call
@@ -129,9 +133,12 @@ class RpcHttp2Server implements IRpcServer {
   /// it. Two stages, two mechanisms; this one is the cheap half, and it is the
   /// half that is on by default.
   ///
+  /// Under TLS the same deadline first bounds the wait for the client's TLS
+  /// hello: a socket that connects and sends nothing is destroyed when it
+  /// passes, and the preface deadline starts once the handshake is done.
+  ///
   /// 30s is three orders of magnitude of slack: a conforming client sends the
-  /// preface within one RTT, and under TLS the socket is only handed here after
-  /// the handshake. **A client that opens the TCP connection eagerly and speaks
+  /// preface within one RTT. **A client that opens the TCP connection eagerly and speaks
   /// HTTP/2 much later — some load balancers pre-warm this way — is dropped**;
   /// pass null to keep the old behaviour.
   final Duration? _prefaceTimeout;
@@ -218,7 +225,7 @@ class RpcHttp2Server implements IRpcServer {
   ///
   /// Returns the OS-assigned port once bound when constructed with port `0`;
   /// otherwise the requested port.
-  int get port => _serverSocket?.port ?? _secureServerSocket?.port ?? _port;
+  int get port => _serverSocket?.port ?? _port;
 
   /// The live endpoints, one per connection.
   @override
@@ -413,22 +420,15 @@ class RpcHttp2Server implements IRpcServer {
         // all, still completes the handshake with nothing selected and is then
         // handed to the h2 parser, which is where it fails instead.
         _securityContext.setAlpnProtocols(const ['h2'], true);
-        _secureServerSocket = await SecureServerSocket.bind(
-          _host,
-          _port,
-          _securityContext,
-        );
-        connections = _secureServerSocket!;
-      } else {
-        _serverSocket = await ServerSocket.bind(_host, _port);
-        connections = _serverSocket!;
       }
+      _serverSocket = await ServerSocket.bind(_host, _port);
+      connections = _serverSocket!;
       _isRunning = true;
 
       _logger?.info('HTTP/2 server listening ($scheme) on $_host:$port');
 
       final subscription = connections.listen(
-        _handleConnection,
+        _securityContext == null ? _handleConnection : _acceptTls,
         onError: (Object error, StackTrace stackTrace) {
           _logger?.error(
             'Server socket error',
@@ -492,12 +492,82 @@ class RpcHttp2Server implements IRpcServer {
       ),
     );
 
+    for (final socket in _handshaking) {
+      socket.destroy();
+    }
+    _handshaking.clear();
     await _serverSocket?.close();
     _serverSocket = null;
-    await _secureServerSocket?.close();
-    _secureServerSocket = null;
 
     _logger?.info('HTTP/2 server stopped');
+  }
+
+  /// Waits for the client's first bytes under the preface deadline, then runs
+  /// the TLS handshake and hands the secured socket to [_handleConnection].
+  ///
+  /// The deadline is enforced BEFORE the handshake starts, on purpose: once
+  /// `SecureSocket.secureServer` has taken the socket over, destroying the
+  /// original no longer closes it, so a deadline on the handshake itself
+  /// abandons a socket the handshake still holds. Reading the ClientHello's
+  /// first chunk here and passing it as `bufferedData` keeps the socket ours
+  /// until the client has spoken. A client that sends part of a handshake and
+  /// stalls is not bounded by this.
+  ///
+  /// A failed handshake destroys the socket and is not reported as a
+  /// connection error: it is what a scanner or a plain-text client produces,
+  /// and a SecureServerSocket drops those silently too.
+  void _acceptTls(Socket raw) {
+    // Read now: a destroyed socket throws on remoteAddress.
+    final peer = '${raw.remoteAddress.address}:${raw.remotePort}';
+    _handshaking.add(raw);
+    Timer? deadline;
+    late final StreamSubscription<List<int>> first;
+    void drop(String why) {
+      deadline?.cancel();
+      _handshaking.remove(raw);
+      unawaited(first.cancel());
+      raw.destroy();
+      if (_logger?.isDebug ?? false) {
+        _logger?.debug('Dropping $peer before TLS: $why');
+      }
+    }
+
+    first = raw.listen(
+      (chunk) {
+        deadline?.cancel();
+        // Paused, not cancelled: secureServer takes the socket over from a
+        // paused subscription, and cancelling would close its read side.
+        first.pause();
+        SecureSocket.secureServer(
+          raw,
+          _securityContext,
+          bufferedData: chunk,
+        ).then(
+          (secure) {
+            _handshaking.remove(raw);
+            if (!_isRunning) {
+              secure.destroy();
+              return;
+            }
+            _handleConnection(secure);
+          },
+          onError: (Object error) {
+            _handshaking.remove(raw);
+            raw.destroy();
+            if (_logger?.isDebug ?? false) {
+              _logger?.debug('TLS handshake with $peer failed: $error');
+            }
+          },
+        );
+      },
+      onError: (Object error) => drop('$error'),
+      onDone: () => drop('closed by the peer'),
+      cancelOnError: true,
+    );
+    final timeout = _prefaceTimeout;
+    if (timeout != null) {
+      deadline = Timer(timeout, () => drop('nothing sent within $timeout'));
+    }
   }
 
   /// Builds the transport, endpoint and lifecycle wiring for one connection.
