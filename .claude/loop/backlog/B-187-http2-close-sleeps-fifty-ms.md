@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 696)
+round: 696
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
 probe: none — static read, nothing run
@@ -34,6 +34,12 @@ Time `close()` with one open stream.
 
 Remove it.
 
+## Outcome (round 696)
+
+FIXED as decided: the wait is gone. `close()` with a call in flight took
+67-69 ms, now 13 ms; the aborted call fails with a status.
+`../rounds/696-close-aborts-at-once.md`.
+
 ## Owner decision
 
-—
+2026-10-07: **remove the wait** -- `close()` aborts at once.

@@ -2211,17 +2211,8 @@ class RpcHttp2CallerTransport
     _keepalive?.cancel();
     _keepalive = null;
 
-    // A short grace period for streams still finishing.
-    if (_activeStreams.isNotEmpty) {
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
-          'Waiting on ${_activeStreams.length} active stream(s)',
-        );
-      }
-      await Future<void>.delayed(Duration(milliseconds: 50));
-    }
-
-    // Abort EVERY remaining stream, half-closed ones INCLUDED.
+    // Abort EVERY remaining stream at once, half-closed ones INCLUDED. close()
+    // is the abort; a caller that wants calls to finish awaits them first.
     //
     // Skipping the half-closed ones means skipping every ordinary unary call,
     // since those send endStream: true with the request. Those streams stay
