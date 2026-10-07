@@ -9,7 +9,10 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
     private var channel: FlutterMethodChannel?
     private var messenger: FlutterBinaryMessenger?
     private var runtimes: [String: WasmRuntime] = [:]
-    private var checkSupportWebView: WKWebView?
+    /// One web view per probe in flight. A single slot let concurrent probes
+    /// replace and release each other's view mid-evaluation, and every one of
+    /// them answered "no WebAssembly".
+    private var checkSupportWebViews: [ObjectIdentifier: WKWebView] = [:]
 
     public static func register(with registrar: FlutterPluginRegistrar) {
         let channel = FlutterMethodChannel(
@@ -46,7 +49,8 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
 
     private func checkSupport(result: @escaping FlutterResult) {
         let webView = WKWebView(frame: .zero)
-        checkSupportWebView = webView
+        let probeId = ObjectIdentifier(webView)
+        checkSupportWebViews[probeId] = webView
         webView.evaluateJavaScript("""
             (function() {
               var r = {};
@@ -64,7 +68,7 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
               return JSON.stringify(r);
             })()
         """) { [weak self] value, error in
-            self?.checkSupportWebView = nil
+            self?.checkSupportWebViews[probeId] = nil
             if let json = value as? String,
                let data = json.data(using: .utf8),
                let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {

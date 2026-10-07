@@ -56,6 +56,14 @@ Item 6: detach the engine with a send in flight.
 
 One commit per platform.
 
+## Progress
+
+- Item 2 FIXED in round 689: four concurrent iOS probes all answered "cannot
+  run" against a single one's "can"; each probe now holds its own web view.
+  `../rounds/689-concurrent-support-probes-agree.md`.
+- Item 1, read in round 689: after `stop()` the guest gets one empty frame,
+  then the next fetch fails and the loop ends. Not a spin.
+
 ## Owner decision
 
 —
