@@ -23,6 +23,8 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[712](712-a-silent-h2-client.md)** FIXED, http2 — **one silent TCP client killed an h2c server at defaults** (preface deadline and keepalive tick in one turn, orphaned PING completer in the root zone), and under TLS was held open for good. Keepalive pings in its own zone; the TLS server waits for the client's first bytes under the deadline. Closes B-260
+- **[711](711-pre-bind-requests-credited-once.md)** FIXED, core — **a request queued before the handler bound was credited twice**, so a stalled client stream failed one past the depth; and an explicit small `maxBufferedBytes` made every stream stop-and-wait. Closes B-259
 - **[710](710-the-window-fits-the-buffer.md)** FIXED, core + websocket — **a 64 KiB message limit under the 4 MiB window failed lagging streams at item 3**: the queue bound now covers the window, an explicit small buffer shrinks the advertised window, first grants replace the seed. Closes B-258
 - **[709](709-message-credit.md)** FIXED, core + websocket — **a sender inside its byte window overran the 1024-message depth**: websocket server streams of small items failed at ~1026 with a slow reader. Grants carry message credit; depth default 8192 (owner, after the latency cost). Closes B-257
 - **[708](708-host-sends-leave-in-batches.md)** FIXED, wasm — **host-to-guest went one frame per platform round trip**: Android 26-30 f/s, a 10k burst did not finish. The host bridge sends queued frames in batches: 349-513 f/s, the burst completes. Closes B-168

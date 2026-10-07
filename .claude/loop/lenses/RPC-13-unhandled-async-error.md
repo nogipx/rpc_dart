@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535, 557, 577, 639, 647]
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535, 557, 577, 639, 647, 712]
 status: confirmed (round 431)
 ---
 
