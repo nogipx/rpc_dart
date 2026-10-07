@@ -92,3 +92,19 @@ abstract class IRpcChannelProtocolClose {
   /// programmatically, and WebSocket caps it at 123 bytes.
   Future<void> closeForProtocolError(String reason);
 }
+
+/// Optional capability: a channel that can tell its peer it is hanging up
+/// because the peer's message was larger than the policy allows.
+///
+/// A size violation is not a framing one. The peer can correct it by sending
+/// less, and http1 and http2 answer the same request with RESOURCE_EXHAUSTED,
+/// so a channel that closes for it should let the peer's caller say the same.
+/// A channel without this capability is closed through
+/// [IRpcChannelProtocolClose] instead.
+abstract class IRpcChannelOversizeClose {
+  /// Closes the channel, telling the peer its message was too large.
+  ///
+  /// [reason] is for a human reading a log, as in
+  /// [IRpcChannelProtocolClose.closeForProtocolError].
+  Future<void> closeForOversize(String reason);
+}

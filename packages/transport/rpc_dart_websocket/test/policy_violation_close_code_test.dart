@@ -147,13 +147,11 @@ void main() {
       // The path this one was aligned WITH must not move.
       final port = await _startServer(StreamController<WebSocketChannel>());
 
-      final oversized = Uint8List(9);
-      final view = ByteData.sublistView(oversized);
-      view.setUint32(0, 3);
-      view.setUint8(4, 0x00);
-      view.setUint32(5, 0xFFFFFFFF);
+      // Metadata that is not JSON. Not an oversized length: that is a size,
+      // and closes with its own code.
+      final malformed = _frame(3, 0x02, utf8.encode('{'));
 
-      expect(await _closeCodeFor(port, oversized), 4400);
+      expect(await _closeCodeFor(port, malformed), 4400);
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );

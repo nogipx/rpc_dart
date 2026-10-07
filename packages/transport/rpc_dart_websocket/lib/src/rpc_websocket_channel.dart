@@ -32,15 +32,17 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///   ALWAYS the local error path. Reading it as the peer's judgement makes the
 ///   commonest transient network failure non-retryable. The rare genuine case
 ///   costs a bounded number of retries and then the same failure.
-/// - 3000-4999 are library/application codes with no fixed meaning, so
-///   `unknown`. Same rule as `grpcStatusFromHttpStatus`.
+/// - 4413 is this library's "message too large" (`_tooLargeCloseCode`), so
+///   `resourceExhausted`, as http1 and http2 answer the same request.
+/// - Every other 3000-4999 code is a library/application code with no fixed
+///   meaning, so `unknown`. Same rule as `grpcStatusFromHttpStatus`.
 int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
   null => RpcStatus.unavailable,
   1000 || 1001 || 1005 || 1006 => RpcStatus.unavailable,
   1002 => RpcStatus.unavailable,
   1012 || 1013 || 1014 => RpcStatus.unavailable,
   1008 => RpcStatus.permissionDenied,
-  1009 => RpcStatus.resourceExhausted,
+  1009 || 4413 => RpcStatus.resourceExhausted,
   1003 || 1007 || 1010 || 1011 => RpcStatus.internal,
   _ => RpcStatus.unknown,
 };
@@ -105,7 +107,8 @@ class RpcWebSocketNonBinaryFrame extends RpcException
 /// `RpcWebSocketCallerTransport.connect` and the server's accept path build the
 /// socket themselves and never hand it out, so a caller using those cannot
 /// reach this at all.
-class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
+class RpcWebSocketChannel
+    implements IRpcChannel, IRpcChannelProtocolClose, IRpcChannelOversizeClose {
   final WebSocketChannel _ws;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
   late final StreamSubscription<void> _sub;
@@ -263,13 +266,28 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
     return utf8.decode(bytes.sublist(0, end), allowMalformed: true);
   }
 
+  /// Close code for a peer message larger than the policy allows.
+  ///
+  /// Not 1009 "message too big", for the reason [_protocolErrorCloseCode] is not
+  /// 1002. 4413 echoes HTTP 413, and [grpcStatusFromWebSocketCloseCode] maps it
+  /// to RESOURCE_EXHAUSTED, the status http1 and http2 answer the same request
+  /// with.
+  static const int _tooLargeCloseCode = 4413;
+
   @override
-  Future<void> closeForProtocolError(String reason) async {
+  Future<void> closeForProtocolError(String reason) =>
+      _closeWithCode(_protocolErrorCloseCode, reason);
+
+  @override
+  Future<void> closeForOversize(String reason) =>
+      _closeWithCode(_tooLargeCloseCode, reason);
+
+  Future<void> _closeWithCode(int code, String reason) async {
     if (_closed) return;
     _closed = true;
     await _sub.cancel();
     try {
-      await _ws.sink.close(_protocolErrorCloseCode, _trimCloseReason(reason));
+      await _ws.sink.close(code, _trimCloseReason(reason));
     } catch (_) {
       // The reason is a courtesy; the CLOSE is the contract. `_closed` is
       // already true above, so a throw here would leave the socket open with no
@@ -278,7 +296,7 @@ class RpcWebSocketChannel implements IRpcChannel, IRpcChannelProtocolClose {
       // keeps it under the cap -- and kept for the platform where close()
       // rejects a reason this one would accept.
       try {
-        await _ws.sink.close(_protocolErrorCloseCode);
+        await _ws.sink.close(code);
       } catch (_) {}
     }
     if (!_incoming.isClosed) unawaited(_incoming.close());

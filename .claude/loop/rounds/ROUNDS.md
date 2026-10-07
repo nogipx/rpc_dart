@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[680](680-an-oversized-websocket-request-says-so.md)** FIXED, rpc_dart + websocket — **an oversized websocket request read as UNKNOWN (2)** where http1/http2 say 8. By owner decision a dedicated close code, 4413, mapped to RESOURCE_EXHAUSTED (new opt-in `IRpcChannelOversizeClose`); framing violations keep 4400. Closes B-251
 - **[679](679-two-metadata-edges-made-the-same.md)** FIXED, rpc_dart — **request metadata edges differed by transport**: an edge-whitespace value is now refused before send (INVALID_ARGUMENT on all five), and a reserved `grpc-` request header no longer reaches the handler. Item 3 unchanged by decision. Closes B-253
 - **[678](678-a-dead-peer-is-unavailable-everywhere.md)** FIXED, rpc_dart + websocket + isolate — **a call after the peer died was 9 on memory, isolate and websocket, 14 on http**. By owner decision UNAVAILABLE everywhere (`RpcClosedException.byPeer`, `RpcNoConnectionException` always 14); this side's own close stays 9. Closes B-252
 - **[677](677-what-auto-means.md)** FIXED, rpc_dart (doc) — **`RpcDataTransferMode.auto`'s doc said codecs force serialization**; on unary the code passes objects wherever the transport can. Doc fixed by owner decision, behaviour pinned. Closes B-250

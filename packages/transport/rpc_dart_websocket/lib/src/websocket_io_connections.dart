@@ -178,7 +178,7 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
 ///
 /// An adopted policy only RAISES the ceiling above the default. Below it, a
 /// whole message past the server's limit should still reach the multiplexer,
-/// which closes with 4400 and says why; the guard can only destroy the socket,
+/// which closes with 4413 and says why; the guard can only destroy the socket,
 /// which the peer reads as a retryable dropped connection.
 final class _MessageCeiling {
   _MessageCeiling(RpcSecurityPolicy? own)

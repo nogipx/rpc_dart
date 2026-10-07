@@ -124,10 +124,11 @@ Future<String> _stillServing(_Rig rig) async {
 
 void main() {
   test('a message over maxMessageLengthBytes closes the connection', () async {
-    // 4400 is the framing-violation code, which maps to UNKNOWN and is NOT
-    // retried -- so the peer stops resending what got it disconnected.
+    // 4413 is the message-too-large code, which maps to RESOURCE_EXHAUSTED --
+    // not retried without pushback, so the peer stops resending what got it
+    // disconnected.
     final rig = await _serve(maxMessageBytes: 1024 * 1024);
-    expect(await _push(rig, bytes: 8 * 1024 * 1024), 4400);
+    expect(await _push(rig, bytes: 8 * 1024 * 1024), 4413);
   });
 
   test('the refusal names the limit it hit', () async {
@@ -164,7 +165,7 @@ void main() {
       final rig = await _serve(maxMessageBytes: 1024 * 1024);
       expect(
         await _push(rig, bytes: 8 * 1024 * 1024, count: 5),
-        4400,
+        4413,
         reason: 'a surviving connection is an unlimited supply of peaks',
       );
     },

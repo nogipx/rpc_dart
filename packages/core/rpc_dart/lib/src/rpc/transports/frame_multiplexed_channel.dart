@@ -15,7 +15,10 @@ import '../../core/_index.dart';
 ///
 /// Use [pair] for testing without a real byte transport.
 class RpcFrameMultiplexedChannel
-    implements IRpcMultiplexedChannel, IRpcChannelProtocolClose {
+    implements
+        IRpcMultiplexedChannel,
+        IRpcChannelProtocolClose,
+        IRpcChannelOversizeClose {
   final IRpcChannel _channel;
   final RpcSecurityPolicy _policy;
 
@@ -459,6 +462,7 @@ class RpcFrameMultiplexedChannel
           'Incoming frame buffer overflow: $incoming bytes '
           '(max: $_maxBufferedFrameBytes)',
         ),
+        oversize: true,
       );
       return false;
     }
@@ -496,7 +500,10 @@ class RpcFrameMultiplexedChannel
       // What still reaches here is a SIZE violation, or malformed metadata on
       // a connection we have decided to close for. The framing is not
       // trustworthy past that point, so tearing down is the only safe answer.
-      _failChannel(error);
+      _failChannel(
+        error,
+        oversize: error.statusCode == RpcStatus.resourceExhausted,
+      );
       return false;
     }
 
@@ -564,7 +571,10 @@ class RpcFrameMultiplexedChannel
   /// capped at 256 KiB: the call failed AND every later call on the connection
   /// got "Transport is disconnected and has no socket", where http2 -- the same
   /// library, the same scenario -- failed only the call.
-  void _failChannel(RpcFrameException error) {
+  ///
+  /// [oversize] marks a message larger than the policy allows, which the peer
+  /// is told as such: it is a limit the peer can correct, not malformed bytes.
+  void _failChannel(RpcFrameException error, {bool oversize = false}) {
     if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
     // Drop any partially buffered bytes immediately; do not keep allocating.
     _buf = Uint8List(0);
@@ -579,7 +589,28 @@ class RpcFrameMultiplexedChannel
     //
     // Channels with no close code on the wire fall through to the ordinary
     // close, so this changes nothing for them.
-    unawaited(closeForProtocolError(error.message));
+    unawaited(
+      oversize
+          ? closeForOversize(error.message)
+          : closeForProtocolError(error.message),
+    );
+  }
+
+  /// Forwarded for the same reason as [closeForProtocolError]; a byte channel
+  /// without the capability gets the protocol close instead.
+  @override
+  Future<void> closeForOversize(String reason) async {
+    final channel = _channel;
+    if (channel is! IRpcChannelOversizeClose) {
+      await closeForProtocolError(reason);
+      return;
+    }
+    if (_closed) return;
+    _closed = true;
+    await (channel as IRpcChannelOversizeClose).closeForOversize(reason);
+    await _channelSub?.cancel();
+    _channelSub = null;
+    if (!_incomingCtl.isClosed) await _incomingCtl.close();
   }
 
   /// Forwarded so layers ABOVE this channel can report a peer fault too.

@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 676)
-round: — (not re-measured)
+status: closed (round 680)
+round: 680
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
 probe: .dart_tool/probe/parity_matrix.dart (5.request-over-limit, 5.connection-usable-after-over)
@@ -46,3 +46,9 @@ cannot carry it.
 2026-10-07, round 676's batch: **a dedicated close code for "message too
 large", mapped to RESOURCE_EXHAUSTED on the caller**. The connection still
 closes.
+
+## Outcome (round 680)
+
+FIXED as decided: an oversized message closes with 4413, which the caller maps
+to RESOURCE_EXHAUSTED; a framing violation keeps 4400 / UNKNOWN. The connection
+still closes. `../rounds/680-an-oversized-websocket-request-says-so.md`.
