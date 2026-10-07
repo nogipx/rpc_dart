@@ -20,6 +20,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
@@ -530,6 +531,7 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         // the peer would wait on bytes the guest has already produced. Bounded
         // so a guest that produces during the drain cannot pin the loop here.
         var rounds = 0
+        var sentSinceYield = 0
         while (rounds++ < 64) {
             val raw = isolate.evaluateJavaScriptAsync("_rpcWasmDrainOutbox()").await()
             if (raw.isEmpty()) return
@@ -538,6 +540,18 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                 if (b64.isEmpty()) continue
                 val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
                 sendRuntimeBytes(runtimeId, bytes)
+                // Give the main thread back every so often. Each send runs the
+                // Dart handler right here, on this thread, and Dart's microtasks
+                // -- where the transport hands a frame to its consumer -- only run
+                // once this task returns. Without the yield one drain delivered
+                // thousands of frames before the consumer saw any, and the host's
+                // per-stream cap (maxBufferedMessagesPerStream, 1024 by default)
+                // failed the call. 256 keeps that lag well under the default at a
+                // fraction of the cost of yielding per frame.
+                if (++sentSinceYield >= 256) {
+                    sentSinceYield = 0
+                    yield()
+                }
             }
         }
         // Still more queued after the cap: come straight back rather than

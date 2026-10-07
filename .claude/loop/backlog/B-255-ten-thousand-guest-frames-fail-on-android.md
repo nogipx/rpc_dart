@@ -1,6 +1,6 @@
 ---
-status: open
-round: 675
+status: closed (round 683)
+round: 683
 commit: 32974d54
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/example/integration_test/guest_to_host_order_test.dart]
 probe: none — the device test itself; its failure text has not been captured
@@ -24,6 +24,14 @@ was lost in ~10k lines of the bridge's per-frame `debugPrint`. Run it with that
 debug output off, or catch and print the error in the test, before reading
 anything into it.
 
+## Outcome (round 683)
+
+FIXED. The error was the host's per-stream cap, 1024 un-consumed messages: the
+Kotlin drain sent thousands of frames inside one main-thread task, so Dart's
+microtasks never ran between them and the consumer saw none. The drain now
+yields every 256 frames. `../rounds/683-the-drain-gives-the-thread-back.md`.
+
 ## Owner decision
 
-—
+2026-10-07, round 683: yield every 256 frames, chosen over per frame after
+seeing both timings.
