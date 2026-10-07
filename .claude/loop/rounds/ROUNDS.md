@@ -23,6 +23,8 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[714](714-an-oversized-h1-stream-is-cancelled.md)** FIXED, http — **a server stream answered over the limit kept its handler and slot**; four of them made the server answer 503 to everyone. The transport now emits a cancellation for it. Closes B-264
+- **[713](713-pings-are-rate-limited.md)** FIXED, websocket — **a deaf client flooding pings grew the server by ~3 GiB in 10 s** (dart:io queues a pong per ping). The frame guard rate-limits pings. Closes B-263
 - **[712](712-a-silent-h2-client.md)** FIXED, http2 — **one silent TCP client killed an h2c server at defaults** (preface deadline and keepalive tick in one turn, orphaned PING completer in the root zone), and under TLS was held open for good. Keepalive pings in its own zone; the TLS server waits for the client's first bytes under the deadline. Closes B-260
 - **[711](711-pre-bind-requests-credited-once.md)** FIXED, core — **a request queued before the handler bound was credited twice**, so a stalled client stream failed one past the depth; and an explicit small `maxBufferedBytes` made every stream stop-and-wait. Closes B-259
 - **[710](710-the-window-fits-the-buffer.md)** FIXED, core + websocket — **a 64 KiB message limit under the 4 MiB window failed lagging streams at item 3**: the queue bound now covers the window, an explicit small buffer shrinks the advertised window, first grants replace the seed. Closes B-258
