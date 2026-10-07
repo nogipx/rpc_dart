@@ -154,28 +154,24 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  // GUARD: the handler is NOT stopped -- this transport has no reset, so it
-  // runs to completion while its output is dropped. Pinned because it is the
-  // cost of the fix, and the day a reset exists this is what changes.
+  // The handler is STOPPED once the stream is answered: the transport tells
+  // the pipeline the way a peer cancellation is told. Without it the handler
+  // ran to completion with its output dropped, holding its slot meanwhile.
   test(
-    'GUARD: the handler keeps running after the stream is ended',
+    'the handler is cancelled once the stream is ended',
     () async {
       final rig = await _serve(200);
       await _drain(rig.caller);
+      final atAnswer = rig.produced();
 
-      // POLLED, not slept: 200 items at 1 ms apart take longer than any fixed
-      // wait is safe for on a loaded machine, and a fixed 500 ms made this fail
-      // once and pass once on identical code.
-      final deadline = DateTime.now().add(const Duration(seconds: 10));
-      while (rig.produced() < 200 && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
 
       expect(
         rig.produced(),
-        200,
-        reason: 'memory is bounded by dropping the output, not by stopping it',
+        lessThan(200),
+        reason: 'the handler must not run to completion',
       );
+      expect(rig.produced() - atAnswer, lessThan(5));
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );

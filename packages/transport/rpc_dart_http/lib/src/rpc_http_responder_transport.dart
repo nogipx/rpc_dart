@@ -638,6 +638,24 @@ class RpcHttpResponderTransport
       ),
     ]);
     _completeResponse(streamId, pending);
+    // The caller has its answer, but the handler does not know: every later
+    // send returns normally and is dropped, so a stream that runs until
+    // cancelled kept running and kept its slot, and once maxActiveStreams
+    // such calls had accumulated every new request got 503. Told the way a
+    // peer's cancellation is told, the pipeline cancels the handler and
+    // releases the stream.
+    _emit(
+      RpcTransportMessage(
+        streamId: streamId,
+        metadata: RpcMetadata([
+          RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+          RpcHeader(
+            RpcHeaders.xCancellationReason,
+            'The response exceeded the buffered-bytes limit',
+          ),
+        ]),
+      ),
+    );
   }
 
   @override
