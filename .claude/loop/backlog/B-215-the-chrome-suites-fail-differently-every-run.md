@@ -1,6 +1,6 @@
 ---
-status: open
-round: 543
+status: closed (round 702)
+round: 702
 commit: b566bcb8
 paths: [pubspec.yaml, packages/transport/rpc_dart_isolate/test/web_worker/worker_startup_failure_test.dart, packages/transport/rpc_dart_isolate/test/web_worker/echo_worker_test.dart]
 probe: none
@@ -60,6 +60,13 @@ difference at low load, revert it — it is then complexity bought with nothing.
 Worth asking separately whether a worker that fails to LOAD can be told from one the browser
 refused to start under pressure. The transport reports both as "failed to load or threw during
 startup", which is the same string for a code defect and for an exhausted machine.
+
+## Outcome (round 702)
+
+Measured on a quiet start (load 2.34): each Chrome file alone 5/5 and 5/5,
+both in one invocation 2/5, `test:web` as committed (split since round 543)
+3/3. The failure is the shared invocation; the split is load-bearing and
+stays. `../rounds/702-the-chrome-flake-is-the-shared-invocation.md`.
 
 ## Owner decision
 

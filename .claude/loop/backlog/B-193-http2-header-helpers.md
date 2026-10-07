@@ -1,6 +1,6 @@
 ---
-status: open (round 697 refused connection-specific headers; the cost items remain)
-round: 697
+status: closed (round 703)
+round: 703
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/http2_header_block_guard.dart]
 probe: none — static read, nothing run
@@ -41,6 +41,12 @@ reached the handler over http2 (`connection -> v` and four more); it is now
 refused before it is sent, INVALID_ARGUMENT, on every transport. `te` twice is
 not reachable from user metadata (`te` is reserved). The cost items remain.
 `../rounds/697-connection-headers-are-refused-on-send.md`.
+
+## Outcome (round 703)
+
+The cost items measured: header build 0.72 us and parse 0.25 us per request
+against a 475 us unary call over h2, about 0.2%. Not worth a change.
+`../rounds/703-header-conversion-is-a-fifth-of-a-percent.md`.
 
 ## Owner decision
 

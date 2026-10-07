@@ -23,6 +23,8 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[703](703-header-conversion-is-a-fifth-of-a-percent.md)** CLEAN, http2 — **B-193's header cost**: build 0.72 us + parse 0.25 us per request against 475 us per unary call, about 0.2%. Nothing to gain. Closes B-193
+- **[702](702-the-chrome-flake-is-the-shared-invocation.md)** CLEAN, isolate — **the Chrome suite flakes**: on a quiet start each file alone 10/10, both in one invocation 2/5, `test:web` 3/3. The shared invocation is the cause; round 543's split stays. Closes B-196, B-215
 - **[701](701-a-responder-interceptor-can-shorten-a-call.md)** FIXED, rpc_dart — **a deadline set by a responder interceptor was not enforced** (handler answered after 2 s against a 200 ms timeout). By owner decision an earlier one re-arms the stream timer; a later one never extends the caller's. Closes B-244
 - **[700](700-peer-middleware-knows-the-direction.md)** FIXED, rpc_dart — **peer middleware could not tell an outgoing call from an incoming one**. By owner decision `RpcMiddlewareContext.direction` (`RpcCallDirection`), set by both pipelines. Closes B-245
 - **[699](699-the-web-under-dart2wasm-decodes.md)** FIXED, rpc_dart — **under dart2wasm on the web every response failed to decode** (websocket client in node 22; dart2js fine): the same JS-backed `sublist` SDK bug, in core's CBOR. Decoded from views instead, at no cost. Closes B-256

@@ -1,6 +1,6 @@
 ---
-status: open
-round: 508
+status: closed (round 702)
+round: 702
 commit: 5fa2b280
 paths: [packages/transport/rpc_dart_isolate/test/web_worker/worker_startup_failure_test.dart, packages/transport/rpc_dart_isolate/test/web_worker/echo_worker_test.dart]
 probe: none — observed twice during the gate, not yet instrumented
@@ -99,6 +99,13 @@ give the browser launch its own melos step so it never competes with twenty othe
 suites; raise or remove the load timeout specifically; or retry the load once and log
 it loudly, which is the worst option and should only be reached for if the first two
 refute.
+
+## Outcome (round 702)
+
+Measured on a quiet start (load 2.34): each Chrome file alone 5/5 and 5/5,
+both in one invocation 2/5, `test:web` as committed (split since round 543)
+3/3. The failure is the shared invocation; the split is load-bearing and
+stays. `../rounds/702-the-chrome-flake-is-the-shared-invocation.md`.
 
 ## Owner decision
 

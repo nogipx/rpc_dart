@@ -3,7 +3,7 @@ refines: U-03
 paths: [packages/**/analysis_options.yaml, analysis_options.yaml]
 applies: the project has a static-analysis gate configured from a shared preset
 breaks: "wrong result: an unchecked implicit downcast from `dynamic` throws at run time where the analyser could have refused it — LATENT on this corpus (round 329), so the damage is a permanently unguarded surface rather than a live defect."
-applied: [325, 326, 328, 640]
+applied: [325, 326, 328, 640, 702]
 status: confirmed (round 325)
 ---
 
