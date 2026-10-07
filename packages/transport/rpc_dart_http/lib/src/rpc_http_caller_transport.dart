@@ -600,10 +600,16 @@ class RpcHttpCallerTransport
         // A metadata value that must carry a comma of its own has a specified
         // home: a `-bin` key, base64, whose alphabet contains none.
         final header = RpcHeader(name, value);
-        if (name == RpcHeaders.grpcStatus || name == RpcHeaders.grpcMessage) {
-          // Unaffected either way: the status is numeric and grpc-message is
-          // percent-encoded over ALPHA/DIGIT/-/./_/~, so neither can contain a
-          // comma.
+        if (name == RpcHeaders.grpcStatus ||
+            name == RpcHeaders.grpcMessage ||
+            name == RpcHeaders.grpcStatusDetails) {
+          // Unaffected either way: the status is numeric, grpc-message is
+          // percent-encoded over ALPHA/DIGIT/-/./_/~, and the details are
+          // base64, so none can contain a comma.
+          //
+          // The details belong here with the other two: the status is built
+          // from the trailer frame, and without them it loses every detail --
+          // `RpcRetryInfo` among them, the pushback the retry predicate needs.
           trailerHeaders.add(header);
         } else {
           initialHeaders.add(header);

@@ -1,6 +1,6 @@
 ---
-status: decided by owner (round 676)
-round: — (not re-measured)
+status: closed (round 681)
+round: 681
 commit: 81530a7b
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
 probe: .dart_tool/probe/parity_matrix.dart (scenario 1.error-details)
@@ -46,6 +46,12 @@ A server returning `RpcStatusException.atCapacity(...)` behind
 ## Fix sketch
 
 Route `grpc-status-details-bin` to the trailer frame with the other two.
+
+## Outcome (round 681)
+
+FIXED as decided. The witness above, built as a test: details arrive, and an
+at-capacity call behind the default retry predicate runs 3 times, not 1.
+`../rounds/681-http1-error-details-reach-the-caller.md`.
 
 ## Owner decision
 
