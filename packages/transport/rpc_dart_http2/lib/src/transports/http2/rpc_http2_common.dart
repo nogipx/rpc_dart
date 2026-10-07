@@ -310,8 +310,15 @@ class RpcHttp2StreamError extends RpcStatusException {
   /// The stack the inner error arrived with, when there was one.
   final StackTrace? stackTrace;
 
-  RpcHttp2StreamError(this.streamId, this.error, [this.stackTrace])
-    : super(wireStatusFor(error).status, wireStatusFor(error).message);
+  RpcHttp2StreamError(int streamId, Object error, [StackTrace? stackTrace])
+    : this._(streamId, error, stackTrace, wireStatusFor(error));
+
+  RpcHttp2StreamError._(
+    this.streamId,
+    this.error,
+    this.stackTrace,
+    ({int status, String message, Uint8List? detailsBin}) wire,
+  ) : super(wire.status, wire.message);
 }
 
 /// An [RpcHttp2StreamError] about one stream only -- its frames, its headers,

@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 698) — cleanup commit by owner decision
+round: 698
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
 probe: none — static read, nothing run
@@ -48,6 +48,20 @@ None.
 
 One cleanup commit.
 
+## Outcome (cleanup, after round 698)
+
+Done in one cleanup commit, by owner decision, no round: 1 (the second
+`terminate()` after one threw is gone), 2 (the two `closed` branches merged),
+4 (typo), 6 (the log label is read before the stream is recorded, so
+"trailers-only" is reachable), 7 (`:method` compared exactly), 8 (a throwing
+wrapper, or a failure before the endpoint exists, now fires
+`onConnectionClosed`), 9 (`wireStatusFor` computed once).
+
+Left: 3 (the per-parser `maxActiveStreams` check is a second line behind
+`createStream`'s, kept), 5 (the shared drain signal is correct through
+`reconnect()`'s reset), 10 (double dispatch is a design question, the same as
+the channel transport's).
+
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are **done as cleanup commits, without rounds**.

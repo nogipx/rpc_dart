@@ -578,7 +578,9 @@ class RpcHttp2ResponderTransport
     // check next door: a request with no `:method` is malformed HTTP/2 and
     // package:http2 refuses it before this point.
     final requestMethod = extractRequestMethod(message.headers);
-    if (requestMethod != null && requestMethod.toUpperCase() != 'POST') {
+    // Exact: HTTP methods are case-sensitive (RFC 9110 §9.1), so `post` is
+    // not POST.
+    if (requestMethod != null && requestMethod != 'POST') {
       throw ArgumentError.value(
         requestMethod,
         ':method',
@@ -888,6 +890,13 @@ class RpcHttp2ResponderTransport
 
     try {
       final List<http2.Header> headers;
+      // Read before the branches below record the stream, or every ending
+      // would log as plain trailers.
+      final kind = !endStream
+          ? 'initial headers'
+          : _initialHeadersSent.contains(streamId)
+          ? 'trailers'
+          : 'trailers-only';
 
       if (!endStream) {
         // Initial response headers — includes :status: 200
@@ -910,10 +919,7 @@ class RpcHttp2ResponderTransport
       ).add(http2.HeadersStreamMessage(headers, endStream: endStream));
 
       if (_logger?.isInternal ?? false) {
-        _logger?.internal(
-          'Metadata sent for stream $streamId '
-          '(${endStream ? (_initialHeadersSent.contains(streamId) ? "trailers" : "trailers-only") : "initial headers"})',
-        );
+        _logger?.internal('Metadata sent for stream $streamId ($kind)');
       }
     } catch (e) {
       _logger?.error('Error sending metadata for stream $streamId: $e');
@@ -1191,7 +1197,7 @@ class RpcHttp2ResponderTransport
     Object object, {
     bool endStream = false,
   }) async {
-    throw UnimplementedError('Unsupport direct object sending');
+    throw UnimplementedError('Unsupported: direct object sending');
   }
 
   @override

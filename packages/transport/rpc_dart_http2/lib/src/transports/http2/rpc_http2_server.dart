@@ -577,6 +577,12 @@ class RpcHttp2Server implements IRpcServer {
             'onConnectionError',
             () => _onConnectionError?.call(error, stackTrace),
           );
+          // No endpoint exists yet to release, so balance onConnectionOpened
+          // here.
+          _notify(
+            'onConnectionClosed',
+            () => _onConnectionClosed?.call(socket),
+          );
           socket.destroy();
           return;
         }
@@ -654,7 +660,11 @@ class RpcHttp2Server implements IRpcServer {
       // onConnectionClosed, balancing the onConnectionOpened above for a
       // connection now being torn down.
       final orphan = created;
-      if (orphan != null) _releaseEndpoint(orphan, socket);
+      if (orphan != null) {
+        _releaseEndpoint(orphan, socket);
+      } else {
+        _notify('onConnectionClosed', () => _onConnectionClosed?.call(socket));
+      }
       socket.destroy();
     }
   }

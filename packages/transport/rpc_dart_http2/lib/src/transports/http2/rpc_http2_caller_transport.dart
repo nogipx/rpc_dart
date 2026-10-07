@@ -1879,17 +1879,9 @@ class RpcHttp2CallerTransport
   Future<RpcHealthStatus> health() async {
     final details = _buildHealthDetails();
 
-    if (_messageController.isClosed) {
-      return RpcHealthStatus.closed(
-        component: runtimeType.toString(),
-        message: 'HTTP/2 transport closed',
-        details: details,
-      );
-    }
-
-    // close() is terminal; a failed reconnect is not. Reporting the second as
-    // "closed" was what made the advice below unfollowable.
-    if (_isClosed) {
+    // close() is terminal; a failed reconnect is not, and is reported below as
+    // degraded, so a supervisor can act on it.
+    if (_messageController.isClosed || _isClosed) {
       return RpcHealthStatus.closed(
         component: runtimeType.toString(),
         message: 'HTTP/2 transport closed',
@@ -2253,11 +2245,6 @@ class RpcHttp2CallerTransport
         }
       } catch (e) {
         _logger?.warning('Error closing stream ${stream.id}: $e');
-        try {
-          stream.terminate();
-        } catch (e2) {
-          _logger?.warning('Error terminating stream ${stream.id}: $e2');
-        }
       }
     }
     _activeStreams.clear();
@@ -2322,7 +2309,7 @@ class RpcHttp2CallerTransport
     Object object, {
     bool endStream = false,
   }) async {
-    throw UnimplementedError('Unsupport direct object sending');
+    throw UnimplementedError('Unsupported: direct object sending');
   }
 
   @override
