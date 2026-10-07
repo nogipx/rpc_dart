@@ -66,6 +66,7 @@ melos run analyze:native # the wasm plugin's Swift + Kotlin (see below)
 melos run test:wasm:device # RUNS that native code; needs a booted device
 melos run test:web       # dart2js/node web regression guard
 melos run format:check   # formatting gate
+melos run check:skills   # shipped Agent Skills: examples compile, frontmatter, links
 melos run publish:dry    # validate publishable packages
 melos exec --scope=rpc_dart_http2 -- fvm dart test   # one package
 melos list --category transport                      # group filter
@@ -221,6 +222,25 @@ on `Version X already exists`, after the other packages have gone out.
 - **web is a real target** (dart2js / Wasm). Guard against dart2js pitfalls
   (async* cancel, int > 2^53, clock/Random); run `melos run test:web` for
   web-relevant changes.
+
+## Agent Skills shipped with packages
+
+`packages/core/rpc_dart/skills/rpc_dart-core/` is an Agent Skill for USERS of
+rpc_dart. `dart pub publish` bundles `skills/`, and users install it with
+`dart run skills get`. It is the reference documentation for agents, and it is
+read offline at the version the user resolved. So it describes core only and
+must match `lib/` exactly.
+
+- Change a public core API, and you update the skill in the same commit.
+  `melos run check:skills` (part of `prepare`) compiles every ```dart block. It
+  cannot see prose, so a renamed parameter mentioned only in text still slips
+  through.
+- The ```dart blocks of one file are joined into one library. Write every block
+  as top-level code: statements go inside a function, and put imports in the
+  block.
+- `SKILL.md` must open with `---` frontmatter, so it carries no SPDX header.
+  `license:annotate` skips it, and `REUSE.toml`'s `**/*.md` covers it.
+- Transport specifics belong in that transport's README, not in the skill.
 
 ## The evidence-loop skill is linked, not copied
 
