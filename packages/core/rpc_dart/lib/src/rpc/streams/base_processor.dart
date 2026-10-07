@@ -1305,7 +1305,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       // User metadata must not clobber protocol-reserved headers.
       for (final entry in _context.headers.entries) {
         if (RpcHeaders.isReserved(entry.key)) continue;
-        RpcHeaders.checkValueEdges(entry.key, entry.value);
+        RpcHeaders.checkUserHeader(entry.key, entry.value);
         headerMap[entry.key] = entry.value;
       }
 

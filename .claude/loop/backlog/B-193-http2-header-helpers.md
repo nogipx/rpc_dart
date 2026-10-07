@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: open (round 697 refused connection-specific headers; the cost items remain)
+round: 697
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/http2_header_block_guard.dart]
 probe: none — static read, nothing run
@@ -34,6 +34,15 @@ Requests/s with a profiler on header conversion.
 
 One conversion pass, cached constant headers, one builder, forward pause/resume.
 
+## Progress (round 697)
+
+The protocol item is done: a connection-specific header in user metadata
+reached the handler over http2 (`connection -> v` and four more); it is now
+refused before it is sent, INVALID_ARGUMENT, on every transport. `te` twice is
+not reachable from user metadata (`te` is reserved). The cost items remain.
+`../rounds/697-connection-headers-are-refused-on-send.md`.
+
 ## Owner decision
 
-—
+2026-10-07: connection-specific headers **refused on send** with
+INVALID_ARGUMENT, as edge whitespace in round 679.

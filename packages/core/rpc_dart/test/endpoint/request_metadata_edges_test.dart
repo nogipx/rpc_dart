@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Two request-metadata edges, the same on every transport: a value with leading
-// or trailing whitespace is refused before it is sent (RFC 9113 §8.2.1 forbids
-// it, and HTTP/1.1 would trim it silently), and a `grpc-` header other than the
-// three the framework negotiates never reaches the handler.
+// Request-metadata edges, the same on every transport: a value with leading or
+// trailing whitespace is refused before it is sent (RFC 9113 §8.2.1 forbids
+// it, and HTTP/1.1 would trim it silently), and so is a connection-specific
+// header (RFC 9113 §8.2.2: a request carrying one is malformed); a `grpc-`
+// header other than the three the framework negotiates never reaches the
+// handler.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -58,6 +60,24 @@ void main() {
       'status ${RpcStatus.invalidArgument}',
     );
   });
+
+  for (final name in const [
+    'connection',
+    'keep-alive',
+    'proxy-connection',
+    'transfer-encoding',
+    'upgrade',
+  ]) {
+    test(
+      'a connection-specific header ($name) is refused before it is sent',
+      () async {
+        expect(
+          await _call({name: 'v'}, name),
+          'status ${RpcStatus.invalidArgument}',
+        );
+      },
+    );
+  }
 
   test('inner whitespace is fine', () async {
     expect(await _call({'x-pad': 'v  w'}, 'x-pad'), 'v  w');

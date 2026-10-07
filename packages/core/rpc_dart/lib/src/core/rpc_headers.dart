@@ -144,12 +144,30 @@ abstract final class RpcHeaders {
         lower != grpcAcceptEncoding;
   }
 
-  /// Throws if a user metadata [value] starts or ends with a space or tab.
+  /// Hop-by-hop HTTP/1.1 headers. RFC 9113 §8.2.2: an HTTP/2 request carrying
+  /// one is malformed, so a strict peer refuses it.
+  static const connectionSpecific = <String>{
+    'connection',
+    'keep-alive',
+    'proxy-connection',
+    'transfer-encoding',
+    'upgrade',
+  };
+
+  /// Throws an [RpcMetadataViolation] for user metadata that could not arrive
+  /// the same way on every transport: a connection-specific [name], or a
+  /// [value] that starts or ends with a space or tab.
   ///
-  /// RFC 9113 §8.2.1 forbids such a field value, so a strict HTTP/2 peer may
-  /// refuse the request, and the HTTP/1.1 stack trims it silently -- one value,
-  /// two different arrivals.
-  static void checkValueEdges(String name, String value) {
+  /// RFC 9113 forbids both (§8.2.2, §8.2.1), so a strict HTTP/2 peer may
+  /// refuse the request, and the HTTP/1.1 stack trims edge whitespace
+  /// silently -- one value, two different arrivals.
+  static void checkUserHeader(String name, String value) {
+    if (connectionSpecific.contains(name.toLowerCase())) {
+      throw RpcMetadataViolation(
+        'Metadata key "$name" is a connection-specific header',
+        name: name,
+      );
+    }
     if (value.isEmpty) return;
     bool ws(int c) => c == 0x20 || c == 0x09;
     if (ws(value.codeUnitAt(0)) || ws(value.codeUnitAt(value.length - 1))) {

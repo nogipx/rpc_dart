@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[697](697-connection-headers-are-refused-on-send.md)** FIXED, rpc_dart — **connection-specific headers in user metadata reached the peer over http2**, which RFC 9113 calls malformed. By owner decision refused on send with INVALID_ARGUMENT on every transport. B-193's protocol item
 - **[696](696-close-aborts-at-once.md)** FIXED, http2 — **`close()` slept 50 ms with a call in flight** before aborting it. By owner decision the wait is gone: 67-69 ms -> 13 ms. Closes B-187
 - **[695](695-two-responder-claims-measured-clean.md)** CLEAN, http2 — **B-190's health and lost-trailer claims**: after a protocol close `health()` is not healthy, and an overrun reaches the caller as `status 8`. Kept as guards; the lead's other claims stay open
 - **[694](694-the-caller-addresses-its-peer-correctly.md)** FIXED, http2 — **three addressing defects**: Basic auth sent percent-encoded credentials, CONNECT left an IPv6 target unbracketed, `:authority` dropped a non-default port. All three fixed; B-183's ALPN claim stays open
