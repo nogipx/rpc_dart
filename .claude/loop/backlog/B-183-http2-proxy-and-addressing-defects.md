@@ -1,6 +1,6 @@
 ---
-status: open (round 694 fixed three of four claims; ALPN remains)
-round: 694
+status: closed (round 698)
+round: 698
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: none — static read, nothing run
@@ -43,6 +43,12 @@ OPEN: the unchecked ALPN. Its witness needs a TLS server the client trusts;
 `secureConnect` takes no security context and macOS ignores the default
 context's added trust. `../rounds/694-the-caller-addresses-its-peer-correctly.md`.
 
+## Outcome (round 698)
+
+ALPN: fixed by reading, as decided -- after both TLS handshakes the caller
+refuses a peer that did not choose `h2`, naming what it chose. Not witnessed.
+`../rounds/698-the-alpn-choice-is-checked.md`.
+
 ## Owner decision
 
-—
+2026-10-07: the ALPN claim is **fixed by reading**, without a witness.

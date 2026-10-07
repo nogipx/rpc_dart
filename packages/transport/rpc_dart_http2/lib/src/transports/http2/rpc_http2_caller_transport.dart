@@ -343,6 +343,7 @@ class RpcHttp2CallerTransport
       // the same class produced differently configured sockets. See
       // disableNagle.
       disableNagle(socket, logger: logger, what: 'h2 socket to $host:$port');
+      _requireH2(socket, '$host:$port');
       return _guardedConnection(
         incoming: socket,
         outgoing: socket,
@@ -756,6 +757,7 @@ class RpcHttp2CallerTransport
           },
         );
       }
+      _requireH2(secureSocket, '$targetHost:$targetPort');
       return _guardedConnection(
         incoming: secureSocket,
         outgoing: secureSocket,
@@ -778,6 +780,22 @@ class RpcHttp2CallerTransport
         drainSignal: drainSignal,
       );
     }
+  }
+
+  /// Refuses a TLS peer that did not choose `h2` in ALPN.
+  ///
+  /// Offering `h2` is a request, not a guarantee: a server that speaks only
+  /// HTTP/1.1 completes the handshake without choosing it, and an h2 preface
+  /// sent to it fails later with an error that does not say why. The socket is
+  /// destroyed and the reason named here instead.
+  static void _requireH2(SecureSocket socket, String peer) {
+    final chosen = socket.selectedProtocol;
+    if (chosen == 'h2') return;
+    socket.destroy();
+    throw SocketException(
+      'TLS peer $peer did not negotiate HTTP/2 '
+      '(ALPN: ${chosen ?? 'none'})',
+    );
   }
 
   static int _indexOfEndOfHeaders(List<int> bytes) {
