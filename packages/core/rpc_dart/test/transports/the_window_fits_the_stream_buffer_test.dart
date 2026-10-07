@@ -118,7 +118,7 @@ void main() {
       expect(p.advertisedWindowBytes, isNull);
     });
 
-    test('an explicit buffer shrinks the advertised window, never below 1', () {
+    test('an explicit buffer shrinks the advertised window', () {
       const roomy = RpcSecurityPolicy(
         maxMessageLengthBytes: 1000,
         maxMetadataBytes: 100,
@@ -130,7 +130,16 @@ void main() {
       );
 
       expect(roomy.advertisedWindowBytes, 5000);
-      expect(tight.advertisedWindowBytes, 1);
+      // No room for a maximal message on top: half the buffer.
+      expect(tight.advertisedWindowBytes, 502);
+    });
+
+    test('a hardening buffer below the message limit keeps the window', () {
+      // 8 MiB against the default 16 MiB message limit: half of it is the
+      // default 4 MiB window, so nothing slows down.
+      const p = RpcSecurityPolicy(maxBufferedBytes: 8 * 1024 * 1024);
+
+      expect(p.advertisedWindowBytes, p.flowControlWindowBytes);
     });
   });
 

@@ -187,6 +187,24 @@ final class RpcResponderStreamState {
   int _sinkHeldEvents = 0;
   bool _sinkOverflowed = false;
 
+  /// Request messages the transport credited on arrival, before the stream was
+  /// deferred, that the handler has not taken yet. They are the first ones it
+  /// takes, so a count is enough.
+  int _preCredited = 0;
+
+  /// Records [count] queued messages as already credited to the peer.
+  void markPreCredited(int count) {
+    _preCredited = count;
+  }
+
+  /// Whether the message the handler just took was already credited, which
+  /// spends one of them.
+  bool takePreCredited() {
+    if (_preCredited == 0) return false;
+    _preCredited--;
+    return true;
+  }
+
   /// The connection's budget, set by whichever of [attachRequestSink] and
   /// [storePayload] runs first; [releaseBuffered] returns this state's share.
   RpcResponderBufferBudget? _budget;
@@ -266,7 +284,14 @@ final class RpcResponderStreamState {
     final budget = _budget!;
     final bytes = message.bufferedBytes;
     final carries = _carriesMessage(message);
-    if (!budget.take(_sinkHeldBytes, carries ? _sinkHeldEvents : 0, bytes)) {
+    // The peer was told the pre-credited ones are consumed, so it may send
+    // that many past the depth while they are still queued here.
+    final counted = _sinkHeldEvents - _preCredited;
+    if (!budget.take(
+      _sinkHeldBytes,
+      carries && counted > 0 ? counted : 0,
+      bytes,
+    )) {
       _sinkOverflowed = true;
       droppedRequests++;
       sink.addError(

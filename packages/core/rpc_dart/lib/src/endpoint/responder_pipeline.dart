@@ -2221,7 +2221,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         : null;
     flowControlled?.deferFlowCredit(state.id);
 
-    for (final message in initialMessages) {
+    // Everything that arrived before this point was credited on arrival, while
+    // the stream was not yet deferred. Those must not be credited again as the
+    // handler takes them, and until it does the peer believes them consumed,
+    // so the depth bound allows for them.
+    final initial = initialMessages.toList(growable: false);
+    state.markPreCredited(
+      initial.where((m) => m.payload != null || m.isDirect).length,
+    );
+    for (final message in initial) {
       state.pushRequest(message);
     }
     // The peer may have half-closed before the responder was bound -- always
@@ -2233,7 +2241,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // the peer -- the same property the transport's own metering relies on.
     return controller.stream.map((message) {
       state.releaseRequest(message);
-      if (message.payload != null || message.isDirect) {
+      if ((message.payload != null || message.isDirect) &&
+          !state.takePreCredited()) {
         flowControlled?.returnFlowCredit(
           state.id,
           message.payload?.length ?? 0,

@@ -24,11 +24,41 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
+/// Where the request handlers below stall, and for how long.
+var _stallAt = -1;
+const _stall = Duration(milliseconds: 300);
+
 final class _Svc extends RpcResponderContract {
   _Svc() : super('Echo');
 
   @override
   void setup() {
+    addClientStreamMethod<RpcString, RpcString>(
+      methodName: 'Up',
+      handler: (requests, {RpcContext? context}) async {
+        var n = 0;
+        await for (final _ in requests) {
+          n++;
+          if (n == _stallAt) await Future<void>.delayed(_stall);
+        }
+        return '$n'.rpc;
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'Both',
+      handler: (requests, {RpcContext? context}) async* {
+        var n = 0;
+        await for (final r in requests) {
+          n++;
+          if (n == _stallAt) await Future<void>.delayed(_stall);
+          if (n % 100 == 0) yield r;
+        }
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'Count',
       handler: (r, {RpcContext? context}) async* {
@@ -85,13 +115,8 @@ final class _ChunkedChannel implements IRpcChannel {
   Future<void> close() async {}
 }
 
-/// Streams [count] small items to a consumer that spends [perItem] on each,
-/// and reports how many arrived and what ended the stream.
-Future<({int received, Object? error})> _stream(
-  int count, {
-  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-  Duration? perItem,
-}) async {
+/// A caller and a responder over a pair of [_ChunkedChannel]s.
+RpcCallerEndpoint _rig(RpcSecurityPolicy policy) {
   final a = _ChunkedChannel();
   final b = _ChunkedChannel();
   a.peer = b;
@@ -115,7 +140,23 @@ Future<({int received, Object? error})> _stream(
     await caller.close();
     await responder.close();
   });
+  return caller;
+}
 
+Stream<RpcString> _items(int n) async* {
+  for (var i = 0; i < n; i++) {
+    yield 'i$i'.rpc;
+  }
+}
+
+/// Streams [count] small items to a consumer that spends [perItem] on each,
+/// and reports how many arrived and what ended the stream.
+Future<({int received, Object? error})> _stream(
+  int count, {
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  Duration? perItem,
+}) async {
+  final caller = _rig(policy);
   var received = 0;
   Object? error;
   try {
@@ -190,6 +231,48 @@ void main() {
           RpcStatus.resourceExhausted,
         ),
       );
+    });
+  });
+
+  group('the request direction, a handler stalling once', () {
+    // The stall points are where a grant has just been flushed: half the
+    // depth, less the first message, which arrives before the handler is
+    // bound. That message was credited on arrival and again when the handler
+    // took it, so the sender ran one past the depth.
+    const depth = RpcSecurityPolicy(maxBufferedMessagesPerStream: 64);
+    tearDown(() => _stallAt = -1);
+
+    for (final (at, role) in [(31, 'WITNESS'), (95, 'WITNESS'), (1, 'GUARD')]) {
+      test('$role a client stream stalling at $at', () async {
+        _stallAt = at;
+        final caller = _rig(depth);
+
+        final r = await caller.clientStream<RpcString, RpcString>(
+          serviceName: 'Echo',
+          methodName: 'Up',
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )(_items(1000));
+
+        expect(r.value, '1000');
+      });
+    }
+
+    test('GUARD a bidi stream stalling at 31', () async {
+      _stallAt = 31;
+      final caller = _rig(depth);
+
+      final echoed = await caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Echo',
+            methodName: 'Both',
+            requests: _items(1000),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .length;
+
+      expect(echoed, 10);
     });
   });
 

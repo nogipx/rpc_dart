@@ -452,17 +452,24 @@ final class RpcSecurityPolicy {
   }
 
   /// The per-stream window this side advertises: [flowControlWindowBytes],
-  /// or less when [effectiveStreamBufferBytes] could not hold that much plus
-  /// one message and its metadata. Never below 1, which still admits one
-  /// message at a time. Null when the window is off.
+  /// or less when [effectiveStreamBufferBytes] could not hold that much.
+  ///
+  /// The buffer must hold the window plus the one message a sender may admit
+  /// on its last byte of credit, plus metadata. When an explicit
+  /// [maxBufferedBytes] leaves no room for a maximal message on top, the
+  /// window is half the buffer instead: safe for every message up to that
+  /// half, and a buffer smaller than one maximal message cannot hold such a
+  /// message whatever the window. Never below 1. Null when the window is off.
   int? get advertisedWindowBytes {
     final window = flowControlWindowBytes;
     if (window == null) return null;
-    final room =
-        effectiveStreamBufferBytes -
+    final buffer = effectiveStreamBufferBytes;
+    final spare =
+        buffer -
         maxMessageLengthBytes -
         RpcConstants.messagePrefixSize -
         maxMetadataBytes;
+    final room = spare > buffer ~/ 2 ? spare : buffer ~/ 2;
     if (room >= window) return window;
     return room < 1 ? 1 : room;
   }
