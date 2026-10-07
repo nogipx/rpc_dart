@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.javascriptengine.IsolateTerminatedException
 import androidx.javascriptengine.JavaScriptIsolate
 import androidx.javascriptengine.JavaScriptSandbox
+import androidx.javascriptengine.TerminationInfo
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -88,14 +89,36 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     private suspend fun ensureSandbox(): JavaScriptSandbox {
-        if (sandbox != null) return sandbox!!
-        if (sandboxFuture == null) {
-            sandboxFuture = scope.async {
-                JavaScriptSandbox.createConnectedInstanceAsync(context).await()
-            }
+        sandbox?.let { return it }
+        val pending = sandboxFuture ?: scope.async {
+            JavaScriptSandbox.createConnectedInstanceAsync(context).await()
+        }.also { sandboxFuture = it }
+        try {
+            return pending.await().also { sandbox = it }
+        } catch (e: Exception) {
+            // Not cached: a failed bind would otherwise be rethrown to every
+            // later checkSupport and loadRuntime until the app restarts.
+            if (sandboxFuture === pending) sandboxFuture = null
+            throw e
         }
-        sandbox = sandboxFuture!!.await()
-        return sandbox!!
+    }
+
+    /// Forgets [dead] once its process has died, so the next runtime binds a
+    /// new sandbox. The cache otherwise lives as long as the plugin, and
+    /// createIsolate on a dead sandbox does not throw: it returns an isolate
+    /// that fails its first evaluation, so every later loadRuntime failed with
+    /// "sandbox was dead before call to createIsolate". Each of the dead
+    /// sandbox's isolates reports it, possibly after a new one is bound, so
+    /// only the sandbox named is dropped.
+    private fun dropDeadSandbox(dead: JavaScriptSandbox) {
+        if (sandbox !== dead) return
+        sandbox = null
+        sandboxFuture = null
+        try {
+            dead.close()
+        } catch (e: Exception) {
+            android.util.Log.w("RpcDartWasm", "Dead sandbox close: ${e.message}")
+        }
     }
 
     private suspend fun checkSupport(): Map<String, Any> {
@@ -184,6 +207,7 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         // and every call waited out its own deadline. An ordinary close removes
         // the id first, so reportDeath ignores the callback it causes.
         isolate.addOnTerminatedCallback(ContextCompat.getMainExecutor(context)) { info ->
+            if (info.status == TerminationInfo.STATUS_SANDBOX_DEAD) dropDeadSandbox(sb)
             reportDeath(runtimeId, info.toString())
         }
         registerByteChannel(runtimeId)

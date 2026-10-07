@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[685](685-a-dead-sandbox-is-replaced.md)** FIXED, wasm (Kotlin) — **after the Android sandbox died, every later runtime failed to load**: the dead sandbox stayed cached, and `createIsolate` on it does not throw. Dropped on the termination callback; a failed bind is not cached. Closes B-166
 - **[684](684-a-killed-sandbox-is-reported.md)** FIXED, wasm (Kotlin) — **an Android sandbox killed while idle went unreported**; calls hung to their deadline. Witnessed for the first time on a rooted API 33 AVD with a sideloaded WebView; termination callback + wake in `finally` + forward catch reports. Closes B-102
 - **[683](683-the-drain-gives-the-thread-back.md)** FIXED, wasm (Kotlin) — **10k guest frames failed on Android**: the drain sent thousands of frames in one main-thread task, Dart's microtasks never ran (3703 pending at once), the host's 1024-message cap failed the call. Yields every 256 frames (owner's choice); device suite green on both platforms. Closes B-255
 - **[682](682-a-js-backed-view-cannot-be-sliced.md)** FIXED, wasm — **a client-stream call to a dart2wasm guest failed with INTERNAL**: an SDK bug, `sublist` of a JS-backed view counts its offset twice. The guest bridge copies each chunk (owner's choice, ~0.3 us per chunk); 9 of 9 on iOS and Android. Closes B-254, files B-256

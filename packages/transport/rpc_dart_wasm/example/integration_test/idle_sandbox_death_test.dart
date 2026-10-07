@@ -2,29 +2,25 @@
 //
 // SPDX-License-Identifier: MIT
 
-// B-102: a sandbox that dies while the driver is PARKED.
+// A sandbox that dies while the Kotlin driver is PARKED -- no timer pending, so
+// nothing is being evaluated -- is reported to Dart, through the isolate's
+// termination callback, and the next call fails at once instead of waiting
+// out its deadline.
 //
-// With no timers pending the Kotlin driver waits on `waker.await()`, and the
-// only thing that completes that waker is `wakeDriver` at the END of
-// `forwardBytesToRuntime` — after the `.await()` that throws when the isolate is
-// gone. No `setOnTerminatedCallback` is registered either, so nothing else
-// notices. The lead's claim is that an idle runtime whose sandbox process dies
-// is never reported and every later call hangs.
-//
-// MANUAL, and skipped by default: the witness needs the sandbox process killed
-// from the host partway through, which a test on the device cannot do. Run it
-// as
+// MANUAL, and skipped by default: the sandbox process has to be killed from the
+// host partway through. It runs under an isolated uid, so that needs root: a
+// Play-image emulator refuses `kill`, `adb root`, `am kill` and `am force-stop`
+// alike. Use a `google_apis` image, with a WebView new enough to compile WASM
+// (installing the APK from an up-to-date device works). Run it as
 //
 //   fvm flutter test integration_test/idle_sandbox_death_test.dart \
-//     -d emulator-5554 --dart-define=rpcWasmKillProbe=true
+//     -d <emulator> --dart-define=rpcWasmKillProbe=true
 //
-// and while it prints WINDOW-OPEN, kill the sandbox from the host:
+// and while it prints WINDOW-OPEN:
 //
-//   adb -s emulator-5554 shell ps -A | grep sandboxed_process
-//   adb -s emulator-5554 shell kill <pid>
-//
-// It is committed rather than kept as a throwaway because the instrument is the
-// expensive part and the next round on this lead needs exactly it.
+//   adb -s <emulator> root
+//   adb -s <emulator> shell ps -A -o PID,NAME | grep js_sandbox
+//   adb -s <emulator> shell kill -9 <pid>
 @TestOn('vm')
 library;
 

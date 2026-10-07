@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 685)
+round: 685
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
 probe: none — static read, nothing run
@@ -31,6 +31,14 @@ Kill the sandbox process; call `loadRuntime` again.
 ## Fix sketch
 
 Reset both fields on failure and on sandbox death.
+
+## Outcome (round 685)
+
+FIXED. Witnessed on a rooted AVD: after a kill, the next `loadRuntime` failed
+with "sandbox was dead before call to createIsolate"; now it loads and answers.
+The termination callback drops the dead sandbox (`createIsolate` itself does
+not throw on one), and a failed bind is no longer cached (by reading only).
+`../rounds/685-a-dead-sandbox-is-replaced.md`.
 
 ## Owner decision
 
