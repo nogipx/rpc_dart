@@ -6,8 +6,6 @@
 .fvm/
 .vscode/
 .idea/
-__pycache__/
-site/
 
 # Melos-generated IDE module files (per-package + workspace).
 *.iml

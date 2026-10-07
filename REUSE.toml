@@ -9,7 +9,6 @@ path = [
   ".fvmrc",
   "**/.pubignore",
   "**/*.podspec",
-  "docs/**",
   "**/*.md",
 ]
 precedence = "aggregate"

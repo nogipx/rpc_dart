@@ -1,0 +1,114 @@
+<!doctype html>
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RPC Dart</title>
+  <meta name="description" content="Transport-agnostic RPC framework for Dart: one contract over in-process, HTTP/2 (gRPC wire), HTTP/1.1, WebSocket, isolates and WebAssembly.">
+  <link rel="icon" href="logo.png">
+  <style>
+    :root {
+      --bg: #ffffff; --fg: #1b1f24; --muted: #5b6470; --line: #e3e6ea;
+      --code: #f4f6f8; --accent: #1f6feb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1216; --fg: #e6e9ed; --muted: #9aa4b0; --line: #262c33;
+        --code: #171b21; --accent: #58a6ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--fg);
+      font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 760px; margin: 0 auto; padding: 56px 24px 72px; }
+    header { display: flex; align-items: center; gap: 16px; }
+    header img { width: 56px; height: 56px; }
+    h1 { font-size: 32px; margin: 0; }
+    h2 { font-size: 18px; margin: 40px 0 12px; }
+    p { margin: 12px 0; }
+    .lead { color: var(--muted); font-size: 18px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    pre {
+      background: var(--code); border: 1px solid var(--line); border-radius: 8px;
+      padding: 12px 16px; overflow-x: auto; font-size: 14px;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 15px; }
+    td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+    td:first-child { white-space: nowrap; }
+    footer { margin-top: 48px; color: var(--muted); font-size: 14px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="logo.png" alt="">
+    <h1>RPC Dart</h1>
+  </header>
+  <p class="lead">
+    Transport-agnostic RPC framework for Dart. Write a contract once and run it
+    in process, over HTTP/2 with the real gRPC wire, HTTP/1.1, WebSocket,
+    isolates or a WebAssembly bridge. Unary and all three streaming shapes,
+    deadlines, cancellation, flow control and resource limits included.
+  </p>
+  <div class="links">
+    <a href="https://pub.dev/packages/rpc_dart">pub.dev</a>
+    <a href="https://pub.dev/documentation/rpc_dart/latest/">API reference</a>
+    <a href="https://github.com/nogipx/rpc_dart">GitHub</a>
+    <a href="https://github.com/nogipx/rpc_dart/issues">Issues</a>
+  </div>
+
+  <h2>Install</h2>
+  <pre><code>dart pub add rpc_dart</code></pre>
+  <p>
+    Start with the <a href="https://pub.dev/packages/rpc_dart">rpc_dart README</a>.
+    Each transport package's README covers its own setup.
+  </p>
+
+  <h2>Using an AI coding agent</h2>
+  <p>
+    <code>rpc_dart</code> ships an Agent Skill: verified reference material
+    for contracts, endpoints, streaming, errors, limits and testing, matched to
+    the version you depend on. Install it into your project:
+  </p>
+  <pre><code>dart run skills@ get</code></pre>
+  <p>
+    It goes into <code>.claude/skills/</code>, <code>.agents/skills/</code> or
+    your agent's equivalent. On an SDK without <code>dart run &lt;package&gt;@</code>,
+    add <code>skills</code> as a dev dependency and run
+    <code>dart run skills get</code>. See the
+    <a href="https://pub.dev/packages/skills">skills CLI</a>.
+  </p>
+
+  <h2>Packages</h2>
+  <table>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart">rpc_dart</a></td><td>Core: contracts, endpoints, streaming, in-process transport</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_http2">rpc_dart_http2</a></td><td>HTTP/2 transport, gRPC wire compatible</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_http">rpc_dart_http</a></td><td>HTTP/1.1 transport, unary only</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_websocket">rpc_dart_websocket</a></td><td>WebSocket transport, web-safe client</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_isolate">rpc_dart_isolate</a></td><td>Isolate and web worker transport</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_wasm">rpc_dart_wasm</a></td><td>WebAssembly bridge transport (Flutter)</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_generator">rpc_dart_generator</a></td><td>Contracts generated from annotated interfaces</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_framework">rpc_dart_framework</a></td><td>Modules, DI, lifecycle, graceful shutdown</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_compression">rpc_dart_compression</a></td><td>Gzip codec, web compatible</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_opentelemetry">rpc_dart_opentelemetry</a></td><td>Tracing, metrics and logs</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_log">rpc_dart_log</a></td><td>Remote log collector</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_dart_grpc_reflection">rpc_dart_grpc_reflection</a></td><td>gRPC server reflection</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_data">rpc_data</a></td><td>Data service layer: CRUD, queries, change streams (Postgres, SQLite)</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_notify">rpc_notify</a></td><td>Topic-based push notifications (Postgres, Redis)</td></tr>
+    <tr><td><a href="https://pub.dev/packages/rpc_blob">rpc_blob</a></td><td>Streamed blob storage (MinIO/S3, SQLite, WebDAV)</td></tr>
+  </table>
+
+  <footer>MIT licensed.</footer>
+</main>
+</body>
+</html>
