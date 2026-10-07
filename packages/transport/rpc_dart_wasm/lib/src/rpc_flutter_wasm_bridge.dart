@@ -325,6 +325,31 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     _releaseNative();
   }
 
+  /// Frames waiting for the native side, in order, and their total size.
+  final List<Uint8List> _sendQueue = [];
+  int _sendQueuedBytes = 0;
+  bool _pumping = false;
+
+  /// Completed when the queue drops below [_sendQueueLimit] again.
+  Completer<void>? _sendRoom;
+
+  /// The most a [send] queues before it waits for the native side.
+  static const int _sendQueueLimit = 1024 * 1024;
+
+  /// The most one platform message carries, in frames and in bytes; a single
+  /// larger frame still goes alone. Frames because the guest decodes a chunk
+  /// in one go, and a chunk of thousands outruns its consumer.
+  static const int _sendBatchFrames = 64;
+  static const int _sendBatchBytes = 64 * 1024;
+
+  /// Queues [data] and returns once it is queued, unless the queue is full.
+  ///
+  /// One platform message per frame, each awaited before the next, held the
+  /// guest to one frame per native round trip -- each a JavaScript evaluation
+  /// on Android: about 30 frames a second host-to-guest. The pump below sends
+  /// whatever has queued in one message instead. Safe because the bridge is a
+  /// byte stream that the guest reassembles. Flow control still bounds what is
+  /// in flight; the queue limit bounds memory if the peer does no flow control.
   @override
   Future<void> send(Uint8List data) async {
     if (_closed || _dead) return;
@@ -332,12 +357,56 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
       debugPrint('[RpcFlutterWasmBridge] sending ${data.length} bytes');
       return true;
     }());
-    final reply = _messenger.send(
-      _outgoingChannel,
-      ByteData.view(data.buffer, data.offsetInBytes, data.lengthInBytes),
-    );
-    if (reply != null) {
-      await reply;
+    _sendQueue.add(data);
+    _sendQueuedBytes += data.lengthInBytes;
+    if (!_pumping) unawaited(_pumpSends());
+    if (_sendQueuedBytes > _sendQueueLimit) {
+      await (_sendRoom ??= Completer<void>()).future;
+    }
+  }
+
+  Future<void> _pumpSends() async {
+    _pumping = true;
+    try {
+      while (_sendQueue.isNotEmpty && !_closed && !_dead) {
+        var frames = 1;
+        var bytes = _sendQueue.first.lengthInBytes;
+        while (frames < _sendQueue.length &&
+            frames < _sendBatchFrames &&
+            bytes + _sendQueue[frames].lengthInBytes <= _sendBatchBytes) {
+          bytes += _sendQueue[frames].lengthInBytes;
+          frames++;
+        }
+        final Uint8List chunk;
+        if (frames == 1) {
+          chunk = _sendQueue.first;
+        } else {
+          chunk = Uint8List(bytes);
+          var at = 0;
+          for (var i = 0; i < frames; i++) {
+            chunk.setAll(at, _sendQueue[i]);
+            at += _sendQueue[i].lengthInBytes;
+          }
+        }
+        _sendQueue.removeRange(0, frames);
+        _sendQueuedBytes -= bytes;
+        final room = _sendRoom;
+        if (room != null && _sendQueuedBytes <= _sendQueueLimit) {
+          _sendRoom = null;
+          room.complete();
+        }
+        final reply = _messenger.send(
+          _outgoingChannel,
+          ByteData.view(chunk.buffer, chunk.offsetInBytes, chunk.lengthInBytes),
+        );
+        if (reply != null) await reply;
+      }
+    } finally {
+      _pumping = false;
+      // A closed or dead bridge sends nothing more; release any waiter.
+      final room = _sendRoom;
+      _sendRoom = null;
+      room?.complete();
     }
   }
 

@@ -1,6 +1,6 @@
 ---
-status: open (round 707 batched iOS recv; the Android half remains)
-round: 707
+status: closed (round 708)
+round: 708
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift, packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
 probe: none — static read, nothing run
@@ -41,6 +41,15 @@ Batching iOS sends was tried and reverted: a fast guest's burst of tiny frames
 outruns the host and trips the 1024-message cap. Android unmeasured: adb could
 not reach its loopback server this session.
 `../rounds/707-ios-recv-answers-in-batches.md`.
+
+## Outcome (round 708)
+
+The host bridge now sends queued frames in batches: Android host-to-guest
+26-30 to 349-513 f/s, and a 10000-frame burst completes. Together with round
+707's iOS recv batching the lead's host-to-guest cost is answered on both
+platforms. Guest-to-host on Android stays where it was; the one change shown
+to help it was reverted for a test regression whose cause was not found.
+`../rounds/708-host-sends-leave-in-batches.md`.
 
 ## Owner decision
 

@@ -79,7 +79,14 @@ void main() {
             cancelOnError: false,
           );
 
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      // Closed once the stream is demonstrably live, not after a fixed 400 ms:
+      // how soon the first item arrives depends on the device and its load,
+      // and closing earlier made the premise below fail with nothing to do
+      // with what is under test.
+      final live = DateTime.now().add(const Duration(seconds: 30));
+      while (items == 0 && DateTime.now().isBefore(live)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
       unawaited(c.caller.close());
 
       // POLLED, not slept. The thing being waited for is the CONSUMER
