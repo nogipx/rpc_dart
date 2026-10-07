@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[690](690-goaway-through-a-proxy.md)** FIXED, http2 — **GOAWAY was invisible through a CONNECT proxy**: a draining connection gave RESOURCE_EXHAUSTED and `health()` healthy, because the proxy path never got the drain signal. Now UNAVAILABLE and not healthy. Closes B-177
 - **[689](689-concurrent-support-probes-agree.md)** FIXED, wasm (Swift) — **concurrent iOS `checkSupport` calls all answered "cannot run"**: one web-view slot, replaced and released mid-probe. One view per probe. B-172 item 2; the lead stays open
 - **[688](688-the-support-probe-matches-load.md)** FIXED, wasm — **`canRunDartWasm` said yes where `load()` refuses**: it ignored Android's WASM-compilation and named-data features. Both folded in; library and stub docs say what is exported where. Closes B-171
 - **[687](687-guest-timers-fire-in-deadline-order.md)** FIXED, wasm (Swift + Kotlin) — **guest timers due together fired in id order with microtasks last** (`late,early,same,micro`) on both platforms. iOS now uses WebKit's timers; Android sorts by deadline and yields after each. Closes B-169

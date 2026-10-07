@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 690)
+round: 690
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: none — static read, nothing run
@@ -32,6 +32,13 @@ Proxy + server `drain()`; next call's status and health.
 ## Fix sketch
 
 Pass the drain signal on both proxy branches.
+
+## Outcome (round 690)
+
+FIXED. Through a CONNECT proxy, with a call keeping the connection open after
+GOAWAY: a new call was 8 and `health()` healthy; now 14 and not healthy. The
+proxy path passes the drain signal on.
+`../rounds/690-goaway-through-a-proxy.md`.
 
 ## Owner decision
 

@@ -316,6 +316,7 @@ class RpcHttp2CallerTransport
           handshakeTimeout: proxyHandshakeTimeout,
           policy: policy,
           logger: logger,
+          drainSignal: drainSignal,
         );
       }
       // See the h2c path: `timeout:` releases the attempt, an outer wrapper does
@@ -440,6 +441,7 @@ class RpcHttp2CallerTransport
           handshakeTimeout: proxyHandshakeTimeout,
           policy: policy,
           logger: logger,
+          drainSignal: drainSignal,
         );
       }
       // `timeout:` rather than an outer `.timeout()`: dart:io abandons the
@@ -570,6 +572,7 @@ class RpcHttp2CallerTransport
     required RpcSecurityPolicy policy,
     Duration handshakeTimeout = _proxyHandshakeTimeout,
     LogScope? logger,
+    _DrainSignal? drainSignal,
   }) async {
     final proxyHost = proxyUri.host;
     final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
@@ -704,6 +707,7 @@ class RpcHttp2CallerTransport
         destroy: secureSocket.destroy,
         policy: policy,
         logger: logger,
+        drainSignal: drainSignal,
       );
     } else {
       // Keep sub alive — it feeds forwardCtrl.
@@ -716,6 +720,7 @@ class RpcHttp2CallerTransport
         destroy: rawSocket.destroy,
         policy: policy,
         logger: logger,
+        drainSignal: drainSignal,
       );
     }
   }
