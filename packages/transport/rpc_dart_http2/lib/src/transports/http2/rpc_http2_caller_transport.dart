@@ -154,6 +154,17 @@ class RpcHttp2CallerTransport
 
   final int _port;
 
+  /// `:authority` for every request: the port kept unless it is the scheme's
+  /// default (RFC 9113 §8.3.1), as a virtual host or a routing proxy reads it.
+  late final String _authority =
+      (_scheme == 'https' && _port == 443) || (_scheme == 'http' && _port == 80)
+      ? _authorityHost(_host)
+      : '${_authorityHost(_host)}:$_port';
+
+  /// [host] as it appears in an authority: an IPv6 literal in brackets.
+  static String _authorityHost(String host) =>
+      host.contains(':') && !host.startsWith('[') ? '[$host]' : host;
+
   /// Set ONLY by [close]; permanent.
   bool _isClosed = false;
 
@@ -594,13 +605,24 @@ class RpcHttp2CallerTransport
     // on a socket the proxy has already reset cannot take the isolate out.
     disableNagle(rawSocket, logger: logger, what: 'proxy socket to $proxyHost');
 
-    // Build CONNECT request.
+    // Build CONNECT request. The target in authority-form, so an IPv6 literal
+    // is bracketed.
+    final target = '${_authorityHost(targetHost)}:$targetPort';
     final reqBuf = StringBuffer()
-      ..write('CONNECT $targetHost:$targetPort HTTP/1.1\r\n')
-      ..write('Host: $targetHost:$targetPort\r\n');
+      ..write('CONNECT $target HTTP/1.1\r\n')
+      ..write('Host: $target\r\n');
     if (proxyUri.userInfo.isNotEmpty) {
+      // Basic auth takes the credentials themselves; a URI spells an `@` or a
+      // `:` inside them percent-encoded. Decoded per part, so an encoded `:` in
+      // the user name cannot move the split.
+      final info = proxyUri.userInfo;
+      final split = info.indexOf(':');
+      final credentials = split < 0
+          ? Uri.decodeComponent(info)
+          : '${Uri.decodeComponent(info.substring(0, split))}:'
+                '${Uri.decodeComponent(info.substring(split + 1))}';
       reqBuf.write(
-        'Proxy-Authorization: Basic ${base64Encode(utf8.encode(proxyUri.userInfo))}\r\n',
+        'Proxy-Authorization: Basic ${base64Encode(utf8.encode(credentials))}\r\n',
       );
     }
     reqBuf.write('\r\n');
@@ -609,8 +631,8 @@ class RpcHttp2CallerTransport
     // Single subscription kept alive for the full lifetime of the tunnel.
     // For non-TLS: data after CONNECT headers is forwarded to [forwardCtrl],
     //   and http2 reads from forwardCtrl.stream via viaStreams.
-    // For TLS: subscription is cancelled after CONNECT so SecureSocket can
-    //   attach its own listener via _detachRaw() / SecureSocket.secure().
+    // For TLS: subscription is paused after CONNECT and SecureSocket.secure()
+    //   takes the socket over from it.
     final forwardCtrl = StreamController<List<int>>();
     final handshake = Completer<void>();
     bool headersDone = false;
@@ -906,7 +928,7 @@ class RpcHttp2CallerTransport
       method: 'POST',
       path: methodPath,
       scheme: _scheme,
-      authority: _host,
+      authority: _authority,
     );
 
     // A connection that is gone must be reported as UNAVAILABLE, never as

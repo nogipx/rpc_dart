@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: open (round 694 fixed three of four claims; ALPN remains)
+round: 694
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: none — static read, nothing run
@@ -34,6 +34,14 @@ proxy.
 
 Decode user and password; bracket IPv6; include the port; check
 `selectedProtocol`.
+
+## Progress (round 694)
+
+FIXED, each witnessed red first: Basic auth now carries decoded credentials,
+an IPv6 target is bracketed in CONNECT, `:authority` keeps a non-default port.
+OPEN: the unchecked ALPN. Its witness needs a TLS server the client trusts;
+`secureConnect` takes no security context and macOS ignores the default
+context's added trust. `../rounds/694-the-caller-addresses-its-peer-correctly.md`.
 
 ## Owner decision
 
