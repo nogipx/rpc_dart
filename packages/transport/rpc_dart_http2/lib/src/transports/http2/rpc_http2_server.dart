@@ -173,6 +173,9 @@ class RpcHttp2Server implements IRpcServer {
     RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
     SecurityContext? securityContext,
     LogScope? logger,
+    Duration? pingInterval = const Duration(seconds: 30),
+    Duration? pingTimeout,
+    Duration? prefaceTimeout = const Duration(seconds: 30),
   }) {
     return RpcHttp2Server(
       host: host,
@@ -180,6 +183,9 @@ class RpcHttp2Server implements IRpcServer {
       securityPolicy: securityPolicy,
       securityContext: securityContext,
       logger: logger,
+      pingInterval: pingInterval,
+      pingTimeout: pingTimeout,
+      prefaceTimeout: prefaceTimeout,
       onEndpointCreated: (endpoint) {
         if (logger?.isDebug ?? false) {
           logger?.debug(
@@ -482,13 +488,15 @@ class RpcHttp2Server implements IRpcServer {
     // Cleared alongside _endpoints: this map is only ever a view onto them, and
     // leaving entries here would pin dead connections for the server's lifetime.
     _connections.clear();
-    for (final endpoint in endpointsToClose) {
-      try {
-        await endpoint.close();
-      } catch (e) {
-        _logger?.warning('Error closing an endpoint: $e');
-      }
-    }
+    // Together, not one after another: each close can take its own bounded
+    // wait, and N connections paid N of them in sequence.
+    await Future.wait(
+      endpointsToClose.map(
+        (endpoint) => endpoint.close().catchError((Object e) {
+          _logger?.warning('Error closing an endpoint: $e');
+        }),
+      ),
+    );
 
     await _serverSocket?.close();
     _serverSocket = null;

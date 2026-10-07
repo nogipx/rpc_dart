@@ -1,5 +1,5 @@
 ---
-status: open (562 fixed the double close and refuted the crash; 564 discharged start() re-entrancy; three remain)
+status: closed (round 564) — the rest as a cleanup commit, by owner decision
 round: 564
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
@@ -87,6 +87,16 @@ package). Nothing left here; it was not merely "possibly a duplicate".
 `onConnectionOpened` was never double-fired (`opened=1` in every row), so the guard is witnessed on the
 close half only.
 
+## Outcome (cleanup, after round 698)
+
+The three remaining items, in one cleanup commit: `stop()` closes its
+endpoints together (`Future.wait`) rather than one after another;
+`createWithContracts` passes `pingInterval`, `pingTimeout` and
+`prefaceTimeout` through, with the constructor's defaults. The comment
+("nothing has subscribed to the guarded stream until endpoint.start()") reads
+true at this sha -- the guarded stream is first listened to by the endpoint's
+start -- and is left.
+
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are **done as cleanup commits, without rounds**.
