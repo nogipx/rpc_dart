@@ -193,16 +193,15 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         };
         </script>
         <script>
-        var _microtaskQueue = [];
         var _timerId = 0;
         var _timers = {};
         var _nextTickHandle = 0;
-        function queueMicrotask(fn) { _microtaskQueue.push(fn); }
+        // WebKit's own queueMicrotask is left in place. A queue of our own,
+        // drained only on a timer tick or an inbound frame, held every Dart
+        // continuation a native promise resumed: WebKit runs that resumption,
+        // and nothing drained what it scheduled until the next tick -- on an
+        // idle runtime, never.
         function _flushMicrotasks() {
-          while (_microtaskQueue.length > 0) {
-            var fn = _microtaskQueue.shift();
-            try { fn(); } catch(e) { console.error(e); }
-          }
           // Every timer and every inbound frame ends here, so a receiver the
           // guest installed in either gets the frames held for it.
           _rpcWasmDeliverEarly();

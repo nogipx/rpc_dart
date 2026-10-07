@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 686)
+round: 686
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift]
 probe: none — static read, nothing run
@@ -32,6 +32,13 @@ traffic; time to resume.
 ## Fix sketch
 
 Keep the native `queueMicrotask` on iOS.
+
+## Outcome (round 686)
+
+FIXED, on both platforms -- Android had the same queue. A guest awaiting
+`Promise.resolve()` 100 times timed out at 10 s on both; now 1 ms. iOS keeps
+WebKit's `queueMicrotask`; Android's goes through a promise job.
+`../rounds/686-the-engine-runs-the-microtasks.md`.
 
 ## Owner decision
 

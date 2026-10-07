@@ -10,10 +10,17 @@
 // rpc_dart's own stack -- framing, flow control, contracts -- inside the
 // sandbox, which is what an application actually does.
 
+import 'dart:js_interop';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_wasm/rpc_wasm.dart';
 
 const _codec = RpcCodec(RpcString.fromJson);
+
+/// A promise the JS engine resolves itself, in its own microtask queue -- the
+/// shape of every browser API a guest awaits.
+@JS('Promise.resolve')
+external JSPromise<JSAny?> _nativeResolved(JSAny? value);
 
 /// Items the Firehose handler has yielded, readable over RPC.
 int _produced = 0;
@@ -119,6 +126,20 @@ final class _EchoService extends RpcResponderContract {
         return '${samples.first},${samples[samples.length ~/ 2]},'
                 '${samples.last}'
             .rpc;
+      },
+    );
+
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'AfterPromise',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async {
+        final n = int.tryParse(request.value) ?? 1;
+        final clock = Stopwatch()..start();
+        for (var i = 0; i < n; i++) {
+          await _nativeResolved(null).toDart;
+        }
+        return 'resumed $n in ${clock.elapsedMicroseconds}us'.rpc;
       },
     );
 

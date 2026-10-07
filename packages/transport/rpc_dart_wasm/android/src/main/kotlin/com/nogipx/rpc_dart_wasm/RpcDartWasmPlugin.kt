@@ -214,19 +214,23 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         isolate.provideNamedData("rpc_wasm_module", wasmBytes)
         val bootScript = """
             var globalThis = this;
-            var _microtaskQueue = [];
             var _rpcWasmOutbox = [];
             var _rpcWasmBootError = null;
             var _rpcWasmBootTrace = null;
             var _rpcWasmBootPhase = 'init';
             var _timerId = 0;
             var _timers = {};
-            function queueMicrotask(fn) { _microtaskQueue.push(fn); }
-            function _flushMicrotasks() {
-              while (_microtaskQueue.length > 0) {
-                var fn = _microtaskQueue.shift();
+            // Onto the ENGINE's microtask queue, through a promise job. A queue
+            // of our own, drained only on a timer tick or an inbound frame, held
+            // every Dart continuation a native promise resumed: the engine runs
+            // that resumption, and nothing drained what it scheduled until the
+            // next tick -- on an idle runtime, never.
+            function queueMicrotask(fn) {
+              Promise.resolve().then(function() {
                 try { fn(); } catch(e) { console.error(e); }
-              }
+              });
+            }
+            function _flushMicrotasks() {
               // Every timer and every inbound frame ends here, so a receiver the
               // guest installed in either gets the frames held for it.
               _rpcWasmDeliverEarly();
