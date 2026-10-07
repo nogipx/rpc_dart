@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 691)
+round: 691
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: none — static read, nothing run
@@ -32,6 +32,13 @@ Keepalive 200 ms; pause the server; reconnect as the probe times out.
 ## Fix sketch
 
 Guard on identity; pick one status for "peer gone".
+
+## Outcome (round 691)
+
+CLEAN, both claims. A call after a keepalive death is UNAVAILABLE (round 678
+unified the status); a probe that times out after `reconnect()` leaves the new
+connection working. Both checks kept as tests.
+`../rounds/691-keepalive-death-is-unavailable.md`.
 
 ## Owner decision
 
