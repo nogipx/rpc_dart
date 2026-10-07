@@ -10,6 +10,7 @@
 // rpc_dart's own stack -- framing, flow control, contracts -- inside the
 // sandbox, which is what an application actually does.
 
+import 'dart:async';
 import 'dart:js_interop';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -140,6 +141,26 @@ final class _EchoService extends RpcResponderContract {
           await _nativeResolved(null).toDart;
         }
         return 'resumed $n in ${clock.elapsedMicroseconds}us'.rpc;
+      },
+    );
+
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'TimerOrder',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async {
+        final log = <String>[];
+        Timer(const Duration(milliseconds: 30), () => log.add('late'));
+        Timer(const Duration(milliseconds: 10), () {
+          log.add('early');
+          scheduleMicrotask(() => log.add('micro'));
+        });
+        Timer(const Duration(milliseconds: 10), () => log.add('same'));
+        // Hold the thread past every deadline, so all three are due at once.
+        final clock = Stopwatch()..start();
+        while (clock.elapsedMilliseconds < 60) {}
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        return log.join(',').rpc;
       },
     );
 

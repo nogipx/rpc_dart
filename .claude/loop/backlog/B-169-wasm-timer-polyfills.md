@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 687)
+round: 687
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift, packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
 probe: none — static read, nothing run
@@ -32,6 +32,14 @@ order.
 ## Fix sketch
 
 A deadline-ordered heap; flush microtasks per timer; native timers on iOS.
+
+## Outcome (round 687)
+
+FIXED. Three timers due together fired `late,early,same,micro` on both
+platforms; now `early,micro,same,late`, as in a browser. iOS uses WebKit's
+timers; Android sorts by deadline and yields to the microtask queue after each.
+A zero `setInterval` stays 16 ms on Android, on purpose.
+`../rounds/687-guest-timers-fire-in-deadline-order.md`.
 
 ## Owner decision
 

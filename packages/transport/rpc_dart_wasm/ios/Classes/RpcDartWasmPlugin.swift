@@ -145,19 +145,15 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         // tag it is in, taking this handler with it if they were together.
         //
         // The timer capture below is here for a DIFFERENT reason, and it is
-        // load-bearing. The next tag DECLARES `function setTimeout`, and a
-        // function declaration is hoisted to the top of its script -- so the
-        // same two lines written there would have captured the polyfill, not
-        // the platform. Measured on an iOS 18.6 simulator before this moved:
-        //
-        //     nativeIsPolyfill=true  nativeIsWindow=true
-        //     src=function setTimeout(fn, ms) {   var id =
-        //
-        // _scheduleNextTick then called itself through _nativeSetTimeout, so a
-        // single setTimeout from the guest recursed until the stack blew and no
-        // timer ever reached the event loop.
+        // load-bearing. The next tag DECLARES `function setTimeout` and the
+        // rest as wrappers over these, and a function declaration is hoisted
+        // to the top of its script -- so the same lines written there would
+        // capture the wrappers, not the platform, and every timer would call
+        // itself until the stack blew.
         var _nativeSetTimeout = setTimeout;
         var _nativeClearTimeout = clearTimeout;
+        var _nativeSetInterval = setInterval;
+        var _nativeClearInterval = clearInterval;
         var _rpcBootReported = false;
         function _rpcReportBoot(msg) {
           if (_rpcBootReported) return;
@@ -193,9 +189,6 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         };
         </script>
         <script>
-        var _timerId = 0;
-        var _timers = {};
-        var _nextTickHandle = 0;
         // WebKit's own queueMicrotask is left in place. A queue of our own,
         // drained only on a timer tick or an inbound frame, held every Dart
         // continuation a native promise resumed: WebKit runs that resumption,
@@ -214,59 +207,25 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
           info: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'info', message: m}); },
           debug: function() { var m = Array.prototype.join.call(arguments, ' '); window.webkit.messageHandlers.rpcConsole.postMessage({level: 'debug', message: m}); }
         };
+        // WebKit's own timers, which already fire in deadline order with the
+        // microtasks of one run before the next. Wrapped only to log a throw
+        // and to hand over frames held for a receiver the callback installed.
+        function _rpcTimerCallback(fn, args) {
+          return function() {
+            try { fn.apply(null, args); } catch(e) { console.error(e); }
+            _flushMicrotasks();
+          };
+        }
         function setTimeout(fn, ms) {
-          var id = ++_timerId;
-          _timers[id] = { fn: fn, interval: false, ms: ms || 0, next: Date.now() + (ms || 0) };
-          _scheduleNextTick();
-          return id;
+          var args = Array.prototype.slice.call(arguments, 2);
+          return _nativeSetTimeout(_rpcTimerCallback(fn, args), ms);
         }
         function setInterval(fn, ms) {
-          var id = ++_timerId;
-          _timers[id] = { fn: fn, interval: true, ms: ms || 16, next: Date.now() + (ms || 16) };
-          _scheduleNextTick();
-          return id;
+          var args = Array.prototype.slice.call(arguments, 2);
+          return _nativeSetInterval(_rpcTimerCallback(fn, args), ms);
         }
-        function clearInterval(id) { delete _timers[id]; }
-        function clearTimeout(id) { delete _timers[id]; }
-        function _scheduleNextTick() {
-          var now = Date.now();
-          var minDelay = Infinity;
-          var ids = Object.keys(_timers);
-          for (var i = 0; i < ids.length; i++) {
-            var t = _timers[ids[i]];
-            if (t) {
-              var d = t.next - now;
-              if (d < minDelay) minDelay = d;
-            }
-          }
-          if (_nextTickHandle) {
-            _nativeClearTimeout(_nextTickHandle);
-            _nextTickHandle = 0;
-          }
-          if (minDelay === Infinity) return;
-          if (minDelay < 0) minDelay = 0;
-          _nextTickHandle = _nativeSetTimeout(_runDueTimers, minDelay);
-        }
-        function _runDueTimers() {
-          _nextTickHandle = 0;
-          var now = Date.now();
-          var ids = Object.keys(_timers);
-          for (var i = 0; i < ids.length; i++) {
-            var id = ids[i];
-            var t = _timers[id];
-            if (!t) continue;
-            if (now >= t.next) {
-              if (t.interval) {
-                t.next = now + t.ms;
-              } else {
-                delete _timers[id];
-              }
-              try { t.fn(); } catch(e) { console.error(e); }
-            }
-          }
-          _flushMicrotasks();
-          _scheduleNextTick();
-        }
+        function clearTimeout(id) { _nativeClearTimeout(id); }
+        function clearInterval(id) { _nativeClearInterval(id); }
         function _rpcWasmSendBytes(bytes) {
           fetch('rpc-wasm:///send', {method: 'POST', body: bytes});
         }

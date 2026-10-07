@@ -264,33 +264,50 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             if (typeof performance === 'undefined') {
               var performance = { now: function() { return Date.now(); } };
             }
+            function _rpcTimerFn(fn, args) {
+              return args.length === 0 ? fn : function() { fn.apply(null, args); };
+            }
             function setTimeout(fn, ms) {
               var id = ++_timerId;
-              _timers[id] = { fn: fn, interval: false, ms: ms || 0, next: Date.now() + (ms || 0) };
+              var f = _rpcTimerFn(fn, Array.prototype.slice.call(arguments, 2));
+              _timers[id] = { fn: f, interval: false, ms: ms || 0, next: Date.now() + (ms || 0) };
               return id;
             }
+            // A zero interval is held at 16 ms: the driver evaluates a tick per
+            // deadline, so 0 would spin it with no pause at all.
             function setInterval(fn, ms) {
               var id = ++_timerId;
-              _timers[id] = { fn: fn, interval: true, ms: ms || 16, next: Date.now() + (ms || 16) };
+              var f = _rpcTimerFn(fn, Array.prototype.slice.call(arguments, 2));
+              _timers[id] = { fn: f, interval: true, ms: ms || 16, next: Date.now() + (ms || 16) };
               return id;
             }
             function clearInterval(id) { delete _timers[id]; }
             function clearTimeout(id) { delete _timers[id]; }
-            function _tickAndReportNext() {
+            // Due timers fire as a browser fires them: in deadline order, ties
+            // in creation order, and the microtasks one schedules run before
+            // the next -- the `await` yields to the engine's microtask queue,
+            // where dart2wasm drains every pending Dart microtask in one job.
+            // The driver awaits the returned promise.
+            async function _tickAndReportNext() {
               var now = Date.now();
+              var due = [];
               var ids = Object.keys(_timers);
               for (var i = 0; i < ids.length; i++) {
-                var id = ids[i];
-                var t = _timers[id];
-                if (!t) continue;
-                if (now >= t.next) {
-                  if (t.interval) {
-                    t.next = now + t.ms;
-                  } else {
-                    delete _timers[id];
-                  }
-                  try { t.fn(); } catch(e) { console.error(e); }
+                var t = _timers[ids[i]];
+                if (t && now >= t.next) due.push({ id: +ids[i], t: t });
+              }
+              due.sort(function(a, b) { return (a.t.next - b.t.next) || (a.id - b.id); });
+              for (var i = 0; i < due.length; i++) {
+                var id = due[i].id, t = due[i].t;
+                // Cleared by a timer that ran before it.
+                if (_timers[id] !== t) continue;
+                if (t.interval) {
+                  t.next = now + t.ms;
+                } else {
+                  delete _timers[id];
                 }
+                try { t.fn(); } catch(e) { console.error(e); }
+                await null;
               }
               _flushMicrotasks();
               now = Date.now();
