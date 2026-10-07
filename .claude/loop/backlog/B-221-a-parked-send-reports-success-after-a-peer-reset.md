@@ -1,5 +1,5 @@
 ---
-status: open (round 568 fixed items 1 and 2; `_waiters` remains)
+status: closed (round 568) — by owner decision, 2026-10-07
 round: 568
 commit: 86c3cc16
 release: breaking
@@ -102,4 +102,5 @@ streams, reading `outgoingPumps`.
 
 ## Owner decision
 
-—
+2026-10-07: **close** -- items 1 and 2 were fixed in round 568; item 3 has no
+caller in this repository that reaches one pump concurrently.

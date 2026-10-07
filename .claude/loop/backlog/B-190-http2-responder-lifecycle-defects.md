@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 695) — by owner decision, 2026-10-07
+round: 695
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
 probe: none — static read, nothing run
@@ -46,4 +46,6 @@ for a shutdown), missing error handling.
 
 ## Owner decision
 
-—
+2026-10-07, after round 695: **close** -- UNAVAILABLE is the right answer for a
+stream ended by a server shutting down; the unwitnessed claims (the unowned
+subscription, the missing error handling) are not pursued.

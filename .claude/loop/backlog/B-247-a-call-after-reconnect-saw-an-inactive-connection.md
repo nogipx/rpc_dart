@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 671) — by owner decision, 2026-10-07
 round: 671
 commit: 444e1bac
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/test/stream_ids_survive_reconnect_test.dart]
@@ -47,4 +47,4 @@ separates "the new socket died" from "a flag says it did".
 
 ## Owner decision
 
-—
+2026-10-07: **close** -- seen once; its probe read 608 of 608 clean.

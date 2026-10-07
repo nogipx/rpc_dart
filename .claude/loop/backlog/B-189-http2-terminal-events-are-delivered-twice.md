@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 667) — by owner decision, 2026-10-07
 round: 667 (measured, not fixed)
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
@@ -57,4 +57,5 @@ about one stream on the broadcast failed every call beside it.
 
 ## Owner decision
 
-—
+2026-10-07, after round 695: **close** -- two ends per call are confirmed, but
+no consequence was found, so nothing is changed.
