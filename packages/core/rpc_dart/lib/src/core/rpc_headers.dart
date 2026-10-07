@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'channel_frame.dart' show RpcMetadataViolation;
+
 /// gRPC-semantic header name constants.
 ///
 /// Contains only transport-agnostic header names that carry meaning at the
@@ -130,4 +132,31 @@ abstract final class RpcHeaders {
   /// Whether [name] (case-insensitive) is a protocol-reserved header that user
   /// metadata is not allowed to set.
   static bool isReserved(String name) => reserved.contains(name.toLowerCase());
+
+  /// Whether a REQUEST header named [name] is withheld from the handler's
+  /// context: gRPC reserves the `grpc-` prefix, and only the three the
+  /// framework negotiates through the context may pass.
+  static bool isHiddenFromHandler(String name) {
+    final lower = name.toLowerCase();
+    return lower.startsWith('grpc-') &&
+        lower != grpcTimeout &&
+        lower != grpcEncoding &&
+        lower != grpcAcceptEncoding;
+  }
+
+  /// Throws if a user metadata [value] starts or ends with a space or tab.
+  ///
+  /// RFC 9113 §8.2.1 forbids such a field value, so a strict HTTP/2 peer may
+  /// refuse the request, and the HTTP/1.1 stack trims it silently -- one value,
+  /// two different arrivals.
+  static void checkValueEdges(String name, String value) {
+    if (value.isEmpty) return;
+    bool ws(int c) => c == 0x20 || c == 0x09;
+    if (ws(value.codeUnitAt(0)) || ws(value.codeUnitAt(value.length - 1))) {
+      throw RpcMetadataViolation(
+        'Metadata value for "$name" starts or ends with whitespace',
+        name: name,
+      );
+    }
+  }
 }

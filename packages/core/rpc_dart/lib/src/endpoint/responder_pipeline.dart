@@ -2419,7 +2419,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       for (final header in message.metadata!.headers) {
         if (!header.name.startsWith(':') &&
             header.name != 'content-type' &&
-            header.name != 'te') {
+            header.name != 'te' &&
+            !RpcHeaders.isHiddenFromHandler(header.name)) {
           final existing = headers[header.name];
           headers[header.name] = existing == null
               ? header.value

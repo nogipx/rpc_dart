@@ -1,6 +1,7 @@
 ---
-status: decided by owner (round 676)
-round: — (not re-measured)
+status: closed (round 679)
+release: changelog
+round: 679
 commit: 81530a7b
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/core/rpc_headers.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/**]
 probe: .dart_tool/probe/parity_matrix.dart (group 2)
@@ -40,6 +41,13 @@ http1                          + user-agent, host, content-length, accept-encodi
 ```
 
 A handler that reads these works on one transport and not on another.
+
+## Outcome (round 679)
+
+Items 1 and 2 FIXED as decided: an edge-whitespace value is refused before it
+is sent (INVALID_ARGUMENT on all five), and a reserved `grpc-` request header
+no longer reaches the handler. Item 3 unchanged by decision.
+`../rounds/679-two-metadata-edges-made-the-same.md`.
 
 ## Owner decision
 
