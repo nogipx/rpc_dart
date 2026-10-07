@@ -39,8 +39,8 @@ final class _Record extends IRpcMiddleware {
   }
 }
 
-Future<void> _echo(RpcPeerEndpoint from) => from
-    .unaryRequest<RpcString, RpcString>(
+Future<void> _echo(RpcPeerEndpoint from) =>
+    from.unaryRequest<RpcString, RpcString>(
       serviceName: 'S',
       methodName: 'echo',
       request: 'x'.rpc,

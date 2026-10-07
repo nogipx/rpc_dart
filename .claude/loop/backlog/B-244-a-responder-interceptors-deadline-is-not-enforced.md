@@ -1,6 +1,6 @@
 ---
-status: awaiting owner
-round: 659 (owner question from the peer review; measured at HEAD in the owner review after it)
+status: closed (round 701)
+round: 701
 commit: feaf34de
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/peer_responder_icpt_context.dart
@@ -50,6 +50,13 @@ peer misbehaviour. Medium.
 
 Recommended: 1 (the owner's choice of recommendation in the review).
 
+## Outcome (round 701)
+
+FIXED as decided: an EARLIER deadline from a responder interceptor re-arms the
+stream's timer; a later one or none keeps the caller's. Before, a 200 ms
+interceptor timeout let the handler answer 'late' after 2 s.
+`../rounds/701-a-responder-interceptor-can-shorten-a-call.md`.
+
 ## Owner decision
 
-—
+2026-10-07: **option 1, tighten only**.

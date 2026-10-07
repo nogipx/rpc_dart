@@ -350,6 +350,11 @@ abstract base class RpcEndpointBase {
     }
   }
 
+  /// Called with the context the interceptors hand the handler, [origin]
+  /// being the token the call started with. No-op here; the responder
+  /// enforces an earlier deadline from it.
+  void _handlerContextChosen(RpcCancellationToken? origin, RpcContext ctx) {}
+
   /// [ctx] as the handler will get it, still reachable through [origin].
   ///
   /// Cancellation is tracked on the token a call STARTED with: the caller's
@@ -385,6 +390,7 @@ abstract base class RpcEndpointBase {
     final origin = context.context.cancellationToken;
     Future<TResponse> invokeHandler(RpcContext ctx, TRequest req) async {
       context.updateContext(_keepCancellable(origin, ctx));
+      _handlerContextChosen(origin, context.context);
       return handler(context.context, req);
     }
 
@@ -416,6 +422,7 @@ abstract base class RpcEndpointBase {
     final origin = context.context.cancellationToken;
     FutureOr<Stream<TResponse>> invokeHandler(RpcContext ctx, TRequest req) {
       context.updateContext(_keepCancellable(origin, ctx));
+      _handlerContextChosen(origin, context.context);
       return handler(context.context, req);
     }
 
@@ -453,6 +460,7 @@ abstract base class RpcEndpointBase {
       Stream<TRequest> reqs,
     ) async {
       context.updateContext(_keepCancellable(origin, ctx));
+      _handlerContextChosen(origin, context.context);
       return handler(context.context, reqs);
     }
 
@@ -490,6 +498,7 @@ abstract base class RpcEndpointBase {
       Stream<TRequest> reqs,
     ) {
       context.updateContext(_keepCancellable(origin, ctx));
+      _handlerContextChosen(origin, context.context);
       return handler(context.context, reqs);
     }
 

@@ -102,6 +102,9 @@ Forward only what you mean to, e.g.
   timeout. When it passes, the handler's `cancellationToken` is cancelled and
   the call is ended. The `grpc-timeout` header is still readable through
   `getHeader`.
+- A responder interceptor may shorten that: a context it passes to `next`
+  with an earlier deadline (`call.context.withTimeout(d)`) is enforced the
+  same way. A later deadline, or none, does not extend the caller's.
 - The `RpcContext.withTimeout(d)` factory always uses `DateTime.now()`. For a
   fake clock, use `RpcContext.empty().withClock(fake).withTimeout(d)` or
   `RpcContextBuilder().withClock(fake).withTimeout(d)`.

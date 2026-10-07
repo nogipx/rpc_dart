@@ -78,6 +78,10 @@ final class RpcResponderStreamState {
   bool _boundToMessageStream = false;
   Timer? _deadlineTimer;
 
+  /// The deadline the armed timer is for, so a later one can be told from an
+  /// earlier one.
+  DateTime? deadlineAt;
+
   /// Arms a deadline timer that fires [onExceeded] after [remaining]. If the
   /// deadline has already passed, fires on the next microtask. Re-arming
   /// cancels any prior timer (idempotent for the same deadline).

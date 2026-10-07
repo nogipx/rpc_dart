@@ -2323,12 +2323,44 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // response path is torn down so a late result is discarded.
     final deadline = context.deadline;
     if (deadline != null) {
+      state.deadlineAt = deadline;
       state.armDeadline(
         deadline.difference(context.clock()),
         () => _onDeadlineExceeded(state),
       );
     }
+    final token = context.cancellationToken;
+    if (token != null) _streamByToken[token] = state;
     return context;
+  }
+
+  /// The stream a call's starting token belongs to, for [_handlerContextChosen].
+  /// An Expando, so it holds nothing once the call is gone.
+  final Expando<RpcResponderStreamState> _streamByToken = Expando();
+
+  /// Enforces a deadline a responder interceptor set, when it is EARLIER than
+  /// the one already armed: the timer above was armed from the inbound
+  /// message, before any interceptor ran, so without this a server-side
+  /// timeout written as an interceptor changed what the handler read and
+  /// nothing else. A later deadline, or none, leaves the caller's in force --
+  /// a responder may shorten a call, never extend what the caller asked for.
+  ///
+  /// A call this endpoint MAKES has no entry here, so on a peer the outgoing
+  /// half is untouched.
+  @override
+  void _handlerContextChosen(RpcCancellationToken? origin, RpcContext ctx) {
+    if (origin == null) return;
+    final state = _streamByToken[origin];
+    final chosen = ctx.deadline;
+    if (state == null || chosen == null) return;
+    if (!identical(_respStreams[state.id], state)) return;
+    final armed = state.deadlineAt;
+    if (armed != null && !chosen.isBefore(armed)) return;
+    state.deadlineAt = chosen;
+    state.armDeadline(
+      chosen.difference(ctx.clock()),
+      () => _onDeadlineExceeded(state),
+    );
   }
 
   /// How long past the deadline reclamation waits. See
