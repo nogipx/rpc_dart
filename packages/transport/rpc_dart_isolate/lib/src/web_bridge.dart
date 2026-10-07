@@ -25,6 +25,10 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// Frame kinds the host and worker exchange.
 enum BridgeType { init, ready, metadata, data, finish, close }
 
+/// Wire name to type. The wire name IS the enum name, so renaming a value
+/// changes the protocol.
+final Map<String, BridgeType> _bridgeTypes = BridgeType.values.asNameMap();
+
 /// One frame, in the Map form structured clone accepts.
 class BridgeMessage {
   /// What kind of frame this is.
@@ -57,14 +61,7 @@ class BridgeMessage {
 
   /// The structured-clone form.
   Map<String, Object?> toMap() => {
-    'type': switch (type) {
-      BridgeType.init => 'init',
-      BridgeType.ready => 'ready',
-      BridgeType.metadata => 'metadata',
-      BridgeType.data => 'data',
-      BridgeType.finish => 'finish',
-      BridgeType.close => 'close',
-    },
+    'type': type.name,
     'streamId': streamId,
     if (endStream) 'endStream': true,
     if (metadata != null) 'metadata': metadata,
@@ -78,15 +75,7 @@ class BridgeMessage {
     final typeRaw = raw['type'];
     final streamId = asInt(raw['streamId']);
     if (typeRaw is! String || streamId == null) return null;
-    final type = switch (typeRaw) {
-      'init' => BridgeType.init,
-      'ready' => BridgeType.ready,
-      'metadata' => BridgeType.metadata,
-      'data' => BridgeType.data,
-      'finish' => BridgeType.finish,
-      'close' => BridgeType.close,
-      _ => null,
-    };
+    final type = _bridgeTypes[typeRaw];
     if (type == null) return null;
     final metadata = raw['metadata'];
     return BridgeMessage(

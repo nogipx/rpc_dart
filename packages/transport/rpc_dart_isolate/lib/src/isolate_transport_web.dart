@@ -52,12 +52,13 @@ abstract interface class RpcIsolateTransport {
     Uri? workerUri,
     Duration startupTimeout = const Duration(seconds: 30),
   }) async {
-    // On web we cannot transfer the entrypoint function; user must expose it
-    // in a worker. Keeping the parameter for API parity.
+    // Unused on the web, as is `isolateId`: a function cannot cross into a
+    // Worker, so the worker script passes its own entrypoint to
+    // runRpcIsolateManagerWorker. Both stay for parity with the VM signature.
     final _ = entrypoint;
 
     // The policy rides on the URL: a Worker has no argument list, and the VM
-    // sibling ships it as args[4]. See [_policyQueryParam].
+    // sibling ships it as args[4]. See kWorkerPolicyQueryParam.
     final uri = withWorkerPolicy(_resolveWorkerUri(workerUri), policy);
     final workerOptions = _buildWorkerOptions(debugName);
     final worker = workerOptions == null

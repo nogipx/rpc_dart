@@ -59,6 +59,16 @@ void main() {
     expect(policyFromWorkerUrl(uri.toString()), isNotNull);
   });
 
+  test('a repeated query parameter keeps every value', () {
+    final uri = withWorkerPolicy(
+      Uri.parse('https://x/worker.js?tag=a&tag=b'),
+      raised,
+    );
+
+    expect(uri.queryParametersAll['tag'], ['a', 'b']);
+    expect(policyFromWorkerUrl(uri.toString()), isNotNull);
+  });
+
   group('a URL that carries no usable policy yields null', () {
     // The worker then uses its explicit `policy:` argument, and failing that
     // the default -- which is the old behaviour, kept as the floor.

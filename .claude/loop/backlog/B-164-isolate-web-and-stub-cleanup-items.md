@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 698) — cleanup commit by owner decision
+round: 698
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart, packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart, packages/transport/rpc_dart_isolate/lib/src/worker_policy.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport_stub.dart]
 probe: none — static read, nothing run
@@ -43,6 +43,18 @@ None.
 
 One cleanup commit.
 
+## Outcome (cleanup, after round 698)
+
+Done in one cleanup commit, by owner decision, no round: 1 (the doc names
+`kWorkerPolicyQueryParam`), 2 (the comment says `entrypoint` and `isolateId`
+are unused on the web and why), 3 (`type.name` and `asNameMap()`), 5
+(`withWorkerPolicy` keeps every value of a repeated parameter; a VM test
+added), 6 (the stub's `spawn` fails through its future, and its message no
+longer says "web"). The web worker still compiles with dart2js.
+
+Left: 4 (`onDispose` and the double close) -- changing teardown order on the
+web without a browser witness is not hygiene.
+
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are **done as cleanup commits, without rounds**.

@@ -21,10 +21,13 @@ const String kWorkerPolicyQueryParam = 'rpcPolicy';
 /// **Platform-agnostic on purpose.** These two are a PAIR, and the round trip
 /// they make crosses a Worker boundary that no test can build — so keeping them
 /// out of the `dart:js_interop` file is what lets anything check they agree.
+///
+/// `queryParametersAll`, not `queryParameters`: the second keeps one value per
+/// key, so a worker URL with a repeated parameter lost all but one of them.
 Uri withWorkerPolicy(Uri uri, RpcSecurityPolicy policy) => uri.replace(
   queryParameters: {
-    ...uri.queryParameters,
-    kWorkerPolicyQueryParam: json.encode(policy.toMap()),
+    ...uri.queryParametersAll,
+    kWorkerPolicyQueryParam: [json.encode(policy.toMap())],
   },
 );
 

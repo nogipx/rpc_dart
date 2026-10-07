@@ -12,7 +12,8 @@ typedef RpcIsolateEntrypoint =
 /// Not the web: `rpc_dart_isolate.dart` resolves web to
 /// `isolate_transport_web.dart`, which is a real Worker-backed implementation.
 /// Reaching this stub means no isolate mechanism exists at all, so [spawn]
-/// throws [UnsupportedError].
+/// fails with [UnsupportedError] -- through its future, as the real
+/// implementations fail, so a `.catchError` sees it.
 abstract interface class RpcIsolateTransport {
   static Future<({IRpcReconnectableTransport transport, void Function() kill})>
   spawn({
@@ -23,10 +24,10 @@ abstract interface class RpcIsolateTransport {
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Uri? workerUri,
     Duration startupTimeout = const Duration(seconds: 30),
-  }) {
+  }) async {
     throw UnsupportedError(
-      'RpcIsolateTransport is not available on this platform. '
-      'Use a different transport when targeting the web.',
+      'RpcIsolateTransport is not available on this platform: it has neither '
+      'dart:isolate nor dart:js_interop.',
     );
   }
 }
