@@ -244,10 +244,10 @@ void main() {
         onBadCertificate: (_) => true,
       );
 
-      // Note: `socket.selectedProtocol` may be null on some platforms (macOS
-      // Dart VM does not always surface the negotiated ALPN id), so we do not
-      // assert on it. The server advertises ALPN `h2`; the end-to-end RPC below
-      // proves HTTP/2-over-TLS works regardless.
+      // secureConnect refuses a peer that did not choose h2, so a server that
+      // completes the handshake without selecting it is unreachable from our
+      // own caller, even though the RPC below would still work.
+      expect(socket.selectedProtocol, 'h2');
 
       final client = RpcHttp2CallerTransport.viaSocket(
         socket,

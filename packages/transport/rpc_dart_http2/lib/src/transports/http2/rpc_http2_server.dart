@@ -68,6 +68,8 @@ class RpcHttp2Server implements IRpcServer {
   /// [securityContext], when non-null, binds a TLS socket ([SecureServerSocket])
   /// advertising ALPN `h2` instead of a plaintext ([ServerSocket]) `h2c` one.
   /// Provide a certificate chain and private key to serve HTTP/2 over TLS.
+  /// [start] sets the context's server-side ALPN list to `['h2']`, replacing
+  /// any list already set on it.
   ///
   /// [pingInterval] and [pingTimeout] configure PING keepalive; see the field
   /// docs, which explain why the default is on. [prefaceTimeout] bounds an
@@ -402,27 +404,19 @@ class RpcHttp2Server implements IRpcServer {
     try {
       final Stream<Socket> connections;
       if (_securityContext != null) {
-        // Advertise 'h2' for ALPN -- but do NOT treat it as a filter, because
-        // it is not one here. Measured against a bare SecureServerSocket given
-        // the same `supportedProtocols` as a control, the handshake completes
-        // whatever the client offers (h2, http/1.1, or no ALPN at all) and the
-        // server-side selectedProtocol comes back null. That is the platform's
-        // TLS/ALPN behaviour, not this server's.
+        // ALPN 'h2' is set on the context, NOT passed as `supportedProtocols`
+        // to bind: given that parameter, the server selects nothing and every
+        // client sees ALPN none -- which our own caller refuses. On the
+        // context, a client offering h2 gets h2.
         //
-        // Two consequences before relying on it:
-        //  - No client is rejected for its protocol list. A browser, a health
-        //    checker or a scanner completes the handshake and is then handed to
-        //    the h2 parser, which is where it fails instead. ALPN is not an
-        //    access control here.
-        //  - RFC 7540 requires ALPN for h2 over TLS, so a STRICT gRPC client may
-        //    refuse to proceed without a negotiated 'h2'. Lenient clients
-        //    (grpcurl) interoperate fine, but that is the client forgiving,
-        //    not a negotiated protocol.
+        // It is not a filter. A client offering only http/1.1, or no ALPN at
+        // all, still completes the handshake with nothing selected and is then
+        // handed to the h2 parser, which is where it fails instead.
+        _securityContext.setAlpnProtocols(const ['h2'], true);
         _secureServerSocket = await SecureServerSocket.bind(
           _host,
           _port,
           _securityContext,
-          supportedProtocols: const ['h2'],
         );
         connections = _secureServerSocket!;
       } else {
