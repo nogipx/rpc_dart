@@ -1,6 +1,6 @@
 ---
-status: open
-round: 675
+status: closed (round 682)
+round: 682
 commit: 32974d54
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/transport/rpc_dart_wasm/lib/src/wasm/rpc_wasm.dart, packages/transport/rpc_dart_wasm/example/integration_test/rpc_guest_test.dart]
 probe: packages/transport/rpc_dart_wasm/example/integration_test/zz_probe_collect.dart
@@ -45,6 +45,13 @@ bytes, whose `buffer`/`offsetInBytes` differ from a VM list's. Look for a
 (buffered payloads before bind), then a VM witness that reproduces it with a
 non-zero-offset view.
 
+## Outcome (round 682)
+
+FIXED. An SDK bug: on dart2wasm `sublist` of a JS-backed view at a non-zero
+offset counts the offset twice. The guest bridge now copies each chunk into a
+Dart list; 9 of 9 on both platforms. The same exposure on the web transports
+is B-256. `../rounds/682-a-js-backed-view-cannot-be-sliced.md`.
+
 ## Owner decision
 
-—
+2026-10-07, round 682: copy at the guest boundary, after seeing the cost.

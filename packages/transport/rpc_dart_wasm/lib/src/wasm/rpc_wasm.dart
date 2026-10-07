@@ -185,8 +185,13 @@ final class _RpcWasmBridge implements RpcWasmBridge {
 
   void _receiveBytes(JSUint8Array bytes) {
     if (_closed || _incoming.isClosed) return;
-    final dartBytes = bytes.toDart;
-    _incoming.add(dartBytes);
+    // COPIED into a Dart list, not wrapped. `toDart` returns a JS-backed list,
+    // and on dart2wasm `sublist` of a JS-backed VIEW at a non-zero offset
+    // counts the offset twice: it throws a RangeError, or returns the wrong
+    // bytes. Every payload here becomes such a view -- the frame decoder hands
+    // up views into the chunk -- so the CBOR codec's `sublist` failed every
+    // client-stream call, and any codec that slices its payload would too.
+    _incoming.add(Uint8List.fromList(bytes.toDart));
   }
 
   @override
