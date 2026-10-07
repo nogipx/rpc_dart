@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[710](710-the-window-fits-the-buffer.md)** FIXED, core + websocket — **a 64 KiB message limit under the 4 MiB window failed lagging streams at item 3**: the queue bound now covers the window, an explicit small buffer shrinks the advertised window, first grants replace the seed. Closes B-258
 - **[709](709-message-credit.md)** FIXED, core + websocket — **a sender inside its byte window overran the 1024-message depth**: websocket server streams of small items failed at ~1026 with a slow reader. Grants carry message credit; depth default 8192 (owner, after the latency cost). Closes B-257
 - **[708](708-host-sends-leave-in-batches.md)** FIXED, wasm — **host-to-guest went one frame per platform round trip**: Android 26-30 f/s, a 10k burst did not finish. The host bridge sends queued frames in batches: 349-513 f/s, the burst completes. Closes B-168
 - **[707](707-ios-recv-answers-in-batches.md)** FIXED, wasm (Swift) — **iOS `/recv` answered one frame per fetch**: host-to-guest 211-375 f/s. Batched up to 64 frames: 1363-4231. Send batching tried and reverted (trips the host's 1024 cap). B-168 iOS half; Android blocked by adb
