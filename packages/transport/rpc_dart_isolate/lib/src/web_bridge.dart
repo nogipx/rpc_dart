@@ -346,4 +346,13 @@ Uint8List materializeBytes(Object? raw) {
 }
 
 /// Puts payload bytes into a form structured clone accepts everywhere.
-List<int> serializeBytes(Uint8List data) => data.toList(growable: false);
+///
+/// The typed array itself: structured clone copies it as one block, where a
+/// `List<int>` crossed as a JS array of numbers, boxed and copied element by
+/// element on both sides. A view into a larger buffer is compacted first,
+/// because cloning a typed array clones its whole underlying buffer.
+/// [materializeBytes] still reads the old list form, from an older peer.
+Uint8List serializeBytes(Uint8List data) =>
+    data.offsetInBytes == 0 && data.lengthInBytes == data.buffer.lengthInBytes
+    ? data
+    : Uint8List.fromList(data);

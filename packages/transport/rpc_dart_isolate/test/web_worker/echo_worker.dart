@@ -63,6 +63,12 @@ final class _EchoContract extends RpcResponderContract {
       responseCodec: RpcString.codec,
     );
     addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Size',
+      handler: (r, {RpcContext? context}) async => '${r.value.length}'.rpc,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+    );
+    addUnaryMethod<RpcString, RpcString>(
       methodName: 'Credit',
       handler: (r, {RpcContext? context}) async {
         final t = _transport;

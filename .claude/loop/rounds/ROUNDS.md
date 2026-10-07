@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[706](706-worker-bytes-cross-as-one-block.md)** FIXED, isolate — **web worker bytes crossed as a JS array of numbers**: 1 MiB host-to-worker 7.5-8 MiB/s (dart2js), 2.9 (dart2wasm). Sent as a typed array: 272-299 and 64-66 MiB/s. Closes B-160
 - **[705](705-a-dead-worker-is-terminated-and-not-restarted.md)** FIXED (by reading), isolate — **a web worker that died was left running**, and an `onDone` fallback could start the entrypoint on a dead channel. The death listener terminates the worker (parity with VM errorsAreFatal); the fallback is gone. Closes B-161, B-162
 - **[704](704-the-window-grant-reaches-a-module-worker.md)** FIXED, isolate — **a dart2wasm module worker lost the host's connection-window grant** (credit `null`; dart2js fine). The host holds frames until the worker is listening. Closes B-163
 - **[703](703-header-conversion-is-a-fifth-of-a-percent.md)** CLEAN, http2 — **B-193's header cost**: build 0.72 us + parse 0.25 us per request against 475 us per unary call, about 0.2%. Nothing to gain. Closes B-193

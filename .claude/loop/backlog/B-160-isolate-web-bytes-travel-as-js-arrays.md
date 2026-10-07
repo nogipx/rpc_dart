@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 706)
+round: 706
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart]
 probe: none — static read, nothing run
@@ -32,6 +32,12 @@ MB/s for 1 MiB payloads host→worker on Chrome.
 
 Send the Uint8List (structured clone keeps typed arrays) or transfer its buffer.
 
+## Outcome (round 706)
+
+CONFIRMED and FIXED: 1 MiB host-to-worker went from 7.5-8.0 to 272-299 MiB/s
+on dart2js and from 2.9 to 64-66 MiB/s on dart2wasm; bytes now cross as a
+typed array. `../rounds/706-worker-bytes-cross-as-one-block.md`.
+
 ## Owner decision
 
-—
+2026-10-07: take it on now.
