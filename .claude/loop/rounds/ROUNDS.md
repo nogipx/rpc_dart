@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[699](699-the-web-under-dart2wasm-decodes.md)** FIXED, rpc_dart — **under dart2wasm on the web every response failed to decode** (websocket client in node 22; dart2js fine): the same JS-backed `sublist` SDK bug, in core's CBOR. Decoded from views instead, at no cost. Closes B-256
 - **[698](698-the-alpn-choice-is-checked.md)** FIXED (by reading), http2 — **the caller never checked ALPN**, so an HTTP/1.1-only TLS peer got an h2 preface. Now refused with the chosen protocol named; not witnessed on macOS. Closes B-183
 - **[697](697-connection-headers-are-refused-on-send.md)** FIXED, rpc_dart — **connection-specific headers in user metadata reached the peer over http2**, which RFC 9113 calls malformed. By owner decision refused on send with INVALID_ARGUMENT on every transport. B-193's protocol item
 - **[696](696-close-aborts-at-once.md)** FIXED, http2 — **`close()` slept 50 ms with a call in flight** before aborting it. By owner decision the wait is gone: 67-69 ms -> 13 ms. Closes B-187

@@ -1,6 +1,6 @@
 ---
-status: open
-round: 682
+status: closed (round 699)
+round: 699
 commit: 662aa653
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/core/parser.dart]
 probe: .dart_tool/probe/b254_jsview.dart
@@ -40,6 +40,15 @@ measured, and ask the owner.
 
 The browser HTTP transports (`package:http`'s `BrowserClient`, the http1
 caller) are the same question.
+
+## Outcome (round 699)
+
+CONFIRMED and FIXED. A websocket client compiled with dart2wasm, run in node
+22, failed every response with `Response could not be decoded`; dart2js
+succeeded. Core's CBOR decoder no longer calls `sublist`: text is decoded from
+a view (one copy fewer), bytes copied from a view (the same copy). No owner
+question was needed: the fix costs nothing.
+`../rounds/699-the-web-under-dart2wasm-decodes.md`.
 
 ## Owner decision
 

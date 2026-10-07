@@ -305,7 +305,11 @@ class _FastCborReader {
       throw FormatException('Text string length exceeds available data');
     }
 
-    final utf8Bytes = _bytes.sublist(_offset, _offset + length);
+    // A view, not `sublist`: utf8.decode only reads it, so there is nothing
+    // to copy -- and on dart2wasm `sublist` of a JS-backed view at a non-zero
+    // offset counts the offset twice and throws, which every payload received
+    // from a browser API is.
+    final utf8Bytes = Uint8List.sublistView(_bytes, _offset, _offset + length);
     _offset += length;
 
     try {
@@ -439,7 +443,11 @@ class _FastCborReader {
       throw FormatException('Byte string length exceeds available data');
     }
 
-    final result = _bytes.sublist(_offset, _offset + length);
+    // A copy the caller owns, made from a view for the reason in
+    // [_readStringFast]: `sublist` breaks on a JS-backed view under dart2wasm.
+    final result = Uint8List.fromList(
+      Uint8List.sublistView(_bytes, _offset, _offset + length),
+    );
     _offset += length;
     return result;
   }
