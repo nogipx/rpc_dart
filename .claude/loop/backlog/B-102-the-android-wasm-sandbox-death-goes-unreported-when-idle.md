@@ -1,11 +1,10 @@
 ---
-status: open
-round: 493
+status: closed (round 684)
+round: 684
 commit: 016d34d6
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/example/integration_test/idle_sandbox_death_test.dart]
 probe: "packages/transport/rpc_dart_wasm/example/integration_test/idle_sandbox_death_test.dart — built, gated, never yet driven to a kill"
 reason: "bench — the witness needs the sandbox process killed from the HOST mid-run, and round 493 could not identify that process on the emulator in five runs; the instrument is built and committed"
-continuation: yes
 ---
 
 # B-102 — Android wasm: a sandbox that dies while the driver is parked is never reported
@@ -92,6 +91,15 @@ The next round should reach for `adb shell pidof com.nogipx.rpc_dart_wasm_exampl
 or `adb shell dumpsys activity processes | grep -i wasm` first, and confirm it
 can see the APP before trying to find the sandbox. Once a pid can be named, the
 committed test is the whole witness and this closes in one run.
+
+## Outcome (round 684)
+
+FIXED. The kill needed root: the sandbox is an isolated uid, so on a Play
+image nothing can kill it. A `google_apis` API 33 AVD with the newer WebView
+sideloaded did. Before: `death: NONE`, the next call timed out at 15 s. After
+(termination callback, wake in `finally`, forward catch reports): death
+reported, the next call fails in 23 ms.
+`../rounds/684-a-killed-sandbox-is-reported.md`.
 
 ## Owner decision
 

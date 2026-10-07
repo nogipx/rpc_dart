@@ -5,6 +5,8 @@
 package com.nogipx.rpc_dart_wasm
 
 import android.content.Context
+import androidx.core.content.ContextCompat
+import androidx.javascriptengine.IsolateTerminatedException
 import androidx.javascriptengine.JavaScriptIsolate
 import androidx.javascriptengine.JavaScriptSandbox
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -176,6 +178,14 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             ?: UUID.randomUUID().toString()
         val isolate = sb.createIsolate()
         runtimes[runtimeId] = isolate
+        // The only signal for a death while the driver is PARKED: with no timer
+        // pending it waits on its waker and evaluates nothing, so no evaluation
+        // is in flight to fail. A sandbox process killed then went unreported,
+        // and every call waited out its own deadline. An ordinary close removes
+        // the id first, so reportDeath ignores the callback it causes.
+        isolate.addOnTerminatedCallback(ContextCompat.getMainExecutor(context)) { info ->
+            reportDeath(runtimeId, info.toString())
+        }
         registerByteChannel(runtimeId)
         isolate.provideNamedData("rpc_wasm_module", wasmBytes)
         val bootScript = """
@@ -484,6 +494,8 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         val buffer = ByteBuffer.allocateDirect(bytes.size)
         buffer.put(bytes)
         messenger.send(runtimeDiedChannel(runtimeId), buffer)
+        // A parked driver would otherwise wait on its waker forever.
+        wakeDriver(runtimeId)
     }
 
     private fun wakeDriver(runtimeId: String) {
@@ -501,6 +513,16 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     private suspend fun forwardBytesToRuntime(runtimeId: String, bytes: ByteArray) {
         val isolate = runtimes[runtimeId] ?: return
+        try {
+            evaluateForward(isolate, bytes)
+        } finally {
+            // In a finally: a forward that throws must still wake the driver,
+            // or a parked one never notices anything.
+            wakeDriver(runtimeId)
+        }
+    }
+
+    private suspend fun evaluateForward(isolate: JavaScriptIsolate, bytes: ByteArray) {
         if (bytes.size >= NAMED_DATA_THRESHOLD) {
             val name = "rpc_msg_${messageCounter.getAndIncrement()}"
             isolate.provideNamedData(name, bytes)
@@ -515,7 +537,6 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
             isolate.evaluateJavaScriptAsync("_rpcWasmReceiveBytesB64('$b64')").await()
         }
-        wakeDriver(runtimeId)
     }
 
     private suspend fun drainAndPush(runtimeId: String) {
@@ -613,6 +634,12 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                         "RpcDartWasm",
                         "Forward to $runtimeId dropped: ${e.message}",
                     )
+                    // A runtime that died under the forward is reported here,
+                    // not left for a driver that may be parked. After an
+                    // ordinary close the id is already gone and this is a no-op.
+                    if (e is IsolateTerminatedException) {
+                        reportDeath(runtimeId, e.message ?: e.toString())
+                    }
                 } finally {
                     reply.reply(null)
                 }

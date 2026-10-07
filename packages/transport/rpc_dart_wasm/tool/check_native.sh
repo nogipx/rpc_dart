@@ -123,13 +123,15 @@ check_kotlin() {
     return
   fi
 
-  local embedding guava cor_guava cor_core cor_android jse_aar
+  local embedding guava cor_guava cor_core cor_android jse_aar core_aar
   embedding="$(find_jar 'flutter_embedding_debug-*.jar')"
   guava="$(find_jar 'guava-*-android.jar')"
   cor_guava="$(find_jar 'kotlinx-coroutines-guava-*.jar')"
   cor_core="$(find_jar 'kotlinx-coroutines-core-jvm-*.jar')"
   cor_android="$(find_jar 'kotlinx-coroutines-android-*.jar')"
   jse_aar="$(find "$GRADLE_CACHE" -name 'javascriptengine-*.aar' -type f 2>/dev/null | head -1)"
+  # androidx.core: javascriptengine's own API takes its `Consumer`.
+  core_aar="$(find "$GRADLE_CACHE" -path '*androidx.core/core/*' -name 'core-*.aar' -type f 2>/dev/null | head -1)"
 
   local missing=""
   [[ -z "$embedding" ]] && missing="$missing flutter_embedding"
@@ -138,6 +140,7 @@ check_kotlin() {
   [[ -z "$cor_core" ]] && missing="$missing coroutines-core"
   [[ -z "$cor_android" ]] && missing="$missing coroutines-android"
   [[ -z "$jse_aar" ]] && missing="$missing javascriptengine"
+  [[ -z "$core_aar" ]] && missing="$missing androidx.core"
   if [[ -n "$missing" ]]; then
     skip "kotlin: gradle cache is missing:$missing"
     return
@@ -150,8 +153,14 @@ check_kotlin() {
     skip "kotlin: could not unpack $jse_aar"
     return
   fi
+  local core_dir="$WORK/androidx-core"
+  mkdir -p "$core_dir"
+  if ! (cd "$core_dir" && unzip -o -q "$core_aar" classes.jar); then
+    skip "kotlin: could not unpack $core_aar"
+    return
+  fi
 
-  local cp="$android_jar:$embedding:$jse_dir/classes.jar:$guava:$cor_guava:$cor_core:$cor_android"
+  local cp="$android_jar:$embedding:$jse_dir/classes.jar:$core_dir/classes.jar:$guava:$cor_guava:$cor_core:$cor_android"
 
   # Android Studio ships kotlinc without the executable bit.
   local runner=(); [[ -x "$kotlinc" ]] || runner=(/bin/sh)
