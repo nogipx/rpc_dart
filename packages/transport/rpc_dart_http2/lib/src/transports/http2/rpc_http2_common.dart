@@ -67,7 +67,7 @@ Timer? startHttp2Keepalive({
     }
     inFlight = true;
     try {
-      await ping().timeout(budget);
+      await _guardedPing(ping).timeout(budget);
     } catch (error) {
       timer.cancel();
       onDead(error);
@@ -76,6 +76,27 @@ Timer? startHttp2Keepalive({
       inFlight = false;
     }
   });
+}
+
+/// Runs [ping] in its own error zone and returns its outcome.
+///
+/// package:http2 registers a PING's completer before it writes the frame. On a
+/// connection whose socket is already gone the write throws synchronously, so
+/// the completer's future is never handed back, and when the connection then
+/// terminates it completes that completer with an error nobody listens to.
+/// Created in this zone, that error lands here instead of in the root zone,
+/// where it kills the process. A silent client whose preface deadline and
+/// first keepalive tick fall in the same turn reaches it at the default
+/// settings.
+Future<void> _guardedPing(Future<void> Function() ping) {
+  final outcome = Completer<void>();
+  runZonedGuarded(
+    () => ping().then(outcome.complete, onError: outcome.completeError),
+    (error, stackTrace) {
+      if (!outcome.isCompleted) outcome.completeError(error, stackTrace);
+    },
+  );
+  return outcome.future;
 }
 
 /// Turns Nagle's algorithm off on [socket], as every gRPC stack does.

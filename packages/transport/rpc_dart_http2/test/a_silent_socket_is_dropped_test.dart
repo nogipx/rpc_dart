@@ -53,11 +53,15 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-Future<RpcHttp2Server> _serve({required Duration? prefaceTimeout}) async {
+Future<RpcHttp2Server> _serve({
+  required Duration? prefaceTimeout,
+  Duration? pingInterval = const Duration(seconds: 30),
+}) async {
   final server = RpcHttp2Server(
     host: '127.0.0.1',
     port: 0,
     prefaceTimeout: prefaceTimeout,
+    pingInterval: pingInterval,
     onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
   );
   await server.start();
@@ -121,6 +125,47 @@ void main() {
         0,
         reason: 'and then be dropped at the deadline',
       );
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
+    'a deadline and a keepalive tick in the same turn do not crash the server',
+    () async {
+      // WITNESS. Equal intervals, as at the defaults (30 s each): the deadline
+      // destroys the socket, then the keepalive pings it in the same turn.
+      // package:http2 orphans that PING's completer and later fails it, and
+      // the error went to the zone the server runs in -- here the test's,
+      // which fails the test; in a server, the root zone, which kills it.
+      final server = await _serve(
+        prefaceTimeout: _prefaceTimeout,
+        pingInterval: _prefaceTimeout,
+      );
+      await _open(server.port, _sockets, speak: false);
+
+      expect(
+        await _until(() => server.endpoints.length, 0, _prefaceTimeout * 10),
+        0,
+      );
+      await Future<void>.delayed(_prefaceTimeout * 2);
+
+      final caller = RpcCallerEndpoint(
+        transport: await RpcHttp2CallerTransport.connect(
+          host: '127.0.0.1',
+          port: server.port,
+        ),
+      );
+      addTearDown(caller.close);
+      final response = await caller
+          .unaryRequest<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'echo',
+            request: 'alive'.rpc,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 15));
+      expect(response.value, 'alive');
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
