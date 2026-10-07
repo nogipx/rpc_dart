@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 688)
+round: 688
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/lib/rpc_dart_wasm.dart, packages/transport/rpc_dart_wasm/lib/src/rpc_flutter_wasm_bridge.dart, packages/transport/rpc_dart_wasm/pubspec.yaml]
 probe: none — static read, nothing run
@@ -32,6 +32,13 @@ None / an emulator without wasm compilation.
 ## Fix sketch
 
 Fold the two flags into `canRunDartWasm`; fix docs and versions.
+
+## Outcome (round 688)
+
+FIXED: `canRunDartWasm` now requires the two Android sandbox features
+`load()` requires (a VM test, 2 of 4 red before); the library doc and the
+stub's comment say what is exported where. The podspec version is left for
+the owner's next wasm release. `../rounds/688-the-support-probe-matches-load.md`.
 
 ## Owner decision
 

@@ -3,7 +3,7 @@ refines: U-14, U-03
 paths: [packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/lib/**]
 applies: the plugin has a native layer in Swift and Kotlin — and a contract ACROSS that boundary, which is neither language
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
-applied: [348, 355, 357, 362, 363, 365, 482, 484, 492, 493, 665, 683, 684, 685, 686, 687]
+applied: [348, 355, 357, 362, 363, 365, 482, 484, 492, 493, 665, 683, 684, 685, 686, 687, 688]
 status: confirmed (round 365)
 ---
 

@@ -26,8 +26,18 @@ final class RpcWasmSupportInfo {
     required this.details,
   });
 
+  /// Whether [RpcFlutterWasmBridge.load] can succeed here.
+  ///
+  /// Includes the two sandbox features the Android plugin requires and reports
+  /// in [details] -- WASM compilation and provide/consume array buffers --
+  /// because load refuses without either. iOS reports neither and needs
+  /// neither.
   bool get canRunDartWasm =>
-      jsEngineAvailable && webAssemblyAvailable && wasmGcSupported;
+      jsEngineAvailable &&
+      webAssemblyAvailable &&
+      wasmGcSupported &&
+      details['wasmCompilationSupported'] != false &&
+      details['namedDataSupported'] != false;
 
   @override
   String toString() =>

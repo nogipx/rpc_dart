@@ -4,9 +4,14 @@
 
 /// WASM runtime bridge transport for rpc_dart.
 ///
-/// This package provides the transport layer only. Runtime-specific loaders
-/// (Flutter plugin, JS interop, wasmtime, etc.) should implement
-/// [RpcWasmBridge] and feed it into [RpcWasmTransport].
+/// A Flutter package. [RpcWasmTransport] runs over any [RpcWasmBridge]; this
+/// library also ships one, [RpcFlutterWasmBridge], whose native plugin runs a
+/// dart2wasm guest on iOS and Android. Another runtime's loader implements
+/// [RpcWasmBridge] and hands it to [RpcWasmTransport].
+///
+/// On a JS-interop platform -- the web, and inside the guest itself -- the
+/// Flutter bridge is not exported. [RpcWasm] is the guest side and works only
+/// inside a guest.
 library;
 
 export 'src/rpc_flutter_wasm_bridge.dart'

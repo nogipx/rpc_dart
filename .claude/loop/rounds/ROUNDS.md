@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[688](688-the-support-probe-matches-load.md)** FIXED, wasm — **`canRunDartWasm` said yes where `load()` refuses**: it ignored Android's WASM-compilation and named-data features. Both folded in; library and stub docs say what is exported where. Closes B-171
 - **[687](687-guest-timers-fire-in-deadline-order.md)** FIXED, wasm (Swift + Kotlin) — **guest timers due together fired in id order with microtasks last** (`late,early,same,micro`) on both platforms. iOS now uses WebKit's timers; Android sorts by deadline and yields after each. Closes B-169
 - **[686](686-the-engine-runs-the-microtasks.md)** FIXED, wasm (Swift + Kotlin) — **a guest awaiting native promises stalled**: both boot scripts replaced `queueMicrotask` with a queue drained only on a tick; 100 awaits timed out at 10 s on iOS and Android. The engine's own queue now runs them (1 ms). Closes B-167
 - **[685](685-a-dead-sandbox-is-replaced.md)** FIXED, wasm (Kotlin) — **after the Android sandbox died, every later runtime failed to load**: the dead sandbox stayed cached, and `createIsolate` on it does not throw. Dropped on the termination callback; a failed bind is not cached. Closes B-166
