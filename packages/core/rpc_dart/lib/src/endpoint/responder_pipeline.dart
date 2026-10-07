@@ -1472,6 +1472,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             final response = await _withHandlerSlot(
               streamId,
               () => handleUnary<Object, Object>(
+                direction: RpcCallDirection.incoming,
                 serviceName: binding.serviceName,
                 methodName: binding.methodName,
                 context: context,
@@ -1540,6 +1541,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       handler: (request) => _withHandlerSlot(
         streamId,
         () => handleUnary<IRpcSerializable, IRpcSerializable>(
+          direction: RpcCallDirection.incoming,
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,
@@ -1653,6 +1655,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         handler: (requests) => _withHandlerSlot(
           streamId,
           () => handleClientStream<Object, Object>(
+            direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,
@@ -1696,6 +1699,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       handler: (requests) => _withHandlerSlot(
         streamId,
         () => handleClientStream<IRpcSerializable, IRpcSerializable>(
+          direction: RpcCallDirection.incoming,
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,
@@ -1751,6 +1755,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         handler: (request) => _withHandlerSlotStream(
           streamId,
           () => handleServerStream<Object, Object>(
+            direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,
@@ -1785,6 +1790,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       handler: (request) => _withHandlerSlotStream(
         streamId,
         () => handleServerStream<IRpcSerializable, IRpcSerializable>(
+          direction: RpcCallDirection.incoming,
           serviceName: binding.serviceName,
           methodName: binding.methodName,
           context: context,
@@ -1842,6 +1848,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           final responseStream = _withHandlerSlotStream(
             streamId,
             () => handleBidirectionalStream<Object, Object>(
+              direction: RpcCallDirection.incoming,
               serviceName: binding.serviceName,
               methodName: binding.methodName,
               context: context,
@@ -1894,6 +1901,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         final responseStream = _withHandlerSlotStream(
           streamId,
           () => handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
+            direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,

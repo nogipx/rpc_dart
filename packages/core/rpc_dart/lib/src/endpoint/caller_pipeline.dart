@@ -447,6 +447,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     return () async {
       try {
         return await handleUnary<TRequest, TResponse>(
+          direction: RpcCallDirection.outgoing,
           serviceName: serviceName,
           methodName: methodName,
           context: ctx,
@@ -513,6 +514,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     final ctx = _prepareCallerContext(context, serviceName, methodName);
 
     final stream = handleServerStream<TRequest, TResponse>(
+      direction: RpcCallDirection.outgoing,
       serviceName: serviceName,
       methodName: methodName,
       context: ctx,
@@ -566,6 +568,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       _trackCallerRequest(serviceName, methodName, ctx);
       try {
         return await handleClientStream<C, R>(
+          direction: RpcCallDirection.outgoing,
           serviceName: serviceName,
           methodName: methodName,
           context: ctx,
@@ -603,6 +606,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     final ctx = _prepareCallerContext(context, serviceName, methodName);
 
     final stream = handleBidirectionalStream<C, R>(
+      direction: RpcCallDirection.outgoing,
       serviceName: serviceName,
       methodName: methodName,
       context: ctx,

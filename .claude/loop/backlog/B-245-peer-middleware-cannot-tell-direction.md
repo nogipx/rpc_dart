@@ -1,6 +1,6 @@
 ---
-status: awaiting owner
-round: 659 (owner question from the peer review; measured at HEAD in the owner review after it)
+status: closed (round 700)
+round: 700
 commit: feaf34de
 paths: [packages/core/rpc_dart/lib/src/endpoint/middleware.dart, packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart, packages/core/rpc_dart/lib/src/endpoint/peer_endpoint.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/peer_middleware_direction.dart
@@ -49,6 +49,12 @@ capability, not a wrong result.
 
 The owner listed option 1 only; option 2 is the branch that keeps the API.
 
+## Outcome (round 700)
+
+FIXED as decided: `RpcMiddlewareContext.direction` (`RpcCallDirection.outgoing` /
+`.incoming`), set by both pipelines, optional for hand-built contexts.
+`../rounds/700-peer-middleware-knows-the-direction.md`.
+
 ## Owner decision
 
-—
+2026-10-07: **option 1**, a direction field on `RpcMiddlewareContext`.

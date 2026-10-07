@@ -221,8 +221,12 @@ set is fixed when a call starts.
 Per call: request middlewares, then interceptors, then the handler (on a caller
 endpoint: the wire), then response middlewares. Defaults pass through; override
 only what you need. `RpcMiddlewareContext` has `endpoint`, `serviceName`,
-`methodName` and a mutable `context`. `next` takes `(RpcContext, request)`;
-pass `call.context` to keep the current one.
+`methodName`, a mutable `context`, and `direction`
+(`RpcCallDirection.outgoing` for a call the endpoint makes, `.incoming` for one
+it serves). On an `RpcPeerEndpoint` one middleware list runs both ways, so
+check `direction` for side-specific work such as adding vs checking auth.
+`next` takes `(RpcContext, request)`; pass `call.context` to keep the current
+one.
 
 ```dart
 import 'dart:async';

@@ -252,12 +252,14 @@ abstract base class RpcEndpointBase {
     String serviceName,
     String methodName,
     RpcContext context,
+    RpcCallDirection? direction,
   ) {
     return RpcMiddlewareContext(
       endpoint: this,
       serviceName: serviceName,
       methodName: methodName,
       context: context,
+      direction: direction,
     );
   }
 
@@ -517,6 +519,7 @@ abstract base class RpcEndpointBase {
     required String serviceName,
     required String methodName,
     required RpcContext context,
+    RpcCallDirection? direction,
     required TRequest request,
     required Future<TResponse> Function(RpcContext ctx, TRequest request)
     handler,
@@ -525,6 +528,7 @@ abstract base class RpcEndpointBase {
       serviceName,
       methodName,
       context,
+      direction,
     );
     final normalizedRequest = await _applyRequestMiddlewares<TRequest>(
       middlewareContext,
@@ -552,6 +556,7 @@ abstract base class RpcEndpointBase {
     required String serviceName,
     required String methodName,
     required RpcContext context,
+    RpcCallDirection? direction,
     required TRequest request,
     required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
@@ -563,6 +568,7 @@ abstract base class RpcEndpointBase {
       serviceName,
       methodName,
       context,
+      direction,
     );
     final normalizedRequest = await _applyRequestMiddlewares<TRequest>(
       middlewareContext,
@@ -589,6 +595,7 @@ abstract base class RpcEndpointBase {
     required String serviceName,
     required String methodName,
     required RpcContext context,
+    RpcCallDirection? direction,
     required Stream<TRequest> requests,
     required Future<TResponse> Function(
       RpcContext ctx,
@@ -600,6 +607,7 @@ abstract base class RpcEndpointBase {
       serviceName,
       methodName,
       context,
+      direction,
     );
     final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
       middlewareContext,
@@ -625,6 +633,7 @@ abstract base class RpcEndpointBase {
     required String serviceName,
     required String methodName,
     required RpcContext context,
+    RpcCallDirection? direction,
     required Stream<TRequest> requests,
     required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
@@ -636,6 +645,7 @@ abstract base class RpcEndpointBase {
       serviceName,
       methodName,
       context,
+      direction,
     );
     final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
       middlewareContext,

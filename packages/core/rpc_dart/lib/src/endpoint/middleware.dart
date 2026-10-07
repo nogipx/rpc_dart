@@ -5,6 +5,15 @@
 
 part of '_index.dart';
 
+/// Which way a call goes, from the endpoint running the middleware.
+enum RpcCallDirection {
+  /// A call this endpoint makes.
+  outgoing,
+
+  /// A call this endpoint serves.
+  incoming,
+}
+
 /// Middleware/interceptor context passed through request/response lifecycle.
 /// Provides endpoint reference, service/method names, and the current
 /// [RpcContext].
@@ -21,12 +30,20 @@ class RpcMiddlewareContext {
   /// The current RPC context, may be updated by middleware.
   RpcContext context;
 
+  /// Whether this endpoint is making the call or serving it.
+  ///
+  /// Matters on an `RpcPeerEndpoint`, whose one middleware list runs both
+  /// ways; on a caller or responder endpoint it is always the same. Set by the
+  /// endpoint's own pipelines; null only for a context built by hand.
+  final RpcCallDirection? direction;
+
   /// Creates an [RpcMiddlewareContext] for the given call.
   RpcMiddlewareContext({
     required this.endpoint,
     required this.serviceName,
     required this.methodName,
     required this.context,
+    this.direction,
   });
 
   /// Updates the stored [context].
@@ -40,12 +57,14 @@ class RpcMiddlewareContext {
     String? serviceName,
     String? methodName,
     RpcContext? context,
+    RpcCallDirection? direction,
   }) {
     return RpcMiddlewareContext(
       endpoint: endpoint ?? this.endpoint,
       serviceName: serviceName ?? this.serviceName,
       methodName: methodName ?? this.methodName,
       context: context ?? this.context,
+      direction: direction ?? this.direction,
     );
   }
 }
