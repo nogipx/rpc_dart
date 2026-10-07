@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[695](695-two-responder-claims-measured-clean.md)** CLEAN, http2 — **B-190's health and lost-trailer claims**: after a protocol close `health()` is not healthy, and an overrun reaches the caller as `status 8`. Kept as guards; the lead's other claims stay open
 - **[694](694-the-caller-addresses-its-peer-correctly.md)** FIXED, http2 — **three addressing defects**: Basic auth sent percent-encoded credentials, CONNECT left an IPv6 target unbracketed, `:authority` dropped a non-default port. All three fixed; B-183's ALPN claim stays open
 - **[693](693-the-proxy-path-is-bounded.md)** FIXED, http2 — **`connectTimeout` did not bound the proxy path**: a TLS handshake through a silent tunnel was pending at 6 s. Reaching the proxy and the tunnelled handshake are now bounded (1027 ms with 1 s). Closes B-182
 - **[692](692-tls-through-a-proxy-reaches-the-server.md)** FIXED, http2 — **`secureConnect` through a CONNECT proxy could never work**: the socket subscription was cancelled before `SecureSocket.secure`, closing its read side, so every handshake died "terminated during handshake". Paused instead; the proxied handshake now gets as far as the direct one. Found during B-182

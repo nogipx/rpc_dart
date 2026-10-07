@@ -36,6 +36,14 @@ the client's status.
 Own the subscription; send a trailer (UNAVAILABLE/CANCELLED) when ending a stream
 early; mark closed on protocol error.
 
+## Progress (round 695)
+
+CLEAN, two claims: `health()` after a protocol close is not healthy, and an
+overrun reaches the caller as `status 8` with its message. Still open: the
+unowned subscription, status-less endings on close/release (possibly correct
+for a shutdown), missing error handling.
+`../rounds/695-two-responder-claims-measured-clean.md`.
+
 ## Owner decision
 
 —
