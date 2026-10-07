@@ -99,6 +99,10 @@ _parked() async {
 
   final id = transport.createStream();
   await transport.sendMetadata(id, RpcMetadata.forClientRequest('Svc', 'M'));
+  // The peer's advertisements, which replace the seeded windows; the grants
+  // the tests send below are then increments, as on a live connection.
+  channel.grantConnection(_window);
+  channel.grant(id, _window);
   await transport.sendMessage(id, Uint8List(_window));
 
   return (channel: channel, transport: transport, id: id);

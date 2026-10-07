@@ -90,6 +90,14 @@ final class RpcFlowController {
   /// under it.
   final Set<int> _seededMessages = {};
 
+  /// Streams whose byte credit is still the initial send window, awaiting the
+  /// peer's first grant, which replaces it the same way as [_seededMessages].
+  final Set<int> _seededBytes = {};
+
+  /// Whether the connection credit is still the initial send window; the
+  /// peer's first connection grant replaces it, as for [_seededBytes].
+  bool _connSeeded = false;
+
   /// Senders parked waiting for credit, per stream.
   final Map<int, List<Completer<void>>> _sendWaiters = {};
 
@@ -244,6 +252,7 @@ final class RpcFlowController {
           _sendCredit[streamId] == null &&
           _canTrack(_sendCredit, streamId)) {
         _sendCredit[streamId] = initial;
+        _seededBytes.add(streamId);
       }
       // Seeded at THIS side's own depth, the one number known before the
       // peer's grant arrives. A seed above the peer's depth can still overrun
@@ -260,6 +269,7 @@ final class RpcFlowController {
       }
       if (_connWindow != null && !_connAssumedLegacy && _connCredit == null) {
         _connCredit = initial;
+        _connSeeded = true;
       }
     }
 
@@ -343,6 +353,7 @@ final class RpcFlowController {
       if (!_connPeerGranted) {
         _connAssumedLegacy = true;
         _connCredit = null;
+        _connSeeded = false;
         _log.warning(
           'No connection-level grant within $grace; treating the peer as not '
           'doing flow control and dropping the initial send window',
@@ -353,6 +364,7 @@ final class RpcFlowController {
         _sendCredit.clear();
         _messageCredit.clear();
         _seededMessages.clear();
+        _seededBytes.clear();
         _log.warning(
           'No per-stream grant within $grace; treating the peer as not doing '
           'flow control and dropping the initial send window',
@@ -463,7 +475,10 @@ final class RpcFlowController {
         'clamping. A peer can slow this side down, never speed it up',
       );
     }
-    final next = (_sendCredit[streamId] ?? 0) + granted;
+    final held = _sendCredit[streamId] ?? 0;
+    final next = _seededBytes.remove(streamId)
+        ? held - (_policy.initialSendWindowBytes ?? 0) + granted
+        : held + granted;
     _sendCredit[streamId] = next > window ? window : next;
   }
 
@@ -525,7 +540,7 @@ final class RpcFlowController {
   /// too.
   void credit(int streamId, int bytes, {int messages = 0}) {
     if (bytes > 0) _creditConnection(bytes);
-    final window = _window;
+    final window = _policy.advertisedWindowBytes;
     if (window == null) return;
     if (!_canTrack(_pendingGrant, streamId)) return;
     final pending = (_pendingGrant[streamId] ?? 0) + bytes;
@@ -572,7 +587,7 @@ final class RpcFlowController {
   /// sender receiving no grant is still bounded by its own
   /// `initialSendWindowBytes`.
   void advertiseStream(int streamId) {
-    final window = _window;
+    final window = _policy.advertisedWindowBytes;
     if (window == null) return;
     if (_advertised.length >= _trackCap) return;
     if (!_advertised.add(streamId)) return;
@@ -638,7 +653,11 @@ final class RpcFlowController {
             '$window; clamping',
           );
         }
-        final next = (_connCredit ?? 0) + granted;
+        final held = _connCredit ?? 0;
+        final next = _connSeeded
+            ? held - (_policy.initialSendWindowBytes ?? 0) + granted
+            : held + granted;
+        _connSeeded = false;
         _connCredit = next > window ? window : next;
         wakeAll();
       }
@@ -714,6 +733,7 @@ final class RpcFlowController {
     _sendCredit.remove(streamId);
     _messageCredit.remove(streamId);
     _seededMessages.remove(streamId);
+    _seededBytes.remove(streamId);
     _pendingGrant.remove(streamId);
     _pendingMessageGrant.remove(streamId);
     _advertised.remove(streamId);
@@ -735,12 +755,14 @@ final class RpcFlowController {
     _sendCredit.clear();
     _messageCredit.clear();
     _seededMessages.clear();
+    _seededBytes.clear();
     _pendingGrant.clear();
     _pendingMessageGrant.clear();
     _advertised.clear();
     _deferred.clear();
     _owedConn.clear();
     _connCredit = null;
+    _connSeeded = false;
     _connPending = 0;
   }
 }

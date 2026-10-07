@@ -54,7 +54,7 @@ final restored = RpcSecurityPolicy.fromMap(policy.toMap());
 | Field | Default | Bounds |
 | --- | --- | --- |
 | `maxMessageLengthBytes` | 16 MiB | One decoded message, in message bytes. The wire frame may be 5 bytes larger (`maxFramedMessageBytes`). Also caps decompressed size. |
-| `maxBufferedBytes` | `null` -> `maxMessageLengthBytes + 5` (`effectiveMaxBufferedBytes`) | Un-consumed bytes queued for one stream, and frame reassembly. |
+| `maxBufferedBytes` | `null` -> derived | Un-consumed bytes queued for one stream, and frame reassembly. Derived: reassembly uses `maxMessageLengthBytes + 5` (`effectiveMaxBufferedBytes`); the stream queue uses the window plus one message plus `maxMetadataBytes` (`effectiveStreamBufferBytes`), or `maxMessageLengthBytes + 5` with the window off. Set explicitly below that, the advertised window shrinks to fit (`advertisedWindowBytes`, at least 1) and the stream slows down instead of failing. |
 | `maxMessagesPerChunk` | 1024 | Messages decoded out of one incoming chunk. |
 | `maxBufferedMessagesPerStream` | 8192 | Un-consumed MESSAGES (payloads and direct objects) queued for one stream. The only queue bound that sees zero-copy payloads. With `flowControlWindowBytes` on it is also granted to the peer as message credit, so small messages travel at most this many per round trip. |
 | `maxActiveStreams` | 4096 | Live streams per connection, both directions. Bounds stream state, not running work. |

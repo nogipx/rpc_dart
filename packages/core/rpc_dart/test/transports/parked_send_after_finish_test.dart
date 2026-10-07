@@ -41,14 +41,14 @@ Uint8List _frame(int n) => RpcMessageFrame.encode(Uint8List(n));
 /// Spends the window and leaves one send parked on it.
 ///
 /// The gate admits on `credit > 0` rather than on whether the message FITS, so
-/// each of the first three is let through and drives the balance negative. The
-/// one after that is the one that waits.
+/// the second is let through and drives the balance negative. The one after
+/// that is the one that waits. The peer's first grant replaces the initial
+/// window rather than adding to it, so it does not change that count.
 Future<Object?> _parkOne(
   RpcChannelTransport client,
   int streamId, {
   required Future<void> Function() thenDo,
 }) async {
-  await client.sendMessage(streamId, _frame(4000));
   await client.sendMessage(streamId, _frame(4000));
   await client.sendMessage(streamId, _frame(4000));
 
@@ -114,7 +114,7 @@ void main() {
       );
       expect(
         delivered,
-        hasLength(3),
+        hasLength(2),
         reason: 'only what was sent before the end may be delivered',
       );
 
@@ -150,7 +150,7 @@ void main() {
         thenDo: () async {
           unawaited(client.finishSending(streamId));
           // A consumer arrives and drains, which is what returns credit.
-          await view.take(3).toList();
+          await view.take(2).toList();
           await Future<void>.delayed(const Duration(milliseconds: 200));
         },
       );
@@ -162,9 +162,9 @@ void main() {
       );
       expect(
         endSeenAfter,
-        4,
+        3,
         reason:
-            'the end-of-stream must come after all four payloads, not after '
+            'the end-of-stream must come after all three payloads, not after '
             '$endSeenAfter of them',
       );
 

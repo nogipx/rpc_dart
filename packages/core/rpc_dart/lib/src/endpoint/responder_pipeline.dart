@@ -139,7 +139,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final transport = this.transport;
     final policy = _policyOfTransport(transport);
     return _respBudgetCache = RpcResponderBufferBudget(
-      streamBytes: policy.effectiveMaxBufferedBytes,
+      streamBytes: policy.effectiveStreamBufferBytes,
       streamEvents: policy.maxBufferedMessagesPerStream,
       connectionBytes: policy.flowControlConnectionWindowBytes,
       shared: transport is IRpcConnectionBufferTotal

@@ -430,6 +430,43 @@ final class RpcSecurityPolicy {
       maxBufferedBytes ??
       (maxMessageLengthBytes + RpcConstants.messagePrefixSize);
 
+  /// Un-consumed bytes one stream's queue may hold: [maxBufferedBytes] when
+  /// set, otherwise enough for what flow control lets a peer send.
+  ///
+  /// A peer obeying [flowControlWindowBytes] can have the whole window in
+  /// flight, plus the one message admitted on the last byte of credit, plus
+  /// the metadata that rides outside the window. Derived from the message
+  /// size alone it would fail such a peer whenever [maxMessageLengthBytes] is
+  /// below the window. With the window off it is [effectiveMaxBufferedBytes].
+  ///
+  /// When [maxBufferedBytes] is set below that, the receiver advertises a
+  /// window that fits it instead (see [advertisedWindowBytes]), so the stream
+  /// slows down rather than failing.
+  int get effectiveStreamBufferBytes {
+    final explicit = maxBufferedBytes;
+    if (explicit != null) return explicit;
+    final window = flowControlWindowBytes;
+    final message = maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+    if (window == null) return message;
+    return window + message + maxMetadataBytes;
+  }
+
+  /// The per-stream window this side advertises: [flowControlWindowBytes],
+  /// or less when [effectiveStreamBufferBytes] could not hold that much plus
+  /// one message and its metadata. Never below 1, which still admits one
+  /// message at a time. Null when the window is off.
+  int? get advertisedWindowBytes {
+    final window = flowControlWindowBytes;
+    if (window == null) return null;
+    final room =
+        effectiveStreamBufferBytes -
+        maxMessageLengthBytes -
+        RpcConstants.messagePrefixSize -
+        maxMetadataBytes;
+    if (room >= window) return window;
+    return room < 1 ? 1 : room;
+  }
+
   /// The largest a single gRPC FRAME may be: one message plus its 5-byte prefix.
   ///
   /// **Bound WIRE bytes by this, never by [maxMessageLengthBytes] directly.**
