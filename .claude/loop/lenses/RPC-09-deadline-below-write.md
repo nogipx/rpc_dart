@@ -3,7 +3,7 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434]
+applied: [210, 221, 244, 322, 434, 693]
 status: swept here (round 434, 7ee3e602)
 ---
 

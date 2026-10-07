@@ -1,6 +1,6 @@
 ---
-status: open (round 563 bounded the direct paths; the proxy socket remains)
-round: 563
+status: closed (round 693)
+round: 693
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: none — static read, nothing run
@@ -65,6 +65,15 @@ Still open: the proxy path's own `Socket.connect` inside `_connectH2ViaProxy`, w
 argument threaded through. The reconnect path inherits the bound by construction (`createConnection` is
 also the `connectionFactory`) but was not measured. And 30 s matches the sibling rather than any
 measurement of what a slow link needs.
+
+## Outcome (round 693)
+
+FIXED. The proxy path now takes `connectTimeout` for reaching the proxy and
+for the TLS handshake through the tunnel. Witnessed on the handshake: a silent
+tunnel was still pending at 6 s, now fails in 1027 ms with a 1 s bound. The
+handshake was not reachable before round 692, which found that every TLS
+handshake through a proxy died at once.
+`../rounds/693-the-proxy-path-is-bounded.md`.
 
 ## Owner decision
 

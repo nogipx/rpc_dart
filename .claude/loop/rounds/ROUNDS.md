@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[693](693-the-proxy-path-is-bounded.md)** FIXED, http2 — **`connectTimeout` did not bound the proxy path**: a TLS handshake through a silent tunnel was pending at 6 s. Reaching the proxy and the tunnelled handshake are now bounded (1027 ms with 1 s). Closes B-182
 - **[692](692-tls-through-a-proxy-reaches-the-server.md)** FIXED, http2 — **`secureConnect` through a CONNECT proxy could never work**: the socket subscription was cancelled before `SecureSocket.secure`, closing its read side, so every handshake died "terminated during handshake". Paused instead; the proxied handshake now gets as far as the direct one. Found during B-182
 - **[691](691-keepalive-death-is-unavailable.md)** CLEAN, http2 — **keepalive death status and a late probe after reconnect**: measured through a muting relay, a call after keepalive death is UNAVAILABLE and a late probe leaves the new connection working. Closes B-179
 - **[690](690-goaway-through-a-proxy.md)** FIXED, http2 — **GOAWAY was invisible through a CONNECT proxy**: a draining connection gave RESOURCE_EXHAUSTED and `health()` healthy, because the proxy path never got the drain signal. Now UNAVAILABLE and not healthy. Closes B-177

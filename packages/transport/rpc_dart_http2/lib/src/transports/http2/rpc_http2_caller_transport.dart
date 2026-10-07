@@ -314,6 +314,7 @@ class RpcHttp2CallerTransport
           targetPort: port,
           secure: true,
           handshakeTimeout: proxyHandshakeTimeout,
+          connectTimeout: connectTimeout,
           policy: policy,
           logger: logger,
           drainSignal: drainSignal,
@@ -439,6 +440,7 @@ class RpcHttp2CallerTransport
           targetPort: port,
           secure: false,
           handshakeTimeout: proxyHandshakeTimeout,
+          connectTimeout: connectTimeout,
           policy: policy,
           logger: logger,
           drainSignal: drainSignal,
@@ -571,13 +573,22 @@ class RpcHttp2CallerTransport
     required bool secure,
     required RpcSecurityPolicy policy,
     Duration handshakeTimeout = _proxyHandshakeTimeout,
+    Duration? connectTimeout,
     LogScope? logger,
     _DrainSignal? drainSignal,
   }) async {
     final proxyHost = proxyUri.host;
     final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
 
-    final rawSocket = await Socket.connect(proxyHost, proxyPort);
+    // `connectTimeout` bounds the two phases here that are not the CONNECT
+    // exchange (that one has `handshakeTimeout`): reaching the proxy, and the
+    // TLS handshake through the tunnel. See the direct paths for why
+    // `timeout:` rather than an outer `.timeout()` on the socket connect.
+    final rawSocket = await Socket.connect(
+      proxyHost,
+      proxyPort,
+      timeout: connectTimeout,
+    );
     // This is the path that already did it, and the reason the other two
     // stood out. Routed through the shared helper so a setOption that throws
     // on a socket the proxy has already reset cannot take the isolate out.
@@ -700,11 +711,29 @@ class RpcHttp2CallerTransport
       // secureConnect through a proxy hung forever AFTER a successful CONNECT
       // handshake -- TLS was never even attempted.
       unawaited(forwardCtrl.close());
-      final secureSocket = await SecureSocket.secure(
+      // SecureSocket.secure takes no timeout, so the bound is an outer one --
+      // and it destroys the socket, since abandoning the await alone would
+      // leave the handshake holding it.
+      final handshake = SecureSocket.secure(
         rawSocket,
         host: targetHost,
         supportedProtocols: ['h2'],
       );
+      final SecureSocket secureSocket;
+      if (connectTimeout == null) {
+        secureSocket = await handshake;
+      } else {
+        secureSocket = await handshake.timeout(
+          connectTimeout,
+          onTimeout: () {
+            rawSocket.destroy();
+            throw SocketException(
+              'TLS handshake through the proxy did not finish within '
+              '$connectTimeout',
+            );
+          },
+        );
+      }
       return _guardedConnection(
         incoming: secureSocket,
         outgoing: secureSocket,
