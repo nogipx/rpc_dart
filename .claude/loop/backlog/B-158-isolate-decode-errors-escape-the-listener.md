@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 698) — cleanup commit by owner decision
+round: 698
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart, packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart]
 probe: none — static read, nothing run
@@ -33,6 +33,14 @@ Post a malformed message to the worker port.
 
 Catch and fail the stream.
 
+## Outcome (cleanup, after round 698)
+
+Both handlers (VM and web) now dispatch inside a try and put a decode failure
+on the incoming stream as an error, where the transport fails the connection,
+instead of throwing into the zone. `fromMap` reads a non-string `methodPath`
+as absent instead of throwing. Not witnessed: every sender of these frames is
+this library's own code, so no malformed frame was produced.
+
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are **done as cleanup commits, without rounds**.

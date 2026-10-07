@@ -84,7 +84,9 @@ class BridgeMessage {
       endStream: raw['endStream'] == true,
       metadata: metadata is Map ? metadata.cast<String, Object?>() : null,
       payload: raw['payload'],
-      methodPath: raw['methodPath'] as String?,
+      methodPath: raw['methodPath'] is String
+          ? raw['methodPath'] as String
+          : null,
     );
   }
 }
@@ -201,7 +203,17 @@ class WebMultiplexedChannel implements IRpcMultiplexedChannel {
   void _handleMessage(BridgeMessage message) {
     if (_closed || _incomingCtl.isClosed) return;
     if (message.streamId < 0) return;
+    // A frame that does not decode is reported on the stream, where the
+    // transport fails the connection. Thrown here, in the data callback, it
+    // was an uncaught zone error: on a worker, the end of the worker.
+    try {
+      _dispatch(message);
+    } catch (error, stackTrace) {
+      if (!_incomingCtl.isClosed) _incomingCtl.addError(error, stackTrace);
+    }
+  }
 
+  void _dispatch(BridgeMessage message) {
     switch (message.type) {
       case BridgeType.init:
       case BridgeType.ready:

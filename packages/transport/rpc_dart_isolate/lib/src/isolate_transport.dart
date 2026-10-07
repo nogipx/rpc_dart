@@ -183,7 +183,18 @@ class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
   void _handleMessage(dynamic message) {
     if (message is! _IsolateMessage || _closed || _incomingCtl.isClosed) return;
     if (message.streamId < 0) return;
+    // A frame that does not decode is reported on the stream, where the
+    // transport fails the connection. Thrown here, in the data callback, it
+    // was an uncaught zone error -- fatal to an isolate spawned with
+    // errorsAreFatal.
+    try {
+      _dispatch(message);
+    } catch (error, stackTrace) {
+      if (!_incomingCtl.isClosed) _incomingCtl.addError(error, stackTrace);
+    }
+  }
 
+  void _dispatch(_IsolateMessage message) {
     switch (message.type) {
       case _IsolateMessageType.metadata:
         // Stream 0 is NOT filtered here, unlike the payload cases below.
