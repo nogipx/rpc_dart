@@ -216,7 +216,7 @@ final class RpcResponderStreamState {
     final bytes = message.bufferedBytes.clamp(0, _sinkHeldBytes);
     _sinkHeldBytes -= bytes;
     _budget?.give(bytes);
-    if (_sinkHeldEvents > 0) _sinkHeldEvents--;
+    if (_carriesMessage(message) && _sinkHeldEvents > 0) _sinkHeldEvents--;
   }
 
   /// Returns everything this state still holds to the connection budget.
@@ -265,7 +265,8 @@ final class RpcResponderStreamState {
     }
     final budget = _budget!;
     final bytes = message.bufferedBytes;
-    if (!budget.take(_sinkHeldBytes, _sinkHeldEvents, bytes)) {
+    final carries = _carriesMessage(message);
+    if (!budget.take(_sinkHeldBytes, carries ? _sinkHeldEvents : 0, bytes)) {
       _sinkOverflowed = true;
       droppedRequests++;
       sink.addError(
@@ -279,8 +280,10 @@ final class RpcResponderStreamState {
       return;
     }
     _sinkHeldBytes += bytes;
-    _sinkHeldEvents++;
-    if (message.payload != null || message.isDirect) deliveredRequests++;
+    if (carries) {
+      _sinkHeldEvents++;
+      deliveredRequests++;
+    }
     // Waits when the handler is not reading: not listening yet, or paused in
     // the body of its `await for`.
     sink.add(
@@ -292,6 +295,12 @@ final class RpcResponderStreamState {
       unawaited(sink.close());
     }
   }
+
+  /// Whether [message] counts against the depth bound: the sender's message
+  /// credit counts payloads and direct objects, and a bare metadata frame is
+  /// bounded by its bytes alone.
+  static bool _carriesMessage(RpcTransportMessage message) =>
+      message.payload != null || message.isDirect;
 
   /// Signals the peer's half-close to the bound responder.
   ///

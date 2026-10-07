@@ -71,14 +71,16 @@ final class RpcStreamBufferLedger {
   final Map<int, int> _events = {};
   final Set<int> _failed = {};
 
-  /// Charges [bytes] and one message against [streamId].
+  /// Charges [bytes] and [events] messages against [streamId].
   ///
-  /// Both dimensions, always: a codec payload has bytes AND is one message, and
-  /// whichever ceiling it reaches first is the one that binds.
-  RpcBufferAdmission admit(int streamId, int bytes) {
+  /// Both dimensions: a codec payload has bytes AND is one message, and
+  /// whichever ceiling it reaches first is the one that binds. A bare metadata
+  /// frame is passed as no message, because the sender's message credit does
+  /// not count it either; its bytes still bound it.
+  RpcBufferAdmission admit(int streamId, int bytes, {int events = 1}) {
     if (_failed.contains(streamId)) return RpcBufferAdmission.refused;
     final next = (_held[streamId] ?? 0) + bytes;
-    final nextEvents = (_events[streamId] ?? 0) + 1;
+    final nextEvents = (_events[streamId] ?? 0) + events;
     if (next > limitBytes || nextEvents > limitEvents) {
       _failed.add(streamId);
       return RpcBufferAdmission.overflowed;
@@ -89,7 +91,7 @@ final class RpcStreamBufferLedger {
       return RpcBufferAdmission.overflowedConnection;
     }
     _held[streamId] = next;
-    _events[streamId] = nextEvents;
+    if (nextEvents > 0) _events[streamId] = nextEvents;
     _total += bytes;
     return RpcBufferAdmission.admitted;
   }
@@ -108,18 +110,18 @@ final class RpcStreamBufferLedger {
     _total -= bytes;
   }
 
-  /// Drops [bytes] and one message of [streamId]'s charge as its consumer takes
-  /// them.
+  /// Drops [bytes] and [events] messages of [streamId]'s charge as its
+  /// consumer takes them; [events] matches what [admit] was given.
   ///
   /// The EVENT count is released even for a message that carried no bytes, or a
   /// zero-copy stream would be admitted `limitEvents` times and never again.
-  void release(int streamId, int bytes) {
-    final events = _events[streamId];
-    if (events != null) {
-      if (events <= 1) {
+  void release(int streamId, int bytes, {int events = 1}) {
+    final queued = _events[streamId];
+    if (queued != null && events > 0) {
+      if (queued <= events) {
         _events.remove(streamId);
       } else {
-        _events[streamId] = events - 1;
+        _events[streamId] = queued - events;
       }
     }
     final held = _held[streamId];

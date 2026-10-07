@@ -56,7 +56,7 @@ final restored = RpcSecurityPolicy.fromMap(policy.toMap());
 | `maxMessageLengthBytes` | 16 MiB | One decoded message, in message bytes. The wire frame may be 5 bytes larger (`maxFramedMessageBytes`). Also caps decompressed size. |
 | `maxBufferedBytes` | `null` -> `maxMessageLengthBytes + 5` (`effectiveMaxBufferedBytes`) | Un-consumed bytes queued for one stream, and frame reassembly. |
 | `maxMessagesPerChunk` | 1024 | Messages decoded out of one incoming chunk. |
-| `maxBufferedMessagesPerStream` | 1024 | Un-consumed MESSAGES queued for one stream. The only queue bound that sees zero-copy payloads. |
+| `maxBufferedMessagesPerStream` | 8192 | Un-consumed MESSAGES (payloads and direct objects) queued for one stream. The only queue bound that sees zero-copy payloads. With `flowControlWindowBytes` on it is also granted to the peer as message credit, so small messages travel at most this many per round trip. |
 | `maxActiveStreams` | 4096 | Live streams per connection, both directions. Bounds stream state, not running work. |
 | `maxConcurrentHandlers` | `null` (no limit) | Handlers running at once per connection. Slot held until the handler (and its middleware/interceptors, and for streams the response stream) finishes. |
 | `maxMetadataBytes` | 64 KiB | Total header name + value text of one inbound metadata block. |

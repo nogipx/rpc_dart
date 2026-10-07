@@ -73,11 +73,31 @@ final class RpcFlowController {
   /// granted, or once the initial send window has been seeded for it.
   final Map<int, int> _sendCredit = {};
 
+  /// Send credit per stream, in messages, mirroring [_sendCredit].
+  ///
+  /// The peer's [RpcSecurityPolicy.maxBufferedMessagesPerStream] is a bound the
+  /// byte window cannot express, so it is granted alongside it. Null for a
+  /// stream means unbounded there: no grant yet and no seed.
+  final Map<int, int> _messageCredit = {};
+
+  /// Streams whose message credit is still the seed, awaiting the peer's
+  /// first grant.
+  ///
+  /// That first grant is the peer's whole window, not an increment: it is
+  /// sent on first sight of the stream, before anything is consumed. Added to
+  /// the seed it would double the depth the peer has room for, and the peer
+  /// fails the stream. So it REPLACES the seed, less what was already sent
+  /// under it.
+  final Set<int> _seededMessages = {};
+
   /// Senders parked waiting for credit, per stream.
   final Map<int, List<Completer<void>>> _sendWaiters = {};
 
   /// Bytes consumed locally but not yet granted back, per stream.
   final Map<int, int> _pendingGrant = {};
+
+  /// Messages consumed locally but not yet granted back, per stream.
+  final Map<int, int> _pendingMessageGrant = {};
 
   /// Streams this side has already advertised an initial window for.
   final Set<int> _advertised = {};
@@ -113,11 +133,22 @@ final class RpcFlowController {
   bool _connAssumedLegacy = false;
   bool _streamAssumedLegacy = false;
 
+  /// Set once the peer has granted per stream WITHOUT message credit: it
+  /// paces bytes and knows nothing of depth, so seeded message credit would
+  /// only ever run out. Cleared by a grant that carries it.
+  bool _messagesAssumedLegacy = false;
+
   Timer? _graceTimer;
   bool _closed = false;
 
   int? get _window => _policy.flowControlWindowBytes;
   int? get _connWindow => _policy.flowControlConnectionWindowBytes;
+
+  /// The message window, on whenever the per-stream byte window is: it rides
+  /// on the per-stream grant. It is the depth the receiving transport admits,
+  /// so a sender holding to it never makes that bound fire.
+  int? get _messageWindow =>
+      _window == null ? null : _policy.maxBufferedMessagesPerStream;
 
   /// Whether flow control is on at EITHER level.
   ///
@@ -140,13 +171,19 @@ final class RpcFlowController {
   int? creditFor(int streamId) =>
       _window == null ? null : _sendCredit[streamId];
 
+  /// Send credit left on [streamId] in messages, or null when unbounded there.
+  int? messageCreditFor(int streamId) =>
+      _messageWindow == null ? null : _messageCredit[streamId];
+
   /// Sizes of the per-stream maps, for diagnostics and tests.
   ///
   /// Exposed because these are keyed by PEER-CHOSEN stream ids, so their growth
   /// is the observable symptom of a peer naming ids that never become streams.
   Map<String, int> get stateSizes => {
     'sendCredit': _sendCredit.length,
+    'messageCredit': _messageCredit.length,
     'pendingGrant': _pendingGrant.length,
+    'pendingMessageGrant': _pendingMessageGrant.length,
     'advertised': _advertised.length,
     'waiters': _sendWaiters.length,
     'deferred': _deferred.length,
@@ -181,12 +218,16 @@ final class RpcFlowController {
 
   // ── Sending ────────────────────────────────────────────────────────────────
 
-  /// Consumes [bytes] of credit without suspending.
+  /// Consumes [bytes] and one message of credit without suspending.
   ///
   /// Returns false only when the sender must park, so the hot path stays
   /// synchronous: no window configured, or a peer that has never granted (and
   /// so is not participating), both take credit immediately.
-  bool tryConsume(int streamId, int bytes) {
+  ///
+  /// A [direct] object takes message credit only. It crosses no wire, so no
+  /// byte window applies to it, but it still occupies a place in the peer's
+  /// queue.
+  bool tryConsume(int streamId, int bytes, {bool direct = false}) {
     // Both windows must admit the message, and NEITHER is charged unless both
     // do: charging one and parking on the other leaks credit on every blocked
     // send.
@@ -204,32 +245,58 @@ final class RpcFlowController {
           _canTrack(_sendCredit, streamId)) {
         _sendCredit[streamId] = initial;
       }
+      // Seeded at THIS side's own depth, the one number known before the
+      // peer's grant arrives. A seed above the peer's depth can still overrun
+      // it in that first round trip, as an initial window above the peer's
+      // byte window can.
+      final messageWindow = _messageWindow;
+      if (messageWindow != null &&
+          !_streamAssumedLegacy &&
+          !_messagesAssumedLegacy &&
+          _messageCredit[streamId] == null &&
+          _canTrack(_messageCredit, streamId)) {
+        _messageCredit[streamId] = messageWindow;
+        _seededMessages.add(streamId);
+      }
       if (_connWindow != null && !_connAssumedLegacy && _connCredit == null) {
         _connCredit = initial;
       }
     }
 
-    final streamCredit = _window == null ? null : _sendCredit[streamId];
-    final connCredit = _connWindow == null ? null : _connCredit;
+    final streamCredit = _window == null || direct
+        ? null
+        : _sendCredit[streamId];
+    final connCredit = _connWindow == null || direct ? null : _connCredit;
+    final messageCredit = _messageWindow == null
+        ? null
+        : _messageCredit[streamId];
     // Null means the peer has not advertised that level: stay unbounded there.
     if (streamCredit != null && streamCredit <= 0) return false;
     if (connCredit != null && connCredit <= 0) return false;
+    if (messageCredit != null && messageCredit <= 0) return false;
     if (streamCredit != null) _sendCredit[streamId] = streamCredit - bytes;
     if (connCredit != null) _connCredit = connCredit - bytes;
+    if (messageCredit != null) _messageCredit[streamId] = messageCredit - 1;
     return true;
   }
 
-  /// Parks the caller until [bytes] of send credit are available.
-  Future<void> awaitCredit(int streamId, int bytes) async {
+  /// Parks the caller until [bytes] and one message of send credit are
+  /// available; see [tryConsume] for [direct].
+  Future<void> awaitCredit(
+    int streamId,
+    int bytes, {
+    bool direct = false,
+  }) async {
     var parks = 0;
     while (!_closed) {
-      if (tryConsume(streamId, bytes)) {
+      if (tryConsume(streamId, bytes, direct: direct)) {
         // Only the sends that actually waited are reported, and only at
         // internal: the unparked path is the hot one and must stay silent.
         if (parks > 0 && _log.isInternal) {
           _log.internal(
             'Stream $streamId sent $bytes bytes after $parks park(s); '
-            'stream credit ${creditFor(streamId)}, pool $_connCredit',
+            'stream credit ${creditFor(streamId)}, messages '
+            '${messageCreditFor(streamId)}, pool $_connCredit',
           );
         }
         return;
@@ -237,7 +304,8 @@ final class RpcFlowController {
       if (parks == 0 && _log.isInternal) {
         _log.internal(
           'Stream $streamId parked on $bytes bytes; stream credit '
-          '${creditFor(streamId)}, pool $_connCredit',
+          '${creditFor(streamId)}, messages ${messageCreditFor(streamId)}, '
+          'pool $_connCredit',
         );
       }
       parks++;
@@ -283,6 +351,8 @@ final class RpcFlowController {
       if (!_streamPeerGranted) {
         _streamAssumedLegacy = true;
         _sendCredit.clear();
+        _messageCredit.clear();
+        _seededMessages.clear();
         _log.warning(
           'No per-stream grant within $grace; treating the peer as not doing '
           'flow control and dropping the initial send window',
@@ -349,7 +419,7 @@ final class RpcFlowController {
   /// bound is clamped: credit legitimately goes slightly negative, since a
   /// message is admitted whenever any credit remains, and flooring at zero would
   /// hand that overdraft back as free credit.
-  void _onGrant(int streamId, int bytes) {
+  void _onGrant(int streamId, int bytes, int? messages) {
     final window = _window;
     if (window == null) return;
     if (!_canTrack(_sendCredit, streamId)) return;
@@ -357,7 +427,9 @@ final class RpcFlowController {
     // [forget] drops the entry when the call ends, and a late grant for that id
     // is ordinary rather than hostile. Put back, the entry is never removed
     // again: one per abandoned call, linear.
-    if (!_sendCredit.containsKey(streamId) && !_isStreamLive(streamId)) {
+    if (!_sendCredit.containsKey(streamId) &&
+        !_messageCredit.containsKey(streamId) &&
+        !_isStreamLive(streamId)) {
       if (_log.isInternal) {
         _log.internal(
           'Grant of $bytes for stream $streamId ignored: the call has ended',
@@ -365,6 +437,24 @@ final class RpcFlowController {
       }
       return;
     }
+    if (messages != null && messages > 0) _onMessageGrant(streamId, messages);
+    if (bytes > 0) _onByteGrant(streamId, bytes, window);
+    _wake(streamId);
+  }
+
+  /// Adds [messages] of credit, clamped like bytes at this side's own depth.
+  void _onMessageGrant(int streamId, int messages) {
+    final window = _messageWindow;
+    if (window == null || !_canTrack(_messageCredit, streamId)) return;
+    final granted = messages > window ? window : messages;
+    final held = _messageCredit[streamId] ?? 0;
+    final next = _seededMessages.remove(streamId)
+        ? held - window + granted
+        : held + granted;
+    _messageCredit[streamId] = next > window ? window : next;
+  }
+
+  void _onByteGrant(int streamId, int bytes, int window) {
     final granted = bytes > window ? window : bytes;
     if (granted != bytes && !_clampWarned) {
       _clampWarned = true;
@@ -375,7 +465,6 @@ final class RpcFlowController {
     }
     final next = (_sendCredit[streamId] ?? 0) + granted;
     _sendCredit[streamId] = next > window ? window : next;
-    _wake(streamId);
   }
 
   // ── Receiving ──────────────────────────────────────────────────────────────
@@ -384,10 +473,16 @@ final class RpcFlowController {
   void onConsumed(int streamId, RpcTransportMessage message) {
     if (!enabled) return;
     final bytes = message.payload?.length ?? 0;
-    if (bytes == 0) return;
+    final messages = carriesMessage(message) ? 1 : 0;
+    if (bytes == 0 && messages == 0) return;
     settleOwed(streamId, bytes);
-    credit(streamId, bytes);
+    credit(streamId, bytes, messages: messages);
   }
+
+  /// Whether [message] takes a message of credit: a payload, empty or not, or
+  /// a direct object. A bare metadata frame takes none, on either side.
+  static bool carriesMessage(RpcTransportMessage message) =>
+      message.payload != null || message.isDirect;
 
   /// Records [bytes] as outstanding against the connection pool: they have been
   /// routed to a consumer that credits on consumption, not on arrival.
@@ -420,23 +515,31 @@ final class RpcFlowController {
     if (owed != null && owed > 0) _creditConnection(owed);
   }
 
-  /// Accumulates [bytes] of returned credit and grants at half the window.
+  /// Accumulates [bytes] and [messages] of returned credit and grants once
+  /// either reaches half its window.
   ///
   /// Consumption frees BOTH levels: the message left the connection pool as
   /// well as its own stream. Batched, so a steady stream costs one extra frame
-  /// per half-window rather than one per message.
-  void credit(int streamId, int bytes) {
-    _creditConnection(bytes);
+  /// per half-window rather than one per message. One frame carries both
+  /// dimensions, so whichever triggers it returns the other's pending credit
+  /// too.
+  void credit(int streamId, int bytes, {int messages = 0}) {
+    if (bytes > 0) _creditConnection(bytes);
     final window = _window;
     if (window == null) return;
     if (!_canTrack(_pendingGrant, streamId)) return;
     final pending = (_pendingGrant[streamId] ?? 0) + bytes;
-    if (pending < (window ~/ 2).clamp(1, window)) {
+    final pendingMessages = (_pendingMessageGrant[streamId] ?? 0) + messages;
+    final messageWindow = _messageWindow!;
+    if (pending < (window ~/ 2).clamp(1, window) &&
+        pendingMessages < (messageWindow ~/ 2).clamp(1, messageWindow)) {
       _pendingGrant[streamId] = pending;
+      _pendingMessageGrant[streamId] = pendingMessages;
       return;
     }
     _pendingGrant[streamId] = 0;
-    unawaited(_sendStreamGrant(streamId, pending));
+    _pendingMessageGrant[streamId] = 0;
+    unawaited(_sendStreamGrant(streamId, pending, pendingMessages));
   }
 
   void _creditConnection(int bytes) {
@@ -473,15 +576,18 @@ final class RpcFlowController {
     if (window == null) return;
     if (_advertised.length >= _trackCap) return;
     if (!_advertised.add(streamId)) return;
-    unawaited(_sendStreamGrant(streamId, window));
+    unawaited(_sendStreamGrant(streamId, window, _messageWindow!));
   }
 
-  Future<void> _sendStreamGrant(int streamId, int bytes) async {
+  Future<void> _sendStreamGrant(int streamId, int bytes, int messages) async {
     if (_closed) return;
     try {
       await _send(
         streamId,
-        RpcMetadata([RpcHeader(RpcHeaders.xWindowUpdate, bytes.toString())]),
+        RpcMetadata([
+          RpcHeader(RpcHeaders.xWindowUpdate, bytes.toString()),
+          RpcHeader(RpcHeaders.xWindowUpdateMessages, messages.toString()),
+        ]),
       );
     } catch (_) {
       // A lost grant only matters if the connection is still alive, and a throw
@@ -545,9 +651,28 @@ final class RpcFlowController {
     // the peer participates, exactly as at the connection level above.
     if (granted != null) {
       _notePeerGranted(connection: false);
-      if (granted > 0) _onGrant(message.streamId, granted);
+      final messagesRaw = metadata.getHeaderValue(
+        RpcHeaders.xWindowUpdateMessages,
+      );
+      final messages = messagesRaw == null ? null : int.tryParse(messagesRaw);
+      if (messagesRaw == null) {
+        _noteMessagesLegacy();
+      } else {
+        _messagesAssumedLegacy = false;
+      }
+      _onGrant(message.streamId, granted, messages);
     }
     return true;
+  }
+
+  /// A byte grant with no message credit: the peer paces bytes only, so what
+  /// was seeded for depth is dropped and the senders parked on it released.
+  void _noteMessagesLegacy() {
+    if (_messagesAssumedLegacy) return;
+    _messagesAssumedLegacy = true;
+    _messageCredit.clear();
+    _seededMessages.clear();
+    wakeAll();
   }
 
   // ── Deferred metering (IRpcFlowControlled) ─────────────────────────────────
@@ -567,11 +692,11 @@ final class RpcFlowController {
   /// this is the only record that the call existed at all.
   bool isAdvertised(int streamId) => _advertised.contains(streamId);
 
-  /// Reports [bytes] consumed by that higher layer.
+  /// Reports one message of [bytes] consumed by that higher layer.
   void returnCredit(int streamId, int bytes) {
-    if (!enabled || bytes <= 0) return;
-    settleOwed(streamId, bytes);
-    credit(streamId, bytes);
+    if (!enabled) return;
+    if (bytes > 0) settleOwed(streamId, bytes);
+    credit(streamId, bytes > 0 ? bytes : 0, messages: 1);
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -587,7 +712,10 @@ final class RpcFlowController {
     // and so never runs its onCancel, owing the pool forever.
     repayConnection(streamId);
     _sendCredit.remove(streamId);
+    _messageCredit.remove(streamId);
+    _seededMessages.remove(streamId);
     _pendingGrant.remove(streamId);
+    _pendingMessageGrant.remove(streamId);
     _advertised.remove(streamId);
     _deferred.remove(streamId);
     _wake(streamId);
@@ -605,7 +733,10 @@ final class RpcFlowController {
     _graceTimer = null;
     wakeAll();
     _sendCredit.clear();
+    _messageCredit.clear();
+    _seededMessages.clear();
     _pendingGrant.clear();
+    _pendingMessageGrant.clear();
     _advertised.clear();
     _deferred.clear();
     _owedConn.clear();

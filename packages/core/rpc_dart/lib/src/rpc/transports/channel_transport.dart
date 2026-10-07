@@ -355,7 +355,11 @@ class RpcChannelTransport
     StreamController<RpcTransportMessage> ctl,
   ) {
     final streamId = message.streamId;
-    final admission = _buffers.admit(streamId, message.bufferedBytes);
+    final admission = _buffers.admit(
+      streamId,
+      message.bufferedBytes,
+      events: RpcFlowController.carriesMessage(message) ? 1 : 0,
+    );
     switch (admission) {
       case RpcBufferAdmission.admitted:
         return true;
@@ -405,15 +409,23 @@ class RpcChannelTransport
   ) {
     if (!_fc.enabled) {
       return source.map((message) {
-        _buffers.release(streamId, message.bufferedBytes);
+        _release(streamId, message);
         return message;
       });
     }
     return source.map((message) {
-      _buffers.release(streamId, message.bufferedBytes);
+      _release(streamId, message);
       _fc.onConsumed(streamId, message);
       return message;
     });
+  }
+
+  void _release(int streamId, RpcTransportMessage message) {
+    _buffers.release(
+      streamId,
+      message.bufferedBytes,
+      events: RpcFlowController.carriesMessage(message) ? 1 : 0,
+    );
   }
 
   @override
@@ -507,25 +519,64 @@ class RpcChannelTransport
     bool endStream = false,
   }) async {
     _refuseIfClosed();
+    await _sendMetered(
+      RpcTransportMessage.withPayload(
+        payload: data,
+        isEndOfStream: endStream,
+        streamId: streamId,
+      ),
+      data.length,
+    );
+  }
+
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) async {
+    if (!_channel.supportsZeroCopy) {
+      throw UnsupportedError(
+        'RpcChannelTransport does not support zero-copy with this channel. '
+        'Use sendMessage() with serialization or a zero-copy channel.',
+      );
+    }
+    _refuseIfClosed();
+    // Metered by message count alone: a direct object crosses no wire, but it
+    // takes a place in the peer's queue like any other message.
+    await _sendMetered(
+      RpcTransportMessage.withDirectObject(
+        directPayload: object,
+        isEndOfStream: endStream,
+        streamId: streamId,
+      ),
+      0,
+      direct: true,
+    );
+  }
+
+  /// Sends [message] once the windows admit [bytes] and one message, parking
+  /// for credit when they do not.
+  Future<void> _sendMetered(
+    RpcTransportMessage message,
+    int bytes, {
+    bool direct = false,
+  }) async {
+    final streamId = message.streamId;
+    final endStream = message.isEndOfStream;
     // Fast path FIRST, synchronously: with flow control off, or with credit in
     // hand, this must not introduce an `await`. An unconditional await adds a
     // microtask hop to every send even when the window is disabled, which
     // reorders frames on a path that was synchronous.
-    if (!_fc.tryConsume(streamId, data.length)) {
+    if (!_fc.tryConsume(streamId, bytes, direct: direct)) {
       final parked = Completer<void>();
       _parkedSends[streamId] = parked;
       try {
-        await _fc.awaitCredit(streamId, data.length);
+        await _fc.awaitCredit(streamId, bytes, direct: direct);
         // Closed WHILE parked for credit — the reachable half, and the one that
         // loses a message on a live call rather than a dead one.
         _refuseIfClosed();
-        await _channel.send(
-          RpcTransportMessage.withPayload(
-            payload: data,
-            isEndOfStream: endStream,
-            streamId: streamId,
-          ),
-        );
+        await _channel.send(message);
         if (endStream) _markFinished(streamId);
       } finally {
         // Cleared whether the send went out or was refused: either way nothing
@@ -557,40 +608,7 @@ class RpcChannelTransport
         !await _claimEnding(streamId)) {
       return;
     }
-    await _channel.send(
-      RpcTransportMessage.withPayload(
-        payload: data,
-        isEndOfStream: endStream,
-        streamId: streamId,
-      ),
-    );
-    if (endStream) _markFinished(streamId);
-  }
-
-  @override
-  Future<void> sendDirectObject(
-    int streamId,
-    Object object, {
-    bool endStream = false,
-  }) async {
-    if (!_channel.supportsZeroCopy) {
-      throw UnsupportedError(
-        'RpcChannelTransport does not support zero-copy with this channel. '
-        'Use sendMessage() with serialization or a zero-copy channel.',
-      );
-    }
-    _refuseIfClosed();
-    // Ends a stream like the other three, and meters nothing at all: a direct
-    // object never takes credit, so without the claim it sails past a DATA
-    // frame still parked and the peer ends a frame short.
-    if (endStream && !await _claimEnding(streamId)) return;
-    await _channel.send(
-      RpcTransportMessage.withDirectObject(
-        directPayload: object,
-        isEndOfStream: endStream,
-        streamId: streamId,
-      ),
-    );
+    await _channel.send(message);
     if (endStream) _markFinished(streamId);
   }
 
@@ -627,7 +645,7 @@ class RpcChannelTransport
 
   /// Claims the right to end [streamId] and waits for anything parked on it.
   ///
-  /// Every ending goes through here EXCEPT the one in [sendMessage]'s parked
+  /// Every ending goes through here EXCEPT the one in [_sendMetered]'s parked
   /// branch, which IS the parked send: it would await its own completer, and
   /// that completes only after it returns.
   ///

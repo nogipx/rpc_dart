@@ -162,6 +162,9 @@ How backpressure works: credit-based flow control, configured on
 - Per-stream window (`flowControlWindowBytes`) and per-connection window
   (`flowControlConnectionWindowBytes`). Both count wire bytes. Credit is
   returned as the receiving application consumes messages, not when they arrive.
+- The per-stream grant also carries message credit, equal to the receiver's
+  `maxBufferedMessagesPerStream`, so a stream of many small messages parks the
+  sender at that depth instead of failing.
 - Pausing a caller-side subscription stops credit, so the remote sender's
   `send` waits. An `async*` handler is suspended at `yield`. Resuming releases it.
 - If a peer ignores flow control, a stream that holds more than

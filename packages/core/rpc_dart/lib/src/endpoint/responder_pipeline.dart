@@ -2233,8 +2233,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // the peer -- the same property the transport's own metering relies on.
     return controller.stream.map((message) {
       state.releaseRequest(message);
-      final bytes = message.payload?.length ?? 0;
-      if (bytes > 0) flowControlled?.returnFlowCredit(state.id, bytes);
+      if (message.payload != null || message.isDirect) {
+        flowControlled?.returnFlowCredit(
+          state.id,
+          message.payload?.length ?? 0,
+        );
+      }
       return message;
     });
   }

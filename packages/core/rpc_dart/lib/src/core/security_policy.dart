@@ -48,7 +48,8 @@ final class RpcSecurityPolicy {
   ///
   /// A queue DEPTH, counted in messages, and the companion to
   /// [maxBufferedBytes]: both are charged on every inbound message and whichever
-  /// is reached first binds. It exists because the byte bound cannot see a
+  /// is reached first binds. A bare metadata frame is bounded by its bytes
+  /// alone. It exists because the byte bound cannot see a
   /// zero-copy payload — `RpcTransportMessage.bufferedBytes` is 0 for a
   /// `directPayload`, so an in-memory or isolate peer could queue without limit
   /// against a paused consumer.
@@ -61,9 +62,16 @@ final class RpcSecurityPolicy {
   /// megabytes behind a paused consumer — a depth bounds both without having to
   /// tell them apart.
   ///
-  /// Default 1024, the same order as the codec path's effective depth at the
-  /// default byte ceiling. Exceeding it fails THAT STREAM with
-  /// RESOURCE_EXHAUSTED, not the connection.
+  /// **It is also the sender's message window.** With
+  /// [flowControlWindowBytes] on, it is granted to the peer as message credit
+  /// beside the bytes, so a peer doing flow control parks at it instead of
+  /// passing it. That makes it a throughput bound too: small messages travel at
+  /// most this many per round trip, while messages above
+  /// [flowControlWindowBytes] divided by it are paced by the bytes first.
+  ///
+  /// Default 8192. Exceeding it fails THAT STREAM with RESOURCE_EXHAUSTED, not
+  /// the connection; only a peer ignoring the credit, or one with flow control
+  /// off, can get there.
   final int maxBufferedMessagesPerStream;
 
   /// Max simultaneously active streams, per connection.
@@ -277,7 +285,7 @@ final class RpcSecurityPolicy {
   static const Duration _defaultInitialSendWindowGrace = Duration(seconds: 5);
   static const RpcContentTypeValidation _defaultContentTypeValidation =
       RpcContentTypeValidation.lenient;
-  static const int _defaultMaxBufferedMessagesPerStream = 1024;
+  static const int _defaultMaxBufferedMessagesPerStream = 8192;
 
   /// Creates an [RpcSecurityPolicy] with the given limits.
   const RpcSecurityPolicy({

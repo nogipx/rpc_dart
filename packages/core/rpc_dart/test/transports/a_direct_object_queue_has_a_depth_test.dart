@@ -12,10 +12,11 @@
 // `270 MiB`. A queue DEPTH bounds both without having to tell them apart, which is
 // why the new ceiling counts messages and never their contents.
 //
-// BREAKING: a stream holding more than `maxBufferedMessagesPerStream` un-consumed
-// messages now fails with RESOURCE_EXHAUSTED instead of growing.
+// A sender doing flow control is granted the depth as message credit, so it
+// parks there instead of passing it. A sender that ignores credit passes it, and
+// the stream fails with RESOURCE_EXHAUSTED instead of growing.
 //
-// The measurements are in `.claude/loop/rounds/550`.
+// The measurements are in `.claude/loop/rounds/550` and `709`.
 
 import 'dart:async';
 
@@ -31,16 +32,34 @@ final class _Blob implements IRpcSerializable {
   Map<String, dynamic> toJson() => {'n': n};
 }
 
-typedef _Run = ({int received, Object? error});
+typedef _Run = ({int received, int sentWhilePaused, Object? error});
 
 /// Sends [count] direct objects to a consumer that is paused for [pause], then
 /// drains, and reports what arrived.
+///
+/// [meters] false gives the sender no flow control, so it takes no credit and
+/// stands for a peer that ignores the grants.
 Future<_Run> _send({
   required int count,
   required int depth,
   required bool pause,
+  bool meters = true,
 }) async {
-  final (client, server) = RpcChannelTransport.memoryPair(
+  final (clientCh, serverCh) = RpcDirectMultiplexedChannel.pair();
+  final client = RpcChannelTransport(
+    channel: clientCh,
+    isClient: true,
+    policy: meters
+        ? RpcSecurityPolicy(maxBufferedMessagesPerStream: depth)
+        : RpcSecurityPolicy(
+            maxBufferedMessagesPerStream: depth,
+            flowControlWindowBytes: null,
+            flowControlConnectionWindowBytes: null,
+          ),
+  );
+  final server = RpcChannelTransport(
+    channel: serverCh,
+    isClient: false,
     policy: RpcSecurityPolicy(maxBufferedMessagesPerStream: depth),
   );
   addTearDown(() async {
@@ -78,22 +97,47 @@ Future<_Run> _send({
     streamId,
     RpcMetadata.forClientRequest('Svc', 'push'),
   );
-  for (var i = 0; i < count; i++) {
-    await client.sendDirectObject(streamId, _Blob(i));
-  }
+  var sent = 0;
+  // Not awaited: a metered sender parks at the depth while the consumer is
+  // paused, and that park is part of what is measured.
+  final sending = () async {
+    for (var i = 0; i < count; i++) {
+      await client.sendDirectObject(streamId, _Blob(i));
+      sent++;
+    }
+  }();
 
+  var sentWhilePaused = 0;
   if (pause) {
     // Give the refusal a chance to land before resuming.
     await Future<void>.delayed(const Duration(milliseconds: 50));
+    sentWhilePaused = sent;
     sub.resume();
   }
+  await sending.timeout(const Duration(seconds: 5));
   await Future<void>.delayed(const Duration(milliseconds: 100));
-  return (received: received, error: error);
+  return (received: received, sentWhilePaused: sentWhilePaused, error: error);
 }
 
 void main() {
-  test('WITNESS a paused consumer cannot be queued past the depth', () async {
-    final r = await _send(count: 50, depth: 4, pause: true);
+  test(
+    'WITNESS a metered sender parks at the depth of a paused consumer',
+    () async {
+      final r = await _send(count: 50, depth: 4, pause: true);
+
+      expect(r.error, isNull);
+      expect(
+        r.sentWhilePaused,
+        4,
+        reason:
+            'the depth is granted as message credit, so the sender stops there',
+      );
+      expect(r.received, 50, reason: 'and resumes when the consumer does');
+    },
+  );
+
+  test('a sender ignoring credit cannot queue past the depth', () async {
+    final r = await _send(count: 50, depth: 4, pause: true, meters: false);
 
     expect(
       r.error,

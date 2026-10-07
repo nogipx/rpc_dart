@@ -77,6 +77,17 @@ abstract final class RpcHeaders {
   /// handshake.
   static const xWindowUpdate = 'x-rpc-window-update';
 
+  /// Per-stream flow-control credit, in MESSAGES, granted to the peer.
+  ///
+  /// Rides on the same frame as [xWindowUpdate], never alone, so a peer that
+  /// predates it still reads that frame as a byte grant and ignores this. The
+  /// byte window cannot bound a queue's depth: 4 MiB of 10-byte messages is
+  /// several hundred thousand of them. Without this a sender obeying its window
+  /// still passes the receiver's
+  /// [RpcSecurityPolicy.maxBufferedMessagesPerStream], and the receiver fails
+  /// the stream.
+  static const xWindowUpdateMessages = 'x-rpc-window-update-messages';
+
   /// Connection-level flow-control credit, in bytes, granted to the peer.
   ///
   /// Per-stream windows bound one call; nothing bounded their sum. Measured
@@ -126,6 +137,7 @@ abstract final class RpcHeaders {
     // carrying the key would let a caller lift its own peer's flow-control
     // limit, which is the one thing the limit exists to prevent.
     xWindowUpdate,
+    xWindowUpdateMessages,
     xConnWindowUpdate,
   };
 

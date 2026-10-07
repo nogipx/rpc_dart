@@ -249,7 +249,12 @@ abstract interface class IRpcFlowControlled {
   /// Hands metering of [streamId] to the caller.
   void deferFlowCredit(int streamId);
 
-  /// Reports [bytes] consumed by the application on [streamId].
+  /// Reports one message of [bytes] consumed by the application on
+  /// [streamId].
+  ///
+  /// Called once per payload or direct object, with 0 for an empty or direct
+  /// one: credit is returned in messages as well as bytes, and a message that
+  /// is never reported is a place in the peer's window that never comes back.
   void returnFlowCredit(int streamId, int bytes);
 }
 
