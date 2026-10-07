@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 698) — round 689 and a cleanup commit by owner decision
+round: 698
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift, packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/lib/src/rpc_wasm.dart]
 probe: none — static read, nothing run
@@ -64,6 +64,27 @@ One commit per platform.
 - Item 1, read in round 689: after `stop()` the guest gets one empty frame,
   then the next fetch fails and the loop ends. Not a spin.
 
+## Outcome (cleanup, after round 698)
+
+One cleanup commit, by owner decision, no round, beside round 689's item 2:
+
+- 1: the iOS recv loop ends on a non-ok answer instead of handing the guest an
+  empty frame.
+- 3: the boot prefix and the glue are escaped (`</script` to `<\/script`)
+  before they are spliced into the inline script. The strip's anchoring is
+  left; the leftover check already refuses what it misses.
+- 4: a reported death now releases the native runtime from Dart, once, so an
+  iOS web view does not outlive a runtime the application never closes; the
+  test that pinned "only close() releases" was updated.
+- 6: detach closes each isolate and the sandbox under its own guard.
+- 8: the `RpcWasm.run` example no longer starts the endpoint a second time,
+  and the doc says why `run` is one-shot.
+
+Left: 5 (`?? ""` is only reached when `self` is gone, where the whole call
+chain short-circuits), 7 (an atomic counter, a `globalThis` alias and a
+constant computed at run time are harmless), 9 (drift facts for the owner).
+iOS guest suite 9 of 9, `analyze:native` PASS, `test:wasm` 51.
+
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are **done as cleanup commits, without rounds**.

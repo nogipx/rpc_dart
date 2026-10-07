@@ -209,11 +209,15 @@ void main() {
       expect(bridge.isDead, isTrue);
     });
 
-    test('a later close() still releases the native runtime', () async {
-      // `_dead` is separate from `_closed` for exactly this: the sandbox is
-      // gone but the plugin still holds its slot.
+    test('a death releases the native runtime, once, close() or not', () async {
+      // The sandbox is gone but the plugin still holds its slot -- on iOS the
+      // web view and its process -- so the death itself releases it, without
+      // waiting for an application that may never call close().
       final bridge = await load();
       await pushDeath('sandbox_killed');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(closeRuntimeCalls, [_runtimeId]);
 
       await bridge.close();
 

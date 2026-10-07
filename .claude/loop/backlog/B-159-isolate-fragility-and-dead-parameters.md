@@ -1,5 +1,5 @@
 ---
-status: open (round 580 answered four of eight claims; three unexamined, one documented not removed)
+status: closed (round 580) — by owner decision, 2026-10-07
 round: 580
 commit: 2275b2ab
 release: none
@@ -74,4 +74,6 @@ layout. **The web half (`web_bridge.dart:163, 248, 254`) was not read at all.**
 
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are done as cleanup commits, without rounds. What is
+left here is three unexamined claims (2, 3, 8), each needing its own arm, not a
+cleanup; round 580 already documented or removed the rest. Closed.

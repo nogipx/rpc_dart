@@ -87,9 +87,23 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
   );
   bool _closed = false;
 
-  /// The runtime went away on its own. Distinct from [_closed] so a later
-  /// [close] still tells native to release the runtime's slot.
+  /// The runtime went away on its own. Distinct from [_closed]: a dead bridge
+  /// reports itself closed, but [close] still has its own work to do.
   bool _dead = false;
+
+  /// Native was asked to release the runtime -- by the death report or by
+  /// [close], whichever came first. Asked once.
+  bool _released = false;
+
+  void _releaseNative() {
+    if (_released) return;
+    _released = true;
+    unawaited(
+      _channel
+          .invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId})
+          .catchError((Object _) {}),
+    );
+  }
 
   final StreamController<String> _console = StreamController<String>.broadcast(
     sync: true,
@@ -304,6 +318,11 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
       unawaited(_incoming.close());
     }
     if (!_console.isClosed) unawaited(_console.close());
+    // Release the native side now. The iOS runtime holds its web view -- and
+    // the web view's content process -- until closeRuntime, so a dead runtime
+    // the application never closes would keep them for good. Android has
+    // already released its own; there closeRuntime finds nothing.
+    _releaseNative();
   }
 
   @override
@@ -343,6 +362,11 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     if (!_incoming.isClosed) unawaited(_incoming.close());
     if (!_console.isClosed) await _console.close();
 
-    await _channel.invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId});
+    if (!_released) {
+      _released = true;
+      await _channel.invokeMethod<void>('closeRuntime', {
+        'runtimeId': runtimeId,
+      });
+    }
   }
 }

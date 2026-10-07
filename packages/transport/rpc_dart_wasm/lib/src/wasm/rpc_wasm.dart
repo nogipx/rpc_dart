@@ -30,11 +30,15 @@ external void _consoleError(JSString message);
 /// void main() {
 ///   RpcWasm.run(
 ///     configure: (endpoint) {
-///       endpoint.start();
+///       endpoint.registerServiceContract(MyService());
 ///     },
 ///   );
 /// }
 /// ```
+///
+/// [run] starts the endpoint itself once [configure] returns; `configure` only
+/// registers. It may be called once per runtime: the byte callback it installs
+/// is a single global the host calls.
 abstract final class RpcWasm {
   static bool _initialized = false;
   static RpcPeerEndpoint? _activeEndpoint;

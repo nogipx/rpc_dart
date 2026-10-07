@@ -58,10 +58,24 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         runtimes.keys.forEach { runtimeId ->
             messenger.setMessageHandler(runtimeTxChannel(runtimeId), null)
         }
-        runtimes.values.forEach { it.close() }
+        // Each close guarded, as closeRuntime guards its own: one isolate that
+        // throws must not leave the rest, and the sandbox, open.
+        val closing = runtimes.values.toList()
         runtimes.clear()
-        sandbox?.close()
+        closing.forEach {
+            try {
+                it.close()
+            } catch (e: Exception) {
+                android.util.Log.w("RpcDartWasm", "Isolate close on detach: ${e.message}")
+            }
+        }
+        try {
+            sandbox?.close()
+        } catch (e: Exception) {
+            android.util.Log.w("RpcDartWasm", "Sandbox close on detach: ${e.message}")
+        }
         sandbox = null
+        sandboxFuture = null
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {

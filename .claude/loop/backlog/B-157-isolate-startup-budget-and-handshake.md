@@ -1,5 +1,5 @@
 ---
-status: open (round 579 answered claims 1 and 3; claim 2 remains and has no failure to measure)
+status: closed (round 579) — by owner decision, 2026-10-07
 round: 579
 commit: 513dfc6e
 release: none
@@ -72,4 +72,7 @@ would do. An extra round trip on a path that runs once per isolate, with no fail
 
 ## Owner decision
 
-—
+2026-10-07: hygiene leads are done as cleanup commits, without rounds. Nothing
+is left here to clean: claims 1 and 3 were settled in round 579, and claim 2
+(a second port in the handshake) is a protocol change with no failure behind
+it. Closed.

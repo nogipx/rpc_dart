@@ -134,6 +134,13 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
         runtimes[runtimeId] = runtime
         registerByteChannel(runtimeId: runtimeId)
 
+        // Both are spliced into an inline <script>, which the HTML parser ends
+        // at the first `</script` it meets, in a string or not. `<\/script` is
+        // the same text to JavaScript, which only ever allows it inside a
+        // string, a regex or a comment.
+        let prefixInline = jsBootPrefix.replacingOccurrences(of: "</script", with: "<\\/script")
+        let glueInline = plainJs.replacingOccurrences(of: "</script", with: "<\\/script")
+
         let bootHtml = """
         <!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
         <script>
@@ -265,6 +272,8 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
           _recvRunning = true;
           (function poll() {
             fetch('rpc-wasm:///recv').then(function(r) {
+              // stop() answers 499; that is the end of the loop, not a frame.
+              if (!r.ok) throw new Error('recv ' + r.status);
               return r.arrayBuffer();
             }).then(function(buf) {
               _rpcWasmReceiveBytes(new Uint8Array(buf));
@@ -274,8 +283,8 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
             });
           })();
         }
-        \(jsBootPrefix)
-        \(plainJs)
+        \(prefixInline)
+        \(glueInline)
         (async function() {
           try {
             var resp = await fetch('rpc-wasm:///module.wasm');
