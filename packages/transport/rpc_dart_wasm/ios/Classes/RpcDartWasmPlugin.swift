@@ -393,6 +393,12 @@ private class SchemeHandler: NSObject, WKURLSchemeHandler {
     private var wasmBytes: Data?
     private var pendingRecvTask: WKURLSchemeTask?
     private var recvQueue: [Data] = []
+    /// The most one `/recv` answer batches from the queue.
+    static let recvBatchBytes = 4 * 1024 * 1024
+    /// And at most this many frames: the guest decodes a chunk in one go, and
+    /// thousands of frames at once outrun its consumer and trip the per-stream
+    /// cap of 1024 messages.
+    static let recvBatchFrames = 64
     private var stopped = false
     var onSend: ((Data) -> Void)?
 
@@ -474,7 +480,19 @@ private class SchemeHandler: NSObject, WKURLSchemeHandler {
 
         if path == "/recv" || path == "recv" {
             if !recvQueue.isEmpty {
-                let data = recvQueue.removeFirst()
+                // Everything queued, in one answer: one fetch per frame capped
+                // host-to-guest at a few hundred frames a second. The bridge is
+                // a byte stream -- the guest's multiplexer reassembles frames
+                // across and within chunks -- so concatenating is safe. Bounded
+                // in bytes and in frames, always taking at least one.
+                var data = recvQueue.removeFirst()
+                var frames = 1
+                while let next = recvQueue.first,
+                      frames < Self.recvBatchFrames,
+                      data.count + next.count <= Self.recvBatchBytes {
+                    data.append(recvQueue.removeFirst())
+                    frames += 1
+                }
                 respond(task: urlSchemeTask, data: data)
             } else {
                 if let prev = pendingRecvTask {

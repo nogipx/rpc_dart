@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: open (round 707 batched iOS recv; the Android half remains)
+round: 707
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift, packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
 probe: none — static read, nothing run
@@ -34,6 +34,14 @@ Frames/s for 1 KiB frames each direction, both platforms.
 Batch `/recv` with length prefixes; named data for every host→guest frame; drain
 console and outbox in one evaluation.
 
+## Progress (round 707)
+
+iOS `/recv` batches up to 64 frames: host-to-guest 211-375 to 1363-4231 f/s.
+Batching iOS sends was tried and reverted: a fast guest's burst of tiny frames
+outruns the host and trips the 1024-message cap. Android unmeasured: adb could
+not reach its loopback server this session.
+`../rounds/707-ios-recv-answers-in-batches.md`.
+
 ## Owner decision
 
-—
+2026-10-07: take it on now.

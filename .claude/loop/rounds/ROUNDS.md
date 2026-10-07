@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[707](707-ios-recv-answers-in-batches.md)** FIXED, wasm (Swift) — **iOS `/recv` answered one frame per fetch**: host-to-guest 211-375 f/s. Batched up to 64 frames: 1363-4231. Send batching tried and reverted (trips the host's 1024 cap). B-168 iOS half; Android blocked by adb
 - **[706](706-worker-bytes-cross-as-one-block.md)** FIXED, isolate — **web worker bytes crossed as a JS array of numbers**: 1 MiB host-to-worker 7.5-8 MiB/s (dart2js), 2.9 (dart2wasm). Sent as a typed array: 272-299 and 64-66 MiB/s. Closes B-160
 - **[705](705-a-dead-worker-is-terminated-and-not-restarted.md)** FIXED (by reading), isolate — **a web worker that died was left running**, and an `onDone` fallback could start the entrypoint on a dead channel. The death listener terminates the worker (parity with VM errorsAreFatal); the fallback is gone. Closes B-161, B-162
 - **[704](704-the-window-grant-reaches-a-module-worker.md)** FIXED, isolate — **a dart2wasm module worker lost the host's connection-window grant** (credit `null`; dart2js fine). The host holds frames until the worker is listening. Closes B-163

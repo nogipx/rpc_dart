@@ -206,6 +206,21 @@ final class _EchoService extends RpcResponderContract {
         }
       },
     );
+
+    // N items of about 1 KiB each, guest to host: the frame rate the byte
+    // transport sustains in that direction.
+    addServerStreamMethod<RpcString, RpcString>(
+      methodName: 'Kilobytes',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async* {
+        final n = int.parse(request.value);
+        final body = 'k' * 1000;
+        for (var i = 0; i < n; i++) {
+          yield body.rpc;
+        }
+      },
+    );
   }
 }
 
