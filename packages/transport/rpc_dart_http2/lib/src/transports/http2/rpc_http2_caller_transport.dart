@@ -688,8 +688,12 @@ class RpcHttp2CallerTransport
     }
 
     if (secure) {
-      // Cancel our sub so SecureSocket.secure() (via _detachRaw) can attach.
-      await sub.cancel();
+      // PAUSED, not cancelled: SecureSocket.secure() takes the socket over from
+      // a paused subscription, as its documentation asks. Cancelling closes the
+      // socket's read side, and the TLS handshake through the tunnel then dies
+      // with "Connection terminated during handshake" before reaching the
+      // server.
+      sub.pause();
       // NOT awaited, for the same reason as the timeout path above: on the TLS
       // branch nothing ever listens to `forwardCtrl` (http2 reads from the
       // SecureSocket instead), so awaiting its close never returns and
