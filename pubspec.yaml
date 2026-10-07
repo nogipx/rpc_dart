@@ -325,6 +325,8 @@ melos:
           && fvm dart test -p chrome -j 1 --timeout 3x test/web_worker/echo_worker_test.dart)
         (cd packages/transport/rpc_dart_isolate \
           && fvm dart test -p chrome -j 1 --timeout 3x test/web_worker/worker_startup_failure_test.dart)
+        (cd packages/transport/rpc_dart_isolate \
+          && fvm dart test -p chrome -j 1 --timeout 3x test/web_worker/the_window_grant_reaches_the_worker_test.dart)
 
     # --- Code generation (build_runner) ---
     gen:

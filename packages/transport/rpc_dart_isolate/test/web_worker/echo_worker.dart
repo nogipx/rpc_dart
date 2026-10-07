@@ -26,12 +26,15 @@ void main() {
 
 void _echoServer(IRpcTransport transport, Map<String, dynamic> params) {
   final responder = RpcResponderEndpoint(transport: transport);
-  responder.registerServiceContract(_EchoContract(params));
+  responder.registerServiceContract(_EchoContract(params, transport));
   responder.start();
 }
 
 final class _EchoContract extends RpcResponderContract {
-  _EchoContract(this._params) : super('EchoService');
+  _EchoContract(this._params, this._transport) : super('EchoService');
+
+  /// The worker's own transport, for reporting its flow-control state.
+  final IRpcTransport _transport;
 
   /// Whatever `spawn(customParams: ...)` actually delivered to the entrypoint.
   ///
@@ -56,6 +59,18 @@ final class _EchoContract extends RpcResponderContract {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Die',
       handler: _die,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+    );
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Credit',
+      handler: (r, {RpcContext? context}) async {
+        final t = _transport;
+        return (t is RpcChannelTransport
+                ? '${t.flowControlConnectionCredit}'
+                : 'not a channel transport')
+            .rpc;
+      },
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );

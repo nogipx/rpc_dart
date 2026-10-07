@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 705)
+round: 705
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart]
 probe: none — static read, nothing run
@@ -33,6 +33,11 @@ Close the host before init; does the worker run its entrypoint?
 
 Remove the fallback or give it a timer.
 
+## Outcome (round 705)
+
+FIXED by reading: the onDone fallback is gone; it could only start the
+entrypoint on a dead channel. `../rounds/705-a-dead-worker-is-terminated-and-not-restarted.md`.
+
 ## Owner decision
 
-—
+2026-10-07: take it on now.

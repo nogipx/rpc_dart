@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 704)
+round: 704
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart]
 probe: none — static read, nothing run
@@ -32,6 +32,12 @@ dart2wasm worker; read `flowControlConnectionCredit` on the worker after start.
 
 Advertise after `ready`.
 
+## Outcome (round 704)
+
+CONFIRMED and FIXED: on a dart2wasm module worker the worker's connection
+credit read `null`, the grant lost; the host now holds its frames until the
+worker reports its scope wired. `../rounds/704-the-window-grant-reaches-a-module-worker.md`.
+
 ## Owner decision
 
-—
+2026-10-07: take it on now.

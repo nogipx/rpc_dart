@@ -1,6 +1,6 @@
 ---
-status: open
-round: — (not re-measured) — filed by the external audit of 2026-09-28
+status: closed (round 705)
+round: 705
 commit: 8253fe8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart, packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart]
 probe: none — static read, nothing run
@@ -32,6 +32,13 @@ Worker handler with an unawaited throwing future; is the connection closed?
 
 Fail only on worker termination; treat `messageerror` per message.
 
+## Outcome (round 705)
+
+FIXED by reading, against the lead's sketch: closing on an uncaught error is
+parity with the VM's errorsAreFatal and stays; the death listener now also
+terminates the worker, which it left running. `messageerror` is unreachable
+with what both sides send. `../rounds/705-a-dead-worker-is-terminated-and-not-restarted.md`.
+
 ## Owner decision
 
-—
+2026-10-07: take it on now.

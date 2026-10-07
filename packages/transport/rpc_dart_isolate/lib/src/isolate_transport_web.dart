@@ -76,6 +76,7 @@ abstract interface class RpcIsolateTransport {
       messageStream: controller.onMessage,
       send: controller.sendIsolate,
       onClose: controller.close,
+      holdUntilReleased: true,
     );
     final transport = RpcChannelTransport(
       channel: channel,
@@ -156,6 +157,9 @@ abstract interface class RpcIsolateTransport {
       await abandon();
       rethrow;
     }
+    // The worker is listening now; what the transport sent before -- the
+    // connection-window grant -- goes out.
+    channel.release();
 
     // Listen for the worker's post-entrypoint readiness ack before any RPC
     // frames are allowed to flow.
@@ -205,7 +209,14 @@ abstract interface class RpcIsolateTransport {
     // its channel from onError/onExit for the same reason.
     worker.removeEventListener('error', errorListener);
     worker.removeEventListener('messageerror', errorListener);
+    //
+    // An uncaught error is treated as the worker's death, as on the VM, where
+    // the isolate is spawned with errorsAreFatal and really does die. A
+    // browser keeps a worker running past one, so it is terminated here too:
+    // closing only the transport left a worker with nobody to talk to running
+    // for the life of the page.
     final deathListener = (Event event) {
+      worker.terminate();
       unawaited(transport.close());
     }.toJS;
     worker.addEventListener('error', deathListener);
@@ -308,8 +319,9 @@ void runRpcIsolateManagerWorker(
         start((msg.payload as Map).cast<String, dynamic>());
       }
     },
-    // A host that never sends init still has to get its entrypoint started.
-    onDone: () => start(const <String, dynamic>{}),
+    // No fallback on onDone: the stream ends only when the channel is gone,
+    // and starting the entrypoint then would run user code on a dead channel
+    // and send `ready` into it. RpcIsolateTransport.spawn always sends init.
   );
 }
 

@@ -107,13 +107,25 @@ class WebMultiplexedChannel implements IRpcMultiplexedChannel {
   bool _closed = false;
   final void Function()? _onClose;
 
+  /// Frames sent before [release], in order; null once released.
+  List<Map<String, Object?>>? _held;
+
   /// Bridges [messageStream] and [send].
+  ///
+  /// [holdUntilReleased] keeps every outgoing frame until [release]. The host
+  /// needs it: its transport advertises the connection window from its
+  /// constructor, before the worker script has installed `onmessage`, and a
+  /// module worker -- dart2wasm's -- drops what arrives before then. Measured
+  /// in Chrome, the worker's connection credit stayed null: host-to-worker flow
+  /// control silently off.
   WebMultiplexedChannel({
     required Stream<dynamic> messageStream,
     required void Function(Map<String, Object?> data) send,
     void Function()? onClose,
+    bool holdUntilReleased = false,
   }) : _send = send,
-       _onClose = onClose {
+       _onClose = onClose,
+       _held = holdUntilReleased ? <Map<String, Object?>>[] : null {
     _messageSub = messageStream.listen(
       (raw) {
         final msg = BridgeMessage.fromMap(raw);
@@ -126,6 +138,26 @@ class WebMultiplexedChannel implements IRpcMultiplexedChannel {
         if (!_closed) close();
       },
     );
+  }
+
+  /// Sends what [holdUntilReleased] kept, in order, and stops holding.
+  void release() {
+    final held = _held;
+    if (held == null) return;
+    _held = null;
+    if (_closed) return;
+    for (final frame in held) {
+      _send(frame);
+    }
+  }
+
+  void _transmit(Map<String, Object?> frame) {
+    final held = _held;
+    if (held != null) {
+      held.add(frame);
+    } else {
+      _send(frame);
+    }
   }
 
   @override
@@ -158,7 +190,7 @@ class WebMultiplexedChannel implements IRpcMultiplexedChannel {
     }
 
     try {
-      _send(
+      _transmit(
         BridgeMessage(
           type: type,
           streamId: message.streamId,
