@@ -16,97 +16,121 @@ SPDX-License-Identifier: MIT
   </h1>
 </div>
 
-Transport-agnostic RPC framework for Dart. Implements the gRPC wire protocol — works over HTTP/2, WebSocket, Isolates, and in-memory without code changes.
+Transport-agnostic RPC framework for Dart. One contract runs over any
+transport without code changes: in-process, isolates, WebSocket, HTTP/1.1, and
+HTTP/2 with the real gRPC wire protocol. This package is the core; transports
+other than the in-process ones live in separate packages (see
+[Ecosystem](#ecosystem)).
 
 ---
 
 ## Core concepts
 
-- **Contract** — service name and method identifiers defining the API.
-- **Responder** — server side: registers methods and handles requests.
-- **Caller** — client side: invokes methods via an endpoint.
-- **Endpoint** — connection point that wraps a transport.
-- **Transport** — message transport (InMemory, Isolate, HTTP/2, WebSocket, etc.).
-- **Codec** — optional serializer/deserializer for requests and responses.
+- **Contract** — a service name plus its methods. A responder contract
+  (`RpcResponderContract`) handles calls; a caller contract
+  (`RpcCallerContract`) makes them.
+- **Endpoint** — binds contracts to one transport: `RpcResponderEndpoint`
+  (server), `RpcCallerEndpoint` (client), `RpcPeerEndpoint` (both directions).
+- **Transport** — anything implementing `IRpcTransport`.
+- **Codec** — serializes requests and responses. Optional for in-process
+  zero-copy transports, required on the network.
 
 ## Key features
 
 - Unary, server streaming, client streaming, bidirectional streaming.
-- Zero-copy in-process transport (`RpcInMemoryTransport`).
+- Zero-copy in-process transport (`RpcChannelTransport.memoryPair()`).
 - 3-layer transport architecture: `IRpcChannel` → `IRpcMultiplexedChannel` → `IRpcTransport`.
-- Resilience: retry, circuit breaker, rate limiter, reconnect state machine.
+- Resilience: retry, circuit breaker, rate limiter, reconnecting client connection.
 - Per-stream and connection-wide flow control, on by default.
 - Security policy: bounds on metadata, message size and concurrent streams.
 - gRPC Health Checking Protocol (`grpc.health.v1`).
 - `RpcBinaryCodec` for protobuf and other binary formats.
 - `RpcContext` with trace id, headers, deadline, cancellation.
-- Pure Dart core — no external runtime dependencies.
+- Pure Dart core — no runtime dependencies.
 
 ---
 
 ## Quick start
 
-Define a contract:
+Define the messages. `RpcCodec` serializes any `IRpcSerializable` (CBOR of
+`toJson()`):
 
 ```dart
-abstract interface class ICalculatorContract {
-  static const name = 'Calculator';
-  static const methodSum = 'sum';
-}
+import 'package:rpc_dart/rpc_dart.dart';
 
-class SumRequest {
+const calculatorService = 'Calculator';
+
+class SumRequest implements IRpcSerializable {
   final List<double> values;
   SumRequest(this.values);
-  factory SumRequest.fromJson(Map<String, dynamic> j) =>
-      SumRequest((j['values'] as List).cast<double>());
+
+  factory SumRequest.fromJson(Map<String, dynamic> json) => SumRequest(
+    (json['values'] as List).map((v) => (v as num).toDouble()).toList(),
+  );
+
+  @override
   Map<String, dynamic> toJson() => {'values': values};
 }
 
-class SumResponse {
+class SumResponse implements IRpcSerializable {
   final double result;
   SumResponse(this.result);
-  factory SumResponse.fromJson(Map<String, dynamic> j) =>
-      SumResponse(j['result'] as double);
+
+  factory SumResponse.fromJson(Map<String, dynamic> json) =>
+      SumResponse((json['result'] as num).toDouble());
+
+  @override
   Map<String, dynamic> toJson() => {'result': result};
 }
 ```
 
-Implement the responder:
+Implement the responder (server side) and the caller (client side):
 
 ```dart
 class CalculatorResponder extends RpcResponderContract {
-  CalculatorResponder() : super(ICalculatorContract.name) {
+  CalculatorResponder() : super(calculatorService);
+
+  @override
+  void setup() {
     addUnaryMethod<SumRequest, SumResponse>(
-      methodName: ICalculatorContract.methodSum,
+      methodName: 'sum',
       requestCodec: RpcCodec.withDecoder(SumRequest.fromJson),
       responseCodec: RpcCodec.withDecoder(SumResponse.fromJson),
-      handler: (req, {context}) async {
-        final total = req.values.fold<double>(0, (a, b) => a + b);
+      handler: (request, {context}) async {
+        final total = request.values.fold<double>(0, (a, b) => a + b);
         return SumResponse(total);
       },
     );
   }
 }
+
+class CalculatorCaller extends RpcCallerContract {
+  CalculatorCaller(RpcCallerEndpoint endpoint)
+    : super(calculatorService, endpoint);
+
+  Future<SumResponse> sum(SumRequest request, {RpcContext? context}) =>
+      callUnary<SumRequest, SumResponse>(
+        methodName: 'sum',
+        request: request,
+        requestCodec: RpcCodec.withDecoder(SumRequest.fromJson),
+        responseCodec: RpcCodec.withDecoder(SumResponse.fromJson),
+        context: context,
+      );
+}
 ```
 
-Run with in-memory transport:
+Run them over the in-memory transport:
 
 ```dart
-void main() async {
+Future<void> main() async {
   final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
   final responder = RpcResponderEndpoint(transport: serverTransport);
   responder.registerServiceContract(CalculatorResponder());
-  responder.start();
+  responder.start(); // without start() calls hang
 
   final caller = RpcCallerEndpoint(transport: clientTransport);
-  final res = await caller.callUnary<SumRequest, SumResponse>(
-    serviceName: ICalculatorContract.name,
-    methodName: ICalculatorContract.methodSum,
-    requestCodec: RpcCodec.withDecoder(SumRequest.fromJson),
-    responseCodec: RpcCodec.withDecoder(SumResponse.fromJson),
-    request: SumRequest([1, 2, 3]),
-  );
+  final res = await CalculatorCaller(caller).sum(SumRequest([1, 2, 3]));
   print(res.result); // 6.0
 
   await caller.close();
@@ -114,13 +138,17 @@ void main() async {
 }
 ```
 
+Swap `memoryPair()` for a transport from a transport package and nothing else
+changes.
+
 > Use [rpc_dart_generator](https://pub.dev/packages/rpc_dart_generator) to generate caller/responder boilerplate from annotated Dart interfaces.
 
 ---
 
 ## Protobuf / binary codecs
 
-`RpcBinaryCodec` works with any type — use it for protobuf or any custom binary format:
+`RpcBinaryCodec` adapts any byte format; the type does not need to implement
+`IRpcSerializable`. With protobuf-generated classes:
 
 ```dart
 final reqCodec = RpcBinaryCodec<MyRequest>(
@@ -133,67 +161,92 @@ final reqCodec = RpcBinaryCodec<MyRequest>(
 
 ## Resilience
 
-### Retry
+### Retry and circuit breaker
+
+Interceptors are added with `addInterceptor`; the first one added is the
+outermost. Add the circuit breaker before the retry so an open circuit fails
+fast instead of being retried:
 
 ```dart
-final caller = RpcCallerEndpoint(
-  transport: transport,
-  interceptors: [
-    RpcRetryInterceptor(
-      maxAttempts: 3,
-      backoff: BackoffPolicy.exponential(
-        initial: Duration(milliseconds: 100),
-        multiplier: 2,
+void configureCaller(RpcCallerEndpoint caller) {
+  caller
+    ..addInterceptor(
+      RpcCircuitBreakerInterceptor(
+        failureThreshold: 5,
+        resetTimeout: const Duration(seconds: 30),
       ),
-    ),
-  ],
-);
+    )
+    ..addInterceptor(
+      RpcRetryInterceptor(
+        maxAttempts: 3,
+        backoff: const ExponentialBackoff(
+          baseDelay: Duration(milliseconds: 100),
+          maxDelay: Duration(seconds: 5),
+        ),
+      ),
+    );
+}
 ```
 
-### Circuit breaker
-
-```dart
-RpcCircuitBreakerInterceptor(
-  failureThreshold: 5,
-  resetTimeout: Duration(seconds: 30),
-)
-```
+Retry covers unary calls only and is meant for idempotent methods. `FixedBackoff`
+is the other built-in `BackoffPolicy`.
 
 ### Client connection with reconnect
 
+`RpcClientConnection` reopens a transport after a drop. Create the endpoint once
+on `connection.transport`; it stays valid across reconnects:
+
 ```dart
-final connection = RpcClientConnection(
-  transportFactory: () => RpcHttp2Transport(...),
-  reconnectPolicy: BackoffPolicy.exponential(...),
-);
-await connection.connect();
+RpcCallerEndpoint connect(Future<IRpcReconnectableTransport> Function() open) {
+  final connection = RpcClientConnection(
+    transportFactory: open,
+    backoff: const ExponentialBackoff(maxDelay: Duration(seconds: 30)),
+  );
+  connection.connect(); // returns void; watch connection.state
+  return RpcCallerEndpoint(transport: connection.transport);
+}
 ```
 
 ### Rate limiter
 
+A responder-side interceptor:
+
 ```dart
-final limiter = RpcRateLimiter(
-  maxRequests: 100,
-  window: Duration(seconds: 1),
-  keyExtractor: (context) => context.header('user-id'),
-);
+void limit(RpcResponderEndpoint responder) {
+  const second = Duration(seconds: 1);
+  responder.addInterceptor(
+    RpcRateLimiter(
+      global: const RateLimit.slidingWindow(max: 5000, window: second),
+      perKeyFallback: const RateLimit.slidingWindow(max: 100, window: second),
+      keyExtractor: (call) => call.context.getHeader('user-id'),
+    ),
+  );
+}
 ```
+
+A refused call fails with `RESOURCE_EXHAUSTED` plus retry info, which the
+caller's default retry policy treats as transient.
 
 ---
 
 ## gRPC Health Checking
 
-Implements the standard `grpc.health.v1.Health` protocol:
+`GrpcHealthCheckContract` implements the standard `grpc.health.v1.Health`
+protocol (`Check` and `Watch`), backed by a `GrpcHealthServiceStatus` you update.
+The service name `''` means the whole server:
 
 ```dart
-final health = RpcGrpcHealthService();
-health.setStatus('MyService', ServingStatus.serving);
-responder.registerServiceContract(health);
-
-// Client:
-final client = RpcGrpcHealthClient(caller);
-final status = await client.check('MyService');
+GrpcHealthServiceStatus serveHealth(RpcResponderEndpoint responder) {
+  final status = GrpcHealthServiceStatus()
+    ..setStatus('', GrpcServingStatus.serving)
+    ..setStatus('MyService', GrpcServingStatus.serving);
+  responder.registerServiceContract(GrpcHealthCheckContract(status));
+  return status;
+}
 ```
+
+Any standard gRPC health client (for example `grpc_health_probe`) can query it
+over `rpc_dart_http2`.
 
 ---
 
@@ -207,26 +260,37 @@ IRpcMultiplexedChannel   — multiplexed framed messages
 IRpcTransport            — full transport with stream IDs and health
 ```
 
-Convenience factories on `RpcChannelTransport`:
+Factories on `RpcChannelTransport`:
 
 ```dart
-// Zero-copy in-memory pair (tests, isolates):
-final (t1, t2) = RpcChannelTransport.memoryPair();
+void transports(IRpcChannel myChannel) {
+  // Zero-copy in-memory pair (tests, in-process):
+  final (client, server) = RpcChannelTransport.memoryPair();
 
-// Frame-based pair (exercises full codec path):
-final (t1, t2) = RpcChannelTransport.pair();
+  // Frame-based pair (exercises the full codec path):
+  final (frameClient, frameServer) = RpcChannelTransport.pair();
 
-// Wrap any IRpcChannel (WebSocket, TCP):
-final transport = RpcChannelTransport.fromChannel(myChannel);
+  // Wrap any IRpcChannel (WebSocket, TCP):
+  final transport = RpcChannelTransport.fromChannel(
+    channel: myChannel,
+    isClient: true,
+  );
+}
 ```
+
+`memoryPair()` passes objects by reference, so it skips codecs on unary calls
+and never enforces byte limits. If production uses a network transport, run
+your tests over `pair()` too.
 
 ---
 
 ## Flow control and resource limits
 
-Both are configured through `RpcSecurityPolicy`, which any
-`RpcChannelTransport` accepts. The defaults are safe for a server exposed to
-untrusted peers; you only need to touch them to relax or tighten.
+Both are configured through `RpcSecurityPolicy`, which is passed to the
+transport (`memoryPair(policy:)`, `pair(policy:)`, `fromChannel(policy:)`, or a
+transport package's policy parameter), not to the endpoint. The defaults are
+safe for a server exposed to untrusted peers; you only need to touch them to
+relax or tighten.
 
 ### Flow control
 
@@ -235,7 +299,7 @@ window, and all streams on a connection share a second one:
 
 ```dart
 final (client, server) = RpcChannelTransport.pair(
-  policy: RpcSecurityPolicy(
+  policy: const RpcSecurityPolicy(
     flowControlWindowBytes: 4 * 1024 * 1024,            // per stream
     flowControlConnectionWindowBytes: 64 * 1024 * 1024, // whole connection
   ),
@@ -243,9 +307,9 @@ final (client, server) = RpcChannelTransport.pair(
 ```
 
 The sender blocks once its window is used up and resumes as the receiving
-application consumes. Credit travels on bare metadata frames, which a peer that
-predates this ignores — a mixed-version pair simply falls back to the old
-unbounded behaviour rather than deadlocking.
+application consumes. Credit travels on bare metadata frames; a peer that does
+not understand them ignores them, and a grace window keeps the sender from
+deadlocking against such a peer.
 
 Set either to `null` to disable. **HTTP/2 has its own flow control**, so
 `rpc_dart_http2` should disable these rather than run two windows over each
@@ -257,7 +321,7 @@ other.
 const policy = RpcSecurityPolicy(
   maxActiveStreams: 4096,          // concurrent streams, per connection
   maxConcurrentHandlers: 256,      // handlers RUNNING, default null
-  maxMessageLengthBytes: 16 << 20, // single message, framing included
+  maxMessageLengthBytes: 16 << 20, // single decoded message
   maxBufferedBytes: 16 << 20,      // queued for a stream nobody is reading
   maxMetadataBytes: 64 * 1024,
   maxHeaders: 128,
@@ -289,11 +353,14 @@ stream fails with `RESOURCE_EXHAUSTED` and the connection survives.
 
 ## Health monitoring
 
+Every endpoint reports its own and its transport's health:
+
 ```dart
-final report = await caller.health();
-if (!report.isHealthy) {
-  print('issue: ${report.transportStatus?.message}');
-  await caller.reconnect();
+Future<void> checkHealth(RpcCallerEndpoint caller) async {
+  final report = await caller.health();
+  if (!report.isHealthy) {
+    print('issue: ${report.transportStatus?.message}');
+  }
 }
 ```
 
@@ -302,55 +369,92 @@ if (!report.isHealthy) {
 ## Cancellation and deadlines
 
 ```dart
-final token = RpcCancellationToken();
-final ctx = RpcContext
-    .withCancellation(token)
-    .withTimeout(Duration(seconds: 2));
+Future<void> cancellable(CalculatorCaller calculator) async {
+  final token = RpcCancellationToken();
+  final ctx = RpcContext.withCancellation(
+    token,
+  ).withTimeout(const Duration(seconds: 2));
 
-// In the handler, cooperate:
-Future<Response> handle(Request req, {RpcContext? context}) async {
-  for (final item in items) {
-    context?.cancellationToken?.throwIfCancelled();
-    await process(item);
-  }
-  return Response(...);
+  final pending = calculator.sum(SumRequest([1, 2]), context: ctx);
+  token.cancel('user cancelled'); // the call fails with CANCELLED
+  await pending.catchError((_) => SumResponse(0));
 }
 
-token.cancel('user cancelled');
+// In a handler, cooperate with cancellation:
+Future<SumResponse> slowSum(SumRequest request, {RpcContext? context}) async {
+  var total = 0.0;
+  for (final value in request.values) {
+    context?.cancellationToken?.throwIfCancelled();
+    total += value;
+  }
+  return SumResponse(total);
+}
 ```
+
+A cancelled token poisons its context: make a new token or context per logical
+operation.
 
 ---
 
 ## Error handling
 
-Return specific gRPC status codes from handlers:
+Throw `RpcStatusException` with an `RpcStatus` code to send a status to the
+caller. Any other exception reaches the caller as `INTERNAL`.
 
 ```dart
-Future<Response> handle(Request req, {RpcContext? context}) async {
-  if (!authorized) throw RpcStatusException(StatusCode.unauthenticated, 'Not authorized');
-  return Response(...);
+Future<SumResponse> guardedSum(SumRequest request, {RpcContext? context}) async {
+  if (context?.getHeader('authorization') == null) {
+    throw RpcStatusException(RpcStatus.unauthenticated, 'Not authorized');
+  }
+  return SumResponse(request.values.fold<double>(0, (a, b) => a + b));
 }
 ```
+
+On the caller, branch on `e.statusCode`: a status sent by the server always
+arrives as a plain `RpcStatusException`.
 
 ---
 
 ## Testing
 
 ```dart
-test('sum', () async {
-  final (ct, st) = RpcChannelTransport.memoryPair();
-  final responder = RpcResponderEndpoint(transport: st)
-    ..registerServiceContract(CalculatorResponder())
-    ..start();
-  final caller = RpcCallerEndpoint(transport: ct);
+import 'package:test/test.dart';
 
-  final res = await caller.callUnary(...);
-  expect(res.result, 6.0);
+void main() {
+  test('sum', () async {
+    final (ct, st) = RpcChannelTransport.memoryPair();
+    final responder = RpcResponderEndpoint(transport: st)
+      ..registerServiceContract(CalculatorResponder())
+      ..start();
+    final caller = RpcCallerEndpoint(transport: ct);
 
-  await caller.close();
-  await responder.close();
-});
+    final res = await CalculatorCaller(caller).sum(SumRequest([1, 2, 3]));
+    expect(res.result, 6.0);
+
+    await caller.close();
+    await responder.close();
+  });
+}
 ```
+
+---
+
+## AI agents
+
+This package ships an [Agent Skill](https://pub.dev/packages/skills) for coding
+agents (Claude Code, Cursor, Copilot, Codex and others): the API reference,
+rules and pitfalls, matched to the rpc_dart version your project resolves.
+Install it from your project root with the
+[skills](https://pub.dev/packages/skills) CLI:
+
+```sh
+dart run skills@ get
+```
+
+It is installed into your agent's skills directory, for example
+`.claude/skills/` or `.agents/skills/`. If your SDK does not support
+`dart run <package>@`, add `skills` as a dev dependency and run
+`dart run skills get`.
 
 ---
 
@@ -365,7 +469,9 @@ This package is the core of the rpc_dart ecosystem. Additional packages are avai
 | [rpc_dart_grpc_reflection](https://pub.dev/packages/rpc_dart_grpc_reflection) | gRPC Server Reflection (grpcurl, Postman support) |
 | [rpc_dart_opentelemetry](https://pub.dev/packages/rpc_dart_opentelemetry) | OpenTelemetry tracing and metrics |
 | [rpc_dart_http2](https://pub.dev/packages/rpc_dart_http2) | HTTP/2 transport (gRPC wire compatible) |
+| [rpc_dart_http](https://pub.dev/packages/rpc_dart_http) | HTTP/1.1 transport |
 | [rpc_dart_websocket](https://pub.dev/packages/rpc_dart_websocket) | WebSocket transport |
 | [rpc_dart_isolate](https://pub.dev/packages/rpc_dart_isolate) | Isolate transport |
+| [rpc_dart_wasm](https://pub.dev/packages/rpc_dart_wasm) | WebAssembly bridge transport |
 
 For the full list visit the [GitHub repository](https://github.com/nogipx/rpc_dart).
