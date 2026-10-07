@@ -186,18 +186,53 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
 }
 
 /// Reads WebSocket frame headers off a byte stream and refuses a message whose
-/// declared length crosses [maxMessageBytes].
+/// declared length crosses [maxMessageBytes], or a peer pinging faster than
+/// [maxPingsPerSecond].
 ///
 /// Counts what a header DECLARES, so the refusal comes before the payload is
 /// read: a fragmented message is summed across its fragments, and a control
 /// frame (which may arrive between them) counts toward nothing but may not
 /// exceed 125 bytes, the protocol's own limit.
+///
+/// Pings are rate-limited because dart:io answers each with a pong queued on
+/// an unbounded write buffer: a client that sends pings and never reads makes
+/// the server hold a pong for every ping, at the client's upload rate. A
+/// burst of [maxPingBurst] is allowed, refilled at [maxPingsPerSecond]; a
+/// keepalive pings once per interval and browsers do not ping at all.
 final class WebSocketFrameGuard {
-  /// Creates a guard with the given per-message ceiling.
-  WebSocketFrameGuard(this.maxMessageBytes);
+  /// Creates a guard with the given per-message ceiling. [now] reads a
+  /// monotonic clock in microseconds, for tests.
+  WebSocketFrameGuard(this.maxMessageBytes, {int Function()? now})
+    : _now = now ?? _monotonic,
+      _pingTokens = maxPingBurst.toDouble();
 
   /// Ceiling on one message's payload, summed over its fragments.
   final int maxMessageBytes;
+
+  /// Pings admitted at once before the rate applies.
+  static const int maxPingBurst = 256;
+
+  /// Sustained pings admitted per second.
+  static const int maxPingsPerSecond = 16;
+
+  static final Stopwatch _clock = Stopwatch()..start();
+  static int _monotonic() => _clock.elapsedMicroseconds;
+
+  final int Function() _now;
+  double _pingTokens;
+  int? _pingRefilledAt;
+
+  /// Spends one ping token; false when the bucket is empty.
+  bool _admitPing() {
+    final now = _now();
+    final last = _pingRefilledAt ?? now;
+    _pingRefilledAt = now;
+    _pingTokens += (now - last) * maxPingsPerSecond / 1000000;
+    if (_pingTokens > maxPingBurst) _pingTokens = maxPingBurst.toDouble();
+    if (_pingTokens < 1) return false;
+    _pingTokens -= 1;
+    return true;
+  }
 
   final Uint8List _header = Uint8List(14);
   int _headerLen = 0;
@@ -250,6 +285,7 @@ final class WebSocketFrameGuard {
     if (length < 0) return false;
     if (opcode >= 8) {
       if (length > 125) return false;
+      if (opcode == 0x9 && !_admitPing()) return false;
       _finalData = false;
     } else {
       _messageBytes += length;

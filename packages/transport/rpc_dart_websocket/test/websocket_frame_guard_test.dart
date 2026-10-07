@@ -84,4 +84,52 @@ void main() {
     // Two bytes, two of length, four of mask: the whole header and no payload.
     expect(guard.admit(_frame(2, 1001, fin: true).sublist(0, 8)), isFalse);
   });
+
+  group('pings', () {
+    // dart:io queues a pong for every ping on an unbounded write buffer, so a
+    // client pinging without reading grew the server by gigabytes in seconds.
+    var clock = 0;
+    WebSocketFrameGuard build() => WebSocketFrameGuard(1000, now: () => clock);
+    setUp(() => clock = 0);
+
+    test('WITNESS a ping flood is refused after the burst', () {
+      final guard = build();
+      var admitted = 0;
+      while (guard.admit(_frame(9, 125, fin: true))) {
+        admitted++;
+        if (admitted > 100000) break;
+      }
+
+      expect(admitted, WebSocketFrameGuard.maxPingBurst);
+    });
+
+    test('the bucket refills at the sustained rate', () {
+      final guard = build();
+      for (var i = 0; i < WebSocketFrameGuard.maxPingBurst; i++) {
+        guard.admit(_frame(9, 0, fin: true));
+      }
+      clock += 1000000;
+
+      for (var i = 0; i < WebSocketFrameGuard.maxPingsPerSecond; i++) {
+        expect(guard.admit(_frame(9, 0, fin: true)), isTrue, reason: '$i');
+      }
+      expect(guard.admit(_frame(9, 0, fin: true)), isFalse);
+    });
+
+    test('GUARD a keepalive pinging every 100 ms runs for good', () {
+      final guard = build();
+      for (var i = 0; i < 10000; i++) {
+        clock += 100000;
+        expect(guard.admit(_frame(9, 8, fin: true)), isTrue, reason: '$i');
+      }
+    });
+
+    test('GUARD pongs and data frames are not rate-limited', () {
+      final guard = build();
+      for (var i = 0; i < 10000; i++) {
+        expect(guard.admit(_frame(10, 125, fin: true)), isTrue);
+        expect(guard.admit(_frame(2, 10, fin: true)), isTrue);
+      }
+    });
+  });
 }
