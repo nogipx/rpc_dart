@@ -10,6 +10,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:universal_io/io.dart';
 
 import 'http2_header_block_guard.dart';
+import 'raw_socket_pipe.dart';
 import 'rpc_http2_common.dart';
 
 /// Whether the peer has told us this connection is going away.
@@ -596,15 +597,20 @@ class RpcHttp2CallerTransport
     // exchange (that one has `handshakeTimeout`): reaching the proxy, and the
     // TLS handshake through the tunnel. See the direct paths for why
     // `timeout:` rather than an outer `.timeout()` on the socket connect.
-    final rawSocket = await Socket.connect(
+    // A RawSocket throughout, not a Socket: it is the only kind that stays
+    // closable through the TLS handshake. Once SecureSocket.secure owns a
+    // Socket, destroying the original no longer closes it, so a handshake
+    // that timed out left its socket to the proxy open. See RawSocketPipe.
+    final raw = await RawSocket.connect(
       proxyHost,
       proxyPort,
       timeout: connectTimeout,
     );
-    // This is the path that already did it, and the reason the other two
-    // stood out. Routed through the shared helper so a setOption that throws
-    // on a socket the proxy has already reset cannot take the isolate out.
-    disableNagle(rawSocket, logger: logger, what: 'proxy socket to $proxyHost');
+    try {
+      raw.setOption(SocketOption.tcpNoDelay, true);
+    } catch (error) {
+      logger?.warning('Could not disable Nagle on proxy socket: $error');
+    }
 
     // Build CONNECT request. The target in authority-form, so an IPv6 literal
     // is bracketed.
@@ -627,92 +633,79 @@ class RpcHttp2CallerTransport
       );
     }
     reqBuf.write('\r\n');
-    rawSocket.add(utf8.encode(reqBuf.toString()));
+    final request = utf8.encode(reqBuf.toString());
 
-    // Single subscription kept alive for the full lifetime of the tunnel.
-    // For non-TLS: data after CONNECT headers is forwarded to [forwardCtrl],
-    //   and http2 reads from forwardCtrl.stream via viaStreams.
-    // For TLS: subscription is paused after CONNECT and SecureSocket.secure()
-    //   takes the socket over from it.
-    final forwardCtrl = StreamController<List<int>>();
+    // ONE subscription for the socket's whole life: the CONNECT exchange reads
+    // through it, then it is handed to RawSecureSocket.secure or to the pipe.
     final handshake = Completer<void>();
-    bool headersDone = false;
     final headerBuf = <int>[];
+    var leftover = Uint8List(0);
+    var written = 0;
+    late final StreamSubscription<RawSocketEvent> sub;
+    void fail(Object error) {
+      if (!handshake.isCompleted) handshake.completeError(error);
+    }
 
-    final sub = rawSocket.listen(
-      (chunk) {
-        if (headersDone) {
-          if (!forwardCtrl.isClosed) forwardCtrl.add(chunk);
-          return;
-        }
-        headerBuf.addAll(chunk);
-        if (headerBuf.length > _maxProxyHeaderBytes) {
-          rawSocket.destroy();
-          if (!handshake.isCompleted) {
-            handshake.completeError(
-              SocketException(
-                'HTTP proxy sent more than $_maxProxyHeaderBytes bytes of '
-                'CONNECT response headers without terminating them',
-              ),
-            );
-          }
-          return;
-        }
-        final endIdx = _indexOfEndOfHeaders(headerBuf);
-        if (endIdx == -1) return;
-
-        headersDone = true;
-        final statusLine = String.fromCharCodes(headerBuf).split('\r\n').first;
-        if (!RegExp(r'HTTP/\S+ 2\d\d').hasMatch(statusLine)) {
-          rawSocket.destroy();
-          if (!handshake.isCompleted) {
-            handshake.completeError(
-              SocketException(
-                'HTTP proxy CONNECT rejected: ${statusLine.trim()}',
-              ),
-            );
-          }
-          return;
-        }
-        // Bytes after \r\n\r\n (unusual but possible): forward immediately.
-        final leftover = headerBuf.sublist(endIdx + 4);
-        if (leftover.isNotEmpty && !forwardCtrl.isClosed) {
-          forwardCtrl.add(Uint8List.fromList(leftover));
-        }
-        if (!handshake.isCompleted) handshake.complete();
-      },
-      onError: (Object e) {
-        if (!handshake.isCompleted) {
-          handshake.completeError(e);
-        } else if (!forwardCtrl.isClosed) {
-          forwardCtrl.addError(e);
+    sub = raw.listen(
+      (event) {
+        if (handshake.isCompleted) return;
+        switch (event) {
+          case RawSocketEvent.write:
+            written += raw.write(request, written);
+            if (written >= request.length) raw.writeEventsEnabled = false;
+          case RawSocketEvent.read:
+            final chunk = raw.read();
+            if (chunk == null) return;
+            headerBuf.addAll(chunk);
+            final endIdx = _indexOfEndOfHeaders(headerBuf);
+            if (endIdx == -1) {
+              if (headerBuf.length > _maxProxyHeaderBytes) {
+                fail(
+                  SocketException(
+                    'HTTP proxy sent more than $_maxProxyHeaderBytes bytes of '
+                    'CONNECT response headers without terminating them',
+                  ),
+                );
+              }
+              return;
+            }
+            final statusLine = String.fromCharCodes(
+              headerBuf.sublist(0, endIdx),
+            ).split('\r\n').first;
+            if (!RegExp(r'HTTP/\S+ 2\d\d').hasMatch(statusLine)) {
+              fail(
+                SocketException(
+                  'HTTP proxy CONNECT rejected: ${statusLine.trim()}',
+                ),
+              );
+              return;
+            }
+            // Bytes after \r\n\r\n (unusual but possible): kept for the
+            // tunnel.
+            leftover = Uint8List.fromList(headerBuf.sublist(endIdx + 4));
+            // No more reads until the next stage takes the subscription
+            // over. Not a pause: RawSecureSocket.secure refuses a paused
+            // subscription.
+            raw.readEventsEnabled = false;
+            handshake.complete();
+          case RawSocketEvent.readClosed:
+          case RawSocketEvent.closed:
+            fail(SocketException('Proxy closed during CONNECT'));
         }
       },
-      onDone: () {
-        if (!handshake.isCompleted) {
-          handshake.completeError(
-            SocketException('Proxy closed during CONNECT'),
-          );
-        }
-        if (!forwardCtrl.isClosed) forwardCtrl.close();
-      },
+      onError: fail,
+      onDone: () => fail(SocketException('Proxy closed during CONNECT')),
     );
+    raw.writeEventsEnabled = true;
 
     // Bounded, and the socket is released on the way out: abandoning the await
-    // without destroying the socket would leak it -- Future.timeout abandons
-    // the await, not the work.
+    // without closing the socket would leak it -- Future.timeout abandons the
+    // await, not the work.
     try {
       await handshake.future.timeout(handshakeTimeout);
     } catch (error) {
       await sub.cancel();
-      // NOT awaited. `forwardCtrl` is single-subscription and nothing has
-      // listened to it on this path, and closing a never-listened controller
-      // returns a future that does not complete until someone does. Awaiting
-      // it deadlocked the very timeout being added here: the 2s bound fired
-      // and then cleanup hung forever, which looked exactly like no timeout at
-      // all.
-      unawaited(forwardCtrl.close());
-      rawSocket.destroy();
+      await raw.close();
       if (error is TimeoutException) {
         throw SocketException(
           'HTTP proxy did not answer CONNECT within $handshakeTimeout',
@@ -722,64 +715,77 @@ class RpcHttp2CallerTransport
     }
 
     if (secure) {
-      // PAUSED, not cancelled: SecureSocket.secure() takes the socket over from
-      // a paused subscription, as its documentation asks. Cancelling closes the
-      // socket's read side, and the TLS handshake through the tunnel then dies
-      // with "Connection terminated during handshake" before reaching the
-      // server.
-      sub.pause();
-      // NOT awaited, for the same reason as the timeout path above: on the TLS
-      // branch nothing ever listens to `forwardCtrl` (http2 reads from the
-      // SecureSocket instead), so awaiting its close never returns and
-      // secureConnect through a proxy hung forever AFTER a successful CONNECT
-      // handshake -- TLS was never even attempted.
-      unawaited(forwardCtrl.close());
-      // SecureSocket.secure takes no timeout, so the bound is an outer one --
-      // and it destroys the socket, since abandoning the await alone would
-      // leave the handshake holding it.
-      final handshake = SecureSocket.secure(
-        rawSocket,
+      if (leftover.isNotEmpty) {
+        await sub.cancel();
+        await raw.close();
+        throw SocketException(
+          'HTTP proxy sent tunnel bytes before the TLS handshake began',
+        );
+      }
+      // The bound closes the RawSocket, which -- unlike a Socket handed to
+      // SecureSocket.secure -- really closes the handshake's socket.
+      final handshake = RawSecureSocket.secure(
+        raw,
+        subscription: sub,
         host: targetHost,
         supportedProtocols: ['h2'],
       );
-      final SecureSocket secureSocket;
-      if (connectTimeout == null) {
-        secureSocket = await handshake;
-      } else {
-        secureSocket = await handshake.timeout(
-          connectTimeout,
-          onTimeout: () {
-            rawSocket.destroy();
-            throw SocketException(
-              'TLS handshake through the proxy did not finish within '
-              '$connectTimeout',
-            );
-          },
+      final RawSecureSocket secureSocket;
+      try {
+        secureSocket = connectTimeout == null
+            ? await handshake
+            : await handshake.timeout(connectTimeout);
+      } on TimeoutException {
+        await raw.close();
+        throw SocketException(
+          'TLS handshake through the proxy did not finish within '
+          '$connectTimeout',
+        );
+      } catch (_) {
+        await raw.close();
+        rethrow;
+      }
+      final chosen = secureSocket.selectedProtocol;
+      if (chosen != 'h2') {
+        await secureSocket.close();
+        throw SocketException(
+          'TLS peer $targetHost:$targetPort did not negotiate HTTP/2 '
+          '(ALPN: ${chosen ?? 'none'})',
         );
       }
-      _requireH2(secureSocket, '$targetHost:$targetPort');
+      final pipe = RawSocketPipe(secureSocket);
       return _guardedConnection(
-        incoming: secureSocket,
-        outgoing: secureSocket,
-        destroy: secureSocket.destroy,
-        policy: policy,
-        logger: logger,
-        drainSignal: drainSignal,
-      );
-    } else {
-      // Keep sub alive — it feeds forwardCtrl.
-      // http2 reads from forwardCtrl.stream; writes go directly to rawSocket.
-      // The guard sits on the forwarded stream, so it bounds what the TUNNELED
-      // peer sends as well as anything the proxy injects.
-      return _guardedConnection(
-        incoming: forwardCtrl.stream,
-        outgoing: rawSocket,
-        destroy: rawSocket.destroy,
+        incoming: pipe.incoming,
+        outgoing: pipe,
+        destroy: pipe.destroy,
         policy: policy,
         logger: logger,
         drainSignal: drainSignal,
       );
     }
+    // The guard sits on the tunnel's stream, so it bounds what the TUNNELED
+    // peer sends as well as anything the proxy injects.
+    final pipe = RawSocketPipe(raw, subscription: sub);
+    final Stream<List<int>> incoming = leftover.isEmpty
+        ? pipe.incoming
+        : _prepend(leftover, pipe.incoming);
+    return _guardedConnection(
+      incoming: incoming,
+      outgoing: pipe,
+      destroy: pipe.destroy,
+      policy: policy,
+      logger: logger,
+      drainSignal: drainSignal,
+    );
+  }
+
+  /// [first], then everything [rest] delivers.
+  static Stream<List<int>> _prepend(
+    List<int> first,
+    Stream<List<int>> rest,
+  ) async* {
+    yield first;
+    yield* rest;
   }
 
   /// Refuses a TLS peer that did not choose `h2` in ALPN.
