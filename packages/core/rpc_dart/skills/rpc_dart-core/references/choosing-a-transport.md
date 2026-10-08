@@ -99,6 +99,11 @@ RpcCallerEndpoint overCustomPipe(IRpcChannel channel) => RpcCallerEndpoint(
   `IRpcReconnectableTransport`), call `connect()`, and give
   `connection.transport` to a single `RpcCallerEndpoint` that you keep for the
   app's lifetime. See `errors-and-resilience.md`.
+- `RpcClientConnection` notices a drop when the transport's `incomingMessages`
+  ends or errors, or when a transport implementing
+  `IRpcConnectionLossReporting` emits on `connectionLost`. The websocket and
+  http2 caller transports implement it, because they stay open for their own
+  `reconnect()` and their message stream does neither.
 - In-flight calls do not survive a reconnect. Only new calls do; reissue the
   lost ones yourself (idempotent methods only).
 
@@ -133,4 +138,8 @@ RpcCallerEndpoint resilientCaller(
   `RpcClientConnection`; its transport proxy is stable.
 - A transport decorator that forwards `IRpcTransport` but not the
   `IRpcReconnectableTransport` members loses reconnect safety; implement the
-  capability interfaces it wraps.
+  capability interfaces it wraps. One that hides `IRpcConnectionLossReporting`
+  leaves `RpcClientConnection` online over a dead connection.
+- A custom transport that stays open across a lost connection must implement
+  `IRpcConnectionLossReporting`, or `RpcClientConnection` never notices the
+  drop. One that closes itself needs nothing: the stream's end says it.

@@ -87,6 +87,10 @@ final class _ReconnectingTransportProxy
   IRpcTransport? _inner;
   StreamSubscription<RpcTransportMessage>? _innerSub;
 
+  /// To the live transport's [IRpcConnectionLossReporting.connectionLost], when
+  /// it has one.
+  StreamSubscription<Object?>? _lossSub;
+
   /// Remembered from the transport most recently attached.
   ///
   /// The layers above read these ONCE and cache the answer — the responder
@@ -159,6 +163,7 @@ final class _ReconnectingTransportProxy
     }
 
     final previousSub = _innerSub;
+    final previousLoss = _lossSub;
     final previous = _inner;
     // Read the outgoing transport's cursor while it is still open, then seed
     // the incoming one before any call can reach it. See [_idWatermark].
@@ -167,6 +172,7 @@ final class _ReconnectingTransportProxy
       (inner as IRpcStreamIdSequence).resumeStreamIdsAfter(_idWatermark);
     }
     _innerSub = null;
+    _lossSub = null;
     _inner = inner;
     if (inner is IRpcSecurityPolicyAware) {
       _lastPolicy = (inner as IRpcSecurityPolicyAware).securityPolicy;
@@ -177,6 +183,9 @@ final class _ReconnectingTransportProxy
     // mistaken for a drop of the new one. The identity guards below make that
     // safe even if a queued event slips through the async cancel.
     if (previousSub != null) unawaited(previousSub.cancel().catchError((_) {}));
+    if (previousLoss != null) {
+      unawaited(previousLoss.cancel().catchError((_) {}));
+    }
     if (previous != null && !identical(previous, inner)) {
       unawaited(previous.close().catchError((_) {}));
     }
@@ -208,6 +217,19 @@ final class _ReconnectingTransportProxy
       // cancelled by the first one would never see the connection end.
       cancelOnError: false,
     );
+
+    // A transport that stays open for its own reconnect() neither ends nor
+    // errors the stream above when its connection goes; it reports the loss
+    // here instead, and the proxy treats it as the end.
+    if (inner is IRpcConnectionLossReporting) {
+      _lossSub = (inner as IRpcConnectionLossReporting).connectionLost.listen((
+        error,
+      ) {
+        if (!identical(_inner, inner)) return;
+        _retire(inner);
+        onDropped?.call(error);
+      }, onError: (Object _) {});
+    }
   }
 
   /// Whether [e] describes ONE inbound frame rather than the connection.
@@ -251,6 +273,10 @@ final class _ReconnectingTransportProxy
       await _innerSub?.cancel();
     } catch (_) {}
     _innerSub = null;
+    try {
+      await _lossSub?.cancel();
+    } catch (_) {}
+    _lossSub = null;
     try {
       await _inner?.close();
     } catch (_) {}

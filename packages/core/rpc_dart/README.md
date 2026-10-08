@@ -194,7 +194,10 @@ is the other built-in `BackoffPolicy`.
 ### Client connection with reconnect
 
 `RpcClientConnection` reopens a transport after a drop. Create the endpoint once
-on `connection.transport`; it stays valid across reconnects:
+on `connection.transport`; it stays valid across reconnects. It notices a drop
+when the transport's message stream ends or errors, or, for a transport that
+stays open across a drop for its own `reconnect()`, through
+`IRpcConnectionLossReporting.connectionLost`:
 
 ```dart
 RpcCallerEndpoint connect(Future<IRpcReconnectableTransport> Function() open) {

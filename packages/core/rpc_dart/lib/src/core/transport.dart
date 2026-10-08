@@ -233,6 +233,28 @@ abstract interface class IRpcStreamIdSequence {
 abstract interface class IRpcReconnectableTransport
     implements IRpcTransport, IRpcStreamIdSequence {}
 
+/// Capability: the transport outlives a lost connection and says when it
+/// loses one.
+///
+/// A transport that can re-attach a new connection with `reconnect()` keeps
+/// itself and its [IRpcTransport.incomingMessages] open across a drop, so that
+/// stream neither ends nor errors when the connection goes. A layer that
+/// supervises reconnects, such as `RpcClientConnection`, has nothing else to
+/// tell a dropped connection from a quiet one; without this it stays online
+/// over a dead connection.
+///
+/// A separate stream rather than an error on [IRpcTransport.incomingMessages]:
+/// that stream is public, and an error on it reaches every listener, including
+/// one that registered no `onError`, where it is an uncaught error.
+///
+/// A transport that closes itself when its connection goes does not need this:
+/// the end of [IRpcTransport.incomingMessages] already says it.
+abstract interface class IRpcConnectionLossReporting {
+  /// One event per lost connection, carrying the error that ended it, or null
+  /// when the peer closed it cleanly. Broadcast. Never carries a stream error.
+  Stream<Object?> get connectionLost;
+}
+
 /// Capability: a higher layer takes over flow-control metering for a stream.
 ///
 /// The transport meters what it hands out through `getMessagesForStream`,
