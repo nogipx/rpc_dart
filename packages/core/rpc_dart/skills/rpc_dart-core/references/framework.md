@@ -42,10 +42,8 @@ import 'package:rpc_dart_framework/rpc_dart_framework.dart';
   start in dependency order and stop in reverse.
 - `buildContracts` runs once **per connection**. Return new contract instances
   every time. Keep shared state in the container, not in the contract.
-- The transport server starts BEFORE any `onStart` runs. A connection can
-  arrive, and `buildContracts` can run, while `onStart` is still working. So
-  register what `buildContracts` resolves in `configure` or `configureWithEnv`
-  (both run before the server starts), or resolve it inside the handler.
+- Every module's `onStart` finishes before the transport server starts, so
+  `buildContracts` can resolve what `onStart` registers.
 - `RpcApp.start()` runs once. A second call, even after `stop()` or a failed
   start, throws. To restart, build a new `RpcApp`.
 - A failed start rolls back: started modules get `onStop`, the server stops,
@@ -62,11 +60,11 @@ import 'package:rpc_dart_framework/rpc_dart_framework.dart';
 2. For each module: `configure(container)`, then
    `configureWithEnv(container, env)`. Both are synchronous.
 3. Spawn the isolate of each `RpcIsolateModule`.
-4. Build and start the server. For each new connection the server calls back
+4. For each module: `await onStart(container)`.
+5. Build and start the server. For each new connection the server calls back
    with a `RpcResponderEndpoint`; the app adds the `onError`/`onCall` hooks,
    the `interceptors:`, the `middlewares:`, registers every server module's
    `buildContracts`, and starts the endpoint.
-5. For each module: `await onStart(container)`.
 6. `afterModulesStart(container)`, if given.
 
 `stop()` stops the server with `drainTimeout` (it stops admitting and lets
@@ -209,9 +207,10 @@ in `afterModulesStart`; see that transport's README.
 is rethrown. `onCall` gets an `RpcCallEvent` (`serviceName`, `methodName`,
 `callType`, `duration`, `success`, `error`, `context`) after each call.
 
-`await app.health()` returns `RpcAppHealth`. The level is the worst of the
-modules' `degraded`/`unhealthy`, and `unhealthy` when any server endpoint is
-inactive or its transport closed. Serve `toJson()` from a health check.
+`await app.health()` returns `RpcAppHealth`. The level is the worst over the
+modules, where a module's `closed` counts as `unhealthy` and `reconnecting` as
+`degraded`, and `unhealthy` when any server endpoint is inactive or its
+transport closed. Serve `toJson()` from a health check.
 
 ## Isolate modules
 
@@ -324,19 +323,14 @@ Future<void> main() async {
   a throwing factory still throws.
 - `registerFactory` builds a new instance on every `get`. For one shared
   instance use `registerSingleton` or `registerLazySingleton`.
-- Resolving in `buildContracts` something that `onStart` registers fails for
-  connections that arrive during startup. Register it in `configure` /
-  `configureWithEnv`.
 - Storing per-connection state in a module field: modules are shared by every
   connection.
 - `RpcEnvConfig.require` treats an empty value as missing. `getBool` is true
   for `true`, `1` and `yes` (any case).
-- A module whose `checkHealth` returns `reconnecting` or `closed` does not
-  lower `RpcAppHealth.level`; only `degraded` and `unhealthy` do.
 - `RpcTestApp` uses `memoryPair()`, which is zero-copy: codecs do not run.
   Test serialization over `RpcChannelTransport.pair()` (`testing.md`).
-- `RpcTestApp` builds contracts once (one connection), before `onStart`, so
-  it does not reproduce per-connection or startup-race bugs.
+- `RpcTestApp` builds contracts once (one connection), so it does not
+  reproduce per-connection bugs.
 - An unbounded `RpcCallSpy` in a long-running server keeps every call's
   context. Pass `maxEntries:` or do not use it outside tests.
 - Calling `initIsolate()` / `terminateIsolate()` yourself: the app does it.
