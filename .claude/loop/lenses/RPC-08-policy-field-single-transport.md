@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745]
 status: confirmed (round 584)
 ---
 
@@ -500,3 +500,13 @@ WITNESS  the parameter OMITTED       200   RSS +524 MiB
 
 `../rounds/584-the-documented-setup-was-the-unsafe-one.md`,
 `../probes/P-204-what-the-documented-shelf-setup-admits.md`, B-150, B-223.
+
+## Round 745 — the whole matrix in eighteen queries
+
+dart-runner's `find_references` per field, under `scope: lib`, gives the
+census half of the detector: who READS each field. All 18 fields across core,
+http and http2 fit in one table, and every empty cell had a reason. The one
+behavioural split it shows is `closeOnProtocolError`: honoured by the channel
+transport in both roles, not by the http2 caller, on purpose. A census is not
+the probe this lens asks for; it says where to aim one.
+`../rounds/745-the-policy-matrix-from-the-analyzer.md`.

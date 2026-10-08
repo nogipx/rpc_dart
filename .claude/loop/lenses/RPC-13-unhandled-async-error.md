@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are paths that run user code outside a guarded zone — or inside one that was never meant to catch it
 breaks: a process crash.
-applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535, 557, 577, 639, 647, 712]
-status: confirmed (round 431)
+applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535, 557, 577, 639, 647, 712, 744]
+status: confirmed (round 744)
 ---
 
 # RPC-13 — An unhandled async error is fatal to the isolate
@@ -323,3 +323,17 @@ escapes with `Bad state: Cannot add event after closing`.
 
 `../rounds/557-the-comment-named-a-zone-that-was-not-there.md`,
 `../probes/P-182-where-terminate-s-error-lands.md`, B-178.
+
+## Round 744 — the detector is the analyzer's reference list
+
+dart-runner's `find_references` on `unawaited` lists every site by resolved
+element, so a site is not missed for a line break or an alias. It is not the
+whole list on its own. A Flutter package resolves `dart:async` from
+`sky_engine`, which is a different element: the 11 sites in `rpc_dart_wasm`
+were absent, and a grep count over the same `lib/` trees (128 lines against
+117 references) is what showed it. **Count the same thing with grep and
+reconcile the difference before calling an enumeration complete.**
+
+One site of 128 dropped a failing future: the foreign-id release in
+`RpcFlutterWasmBridge.load()`, whose sibling `_releaseNative()` already had
+the `catchError`. `../rounds/744-every-unawaited-site-from-the-analyzer.md`.

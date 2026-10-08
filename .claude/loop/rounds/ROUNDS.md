@@ -23,6 +23,8 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[745](745-the-policy-matrix-from-the-analyzer.md)** CLEAN, rpc_dart, rpc_dart_http, rpc_dart_http2 — who reads each of the 18 RpcSecurityPolicy fields, from the analyzer; every empty cell explained, closeOnProtocolError's caller split is documented
+- **[744](744-every-unawaited-site-from-the-analyzer.md)** FIXED, rpc_dart_wasm, `8c0e7531` — all 128 unawaited sites in lib/, enumerated by the analyzer and reconciled with grep; the foreign-runtime release in RpcFlutterWasmBridge.load() leaked a failing closeRuntime (new P-248)
 - **[743](743-a-shared-close-is-still-bounded.md)** CLEAN, rpc_dart — two concurrent responder close() calls over four stuck handlers return in 404 ms against a 400 ms disposer bound; with the bound lifted both hang (new P-247)
 - **[742](742-rpc-dart-calls-grpc-go.md)** CLEAN, rpc_dart_http2 — rpc_dart's h2 caller against a real grpc-go server: every call shape, a non-ASCII NotFound, a deadline sent as `grpc-timeout`, Unimplemented (new P-246)
 - **[741](741-grpcurl-streams-and-tls.md)** CLEAN, rpc_dart_http2 + rpc_dart_grpc_reflection — grpcurl client-stream and bidi work, h2 over TLS works with `-insecure`, and a plaintext preface to the TLS listener is closed in 1 ms
