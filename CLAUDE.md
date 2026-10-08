@@ -245,11 +245,13 @@ read offline at the version the user resolved, so it must match the code
 exactly.
 
 **Its scope is the packages under `packages/core/`**, not `rpc_dart` alone.
-`rpc_dart` is covered in full. The companions are covered by the everyday
-workflow an agent needs: `rpc_dart_generator` has its own reference
-(`code-generation.md`, and defining contracts by generation is what the skill
-recommends); the others are named in `SKILL.md` with what they are for, and
-their full reference stays in each package's README.
+`rpc_dart` is covered in full. Each companion has one reference covering the
+everyday workflow an agent needs, and its README stays the full reference:
+`code-generation.md` (`rpc_dart_generator` -- defining contracts by generation
+is what the skill recommends), `framework.md`, `compression.md`,
+`grpc-reflection.md`, `remote-logging.md` (`rpc_dart_log`) and
+`opentelemetry.md`. Their ```dart blocks import the sibling package directly;
+`check:skills` resolves it through the workspace.
 
 - Change a public API of any package under `packages/core/` that the skill
   describes, and you update the skill in the same commit. That includes the
