@@ -11,8 +11,21 @@ Transport-agnostic RPC framework for Dart. This is a **monorepo** managed with
 
 ## Layout
 
-- `packages/core/*` — core library (`rpc_dart`) + framework, log, generator,
-  grpc_reflection, opentelemetry, compression.
+- `packages/core/*` — the core library and its companions:
+  - `rpc_dart` — contracts, endpoints, streaming, codecs, `RpcContext`,
+    errors and resilience, `RpcSecurityPolicy` and flow control, logging,
+    the in-memory and channel transports, and the codegen annotations.
+    Ships the Agent Skill (see below).
+  - `rpc_dart_generator` — `build_runner` generator: an annotated interface
+    becomes the caller, the responder base, name constants and codecs. The
+    recommended way to define contracts.
+  - `rpc_dart_framework` — client/server framework on top: modules, DI,
+    lifecycle, graceful shutdown, rate limiting, isolate workers, test harness.
+  - `rpc_dart_compression` — compression codecs (gzip), web-compatible.
+  - `rpc_dart_grpc_reflection` — gRPC Server Reflection, so grpcurl and
+    Postman can discover services.
+  - `rpc_dart_log` — remote log collector over WebSocket.
+  - `rpc_dart_opentelemetry` — OpenTelemetry tracing, metrics and logs.
 - `packages/transport/*` — transports: http, http2, isolate, websocket, wasm.
 - `packages/data/*`, `packages/notify/*`, `packages/blob/*` — higher layers.
 - Root `pubspec.yaml` declares the pub `workspace:` and the `melos:` config.
@@ -228,10 +241,19 @@ on `Version X already exists`, after the other packages have gone out.
 `packages/core/rpc_dart/skills/rpc_dart-core/` is an Agent Skill for USERS of
 rpc_dart. `dart pub publish` bundles `skills/`, and users install it with
 `dart run skills get`. It is the reference documentation for agents, and it is
-read offline at the version the user resolved. So it describes core only and
-must match `lib/` exactly.
+read offline at the version the user resolved, so it must match the code
+exactly.
 
-- Change a public core API, and you update the skill in the same commit.
+**Its scope is the packages under `packages/core/`**, not `rpc_dart` alone.
+`rpc_dart` is covered in full. The companions are covered by the everyday
+workflow an agent needs: `rpc_dart_generator` has its own reference
+(`code-generation.md`, and defining contracts by generation is what the skill
+recommends); the others are named in `SKILL.md` with what they are for, and
+their full reference stays in each package's README.
+
+- Change a public API of any package under `packages/core/` that the skill
+  describes, and you update the skill in the same commit. That includes the
+  generator's annotations, generated class names and command line.
   `melos run check:skills` (part of `prepare`) compiles every ```dart block. It
   cannot see prose, so a renamed parameter mentioned only in text still slips
   through.
@@ -241,6 +263,9 @@ must match `lib/` exactly.
 - `SKILL.md` must open with `---` frontmatter, so it carries no SPDX header.
   `license:annotate` skips it, and `REUSE.toml`'s `**/*.md` covers it.
 - Transport specifics belong in that transport's README, not in the skill.
+- A block that needs generated code cannot compile in `check:skills`, which
+  has no `build_runner`. Fence it as ```text and check it against real
+  generator output by hand (a scratch package under `.dart_tool/probe/`).
 
 ## The evidence-loop skill is linked, not copied
 
