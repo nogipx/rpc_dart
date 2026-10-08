@@ -1,5 +1,5 @@
 ---
-status: open (round 714)
+status: closed (round 716)
 round: 714
 commit: 0f167865
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift, packages/transport/rpc_dart_isolate/lib/src/web_bridge.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
@@ -33,4 +33,4 @@ Each read, none measured; listed so they are not lost.
 
 ## Owner decision
 
-—
+Owner, 2026-10-08: fix item 5 (round 716); document items 3, 4 and 6. Items 1 and 2 fixed by reading in round 716.

@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[716](716-the-audit-tail.md)** FIXED, http2 + wasm + docs — **a timed-out TLS handshake through a proxy left its socket open**: the proxy path now runs on a RawSocket. Android setup-throw leak and iOS unbounded guest queue fixed; three items documented. Closes B-266
 - **[715](715-h2-uploads-bounded-by-bytes.md)** FIXED, core + http2 + http — **h2 uploads of small messages failed at the depth**: `IRpcNoMessageCredit` bounds h2 request queues by bytes alone (owner). B-262 and B-265 documented by owner decision. Closes B-261, B-262, B-265
 - **[714](714-an-oversized-h1-stream-is-cancelled.md)** FIXED, http — **a server stream answered over the limit kept its handler and slot**; four of them made the server answer 503 to everyone. The transport now emits a cancellation for it. Closes B-264
 - **[713](713-pings-are-rate-limited.md)** FIXED, websocket — **a deaf client flooding pings grew the server by ~3 GiB in 10 s** (dart:io queues a pong per ping). The frame guard rate-limits pings. Closes B-263
