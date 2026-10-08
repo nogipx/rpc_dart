@@ -332,14 +332,20 @@ public class RpcDartWasmPlugin: NSObject, FlutterPlugin {
                 reply(nil)
                 return
             }
-            self.receiveRuntimeBytes(runtimeId: runtimeId, bytes: bytes)
-            reply(nil)
+            self.receiveRuntimeBytes(runtimeId: runtimeId, bytes: bytes) {
+                reply(nil)
+            }
         })
     }
 
-    private func receiveRuntimeBytes(runtimeId: String, bytes: Data) {
-        guard let runtime = runtimes[runtimeId] else { return }
-        runtime.enqueueForJS(bytes)
+    /// Queues [bytes] for the guest; [onRoom] answers the host's send, held
+    /// while the queue is over its limit so the host stops sending.
+    private func receiveRuntimeBytes(runtimeId: String, bytes: Data, onRoom: @escaping () -> Void) {
+        guard let runtime = runtimes[runtimeId] else {
+            onRoom()
+            return
+        }
+        runtime.enqueueForJS(bytes, onRoom: onRoom)
     }
 
     private func stripModuleSyntax(_ code: String) -> String {
@@ -393,6 +399,17 @@ private class SchemeHandler: NSObject, WKURLSchemeHandler {
     private var wasmBytes: Data?
     private var pendingRecvTask: WKURLSchemeTask?
     private var recvQueue: [Data] = []
+    /// Bytes in [recvQueue].
+    private var queuedBytes = 0
+    /// Host sends answered only once the queue is back under its limit.
+    ///
+    /// The host's bridge sends one batch and waits for the answer before the
+    /// next, so holding the answer is what bounds the queue: answered at once,
+    /// a guest that stops polling lets the host fill this queue for as long as
+    /// it keeps sending.
+    private var heldReplies: [() -> Void] = []
+    /// Queue size past which host sends are held.
+    static let queueLimitBytes = 1024 * 1024
     /// The most one `/recv` answer batches from the queue.
     static let recvBatchBytes = 4 * 1024 * 1024
     /// And at most this many frames: the guest decodes a chunk in one go, and
@@ -407,13 +424,28 @@ private class SchemeHandler: NSObject, WKURLSchemeHandler {
         super.init()
     }
 
-    func enqueue(_ data: Data) {
+    func enqueue(_ data: Data, onRoom: @escaping () -> Void) {
         if let task = pendingRecvTask {
             pendingRecvTask = nil
             respond(task: task, data: data)
-        } else {
-            recvQueue.append(data)
+            onRoom()
+            return
         }
+        recvQueue.append(data)
+        queuedBytes += data.count
+        if queuedBytes > Self.queueLimitBytes {
+            heldReplies.append(onRoom)
+        } else {
+            onRoom()
+        }
+    }
+
+    /// Answers the held host sends once the queue is back under its limit.
+    private func releaseHeldReplies() {
+        guard queuedBytes <= Self.queueLimitBytes, !heldReplies.isEmpty else { return }
+        let held = heldReplies
+        heldReplies.removeAll()
+        held.forEach { $0() }
     }
 
     func stop() {
@@ -431,6 +463,12 @@ private class SchemeHandler: NSObject, WKURLSchemeHandler {
             task.didFinish()
         }
         recvQueue.removeAll()
+        queuedBytes = 0
+        // Answered, not dropped: the host awaits each, and a close must not
+        // leave its send pump waiting for good.
+        let held = heldReplies
+        heldReplies.removeAll()
+        held.forEach { $0() }
     }
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
@@ -493,7 +531,9 @@ private class SchemeHandler: NSObject, WKURLSchemeHandler {
                     data.append(recvQueue.removeFirst())
                     frames += 1
                 }
+                queuedBytes -= data.count
                 respond(task: urlSchemeTask, data: data)
+                releaseHeldReplies()
             } else {
                 if let prev = pendingRecvTask {
                     prev.didFailWithError(NSError(domain: "rpc-wasm", code: -5,
@@ -601,8 +641,8 @@ private class WasmRuntime: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         }
     }
 
-    func enqueueForJS(_ data: Data) {
-        schemeHandler.enqueue(data)
+    func enqueueForJS(_ data: Data, onRoom: @escaping () -> Void) {
+        schemeHandler.enqueue(data, onRoom: onRoom)
     }
 
     func close() {

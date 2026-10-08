@@ -224,8 +224,6 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
             if (info.status == TerminationInfo.STATUS_SANDBOX_DEAD) dropDeadSandbox(sb)
             reportDeath(runtimeId, info.toString())
         }
-        registerByteChannel(runtimeId)
-        isolate.provideNamedData("rpc_wasm_module", wasmBytes)
         val bootScript = """
             var globalThis = this;
             var _rpcWasmOutbox = [];
@@ -464,6 +462,11 @@ class RpcDartWasmPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         """.trimIndent()
 
         return try {
+            // Inside the try with the boot itself, so a throw from either one
+            // is cleaned up below: Dart, told the load failed, never asks for
+            // the runtime to be closed.
+            registerByteChannel(runtimeId)
+            isolate.provideNamedData("rpc_wasm_module", wasmBytes)
             val evalResult = withTimeoutOrNull(30_000) {
                 isolate.evaluateJavaScriptAsync(bootScript).await()
             } ?: throw Exception("boot_timeout: no response within 30s")
