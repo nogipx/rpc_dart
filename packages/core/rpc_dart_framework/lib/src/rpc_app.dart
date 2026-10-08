@@ -116,7 +116,16 @@ class RpcApp {
     }
     _startAttempted = true;
     _started = true;
+    final starting = _start();
+    _starting = starting;
+    await starting;
+  }
 
+  /// The [start] in progress, which [stop] waits out: stopping mid-start left
+  /// the server it went on to start running, and nothing could stop it.
+  Future<void>? _starting;
+
+  Future<void> _start() async {
     _autoInterceptors = [
       if (_config.onError != null) ErrorReportingInterceptor(_config.onError!),
       if (_config.onCall != null) CallMetricsInterceptor(_config.onCall!),
@@ -174,6 +183,11 @@ class RpcApp {
   }
 
   Future<void> stop() async {
+    try {
+      await _starting;
+    } catch (_) {
+      // start() reports its own failure, and rolled back.
+    }
     if (!_started) return;
 
     _log?.info('RpcApp stopping');

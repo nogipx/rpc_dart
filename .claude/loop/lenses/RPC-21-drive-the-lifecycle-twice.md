@@ -3,8 +3,8 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
 breaks: a connection leak; or a running call detached from everything that can stop it.
-applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705]
-status: confirmed (round 487)
+applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721]
+status: confirmed (round 721)
 ---
 
 # RPC-21 — Drive the lifecycle twice
