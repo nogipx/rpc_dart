@@ -4,7 +4,8 @@
 // Example: gRPC Server Reflection with protobuf-typed service.
 //
 // Uses RpcBinaryCodec so grpcurl can actually call methods.
-// Reflection descriptor is built from generated .pbjson.dart bytes (Tier 1).
+// The reflection descriptor is built from protoc-generated .pbjson.dart bytes
+// with RpcReflectionRegistry.addFromPbjson.
 //
 // Run:
 //   fvm dart run example/server_protobuf.dart
@@ -92,7 +93,7 @@ void main() async {
     onEndpointCreated: (endpoint) {
       registry.attachTo(endpoint);
       endpoint.registerServiceContract(EchoResponderContract());
-      endpoint.start();
+      // RpcHttp2Server starts the endpoint after this callback returns.
     },
   );
 

@@ -3,26 +3,20 @@
 
 // Example: gRPC Server Reflection with rpc_dart
 //
-// Demonstrates all three registration tiers:
-//   Tier 1 — full schema via RpcFileDescriptorBuilder
-//   Tier 2 — full schema from codegen descriptor (shown as comment)
-//   Tier 3 — name-only registration
+// Builds the reflection descriptor by hand with RpcFileDescriptorBuilder
+// (field and method metadata) and serves it next to a CBOR service.
+// Other ways to get descriptor bytes:
+//   - protoc output (.pbjson.dart): RpcReflectionRegistry.addFromPbjson,
+//     see example/server_protobuf.dart.
+//   - rpc_dart_generator with @RpcService(grpcDescriptor: true):
+//     registry.addFileDescriptor(<Base>Names.grpcDescriptor).
 //
 // DISCOVERY ONLY. This service is wired with `RpcCodec`, which is CBOR, so a
 // descriptor makes it DESCRIBABLE, not callable by a protobuf client. Reflection
 // and the wire format are independent: grpcurl reads the descriptor over
-// reflection just fine and then sends protobuf, which this codec cannot parse.
-//
-// This header used to say "grpcurl can call methods" and the server printed an
-// invoke command to match. Following it gives:
-//
-//     grpcurl -d '{"message":"hello","count":3}' ... EchoService/Echo
-//     ERROR: Code: Internal  Message: Internal server error
-//
-// -- and nothing more, because the codec's FormatException is redacted on the
-// way out (default-deny, round 111). So the instruction cost the reader a
-// debugging session and told them nothing. For a service a foreign gRPC client
-// can INVOKE, use example/server_protobuf.dart, which pairs the descriptor with
+// reflection and then sends protobuf, which this codec cannot parse. The call
+// fails with `Code: Internal`. For a service a foreign gRPC client can INVOKE,
+// use example/server_protobuf.dart, which pairs the descriptor with
 // RpcBinaryCodec.
 //
 // Run:
@@ -32,6 +26,7 @@
 //   grpcurl -plaintext localhost:50051 list
 //   grpcurl -plaintext localhost:50051 list echo.v1.EchoService
 //   grpcurl -plaintext localhost:50051 describe echo.v1.EchoService
+//   grpcurl -plaintext localhost:50051 describe echo.v1.EchoService.Echo
 
 import 'dart:async';
 import 'dart:io';
@@ -106,9 +101,9 @@ class EchoResponderContract extends RpcResponderContract {
 }
 
 // ---------------------------------------------------------------------------
-// Reflection descriptor (Tier 1 — built from field metadata)
+// Reflection descriptor, built from field and method metadata.
 //
-// For protobuf services: use .addMessageBytes() / .addServiceBytes() with
+// For protobuf services, use .addMessageBytes() / .addServiceBytes() with
 // bytes from the generated .pbjson.dart file instead.
 // ---------------------------------------------------------------------------
 
@@ -179,7 +174,7 @@ void main() async {
     onEndpointCreated: (endpoint) {
       endpoint.registerServiceContract(EchoResponderContract());
       registry.attachTo(endpoint);
-      endpoint.start();
+      // RpcHttp2Server starts the endpoint after this callback returns.
     },
   );
 

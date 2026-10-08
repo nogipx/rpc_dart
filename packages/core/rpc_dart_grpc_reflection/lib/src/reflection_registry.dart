@@ -107,7 +107,7 @@ class RpcReflectionRegistry {
   /// All registered service names (fully qualified).
   List<String> get serviceNames => List.unmodifiable(_serviceNames);
 
-  /// Whether any files with full schema have been registered.
+  /// Whether any file descriptor has been registered.
   bool get hasDescriptors => _files.isNotEmpty;
 
   /// Returns FileDescriptorProto bytes for [filename] plus all registered
@@ -125,7 +125,8 @@ class RpcReflectionRegistry {
   /// Returns FileDescriptorProto bytes for the file containing [symbol] plus
   /// all registered transitive dependencies, or null if not found.
   ///
-  /// [symbol] may be a service name, message type name, nested type, or enum.
+  /// [symbol] may be a service, a method (`foo.v1.Service.Method`), a message
+  /// type, a nested type, or an enum.
   /// Accepts both `foo.v1.Bar` and `.foo.v1.Bar` forms.
   ///
   /// Like [fileByFilename], declared-but-unregistered dependencies are skipped
@@ -243,12 +244,7 @@ class RpcReflectionRegistry {
 
       // Methods too. The reflection proto documents file_containing_symbol as
       // taking `<package>.<service>[.<method>]`, and `grpcurl describe
-      // pkg.Service.Method` relies on it. Only services, messages and enums
-      // were indexed, so a real gRPC client got "Symbol not found" for every
-      // method while the enclosing service resolved fine -- verified against
-      // grpcurl 1.9.3, where `describe echo.v1.EchoService` and
-      // `describe echo.v1.EchoRequest` both worked and
-      // `describe echo.v1.EchoService.Echo` did not.
+      // pkg.Service.Method` relies on it.
       for (final method in proto.serviceMethods[svc] ?? const <String>[]) {
         _symbolToFile['$fqn.$method'] = proto.name;
       }

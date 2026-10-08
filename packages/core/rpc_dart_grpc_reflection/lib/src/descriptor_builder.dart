@@ -245,10 +245,37 @@ class RpcMethodDescriptor {
 /// registry.addFileDescriptor(EchoNames.grpcDescriptor);
 /// ```
 ///
-/// **Tier 3 — manual services (name-only)**:
+/// **Tier 3 — hand-built schema**: describe messages and methods field by
+/// field:
 /// ```dart
-/// registry.addServiceName('myapp.v1.MyService');
+/// final descriptor = RpcFileDescriptorBuilder(
+///   name: 'echo.proto',
+///   package: 'echo.v1',
+/// )
+///   .addMessage(RpcMessageDescriptor(
+///     name: 'EchoRequest',
+///     fields: [
+///       RpcFieldDescriptor(
+///         name: 'message',
+///         number: 1,
+///         type: RpcFieldType.typeString,
+///       ),
+///     ],
+///   ))
+///   .addService(name: 'EchoService', methods: [
+///     RpcMethodDescriptor(
+///       name: 'Echo',
+///       inputType: '.echo.v1.EchoRequest',
+///       outputType: '.echo.v1.EchoRequest',
+///     ),
+///   ])
+///   .build();
+///
+/// registry.addFileDescriptor(descriptor);
 /// ```
+///
+/// There is no name-only registration: a service is listed only when a
+/// descriptor that contains it is registered.
 class RpcFileDescriptorBuilder {
   /// Filename used as the key in the reflection registry, e.g. `'echo.proto'`.
   final String name;
@@ -298,8 +325,6 @@ class RpcFileDescriptorBuilder {
   }
 
   /// Adds a message descriptor built from field-level metadata.
-  ///
-  /// Used by codegen for native rpc_dart (non-protobuf) services.
   RpcFileDescriptorBuilder addMessage(RpcMessageDescriptor message) {
     _messageBytes.add(message.toBytes());
     return this;
@@ -313,7 +338,8 @@ class RpcFileDescriptorBuilder {
 
   /// Adds a service descriptor built from method-level metadata.
   ///
-  /// Used by codegen for native rpc_dart (non-protobuf) services.
+  /// [name] is the unqualified service name, e.g. `'EchoService'`. The
+  /// builder's [package] supplies the prefix.
   RpcFileDescriptorBuilder addService({
     required String name,
     required List<RpcMethodDescriptor> methods,
