@@ -26,6 +26,12 @@ closes at once, such as a load balancer with no healthy backend. To measure:
 whether each such Online resets the backoff (a reconnect at the base delay
 forever), and whether connect() should wait for the peer's SETTINGS.
 
+**Round 748 answered the first: it did**, and not only for http2:
+`RpcWebSocketServer` at capacity drew 28 connections in 6 s with
+`maxAttempts: 4`. Fixed in `3fc2fa74`: a connection that drops within 5 s is
+a failed attempt. **What remains** is the second question: Online before
+SETTINGS, now bounded by the backoff.
+
 ## Owner decision
 
 —

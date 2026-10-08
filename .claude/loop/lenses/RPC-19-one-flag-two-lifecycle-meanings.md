@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653, 667, 668, 669, 676, 678, 691, 746]
-status: confirmed (round 746)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653, 667, 668, 669, 676, 678, 691, 746, 748]
+status: confirmed (round 748)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -462,3 +462,10 @@ shared one, an error on `incomingMessages`, and an existing test with no
 `onError` took it as an uncaught error. **When one signal has two readers, a
 new meaning needs a new signal, not a new event on the old one.**
 `../rounds/746-the-connection-that-never-noticed.md`.
+
+Round 748, the next state over: `RpcClientOnline` meant "the factory returned
+a transport" to the connection and "the server is serving" to the backoff,
+which started its count over on it. A server that accepts and refuses got a
+reconnect at the base delay for ever. The count now starts over only on the
+drop of a connection that held up.
+`../rounds/748-a-connection-that-drops-at-once.md`.
