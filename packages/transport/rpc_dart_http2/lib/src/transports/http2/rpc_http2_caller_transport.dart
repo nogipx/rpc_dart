@@ -13,7 +13,8 @@ import 'http2_header_block_guard.dart';
 import 'raw_socket_pipe.dart';
 import 'rpc_http2_common.dart';
 
-/// Whether the peer has told us this connection is going away.
+/// Whether the peer has told us this connection is going away, and which
+/// connection's socket has ended.
 ///
 /// A mutable holder rather than a field because the connection is built by a
 /// static factory closure BEFORE the transport instance exists, and the same
@@ -21,6 +22,14 @@ import 'rpc_http2_common.dart';
 /// transport, shared with every connection it builds, reset on attach.
 class _DrainSignal {
   bool goawayReceived = false;
+
+  /// How many connections the factory has built. The one just built is the
+  /// one being attached, so its number is this count.
+  int built = 0;
+
+  /// Called with a connection's number when its socket ends. Set by the
+  /// transport; a number lets it ignore a connection it has already replaced.
+  void Function(int connection)? onSocketEnded;
 }
 
 /// Client-side HTTP/2 transport: one [IRpcTransport] over one connection,
@@ -33,7 +42,8 @@ class RpcHttp2CallerTransport
     implements
         IRpcReconnectableTransport,
         IRpcStreamReset,
-        IRpcSecurityPolicyAware {
+        IRpcSecurityPolicyAware,
+        IRpcConnectionLossReporting {
   @override
   bool get isClient => true;
 
@@ -249,8 +259,39 @@ class RpcHttp2CallerTransport
        _pingInterval = pingInterval,
        _pingTimeout = pingTimeout,
        _drainSignal = drainSignal ?? _DrainSignal() {
+    _connectionNumber = _drainSignal.built;
+    _drainSignal.onSocketEnded = _connectionLost;
     _startKeepalive();
   }
+
+  /// Which of the factory's connections [_connection] is; see [_DrainSignal].
+  int _connectionNumber = 0;
+
+  /// The last connection whose loss was reported, so it is reported once.
+  int _lostConnection = -1;
+
+  /// Connection [number] is gone: its socket ended, or keepalive found the
+  /// path dead. Fails what is left on it and reports it on [connectionLost].
+  ///
+  /// [incomingMessages] stays open across a drop for [reconnect], so without
+  /// the report nothing listening can tell a drop from a quiet connection:
+  /// `RpcClientConnection` stayed online over a dead connection, failing every
+  /// call, until the app restarted.
+  void _connectionLost(int number) {
+    if (number != _connectionNumber || _lostConnection == number) return;
+    if (_isClosed) return;
+    _lostConnection = number;
+    _disconnected = true;
+    _discardConnection(_connection);
+    if (!_lostCtl.isClosed) _lostCtl.add(null);
+  }
+
+  /// One event per connection lost while this transport stays open for
+  /// [reconnect].
+  @override
+  Stream<Object?> get connectionLost => _lostCtl.stream;
+  final StreamController<Object?> _lostCtl =
+      StreamController<Object?>.broadcast();
 
   /// Set once the peer sends GOAWAY on the current connection.
   ///
@@ -281,6 +322,7 @@ class RpcHttp2CallerTransport
   void _startKeepalive() {
     _keepalive?.cancel();
     final connection = _connection;
+    final number = _connectionNumber;
     _keepalive = startHttp2Keepalive(
       interval: _pingInterval,
       timeout: _pingTimeout,
@@ -291,8 +333,7 @@ class RpcHttp2CallerTransport
           'HTTP/2 keepalive failed for $_host:$_port ($error); the path is '
           'half-open, tearing the connection down so calls fail fast',
         );
-        _disconnected = true;
-        _discardConnection(connection);
+        _connectionLost(number);
       },
     );
   }
@@ -552,10 +593,12 @@ class RpcHttp2CallerTransport
     LogScope? logger,
     _DrainSignal? drainSignal,
   }) {
+    final number = drainSignal == null ? 0 : ++drainSignal.built;
     final guarded = guardHttp2HeaderBlock(
       incoming,
       maxHeaderBlockBytes: policy.maxMetadataBytes,
       skipConnectionPreface: false,
+      onEnd: () => drainSignal?.onSocketEnded?.call(number),
       onGoaway: () {
         logger?.internal(
           'HTTP/2 peer sent GOAWAY: this connection is draining',
@@ -2053,6 +2096,9 @@ class RpcHttp2CallerTransport
     //
     // _discardConnection exists for exactly this and is already used on the
     // abandon path; the prologue just never used it.
+    //
+    // Its socket ending is this reconnect's own doing, not a loss to report.
+    _lostConnection = _connectionNumber;
     _discardConnection(_connection);
 
     // TELL THE CONSUMERS FIRST. `terminate()` above delivers its per-stream errors
@@ -2153,6 +2199,7 @@ class RpcHttp2CallerTransport
       }
 
       _connection = connection;
+      _connectionNumber = _drainSignal.built;
       _disconnected = false;
       // `_nextStreamId` is deliberately NOT reset here.
       //
@@ -2287,6 +2334,7 @@ class RpcHttp2CallerTransport
         _logger?.warning('Error closing the message controller: $e');
       }
     }
+    if (!_lostCtl.isClosed) await _lostCtl.close();
 
     // BOUNDED, then forceful -- see [kGracefulCloseTimeout], which the
     // responder transport shares.

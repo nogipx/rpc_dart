@@ -105,9 +105,13 @@ Future<RpcHttp2CallerTransport> pinnedTransport(SecurityContext context) async {
 
 ### Reconnecting
 
-The transport does not reconnect by itself. When the connection drops, calls
-fail with `UNAVAILABLE` and `health()` reports it. Call `reconnect()` to open a
-new connection on the same transport:
+The transport does not reconnect by itself. When the connection drops (the
+socket ends, or keepalive finds the path dead), calls fail with `UNAVAILABLE`,
+`health()` reports it, and `connectionLost` (`IRpcConnectionLossReporting`)
+emits once; `incomingMessages` stays open and carries no error. For automatic
+reconnect with backoff, give `RpcClientConnection` from `rpc_dart` a factory
+that calls `RpcHttp2CallerTransport.connect`; it reconnects on that event. Or
+call `reconnect()` to open a new connection on the same transport:
 
 ```dart
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';

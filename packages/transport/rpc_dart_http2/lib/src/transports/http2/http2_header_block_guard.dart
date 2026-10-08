@@ -48,6 +48,10 @@ import 'dart:typed_data';
 /// [onPrefaceComplete], when given, fires once the peer has finished sending the
 /// preface: the first evidence that an accepted socket is an HTTP/2 client at
 /// all. Only meaningful with [skipConnectionPreface] true.
+///
+/// [onEnd], when given, fires when [incoming] ends: the peer closed the socket
+/// or the path died. package:http2 has no event for that either; a client
+/// otherwise learns of it only when its next call fails.
 Stream<List<int>> guardHttp2HeaderBlock(
   Stream<List<int>> incoming, {
   required int maxHeaderBlockBytes,
@@ -55,6 +59,7 @@ Stream<List<int>> guardHttp2HeaderBlock(
   bool skipConnectionPreface = true,
   void Function()? onGoaway,
   void Function()? onPrefaceComplete,
+  void Function()? onEnd,
 }) {
   final controller = StreamController<List<int>>();
   final scanner = _HeaderBlockScanner(
@@ -87,6 +92,7 @@ Stream<List<int>> guardHttp2HeaderBlock(
     },
     onDone: () {
       if (!controller.isClosed) controller.close();
+      onEnd?.call();
     },
     cancelOnError: false,
   );

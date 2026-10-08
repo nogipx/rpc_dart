@@ -149,9 +149,11 @@ void main() {
             'at-capacity',
       );
 
-      final s = transport.createStream();
+      // A transport that has seen its socket end refuses at createStream; one
+      // that has not yet seen it fails the send. Either way the status counts.
       Object? caught;
       try {
+        final s = transport.createStream();
         await transport.sendMetadata(s, _meta);
       } catch (e) {
         caught = e;
