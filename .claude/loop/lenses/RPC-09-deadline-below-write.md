@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434, 693]
-status: swept here (round 434, 7ee3e602)
+applied: [210, 221, 244, 322, 434, 693, 717]
+status: swept here (round 717, b005e0d2)
 ---
 
 # RPC-09 — A call deadline that sits below the write
@@ -129,3 +129,20 @@ parks on per-stream credit, and connection credit alone does not admit a
 message, so refusing `_onGrant` still hangs the draining call at 20 s.
 
 `../rounds/434-the-fifth-wake-nobody-counted.md`.
+
+## Round 717 — six wake paths, and the HTTP/1.1 upload
+
+The sixth is `_noteMessagesLegacy` (`:694`), added with message credit in
+round 709. It releases senders parked on seeded message credit when a peer
+grants bytes without the messages header. Message credit is debited and
+credited by the same predicate, `carriesMessage`. All four P-10 cells
+reproduce.
+
+The HTTP/1.1 half had never had a bench. `_fireRequest` writes the whole body
+before it can see any response, which is this lens's shape exactly. It is
+covered from above: the unary caller's deadline is on the response completer,
+and its `finally` calls `releaseStreamId`, which aborts the request mid-pipe.
+Measured by P-233: 2432 KiB and a closed socket, against 8192 KiB on an open
+socket with the abort removed. rpc_dart's own server never stops reading. It
+reads to the end past the size limit, so the shape needs a foreign server.
+`../rounds/717-the-deadline-still-sits-above-the-write.md`.

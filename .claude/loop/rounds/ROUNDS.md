@@ -23,6 +23,8 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[718](718-the-proxy-pipe-closes-its-socket.md)** CLEAN, rpc_dart_http2 — `RawSocketPipe` (round 716) releases its socket on `close()` against a silent peer, as the direct `Socket` path does: 0 and 0 left, 1 with the shutdown ablated (new P-234)
+- **[717](717-the-deadline-still-sits-above-the-write.md)** CLEAN, rpc_dart + rpc_dart_http — RPC-09 re-swept over 59 moved files: six wake paths now (message credit added one), P-10's ablation still hangs, and an HTTP/1.1 deadline aborts an upload into a server that stopped reading (new P-233)
 - **[716](716-the-audit-tail.md)** FIXED, http2 + wasm + docs — **a timed-out TLS handshake through a proxy left its socket open**: the proxy path now runs on a RawSocket. Android setup-throw leak and iOS unbounded guest queue fixed; three items documented. Closes B-266
 - **[715](715-h2-uploads-bounded-by-bytes.md)** FIXED, core + http2 + http — **h2 uploads of small messages failed at the depth**: `IRpcNoMessageCredit` bounds h2 request queues by bytes alone (owner). B-262 and B-265 documented by owner decision. Closes B-261, B-262, B-265
 - **[714](714-an-oversized-h1-stream-is-cancelled.md)** FIXED, http — **a server stream answered over the limit kept its handler and slot**; four of them made the server answer 503 to everyone. The transport now emits a cancellation for it. Closes B-264

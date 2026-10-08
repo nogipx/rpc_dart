@@ -65,6 +65,10 @@ overdraft" rather than a fixed number.
 > the sender parks on per-STREAM credit, and connection credit alone does not
 > admit a message.
 >
+> Round 717 re-ran both columns over message credit's sixth wake path
+> (`_noteMessagesLegacy`). All eight cells are unchanged: CASE 19 pulled,
+> ablated CONTROL HUNG at 20 s with 16 pulled.
+>
 > When a bench's ablation targets one of several paths to the same effect,
 > re-running it is not a formality: the other paths are what decide whether it
 > still sees anything.
