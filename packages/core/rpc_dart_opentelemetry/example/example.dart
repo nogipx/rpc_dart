@@ -2,73 +2,93 @@
 //
 // SPDX-License-Identifier: MIT
 
-// ignore_for_file: avoid_print
-
 import 'package:opentelemetry/api.dart';
 import 'package:opentelemetry/sdk.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_opentelemetry/rpc_dart_opentelemetry.dart';
 
-/// Example: wiring up rpc_dart_opentelemetry with a local OTLP collector.
+/// Example: one trace from a caller to a responder over an in-memory
+/// transport.
 ///
-/// Prerequisites (Docker):
-///   docker run -p 4317:4317 otel/opentelemetry-collector-contrib
-void main() async {
-  // -------------------------------------------------------------------------
-  // 1. Bootstrap OTel SDK
-  //    ConsoleExporter prints spans to stdout — swap for CollectorExporter in prod.
-  // -------------------------------------------------------------------------
-  final exporter = ConsoleExporter();
-  final processor = SimpleSpanProcessor(exporter);
+/// Spans are printed to stdout. To send them to an OpenTelemetry collector
+/// instead, pass its OTLP/HTTP traces endpoint to [bootstrapTracing]:
+///
+///   docker run -p 4318:4318 otel/opentelemetry-collector-contrib
+///   bootstrapTracing(otlpTraces: Uri.parse('http://localhost:4318/v1/traces'))
+///
+/// `CollectorExporter` ships in `package:opentelemetry/sdk.dart` and sends
+/// OTLP over HTTP with protobuf, so use the HTTP port 4318, not gRPC 4317.
+TracerProviderBase bootstrapTracing({Uri? otlpTraces}) {
+  final provider = TracerProviderBase(
+    processors: [
+      if (otlpTraces == null)
+        SimpleSpanProcessor(ConsoleExporter())
+      else
+        BatchSpanProcessor(CollectorExporter(otlpTraces)),
+    ],
+  );
+  registerGlobalTracerProvider(provider);
+  return provider;
+}
 
-  final tracerProvider = TracerProviderBase(processors: [processor]);
-  registerGlobalTracerProvider(tracerProvider);
+final class GreeterResponder extends RpcResponderContract {
+  GreeterResponder() : super('Greeter');
 
-  // For production OTLP export (requires `opentelemetry_exporter_otlp_grpc` or similar):
-  // final exporter = CollectorExporter(Uri.parse('http://localhost:4317'));
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'hello',
+      handler: _hello,
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+    );
+  }
 
-  // -------------------------------------------------------------------------
-  // 2. Build the interceptor
-  // -------------------------------------------------------------------------
-  final tracer = globalTracerProvider.getTracer('my-service', version: '1.0.0');
+  Future<RpcString> _hello(RpcString request, {RpcContext? context}) async {
+    // OtelRpcInterceptor stores the server span of this call in the context.
+    final span = context?.getValue<Span>(OtelRpcKeys.span);
+    span?.setAttribute(Attribute.fromString('greeting.name', request.value));
+    return RpcString('Hello, ${request.value}');
+  }
+}
 
-  final otelInterceptor = OtelRpcInterceptor(tracer: tracer);
+final class GreeterCaller extends RpcCallerContract {
+  GreeterCaller(RpcCallerEndpoint endpoint) : super('Greeter', endpoint);
 
-  // -------------------------------------------------------------------------
-  // 3. Register on your endpoint
-  // -------------------------------------------------------------------------
-  //
-  // final endpoint = MyResponderEndpoint(transport: ...)
-  //   ..addInterceptor(otelInterceptor);
-  //
-  // Every RPC call will now produce a trace span automatically.
+  Future<RpcString> hello(RpcString request, {RpcContext? context}) =>
+      callUnary<RpcString, RpcString>(
+        methodName: 'hello',
+        request: request,
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+        context: context,
+      );
+}
 
-  print('OtelRpcInterceptor ready: $otelInterceptor');
+Future<void> main() async {
+  final provider = bootstrapTracing();
+  final tracer = globalTracerProvider.getTracer('greeter', version: '1.0.0');
 
-  // -------------------------------------------------------------------------
-  // 4. Client side — register OtelRpcClientInterceptor on the caller endpoint
-  //    so every outgoing call gets a CLIENT span and W3C headers automatically.
-  // -------------------------------------------------------------------------
-  //
-  // final callerEndpoint = MyCallerEndpoint(transport: ...)
-  //   ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
-  //
-  // For ad-hoc one-off calls without an interceptor:
-  //   final outgoingCtx = RpcOtelPropagator.inject(RpcContext.empty());
-  //   final response = await callerEndpoint.myMethod(outgoingCtx, request);
+  final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
 
-  // -------------------------------------------------------------------------
-  // 5. Accessing the active span inside a handler (optional enrichment)
-  // -------------------------------------------------------------------------
-  //
-  // Future<MyResponse> handle(RpcContext ctx, MyRequest req) async {
-  //   final span = ctx.getValue(OtelRpcKeys.span) as Span?;
-  //   span?.setAttribute(Attribute.fromString('user.id', req.userId));
-  //   ...
-  // }
+  // Server side: one SERVER span per call, parented on the incoming
+  // traceparent.
+  final responder = RpcResponderEndpoint(transport: serverTransport)
+    ..addInterceptor(OtelRpcInterceptor(tracer: tracer))
+    ..registerServiceContract(GreeterResponder())
+    ..start();
 
-  // -------------------------------------------------------------------------
-  // 6. Graceful shutdown — flush and release OTel SDK resources.
-  //    Always call this before process exit so buffered spans are exported.
-  // -------------------------------------------------------------------------
-  tracerProvider.shutdown();
+  // Client side: one CLIENT span per call, traceparent injected into the
+  // outgoing metadata.
+  final caller = RpcCallerEndpoint(transport: clientTransport)
+    ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
+
+  // One trace: client span Greeter/hello -> server span Greeter/hello.
+  await GreeterCaller(caller).hello(const RpcString('Ada'));
+
+  await caller.close();
+  await responder.close();
+
+  // Flush buffered spans before the process exits.
+  provider.shutdown();
 }

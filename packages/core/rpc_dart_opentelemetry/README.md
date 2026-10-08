@@ -6,8 +6,10 @@ SPDX-License-Identifier: MIT
 
 # rpc_dart_opentelemetry
 
-OpenTelemetry tracing, metrics and log export for `rpc_dart`, built on the
-[`opentelemetry`](https://pub.dev/packages/opentelemetry) package.
+OpenTelemetry tracing and call metrics for `rpc_dart`, built on the
+[`opentelemetry`](https://pub.dev/packages/opentelemetry) package. It also
+mirrors `LogController` spans and events into OTel. Logs reach the backend as
+spans and span events; the OTel logs API is not used.
 
 - `OtelRpcInterceptor` — server-side interceptor: one span per call, W3C
   `traceparent` extracted from the incoming metadata.
@@ -16,8 +18,8 @@ OpenTelemetry tracing, metrics and log export for `rpc_dart`, built on the
 - `RpcOtelPropagator` — W3C trace-context extract/inject over `RpcContext`
   headers.
 - `RpcOtelMetrics` — call counters and duration instruments.
-- `LogControllerOtelOutput` — a `LogOutput` that forwards the built-in logger's
-  spans and events to OTel.
+- `LogControllerOtelOutput` — a `LogOutput` that turns the built-in logger's
+  spans and events into OTel spans and span events.
 
 ## Install
 
@@ -43,6 +45,20 @@ TracerProviderBase bootstrapTracing() {
   registerGlobalTracerProvider(provider);
   return provider;
 }
+```
+
+`CollectorExporter` ships in `package:opentelemetry/sdk.dart`. It sends OTLP
+over HTTP with protobuf to the exact URI you give it, so pass the collector's
+HTTP port and path, not the gRPC port 4317:
+
+```dart
+TracerProviderBase otlpTracing() => TracerProviderBase(
+  processors: [
+    BatchSpanProcessor(
+      CollectorExporter(Uri.parse('http://localhost:4318/v1/traces')),
+    ),
+  ],
+);
 ```
 
 Call `provider.shutdown()` before the process exits so buffered spans are
@@ -183,11 +199,9 @@ LogController buildLogger(Tracer tracer) {
   return LogController(
     outputs: [
       ConsoleOutput(),
-      LogControllerOtelOutput(
-        tracer: tracer,
-        // Parent log spans on the active RPC span inside a handler.
-        rootContextProvider: () => Context.current,
-      ),
+      // Inside a handler Context.current is the RPC span, so log spans
+      // started there become its children.
+      LogControllerOtelOutput(tracer: tracer),
     ],
   );
 }
@@ -200,10 +214,17 @@ LogController buildLogger(Tracer tracer) {
 | `LogEvent` without one | zero-duration span `log.<scope>` |
 | `LogSpan` (end) | data as attributes, `ok`/`error` status, `span.end(endTime)` |
 
-Nested log spans become child OTel spans. With `rootContextProvider` returning
-`Context.current`, a `withSpan('db.query', ...)` inside a handler becomes a
+Nested log spans become child OTel spans. A log span or standalone event with
+no open parent is parented on `rootContextProvider()`, which defaults to
+`Context.current`. So a `withSpan('db.query', ...)` inside a handler becomes a
 child of the server span from `OtelRpcInterceptor`, giving one connected trace
-from the caller down to the handler's own work.
+from the caller down to the handler's own work. Pass `rootContextProvider:`
+only to choose a different root.
+
+`LogControllerOtelOutput` does not use the OTel logs API. A log line inside an
+open log span becomes a span event; one outside any log span becomes its own
+zero-duration span. Keep the controller's `minLevel` at `info` or above, or
+every debug line becomes a span.
 
 Spans whose end record never arrives are bounded: past `maxOpenSpans` (default
 1024) the oldest are ended, and a sweep every `sweepInterval` (default 30 s)
