@@ -466,9 +466,16 @@ class _Emitter {
         );
       } else {
         // Primitive types (String/int/double/bool) have no `fromJson` factory.
-        // Round-trip them through CBOR via the unsafe (non-map) helpers.
+        // Round-trip them through CBOR via the unsafe (non-map) helpers. The
+        // decoder is a typed static method here, because `decodeUnsafe`
+        // returns `dynamic` and does not fit `$typeName Function(Uint8List)`.
+        final decoder =
+            '_decode${codecName[0].toUpperCase()}${codecName.substring(1)}';
         b.writeln(
-          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: CborCodec.decodeUnsafe);',
+          '  static $typeName $decoder(Uint8List bytes) => CborCodec.decodeUnsafe(bytes) as $typeName;',
+        );
+        b.writeln(
+          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: $decoder);',
         );
       }
     }
@@ -1391,7 +1398,22 @@ class _GrpcDescriptorBuilder {
 
   Uint8List? _buildMessageDescriptor(String name, DartType type) {
     if (type is! InterfaceType) return null;
-    final fields = type.element.fields.where((f) => !f.isStatic).toList();
+    // A bare primitive is not a message. Described as a wrapper with one
+    // `value` field, the shape of google.protobuf.StringValue and its
+    // siblings; read as a class, String's getters (`hashCode`, `length`, ...)
+    // became fields.
+    if (type.isDartCoreString ||
+        type.isDartCoreInt ||
+        type.isDartCoreDouble ||
+        type.isDartCoreBool) {
+      final field = _buildFieldDescriptor('value', 1, type);
+      if (field == null) return null;
+      final w = _ProtoWriter();
+      w.writeString(1, name);
+      w.writeBytes(2, field);
+      return w.toBytes();
+    }
+    final fields = _messageFields(type);
     if (fields.isEmpty) return null;
 
     // Determine field numbers. An explicit @RpcProtoField(n) pins the number;
@@ -1404,10 +1426,10 @@ class _GrpcDescriptorBuilder {
     final w = _ProtoWriter();
     w.writeString(1, name);
     for (var i = 0; i < fields.length; i++) {
-      final fieldName = fields[i].name;
+      final fieldName = fields[i].field.name;
       if (fieldName == null) continue;
 
-      final explicit = _explicitFieldNumber(fields[i]);
+      final explicit = _explicitFieldNumber(fields[i].field);
       final number = explicit ?? (i + 1);
       if (explicit == null) {
         declarationOrderFields.add(fieldName);
@@ -1441,6 +1463,38 @@ class _GrpcDescriptorBuilder {
     return w.toBytes();
   }
 
+  /// The stored instance fields of [type], inherited ones first.
+  ///
+  /// Declared fields alone miss what a superclass holds: `RpcString` keeps its
+  /// `value` in `RpcPrimitiveMessage`, so it read as having no fields and the
+  /// whole descriptor was dropped. Synthetic fields, the ones a getter
+  /// induces, are not stored and are left out.
+  ///
+  /// Each field comes with its type as seen from [type], so a generic
+  /// superclass's `T value` reads as `String value` for `RpcString`.
+  List<({FieldElement field, DartType type})> _messageFields(
+    InterfaceType type,
+  ) {
+    final chain = <InterfaceType>[];
+    InterfaceType? current = type;
+    while (current != null && !current.isDartCoreObject) {
+      chain.add(current);
+      current = current.superclass;
+    }
+    return [
+      for (final level in chain.reversed)
+        for (final field in level.element.fields)
+          // isSynthetic, not its analyzer-10 replacement: the supported range
+          // starts at analyzer 9.
+          // ignore: deprecated_member_use
+          if (!field.isStatic && !field.isSynthetic)
+            (
+              field: field,
+              type: level.getGetter(field.name ?? '')?.returnType ?? field.type,
+            ),
+    ];
+  }
+
   /// Reads an explicit `@RpcProtoField(number)` from [field], or null when the
   /// field is not annotated.
   int? _explicitFieldNumber(FieldElement field) {
@@ -1469,8 +1523,8 @@ class _GrpcDescriptorBuilder {
       log.warning(
         'gRPC descriptor: field "$name" has unsupported collection type '
         '"${_typeName(type)}". Map, Set and Iterable are not representable as '
-        'proto fields; use a List or a dedicated message type. Descriptor '
-        'generation skipped for this service.',
+        'proto fields; use a List or a dedicated message type. The field is '
+        'left out of the descriptor.',
       );
       return null;
     }

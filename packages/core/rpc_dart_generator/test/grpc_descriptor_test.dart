@@ -155,6 +155,84 @@ class Ack implements IRpcSerializable {
     });
   });
 
+  group('grpc descriptor — which fields a message has', () {
+    // A message's fields were its class's DECLARED fields alone: RpcString
+    // keeps `value` in a generic superclass, so it had none and the whole
+    // descriptor was dropped; a bare String read String's getters as fields;
+    // and a getter on a model class became a field of its own.
+    test(
+      'inherited, primitive and getter fields are described as stored',
+      () async {
+        final packageConfig = await _loadPackageConfig();
+        final readerWriter = TestReaderWriter(
+          rootPackage: 'rpc_dart_generator',
+        );
+        await readerWriter.testing.loadIsolateSources();
+
+        const source = r'''
+import 'dart:async';
+import 'package:rpc_dart/rpc_dart.dart';
+part 'shapes.g.dart';
+
+@RpcService(name: 'shapes.v1.Shapes', grpcDescriptor: true)
+abstract class IShapes {
+  @RpcMethod.unary(name: 'wrapped')
+  Future<RpcInt> wrapped(RpcString request, {RpcContext? context});
+
+  @RpcMethod.unary(name: 'bare')
+  Future<Totals> bare(String request, {RpcContext? context});
+}
+
+class Totals implements IRpcSerializable {
+  Totals({required this.a, required this.b});
+  final int a;
+  final int b;
+  int get sum => a + b;
+  factory Totals.fromJson(Map<String, dynamic> json) =>
+      Totals(a: json['a'] as int, b: json['b'] as int);
+  @override
+  Map<String, dynamic> toJson() => {'a': a, 'b': b};
+}
+''';
+
+        String? output;
+        await testBuilder(
+          rpcDartBuilder(BuilderOptions({})),
+          {'rpc_dart_generator|lib/shapes.dart': source},
+          rootPackage: 'rpc_dart_generator',
+          packageConfig: packageConfig,
+          readerWriter: readerWriter,
+          outputs: {
+            'rpc_dart_generator|lib/shapes.rpc_dart.g.part': decodedMatches(
+              predicate<String>((s) {
+                output = s;
+                return true;
+              }),
+            ),
+          },
+        );
+
+        final descriptor = _extractDescriptorBytes(output!);
+        final parsed = parseFileDescriptorProto(descriptor);
+        expect(
+          parsed.messageTypes,
+          containsAll(['RpcString', 'RpcInt', 'String', 'Totals']),
+        );
+        // RpcString's inherited `value` is a string (9), RpcInt's an int64 (3).
+        expect(_messageHasFieldType(descriptor, 'RpcString', 9), isTrue);
+        expect(_messageHasFieldType(descriptor, 'RpcInt', 3), isTrue);
+        // A bare String is a one-field wrapper, not String's getters.
+        expect(_messageHasFieldType(descriptor, 'String', 9), isTrue);
+        expect(_messageHasFieldType(descriptor, 'String', 3), isFalse);
+        // Totals stores a and b; the `sum` getter is not a field.
+        expect(_messageHasFieldNumber(descriptor, 'Totals', 2), isTrue);
+        expect(_messageHasFieldNumber(descriptor, 'Totals', 3), isFalse);
+        // A bare primitive's codec has a typed decoder, or it does not compile.
+        expect(output, isNot(contains('fromBytes: CborCodec.decodeUnsafe')));
+      },
+    );
+  });
+
   group('grpc descriptor — fully-qualified type names', () {
     test(
       'message field type names are package-qualified like service refs',
