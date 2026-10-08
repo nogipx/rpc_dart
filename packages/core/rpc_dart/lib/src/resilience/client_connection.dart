@@ -553,6 +553,16 @@ class RpcClientConnection {
   Completer<void>? _connectingGuard;
   int _reconnectAttempts = 0;
 
+  /// How long the live transport has been attached; see [_stableConnection].
+  Stopwatch? _online;
+
+  /// How long a connection must last before its drop starts the attempt count
+  /// over. One that drops sooner was a failed attempt: a server that accepts
+  /// and then refuses (at capacity, or a balancer with no backend) otherwise
+  /// gets a reconnect at the base delay for ever, and [maxAttempts] is never
+  /// reached.
+  static const Duration _stableConnection = Duration(seconds: 5);
+
   /// Observable connection state stream.
   Stream<RpcClientConnectionState> get state => _stateCtl.stream;
 
@@ -635,6 +645,11 @@ class RpcClientConnection {
       );
       _emit(RpcClientDisconnected(reason: error));
       return;
+    }
+    final online = _online;
+    _online = null;
+    if (online != null && online.elapsed >= _stableConnection) {
+      _reconnectAttempts = 0;
     }
     _reconnectAttempts++;
     _emit(const RpcClientOffline());
@@ -755,7 +770,9 @@ class RpcClientConnection {
 
         _proxy.attach(inner);
         _logger?.call('info', 'Connected (attempt ${_reconnectAttempts + 1})');
-        _reconnectAttempts = 0;
+        // The count starts over when this connection drops after holding up,
+        // not here; see [_stableConnection].
+        _online = Stopwatch()..start();
         _emit(const RpcClientOnline());
         guard.complete();
         return;

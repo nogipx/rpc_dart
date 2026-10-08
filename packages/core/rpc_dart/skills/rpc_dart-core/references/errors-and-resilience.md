@@ -241,6 +241,8 @@ RpcCallerEndpoint connectWithRetry(
 - Other members: `state` (a broadcast stream), `currentState`, `forceReconnect()`, `disconnect()`
   (resume later with `connect()`), `dispose()` (permanent).
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.
+- A connection that drops within 5 s of coming online counts as a failed attempt, so `maxAttempts` and the backoff
+  still apply to a server that accepts and then refuses. One that held up longer starts the count over.
 - Calls that are in flight during a drop are lost. Issue them again.
 
 ## Pitfalls
