@@ -38,6 +38,8 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-239](P-239-unknown-methods-against-the-otel-interceptor.md)** valid (round 725), rpc_dart_opentelemetry — spans the OTel interceptor exports for calls to unregistered names: 0 of 200, against 100 of 100 for the registered method
+- **[P-238](P-238-a-deaf-reader-against-an-h2-bidi-handler.md)** valid (round 723), rpc_dart_http2 — responses an h2 bidi handler produces for a raw peer that keeps sending and grants no response credit: 66, against 100000 reading and 100000 with the pump's pause wait ablated
 - **[P-237](P-237-stop-during-start.md)** valid (round 721), rpc_dart_framework — server starts, stops and running state after `RpcApp.stop()` lands inside `start()`: 1 / 0 / running before, 1 / 1 / stopped after
 - **[P-236](P-236-tiny-responses-against-the-caller-window.md)** valid (round 720), rpc_dart_http2 — responses a paused h2 caller accepts before its window stops the server: 472002 empty ones charged by payload alone, 36002 weighed, 4245 at 1 KiB
 - **[P-235](P-235-tiny-messages-against-the-byte-bound.md)** valid (round 719), rpc_dart + rpc_dart_http2 — RSS of parked h2 client-stream queues of two-byte messages: +413 MiB over 8 streams with the depth bound lifted and nothing weighing a message, -30 MiB once each counts 128 bytes

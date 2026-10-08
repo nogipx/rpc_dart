@@ -23,6 +23,10 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[726](726-the-weighing-did-not-move-the-sweep.md)** CLEAN, rpc_dart — RPC-09 re-swept after round 719's own weighing: P-10 unchanged; `test:web` green over rounds 719-722
+- **[725](725-a-peer-cannot-name-a-metric-series.md)** CLEAN, rpc_dart_opentelemetry — calls to unregistered methods never reach the OTel interceptor (0 of 200 spans, 100 of 100 for the registered one), so a peer cannot mint metric series (new P-239)
+- **[724](724-a-deaf-readers-requests-are-bounded.md)** CLEAN, rpc_dart + rpc_dart_http2 — the requests a deaf h2 reader keeps sending are charged to the core budget at round 719's weight: refused at 152k held, not the 520k a payload-only bound allows
+- **[723](723-the-h2-responder-stops-a-deaf-readers-handler.md)** CLEAN, rpc_dart_http2 — a raw h2 peer that keeps sending and grants no response credit holds a bidi handler at 66 responses (one window); 100000 with the pump's pause wait ablated (new P-238)
 - **[722](722-concurrent-stops-share-one.md)** FIXED, rpc_dart_framework — two concurrent `RpcApp.stop()` calls stopped the server and every module twice, the second during the first's drain: they now share one stop
 - **[721](721-stop-waits-for-start.md)** FIXED, rpc_dart_framework — **`RpcApp.stop()` during a slow `onStart` left the server start() went on to start running, and no later stop() could reach it**: stop() now waits for the start in progress
 - **[720](720-tiny-responses-are-weighed.md)** FIXED, rpc_dart_http2 — **a paused h2 caller accepted 472k empty responses (108 MiB) under a 4 MiB window**: each now weighs payload plus 128, and the server stops at 36k

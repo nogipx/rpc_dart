@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434, 693, 717]
-status: swept here (round 717, b005e0d2)
+applied: [210, 221, 244, 322, 434, 693, 717, 726]
+status: swept here (round 726, 472dd6af)
 ---
 
 # RPC-09 — A call deadline that sits below the write

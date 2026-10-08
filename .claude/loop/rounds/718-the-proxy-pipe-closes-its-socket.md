@@ -70,11 +70,11 @@ a no-op, the proxy arm reads 1 socket 3 s after close, against 0.
 5. No fix, so no witness.
 6. n/a.
 7. CLEAN, with a valid control.
-8. None as a rule. Two dead instruments came first; their price is the item
-   below. Peer-side signals cannot tell a half-close from a close: both put
-   one FIN on the wire, and writing into it brought an RST even against a
-   bare `RawSocket.shutdown(send)` client. The process's own socket table
-   was the instrument that could tell them apart.
+8. Yes, filed as `../lessons/L-21-count-the-socket-where-it-lives.md`. Four
+   dead instruments came first. Peer-side signals cannot tell a half-close
+   from a close: both put one FIN on the wire, and writing into it brought an
+   RST even against a bare `RawSocket.shutdown(send)` client. The process's
+   own socket table was the instrument that could tell them apart.
 A1. One process. The forwarder and the server have no policy; the caller uses
     the default `RpcSecurityPolicy`.
 A2. Neither: lifecycle, not volume or latency.
