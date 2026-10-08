@@ -30,9 +30,11 @@ LogCollectorMcpServer  -->  Claude Code / any MCP client
 ## Client setup
 
 Add `rpc_dart_log` to your app's dependencies, then attach `LogCollectorOutput`
-to your existing `LogController`:
+to your existing `LogController`. `rpc_dart_log.dart` exports only
+`LogCollectorOutput` and `DeviceInfo`; import `rpc_dart` for `LogController`.
 
 ```dart
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_log/rpc_dart_log.dart';
 
 final controller = LogController(
@@ -47,15 +49,33 @@ final controller = LogController(
         os: 'Android 15',       // optional
         appVersion: '1.2.0+42', // optional
       ),
-      bufferSize: 2000,         // records buffered while disconnected
+      bufferSize: 2000,         // default; buffered plus in-flight records
+      maxInFlight: 32,          // default; unacked records on the wire
     ),
   ],
 );
 ```
 
-`LogCollectorOutput` auto-reconnects with exponential backoff (1s..15s) and
-flushes the buffer on reconnect. Each instance generates a unique session ID
-so multiple connections from the same app are distinguishable.
+The constructor starts connecting at once. `write` never blocks: records wait
+in a buffer while offline and are sent once the connection is up.
+
+- On a drop, `LogCollectorOutput` reconnects through the core
+  `RpcClientConnection` with its default `ExponentialBackoff`: 1s base, capped
+  at 60s, with jitter, no attempt limit. After each reconnect it handshakes
+  again and resends unacknowledged records in order.
+- `bufferSize` caps buffered plus in-flight records. Past it the oldest records
+  are dropped.
+- Only `LogEvent` and finished `LogSpan` records are sent. `LogSpanStart` is
+  skipped.
+- Each instance generates a random 6-hex-char `sessionId`. The collector labels
+  its records `<device name>/<sessionId>`, so several connections from the same
+  app are distinguishable.
+- `dispose()` (or `dispose()` on the controller that owns the output) clears
+  the buffer without flushing. Records logged just before exit can be lost.
+- A handshake failure is reported through `dart:developer` `log`, not through
+  the `LogController`.
+- For diagnostics the output exposes `sessionId`, `isConnected`,
+  `bufferedCount` and `inFlightCount`.
 
 ---
 
@@ -64,36 +84,95 @@ so multiple connections from the same app are distinguishable.
 ### Install
 
 ```sh
-dart pub global activate --source path packages/core/rpc_dart_log
+dart pub global activate rpc_dart_log
 ```
 
 ### Run
 
 ```sh
-rpc_dart_log [--host 0.0.0.0] [--port 9500] [--mcp-port 9501] [--buffer 5000]
+rpc_dart_log [--host 127.0.0.1] [--port 9500] [--mcp-port 9501] [--bind-all] [--no-color]
 ```
 
-Starts two servers:
-- **WebSocket collector** on `--port` (default 9500) -- accepts client connections
+Starts two servers on the same host:
+- **WebSocket collector** on `--port` / `-p` (default 9500) -- accepts client connections
 - **MCP HTTP server** on `--mcp-port` (default 9501) -- serves AI tools
 
-Terminal output uses ANSI colors with device labels. Pass `--no-color` to disable.
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--host`, `-H` | `127.0.0.1` | Address to bind. |
+| `--bind-all` | off | Bind `0.0.0.0` (all interfaces). Overrides `--host`. |
+| `--port`, `-p` | `9500` | WebSocket collector port. |
+| `--mcp-port` | `9501` | MCP HTTP server port. |
+| `--no-color` | off | Disable ANSI colors. |
+| `--help`, `-h` | | Show usage. |
+
+The collector binds loopback by default, so only the same machine can reach it.
+A phone or another host needs `--bind-all` or an explicit `--host`. Do this on
+a trusted network only: the MCP endpoint and its OAuth flow have no
+authentication. The buffer size is not a flag; the executable keeps the last
+5000 records.
+
+Terminal output uses ANSI colors with device labels. Colors are also off when
+stdout is not a terminal.
 
 ### Embed in your own server
+
+`LogCollectorMcpServer.run` starts a collector, a console and the MCP HTTP
+server together. This is what the executable does. All parameters are optional
+and show their defaults below.
 
 ```dart
 import 'package:rpc_dart_log/rpc_dart_log_server.dart';
 
-final mcp = await LogCollectorMcpServer.run(
-  host: '0.0.0.0',
-  collectorPort: 9500,
-  mcpPort: 9501,
-  bufferSize: 5000,
-);
+Future<void> main() async {
+  final mcp = await LogCollectorMcpServer.run(
+    host: '127.0.0.1',
+    collectorPort: 9500,
+    mcpPort: 9501,
+    bufferSize: 5000,
+    colored: true,
+  );
 
-// later:
-await mcp.stop();
+  // later:
+  await mcp.stop(); // stops the MCP server and the collector
+}
 ```
+
+For a collector without MCP, use `LogCollectorServer` and
+`LogCollectorConsole` directly:
+
+```dart
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_log/rpc_dart_log_server.dart';
+
+Future<void> main() async {
+  final server = LogCollectorServer(
+    host: '127.0.0.1', // default
+    port: 9500,        // default; 0 picks a free port, see boundPort
+    controller: LogController(minLevel: RpcLogLevel.internal),
+  );
+  final console = LogCollectorConsole(colored: false); // sink defaults to stdout
+  server.onConnection.listen(console.printConnection);
+  server.onRecord.listen(console.printRecord);
+  await server.start();
+  print('listening on ${server.boundPort}');
+
+  // later:
+  await server.stop();
+}
+```
+
+- `onRecord` is a broadcast `Stream<TaggedRecord>` (`deviceLabel`, `record`).
+- `onConnection` is a broadcast stream of the sealed
+  `LogCollectorConnectionEvent`: `DeviceConnected` or `DeviceDisconnected`,
+  each with a `session` (`id`, `deviceName`, `app`, `label`, `connectedAt`).
+  `sessions` lists the connected ones.
+- Every received record is also added to `controller`. The default is a
+  `LogController(minLevel: RpcLogLevel.internal)` with no outputs. Pass your own
+  to route remote records into other outputs.
+- `stop()` disposes `controller`, including one you passed in, and with it all
+  of that controller's outputs. Do not pass a controller that must outlive the
+  collector.
 
 ---
 
@@ -126,16 +205,17 @@ first** -- it gives enough context to plan the next query without reading logs.
 
 Response includes:
 - Connected devices with app ID and connection time
-- Buffer size, time range, and current cursor
+- Buffer size, time range, and current cursor (marked when the buffer is full)
 - Total error and warning counts
 - Scope breakdown (top 15 by volume) with per-level counts
 - Last 5 **unique** errors (deduplicated by device+scope+message, with repeat count)
-- Active traceIds as 8-char prefixes with error annotation
+- TraceIds as 8-char prefixes with error counts: the first 10 of the tracked
+  ones in arrival order, then `... +N more`
 
 Example output:
 ```
 Devices (1):
-  Pixel 9/a3f (com.example.app) since 14:32:10
+  Pixel 9/a3f9c1 [com.example.app] since 14:32:10
 Buffer: 1247 records | 14:32:10 - 15:01:44 | cursor: 1247
 Totals: 5 errors, 12 warnings
 Scopes:
@@ -144,9 +224,9 @@ Scopes:
   auth: 45 total
   ... +2 more scopes
 Recent errors (3 unique):
-  [x47] 15:01:42 [Pixel 9/a3f] ERROR  engine.websocket  Connection lost  err=SocketException
-  15:00:11 [Pixel 9/a3f] ERROR  sync.engine  Sync timeout
-  14:58:03 [Pixel 9/a3f] ERROR  auth  Token expired
+  [x47] 15:01:42 [Pixel 9/a3f9c1] ERROR engine.websocket  Connection lost  err=SocketException
+  15:00:11 [Pixel 9/a3f9c1] ERROR sync.engine  Sync timeout
+  14:58:03 [Pixel 9/a3f9c1] ERROR auth  Token expired
 TraceIds (4): a3f9bc12 (2 err), 8d7e2a01, c1240fe4 (1 err), 9b38a10f
 ```
 
@@ -158,18 +238,18 @@ Query log records with filters. Returns records in chronological order.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `count` | int | Max records to return (default: 50, max: 500). Shows `N of N+` when truncated. |
-| `level` | string | Minimum level: `internal` `trace` `debug` `info` `warning` `error` `fatal` |
+| `count` | int | Max records to return (default: 50, clamped to 1..500). The newest matches are kept. Shows `N of N+` when truncated. |
+| `level` | string | Minimum level: `internal` `trace` `debug` `info` `warning` `error` `fatal`. Applies to events only; spans pass. |
 | `scope` | string | Scope prefix filter. `"engine"` matches `engine.websocket`, `engine.conn`, etc. |
-| `device` | string | Device label substring, case-insensitive. `"pixel"` matches `Pixel 9/a3f`. |
-| `message` | string | Regex pattern (case-insensitive). Plain strings work as substring search. |
+| `device` | string | Device label substring, case-insensitive. `"pixel"` matches `Pixel 9/a3f9c1`. |
+| `message` | string | Regex pattern (case-insensitive), matched against an event's message or a span's name. Plain strings work as substring search. |
 | `traceId` | string | TraceId prefix (8+ chars from sources, or full ID). Uses `startsWith`. |
 | `type` | string | Record type: `"event"` or `"span"`. Omit for both. |
 | `since` | string | Time cutoff. Relative: `"30s"`, `"2m"`, `"1h"`. Absolute: `"14:55"`, `"14:55:30"`. |
 | `cursor` | int | Return only records after this cursor (from previous response). Overrides `since`. |
 | `collapse` | bool | Collapse repeating sequences into `[xN]` / `[xN cycles]` (default: false). |
 | `no_data` | bool | Omit structured data fields (default: false). Useful when data is large. |
-| `context` | int | Show N lines before/after each match (max: 20). Match lines prefixed `>`, context lines `  `. Non-contiguous windows separated by `---`. Disables collapse. |
+| `context` | int | Show N lines before/after each match (default: 0, max: 20). Match lines prefixed `>`, context lines `  `. Non-contiguous windows separated by `---`. With context, `count` limits the oldest matches. Disables collapse. |
 
 #### `message` regex examples
 
@@ -189,9 +269,9 @@ For a polling loop that emits 2 lines per cycle:
 
 ```
 [x198 cycles]:
-  14:32:10 [Pixel 9/a3f] INFO   engine.poller  tick: start
-  14:32:10 [Pixel 9/a3f] INFO   engine.poller  tick: done
-14:33:01 [Pixel 9/a3f] ERROR  engine.poller  Poller stopped
+  14:32:10 [Pixel 9/a3f9c1] INFO  engine.poller  tick: start
+  14:32:10 [Pixel 9/a3f9c1] INFO  engine.poller  tick: done
+14:33:01 [Pixel 9/a3f9c1] ERROR engine.poller  Poller stopped
 ```
 
 Period detection handles sequences of 1, 2, or 3 lines. Smaller period is
@@ -200,13 +280,13 @@ preferred (e.g. `a a a a` collapses as `[x4] a`, not `[x2 cycles]: a a`).
 #### `context` output
 
 ```
-  14:01:10 [Pixel 9/a3f] INFO   engine.ws  sending handshake
-> 14:01:11 [Pixel 9/a3f] ERROR  engine.ws  Connection lost  err=SocketException
-  14:01:11 [Pixel 9/a3f] INFO   engine.ws  scheduling reconnect
+  14:01:10 [Pixel 9/a3f9c1] INFO  engine.ws  sending handshake
+> 14:01:11 [Pixel 9/a3f9c1] ERROR engine.ws  Connection lost  err=SocketException
+  14:01:11 [Pixel 9/a3f9c1] INFO  engine.ws  scheduling reconnect
 ---
-  14:03:44 [Pixel 9/a3f] INFO   engine.ws  reconnect attempt 3
-> 14:03:45 [Pixel 9/a3f] ERROR  engine.ws  Connection lost  err=SocketException
-  14:03:45 [Pixel 9/a3f] INFO   engine.ws  scheduling reconnect
+  14:03:44 [Pixel 9/a3f9c1] INFO  engine.ws  reconnect attempt 3
+> 14:03:45 [Pixel 9/a3f9c1] ERROR engine.ws  Connection lost  err=SocketException
+  14:03:45 [Pixel 9/a3f9c1] INFO  engine.ws  scheduling reconnect
 ```
 
 ---
@@ -279,14 +359,16 @@ rpc_log_get_logs  device=Pixel  level=error  since=10m
 Each line in `rpc_log_get_logs` output:
 
 ```
-HH:MM:SS [DeviceLabel] LEVEL  scope.name  message  err=...  trace=...  key=val
+HH:MM:SS [DeviceLabel] LEVEL scope.name  message  err=...  trace=...  key=val
 ```
 
-- `LEVEL` is padded to 5 chars: `INFO `, `ERROR`, `WARN `, `DEBUG`, `FATAL`, `SPAN `
+- `LEVEL` is the upper-case level name padded to 5 chars: `INFO `, `DEBUG`,
+  `TRACE`, `ERROR`, `FATAL`, `WARNING`, `INTERNAL`
 - `err=` present only when error is non-null
-- `trace=` present only when traceId is set
-- Data fields truncated to 120 chars with `...` suffix
-- Spans show: `HH:MM:SS [device] SPAN  scope  name  Nms ok|error`
+- `trace=` present only when traceId is set (full id)
+- Data fields are joined as `key=val key=val`; the joined string is truncated
+  to 120 chars with a `...` suffix
+- Spans show: `HH:MM:SS [device] SPAN  scope  name Nms ok|error  err=...  trace=...`
 
 ---
 
@@ -302,7 +384,12 @@ HH:MM:SS [DeviceLabel] LEVEL  scope.name  message  err=...  trace=...  key=val
 
 ## Buffer behavior
 
-- Server buffers last N records (default 5000, configurable via `--buffer`)
-- When full, oldest records are evicted (scope stats may be slightly overstated)
-- Cursor is monotonically increasing across evictions -- always safe to use for incremental tail
+- Server buffers the last N records (5000 in the executable; `bufferSize` in
+  `LogCollectorMcpServer.run`, `maxRecords` in `LogCollectorMcpBuffer`)
+- When full, oldest records are evicted. Scope stats and error/warning totals
+  are cumulative, so they can count evicted records
+- Scope stats capped at 500 scopes; oldest evicted when full
 - TraceId index capped at 500 entries; oldest evicted when full
+- Cursor increases monotonically across evictions. If records after a cursor
+  were evicted, `rpc_log_get_logs` returns the whole buffer prefixed with
+  `WARNING: cursor stale`, so a tail consumer can reset
