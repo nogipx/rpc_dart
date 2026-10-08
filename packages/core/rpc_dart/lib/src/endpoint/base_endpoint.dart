@@ -220,8 +220,20 @@ abstract base class RpcEndpointBase {
   }
 
   /// Closes the endpoint and releases all resources.
-  Future<void> close() async {
+  ///
+  /// Concurrent and later calls share one close and return when it is done: a
+  /// second call used to return at once while the transport was still
+  /// closing, and the subclasses released their resources twice.
+  Future<void> close() => _closing ??= _closeOnce();
+
+  Future<void>? _closing;
+
+  /// What a subclass releases before the transport closes.
+  Future<void> _closeResources() async {}
+
+  Future<void> _closeOnce() async {
     if (!_isActive) return;
+    await _closeResources();
 
     _log.internal('Closing RpcEndpoint');
     _isActive = false;

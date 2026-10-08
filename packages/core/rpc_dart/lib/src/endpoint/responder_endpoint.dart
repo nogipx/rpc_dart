@@ -46,11 +46,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   }
 
   @override
-  Future<void> close() async {
-    if (!isActive) return;
-    await closeResponderResources();
-    await super.close();
-  }
+  Future<void> _closeResources() => closeResponderResources();
 
   /// Throws if [serviceName].[methodName] is not registered with [expectedType].
   void validateMethodExists(

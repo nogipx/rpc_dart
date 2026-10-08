@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[732](732-concurrent-endpoint-closes-share-one.md)** FIXED, rpc_dart — a second concurrent endpoint `close()` returned at once while the transport was still closing, and the subclasses released their pipelines twice: every close now shares one
 - **[731](731-stop-waits-for-the-bind.md)** FIXED, rpc_dart_http2 + rpc_dart_http + rpc_dart_log — **`stop()` during a server's bind left it listening with nothing to stop it**, in all three servers that bind: each stop() now waits for the bind in progress
 - **[730](730-stop-does-not-outwait-a-hung-start.md)** FIXED, rpc_dart_framework — **round 721 made `stop()` hang for as long as an `onStart` hung**: stop() now asks start() to roll back and waits at most `shutdownTimeout` (1004 ms against HUNG)
 - **[729](729-the-weighing-failed-honest-peers.md)** RETRACTED, rpc_dart + rpc_dart_http2 — **rounds 719-720 refused honest peers (L-20)**: an upload of 300000 small messages and a 300000-row stream to slightly slow consumers failed; 720 reverted, 719's overhead moved to the connection total only
