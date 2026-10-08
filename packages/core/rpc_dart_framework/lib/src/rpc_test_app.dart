@@ -120,6 +120,12 @@ class RpcTestApp {
       callerEndpoint.addMiddleware(mw);
     }
 
+    // Modules start first, as in RpcApp: `buildContracts` resolves what
+    // `onStart` provides.
+    for (final module in sorted) {
+      await module.onStart(container);
+    }
+
     // Register contracts for server modules only.
     for (final module in sorted) {
       if (module is! RpcServerModule) continue;
@@ -130,10 +136,6 @@ class RpcTestApp {
 
     callerEndpoint.start();
     responderEndpoint.start();
-
-    for (final module in sorted) {
-      await module.onStart(container);
-    }
 
     return RpcTestApp._(
       caller: callerEndpoint,
@@ -163,15 +165,7 @@ class RpcTestApp {
       }
     }
 
-    RpcAppHealthLevel level = RpcAppHealthLevel.healthy;
-    for (final entry in moduleHealth.values) {
-      final lvl = entry['level'] as String?;
-      if (lvl == 'unhealthy') {
-        level = RpcAppHealthLevel.unhealthy;
-        break;
-      }
-      if (lvl == 'degraded') level = RpcAppHealthLevel.degraded;
-    }
+    final level = appLevelOf(moduleHealth);
 
     return RpcAppHealth(
       level: level,

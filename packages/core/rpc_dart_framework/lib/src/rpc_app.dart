@@ -144,8 +144,11 @@ class RpcApp {
 
     final startedModules = <RpcModule>[];
     try {
-      await _startServer();
+      await _spawnIsolates();
 
+      // Every module starts BEFORE the server accepts a connection:
+      // `buildContracts` runs per connection and resolves what `onStart`
+      // provides, so a connection arriving earlier would find it missing.
       for (final module in _modules) {
         if (_log?.isDebug ?? false) {
           _log?.debug('onStart: ${module.name}');
@@ -153,6 +156,8 @@ class RpcApp {
         await module.onStart(_container);
         startedModules.add(module);
       }
+
+      await _startServer();
 
       if (_afterModulesStartHook != null) {
         _log?.debug('afterModulesStart');
@@ -279,15 +284,7 @@ class RpcApp {
       endpointHealth.add(endpoint.collectEndpointMetrics());
     }
 
-    RpcAppHealthLevel level = RpcAppHealthLevel.healthy;
-    for (final entry in moduleHealth.values) {
-      final lvl = entry['level'] as String?;
-      if (lvl == 'unhealthy') {
-        level = RpcAppHealthLevel.unhealthy;
-        break;
-      }
-      if (lvl == 'degraded') level = RpcAppHealthLevel.degraded;
-    }
+    var level = appLevelOf(moduleHealth);
 
     // Factor endpoint health into the overall level. A closed/inactive endpoint
     // means the app cannot serve through it, so it degrades to unhealthy.
@@ -314,12 +311,11 @@ class RpcApp {
   // Private helpers
   // -------------------------------------------------------------------------
 
-  /// Isolates spawned during [_startServer], tracked so they can be terminated
-  /// if startup fails partway through.
+  /// Isolates spawned during [_spawnIsolates], tracked so they can be
+  /// terminated if startup fails partway through.
   final List<RpcIsolateModule> _spawnedIsolates = [];
 
-  Future<void> _startServer() async {
-    // Spawn isolates.
+  Future<void> _spawnIsolates() async {
     for (final module in _modules) {
       if (module is RpcIsolateModule) {
         if (_log?.isDebug ?? false) {
@@ -329,7 +325,9 @@ class RpcApp {
         _spawnedIsolates.add(module);
       }
     }
+  }
 
+  Future<void> _startServer() async {
     _server = _serverBuilder!(_setupEndpoint);
     _log?.info('Starting transport server');
     await _server!.start();

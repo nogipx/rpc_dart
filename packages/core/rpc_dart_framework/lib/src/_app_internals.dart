@@ -7,11 +7,30 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 
 import 'rpc_app_config.dart';
+import 'rpc_app_health.dart';
 import 'rpc_module.dart';
 
 // ============================================================================
 // Module ordering
 // ============================================================================
+
+/// The app level the module levels in [moduleHealth] add up to.
+///
+/// Each entry's `level` is an [RpcHealthLevel] name. A `closed` module cannot
+/// serve, so it counts as unhealthy; a `reconnecting` one is recovering, so it
+/// counts as degraded.
+RpcAppHealthLevel appLevelOf(Map<String, Map<String, Object?>> moduleHealth) {
+  var level = RpcAppHealthLevel.healthy;
+  for (final entry in moduleHealth.values) {
+    switch (entry['level']) {
+      case 'unhealthy' || 'closed':
+        return RpcAppHealthLevel.unhealthy;
+      case 'degraded' || 'reconnecting':
+        level = RpcAppHealthLevel.degraded;
+    }
+  }
+  return level;
+}
 
 /// Topological sort of [modules] by [RpcModule.dependencies] (Kahn's algorithm).
 ///
