@@ -74,8 +74,8 @@ final class RpcSecurityPolicy {
   /// on, the sender is not told the depth and a stream of small messages to a
   /// slow consumer can still reach it. A transport with no message credit at
   /// all declares [IRpcNoMessageCredit] (HTTP/2 does), and its request queues
-  /// are not bounded by depth: each message counts a fixed overhead against the
-  /// byte bounds instead.
+  /// are not bounded by depth: each message counts a fixed overhead against
+  /// [flowControlConnectionWindowBytes] instead, and its bytes alone per stream.
   ///
   /// Default 8192. Exceeding it fails THAT STREAM with RESOURCE_EXHAUSTED, not
   /// the connection; only a peer ignoring the credit, or one with flow control

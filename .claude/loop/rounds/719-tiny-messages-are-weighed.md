@@ -10,6 +10,11 @@ release: changelog
 
 # Round 719 — tiny messages are weighed
 
+> **Narrowed by round 729.** Charged per stream, the overhead refused an
+> honest upload of 300000 small messages to a slightly slow handler (L-20).
+> It now counts against the connection total only. The multi-stream bound
+> measured here holds (-31 MiB).
+
 ## Target
 
 Round 715's own fix, re-measured (RPC-15's habit, RPC-17's question: what does

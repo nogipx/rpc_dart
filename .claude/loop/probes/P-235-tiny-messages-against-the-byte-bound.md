@@ -33,3 +33,8 @@ A draining handler, and the pre-715 depth bound restored
 ```
 
 Slow: 32 streams take over ten minutes.
+
+Round 729 added the `slow` arm (`slow 300000 1`: a handler pausing 1 ms every
+20). It reads `ok` with payload alone, `status 8` with the overhead charged
+per stream, and `ok` with the overhead on the connection total only. The
+8-stream parked arm then reads -31 MiB.

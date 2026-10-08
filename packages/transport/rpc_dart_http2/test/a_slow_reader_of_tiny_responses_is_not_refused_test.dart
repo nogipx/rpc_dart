@@ -2,10 +2,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The caller bounds a response its consumer has stopped reading by the
-// un-consumed window. Charged payload bytes alone, a server streaming 9-byte
-// messages got 472k of them into a paused caller, 108 MiB held against a
-// 4 MiB window. Each message now also counts what it retains.
+// The caller refuses a response whose consumer falls past the un-consumed
+// window, and HTTP/2 does not tell the server about that window. Charging
+// each message a fixed overhead on top of its payload (as a fix once did)
+// moved that refusal from about 470k tiny messages behind to about 30k, and
+// an honest consumer only slightly slower than its server -- pausing 1 ms
+// every 20 messages -- got RESOURCE_EXHAUSTED partway through a result set.
 
 @TestOn('vm')
 library;
@@ -18,8 +20,7 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-const _count = 300000;
-var _produced = 0;
+const _count = 60000;
 
 final class _Svc extends RpcResponderContract {
   _Svc() : super('Svc');
@@ -27,12 +28,11 @@ final class _Svc extends RpcResponderContract {
   @override
   void setup() {
     addServerStreamMethod<RpcString, RpcString>(
-      methodName: 'Flood',
+      methodName: 'Rows',
       requestCodec: _codec,
       responseCodec: _codec,
       handler: (request, {RpcContext? context}) async* {
         for (var i = 0; i < _count; i++) {
-          _produced++;
           yield ''.rpc;
           if (i % 2000 == 0) await Future<void>.delayed(Duration.zero);
         }
@@ -43,7 +43,7 @@ final class _Svc extends RpcResponderContract {
 
 void main() {
   test(
-    'WITNESS a paused caller stops a flood of tiny responses',
+    'WITNESS a slightly slow reader receives every tiny response',
     () async {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
@@ -63,33 +63,35 @@ void main() {
       });
 
       var received = 0;
-      final sub = caller
+      final done = Completer<void>();
+      late final StreamSubscription<RpcString> sub;
+      sub = caller
           .serverStream<RpcString, RpcString>(
             serviceName: 'Svc',
-            methodName: 'Flood',
+            methodName: 'Rows',
             request: 'go'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
           )
-          .listen((_) => received++, onError: (Object _) {});
-      addTearDown(sub.cancel);
-      while (received < 3) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
-      sub.pause();
+          .listen(
+            (_) {
+              received++;
+              if (received % 20 == 0) {
+                sub.pause(
+                  Future<void>.delayed(const Duration(milliseconds: 1)),
+                );
+              }
+            },
+            onError: (Object e, StackTrace st) {
+              if (!done.isCompleted) done.completeError(e, st);
+            },
+            onDone: () {
+              if (!done.isCompleted) done.complete();
+            },
+          );
 
-      // Until the server stops producing.
-      var last = -1;
-      while (_produced != last) {
-        last = _produced;
-        await Future<void>.delayed(const Duration(seconds: 1));
-      }
-
-      expect(
-        _produced,
-        lessThan(100000),
-        reason: 'the paused caller kept taking tiny responses past its window',
-      );
+      await done.future.timeout(const Duration(seconds: 60));
+      expect(received, _count);
     },
     timeout: const Timeout(Duration(seconds: 90)),
   );

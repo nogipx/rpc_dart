@@ -10,6 +10,10 @@ release: changelog
 
 # Round 720 — tiny responses are weighed
 
+> **Retracted by round 729.** The weighing refused an honest reader slightly
+> slower than its server (stopped at 34002 of 300000), a bound the server is
+> never told of (L-20). The code is back to payload alone.
+
 ## Target
 
 The mirror of round 719. 719 weighed what a queued REQUEST message retains on

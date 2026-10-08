@@ -266,8 +266,8 @@ abstract interface class IRpcFlowControlled {
 /// message credit, and a sender doing flow control parks there. A transport
 /// that cannot -- HTTP/2, whose peers are paced by HTTP/2's own byte windows --
 /// declares this, and a client-stream or bidi call there is never failed for
-/// how MANY messages it has waiting, only for how many bytes. Each waiting
-/// message counts a fixed overhead on top of its own bytes.
+/// how MANY messages it has waiting, only for how many bytes. Against the
+/// connection total, each waiting message also counts a fixed overhead.
 ///
 /// A marker, with this polarity on purpose: a transport, or a decorator, that
 /// says nothing keeps the depth bound.

@@ -184,6 +184,7 @@ final class RpcResponderStreamState {
 
   /// What [_requestSink] holds un-consumed; see [pushRequest].
   int _sinkHeldBytes = 0;
+  int _sinkHeldOverhead = 0;
   int _sinkHeldEvents = 0;
   bool _sinkOverflowed = false;
 
@@ -231,10 +232,14 @@ final class RpcResponderStreamState {
   /// Clamped: the handler may drain after [releaseBuffered] already returned
   /// the charge, and the connection total must not go negative.
   void releaseRequest(RpcTransportMessage message) {
-    final weight = _budget?.weigh(message) ?? message.bufferedBytes;
-    final bytes = weight.clamp(0, _sinkHeldBytes);
+    final bytes = message.bufferedBytes.clamp(0, _sinkHeldBytes);
+    final overhead = (_budget?.overheadOf(message) ?? 0).clamp(
+      0,
+      _sinkHeldOverhead,
+    );
     _sinkHeldBytes -= bytes;
-    _budget?.give(bytes);
+    _sinkHeldOverhead -= overhead;
+    _budget?.give(bytes + overhead);
     if (_carriesMessage(message) && _sinkHeldEvents > 0) _sinkHeldEvents--;
   }
 
@@ -242,10 +247,14 @@ final class RpcResponderStreamState {
   ///
   /// Called once the stream is torn down: nothing will consume it now.
   void releaseBuffered() {
-    _budget?.give(_sinkHeldBytes + _preBindBytes);
+    _budget?.give(
+      _sinkHeldBytes + _sinkHeldOverhead + _preBindBytes + _preBindOverhead,
+    );
     _sinkHeldBytes = 0;
+    _sinkHeldOverhead = 0;
     _sinkHeldEvents = 0;
     _preBindBytes = 0;
+    _preBindOverhead = 0;
     _preBindEvents = 0;
   }
 
@@ -283,7 +292,8 @@ final class RpcResponderStreamState {
       return;
     }
     final budget = _budget!;
-    final bytes = budget.weigh(message);
+    final bytes = message.bufferedBytes;
+    final overhead = budget.overheadOf(message);
     final carries = _carriesMessage(message);
     // The peer was told the pre-credited ones are consumed, so it may send
     // that many past the depth while they are still queued here.
@@ -292,6 +302,7 @@ final class RpcResponderStreamState {
       _sinkHeldBytes,
       carries && counted > 0 ? counted : 0,
       bytes,
+      overhead: overhead,
     )) {
       _sinkOverflowed = true;
       droppedRequests++;
@@ -306,6 +317,7 @@ final class RpcResponderStreamState {
       return;
     }
     _sinkHeldBytes += bytes;
+    _sinkHeldOverhead += overhead;
     if (carries) {
       _sinkHeldEvents++;
       deliveredRequests++;
@@ -393,9 +405,18 @@ final class RpcResponderStreamState {
     if (!_boundToMessageStream) message = _ownedPayload(message);
     if (!_boundToMessageStream) {
       _budget = budget;
-      final bytes = budget.weigh(message);
-      if (!budget.take(_preBindBytes, _preBindEvents, bytes)) return false;
+      final bytes = message.bufferedBytes;
+      final overhead = budget.overheadOf(message);
+      if (!budget.take(
+        _preBindBytes,
+        _preBindEvents,
+        bytes,
+        overhead: overhead,
+      )) {
+        return false;
+      }
       _preBindBytes += bytes;
+      _preBindOverhead += overhead;
       _preBindEvents++;
       // Only until the responder is bound: after that every frame reaches it
       // directly, and keeping the latest one here pinned a payload per call.
@@ -425,6 +446,7 @@ final class RpcResponderStreamState {
 
   /// What [storePayload] has charged to the two pre-bind buffers.
   int _preBindBytes = 0;
+  int _preBindOverhead = 0;
   int _preBindEvents = 0;
 
   /// Buffers a payload frame that arrived before the method was resolved.
@@ -476,10 +498,14 @@ final class RpcResponderStreamState {
 
   void _releasePreBind(List<RpcTransportMessage> taken) {
     for (final message in taken) {
-      final weight = _budget?.weigh(message) ?? message.bufferedBytes;
-      final bytes = weight.clamp(0, _preBindBytes);
+      final bytes = message.bufferedBytes.clamp(0, _preBindBytes);
+      final overhead = (_budget?.overheadOf(message) ?? 0).clamp(
+        0,
+        _preBindOverhead,
+      );
       _preBindBytes -= bytes;
-      _budget?.give(bytes);
+      _preBindOverhead -= overhead;
+      _budget?.give(bytes + overhead);
       if (_preBindEvents > 0) _preBindEvents--;
     }
   }
@@ -530,17 +556,18 @@ final class RpcResponderBufferBudget {
     this.perMessageBytes = 0,
   });
 
-  /// Bytes charged per queued message on top of [RpcTransportMessage.bufferedBytes].
+  /// Bytes charged per queued message against [connectionBytes] only.
   ///
   /// Nonzero where [streamEvents] is lifted: a held message retains about a
-  /// hundred bytes whatever its payload, and without this charge a queue of
-  /// one-byte messages is bounded by nothing but the stream count.
+  /// hundred bytes whatever its payload, and without this charge queues of
+  /// tiny messages across many streams are bounded by the stream count alone.
+  /// Kept off the per-stream bound, which an honest sender is not told of: a
+  /// fast stream of small messages to a slightly slow handler must not fail.
   final int perMessageBytes;
 
-  /// What [message] is charged while queued; the same at take and give.
-  int weigh(RpcTransportMessage message) =>
-      message.bufferedBytes +
-      (message.payload != null || message.isDirect ? perMessageBytes : 0);
+  /// The connection-only charge for [message]; see [perMessageBytes].
+  int overheadOf(RpcTransportMessage message) =>
+      message.payload != null || message.isDirect ? perMessageBytes : 0;
 
   /// Ceiling on un-consumed bytes per stream.
   final int streamBytes;
@@ -558,25 +585,27 @@ final class RpcResponderBufferBudget {
   /// Bytes this layer holds across the connection.
   int heldBytes = 0;
 
-  /// Charges [bytes] to a stream holding [held] bytes in [events] messages;
-  /// false, and nothing charged, when a ceiling would be crossed.
-  bool take(int held, int events, int bytes) {
+  /// Charges [bytes] to a stream holding [held] bytes in [events] messages, and
+  /// [bytes] plus [overhead] to the connection; false, and nothing charged,
+  /// when a ceiling would be crossed.
+  bool take(int held, int events, int bytes, {int overhead = 0}) {
     if (held + bytes > streamBytes || events + 1 > streamEvents) return false;
+    final charge = bytes + overhead;
     final shared = this.shared;
     if (shared != null) {
-      if (!shared.chargeConnectionBuffer(bytes)) return false;
+      if (!shared.chargeConnectionBuffer(charge)) return false;
     } else {
       final total = connectionBytes;
-      if (total != null && heldBytes + bytes > total) return false;
+      if (total != null && heldBytes + charge > total) return false;
     }
-    heldBytes += bytes;
+    heldBytes += charge;
     return true;
   }
 
-  /// Returns [bytes] a [take] charged.
-  void give(int bytes) {
-    heldBytes -= bytes;
-    shared?.releaseConnectionBuffer(bytes);
+  /// Returns [charge] (bytes plus overhead) a [take] put on the connection.
+  void give(int charge) {
+    heldBytes -= charge;
+    shared?.releaseConnectionBuffer(charge);
   }
 
   /// The ceilings, for a refusal message.

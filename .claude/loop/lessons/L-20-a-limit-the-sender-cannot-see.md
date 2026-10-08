@@ -26,6 +26,13 @@ consumption. Each failed a compliant stream with RESOURCE_EXHAUSTED. The first
 showed on devices for three rounds, where it was read as a bridge being slow,
 because a bridge batching frames is just a socket read that carries many.
 
+Paid again in rounds 719-720, retracted in 729. A per-message overhead added
+to the h2 per-stream bounds to stop a memory amplification failed an honest
+300000-message upload and an honest 300000-row stream to slightly slow
+consumers. The gate was green, because every honest-peer witness in the suite
+was smaller than the new threshold. Measure the honest arm at a size that
+reaches the bound, not at the size the existing witness happens to use.
+
 ## How to apply
 
 When adding or reviewing a bound: write down the sender-side mechanism that

@@ -29,3 +29,7 @@ charge removed:
   empty, payload-only charge    472002
   empty, weighed (r720)          36002
 ```
+
+Round 729 added the `slow` arm (a reader pausing 1 ms every 20). With round
+720's weighing it stopped at 34002 of 300000, and with payload alone the
+server produced all 300000. Round 720 was retracted on that reading.
