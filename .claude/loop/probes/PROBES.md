@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-251](P-251-a-given-channel-that-never-connects.md)** valid (round 747), rpc_dart_websocket — a constructor-built transport over a channel to a dead port, against the bare channel with and without `ready` observed
 - **[P-250](P-250-a-client-connection-across-a-server-restart.md)** valid (round 746), rpc_dart_websocket, rpc_dart_http2 — RpcClientConnection across a server restart on the same port, with a transport-closes-on-drop control
 - **[P-249](P-249-the-process-exits-after-close.md)** valid (round 746), rpc_dart_http2, rpc_dart_websocket — exit latency after main returns, per arm, as a subprocess, with a server-left-running control
 - **[P-248](P-248-a-foreign-runtime-release.md)** valid (round 744), rpc_dart_wasm — load() against a plugin that ignores the requested runtime id and then fails to close it

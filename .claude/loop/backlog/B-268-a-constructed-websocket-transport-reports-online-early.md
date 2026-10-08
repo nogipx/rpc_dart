@@ -26,6 +26,12 @@ transport healthy before the channel is ready, and the channel's connect error
 reached the root zone, which ends the isolate. The README documents the
 constructor for a channel the user builds, so this is a supported path.
 
+**Round 747 fixed the crash** (`d4e8de6c`): the error was web_socket_channel's
+unobserved `ready`, and the transport now observes it. **What remains** is the
+first half: `health()` is `healthy` right after construction, before `ready`
+completes, so `RpcClientConnection` reports online over a channel that may
+never connect.
+
 ## Owner decision
 
 —
