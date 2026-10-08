@@ -233,7 +233,9 @@ final class RpcFlutterWasmBridge implements RpcWasmBridge {
     if (runtimeId != bridge.runtimeId) {
       bridge._release();
       unawaited(
-        _channel.invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId}),
+        _channel
+            .invokeMethod<void>('closeRuntime', {'runtimeId': runtimeId})
+            .catchError((Object _) {}),
       );
       throw RpcStatusException(
         RpcStatus.unavailable,
