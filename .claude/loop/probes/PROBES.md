@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-235](P-235-tiny-messages-against-the-byte-bound.md)** valid (round 719), rpc_dart + rpc_dart_http2 — RSS of parked h2 client-stream queues of two-byte messages: +413 MiB over 8 streams with the depth bound lifted and nothing weighing a message, -30 MiB once each counts 128 bytes
 - **[P-234](P-234-a-closed-transport-releases-its-socket.md)** valid (round 718), rpc_dart_http2 — caller sockets left 3 s after `close()` against a peer that never closes, direct and through a CONNECT proxy: 0 and 0, against 1 with the pipe's shutdown and destroy ablated
 - **[P-233](P-233-upload-into-a-deaf-server.md)** valid (round 717), rpc_dart_http — whether a caller deadline stops an HTTP/1.1 upload the server stopped reading: 2432 KiB and the socket closed, against 8192 KiB on an open socket with the abort removed
 - **[P-232](P-232-what-the-default-retry-spends-on-resource-exhausted.md)** valid (round 669), rpc_dart + rpc_dart_http — bytes uploaded for a message at 2x and 10x the ceiling with and without the default retry, plus a handler cap, a rate limit and a size refusal against a retrying caller: before round 669 the size refusal was uploaded three times; now once, with the capacity arms still retried. Round 669

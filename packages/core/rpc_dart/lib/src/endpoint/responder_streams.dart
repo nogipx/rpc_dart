@@ -231,7 +231,8 @@ final class RpcResponderStreamState {
   /// Clamped: the handler may drain after [releaseBuffered] already returned
   /// the charge, and the connection total must not go negative.
   void releaseRequest(RpcTransportMessage message) {
-    final bytes = message.bufferedBytes.clamp(0, _sinkHeldBytes);
+    final weight = _budget?.weigh(message) ?? message.bufferedBytes;
+    final bytes = weight.clamp(0, _sinkHeldBytes);
     _sinkHeldBytes -= bytes;
     _budget?.give(bytes);
     if (_carriesMessage(message) && _sinkHeldEvents > 0) _sinkHeldEvents--;
@@ -282,7 +283,7 @@ final class RpcResponderStreamState {
       return;
     }
     final budget = _budget!;
-    final bytes = message.bufferedBytes;
+    final bytes = budget.weigh(message);
     final carries = _carriesMessage(message);
     // The peer was told the pre-credited ones are consumed, so it may send
     // that many past the depth while they are still queued here.
@@ -392,7 +393,7 @@ final class RpcResponderStreamState {
     if (!_boundToMessageStream) message = _ownedPayload(message);
     if (!_boundToMessageStream) {
       _budget = budget;
-      final bytes = message.bufferedBytes;
+      final bytes = budget.weigh(message);
       if (!budget.take(_preBindBytes, _preBindEvents, bytes)) return false;
       _preBindBytes += bytes;
       _preBindEvents++;
@@ -475,7 +476,8 @@ final class RpcResponderStreamState {
 
   void _releasePreBind(List<RpcTransportMessage> taken) {
     for (final message in taken) {
-      final bytes = message.bufferedBytes.clamp(0, _preBindBytes);
+      final weight = _budget?.weigh(message) ?? message.bufferedBytes;
+      final bytes = weight.clamp(0, _preBindBytes);
       _preBindBytes -= bytes;
       _budget?.give(bytes);
       if (_preBindEvents > 0) _preBindEvents--;
@@ -525,7 +527,20 @@ final class RpcResponderBufferBudget {
     required this.streamEvents,
     this.connectionBytes,
     this.shared,
+    this.perMessageBytes = 0,
   });
+
+  /// Bytes charged per queued message on top of [RpcTransportMessage.bufferedBytes].
+  ///
+  /// Nonzero where [streamEvents] is lifted: a held message retains about a
+  /// hundred bytes whatever its payload, and without this charge a queue of
+  /// one-byte messages is bounded by nothing but the stream count.
+  final int perMessageBytes;
+
+  /// What [message] is charged while queued; the same at take and give.
+  int weigh(RpcTransportMessage message) =>
+      message.bufferedBytes +
+      (message.payload != null || message.isDirect ? perMessageBytes : 0);
 
   /// Ceiling on un-consumed bytes per stream.
   final int streamBytes;

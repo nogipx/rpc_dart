@@ -133,18 +133,23 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// peer cannot have more outstanding than it was granted.
   RpcResponderBufferBudget? _respBudgetCache;
 
+  /// What one queued request message retains beyond its payload bytes.
+  static const int _heldMessageOverheadBytes = 128;
+
   RpcResponderBufferBudget get _respBudget {
     final cached = _respBudgetCache;
     if (cached != null) return cached;
     final transport = this.transport;
     final policy = _policyOfTransport(transport);
+    final noDepth = transport is IRpcNoMessageCredit;
     return _respBudgetCache = RpcResponderBufferBudget(
       streamBytes: policy.effectiveStreamBufferBytes,
       // No depth where the peer cannot be told it; see IRpcNoMessageCredit.
       // 2^30, not a larger int: the budget's arithmetic must hold on dart2js.
-      streamEvents: transport is IRpcNoMessageCredit
-          ? 1 << 30
-          : policy.maxBufferedMessagesPerStream,
+      streamEvents: noDepth ? 1 << 30 : policy.maxBufferedMessagesPerStream,
+      // In its place each message weighs what it retains, or the byte totals
+      // cannot see a queue of tiny messages.
+      perMessageBytes: noDepth ? _heldMessageOverheadBytes : 0,
       connectionBytes: policy.flowControlConnectionWindowBytes,
       shared: transport is IRpcConnectionBufferTotal
           ? transport as IRpcConnectionBufferTotal
