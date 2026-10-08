@@ -303,7 +303,9 @@ endpoint enforces:
 - Requests that are not `POST` are refused.
 
 The caller's `policy` bounds what a response may cost, and `maxActiveStreams`
-caps concurrent calls on the connection.
+caps concurrent calls on the connection. A response the consumer has stopped
+reading fails the call past `flowControlWindowBytes`, each message counting its
+payload plus 128 bytes.
 
 ## gRPC interop
 

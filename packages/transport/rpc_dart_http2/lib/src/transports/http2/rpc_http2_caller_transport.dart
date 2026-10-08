@@ -1771,7 +1771,7 @@ class RpcHttp2CallerTransport
     int streamId,
     Stream<RpcTransportMessage> source,
   ) => source.map((message) {
-    _fcDischarge(streamId, message.payload?.length ?? 0);
+    _fcDischarge(streamId, unconsumedWeightOf(message));
     return message;
   });
 
@@ -1839,7 +1839,7 @@ class RpcHttp2CallerTransport
     // Charge before delivering: a consumer that takes it synchronously
     // discharges immediately afterwards, and crediting a charge that has not
     // happened yet would clamp the counter at zero.
-    _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
+    _fcOnDelivered(message.streamId, unconsumedWeightOf(message));
     // A reset stream has had its last word: the overrun refusal above, or a
     // reset whose subscription cancel has not landed. Delivering this would
     // put data behind the error that ended the call.

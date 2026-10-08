@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-236](P-236-tiny-responses-against-the-caller-window.md)** valid (round 720), rpc_dart_http2 — responses a paused h2 caller accepts before its window stops the server: 472002 empty ones charged by payload alone, 36002 weighed, 4245 at 1 KiB
 - **[P-235](P-235-tiny-messages-against-the-byte-bound.md)** valid (round 719), rpc_dart + rpc_dart_http2 — RSS of parked h2 client-stream queues of two-byte messages: +413 MiB over 8 streams with the depth bound lifted and nothing weighing a message, -30 MiB once each counts 128 bytes
 - **[P-234](P-234-a-closed-transport-releases-its-socket.md)** valid (round 718), rpc_dart_http2 — caller sockets left 3 s after `close()` against a peer that never closes, direct and through a CONNECT proxy: 0 and 0, against 1 with the pipe's shutdown and destroy ablated
 - **[P-233](P-233-upload-into-a-deaf-server.md)** valid (round 717), rpc_dart_http — whether a caller deadline stops an HTTP/1.1 upload the server stopped reading: 2432 KiB and the socket closed, against 8192 KiB on an open socket with the abort removed

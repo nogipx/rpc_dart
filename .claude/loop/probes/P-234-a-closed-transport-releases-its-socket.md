@@ -1,7 +1,7 @@
 ---
 file: packages/transport/rpc_dart_http2/.dart_tool/probe/r718_closed_transport_leaves_socket.dart
 round: 718
-commit: 2a4f712f
+commit: e8341816
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/raw_socket_pipe.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 status: valid
 ---

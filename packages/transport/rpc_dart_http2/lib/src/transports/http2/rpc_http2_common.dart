@@ -296,6 +296,15 @@ int unconsumedWindowFor(RpcSecurityPolicy policy) =>
     // the transport claim a floor the policy alone decides.
     const RpcSecurityPolicy().flowControlWindowBytes!;
 
+/// What [message] counts against [unconsumedWindowFor] while it waits: its
+/// framed payload plus a fixed 128 for what a held message retains.
+///
+/// Payload alone let a queue of 5-byte frames hold 25x the window in memory.
+int unconsumedWeightOf(RpcTransportMessage message) {
+  final payload = message.payload;
+  return payload == null ? 0 : payload.length + 128;
+}
+
 /// Wraps a stream-scoped error so it can travel through the shared broadcast
 /// [incomingMessages] controller without leaking onto unrelated streams.
 ///
