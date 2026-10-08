@@ -6,7 +6,7 @@ SPDX-License-Identifier: MIT
 
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="rpc_dart_isolate" type="DartTestRunConfigurationType" factoryName="Dart Test">
-    <option name="filePath" value="$PROJECT_DIR$/packages/rpc_dart_isolate/test" />
+    <option name="filePath" value="$PROJECT_DIR$/packages/transport/rpc_dart_isolate/test" />
     <option name="scope" value="FOLDER" />
     <method v="2" />
   </configuration>
