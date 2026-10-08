@@ -479,7 +479,7 @@ test('getUser returns correct user', () async {
 });
 ```
 
-`RpcTestApp.start` takes `modules`, `interceptors`, `middlewares` (responder side), `callerInterceptors`, `callerMiddlewares` (caller side), `config`, and `env` (overrides `config.env`). `app.health()` returns an `RpcAppHealth`. `dispose()` closes both endpoints, then stops modules and terminates isolates; it is safe to call twice.
+`RpcTestApp.start` takes `modules`, `interceptors`, `middlewares` (responder side), `callerInterceptors`, `callerMiddlewares` (caller side), `config`, and `env` (overrides `config.env`). `app.health()` returns an `RpcAppHealth`. `dispose()` closes both endpoints, then stops modules and terminates isolates; it is safe to call twice. A `start` that fails partway undoes the same steps before it rethrows.
 
 `RpcTestApp` supports all module types (`RpcModule`, `RpcServerModule`, `RpcIsolateModule`), `RpcAppConfig` hooks, env overrides, and topological module ordering.
 

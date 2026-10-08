@@ -95,8 +95,31 @@ final class _EchoContract extends RpcResponderContract {
   }
 }
 
+class _Failing extends RpcModule {
+  @override
+  String get name => 'Failing';
+
+  @override
+  List<Type> get dependencies => [_Module];
+
+  @override
+  Future<void> onStart(RpcContainer container) async =>
+      throw StateError('onStart failed');
+}
+
 void main() {
   setUp(_events.clear);
+
+  test('WITNESS a failed RpcTestApp.start stops what it started', () async {
+    await expectLater(
+      RpcTestApp.start(modules: [_Module(), _Failing()]),
+      throwsStateError,
+    );
+
+    expect(_events, [
+      'module.onStop',
+    ], reason: 'a module started before the failure was left running');
+  });
 
   test('WITNESS RpcTestApp.dispose closes the endpoints first', () async {
     final module = _ServingModule();

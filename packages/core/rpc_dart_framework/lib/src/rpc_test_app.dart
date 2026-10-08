@@ -90,13 +90,6 @@ class RpcTestApp {
       module.configureWithEnv(container, envConfig);
     }
 
-    // Spawn isolates.
-    for (final module in sorted) {
-      if (module is RpcIsolateModule) {
-        await module.initIsolate();
-      }
-    }
-
     // In-memory transport pair for server modules.
     final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
     final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
@@ -120,18 +113,46 @@ class RpcTestApp {
       callerEndpoint.addMiddleware(mw);
     }
 
-    // Modules start first, as in RpcApp: `buildContracts` resolves what
-    // `onStart` provides.
-    for (final module in sorted) {
-      await module.onStart(container);
-    }
-
-    // Register contracts for server modules only.
-    for (final module in sorted) {
-      if (module is! RpcServerModule) continue;
-      for (final contract in module.buildContracts(container)) {
-        responderEndpoint.registerServiceContract(contract);
+    // A failure partway leaves nothing running, as RpcApp's rollback does:
+    // endpoints, then started modules in reverse, then isolates.
+    final spawned = <RpcIsolateModule>[];
+    final started = <RpcModule>[];
+    try {
+      for (final module in sorted) {
+        if (module is RpcIsolateModule) {
+          await module.initIsolate();
+          spawned.add(module);
+        }
       }
+
+      // Modules start first, as in RpcApp: `buildContracts` resolves what
+      // `onStart` provides.
+      for (final module in sorted) {
+        await module.onStart(container);
+        started.add(module);
+      }
+
+      // Register contracts for server modules only.
+      for (final module in sorted) {
+        if (module is! RpcServerModule) continue;
+        for (final contract in module.buildContracts(container)) {
+          responderEndpoint.registerServiceContract(contract);
+        }
+      }
+    } catch (_) {
+      await responderEndpoint.close();
+      await callerEndpoint.close();
+      for (final module in started.reversed) {
+        try {
+          await module.onStop();
+        } catch (_) {}
+      }
+      for (final module in spawned.reversed) {
+        try {
+          await module.terminateIsolate();
+        } catch (_) {}
+      }
+      rethrow;
     }
 
     callerEndpoint.start();
