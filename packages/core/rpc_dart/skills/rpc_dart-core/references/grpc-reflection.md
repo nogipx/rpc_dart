@@ -241,13 +241,12 @@ What the generator emits:
   services whose descriptors were added to the registry.
 - Calling a CBOR service from `grpcurl` because `describe` worked. Description
   and wire format are independent; the call fails with `INTERNAL`.
-- A generated service whose request or response is a core primitive
-  (`RpcString`, `RpcInt`, ...) or a Dart built-in. The descriptor is built from
-  the fields the class declares, and those types declare none or unrelated
-  ones: no `grpcDescriptor` is generated, or it describes the wrong fields. Use
-  your own model classes.
 - A model field of type `Map`, `Set` or `Iterable` in a generated service. The
   build warns and the field is left out of the descriptor.
+- Expecting getters in the descriptor. A message is described by its stored
+  fields, inherited ones included; a getter is not a field. A core primitive
+  (`RpcString`, `RpcInt`, ...) or a bare `String`, `int`, `double` or `bool`
+  is described as a message with one `value` field.
 - A model field whose type is another model class. Only request and response
   types become messages; the nested type is referenced but not described.
 - Imported proto files left out of the registry. Responses then omit them, a
