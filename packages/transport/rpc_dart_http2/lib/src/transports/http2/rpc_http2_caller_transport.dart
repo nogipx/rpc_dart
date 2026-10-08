@@ -274,9 +274,8 @@ class RpcHttp2CallerTransport
   /// path dead. Fails what is left on it and reports it on [connectionLost].
   ///
   /// [incomingMessages] stays open across a drop for [reconnect], so without
-  /// the report nothing listening can tell a drop from a quiet connection:
-  /// `RpcClientConnection` stayed online over a dead connection, failing every
-  /// call, until the app restarted.
+  /// the report nothing listening can tell a drop from a quiet connection;
+  /// `RpcClientConnection` reconnects on it.
   void _connectionLost(int number) {
     if (number != _connectionNumber || _lostConnection == number) return;
     if (_isClosed) return;
