@@ -176,14 +176,18 @@ Future<RpcWebSocketServer> serve(RpcResponderContract service) async {
   dead connection and its contracts are kept forever (`HttpServer.idleTimeout`
   does not apply to an upgraded socket). Pass `null` to disable.
 - `compression` — default off (`dart:io` defaults to on). With it on, a peer can
-  send a small message that inflates without limit before any rpc_dart check.
+  send a small message that inflates without limit before any rpc_dart check,
+  and the frame checks below do not run at all: no per-message ceiling, and no
+  limit on inbound pings, each of which dart:io answers with a pong queued for
+  a client that may never read it.
 - `protocolSelector` — subprotocol negotiation, as in `WebSocketTransformer`.
 - `policy` — the message-size ceiling for the upgrade. By default the server's
   `policy` is used, handed over when the server starts.
 
-With compression off, each WebSocket frame header is checked as it arrives, and
-a message larger than the policy allows closes the connection before its
-payload is buffered.
+With compression off, each WebSocket frame header is checked as it arrives: a
+message larger than the policy allows closes the connection before its payload
+is buffered, and so does a client pinging faster than 16 times a second after
+a burst of 256.
 
 ### With another HTTP stack
 
