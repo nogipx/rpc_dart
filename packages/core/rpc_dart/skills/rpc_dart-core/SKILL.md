@@ -1,6 +1,6 @@
 ---
 name: rpc_dart-core
-description: "Write, wire, test and debug code that uses the rpc_dart RPC framework (package:rpc_dart): responder and caller contracts (generated from an annotated interface by rpc_dart_generator, the recommended way, or written by hand), RpcResponderEndpoint / RpcCallerEndpoint / RpcPeerEndpoint, unary and streaming methods, codecs and zero-copy, RpcContext deadlines, cancellation and metadata, RpcStatusException errors, retry / circuit breaker / rate limiting, RpcSecurityPolicy limits, LogController logging, health checks, and tests over RpcChannelTransport.memoryPair() or pair(). Use it whenever Dart code imports package:rpc_dart or any rpc_dart_* transport package, or the user asks to add an RPC service, method or transport to such a project."
+description: "Write, wire, test and debug code that uses the rpc_dart RPC framework (package:rpc_dart) and its core companion packages (rpc_dart_generator, rpc_dart_framework, rpc_dart_compression, rpc_dart_grpc_reflection, rpc_dart_log, rpc_dart_opentelemetry): responder and caller contracts (generated from an annotated interface by rpc_dart_generator, the recommended way, or written by hand), RpcResponderEndpoint / RpcCallerEndpoint / RpcPeerEndpoint, unary and streaming methods, codecs and zero-copy, RpcContext deadlines, cancellation and metadata, RpcStatusException errors, retry / circuit breaker / rate limiting, RpcSecurityPolicy limits, LogController logging, health checks, and tests over RpcChannelTransport.memoryPair() or pair(). Use it whenever Dart code imports package:rpc_dart or any rpc_dart_* transport package, or the user asks to add an RPC service, method or transport to such a project."
 ---
 
 # rpc_dart core
@@ -160,6 +160,11 @@ and a pitfalls list.
 | `LogController`, `LogScope`, outputs, health, ping, gRPC health service | [logging-and-health.md](references/logging-and-health.md) |
 | Testing over `memoryPair()` and `pair()`, capturing logs | [testing.md](references/testing.md) |
 | Which transport package to use; reconnecting | [choosing-a-transport.md](references/choosing-a-transport.md) |
+| An application on `rpc_dart_framework`: modules, DI, lifecycle, graceful shutdown, isolate modules, `RpcTestApp` | [framework.md](references/framework.md) |
+| Gzip message compression with `rpc_dart_compression` | [compression.md](references/compression.md) |
+| gRPC Server Reflection with `rpc_dart_grpc_reflection` (grpcurl, Postman) | [grpc-reflection.md](references/grpc-reflection.md) |
+| Shipping app logs to a remote collector with `rpc_dart_log` | [remote-logging.md](references/remote-logging.md) |
+| Traces, metrics and logs with `rpc_dart_opentelemetry` | [opentelemetry.md](references/opentelemetry.md) |
 
 ## Outside this skill
 
@@ -169,14 +174,6 @@ and a pitfalls list.
 - The generator's full reference (gRPC reflection descriptors,
   `@RpcProtoField`, every generated member): the `rpc_dart_generator` README.
   The everyday workflow is in [code-generation.md](references/code-generation.md).
-- The other packages of the core family, each documented in its README:
-  - `rpc_dart_framework` — an application framework on top of the core:
-    modules, dependency injection, lifecycle and graceful shutdown, rate
-    limiting, isolate workers, a test harness.
-  - `rpc_dart_grpc_reflection` — gRPC Server Reflection, so `grpcurl` and
-    Postman can list and describe the services an endpoint serves.
-  - `rpc_dart_log` — ships logs from apps to a remote collector over
-    WebSocket.
-  - `rpc_dart_opentelemetry` — OpenTelemetry tracing, metrics and logs.
-  - `rpc_dart_compression` — a gzip compression codec that also works on the
-    web.
+- The core family's companion packages have their own references above
+  (framework, compression, gRPC reflection, remote logging, OpenTelemetry).
+  Each package's README is the full reference beyond the everyday workflow.
