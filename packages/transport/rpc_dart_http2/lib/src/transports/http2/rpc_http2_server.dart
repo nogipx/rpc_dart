@@ -765,14 +765,20 @@ IRpcTransport _preserveCapabilities(
       inner is IRpcSecurityPolicyAware && wrapped is! IRpcSecurityPolicyAware;
   final needsFlow =
       inner is IRpcFlowControlled && wrapped is! IRpcFlowControlled;
-  if (!needsPolicy && !needsFlow) return wrapped;
+  final needsNoCredit =
+      inner is IRpcNoMessageCredit && wrapped is! IRpcNoMessageCredit;
+  if (!needsPolicy && !needsFlow && !needsNoCredit) return wrapped;
   return _CapabilityPreservingTransport(inner: inner, wrapped: wrapped);
 }
 
 /// Delegates [IRpcTransport] to the user's wrapper and the capabilities to the
 /// transport it wrapped. See [_preserveCapabilities].
 class _CapabilityPreservingTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
+    implements
+        IRpcTransport,
+        IRpcSecurityPolicyAware,
+        IRpcFlowControlled,
+        IRpcNoMessageCredit {
   _CapabilityPreservingTransport({required this.inner, required this.wrapped});
 
   /// The transport handed to the wrapper; the source of the capabilities.

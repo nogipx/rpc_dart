@@ -19,7 +19,11 @@ import 'rpc_http2_common.dart';
 /// `maxActiveStreams`, `halfOpenStreamTimeout` and the message-size limit all
 /// revert to defaults.
 class RpcHttp2ResponderTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware, IRpcFlowControlled {
+    implements
+        IRpcTransport,
+        IRpcSecurityPolicyAware,
+        IRpcFlowControlled,
+        IRpcNoMessageCredit {
   @override
   bool get isClient => false;
 
