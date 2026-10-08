@@ -144,6 +144,9 @@ final class _ReconnectingTransportProxy
   /// Called by [RpcClientConnection] when the inner transport closes.
   void Function(Object? error)? onDropped;
 
+  /// Answers [reconnect]: the outcome of the connection's next attempt.
+  Future<RpcHealthStatus> Function()? awaitReconnect;
+
   /// Installs [inner] as the live transport, retiring whatever was attached.
   ///
   /// Retiring means CLOSING the previous transport, not merely dropping its
@@ -458,13 +461,19 @@ final class _ReconnectingTransportProxy
         ),
       );
 
+  /// Waits for the outcome of the connection's next attempt, without starting
+  /// one: the connection keeps its own backoff, and a caller asking to
+  /// reconnect -- `RpcRetryInterceptor` before each retry -- gets an attempt
+  /// that lands after a real connect instead of inside the backoff's gap.
   @override
-  Future<RpcHealthStatus> reconnect() => Future.value(
-    RpcHealthStatus.degraded(
-      component: 'transport',
-      message: 'reconnect is managed by RpcClientConnection',
-    ),
-  );
+  Future<RpcHealthStatus> reconnect() =>
+      awaitReconnect?.call() ??
+      Future.value(
+        RpcHealthStatus.degraded(
+          component: 'transport',
+          message: 'reconnect is managed by RpcClientConnection',
+        ),
+      );
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +541,7 @@ class RpcClientConnection {
        _logger = logger,
        _onStateChanged = onStateChanged {
     _proxy.onDropped = _onTransportDropped;
+    _proxy.awaitReconnect = _awaitNextAttempt;
     _proxy.isReconnecting = () =>
         _connectingGuard != null && !_connectingGuard!.isCompleted;
   }
@@ -634,6 +644,62 @@ class RpcClientConnection {
   }
 
   // -- Internal --------------------------------------------------------------
+
+  /// The longest [_awaitNextAttempt] waits. The connection's backoff can sleep
+  /// up to its `maxDelay`, a minute by default, and a retry waiting on it would
+  /// hold its call that long.
+  static const Duration _reconnectWaitLimit = Duration(seconds: 5);
+
+  /// The outcome of the reconnect loop's next attempt, for
+  /// [_ReconnectingTransportProxy.reconnect]. Starts nothing: waking the loop
+  /// early would let every caller's retry become a connect attempt, a burst
+  /// against a server that is down.
+  Future<RpcHealthStatus> _awaitNextAttempt() async {
+    RpcHealthStatus status(RpcClientConnectionState s) => switch (s) {
+      RpcClientOnline() => RpcHealthStatus.healthy(component: 'transport'),
+      RpcClientDisconnected() => RpcHealthStatus.degraded(
+        component: 'transport',
+        message: 'RpcClientConnection stopped reconnecting; call connect()',
+      ),
+      _ => RpcHealthStatus.unhealthy(
+        component: 'transport',
+        message: 'reconnect attempt failed; the connection keeps trying',
+      ),
+    };
+    if (_disposed) {
+      return RpcHealthStatus.closed(component: 'transport');
+    }
+    final now = _state;
+    if (now is RpcClientOnline ||
+        now is RpcClientDisconnected ||
+        now is RpcClientIdle) {
+      return status(now);
+    }
+    // Offline or Connecting: the loop is running. Its next failure is
+    // announced as Connecting with this attempt number; see _connectWithBackoff.
+    final failedPast = _reconnectAttempts + 2;
+    try {
+      final next = await state
+          .firstWhere(
+            (s) =>
+                s is RpcClientOnline ||
+                s is RpcClientDisconnected ||
+                s is RpcClientIdle ||
+                (s is RpcClientConnecting && s.attempt >= failedPast),
+          )
+          .timeout(_reconnectWaitLimit);
+      return status(next);
+    } on TimeoutException {
+      return RpcHealthStatus.unhealthy(
+        component: 'transport',
+        message:
+            'no reconnect outcome within ${_reconnectWaitLimit.inSeconds} s',
+      );
+    } on StateError {
+      // The state stream closed: disposed while waiting.
+      return RpcHealthStatus.closed(component: 'transport');
+    }
+  }
 
   void _onTransportDropped(Object? error) {
     if (_isStopped) return;

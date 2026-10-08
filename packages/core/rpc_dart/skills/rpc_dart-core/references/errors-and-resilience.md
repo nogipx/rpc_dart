@@ -243,6 +243,9 @@ RpcCallerEndpoint connectWithRetry(
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.
 - A connection that drops within 5 s of coming online counts as a failed attempt, so `maxAttempts` and the backoff
   still apply to a server that accepts and then refuses. One that held up longer starts the count over.
+- `connection.transport.reconnect()` starts nothing: it waits, up to 5 s, for the outcome of the connection's next
+  attempt. So `RpcRetryInterceptor` on an endpoint over `connection.transport` retries after a real connect, not in
+  the backoff's gap, and the connection keeps its own backoff however many calls are retrying.
 - Calls that are in flight during a drop are lost. Issue them again.
 
 ## Pitfalls
