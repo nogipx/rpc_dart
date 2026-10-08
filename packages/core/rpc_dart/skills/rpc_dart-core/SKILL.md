@@ -1,6 +1,6 @@
 ---
 name: rpc_dart-core
-description: "Write, wire, test and debug code that uses the rpc_dart RPC framework (package:rpc_dart): responder and caller contracts, RpcResponderEndpoint / RpcCallerEndpoint / RpcPeerEndpoint, unary and streaming methods, codecs and zero-copy, RpcContext deadlines, cancellation and metadata, RpcStatusException errors, retry / circuit breaker / rate limiting, RpcSecurityPolicy limits, LogController logging, health checks, and tests over RpcChannelTransport.memoryPair() or pair(). Use it whenever Dart code imports package:rpc_dart or any rpc_dart_* transport package, or the user asks to add an RPC service, method or transport to such a project."
+description: "Write, wire, test and debug code that uses the rpc_dart RPC framework (package:rpc_dart): responder and caller contracts (generated from an annotated interface by rpc_dart_generator, the recommended way, or written by hand), RpcResponderEndpoint / RpcCallerEndpoint / RpcPeerEndpoint, unary and streaming methods, codecs and zero-copy, RpcContext deadlines, cancellation and metadata, RpcStatusException errors, retry / circuit breaker / rate limiting, RpcSecurityPolicy limits, LogController logging, health checks, and tests over RpcChannelTransport.memoryPair() or pair(). Use it whenever Dart code imports package:rpc_dart or any rpc_dart_* transport package, or the user asks to add an RPC service, method or transport to such a project."
 ---
 
 # rpc_dart core
@@ -30,7 +30,20 @@ caller contract -> RpcCallerEndpoint -> IRpcTransport ~~ IRpcTransport -> RpcRes
   `RpcChannelTransport.pair()` (real frames, in memory) and
   `RpcChannelTransport.fromChannel(...)` (your own byte pipe).
 
-## Minimal working example
+## Define contracts by code generation
+
+**The recommended way to define a service** is one annotated abstract
+interface (`@RpcService`, `@RpcMethod.unary` / `.serverStream` /
+`.clientStream` / `.bidirectionalStream`) run through `rpc_dart_generator` with
+`build_runner`. It generates the caller, the responder base class, the
+method-name constants and the codecs from that single declaration, so the two
+sides cannot drift and codec mistakes surface at build time. Read
+[code-generation.md](references/code-generation.md) before adding a service.
+
+Write contracts by hand, as in the example below, only when the project cannot
+run `build_runner`, or to understand what the generated code does.
+
+## Minimal working example (hand-written contracts)
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
@@ -137,7 +150,8 @@ and a pitfalls list.
 
 | Task | File |
 | --- | --- |
-| Define services and methods; endpoints; peer mode; middleware vs interceptors; codegen annotations | [contracts-and-endpoints.md](references/contracts-and-endpoints.md) |
+| Define a service from an annotated interface with `rpc_dart_generator` (recommended); transfer modes, peer services, versioning | [code-generation.md](references/code-generation.md) |
+| Hand-written contracts; endpoints; peer mode; middleware vs interceptors; annotation reference | [contracts-and-endpoints.md](references/contracts-and-endpoints.md) |
 | Server, client and bidirectional streams; cancellation; backpressure | [streaming.md](references/streaming.md) |
 | Serialization (`IRpcSerializable`, `RpcCodec`, `RpcBinaryCodec`, primitives), transfer modes, compression | [codecs-and-compression.md](references/codecs-and-compression.md) |
 | Deadlines, cancellation, headers and metadata rules, per-call scope | [context-and-metadata.md](references/context-and-metadata.md) |
@@ -152,8 +166,8 @@ and a pitfalls list.
 - Constructing a specific transport and running its server: read the README of
   `rpc_dart_http2`, `rpc_dart_http`, `rpc_dart_websocket`, `rpc_dart_isolate`
   or `rpc_dart_wasm`.
-- Generating contracts from annotated interfaces: `rpc_dart_generator`. The
-  annotations themselves are in core; see
-  [contracts-and-endpoints.md](references/contracts-and-endpoints.md).
+- The generator's full reference (gRPC reflection descriptors,
+  `@RpcProtoField`, every generated member): the `rpc_dart_generator` README.
+  The everyday workflow is in [code-generation.md](references/code-generation.md).
 - Shipping logs or traces out of the process: `rpc_dart_log`,
   `rpc_dart_opentelemetry`. Gzip compression codec: `rpc_dart_compression`.

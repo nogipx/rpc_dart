@@ -11,6 +11,11 @@ contracts to one transport. Server: `RpcResponderContract` on an
 `RpcResponderEndpoint`. Client: `RpcCallerContract` on an `RpcCallerEndpoint`.
 Both directions over one transport: `RpcPeerContract` on an `RpcPeerEndpoint`.
 
+Prefer generating contracts from an annotated interface
+(`code-generation.md`). This file describes the hand-written classes the
+generator produces, which is also what to write when `build_runner` is not an
+option.
+
 ## Rules
 
 - `RpcResponderContract`, `RpcCallerContract` and `RpcPeerContract` are
@@ -278,7 +283,8 @@ interceptors: `errors-and-resilience.md`. Headers and `RpcContext`:
 ## Code-generation annotations
 
 Declared in core so annotated interfaces compile without the generator. Run
-generation with the `rpc_dart_generator` package (see its README).
+generation with the `rpc_dart_generator` package: the workflow is in
+`code-generation.md`.
 
 | Annotation | Declares |
 | --- | --- |
