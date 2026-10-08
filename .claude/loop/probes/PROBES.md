@@ -38,6 +38,10 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-247](P-247-two-closes-on-a-stuck-handler.md)** valid (round 743), rpc_dart — two concurrent responder close() calls while handlers of all four shapes hang, with the disposer-bound ablation
+- **[P-246](P-246-rpc-dart-against-grpc-go.md)** valid (round 742), rpc_dart_http2 — rpc_dart's h2 caller against a real grpc-go server: all four call shapes, a non-ASCII status message, `grpc-timeout` (999 ms at the server) and an unknown method
+- **[P-245](P-245-grpcurl-against-rpc-dart.md)** valid (round 740), rpc_dart_grpc_reflection + rpc_dart_http2 — a real `grpcurl` against RpcHttp2Server with reflection: list, describe, unary, stream, NotFound and a cancelling `grpc-timeout` all behave
+- **[P-244](P-244-dropped-requests-and-the-pool.md)** valid (round 738), rpc_dart — whether requests a bidi handler stopped reading drain the connection pool: no (100000 KiB sent per call, a unary passes), against HUNG when the handler pauses instead
 - **[P-243](P-243-a-second-endpoint-close.md)** valid (round 732), rpc_dart — when a second concurrent endpoint `close()` returns: at 6 ms with the transport still open before round 732, with the first at 209 ms after
 - **[P-242](P-242-stop-during-the-bind.md)** valid (round 731), rpc_dart_http2 + rpc_dart_http + rpc_dart_log — whether a server stopped during its bind is listening afterwards: yes for all three before round 731, no after
 - **[P-241](P-241-a-failed-test-app-start.md)** valid (round 728), rpc_dart_framework — `onStop` calls for a module started before another's `onStart` threw: `RpcApp` 1, `RpcTestApp` 0 before round 728 and 1 after

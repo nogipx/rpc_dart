@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434, 693, 717, 726]
-status: swept here (round 726, 472dd6af)
+applied: [210, 221, 244, 322, 434, 693, 717, 726, 743]
+status: swept here (round 743, a94aca2c)
 ---
 
 # RPC-09 — A call deadline that sits below the write
@@ -146,3 +146,13 @@ Measured by P-233: 2432 KiB and a closed socket, against 8192 KiB on an open
 socket with the abort removed. rpc_dart's own server never stops reading. It
 reads to the end past the size limit, so the shape needs a foreign server.
 `../rounds/717-the-deadline-still-sits-above-the-write.md`.
+
+## Round 743 — a shared close spreads a hang, so check its bound
+
+Round 732 made concurrent endpoint `close()` calls share one future. A
+second close can no longer escape a hung first one, so every unbounded await
+under `_closeResources()` now traps both. The only await there that runs user
+code is the call-scope disposer, bounded by `RpcCallScope.disposerTimeout`.
+P-247: two closes over four stuck handlers return in 404 ms, and both hang
+with the bound lifted. **When a fix makes callers share a future, look again
+at the bounds beneath it.** `../rounds/743-a-shared-close-is-still-bounded.md`.

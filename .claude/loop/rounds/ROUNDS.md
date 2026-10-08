@@ -23,6 +23,17 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[743](743-a-shared-close-is-still-bounded.md)** CLEAN, rpc_dart — two concurrent responder close() calls over four stuck handlers return in 404 ms against a 400 ms disposer bound; with the bound lifted both hang (new P-247)
+- **[742](742-rpc-dart-calls-grpc-go.md)** CLEAN, rpc_dart_http2 — rpc_dart's h2 caller against a real grpc-go server: every call shape, a non-ASCII NotFound, a deadline sent as `grpc-timeout`, Unimplemented (new P-246)
+- **[741](741-grpcurl-streams-and-tls.md)** CLEAN, rpc_dart_http2 + rpc_dart_grpc_reflection — grpcurl client-stream and bidi work, h2 over TLS works with `-insecure`, and a plaintext preface to the TLS listener is closed in 1 ms
+- **[740](740-grpcurl-speaks-to-rpc-dart.md)** CLEAN, rpc_dart_grpc_reflection + rpc_dart_http2 — a real `grpcurl` lists, describes and calls rpc_dart over h2 with reflection; NotFound and `grpc-timeout` (token cancelled) arrive as gRPC defines them (new P-245)
+- **[739](739-stream-ids-still-hold-across-reconnects.md)** CLEAN, rpc_dart + websocket + http2 — RPC-03 after 14 h2 caller commits: P-228, P-115 and P-161 reproduce their post-fix rows; no id overlap or collision across a reconnect
+- **[738](738-dropped-requests-return-their-credit.md)** CLEAN, rpc_dart — RPC-01 after message credit: requests a bidi handler stopped reading are credited as they are dropped, so the connection pool never drains (unary 12 ms; HUNG in the paused control) (new P-244)
+- **[737](737-the-strict-floor-reaches-the-transports.md)** CLEAN, rpc_dart_http2 — RPC-26: the strict type modes reach the transports through the shared base; a planted implicit downcast in http2 is an analyser error
+- **[736](736-capability-markers-through-the-wrappers.md)** DEFERRED, rpc_dart — RPC-04 over the markers added since 659: the reconnecting proxy does not forward `IRpcConnectionBufferTotal` (B-267, risk); `test:wasm` green on the local core
+- **[735](735-no-new-file-is-public-by-omission.md)** CLEAN, rpc_dart + http2 + isolate + websocket — RPC-24 over the 11 files added to `lib/` since round 590: 2 hidden by name, 1 a part, 8 never exported
+- **[734](734-refusal-trailers-re-swept.md)** CLEAN, rpc_dart + rpc_dart_http2 + rpc_dart_framework — RPC-02 re-swept: 22 trailer sites, 14 capped, 7 status-only, the 1 uncapped message reaches only a caller that already cancelled
+- **[733](733-an-interceptor-refusal-returns-its-slot.md)** CLEAN, rpc_dart — RPC-05 after 213 rounds: an interceptor refusing a unary or an unread upload returns its `maxConcurrentHandlers` slot (peak 3, 0 with the release ablated)
 - **[732](732-concurrent-endpoint-closes-share-one.md)** FIXED, rpc_dart — a second concurrent endpoint `close()` returned at once while the transport was still closing, and the subclasses released their pipelines twice: every close now shares one
 - **[731](731-stop-waits-for-the-bind.md)** FIXED, rpc_dart_http2 + rpc_dart_http + rpc_dart_log — **`stop()` during a server's bind left it listening with nothing to stop it**, in all three servers that bind: each stop() now waits for the bind in progress
 - **[730](730-stop-does-not-outwait-a-hung-start.md)** FIXED, rpc_dart_framework — **round 721 made `stop()` hang for as long as an `onStart` hung**: stop() now asks start() to roll back and waits at most `shutdownTimeout` (1004 ms against HUNG)

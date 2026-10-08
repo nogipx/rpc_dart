@@ -45,3 +45,9 @@ strength; three across the board with the release in place, so all four teardown
 paths return what they charged. `deadline` is the interesting row: the handler
 ignores its cancellation token, so the slot deliberately outlives the stream and
 is released only when the work actually ends.
+
+Round 733 added `interceptor-unary` and `interceptor-upload`. In both, a
+responder interceptor refuses before `next` (status 7), and the upload's
+requests are never read. They read 3 released and 0 ablated, like the rest.
+The probe now prints each mode's first churned outcome, so a mode that never
+reaches its ending shows up.

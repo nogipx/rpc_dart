@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: something is HELD and must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate, or a request the caller of a lifecycle method is awaiting
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502, 508, 520]
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502, 508, 520, 733]
 status: confirmed (round 494)
 ---
 
