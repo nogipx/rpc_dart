@@ -56,7 +56,7 @@ over `memoryPair()` or an isolate transport has no bytes to measure.
 | Type | Use |
 | --- | --- |
 | `IRpcSerializable` | Interface: `Map<String, dynamic> toJson()`. Add a `fromJson` factory by convention. |
-| `IRpcCodec<T>` | Interface: `Uint8List serialize(T)`, `T deserialize(Uint8List)`. Implement for any format. |
+| `IRpcCodec<T>` | Interface: `Uint8List serialize(T)`, `T deserialize(Uint8List)`. Implement for any format. `deserialize` may be given a VIEW into a larger buffer: slice it with `Uint8List.sublistView`, or copy it with `Uint8List.fromList`, never with `sublist`. Under dart2wasm in a browser the bytes can be JS-backed, and `sublist` on such a view at a non-zero offset counts the offset twice (an SDK bug), returning wrong bytes or throwing. |
 | `RpcCodec<T extends IRpcSerializable>` | CBOR of `toJson()`. `const RpcCodec([fromJson])` or `const RpcCodec.withDecoder(fromJson)`. Static `RpcCodec.fromBytes(bytes:, fromJson:)`. |
 | `RpcBinaryCodec<T>` | Adapter: `const RpcBinaryCodec(toBytes:, fromBytes:)`. Use for protobuf or any existing byte format; `T` need not implement `IRpcSerializable`. |
 | `CborCodec` | Static `encode(Map<String, dynamic>)` / `decode(Uint8List)` used by `RpcCodec`. |
