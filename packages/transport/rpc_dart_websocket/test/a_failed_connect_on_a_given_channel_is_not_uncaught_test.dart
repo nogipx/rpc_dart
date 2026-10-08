@@ -40,7 +40,8 @@ void main() {
       expect(
         transport.isClosed,
         isTrue,
-        reason: 'the failed connect ends the stream, which closes the transport',
+        reason:
+            'the failed connect ends the stream, which closes the transport',
       );
     },
   );
