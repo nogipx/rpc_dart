@@ -29,5 +29,10 @@ end.
   stop during start (r721)     1      1     false
 ```
 
+Round 730 added a `stop during a hung onStart` arm: HUNG past the probe's
+5 s cutoff after round 721, and returned in 1004 ms (`shutdownTimeout: 1 s`)
+after round 730. Since round 730 the `stop during start` arm reads 0 server
+starts: an interrupted start never starts the server.
+
 Round 722 added a `two concurrent stops` arm. Server stops and module
 `onStop` read 2 and 2 before that round's fix and 1 and 1 after it.

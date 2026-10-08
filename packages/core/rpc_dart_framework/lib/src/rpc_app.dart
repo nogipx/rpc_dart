@@ -125,6 +125,19 @@ class RpcApp {
   /// the server it went on to start running, and nothing could stop it.
   Future<void>? _starting;
 
+  /// Set by [stop]: a [start] still running rolls back at its next step
+  /// instead of starting the server, so a stop never has to outwait a hung
+  /// `onStart`.
+  bool _stopRequested = false;
+
+  /// Set once [stop] has torn everything down, so a [start] that resumes
+  /// afterwards does not tear it down a second time.
+  bool _tornDown = false;
+
+  void _abortIfStopRequested() {
+    if (_stopRequested) throw const _StoppedDuringStart();
+  }
+
   Future<void> _start() async {
     _autoInterceptors = [
       if (_config.onError != null) ErrorReportingInterceptor(_config.onError!),
@@ -159,6 +172,7 @@ class RpcApp {
       // `buildContracts` runs per connection and resolves what `onStart`
       // provides, so a connection arriving earlier would find it missing.
       for (final module in _modules) {
+        _abortIfStopRequested();
         if (_log?.isDebug ?? false) {
           _log?.debug('onStart: ${module.name}');
         }
@@ -166,12 +180,21 @@ class RpcApp {
         startedModules.add(module);
       }
 
+      _abortIfStopRequested();
       await _startServer();
+      _abortIfStopRequested();
 
       if (_afterModulesStartHook != null) {
         _log?.debug('afterModulesStart');
         await _afterModulesStartHook(_container);
       }
+    } on _StoppedDuringStart {
+      // Not an error: the caller asked to stop. Thrown into a start() future
+      // nobody awaits any more, it would be an unhandled error.
+      _log?.info('RpcApp stopped during start; rolling back');
+      await _rollbackStart(startedModules);
+      _started = false;
+      return;
     } catch (e, st) {
       _log?.error('RpcApp failed to start', error: e, stackTrace: st);
       await _rollbackStart(startedModules);
@@ -190,10 +213,19 @@ class RpcApp {
   Future<void>? _stopping;
 
   Future<void> _stop() async {
-    try {
-      await _starting;
-    } catch (_) {
-      // start() reports its own failure, and rolled back.
+    final starting = _starting;
+    if (starting != null && _started) {
+      _stopRequested = true;
+      try {
+        await starting.timeout(_config.shutdownTimeout);
+      } on TimeoutException {
+        _log?.warning(
+          'start() did not reach a stopping point within '
+          '${_config.shutdownTimeout.inSeconds}s; stopping what it started',
+        );
+      } catch (_) {
+        // start() reports its own failure, and rolled back.
+      }
     }
     if (!_started) return;
 
@@ -244,6 +276,7 @@ class RpcApp {
     }
 
     _started = false;
+    _tornDown = true;
     _log?.info('RpcApp stopped');
     if (!_stopCompleter.isCompleted) _stopCompleter.complete();
   }
@@ -360,6 +393,7 @@ class RpcApp {
   /// isolates. Best-effort — individual teardown failures are logged, not
   /// propagated, so the original startup error reaches the caller.
   Future<void> _rollbackStart(List<RpcModule> startedModules) async {
+    if (_tornDown) return;
     _log?.warning('Rolling back partial startup');
 
     // Server first, as in stop(): it may already be serving, and its handlers
@@ -443,4 +477,9 @@ class RpcApp {
     }
     endpoint.start();
   }
+}
+
+/// Unwinds a [RpcApp.start] that [RpcApp.stop] interrupted; never escapes it.
+final class _StoppedDuringStart implements Exception {
+  const _StoppedDuringStart();
 }

@@ -9,6 +9,10 @@
 //
 // Two stop() calls at once both ran every module's onStop. Concurrent calls
 // now share one stop.
+//
+// Waiting for start() made stop() wait on a hung onStart for ever. stop() now
+// asks start() to roll back at its next step and waits at most
+// shutdownTimeout; an interrupted start() completes without error.
 
 import 'dart:async';
 
@@ -35,6 +39,17 @@ class _SlowModule extends RpcServerModule {
     stopped = true;
     stops++;
   }
+
+  @override
+  List<RpcResponderContract> buildContracts(RpcContainer container) => const [];
+}
+
+class _HungModule extends RpcServerModule {
+  @override
+  String get name => 'Hung';
+
+  @override
+  Future<void> onStart(RpcContainer container) => Completer<void>().future;
 
   @override
   List<RpcResponderContract> buildContracts(RpcContainer container) => const [];
@@ -83,6 +98,26 @@ void main() {
     );
     expect(module.started, isTrue, reason: 'onStop ran before onStart ended');
     expect(module.stopped, isTrue);
+  });
+
+  test('WITNESS stop() returns while an onStart never completes', () async {
+    _Server? server;
+    final app = RpcApp.server(
+      modules: [_HungModule()],
+      server: (setup) => server = _Server(setup),
+      config: const RpcAppConfig(shutdownTimeout: Duration(milliseconds: 200)),
+    );
+    unawaited(app.start());
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    var returned = false;
+    await app
+        .stop()
+        .then<void>((_) => returned = true)
+        .timeout(const Duration(seconds: 3), onTimeout: () {});
+
+    expect(returned, isTrue, reason: 'stop() waited on a hung onStart');
+    expect(server, isNull, reason: 'a server started after stop()');
   });
 
   test('WITNESS two concurrent stop() calls stop each module once', () async {

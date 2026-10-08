@@ -313,7 +313,7 @@ RpcAppConfig(
 
 `onError` and `onCall` are automatically wired as interceptors covering all four call types (unary, server-stream, client-stream, bidirectional). `onError` runs, then the exception is rethrown. `RpcCallEvent` carries `serviceName`, `methodName`, `callType`, `duration`, `success`, `error` and `context`.
 
-`stop()` stops the server with `drainTimeout` (it stops admitting and lets in-flight calls finish), then calls `onStop()` in reverse order, each bounded by `shutdownTimeout`, then terminates isolates. It waits for a `start()` still in progress, and concurrent calls share one stop.
+`stop()` stops the server with `drainTimeout` (it stops admitting and lets in-flight calls finish), then calls `onStop()` in reverse order, each bounded by `shutdownTimeout`, then terminates isolates. Called during `start()`, it makes `start()` roll back at its next step instead of starting the server, waiting at most `shutdownTimeout` for that; the interrupted `start()` completes without error. Concurrent calls share one stop.
 
 ---
 

@@ -10,6 +10,10 @@ release: changelog
 
 # Round 721 — stop waits for start
 
+> **Revised by round 730.** The unbounded wait made `stop()` hang for as long
+> as an `onStart` did. `stop()` now asks `start()` to roll back and waits at
+> most `shutdownTimeout`.
+
 ## Target
 
 `3d6eb73e`, the owner's newest framework change: modules now start before

@@ -48,8 +48,9 @@ import 'package:rpc_dart_framework/rpc_dart_framework.dart';
   start, throws. To restart, build a new `RpcApp`.
 - A failed start rolls back in `stop()`'s order: the server stops, started
   modules get `onStop`, isolates are terminated, and the error is rethrown.
-- `stop()` waits for a `start()` still in progress, and concurrent `stop()`
-  calls share one stop.
+- `stop()` during `start()` makes `start()` roll back at its next step, waiting
+  at most `shutdownTimeout`; the interrupted `start()` completes without error.
+  Concurrent `stop()` calls share one stop.
 - Errors from the framework (missing registration, missing env variable,
   unknown dependency, cycle) are `RpcStatusException` with
   `RpcStatus.failedPrecondition`.
