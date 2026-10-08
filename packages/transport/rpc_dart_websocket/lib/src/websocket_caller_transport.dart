@@ -365,6 +365,12 @@ class RpcWebSocketCallerTransport
   /// alone can support. Disjoint id spaces are what tells them apart; the Set
   /// covers what the resume cannot.
   void _attach(WebSocketChannel ws, {int? resumeStreamIdsAfter}) {
+    // A channel handed to the constructor, or by a reconnect factory, may still
+    // be connecting. If that connect fails, web_socket_channel completes
+    // `ready` with the error, and an unobserved `ready` is an uncaught error --
+    // the root zone in an app, which ends the isolate. The failure reaches this
+    // transport through the stream as well, which is what closes it.
+    unawaited(ws.ready.catchError((Object _) {}));
     // Every id minted on the previous connection is stale, and with the resume
     // above they can no longer be confused with new ones. The peer's ids go
     // too: its numbering restarts on the new socket, so a remembered one would
