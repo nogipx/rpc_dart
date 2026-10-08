@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[722](722-concurrent-stops-share-one.md)** FIXED, rpc_dart_framework — two concurrent `RpcApp.stop()` calls stopped the server and every module twice, the second during the first's drain: they now share one stop
 - **[721](721-stop-waits-for-start.md)** FIXED, rpc_dart_framework — **`RpcApp.stop()` during a slow `onStart` left the server start() went on to start running, and no later stop() could reach it**: stop() now waits for the start in progress
 - **[720](720-tiny-responses-are-weighed.md)** FIXED, rpc_dart_http2 — **a paused h2 caller accepted 472k empty responses (108 MiB) under a 4 MiB window**: each now weighs payload plus 128, and the server stops at 36k
 - **[719](719-tiny-messages-are-weighed.md)** FIXED, rpc_dart + rpc_dart_http2 — **round 715's lifted depth bound let parked h2 queues of tiny messages retain 413 MiB over 8 streams, 968 over 32**: each queued message now weighs its bytes plus 128 against the budget (-30 MiB)

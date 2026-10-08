@@ -28,3 +28,6 @@ end.
   stop during start, no wait   1      0     true
   stop during start (r721)     1      1     false
 ```
+
+Round 722 added a `two concurrent stops` arm. Server stops and module
+`onStop` read 2 and 2 before that round's fix and 1 and 1 after it.

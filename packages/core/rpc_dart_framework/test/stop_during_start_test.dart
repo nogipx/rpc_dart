@@ -6,6 +6,9 @@
 // server yet, marked the app stopped, and returned. start() then went on to
 // start the server, and every later stop() returned at once: a listener
 // nothing could stop. stop() now waits for the start in progress.
+//
+// Two stop() calls at once both ran every module's onStop. Concurrent calls
+// now share one stop.
 
 import 'dart:async';
 
@@ -16,6 +19,7 @@ import 'package:test/test.dart';
 class _SlowModule extends RpcServerModule {
   var started = false;
   var stopped = false;
+  var stops = 0;
 
   @override
   String get name => 'Slow';
@@ -27,7 +31,10 @@ class _SlowModule extends RpcServerModule {
   }
 
   @override
-  Future<void> onStop() async => stopped = true;
+  Future<void> onStop() async {
+    stopped = true;
+    stops++;
+  }
 
   @override
   List<RpcResponderContract> buildContracts(RpcContainer container) => const [];
@@ -76,5 +83,15 @@ void main() {
     );
     expect(module.started, isTrue, reason: 'onStop ran before onStart ended');
     expect(module.stopped, isTrue);
+  });
+
+  test('WITNESS two concurrent stop() calls stop each module once', () async {
+    final module = _SlowModule();
+    final app = RpcApp.server(modules: [module], server: _Server.new);
+    await app.start();
+
+    await Future.wait([app.stop(), app.stop()]);
+
+    expect(module.stops, 1, reason: 'a second stop ran onStop again');
   });
 }

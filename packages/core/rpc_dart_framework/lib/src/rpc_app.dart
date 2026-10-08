@@ -182,7 +182,14 @@ class RpcApp {
     _log?.info('RpcApp started');
   }
 
-  Future<void> stop() async {
+  /// Concurrent calls share one stop: a second one ran every module's onStop
+  /// again, while the first was still draining handlers that use them.
+  Future<void> stop() =>
+      _stopping ??= _stop().whenComplete(() => _stopping = null);
+
+  Future<void>? _stopping;
+
+  Future<void> _stop() async {
     try {
       await _starting;
     } catch (_) {
