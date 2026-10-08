@@ -169,5 +169,14 @@ and a pitfalls list.
 - The generator's full reference (gRPC reflection descriptors,
   `@RpcProtoField`, every generated member): the `rpc_dart_generator` README.
   The everyday workflow is in [code-generation.md](references/code-generation.md).
-- Shipping logs or traces out of the process: `rpc_dart_log`,
-  `rpc_dart_opentelemetry`. Gzip compression codec: `rpc_dart_compression`.
+- The other packages of the core family, each documented in its README:
+  - `rpc_dart_framework` — an application framework on top of the core:
+    modules, dependency injection, lifecycle and graceful shutdown, rate
+    limiting, isolate workers, a test harness.
+  - `rpc_dart_grpc_reflection` — gRPC Server Reflection, so `grpcurl` and
+    Postman can list and describe the services an endpoint serves.
+  - `rpc_dart_log` — ships logs from apps to a remote collector over
+    WebSocket.
+  - `rpc_dart_opentelemetry` — OpenTelemetry tracing, metrics and logs.
+  - `rpc_dart_compression` — a gzip compression codec that also works on the
+    web.
