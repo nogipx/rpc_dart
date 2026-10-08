@@ -140,7 +140,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final policy = _policyOfTransport(transport);
     return _respBudgetCache = RpcResponderBufferBudget(
       streamBytes: policy.effectiveStreamBufferBytes,
-      streamEvents: policy.maxBufferedMessagesPerStream,
+      // No depth where the peer cannot be told it; see IRpcNoMessageCredit.
+      // 2^30, not a larger int: the budget's arithmetic must hold on dart2js.
+      streamEvents: transport is IRpcNoMessageCredit
+          ? 1 << 30
+          : policy.maxBufferedMessagesPerStream,
       connectionBytes: policy.flowControlConnectionWindowBytes,
       shared: transport is IRpcConnectionBufferTotal
           ? transport as IRpcConnectionBufferTotal

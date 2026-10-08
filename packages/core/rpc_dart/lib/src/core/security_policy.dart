@@ -69,6 +69,13 @@ final class RpcSecurityPolicy {
   /// most this many per round trip, while messages above
   /// [flowControlWindowBytes] divided by it are paced by the bytes first.
   ///
+  /// The credit rides on the per-stream grant, so with
+  /// [flowControlWindowBytes] off and only [flowControlConnectionWindowBytes]
+  /// on, the sender is not told the depth and a stream of small messages to a
+  /// slow consumer can still reach it. A transport with no message credit at
+  /// all declares [IRpcNoMessageCredit] (HTTP/2 does), and its request queues
+  /// are not bounded by depth.
+  ///
   /// Default 8192. Exceeding it fails THAT STREAM with RESOURCE_EXHAUSTED, not
   /// the connection; only a peer ignoring the credit, or one with flow control
   /// off, can get there.

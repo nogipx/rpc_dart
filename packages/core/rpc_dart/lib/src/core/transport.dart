@@ -258,6 +258,20 @@ abstract interface class IRpcFlowControlled {
   void returnFlowCredit(int streamId, int bytes);
 }
 
+/// Capability: the transport grants no message credit, so the responder bounds
+/// its request queues by bytes alone.
+///
+/// [RpcSecurityPolicy.maxBufferedMessagesPerStream] is safe to enforce only
+/// where the sender is told the depth: a channel transport grants it as
+/// message credit, and a sender doing flow control parks there. A transport
+/// that cannot -- HTTP/2, whose peers are paced by HTTP/2's own byte windows --
+/// declares this, and a client-stream or bidi call there is never failed for
+/// how MANY messages it has waiting, only for how many bytes.
+///
+/// A marker, with this polarity on purpose: a transport, or a decorator, that
+/// says nothing keeps the depth bound.
+abstract interface class IRpcNoMessageCredit {}
+
 /// Capability: one connection-wide total of request bytes held un-consumed.
 ///
 /// The transport buffers what it routes to per-stream consumers, and the
