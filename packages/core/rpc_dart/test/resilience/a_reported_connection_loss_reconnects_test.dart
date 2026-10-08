@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcClientConnection learned of a drop only from its transport's message
-// stream ending or erroring. A transport that stays open for its own
-// reconnect() does neither, so the connection stayed online over a dead one.
-// Such a transport now reports the loss through IRpcConnectionLossReporting,
-// and the connection treats it as the end.
+// A transport that stays open for its own reconnect() neither ends nor errors
+// its message stream when the connection goes, so it reports the loss through
+// IRpcConnectionLossReporting, and RpcClientConnection treats that as the end.
+// A loss from a transport the connection has already replaced is ignored.
+// Round 746.
 
 import 'dart:async';
 

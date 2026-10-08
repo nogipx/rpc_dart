@@ -2,12 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcClientConnection started its attempt count over on every successful
-// connect. A server that accepts and then refuses -- RpcWebSocketServer at its
+// A server that accepts and then refuses -- RpcWebSocketServer at its
 // maxConnections, a balancer with no backend -- makes every connect succeed
-// and every connection drop at once, so the client reconnected at the base
-// delay for ever and never reached maxAttempts. A connection now has to hold
-// up before its drop resets the count.
+// and every connection drop at once. RpcClientConnection counts such a
+// connection as a failed attempt, so backoff and maxAttempts still apply; only
+// a connection that held up starts the count over. Round 748.
 
 import 'dart:async';
 
