@@ -46,8 +46,10 @@ import 'package:rpc_dart_framework/rpc_dart_framework.dart';
   `buildContracts` can resolve what `onStart` registers.
 - `RpcApp.start()` runs once. A second call, even after `stop()` or a failed
   start, throws. To restart, build a new `RpcApp`.
-- A failed start rolls back: started modules get `onStop`, the server stops,
-  isolates are terminated, and the error is rethrown.
+- A failed start rolls back in `stop()`'s order: the server stops, started
+  modules get `onStop`, isolates are terminated, and the error is rethrown.
+- `stop()` waits for a `start()` still in progress, and concurrent `stop()`
+  calls share one stop.
 - Errors from the framework (missing registration, missing env variable,
   unknown dependency, cycle) are `RpcStatusException` with
   `RpcStatus.failedPrecondition`.
@@ -271,8 +273,8 @@ final class IsolateGreeterModule extends RpcIsolateModule {
 `RpcTestApp.start` runs the same modules over `RpcChannelTransport.memoryPair()`
 with no server. It takes `modules:`, `interceptors:`, `middlewares:`,
 `callerInterceptors:`, `callerMiddlewares:`, `config:` and `env:` (overrides
-`config.env`). Call contracts on `app.caller`; `dispose()` stops modules and
-closes both endpoints.
+`config.env`). Call contracts on `app.caller`; `dispose()` closes both
+endpoints, then stops modules.
 
 ```dart
 import 'package:rpc_dart_framework/rpc_dart_framework.dart';

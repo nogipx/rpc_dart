@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[727](727-teardown-stops-the-server-first-everywhere.md)** FIXED, rpc_dart_framework — **a failed start's rollback and `RpcTestApp.dispose` stopped modules under an endpoint still serving**: both now stop the server first, as `stop()` does; docs had the old order in four places
 - **[726](726-the-weighing-did-not-move-the-sweep.md)** CLEAN, rpc_dart — RPC-09 re-swept after round 719's own weighing: P-10 unchanged; `test:web` green over rounds 719-722
 - **[725](725-a-peer-cannot-name-a-metric-series.md)** CLEAN, rpc_dart_opentelemetry — calls to unregistered methods never reach the OTel interceptor (0 of 200 spans, 100 of 100 for the registered one), so a peer cannot mint metric series (new P-239)
 - **[724](724-a-deaf-readers-requests-are-bounded.md)** CLEAN, rpc_dart + rpc_dart_http2 — the requests a deaf h2 reader keeps sending are charged to the core budget at round 719's weight: refused at 152k held, not the 520k a payload-only bound allows

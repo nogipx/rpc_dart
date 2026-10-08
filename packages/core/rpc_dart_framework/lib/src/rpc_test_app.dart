@@ -180,6 +180,11 @@ class RpcTestApp {
     if (_disposed) return;
     _disposed = true;
 
+    // Endpoints first, as RpcApp.stop() stops its server first: a handler
+    // still running uses what the modules hold.
+    await _responder.close();
+    await caller.close();
+
     for (final module in _modules.reversed) {
       try {
         await module.onStop();
@@ -191,8 +196,5 @@ class RpcTestApp {
         await module.terminateIsolate();
       }
     }
-
-    await _responder.close();
-    await caller.close();
   }
 }

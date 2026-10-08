@@ -355,12 +355,27 @@ class RpcApp {
     _log?.info('Transport server started');
   }
 
-  /// Unwinds a partially-completed [start]: stops already-started modules in
-  /// reverse order, stops the transport server, and terminates spawned
+  /// Unwinds a partially-completed [start]: stops the transport server, then
+  /// already-started modules in reverse order, then terminates spawned
   /// isolates. Best-effort — individual teardown failures are logged, not
   /// propagated, so the original startup error reaches the caller.
   Future<void> _rollbackStart(List<RpcModule> startedModules) async {
     _log?.warning('Rolling back partial startup');
+
+    // Server first, as in stop(): it may already be serving, and its handlers
+    // use what the modules hold.
+    if (_server != null) {
+      try {
+        await _server!.stop();
+      } catch (e, st) {
+        _log?.error(
+          'Error stopping server during rollback',
+          error: e,
+          stackTrace: st,
+        );
+      }
+      _server = null;
+    }
 
     for (final module in startedModules.reversed) {
       if (_log?.isDebug ?? false) {
@@ -375,19 +390,6 @@ class RpcApp {
           stackTrace: st,
         );
       }
-    }
-
-    if (_server != null) {
-      try {
-        await _server!.stop();
-      } catch (e, st) {
-        _log?.error(
-          'Error stopping server during rollback',
-          error: e,
-          stackTrace: st,
-        );
-      }
-      _server = null;
     }
 
     for (final module in _spawnedIsolates.reversed) {
