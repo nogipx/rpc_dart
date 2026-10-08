@@ -38,6 +38,7 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-242](P-242-stop-during-the-bind.md)** valid (round 731), rpc_dart_http2 + rpc_dart_http + rpc_dart_log — whether a server stopped during its bind is listening afterwards: yes for all three before round 731, no after
 - **[P-241](P-241-a-failed-test-app-start.md)** valid (round 728), rpc_dart_framework — `onStop` calls for a module started before another's `onStart` threw: `RpcApp` 1, `RpcTestApp` 0 before round 728 and 1 after
 - **[P-240](P-240-teardown-order.md)** valid (round 727), rpc_dart_framework — the order of server stop and module `onStop` in `stop()` and in a failed start's rollback: the rollback had it inverted
 - **[P-239](P-239-unknown-methods-against-the-otel-interceptor.md)** valid (round 725), rpc_dart_opentelemetry — spans the OTel interceptor exports for calls to unregistered names: 0 of 200, against 100 of 100 for the registered method

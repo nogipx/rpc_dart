@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[731](731-stop-waits-for-the-bind.md)** FIXED, rpc_dart_http2 + rpc_dart_http + rpc_dart_log — **`stop()` during a server's bind left it listening with nothing to stop it**, in all three servers that bind: each stop() now waits for the bind in progress
 - **[730](730-stop-does-not-outwait-a-hung-start.md)** FIXED, rpc_dart_framework — **round 721 made `stop()` hang for as long as an `onStart` hung**: stop() now asks start() to roll back and waits at most `shutdownTimeout` (1004 ms against HUNG)
 - **[729](729-the-weighing-failed-honest-peers.md)** RETRACTED, rpc_dart + rpc_dart_http2 — **rounds 719-720 refused honest peers (L-20)**: an upload of 300000 small messages and a 300000-row stream to slightly slow consumers failed; 720 reverted, 719's overhead moved to the connection total only
 - **[728](728-a-failed-test-app-start-rolls-back.md)** FIXED, rpc_dart_framework — `RpcTestApp.start` had no rollback: a module started before a failing `onStart` was never stopped (0 against `RpcApp`'s 1); it now undoes endpoints, modules and isolates

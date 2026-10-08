@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
@@ -197,7 +198,24 @@ class RpcHttpServer implements IRpcServer {
       );
     }
     _binding = true;
+    final bound = Completer<void>();
+    _bind = bound.future;
+    try {
+      await _bindAndServe(transport, preamble);
+    } finally {
+      bound.complete();
+    }
+  }
 
+  /// The bind of an [afterModulesStart] in progress. [stop] waits it out:
+  /// before the bind lands there is nothing to close, and the listener that
+  /// lands after it was reachable by nothing.
+  Future<void>? _bind;
+
+  Future<void> _bindAndServe(
+    RpcHttpResponderTransport transport,
+    Handler? preamble,
+  ) async {
     final endpoint = RpcResponderEndpoint(
       transport: transport,
       logger: _logController,
@@ -327,6 +345,8 @@ class RpcHttpServer implements IRpcServer {
   /// endpoint that has to answer them.
   @override
   Future<void> stop({Duration? drainTimeout}) async {
+    final bind = _bind;
+    if (_binding && _httpServer == null && bind != null) await bind;
     _isRunning = false;
     // Or a server stopped and started again is refused by its own bind claim:
     // the claim survives a successful bind, and `_httpServer` is cleared below.

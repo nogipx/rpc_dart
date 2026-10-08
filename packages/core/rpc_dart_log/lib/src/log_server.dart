@@ -92,6 +92,20 @@ class LogCollectorServer {
 
   /// Start listening for WebSocket connections.
   Future<void> start() async {
+    final started = Completer<void>();
+    _starting = started.future;
+    try {
+      await _start();
+    } finally {
+      started.complete();
+    }
+  }
+
+  /// The [start] in progress. [stop] waits it out, or the listener bound
+  /// after the stop stays up with nothing to close it.
+  Future<void>? _starting;
+
+  Future<void> _start() async {
     _httpServer = await HttpServer.bind(host, port);
     _wsController = StreamController<WebSocketChannel>();
 
@@ -131,6 +145,11 @@ class LogCollectorServer {
 
   /// Stop the server and close all connections.
   Future<void> stop() async {
+    try {
+      await _starting;
+    } catch (_) {
+      // start() reports its own failure.
+    }
     await _rpcServer?.stop();
     await _wsController?.close();
     await _httpServer?.close(force: true);

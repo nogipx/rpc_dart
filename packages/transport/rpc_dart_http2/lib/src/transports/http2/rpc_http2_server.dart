@@ -404,6 +404,8 @@ class RpcHttp2Server implements IRpcServer {
       return;
     }
     _starting = true;
+    final bound = Completer<void>();
+    _bind = bound.future;
 
     final scheme = isSecure ? 'h2 (TLS)' : 'h2c (plaintext)';
     _logger?.info('Starting HTTP/2 server ($scheme) on $_host:$_port');
@@ -452,12 +454,21 @@ class RpcHttp2Server implements IRpcServer {
       _isRunning = false;
       _starting = false;
       rethrow;
+    } finally {
+      bound.complete();
     }
   }
+
+  /// The bind of a [start] in progress. [stop] waits it out: before the bind
+  /// lands there is nothing to stop, and the listener that lands after it was
+  /// reachable by nothing.
+  Future<void>? _bind;
 
   /// Stops the server, optionally letting in-flight calls finish first.
   @override
   Future<void> stop({Duration? drainTimeout}) async {
+    final bind = _bind;
+    if (!_isRunning && _starting && bind != null) await bind;
     if (!_isRunning) return;
 
     _logger?.info('Stopping the HTTP/2 server');
