@@ -27,9 +27,18 @@ class RpcWebSocketCallerTransport
     implements
         IRpcReconnectableTransport,
         IRpcSecurityPolicyAware,
-        IRpcFlowControlled {
+        IRpcFlowControlled,
+        IRpcConnectionLossReporting {
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
+
+  /// One event per socket lost while this transport stays open for
+  /// [reconnect]. Without a reconnect factory a lost socket closes the
+  /// transport, and the end of [incomingMessages] says so instead.
+  @override
+  Stream<Object?> get connectionLost => _connectionLost.stream;
+  final StreamController<Object?> _connectionLost =
+      StreamController<Object?>.broadcast();
 
   /// The stable [incomingMessages] across reconnects, forwarding `_inner`'s.
   ///
@@ -405,6 +414,11 @@ class RpcWebSocketCallerTransport
           // The peer-started drop, which is the earliest this wrapper can learn
           // of one. See [_abandonPeerStreams].
           _abandonPeerStreams('WebSocket connection lost');
+          // And reported, because the stream above stays open for reconnect():
+          // without this, `RpcClientConnection` stayed online over a dead
+          // socket, failing every call until the app restarted. See
+          // [connectionLost].
+          if (!_connectionLost.isClosed) _connectionLost.add(null);
           return;
         }
         close();
@@ -778,5 +792,6 @@ class RpcWebSocketCallerTransport
     await _fwdSub?.cancel();
     await _inner.close();
     if (!_incomingCtl.isClosed) await _incomingCtl.close();
+    if (!_connectionLost.isClosed) await _connectionLost.close();
   }
 }

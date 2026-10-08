@@ -124,9 +124,14 @@ Future<bool> tryReconnect(RpcWebSocketCallerTransport transport) async {
 }
 ```
 
-Calls in flight when the socket drops are lost; only new calls use the new
-socket. For automatic reconnect with backoff, give `RpcClientConnection` from
-`rpc_dart` a factory that calls `RpcWebSocketCallerTransport.connect`.
+When the socket drops, the transport stays open for `reconnect()` and emits one
+event on `connectionLost` (`IRpcConnectionLossReporting`); `incomingMessages`
+neither ends nor errors. Calls in flight when the socket drops are lost; only
+new calls use the new socket.
+
+For automatic reconnect with backoff, give `RpcClientConnection` from `rpc_dart`
+a factory that calls `RpcWebSocketCallerTransport.connect`. The connection
+reconnects on that event.
 
 ## Server
 
