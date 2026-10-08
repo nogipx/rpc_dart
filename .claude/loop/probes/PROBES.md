@@ -38,6 +38,8 @@ The two genuinely-moved benches are P-38 and P-40, whose paths are the http2
 transports rounds 340 and 342 changed — and both were re-run in those rounds,
 after the change, which is what the status is for.
 
+- **[P-250](P-250-a-client-connection-across-a-server-restart.md)** valid (round 746), rpc_dart_websocket, rpc_dart_http2 — RpcClientConnection across a server restart on the same port, with a transport-closes-on-drop control
+- **[P-249](P-249-the-process-exits-after-close.md)** valid (round 746), rpc_dart_http2, rpc_dart_websocket — exit latency after main returns, per arm, as a subprocess, with a server-left-running control
 - **[P-248](P-248-a-foreign-runtime-release.md)** valid (round 744), rpc_dart_wasm — load() against a plugin that ignores the requested runtime id and then fails to close it
 - **[P-247](P-247-two-closes-on-a-stuck-handler.md)** valid (round 743), rpc_dart — two concurrent responder close() calls while handlers of all four shapes hang, with the disposer-bound ablation
 - **[P-246](P-246-rpc-dart-against-grpc-go.md)** valid (round 742), rpc_dart_http2 — rpc_dart's h2 caller against a real grpc-go server: all four call shapes, a non-ASCII status message, `grpc-timeout` (999 ms at the server) and an unknown method

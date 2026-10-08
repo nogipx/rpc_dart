@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[746](746-the-connection-that-never-noticed.md)** FIXED, rpc_dart, rpc_dart_websocket, rpc_dart_http2, `935f1290` `f8dd6a88` `8d6a35a2` — **RpcClientConnection never reconnected after a server restart on either network transport**: the transports keep their message stream open for their own reconnect(), and the connection read that as online. New `IRpcConnectionLossReporting`; an error on the shared stream was tried first and crashed a listener without onError. Every arm exits after close (new P-249, P-250; B-268, B-269)
 - **[745](745-the-policy-matrix-from-the-analyzer.md)** CLEAN, rpc_dart, rpc_dart_http, rpc_dart_http2 — who reads each of the 18 RpcSecurityPolicy fields, from the analyzer; every empty cell explained, closeOnProtocolError's caller split is documented
 - **[744](744-every-unawaited-site-from-the-analyzer.md)** FIXED, rpc_dart_wasm, `8c0e7531` — all 128 unawaited sites in lib/, enumerated by the analyzer and reconciled with grep; the foreign-runtime release in RpcFlutterWasmBridge.load() leaked a failing closeRuntime (new P-248)
 - **[743](743-a-shared-close-is-still-bounded.md)** CLEAN, rpc_dart — two concurrent responder close() calls over four stuck handlers return in 404 ms against a 400 ms disposer bound; with the bound lifted both hang (new P-247)

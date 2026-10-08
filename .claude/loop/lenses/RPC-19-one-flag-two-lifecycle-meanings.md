@@ -3,8 +3,8 @@ refines: U-18
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
 applies: one signal carries both "this is terminal" and "this is recoverable, or local" — a lifecycle flag, an error stream, any single channel two readers interpret differently
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
-applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653, 667, 668, 669, 676, 678, 691]
-status: confirmed (round 592)
+applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653, 667, 668, 669, 676, 678, 691, 746]
+status: confirmed (round 746)
 ---
 
 # RPC-19 — One flag, two lifecycle meanings
@@ -446,3 +446,19 @@ _disconnected  degraded(details: {"supported": true})     no counters
 > in a gate run, three seconds after the same call returned 0.
 
 `../rounds/592-the-diagnostic-that-went-quiet-when-it-mattered.md`, B-219, B-104.
+
+## Round 746 — an open stream meant two things, and nobody reconnected
+
+A transport that stays open for its own `reconnect()` keeps its message
+stream open and silent across a drop. To the transport that means
+"disconnected, recoverable"; to `RpcClientConnection`, which learns of a drop
+only from that stream, it means "online". After a server restart both network
+transports failed every call for good behind the connection the READMEs
+recommend.
+
+The fix gives the second meaning its own channel,
+`IRpcConnectionLossReporting.connectionLost`. The first attempt reused the
+shared one, an error on `incomingMessages`, and an existing test with no
+`onError` took it as an uncaught error. **When one signal has two readers, a
+new meaning needs a new signal, not a new event on the old one.**
+`../rounds/746-the-connection-that-never-noticed.md`.
