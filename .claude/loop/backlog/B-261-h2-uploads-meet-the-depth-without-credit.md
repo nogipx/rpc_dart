@@ -1,5 +1,5 @@
 ---
-status: open (round 711)
+status: closed (round 715)
 round: 711
 commit: 45ee7b15
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart]
@@ -42,4 +42,4 @@ leave and document.
 
 ## Owner decision
 
-—
+Owner, 2026-10-08: bytes only on h2. Done in round 715 with the `IRpcNoMessageCredit` marker.

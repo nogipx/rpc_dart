@@ -23,6 +23,7 @@ So the gap is a record-keeping choice, not a gap in knowledge. Left as-is — th
 content is reachable and renumbering would break every inbound reference — and
 `lint`'s warning stands as a pointer to this note rather than to a mystery.
 
+- **[715](715-h2-uploads-bounded-by-bytes.md)** FIXED, core + http2 + http — **h2 uploads of small messages failed at the depth**: `IRpcNoMessageCredit` bounds h2 request queues by bytes alone (owner). B-262 and B-265 documented by owner decision. Closes B-261, B-262, B-265
 - **[714](714-an-oversized-h1-stream-is-cancelled.md)** FIXED, http — **a server stream answered over the limit kept its handler and slot**; four of them made the server answer 503 to everyone. The transport now emits a cancellation for it. Closes B-264
 - **[713](713-pings-are-rate-limited.md)** FIXED, websocket — **a deaf client flooding pings grew the server by ~3 GiB in 10 s** (dart:io queues a pong per ping). The frame guard rate-limits pings. Closes B-263
 - **[712](712-a-silent-h2-client.md)** FIXED, http2 — **one silent TCP client killed an h2c server at defaults** (preface deadline and keepalive tick in one turn, orphaned PING completer in the root zone), and under TLS was held open for good. Keepalive pings in its own zone; the TLS server waits for the client's first bytes under the deadline. Closes B-260

@@ -1,5 +1,5 @@
 ---
-status: open (round 711)
+status: closed (round 715)
 round: 711
 commit: 45ee7b15
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart]
@@ -33,4 +33,4 @@ per-stream window, or document that the depth is enforced without credit there.
 
 ## Owner decision
 
-—
+Owner, 2026-10-08: document it. The policy doc and the skill now say there is no message credit with only the connection window on (round 715).

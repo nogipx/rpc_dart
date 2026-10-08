@@ -1,5 +1,5 @@
 ---
-status: open (round 714)
+status: closed (round 715)
 round: 714
 commit: 0f167865
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart]
@@ -41,4 +41,4 @@ where the server is `RpcHttpServer` on dart:io rather than any shelf adapter;
 
 ## Owner decision
 
-—
+Owner, 2026-10-08: document it. The rpc_dart_http README now says a cancel stays on the caller's side and streaming calls need a deadline (round 715).
