@@ -420,10 +420,9 @@ class RpcWebSocketCallerTransport
           // The peer-started drop, which is the earliest this wrapper can learn
           // of one. See [_abandonPeerStreams].
           _abandonPeerStreams('WebSocket connection lost');
-          // And reported, because the stream above stays open for reconnect():
-          // without this, `RpcClientConnection` stayed online over a dead
-          // socket, failing every call until the app restarted. See
-          // [connectionLost].
+          // Reported on [connectionLost], because the stream above stays open
+          // for reconnect(): a supervisor such as `RpcClientConnection` cannot
+          // otherwise tell a drop from a quiet connection.
           if (!_connectionLost.isClosed) _connectionLost.add(null);
           return;
         }
