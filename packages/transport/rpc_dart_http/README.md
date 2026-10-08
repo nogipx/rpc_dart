@@ -267,6 +267,12 @@ caller learns which limit it hit.
 Policy limits that the endpoint enforces, such as `maxConcurrentHandlers`,
 apply as on any other transport.
 
+There is no limit on the TOTAL of request bodies buffered at once. One server
+serves every client through one transport, so up to `maxActiveStreams` bodies
+of up to `maxBufferedBytes` each can be held together: at the defaults, 4096
+of 16 MiB. A client has to upload every byte it pins, but size those two for
+the host, or put a proxy with its own body limits in front.
+
 ## Wire format
 
 ```
