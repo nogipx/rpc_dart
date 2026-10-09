@@ -150,7 +150,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       // In its place each message weighs what it retains, or the byte totals
       // cannot see a queue of tiny messages.
       perMessageBytes: noDepth ? _heldMessageOverheadBytes : 0,
-      connectionBytes: policy.flowControlConnectionWindowBytes,
+      connectionBytes: policy.effectiveConnectionBufferBytes,
       shared: transport is IRpcConnectionBufferTotal
           ? transport as IRpcConnectionBufferTotal
           : null,

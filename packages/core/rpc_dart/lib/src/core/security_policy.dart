@@ -459,6 +459,28 @@ final class RpcSecurityPolicy {
     return window + message + maxMetadataBytes;
   }
 
+  /// Un-consumed bytes one connection may hold across its streams, or null
+  /// when [flowControlConnectionWindowBytes] is off.
+  ///
+  /// The connection window plus the one message a sender may admit on its
+  /// last byte of connection credit, plus metadata -- the slack
+  /// [effectiveStreamBufferBytes] gives one stream. Bounded at the window
+  /// alone it refused honest callers: six paused server streams of 15 MB
+  /// messages under the default policy, resumed, had one failed with
+  /// RESOURCE_EXHAUSTED "past the connection total".
+  ///
+  /// The message slack is capped at the window itself, so a connection never
+  /// holds more than twice its window plus metadata: a window set far below
+  /// [maxMessageLengthBytes] keeps its meaning against a peer that ignores it.
+  /// Under such a policy a single message larger than the window can still be
+  /// refused; keep the connection window at least one message.
+  int? get effectiveConnectionBufferBytes {
+    final window = flowControlConnectionWindowBytes;
+    if (window == null) return null;
+    final message = maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+    return window + (message < window ? message : window) + maxMetadataBytes;
+  }
+
   /// The per-stream window this side advertises: [flowControlWindowBytes],
   /// or less when [effectiveStreamBufferBytes] could not hold that much.
   ///

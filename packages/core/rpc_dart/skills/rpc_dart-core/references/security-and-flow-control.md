@@ -116,8 +116,14 @@ Credit-based, per stream and per connection, enforced by `RpcChannelTransport`
 (and so by every transport built on it).
 
 - A sender may have at most `flowControlWindowBytes` un-consumed bytes on one
-  stream, and `flowControlConnectionWindowBytes` across the connection. Bytes
-  are wire bytes: the same window admits a few large or many small messages.
+  stream, and `flowControlConnectionWindowBytes` across the connection, plus
+  the one message it admits on its last byte of credit. Bytes are wire bytes:
+  the same window admits a few large or many small messages.
+- The receiver refuses a stream (RESOURCE_EXHAUSTED) only past what an honest
+  sender can reach: the window plus one message plus metadata. At the
+  connection level that message slack is capped at one more window, so keep
+  `flowControlConnectionWindowBytes` at least `maxMessageLengthBytes` if you
+  lower it.
 - When credit runs out, the send awaits. Your `await` on a client-stream /
   bidi send, or the response stream of a server-stream handler, is suspended
   until the receiver consumes. That is the backpressure; do not wrap it in a

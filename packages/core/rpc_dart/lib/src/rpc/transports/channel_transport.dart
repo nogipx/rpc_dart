@@ -96,12 +96,14 @@ class RpcChannelTransport
   /// design, so the window cannot be the bound here. See
   /// [RpcStreamBufferLedger].
   ///
-  /// The connection total is the connection window: an honest peer cannot
-  /// have more outstanding, so only one ignoring the window is refused.
+  /// The connection total is what an honest peer can have outstanding: the
+  /// connection window plus one message, see
+  /// [RpcSecurityPolicy.effectiveConnectionBufferBytes]. Only a peer ignoring
+  /// the window is refused.
   late final RpcStreamBufferLedger _buffers = RpcStreamBufferLedger(
     limitBytes: _policy.effectiveStreamBufferBytes,
     limitEvents: _policy.maxBufferedMessagesPerStream,
-    limitTotalBytes: _policy.flowControlConnectionWindowBytes,
+    limitTotalBytes: _policy.effectiveConnectionBufferBytes,
   );
 
   /// Credit accounting for both levels. See [RpcFlowController].

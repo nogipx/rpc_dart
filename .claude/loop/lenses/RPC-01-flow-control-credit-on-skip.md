@@ -3,7 +3,7 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497, 558, 738, 768]
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497, 558, 738, 768, 769]
 status: confirmed (round 558)
 rank: 13
 ---

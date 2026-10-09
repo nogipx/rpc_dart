@@ -4,8 +4,9 @@
 
 // The per-stream buffer bound multiplies by the stream count: a peer ignoring
 // flow control parks a full stream's worth on every stream it opens. The
-// connection total is the connection window, which an honest peer cannot
-// exceed.
+// connection total is what an honest peer can have outstanding -- the
+// connection window plus one message, at most another window -- see
+// RpcSecurityPolicy.effectiveConnectionBufferBytes.
 
 import 'dart:async';
 
@@ -198,11 +199,15 @@ Future<({int retained, int errors, String after})> _flood({
 
 void main() {
   // 8 streams x the per-stream ceiling would be ~8 MiB; the connection holds
-  // at most ~128 KiB, which is ~120 of these messages.
-  const ceiling = _connectionWindow ~/ 1024;
+  // at most two windows plus metadata, ~320 of these messages.
+  final ceiling =
+      const RpcSecurityPolicy(
+        flowControlConnectionWindowBytes: _connectionWindow,
+      ).effectiveConnectionBufferBytes! ~/
+      1024;
 
   test(
-    'client-streams on one connection hold no more than its window',
+    'client-streams on one connection hold no more than its connection total',
     () async {
       final r = await _flood(
         method: 'upload',
@@ -216,7 +221,7 @@ void main() {
   );
 
   test(
-    'bidi streams on one connection hold no more than its window',
+    'bidi streams on one connection hold no more than its connection total',
     () async {
       final r = await _flood(
         method: 'bidi',
@@ -229,7 +234,7 @@ void main() {
   );
 
   test(
-    'client-streams and bidi streams together hold no more than its window',
+    'client-streams and bidi streams together hold no more than its connection total',
     () async {
       // The two shapes buffer in different layers; each counting only its own
       // would let a peer mixing them hold the window once per layer.
