@@ -294,11 +294,11 @@ class RpcWebSocketCallerTransport
   /// called for the first upgrade and again for every reconnect. Pass one or
   /// the other, not both.
   ///
-  /// [connectTimeout] bounds the whole open, on both platforms. Without it a
-  /// peer that accepts the connection and never completes the upgrade holds the
-  /// caller until the OS gives up — measured on a black hole that accepts TCP
-  /// and answers nothing, `connect()` was still hanging at 10 s. Null by
-  /// default, which keeps the OS behaviour for anyone who wants it.
+  /// [connectTimeout] bounds the whole open, on both platforms, and every
+  /// reconnect. A peer that accepts TCP and never completes the upgrade is
+  /// bounded by nothing else: the OS does not time out a missing HTTP response,
+  /// and an `RpcClientConnection` awaiting this stays in Connecting. 30 s by
+  /// default, as the http2 caller; pass null to wait without a bound.
   static Future<RpcWebSocketCallerTransport> connect(
     Uri uri, {
     Iterable<String>? protocols,
@@ -307,7 +307,7 @@ class RpcWebSocketCallerTransport
     bool enableCompression = false,
     Map<String, Object>? headers,
     FutureOr<Map<String, Object>> Function()? headersProvider,
-    Duration? connectTimeout,
+    Duration? connectTimeout = const Duration(seconds: 30),
   }) async {
     if (headers != null && headersProvider != null) {
       throw ArgumentError('Pass headers or headersProvider, not both');

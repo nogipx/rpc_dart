@@ -3,7 +3,7 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745, 749, 750, 754]
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745, 749, 750, 754, 755]
 status: confirmed (round 754)
 rank: 23
 ---
@@ -530,3 +530,11 @@ accepts and never sends SETTINGS:
 
 `../rounds/754-a-silent-h2-peer-reads-online.md`,
 `../probes/P-259-a-peer-that-never-sends-settings.md`, B-269.
+
+Round 755 ran the same peer against websocket: the bound covered the
+upgrade, but its DEFAULT was null where http2's is 30 s, so `connect()`
+never returned and `RpcClientConnection` sat in Connecting with one attempt.
+Now 30 s, null still opting out. **Compare the siblings' defaults, not only
+their parameters** — a bound everybody has but one side switches off by
+default is the shape of round 584 in a second package.
+`../rounds/755-websocket-connect-had-no-default-bound.md`.

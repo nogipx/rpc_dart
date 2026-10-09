@@ -81,7 +81,7 @@ Future<RpcWebSocketCallerTransport> connectWithOptions(
 | `enableCompression` | `false` | Offer permessage-deflate. See below. |
 | `headers` | none | Headers on the upgrade request. VM only. |
 | `headersProvider` | none | Called for the first upgrade and for every reconnect. Use it for tokens that expire. Pass `headers` or `headersProvider`, not both. |
-| `connectTimeout` | none | Bounds the whole open, on both platforms. Without it a server that accepts TCP and never completes the upgrade holds `connect` until the OS gives up. |
+| `connectTimeout` | 30 s | Bounds the whole open and every reconnect, on both platforms. `null` waits without a bound: a server that accepts TCP and never completes the upgrade then holds `connect` forever. |
 
 **Keepalive.** A half-open connection (a NAT, load balancer or mobile network
 that stops forwarding without closing) is detected only by `pingInterval`.
