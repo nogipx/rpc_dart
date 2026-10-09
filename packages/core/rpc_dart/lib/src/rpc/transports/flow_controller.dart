@@ -427,10 +427,11 @@ final class RpcFlowController {
   /// paused-consumer stream from 0.8 MB in flight to 300.6 MB. Clamping to the
   /// window we configured means a peer can only ever slow us down.
   ///
-  /// Clamping BEFORE adding also keeps the sum from overflowing. Only the upper
-  /// bound is clamped: credit legitimately goes slightly negative, since a
-  /// message is admitted whenever any credit remains, and flooring at zero would
-  /// hand that overdraft back as free credit.
+  /// The clamp is on the resulting credit (see [_applyGrant]), which also keeps
+  /// the sum from overflowing. Only the upper bound is clamped: credit
+  /// legitimately goes negative by up to a message, since a message is admitted
+  /// whenever any credit remains, and flooring at zero would hand that
+  /// overdraft back as free credit.
   void _onGrant(int streamId, int bytes, int? messages) {
     final window = _window;
     if (window == null) return;
@@ -467,19 +468,42 @@ final class RpcFlowController {
   }
 
   void _onByteGrant(int streamId, int bytes, int window) {
-    final granted = bytes > window ? window : bytes;
-    if (granted != bytes && !_clampWarned) {
+    final seeded = _seededBytes.remove(streamId);
+    final held =
+        (_sendCredit[streamId] ?? 0) -
+        (seeded ? (_policy.initialSendWindowBytes ?? 0) : 0);
+    _sendCredit[streamId] = _applyGrant(held, bytes, window, () {
+      if (_clampWarned) return;
       _clampWarned = true;
       _log.warning(
         'Peer granted $bytes on stream $streamId, above our window of $window; '
         'clamping. A peer can slow this side down, never speed it up',
       );
+    });
+  }
+
+  /// [held] plus [bytes], never above [window].
+  ///
+  /// The cap is on the RESULT, not on the grant. A message is admitted while
+  /// any credit remains, so one larger than the window leaves [held] below
+  /// zero by up to a message, and the peer then returns all of it in one
+  /// grant. Capping that grant at the window kept the difference for good: a
+  /// stream of 7 MB messages under a 4 MiB window stopped after the second,
+  /// with nothing left to grant. Capping at `window - held` instead keeps the
+  /// sum in range, so it still cannot overflow, and a peer still cannot lift
+  /// the credit above the window. [onClamp] fires only when it would have.
+  static int _applyGrant(
+    int held,
+    int bytes,
+    int window,
+    void Function() onClamp,
+  ) {
+    final room = window - held;
+    if (bytes > room) {
+      if (bytes > window) onClamp();
+      return window;
     }
-    final held = _sendCredit[streamId] ?? 0;
-    final next = _seededBytes.remove(streamId)
-        ? held - (_policy.initialSendWindowBytes ?? 0) + granted
-        : held + granted;
-    _sendCredit[streamId] = next > window ? window : next;
+    return held + bytes;
   }
 
   // ── Receiving ──────────────────────────────────────────────────────────────
@@ -643,22 +667,21 @@ final class RpcFlowController {
         _notePeerGranted(connection: true);
       }
       if (parsed != null && parsed > 0 && window != null) {
-        // Clamped like the per-stream grant: a peer must not be able to raise
-        // our ceiling, and clamping first keeps the sum from overflowing.
-        final granted = parsed > window ? window : parsed;
-        if (granted != parsed && !_connClampWarned) {
+        // Capped like the per-stream grant, on the result: a peer must not be
+        // able to raise our ceiling, and a grant returning an overdraft must
+        // not be cut short.
+        final held =
+            (_connCredit ?? 0) -
+            (_connSeeded ? (_policy.initialSendWindowBytes ?? 0) : 0);
+        _connSeeded = false;
+        _connCredit = _applyGrant(held, parsed, window, () {
+          if (_connClampWarned) return;
           _connClampWarned = true;
           _log.warning(
             'Peer granted $parsed at connection level, above our pool of '
             '$window; clamping',
           );
-        }
-        final held = _connCredit ?? 0;
-        final next = _connSeeded
-            ? held - (_policy.initialSendWindowBytes ?? 0) + granted
-            : held + granted;
-        _connSeeded = false;
-        _connCredit = next > window ? window : next;
+        });
         wakeAll();
       }
       return true;

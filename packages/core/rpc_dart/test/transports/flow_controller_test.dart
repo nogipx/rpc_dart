@@ -181,6 +181,25 @@ void main() {
       expect(fc.connectionCredit, 1000);
     });
 
+    test('a grant returning an overdraft is not cut to the window', () {
+      // A message larger than the window leaves credit below zero by up to a
+      // message, and the peer returns all of it at once. Capping that grant at
+      // the window kept the rest for good: nothing more was ever granted, and
+      // the stream stopped.
+      final fc = build(bare);
+      fc.handleInbound(_grant(1, '1000'));
+      fc.handleInbound(_connGrant('1000'));
+      expect(fc.tryConsume(1, 5000), isTrue);
+      expect(fc.creditFor(1), -4000);
+      expect(fc.connectionCredit, -4000);
+
+      fc.handleInbound(_grant(1, '5000'));
+      fc.handleInbound(_connGrant('5000'));
+      expect(fc.creditFor(1), 1000);
+      expect(fc.connectionCredit, 1000);
+      expect(fc.tryConsume(1, 1), isTrue);
+    });
+
     test('an unparseable grant moves nothing', () {
       final fc = build(bare);
       fc.handleInbound(_grant(1, '1000'));
