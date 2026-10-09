@@ -183,12 +183,35 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     final transport = call.endpoint.transport;
     try {
       if ((await transport.health()).isHealthy) return;
-      await transport.reconnect();
+      await _withinCall(transport.reconnect(), call.context);
     } catch (_) {
       // Nothing to do: the attempt below will fail the same way and report it.
       // A health() that throws tells us nothing, and tearing a possibly live
       // connection down on no evidence is the defect this guard exists for.
     }
+  }
+
+  /// Waits for [reconnect] no longer than the call has left: its deadline, or
+  /// its cancellation. A reconnect can take seconds -- behind
+  /// [RpcClientConnection] it waits up to 5 s for the next attempt -- and a
+  /// call is not held past the deadline its caller set. The reconnect itself
+  /// runs on; the attempt after it fails DEADLINE_EXCEEDED or CANCELLED.
+  static Future<void> _withinCall(
+    Future<RpcHealthStatus> reconnect,
+    RpcContext context,
+  ) {
+    final remaining = context.remainingTime;
+    final token = context.cancellationToken;
+    if (remaining == null && token == null) return reconnect;
+    Timer? timer;
+    final ends = <Future<void>>[reconnect];
+    if (remaining != null) {
+      final expired = Completer<void>();
+      timer = Timer(remaining, expired.complete);
+      ends.add(expired.future);
+    }
+    if (token != null) ends.add(token.cancelled);
+    return Future.any(ends).whenComplete(() => timer?.cancel());
   }
 
   bool _shouldRetry(Object error, RpcContext context) {

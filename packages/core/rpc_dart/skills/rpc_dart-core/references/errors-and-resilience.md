@@ -142,7 +142,8 @@ void configure(RpcCallerEndpoint caller) {
 - It never sleeps past the deadline. If the next delay is longer than `remainingTime`, the last error is
   rethrown immediately. A cancel during backoff ends the wait.
 - On UNAVAILABLE it calls `transport.reconnect()` before the next attempt, but only
-  if `transport.health()` reports unhealthy.
+  if `transport.health()` reports unhealthy. It waits for the reconnect no longer than the call's deadline or
+  cancellation; the next attempt then fails with DEADLINE_EXCEEDED or CANCELLED.
 - ONLY for idempotent methods: a lost response is also UNAVAILABLE, so a call
   may have been executed more than once. Deduplicate on the server with `context.requestId`.
 
