@@ -4,9 +4,9 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';

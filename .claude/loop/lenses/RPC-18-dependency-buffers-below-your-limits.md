@@ -1,9 +1,9 @@
 ---
 refines: —
-paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**]
+paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723, 756, 763, 766]
+applied: [237, 387, 611, 713, 723, 756, 763, 766, 767]
 status: confirmed (round 756)
 rank: 10
 ---
@@ -145,3 +145,9 @@ every whole oversized response into a dropped connection, 5 tests of 5.
   worked and paused the source; pausing a broadcast source is what buffers.
   Bounded in `NotifySubscribeResponder`, which never pauses the source.
   `../rounds/766-a-subscriber-that-stops-reading-held-the-topic.md`.
+- **Round 767** — the same in `rpc_data`'s watch: a `Stream.multi` listener
+  buffers while paused; 2934 of 3000 changes added to a paused raw watcher.
+  RSS could not see it, because the held changes were the journal's own
+  objects. Ended with `WATCH_OVERFLOW` past the bound rather than dropped,
+  since a watch promises every change after its cursor.
+  `../rounds/767-a-watcher-that-stops-reading-held-every-change.md`.

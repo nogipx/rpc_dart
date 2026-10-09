@@ -36,6 +36,14 @@ abstract class BaseDataRepository implements IDataRepository {
   static const int databaseExportChunkSize = 512;
   static const int databaseImportBatchSize = 512;
 
+  /// Most live changes held for one watcher whose listener is paused. Past
+  /// this or [maxPendingWatchBytes] the watch ends with `RESOURCE_EXHAUSTED`.
+  int get maxPendingWatchEvents => 1024;
+
+  /// Most bytes of live changes held for one paused watcher, by an estimate
+  /// of each change's JSON form.
+  int get maxPendingWatchBytes => 16 * 1024 * 1024;
+
   final IDataStorageAdapter storage;
   final DateTime Function() _clock;
   final String Function(String collection)? _idGenerator;
@@ -907,13 +915,63 @@ abstract class BaseDataRepository implements IDataRepository {
         return;
       }
 
-      final subscription = _changeController.stream
+      // Live changes are held here, not in [listener], while it is paused:
+      // a MultiStreamController buffers without limit, and the server's
+      // response stream pauses whenever the watcher stops granting credit.
+      // Past the bound the watch ends with RESOURCE_EXHAUSTED and the watcher
+      // resumes from the cursor of the last change it received. The backlog
+      // above is not counted: it is the journal's own events, already held.
+      final held = ListQueue<(DataChangeEvent, int)>();
+      var heldBytes = 0;
+      var ended = false;
+      late final StreamSubscription<DataChangeEvent> subscription;
+
+      void drain() {
+        while (!listener.isPaused && held.isNotEmpty) {
+          final (event, size) = held.removeFirst();
+          heldBytes -= size;
+          listener.add(event);
+        }
+      }
+
+      subscription = _changeController.stream
           .where((event) => event.collection == request.collection)
           .listen(
-            listener.add,
+            (event) {
+              if (ended) return;
+              if (!listener.isPaused && held.isEmpty) {
+                listener.add(event);
+                return;
+              }
+              final size = _approxJsonBytes(event.toJson());
+              if (held.length >= maxPendingWatchEvents ||
+                  heldBytes + size > maxPendingWatchBytes) {
+                ended = true;
+                held.clear();
+                unawaited(subscription.cancel());
+                listener
+                  ..addError(
+                    RpcDataError(
+                      'The watcher stopped reading; resume from the cursor '
+                      'of the last change it received',
+                      status: RpcStatus.resourceExhausted,
+                      code: 'WATCH_OVERFLOW',
+                    ),
+                  )
+                  ..close();
+                return;
+              }
+              held.add((event, size));
+              heldBytes += size;
+            },
             onError: listener.addError,
-            onDone: listener.close,
+            onDone: () {
+              ended = true;
+              drain();
+              listener.close();
+            },
           );
+      listener.onResume = drain;
 
       // Намеренно НЕ ждём subscription.cancel(): на dart2js отмена подписки
       // на цепочку приостановленных async*/await for может не завершиться,
@@ -1025,3 +1083,20 @@ class _SnapshotSchemaEntry {
   final bool enabled;
   final bool requireValidation;
 }
+
+/// Approximate size of a JSON value: the UTF-16 code units of every string in
+/// it, keys included, plus 8 for each other scalar.
+int _approxJsonBytes(Object? value) => switch (value) {
+  null => 0,
+  final String s => s.length,
+  final Map<dynamic, dynamic> m => m.entries.fold(
+    0,
+    (sum, e) => sum + _approxJsonBytes(e.key) + _approxJsonBytes(e.value),
+  ),
+  final Iterable<dynamic> items => items.fold(
+    0,
+    (sum, item) => sum + _approxJsonBytes(item),
+  ),
+  final IRpcSerializable s => _approxJsonBytes(s.toJson()),
+  _ => 8,
+};
