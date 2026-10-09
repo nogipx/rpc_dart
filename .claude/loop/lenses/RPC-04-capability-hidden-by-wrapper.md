@@ -10,33 +10,34 @@ rank: 12
 
 # RPC-04 — Transport capabilities hidden by a wrapper
 
-**The wrapper chain only exists where a wrapper HOOK does.** Round 209 swept it:
-`transportWrapper` is on `RpcHttp2Server` alone — the websocket and http servers
-have no such parameter, isolate hands back a `RpcChannelTransport` directly, and
-the websocket caller/responder forward both interfaces. So http2 is the entire
-surface, which is a much smaller sweep than the paths list suggests.
-
-The line that used to sit here — "on websocket and isolate the capabilities were
-checked as reaching the check site, round 205, filed separately in
-`../checked/`" — was wrong on its own terms: round 205 was RPC-08 (policy fields
-biting on the channel transports) and no such negative was ever filed. Corrected
-in 209.
-
 ## Shape
 
 `is IRpcSecurityPolicyAware` / `is IRpcFlowControlled` does not fire, because
-the caller or responder does not forward the interface to `_inner`.
+the caller or responder does not forward the interface to `_inner`. The same
+shape reaches a constructor argument, a declared return type, a literal getter,
+a fallback, and an injected resource.
 
 ## Detector
 
 Grep both type checks; for every transport package, walk the wrapper chain from
-construction to the check site.
+construction to the check site. Include wrappers the library builds itself
+(`_ReconnectingTransportProxy`), not only wrapper hooks (`transportWrapper`,
+http2 only). Also:
+
+- does every branch that constructs a collaborator pass the same arguments
+  (run when a class GAINS an optional parameter; read the VALUE where the text
+  differs);
+- `bool get supportsZeroCopy => false`-style literals, which no `implements`
+  grep sees;
+- factories whose return type is the bare interface;
+- defaults that manufacture a required value (`?? '/Unknown/Unknown'`) and
+  `x ?? Default()` on objects the class may later dispose.
 
 ## Ask
 
 Does the capability survive as far as the check IN THIS package? And — round 209
 — once it arrives, is the object it is routed TO the one that can actually
-perform it?
+perform it? Where it is absent, can the transport honour the fallback?
 
 ## Evidence
 
@@ -44,197 +45,43 @@ perform it?
 ceiling of 3 on HTTP/1.1, whose responder did not declare the interface — five
 rounds after the knob shipped.
 
-Round 209, the second question. `_CapabilityPreservingTransport` restores a
-dropped capability, and then routes it to whichever object declares it,
-preferring the wrapper. But a wrapper can only ever report CONSUMPTION; the
-charge lives in the transport that sees the bytes. A decorator declaring
-`IRpcFlowControlled` and swallowing it therefore left the inner accounting
-switched off — a deaf client-stream handler took 160900 KiB against a 4 MiB
-window, against 4176 KiB with no wrapper. Fixed by always deferring on the inner
-transport too; the discharge is deliberately not doubled the same way, or a
-FORWARDING decorator would discharge twice and lose the bound the other way.
-
-> **Restoring a capability is not the same as routing it somewhere that can
-> honour it.** Ask which object owns the state the capability manipulates.
-
-## It also happens in a constructor argument (round 334)
-
-Every instance above is a wrapper failing to forward an INTERFACE. The same
-shape reaches a plain factory, and there it is harder to see:
-
-```dart
-if (isZeroCopy) {
-  final processor = CallProcessor<TRequest, TResponse>(
-    ..., logger: _log,          // logged
-  );
-  ...
-}
-return UnaryCaller<TRequest, TResponse>(
-  ..., transferMode: transferMode,
-                                  // NOTHING
-).call(req);
-```
-
-Two branches of one `if`, eight lines apart in `caller_pipeline.dart`.
-`UnaryCaller`'s `logger` is optional and defaults to `LogScope.noop`, so the
-serialized path — the default for every codec-based unary call — had no
-caller-side diagnostics at all, for as long as the class has existed. Every
-other construction site in both pipelines passes its logger: three stream
-callers and seven responders.
-
-Found only because round 334 extended a witness to name a line behind the new
-guards and it came back `Actual: <false>`.
-
-> **Two branches of one `if` are two call sites, and the shorter one is the
-> default.** No type differs, no analyzer rule fires, both compile. Add the
-> optional-collaborator question to the detector: not only "does the wrapper
-> forward this interface" but "does every branch that constructs this
-> collaborator pass the same arguments".
-
-**Round 335 swept that question over the whole corpus: 27 construction sites,
-one defect, and it was 334's.** `CallProcessor` (4), the seven stream responders
-(8), the stream callers (4), `RpcMessageParser` (3) and `RpcChannelTransport`
-(8) all agree. `../checked/C-36-construction-argument-parity.md` holds the list.
-
-> **Read the VALUE where the text differs, or the check has a two-thirds false
-> positive rate on its own findings.** Two of the 27 differ textually and
-> neither is a defect: core passes `policy.effectiveMaxBufferedBytes` where
-> http2 passes the nullable `_policy.maxBufferedBytes`, and the parser's own
-> fallback makes them identical; core passes a `decompressor` where http2 passes
-> none, and that is deliberate layering — the transport parser re-encodes the
-> compressed frame so the ENDPOINT parser decompresses, once.
-
-Run it when a class GAINS an optional parameter, not on a schedule: the surface
-only changes when a constructor does.
-
-## Round 352 — the wrapper core recommends
-
-The 209 sweep was right that the surface is small and wrong about where it ends.
-It looked for WRAPPER HOOKS — a `transportWrapper` parameter a user passes
-something to — and core's own `_ReconnectingTransportProxy` is not one: it is a
-wrapper the library builds itself, and `RpcClientConnection` is documented as
-*"the recommended, transport-agnostic way to get auto-reconnect on a client"*.
-So it is what most applications hand to an endpoint, and it declared
-`IRpcTransport, IRpcStreamReset` and nothing else.
-
-Every wrapper in the workspace, which is the whole sweep:
-
-    RpcWebSocketCallerTransport               all four
-    _CapabilityPreservingTransport (http2)    policy + flow control
-    _ReconnectingTransportProxy               IRpcStreamReset alone
-
-The same endpoint built twice over the SAME transport, once directly and once
-through the proxy:
-
-    effect     direct                  proxy (before)
-    policy     20 MiB received         gRPC frame buffer overflow (max: 16777221)
-    zerocopy   accepted                Zero-copy requires a transport that...
-    flowctl    deferred=1              deferred=0
-
-> **`16777221` is 16 MiB plus the 5-byte message prefix — `const
-> RpcSecurityPolicy()`'s own `effectiveMaxBufferedBytes`.** Measure the EFFECT
-> and the number names which policy the object was built from. The `is` check
-> only tells you it failed.
-
-> **A capability can also be dropped by a LITERAL.** Three of the four were
-> missing interfaces; the fourth was `bool get supportsZeroCopy => false` on a
-> proxy whose `sendDirectObject` has always delegated. No interface is absent, so
-> a detector that greps for `implements` will never see it.
-
-> **Answer from the LAST attach, not from a null inner.** The responder
-> pipeline's limit caches are `??=`, so a read landing in a reconnect gap pins
-> the fallback for the endpoint's whole life — the same defect arriving by a
-> second route, and invisible to a bench that never disconnects.
-
-`RpcWebSocketCallerTransport`'s own class comment states this defect in the
-abstract, over the class that had it (U-14). Bench
-`../probes/P-44-capabilities-through-the-proxy.md`, rebuilt once because the
-frame channel's own policy refused the body in BOTH arms.
-`../rounds/352-the-wrapper-that-declared-nothing.md`.
-
-## Round 430 — the compile-time form, and what it costs
-
-`RpcClientConnection`'s factory now returns `IRpcReconnectableTransport`, so a
-decorator that forwards every `IRpcTransport` member and declares nothing else
-is a compile error at the factory rather than a disconnect on the first run.
-That is this lens's defect, refused one step earlier.
-
-Two things the round measured that generalise beyond it.
-
-> **A declared type can erase a capability as thoroughly as a decorator can.**
-> Three first-party entry points returned objects that implement the cursor
-> while their signatures said `IRpcTransport` — `RpcInMemoryTransport.pair`,
-> `RpcIsolateTransport.spawn`, `RpcWasmTransport.fromBridge`. The `is` check
-> found the capability at run time and the type system had already thrown it
-> away. **Grep for factories whose return type is the bare interface**, not only
-> for classes that fail to declare one.
-
-> **A type that forbids the bad case can walk past the guard that handled it.**
-> Round 224 refused a cursorless transport at attach: one shot, state
-> `Disconnected`, a message naming the two members to forward. With the type in
-> place the bad case can only arrive through a cast, which throws BEFORE the
-> guard — and the generic catch turned that into a backoff spin, built twice and
-> counting. The fix was measured and kept (a `TypeError` catch that ends the
-> loop), but the lesson is the order: **when a compile-time check replaces a
-> runtime one, re-run the runtime one's witness.** It does not simply become
-> redundant; it can become unreachable, and unreachable is not the same as
-> satisfied.
-
-`../rounds/430-the-guard-the-type-walked-past.md`, bench
-`../probes/P-09-watermark-survives-a-decorator.md` — reused, and its decorated
-arm now needs a deliberate `dynamic` hop to exist at all.
-
-## Round 488 — ask what the FALLBACK does where the capability is absent
-
-Every application above asks who DROPS a capability. Round 488 asks the
-complement: core already knows a transport may not implement `IRpcStreamReset`
-and has a fallback for it — a metadata frame with `endStream: true`. So the
-question is whether the transport that lacks the capability can actually honour
-the fallback.
-
-`RpcHttpCallerTransport` cannot. One request IS the call there, and by
-cancellation time it has been sent, so the frame has nothing to be. It was
-turned into a request anyway:
-
-    after the request fires   cancel   2 requests  [/Svc/slow, /Unknown/Unknown]
-    before it fires           cancel   1 request   [/Unknown/Unknown], body 0 B
-
-> **A fallback is a second implementation of the capability, and nothing type-
-> checks it.** `IRpcStreamReset` is declared, discovered by an `is` check and
-> absent here — all visible. The fallback is prose in a doc comment plus a call
-> to a method that means something else, and the transport answered it with a
-> plausible-looking request to a path nobody serves.
-
-> **The default that made it plausible is the tell.** `metadata.methodPath ??
-> '/Unknown/Unknown'` turns "this cannot be a call" into "this is a call named
-> Unknown". Grep for defaults that manufacture a required value: they convert a
-> precondition failure into traffic.
-
-And the pre-fire arm is where the damage is loss rather than noise — the
-assignment to `_pending` was unconditional, so the notice replaced the real
-call, method path and 16-byte body included.
-`../probes/P-127-what-a-cancel-puts-on-the-http1-wire.md`,
-`../rounds/488-a-frame-that-names-no-method-cannot-open-a-call.md`, B-97.
-
-**Round 539 — the injected thing was a RESOURCE, and the mishandling was disposal.**
-`RpcHttpCallerTransport` accepts an `http.Client`, documents how to configure one, and
-closed it on `close()` whoever made it. An injected client answered
-`ClientException: Client is already closed` on its next request; it now reads
-`usable (204)`, while a client the transport owns is still released.
-
-`../probes/P-172-who-owns-the-http-client.md`, B-143.
-
-> **`x ?? Default()` erases the question at the moment it is asked.** Nothing
-> downstream of that line can tell an injected dependency from an owned one, so the
-> answer has to be recorded where it is still known. Wherever a constructor defaults
-> an object it may later dispose, ask who closes it — and whether the code can still
-> tell.
-
-> **Read the consequence, not the call.** "Was `close()` invoked" is the correct
-> outcome for one kind of client and the defect for the other, so the witness USES the
-> client afterwards. The observable has to distinguish the two cases the code cannot.
-
-> **A disposal fix needs the opposite arm or it is a trade.** "Stop closing it"
-> satisfies the witness and leaks on every transport that made its own, so the control
-> reads a descriptor across the close — the only reading available for an object
-> nothing outside can reach.
+- **Round 209** — the wrapper chain exists only where a hook does:
+  `transportWrapper` is on `RpcHttp2Server` alone. A decorator declaring
+  `IRpcFlowControlled` left inner accounting off: 160900 KiB through a 4 MiB
+  window vs 4176 KiB unwrapped. Restoring a capability is not routing it
+  somewhere that can honour it; ask which object owns the state. Also corrected
+  a false claim that round 205 (actually RPC-08) filed a negative in `../checked/`.
+- **Round 334** — `UnaryCaller` in `caller_pipeline.dart` got no `logger` while
+  the sibling branch did, so codec unary calls had no caller diagnostics. Two
+  branches of one `if` are two call sites, and the shorter one is the default.
+- **Round 335** — swept 27 construction sites: one defect, 334's. Two textual
+  differences were not defects, so read the VALUE.
+  `../checked/C-36-construction-argument-parity.md`.
+- **Round 352** — `RpcClientConnection`'s `_ReconnectingTransportProxy`
+  declared only `IRpcStreamReset`: through it the policy fell back to
+  `16777221` (16 MiB plus the 5-byte prefix, `const RpcSecurityPolicy()`),
+  zero-copy refused, flow control `deferred=0`. Measure the EFFECT so the
+  number names the policy; a capability can be dropped by a LITERAL; answer
+  from the LAST attach (`??=` caches pin a reconnect-gap fallback).
+  `RpcWebSocketCallerTransport`'s own comment states the defect (U-14).
+  `../probes/P-44-capabilities-through-the-proxy.md`,
+  `../rounds/352-the-wrapper-that-declared-nothing.md`.
+- **Round 430** — the factory now returns `IRpcReconnectableTransport`. A
+  declared type can erase a capability as thoroughly as a decorator
+  (`RpcInMemoryTransport.pair`, `RpcIsolateTransport.spawn`,
+  `RpcWasmTransport.fromBridge`); the cast walked past round 224's guard into a
+  backoff spin, so when a compile-time check replaces a runtime one, re-run the
+  runtime one's witness. `../rounds/430-the-guard-the-type-walked-past.md`,
+  `../probes/P-09-watermark-survives-a-decorator.md`.
+- **Round 488** — `RpcHttpCallerTransport` lacks `IRpcStreamReset` and turned
+  the `endStream` fallback into a request to `/Unknown/Unknown` (2 requests
+  after fire; before fire it replaced the real call). A fallback is a second
+  implementation of the capability and nothing type-checks it; defaults that
+  manufacture a required value convert a precondition failure into traffic.
+  `../probes/P-127-what-a-cancel-puts-on-the-http1-wire.md`,
+  `../rounds/488-a-frame-that-names-no-method-cannot-open-a-call.md`, B-97.
+- **Round 539** — the transport closed an injected `http.Client` on `close()`
+  (`ClientException: Client is already closed`; now `usable (204)`).
+  `x ?? Default()` erases the ownership question, so record it where known; the
+  witness USES the client afterwards; a disposal fix needs the opposite arm (an
+  owned client is still released). `../probes/P-172-who-owns-the-http-client.md`, B-143.

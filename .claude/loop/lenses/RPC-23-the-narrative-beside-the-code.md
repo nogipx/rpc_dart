@@ -18,30 +18,21 @@ when written. Together they are unreadable by the person the comment is for, and
 unmaintainable by the person who changes the code.
 
 The tell is a comment that answers *how did we find this* rather than *what do I
-pass here*.
+pass here*. The same shape lives in READMEs, thrown error messages, log levels,
+the project's own `CLAUDE.md` rules, and the journal's leads.
 
 ## Detector
 
 Per file, **ALL comment lines** — `///` AND `//` — against total lines. Above
-~20% the file is prose with code in it. Then, per comment, three questions:
+~20% the file is prose with code in it. Counting only `///` measures a third of
+the problem: the narrative lives in the `//` block inside the method. Core's real
+baseline is **6539 comment lines in 23718 (27.6%)**, against the 4430/24049
+(18.4%) the `///` metric reported.
 
-> **The density RANKS where to sweep; it does not decide whether to.** Round 302
-> took `rpc_dart_isolate` at **18.2%**, under the threshold, and found the worst
-> fusion of the whole series: one `//` block carrying two subjects, the first
-> describing code 76 lines below it. The adjacency shape is INDEPENDENT of
-> density — a lean file hides it better, because there is no bloat to prompt a
-> reader to look. Never read a sub-threshold number as "this package is clean".
+> **The density RANKS where to sweep; it does not decide whether to.** Never read
+> a sub-threshold number as "this package is clean".
 
-> **Counting only `///` measures a third of the problem.** Rounds 293-296 ranked
-> by doc lines alone and reported files finished that were not: measured at 297,
-> `channel_transport.dart` still stood at 564 comment lines in 1338 (42%) the
-> round after it was "done", and `transport.dart` at 236 in 533 (44%). The
-> narrative does not live in the doc comment. It lives in the `//` block INSIDE
-> the method, next to the line it explains — which is exactly where a
-> measurement table ends up, because that is where the author was standing.
->
-> Core's real baseline is **6539 comment lines in 23718 (27.6%)**, against the
-> 4430/24049 (18.4%) the `///` metric reported.
+Then, per comment, three questions:
 
 1. **Is there a measured table in it?** A table is a record of one run, on a tree
    that has moved. It belongs in the round record, which is dated and which
@@ -51,682 +42,191 @@ Per file, **ALL comment lines** — `///` AND `//` — against total lines. Abov
 3. **Could a caller choose a value without it?** Keep exactly what answers that
    plus the one limitation that changes the choice. Everything else goes.
 
+**The unit is a BATCH OF FILES.** Read several files whole, cut every comment in
+one pass, one gate, one commit. The ranking gives the order; the three questions
+give the rule.
+
+**Sweep explicitly for adjacency**, which no single block shows: a doc fused onto
+the wrong declaration (a blank line between doc and declaration hides it; witness
+it with an LSP hover before and after); PARAGRAPH fusion (no blank `///` between
+two subjects); a block duplicated verbatim, especially around any `typedef`,
+re-export or thin wrapper a move left behind; the same measurement in two places.
+Look for comment runs that span a blank line, change subject mid-block, or repeat
+a phrase already present in the file.
+
+Further cheap queries, each earned by a round below:
+
+- Language, per package: `grep -rlE "[А-Яа-яЁё]" packages/*/*/lib`. Run over
+  tracked files, not paths. A hit may be a fixture; some classes only have an
+  answer per LINE, not per file.
+- Damage from a bulk comment replace, repo-wide:
+  `grep -nE '// [A-Za-z][A-Za-z ,.()]*[а-яА-ЯёЁ]'`. A prompt to look, not a check
+  that passes.
+- The imperative voice in `throw` arguments — "pass", "use", "construct", "call X
+  first" — driven literally.
+- A comment asserting a REQUIREMENT ("required by", "mandated", "the spec says")
+  read against the same file's statement of the format.
+- Every "X succeeds" sentence read against the limits on X's path.
+- A backlog lead that names a gap, read against the doc for the same symbol.
+- A doc that states a COST or safety property, and a README that names a
+  component: measure the claim, or ask what the component can do.
+
 ## Ask
 
 If this comment were deleted, what would the next caller get wrong?
 
-**On INTERNAL code the reader changes and so does the question.** A private
-field has no caller; it has a maintainer about to change it. Ask instead: *what
-would someone editing this break without knowing?* The keeper is the INVARIANT
-— why the charge point is dispatch and not entry, why the cursor must survive
-close, why this counter is per connection — because that is what a plausible
-edit destroys silently.
+**On INTERNAL code the reader changes and so does the question.** A private field
+has no caller; it has a maintainer about to change it. Ask instead: *what would
+someone editing this break without knowing?* The keeper is the INVARIANT — why
+the charge point is dispatch and not entry, why the cursor must survive close,
+why this counter is per connection — because that is what a plausible edit
+destroys silently.
 
 The measurement that PROVED the invariant is still journal. "37 handlers against
 a ceiling of 4" belongs in the round; "charged at dispatch, released when the
 handler finishes, because a stream can die before its work does" belongs in the
 code. The first is evidence, the second is the rule the evidence bought.
 
-Whatever survives that question is the comment. It is usually three to six
-lines, and for a field it is usually: what it bounds, why the default is what it
-is, and the one case where the obvious value is wrong.
+Whatever survives is the comment: usually three to six lines, and for a field
+usually what it bounds, why the default is what it is, and the one case where
+the obvious value is wrong.
+
+**What NOT to cut:** a comment that says what BREAKS if the code is undone — one
+or two lines, per `config.md`. `_reject`'s "dart:io tears the connection down
+before the status is flushed" is why the drain exists. Cut the how-we-found-it.
+Keep the what-breaks-if-you-undo-it.
 
 ## Evidence
 
-**`RpcSecurityPolicy`, round 293.** 236 doc lines in a 451-line file — every
-field an essay with its own measurements. Four fields carried 127 of them:
-
-    field                        before  after
-    maxActiveStreams                 33      7
-    maxConcurrentHandlers            43     11
-    closeOnProtocolError             17     10
-    halfOpenStreamTimeout            34     13
-
-    file total                      236    151
-
-Nothing was lost: the tables live in rounds 205, 213-215 and 245, which is where
-a reader who wants the history should have to go, and which `loop.py stale` ages
-against the code. What a caller needs — this bounds stream STATE not running
-handlers, use `maxConcurrentHandlers` for the work; null by default because
-turning it on trades slow for refused — survives in a quarter of the space.
-
-> **The comment cannot be aged, so it must not carry what ages.** A measured
-> table beside the code is a claim with a timestamp nobody can see. The journal
-> has dates, shas and a linter; the comment has none of those, and rule one
-> already says prose goes stale silently. That applies hardest to prose that
-> looks like evidence.
-
-## The unit is a BATCH OF FILES
-
-Rounds 293-295 cut four comment blocks each and moved 149 lines against a
-baseline of 4430 — the owner stopped it. 296 moved to one file per round and the
-owner stopped that too, for the same reason: at 92 files in core alone, one per
-round does not finish either.
-
-Read several files whole, cut every comment in one pass, one gate, one commit.
-The ranking gives the order; the two reader questions above give the rule.
-Neither needs re-deriving per block or per file.
-
-**And the sweep sees what a single block cannot: adjacency.** Three kinds, all
-found by sweeping and none reachable block by block:
-
-- **A doc fused to the wrong declaration.** Round 296: `_validateInbound`'s
-  comment ran into `_maxPolicyViolations`' with no declaration between them, so
-  both attached to the constant — one member undocumented, the other's reading
-  as if the first half described it. Round 297 found the same shape at
-  `_reclaimGrace`, wearing `_onDeadlineExceeded`'s description. Round 298 found
-  the worst case: `_normalize` carried `register`'s ENTIRE doc, code sample
-  included, and `register` carried the same nine lines again twenty lines later,
-  so the same instruction appeared twice with no way to tell which was current.
-  Round 299 showed a fused doc can HIDE something, not just misattribute it:
-  `_uniqueToken`'s description sat on `_strongRng`, so the function minting every
-  request id had no doc at all — and the fact that `Random.secure()` THROWS on
-  node, making those ids non-cryptographic, was buried under a heading about a
-  different member. Round 300 found it on the first package swept OUTSIDE core,
-  and on a PUBLIC declaration: `RpcWebSocketChannel`'s description and code
-  sample had fused onto `grpcStatusFromWebSocketCloseCode`, so the exported class
-  the library doc tells you to construct had no doc, and the close-code mapper
-  wore a `RpcChannelTransport.fromChannel` sample.
-
-  Round 301 found the sixth, in a third package, and established what it
-  actually COSTS: `_readBounded`'s doc sat on `_readErrorBody`, and the LSP
-  hover for `_readBounded` returned **signature only** before the fix and the
-  docstring after it. A fused doc is not merely hard to read, it is INVISIBLE to
-  every tool that reads docs by symbol — an IDE, `dart doc`, and any
-  symbol-based agent. That also makes it the one sub-shape here with a real
-  witness: query the hover before and after.
-
-  **Eight instances by round 305, in five packages, and it lands on every KIND
-  of declaration** — a public class (300), a private method (301), a local `//`
-  block (302), a private method again (303), a typedef (304), and a static
-  function whose doc was eaten by a `const` 67 lines above it (305). It is
-  independent of the declaration kind, of comment density (302), and of package.
-  What it depends on is a blank line between a doc and the thing below it, which
-  nothing checks. **Sweep for it explicitly.** A CLASS doc is the easiest to
-  lose this way: it and its declaration are separated by exactly the blank line
-  that hides the fusion, and it is the doc a user reads first.
-- **PARAGRAPH fusion**, the milder variant — two paragraphs of ONE doc run
-  together with no blank `///` between them, so they render as one paragraph and
-  the second subject is swallowed by the first. Round 301 found three in a
-  single package: `stop()`'s idempotency argument swallowing `[drainTimeout]`'s
-  description, a TLS warning swallowing `[policy]`'s, and `_reject`'s CORS
-  rationale swallowing the body-drain one. Nothing catches it — the compiler
-  sees one valid doc, and the text is correct line by line.
-- **A block duplicated verbatim.** Round 297: eight lines about timer-vs-
-  microtask delivery appeared TWICE in a row in `getMessagesForStream`. Each
-  copy is correct, which is why nothing caught it.
-
-  **Round 304 found the CAUSE of one: a doc left behind when its code MOVES.**
-  `RpcHttp2OutgoingPump` moved to `rpc_http2_common.dart` and took its doc; the
-  `typedef _OutgoingPump = RpcHttp2OutgoingPump;` left behind kept a 29-line
-  verbatim copy, ending in a line saying the real one is elsewhere. Both copies
-  correct, in two files, one attached to a one-line alias. Sweep for this around
-  any `typedef`, re-export or thin wrapper — those are what a move leaves
-  behind.
-- **The same measurement in two places.** The pre-method budget's 789 MiB and
-  the deadline reclaim's `openStreams: 30` were each written once as a doc
-  comment and once as an inline block a few hundred lines apart.
-
-Sweep for comment runs that span a blank line, change subject mid-block, or
-repeat a phrase already present in the file.
-
-## The sweep also finds prose that is WRONG, not just long
-
-Round 302: `isolate_transport_stub.dart` called itself the fallback "for
-platforms without `dart:isolate` (e.g., web)", while the conditional export
-three lines away routes `dart.library.js_interop` to a real Worker-backed
-implementation. The one platform named as the example is the one that never
-reaches the file.
-
-No gate catches this — the compiler does not read prose, and the contradicting
-evidence lived in a different file. It is rule one applied to a comment: the
-implementation first, and a divergence is a defect fixed in the same round.
-
-**Fixing one COSTS lines**, and that is correct. The stub went 5 comment lines
-to 9 while the package fell 221 to 192. A round that optimised the metric would
-have made the only false statement in the package worse.
-
-**The sweep is the only pass that READS every comment**, so it is also the only
-one that sees a comment wrong in a way no gate reads. Round 303 found three such
-things in one batch, none of them bloat: a declaration fusion, a misspelling in
-a public doc (`"Gárrantees"`), and an entire file — `rpc_http2_server.dart`,
-class doc, parameter list and every runtime log string — written in RUSSIAN,
-against the root `CLAUDE.md`'s "English for code, comments, and logs". The
-language check is cheap and worth running per package:
-`grep -rlE "[А-Яа-яЁё]" packages/*/*/lib`. It found 22 more files outside the
-mandate, filed as B-30.
-
-## What NOT to cut
-
-A comment earns its place by saying what BREAKS if the code is undone — one or
-two lines, per `config.md`. That is not narrative and it is the thing most worth
-keeping: `_reject`'s "dart:io tears the connection down before the status is
-flushed" is why the drain exists, and a future reader who deletes the drain
-without it will reintroduce the bug.
-
-Cut the how-we-found-it. Keep the what-breaks-if-you-undo-it.
-
-## The worst kind: prose that CAUSES the defect (round 333)
-
-Most of what this lens cuts is inert — a stale story, a table from a round
-record, evidence nobody will re-check. `LogScope.noop` carried a different
-species:
-
-```dart
-/// No-op logger. All methods are empty, zero cost.
-```
-
-The methods are empty; the CALL is not free. `internal(String message, ...)`
-takes a String, so Dart builds the interpolation at the call site before the
-empty body is entered. Measured on one unary round trip with no logger attached:
-**35 discarded messages, 1566 characters, ~2.0 us of CPU on the VM and ~3.5 us
-on dart2js.** The same class exposes `isInternal` "for hot-path optimization",
-used at 25 of 58 interpolating sites — and the per-call unary responder had 38
-calls and zero guards.
-
-> **A doc comment that states a COST is load-bearing, and wrong ones are
-> expensive in a way stale narrative is not.** Stale narrative misleads a reader
-> about history; "zero cost" told every author not to guard, and they did not.
-> When a comment makes a performance or safety claim, measure it or delete the
-> claim — do not carry it forward because it is short.
-
-## Round 364 — prose that names a component which cannot do the job
-
-The strongest form of this shape found so far, and the cheapest to detect.
-`rpc_dart_wasm`'s README said the iOS backend was **JavaScriptCore**, twice.
-JSC has no WebAssembly, so if it were true the package could not run a
-dart2wasm guest on iOS at all — and it does, through an offscreen `WKWebView`
-with a custom scheme handler.
-
-> **Some stale prose is not merely out of date, it is IMPOSSIBLE.** A claim you
-> can refute from the component's own capabilities needs no diff archaeology:
-> ask what the named thing can do, and whether the package works. Faster than
-> comparing against the code, and it caught both mentions at once — a search for
-> the component NAME finds them where a read-through does not.
-
-> **Write the reason next to the correction or it comes back.** The fix says
-> "JSC has no WebAssembly, so it cannot run a dart2wasm guest at all", not just
-> "WKWebView". A bare correction invites the next reader to swap it back.
-
-Same round, the inverse duty: a README is also where a missing measurement does
-damage. The item asked for the price of a frame, the README gave none, so it was
-measured — `p50 12.9 ms` for an empty unary on an Android emulator, flat to
-1 KiB because the price is the boundary rather than the payload. Published with
-the hardware named and the shape explained, since an emulator is a floor and not
-a prediction.
-
-> **And a claim written INTO prose must be verified before it ships, even when
-> its source is the repository's own comment.** The websocket note about
-> `dart:io` buffering a whole message came from a source comment — exactly what
-> this lens says not to trust. Running the existing probe turned it into
-> `96 MiB sent -> 1 chunk -> 96 MiB` before it reached a README people deploy
-> from.
-
-Bench `../probes/P-55-what-a-wasm-call-costs.md`,
-`../rounds/364-the-readme-named-an-engine-that-cannot-run-it.md`.
-
-## Round 401 — the prose that is thrown, not written
-
-Round 364's form is a README naming a component that cannot do the job. Round
-401's is the same defect in the one place prose is reached at RUNTIME, by a
-reader who is already in trouble: an **error message that prescribes**.
-
-`RpcWebSocketServer.start()` refuses to restart over a single-subscription
-stream and names two remedies. Driven literally, "construct a new
-`RpcWebSocketServer`" throws the identical error — the obstacle is the STREAM,
-and over the same `HttpServer` there is no fresh one to be had. And the remedy
-that does work has a window the message did not mention, in which a peer is
-accepted and abandoned.
-
-> **A message that tells the user what to do is a promise the compiler cannot
-> check, read at the worst possible moment.** Grep for the imperative voice in
-> `throw` arguments — "pass", "use", "construct", "call X first" — and drive
-> each one the way a reader would: change only what the sentence says to change.
-
-`../rounds/401-the-remedy-that-was-not-one.md`, and the bench is RPC-21's
-`../probes/P-87-restart-the-way-the-error-says.md`, because driving the remedy
-IS driving the lifecycle twice.
-
-**Round 404 counted the class and sharpened the detector, which is the more
-useful half.** 228 `throw` sites in the 22 packages' `lib/`; about 20 prescribe
-an action. Driving the three highest-risk members — `RpcApp`'s "create a new
-RpcApp to restart", and both copies of "call reconnect()" — found all three
-correct, including both halves of the two-claim sentence on both transports.
-
-> **The tell is not "a message that prescribes". It is a message that prescribes
-> rebuilding A when the state that blocks you is held by B.** `RpcApp` says
-> rebuild the thing that actually holds the single-shot state, and its factory
-> takes a server BUILDER, so the closure rebuilds what cannot be re-listened.
-> The websocket server said rebuild the server when the obstacle was the stream.
-> Rank the class by that question and the rest of it — `call X first` guards on
-> an object's own API, where the obstacle and the named object are the same
-> thing — drops to the bottom without needing to be driven.
-
-Second rule the arms earned: **split a sentence with an `and` in it.** "Call
-reconnect(), and a failed reconnect leaves the transport recoverable, not
-closed" is two assertions, and "recoverable" buys nothing if it only means
-`isClosed == false` — so the failing arm has to go on and try a LATER reconnect.
-Both did succeed. `../probes/P-89-drive-what-the-message-prescribes.md`,
-`../rounds/404-what-the-messages-promise.md`.
-
-## Round 435 — prose has three audiences, not one, and a grep sees one class
-
-B-30 sweeps Cyrillic out of a repo whose own rule says "English for code,
-comments, and logs". Two measurements from the transport half.
-
-**A text-matching detector cannot tell prose from a fixture.** Three of the
-eight transport test files with Cyrillic must keep it: `'Ошибка'` is asserted to
-percent-encode to ASCII on the wire, `'кириллица' * 6` proves a close reason is
-measured in bytes rather than characters, and the wasm test round-trips UTF-8
-through the native bridge. In each, the non-ASCII-ness IS the subject. The lead
-called its grep "both the detector and the check", and the check would have
-demanded breaking all three.
-
-> **A detector for a prose defect returns prose AND data.** Before acting on one
-> of its hits, ask what the line is FOR. The same grep that finds a Russian
-> comment finds the fixture whose whole point is to be Russian — and the second
-> kind cannot be fixed, only recognised.
-
-Scope, too: run over paths rather than `git ls-files`, that grep returns ten
-gitignored Android resource-merge artifacts in nine languages nobody here wrote.
-
-**The audiences are separate and the counts are not interchangeable:**
-
-    comment in test/   a maintainer who opened the file
-    comment in lib/    that, plus dartdoc on the pub.dev package page
-    LOG in lib/        emitted at runtime into the user's own log stream
-
-The third is the one a reader cannot avoid — no file needs opening, and turning
-it off means turning the logger off. Counted on that axis, the largest single
-concentration in the repo is `rpc_notify/lib/src/stream_distributor.dart`: 176
-lines, 137 comments and **39 runtime log messages**, more than any test file.
-B-30 had never counted the third category, and neither had this lens.
-
-Emoji, swept under the same rule, have a different distribution entirely: 154
-lines across 14 files, every one of them `test/` or `example/`, none in `lib/`.
-
-> **Two style rules stated in one sentence are still two populations.** Count
-> each separately before deciding which to sweep; "no emoji and English
-> everywhere" hid the fact that only one half had reached shipped code.
-
-`../rounds/435-the-half-that-ships.md`, `../backlog/B-30-russian-comments-outside-the-mandate.md`.
-
-## Round 436 — the fixture that fails SILENTLY when you translate it
-
-435 said a text detector cannot tell prose from a fixture. 436 censused the
-whole fixture class into `../checked/C-47-the-non-ascii-that-must-stay.md` and
-drove three of them, which is where the useful half is: **they do not all fail
-the same way, and the majority do not fail at all.**
-
-```
-cbor_test.dart:138        '☺' -> ':)'                   FAILS -- hex pinned
-audit_header_ascii:27     'тест 🚀' -> 'test rocket'    FAILS -- assertion inverts
-optimized_cbor:164        'Привет, мир!' -> 'Hello...'  PASSES
-```
-
-A round-trip fixture asserts `decoded == original`, which holds for any string.
-Translate it and the suite stays green while the coverage it existed for —
-multi-byte UTF-8 through this codec — is gone. Ten of the twelve sites in C-47
-are that shape; only two fail loudly.
-
-> **Before sweeping prose, ask which hits would fail if you were WRONG.** "The
-> gate would catch it" is an assumption, and for a round-trip assertion it is
-> false: the test is written to accept any value, so the data it was given
-> stops mattering the moment you change it.
-
-Second measurement, on the detector rather than the data. `[а-яА-Я]` is
-script-specific, so it cannot enumerate the class it keeps hitting: it flags
-`optimized_cbor_test.dart:167` only because `'Hello 🌍 Мир 世界'` contains
-`Мир`, and is blind to `'你好世界'` and `'مرحبا بالعالم'` two lines above in the
-SAME map literal, and to `'世界' * 5000` in the sibling file — 10,000
-characters, the largest unicode fixture in the repo.
-
-And the split changes SHAPE between packages: per FILE in transports (3 of 8
-flagged files pure fixture), per LINE in core, where `cbor_test.dart` holds
-comments to translate at `:148` and fixtures not to at `:135`.
-
-> **A `grep -rl` detector answers "which files", and some classes only have an
-> answer at "which lines".** When a sweep starts re-flagging the same sites,
-> that is the signal the unit is wrong — not that the sweeper was careless.
-
-`../rounds/436-the-detector-that-cannot-see-its-own-class.md`, `../checked/C-47-the-non-ascii-that-must-stay.md`.
-
-## Round 437 — prose nobody reads is prose nobody checks
-
-The rule this lens serves is usually argued as style. Round 437 found the
-version that is not.
-
-```dart
-expect(avgTime, lessThan(10000)); // < 3ms среднее время
-```
-
-10,000 microseconds is 10 ms. The comment had been wrong since it was written
-and nobody noticed, because a reviewer who skips a language they do not read
-skips the CLAIM inside it too. The sibling comment one line down was correct,
-so this was not a systematic slip — it was an unchecked one.
-
-> **A comment in a language the reviewers do not read is not merely unhelpful;
-> it is exempt from review.** That is the argument for the rule that does not
-> depend on anyone's preference: translating it is what subjects it to the same
-> scrutiny as the code beside it.
-
-**And a lint can mandate the ambiguous form.** `$minTimeμs` reads as one
-identifier and is not — `μ` is not an ASCII letter, so it ends the name and
-`μs` is a literal. Round 435 met that shape and mis-edited it into an undefined
-identifier. The obvious repair, `${minTime}μs`, is refused:
-
-```
-info - Unnecessary braces in a string interpolation - unnecessary_brace_in_string_interps
-```
-
-and `analyze` is `--fatal-infos`, so that is a build failure. The analyzer knows
-the boundary from the grammar and calls the braces redundant, which removes the
-only signal a human has.
-
-> **"Unnecessary" in a lint means unnecessary TO THE PARSER.** Where a
-> disambiguator exists for the reader and the compiler does not need it, the
-> rule and the reason for the rule point opposite ways. Comment the site; the
-> config is the owner's to change, not a round's.
-
-`../rounds/437-the-lint-that-mandates-the-ambiguous-form.md`.
-
-## Round 438 — the second one, which makes it a rate
-
-437's stale comment could have been an accident. 438 swept a comparable volume
-and found another, in the second file it opened:
-
-```
-437  fast_cbor_encoder_test.dart:144    "< 3ms"  on lessThan(10000)  -- 10 ms
-438  rpc_context_validation_test.dart   "100мс"  on milliseconds: 1
-```
-
-Both state a NUMBER a reader could check against the line below in one second.
-
-The 438 case is the more instructive: `git log -S` shows the timer WAS
-`milliseconds: 100` when the comment was written, and became `1` in a later
-commit. **It was not wrong when written. It drifted, and the drift was
-invisible** — a reviewer skipping a language they do not read cannot notice that
-the number beside it moved.
-
-> **Comments in an unread language do not merely go unwritten-for; they go
-> un-maintained.** Every ordinary edit that moves a constant leaves them behind,
-> and the usual defence — someone reads the diff — is exactly what does not
-> happen there. Expect drift concentrated in that subset, and check the numbers
-> as you translate.
-
-`../rounds/438-the-comment-that-was-right-once.md`.
-
-## Round 439 — the sweep can damage the prose it is fixing
-
-A comment appearing four times looks like a case for a bulk replace. It is not,
-if it is also a PREFIX of longer ones. `// Регистрируем сервис` was both, and
-six longer comments came out half-translated:
-
-```
-// Регистрируем сервис первый раз   ->   // Register the service. первый раз
-```
-
-It compiles. Every test passes. `analyze` is clean. **Nothing in a Dart gate
-can see a mangled comment**, and the only thing that caught it here was the
-round's own Cyrillic grep — which worked purely because the surviving tail was
-Russian. `// Регистрируем сервис v2` would have come out
-`// Register the service. v2` and been reported as clean by the detector, the
-gate, and the sweep.
-
-> **Bulk-replacing comment text is a substring operation on the one part of a
-> file nothing validates.** Anchor to the end of the line, or edit the sites one
-> at a time. Identical comments batch safely; comments that merely begin the
-> same way do not, and at the moment you write the edit the two are
-> indistinguishable.
-
-The general form: every other class of edit this lens covers has SOME checker —
-the compiler for code, a test for behaviour, the detector for the language. A
-prose edit has none of them, so the care has to be in the edit rather than in
-the check after it.
-
-`../rounds/439-the-replace-that-matched-a-prefix.md`.
-
-## Round 440 — a prose defect needs a prose detector, and one exists
-
-439 said a mangled comment has no checker. That was half right. It has no
-checker in the *toolchain* — but the damage has a signature, and a grep can see
-it:
-
-```
-grep -nE '// [A-Za-z][A-Za-z ,.()]*[а-яА-ЯёЁ]'
-```
-
-An ASCII sentence followed by non-ASCII on one comment line. Run over every
-tracked `*.dart` in 440: **no damage anywhere.** Every hit is a pre-existing
-Russian sentence containing an English identifier — `IBlobClient реализация`,
-`StreamController с onCancel` — all in untouched `lib/` and `example/`. So 439's
-six were the whole population, and the repair was complete.
-
-> **When a sweep can damage what it edits, write the detector for the DAMAGE,
-> not only for the thing being swept.** It is a different pattern from the one
-> driving the work, it costs one grep, and running it repo-wide rather than over
-> the files you touched is what turns "I fixed the ones I saw" into a bound.
-
-Its limit is the one that let 439's escape happen at all: it sees the damage
-only while the surviving tail is non-ASCII. `// Register the service. v2` is
-invisible to everything.
-
-And the rule has now been costed. `replace_all` was used eight times in 440,
-each checked first against a `sort | uniq -c` of the file's comment lines; two
-were rejected as prefixes and done singly. The check takes about as long as
-reading the comments — against six defects nothing in the gate could see.
-
-`../rounds/440-the-rule-applied-to-itself.md`.
-
-## Round 441 — a count that spans scopes reads as progress against one
-
-Six rounds of this sweep each closed with a figure like "`test/` 443 lines
-across 21 files", in a context that made it read as the remainder of the work in
-hand. It was a repo-wide number. Counted by package:
-
-```
-rpc_notify          230 lines   never in scope
-rpc_data_postgres    17 lines   never in scope
-rpc_dart             18 lines   C-47 fixtures only -- finished
-```
-
-Nothing was skipped silently; the rounds swept what the owner's decision names.
-But nothing said the total spanned three scopes either, and a reader watching
-1338 fall to 443 would reasonably have concluded the target was two-fifths done
-when it was complete.
-
-> **Report the remainder on the axis of the DECISION, not the axis the detector
-> happens to return.** A grep counts files; a mandate names packages. When those
-> differ, a falling number is an argument for continuing work that is already
-> finished — or for stopping work that was never started.
-
-Second, smaller: the prefix-damage detector from 440 has a real false-positive
-rate. Four hits repo-wide, all pre-existing Russian sentences opening with an
-English identifier (`// Premium пользователи`, `// Router генерирует`), 4 in 230
-lines. It is a prompt to look, not a check that passes.
-
-`../rounds/441-core-tests-are-down-to-their-fixtures.md`.
-
-## Round 442 — prose that REASSURES against the measurement
-
-The strongest instance this lens has. B-71 records, measured:
-
-> a browser client on a half-open path has **no liveness signal at all**
-
-The shipped doc for the same parameter said:
-
-> **A web client is not unprotected**, but it cannot be tuned here.
-
-and the implementation, more strongly: *"is not left unprotected — the browser
-is doing it"*. Both false. A browser does run ping/pong, which is what the
-sentence rests on, but exposes neither the interval nor the OUTCOME: a missing
-pong never reaches the page. **True of the frames, false of the only thing the
-frames are for.**
-
-Two copies, in the API doc and the implementation, each reading as corroboration
-of the other. That is how it survived.
-
-> **The dangerous prose is not the stale comment or the wrong number — it is the
-> one that tells a reader they are SAFE.** A stale comment costs a minute; a
-> false reassurance is acted on, and it is acted on precisely by the careful
-> reader who went looking for the caveat. When a lead and a doc comment disagree
-> about a platform's behaviour, the doc is the one users obey and the lead is
-> the one with the measurement behind it.
-
-The detector: a backlog lead that names a gap, read against the doc for the same
-symbol. This lens has been reading docs against CODE for 150 rounds; reading
-them against the JOURNAL is new and found this in one pass.
-
-Corollary earned the same round: the fix a doc can deliver is honesty, not
-coverage. The gap is unchanged; what changed is that the page now tells the
-caller to set a deadline on every call, which is the only bound there is.
-
-`../rounds/442-the-doc-that-said-the-opposite.md`.
-
-## Round 490 — the doc that was honest about the WRONG failure
-
-`RpcHttpCallerTransport`'s class doc is unusually candid: it says streaming
-methods *"do not fail — they silently degrade, which is worse"*, and spells out
-that a finite stream succeeds fully buffered while an unbounded one hangs. Every
-sentence of that is written against the reader's interest and none of it was
-complete, because a finite stream has two ceilings and past either one it does
-not degrade at all — it fails RESOURCE_EXHAUSTED:
-
-    1500 x 10 B   http FAILED status=8    channel OK 1500
-    20 x 1 MiB    http FAILED status=8    channel OK 20
-    100 x 10 B    http OK 100             channel OK 100
-
-> **A doc that names a failure mode is harder to doubt than one that says
-> nothing.** This one had done the difficult part — admitting the transport
-> degrades — and a reader who got that far had no reason to suspect a third
-> behaviour underneath it. Candour about one failure reads as a complete
-> account of the failures.
-
-> **The detector here was a LIMIT read against the prose that promises past
-> it.** For every sentence of the form "X succeeds", find the limits on X's path
-> and ask what each one does to it. Two limits, two shapes, and the shapes have
-> to be chosen so each trips exactly one — otherwise the first to fire hides the
-> other and the doc gets one correction instead of two.
-
-And the correction the round could make was bounded by what the code does: the
-DEFAULTS still refuse those streams. What changed is that the ceilings are named,
-the knob for each is named, and one of them now works — `maxBufferedBytes`
-bounded nothing at all, because every body site used the per-message limit.
-
-`../probes/P-129-which-ceiling-stops-a-finite-http1-stream.md`,
-`../rounds/490-the-knob-that-names-the-thing-bounded-nothing.md`, B-99.
-
-## Point it at the project's RULES, not only its comments (round 515)
-
-`CLAUDE.md` is narrative beside the code too, and it can be wrong in the same way a
-doc comment can. Two of its logging claims have now been measured against the code:
-
-- *"the guard is a bool read"* — it was a scan over every configured scope override,
-  235 ns against a real bool read's 1.8 ns (round 512, B-121).
-- *"count calls into a `LogScope` subclass instead"* — **this does not work wherever
-  the code derives a scope.** `LogScope.child()` constructs a plain `LogScope`, so
-  the subclass's overrides are gone, and `UnaryCaller`, `StreamProcessor` and
-  `CallProcessor` all derive. The worked example the rule cites survives only because
-  the flow controller is handed its scope directly. Override `LogController.add`
-  instead; it runs before filtering, so it keeps the property the rule wanted.
-
-**So a convention the project states confidently and repeats at hundreds of sites is
-exactly the kind of claim worth measuring once.** The cost of it being wrong is
-proportional to how widely it is followed.
-
-> Round 515 also shows the other outcome. Aimed at five warning sites the rule says
-> should fire once, the rig produced ZERO warnings — the frames never reached the
-> pipeline — so the lead is UNVERIFIED and nothing was changed. **With no witness
-> there is nothing to switch off, and five one-shot bools would have been five edits
-> with no evidence any of them moves an observable.** Record the inconclusive round
-> and say what the next attempt should do differently.
-
-`../rounds/515-the-rig-never-reached-the-warning.md`, B-124, B-121.
-
-## A level is a CLAIM, and the code can contradict its own taxonomy (round 516)
-
-The same lens on what an `error` record asserts. Three sites logged at `error` on the
-SHAPE of the control flow — the handler threw, so `catch` ran — while the project has
-a status taxonomy saying what the throw MEANT. NOT_FOUND is how a gRPC handler reports
-a missing record, so a correct answer produced three error records: `caller 2,
-responder 1`.
-
-**So treat a log LEVEL as a claim to be checked against the project's own
-vocabulary.** `error` asserts "something is broken". Where the code already has a way
-of saying what happened — a status enum, an exception hierarchy — a level chosen by
-control flow will contradict it, and the contradiction is invisible because both
-sides look locally correct.
-
-> **When you add a classifier, check whether a sibling already classifies the same
-> values — and then make them differ ON PURPOSE.** `RpcStatus.isFault` is narrower
-> than round 501's `_isServerHealthFailure`: a breaker asks "is this endpoint in
-> trouble", a log level asks "did something break", and DEADLINE_EXCEEDED answers the
-> first and not the second. A guard pins the difference, because the natural later
-> edit is to "unify" them and start paging on a slow server.
-
-> **For a silencing fix, the controls must run the other way.** Both witnesses here
-> assert that nothing is logged — which silencing everything would satisfy perfectly.
-> INTERNAL and a status-less `StateError` are what make the round mean anything, and
-> the status-less case is its own arm because an unclassifiable failure must not fall
-> through a "not a fault" branch.
-
-`../probes/P-153-what-an-application-status-logs.md`,
-`../rounds/516-an-answer-that-read-as-an-incident.md`, B-124.
-
-## A LEAD is narrative too, and its framing carries a severity claim (round 521)
-
-B-129 bundles eighteen items under *"Each is small; together they are the reading
-cost"*, with witness *"None — read and delete"*. That is true of the unused parameter
-and the merged doc comments. It is false of at least four of its items — a metadata
-bound that is never enforced in total (a DoS surface on the HTTP transports), a token
-cap that makes a legal service name uncallable, a `break` that silently drops
-messages.
-
-**A grab-bag lead sets a severity for everything inside it, and the round inherits
-that severity unless it re-reads the items on their own.** Taking B-129 at its word
-would have meant a tidy-up commit that deleted dead code and left the DoS surface in
-place — and the lead would then be CLOSED.
-
-> **So read the items, not the summary, and split when the summary is wrong.** The
-> test is the one the loop already uses for filing: would this item, encountered
-> alone, be filed at this severity with this witness? Four of these would have been
-> filed as defects with benches.
-
-This is the same failure mode the lens names in comments — a narrative that was true
-of the thing it was written about, generalised to things it was not — appearing in
-the journal's own records rather than in `lib/`. The journal is not exempt.
-
-`../probes/P-158-does-a-cancel-cut-the-retry-backoff.md`,
-`../rounds/521-a-cleanup-list-with-defects-in-it.md`, B-129.
-
-## Round 586 — the comment and the class doc, fifty lines apart
-
-Round 364 found the strongest form of this lens: prose naming a component that
-CANNOT do the job, refutable from that component's own capabilities. 586 is the
-cheapest form: prose refutable from the SAME FILE.
-
-```
-:109  "All response headers (including grpc-status) are in HTTP headers."
-:461  "Required by gRPC-over-HTTP/1.1 to signal trailer support."
-```
-
-Fifty lines apart in one class. There are no trailers on this wire format to signal
-support for, and "gRPC-over-HTTP/1.1" is not a specification. The header travelled
-on every call and was charged to the aggregate metadata bound:
-`headers delivered 10 -> 9`.
-
-> **A file's own doc comment is a cheaper oracle than any external document, and it
-> is the one nobody checks against.** The detector is mechanical: for each comment
-> asserting a REQUIREMENT ("required by", "mandated", "the spec says"), find the
-> file's own statement of the format and read the two together. No archaeology, no
-> dependency reading.
-
-> **And measure where the thing STOPS, not only that it happens.** The lead's
-> framing — a useless header reaching the application — was wrong:
-> `_createContextFromMessage` excludes `te` by name, so no handler ever saw it. That
-> filter is load-bearing for `rpc_dart_http2`, which sends the header because the
-> gRPC HTTP/2 spec genuinely requires it — so reading only "the header is sent" would
-> have pointed the fix at the filter, which is the one piece that must not move.
-
-`../probes/P-206-what-te-trailers-reaches.md`,
-`../rounds/586-the-header-core-had-to-filter.md`, B-149.
+Headline: `RpcSecurityPolicy` went 236 -> 151 doc lines in round 293; core's
+comment baseline was 27.6%, not the 18.4% the `///` count showed. Fused docs:
+eight instances by round 305, in five packages, on every kind of declaration.
+
+- **Round 293** — `RpcSecurityPolicy`: four fields carried 127 of 236 doc lines;
+  cut to 151 with the tables left in rounds 205, 213-215 and 245. **The comment
+  cannot be aged, so it must not carry what ages.**
+- **Rounds 294-295** — four comment blocks per round moved 149 lines against a
+  baseline of 4430, and the owner stopped it; this is why the unit is a batch.
+- **Round 296** — one file per round; the owner stopped that too, for the same
+  reason: at 92 files in core alone, one per round does not finish either. Found
+  the first fusion: `_validateInbound`'s doc on `_maxPolicyViolations`.
+- **Round 297** — measured the `//` gap: `channel_transport.dart` 564 comment
+  lines in 1338 (42%) and `transport.dart` 236 in 533 (44%) after being "done".
+  Fusion at `_reclaimGrace` wearing `_onDeadlineExceeded`'s doc; eight lines
+  duplicated verbatim in `getMessagesForStream`; the 789 MiB budget and
+  `openStreams: 30` each written twice.
+- **Round 298** — `_normalize` carried `register`'s entire doc, sample included,
+  repeated twenty lines later on `register`.
+- **Round 299** — a fused doc can HIDE a fact: `_uniqueToken` had no doc, and
+  `Random.secure()` throwing on node (non-cryptographic ids) sat under
+  `_strongRng`.
+- **Round 300** — first package outside core, on a PUBLIC class:
+  `RpcWebSocketChannel`'s doc and sample fused onto
+  `grpcStatusFromWebSocketCloseCode`.
+- **Round 301** — the cost: LSP hover for `_readBounded` returned signature only
+  before the fix. A fused doc is INVISIBLE to every tool that reads docs by
+  symbol. Also three PARAGRAPH fusions in one package (`stop()` /
+  `[drainTimeout]`, a TLS warning / `[policy]`, `_reject`'s CORS / body drain).
+- **Round 302** — `rpc_dart_isolate` at **18.2%**, under threshold, held the worst
+  fusion of the series (a `//` block describing code 76 lines below). And
+  `isolate_transport_stub.dart` named web as its example while the conditional
+  export routes `dart.library.js_interop` elsewhere. **Fixing wrong prose COSTS
+  lines** (5 -> 9 while the package fell 221 -> 192), and that is correct.
+- **Round 303** — the sweep is the only pass that READS every comment: a fusion,
+  `"Gárrantees"` in a public doc, and `rpc_http2_server.dart` written in Russian;
+  22 more files filed as B-30.
+- **Round 304** — the CAUSE of a duplicate: `RpcHttp2OutgoingPump` moved to
+  `rpc_http2_common.dart` and `typedef _OutgoingPump` kept a 29-line copy. Sweep
+  around anything a move leaves behind.
+- **Round 305** — a static function's doc eaten by a `const` 67 lines above.
+  **A CLASS doc is the easiest to lose this way**, and it is the doc a user reads
+  first.
+- **Round 333** — `LogScope.noop` said "zero cost"; the call still builds the
+  String: 35 discarded messages, 1566 characters, ~2.0 us VM / ~3.5 us dart2js
+  per unary round trip, `isInternal` used at 25 of 58 sites. **A doc comment that
+  states a COST is load-bearing; measure it or delete the claim.**
+- **Round 364** — `rpc_dart_wasm`'s README named JavaScriptCore, which has no
+  WebAssembly. **Some stale prose is IMPOSSIBLE**, refutable from the component's
+  own capabilities; **write the reason next to the correction or it comes back**;
+  **a claim written INTO prose must be verified before it ships** (`96 MiB sent ->
+  1 chunk -> 96 MiB`; `p50 12.9 ms` per frame).
+  `../probes/P-55-what-a-wasm-call-costs.md`,
+  `../rounds/364-the-readme-named-an-engine-that-cannot-run-it.md`
+- **Round 401** — `RpcWebSocketServer.start()`'s error prescribed "construct a new
+  `RpcWebSocketServer`", which throws the same error. **A message that tells the
+  user what to do is a promise the compiler cannot check, read at the worst
+  possible moment.** `../rounds/401-the-remedy-that-was-not-one.md`, RPC-21's
+  `../probes/P-87-restart-the-way-the-error-says.md`
+- **Round 404** — 228 `throw` sites, ~20 prescribe; the three riskiest were
+  correct. **The tell is a message that prescribes rebuilding A when the state
+  that blocks you is held by B**; and split a sentence with an `and` in it.
+  `../probes/P-89-drive-what-the-message-prescribes.md`,
+  `../rounds/404-what-the-messages-promise.md`
+- **Round 435** — three of eight transport test files keep Cyrillic as fixtures;
+  `stream_distributor.dart` holds **39 runtime log messages**; emoji are 154 lines,
+  none in `lib/`. **A detector for a prose defect returns prose AND data**; **two
+  style rules in one sentence are two populations.**
+  `../rounds/435-the-half-that-ships.md`,
+  `../backlog/B-30-russian-comments-outside-the-mandate.md`
+- **Round 436** — ten of twelve fixtures in C-47 are round-trips that PASS when
+  translated. **Before sweeping, ask which hits would fail if you were WRONG**;
+  **a `grep -rl` detector answers "which files", and some classes only have an
+  answer at "which lines".**
+  `../rounds/436-the-detector-that-cannot-see-its-own-class.md`,
+  `../checked/C-47-the-non-ascii-that-must-stay.md`
+- **Round 437** — `// < 3ms` on `lessThan(10000)` (10 ms). **A comment in a
+  language the reviewers do not read is exempt from review.** And `${minTime}μs`
+  is refused by `unnecessary_brace_in_string_interps`: **"unnecessary" in a lint
+  means unnecessary TO THE PARSER**; comment the site; the config is the owner's
+  to change, not a round's.
+  `../rounds/437-the-lint-that-mandates-the-ambiguous-form.md`
+- **Round 438** — "100мс" on `milliseconds: 1`, right when written and drifted.
+  **Comments in an unread language go un-maintained**; check numbers as you
+  translate. `../rounds/438-the-comment-that-was-right-once.md`
+- **Round 439** — a bulk replace of `// Регистрируем сервис` half-translated six
+  longer comments. **Bulk-replacing comment text is a substring operation on the
+  one part of a file nothing validates**; anchor to end of line or edit singly.
+  `../rounds/439-the-replace-that-matched-a-prefix.md`
+- **Round 440** — the damage grep found no damage repo-wide, bounding 439 at six;
+  `replace_all` used eight times, two rejected as prefixes. **When a sweep can
+  damage what it edits, write the detector for the DAMAGE.**
+  `../rounds/440-the-rule-applied-to-itself.md`
+- **Round 441** — "443 lines across 21 files" was repo-wide; `rpc_notify` 230
+  lines never in scope, while the rounds swept what the owner's decision names.
+  **Report the remainder on the axis of the DECISION.** The damage grep had 4
+  false positives in 230 lines.
+  `../rounds/441-core-tests-are-down-to-their-fixtures.md`
+- **Round 442** — the websocket doc said "A web client is not unprotected" while
+  B-71 measured no liveness signal at all. **The dangerous prose is the one that
+  tells a reader they are SAFE**; the fix a doc can deliver is honesty, not
+  coverage. `../rounds/442-the-doc-that-said-the-opposite.md`
+- **Round 490** — `RpcHttpCallerTransport`'s candid "silently degrade" missed that
+  a finite stream past either ceiling fails status 8. **Candour about one failure
+  reads as a complete account of the failures**; read a LIMIT against the prose
+  that promises past it, one arm per limit. `maxBufferedBytes` bounded nothing.
+  `../probes/P-129-which-ceiling-stops-a-finite-http1-stream.md`,
+  `../rounds/490-the-knob-that-names-the-thing-bounded-nothing.md`, B-99
+- **Round 515** — `CLAUDE.md`'s "a bool read" was 235 ns vs 1.8 ns (round 512,
+  B-121), and "count calls into a `LogScope` subclass" fails wherever
+  `LogScope.child()` derives a scope; override `LogController.add` instead. **A
+  convention repeated at hundreds of sites is worth measuring once.** The warning
+  rig produced ZERO warnings, so the lead stayed UNVERIFIED: **with no witness
+  there is nothing to switch off.**
+  `../rounds/515-the-rig-never-reached-the-warning.md`, B-124, B-121
+- **Round 516** — NOT_FOUND logged at `error` (`caller 2, responder 1`). **Treat a
+  log LEVEL as a claim checked against the project's own vocabulary**;
+  `RpcStatus.isFault` is narrower than round 501's `_isServerHealthFailure` ON
+  PURPOSE; for a silencing fix the controls run the other way (INTERNAL and a
+  status-less `StateError`). `../probes/P-153-what-an-application-status-logs.md`,
+  `../rounds/516-an-answer-that-read-as-an-incident.md`, B-124
+- **Round 521** — B-129 called eighteen items "small", four were defects (a DoS
+  surface among them). **Read the items, not the summary, and split when the
+  summary is wrong**; the journal is not exempt.
+  `../probes/P-158-does-a-cancel-cut-the-retry-backoff.md`,
+  `../rounds/521-a-cleanup-list-with-defects-in-it.md`, B-129
+- **Round 586** — `:109` said all headers are HTTP headers, `:461` sent `te:
+  trailers` as "required by gRPC-over-HTTP/1.1": `headers delivered 10 -> 9`.
+  **A file's own doc comment is a cheaper oracle than any external document**;
+  **measure where the thing STOPS** — `_createContextFromMessage` filters `te` and
+  must stay for `rpc_dart_http2`. `../probes/P-206-what-te-trailers-reaches.md`,
+  `../rounds/586-the-header-core-had-to-filter.md`, B-149
