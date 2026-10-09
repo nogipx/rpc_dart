@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-10
 bench: P-40 — new
 commit: yes
+severity: S2
 ---
 
 # Round 342 — the second mechanism that was not a field

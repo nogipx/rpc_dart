@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — a new test, `packages/transport/rpc_dart_http2/test/proxy_and_authority_addressing_test.dart`, with a proxy that records CONNECT and a raw http2 server that records `:authority`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 694 — the caller addresses its peer correctly

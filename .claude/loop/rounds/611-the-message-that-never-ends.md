@@ -7,6 +7,7 @@ bench: P-216 — new
 budget: probes 3/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 611 — the message that never ends

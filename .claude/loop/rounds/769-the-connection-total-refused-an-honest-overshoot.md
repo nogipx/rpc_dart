@@ -6,6 +6,7 @@ lens: RPC-01
 bench: P-269 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 769 — the connection total refused an honest overshoot

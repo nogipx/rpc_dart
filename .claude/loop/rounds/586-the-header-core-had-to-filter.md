@@ -7,6 +7,7 @@ bench: P-206 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 586 — the header core had to filter

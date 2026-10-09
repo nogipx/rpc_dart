@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-19
 bench: P-125 — new
 commit: yes
+severity: S2
 ---
 
 # Round 486 — a bad frame is not a dropped connection

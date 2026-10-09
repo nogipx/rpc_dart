@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-164 — new
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 531 — the restart that ran inside the shutdown

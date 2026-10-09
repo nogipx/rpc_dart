@@ -7,6 +7,7 @@ bench: P-09 — new
 budget: probes 0/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record and the bench; approved 9 of 10, Q6 n/a (no fix, so no canary)
 commit: no
+severity: S1
 ---
 
 # Round 217 — a decorator erases the stream-id watermark

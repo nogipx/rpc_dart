@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — the evidence is that two doc comments assert the opposite of what
   the lead measured, read against the lead
 commit: yes
+severity: S3
 ---
 
 # Round 442 — the doc that said the opposite

@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-05
 bench: P-130 — new
 commit: yes
+severity: S2
 ---
 
 # Round 491 — the call ended and the request did not

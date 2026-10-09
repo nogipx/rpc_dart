@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-65 — new
 commit: yes
+severity: S1
 ---
 
 # Round 374 — the copy an ordinary application reaches

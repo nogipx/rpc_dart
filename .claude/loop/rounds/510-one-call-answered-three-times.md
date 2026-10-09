@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-16
 bench: P-148 — new
 commit: yes
+severity: S2
 ---
 
 # Round 510 — one call, answered three times

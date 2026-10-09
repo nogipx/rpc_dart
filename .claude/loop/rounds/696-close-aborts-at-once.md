@@ -6,6 +6,7 @@ lens: RPC-14
 bench: none — a new test timing close() with a call in flight, `packages/transport/rpc_dart_http2/test/close_does_not_wait_on_active_calls_test.dart`
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 696 — close aborts at once

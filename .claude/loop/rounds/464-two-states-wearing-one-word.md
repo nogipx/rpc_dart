@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket, rpc_dart_http2]
 lens: RPC-25
 bench: P-113 — new
 commit: yes
+severity: S2
 ---
 
 # Round 464 — two states wearing one word

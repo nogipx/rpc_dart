@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-08
 bench: P-155 — new
 commit: yes
+severity: S2
 ---
 
 # Round 518 — the fix that turned an error into a hang

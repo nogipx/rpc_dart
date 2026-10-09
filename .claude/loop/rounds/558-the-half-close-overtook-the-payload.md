@@ -7,6 +7,7 @@ bench: P-183 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 558 — the half-close overtook the payload

@@ -7,6 +7,7 @@ bench: P-02 — new
 budget: probes 1/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record and the probe; approved 8 of 8 applicable (Q5 and Q6 are n/a: DEFERRED, so there is no fix to canary)
 commit: no
+severity: S1
 ---
 
 # Round 207 — cancelling a stalled http2 call kills the connection for good

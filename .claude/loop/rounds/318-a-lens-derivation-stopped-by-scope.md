@@ -5,6 +5,7 @@ packages: [rpc_blob]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 318 — a lens derivation stopped by scope

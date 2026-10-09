@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-06
 bench: P-54 — new
 commit: yes
+severity: S3
 ---
 
 # Round 363 — the check that would have refused everything

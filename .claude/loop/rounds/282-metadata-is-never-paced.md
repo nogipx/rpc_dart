@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-31 — new
 commit: yes
+severity: S1
 ---
 
 # Round 282 — metadata is never paced, and nothing else catches it

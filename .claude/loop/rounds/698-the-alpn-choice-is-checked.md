@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — by owner decision a fix by reading; no witness is reachable on this machine
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 698 — the ALPN choice is checked

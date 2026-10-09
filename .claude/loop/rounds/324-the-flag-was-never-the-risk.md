@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-19
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 324 — the flag was never the risk

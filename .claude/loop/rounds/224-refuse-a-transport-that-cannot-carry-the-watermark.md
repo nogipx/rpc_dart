@@ -7,6 +7,7 @@ bench: P-09 — reused
 budget: probes 1/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record, the probe and both canaries. Approved 9 of 10, A1 not applicable (no attacker/victim, this is a programmer-error refusal)
 commit: yes
+severity: S1
 ---
 
 # Round 224 — refuse a transport that cannot carry the watermark

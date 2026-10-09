@@ -5,6 +5,7 @@ packages: [rpc_blob_minio]
 lens: RPC-11
 bench: none — the instrument is each excluded suite's own exit status, and this round ran all of them
 commit: yes
+severity: S0
 ---
 
 # Round 477 — every excluded suite, run

@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-23
 bench: P-129 — new
 commit: yes
+severity: S2
 ---
 
 # Round 490 — the knob that names the thing bounded nothing

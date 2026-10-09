@@ -7,6 +7,7 @@ bench: none — the witness counts the server's live handlers directly
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 626 — the server was never told

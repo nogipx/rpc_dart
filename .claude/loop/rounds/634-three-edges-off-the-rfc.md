@@ -7,6 +7,7 @@ bench: none — the witness decodes hand-made bytes and round-trips -0.0 on VM a
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 634 — three edges off the RFC

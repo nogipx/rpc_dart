@@ -7,6 +7,7 @@ bench: P-196 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 575 — the bytes the sender kept writing to

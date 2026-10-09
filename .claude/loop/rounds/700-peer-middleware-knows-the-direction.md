@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — `packages/core/rpc_dart/test/endpoint/peer_middleware_knows_the_direction_test.dart`
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 700 — peer middleware knows the direction

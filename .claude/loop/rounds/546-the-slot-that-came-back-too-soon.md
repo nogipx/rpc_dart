@@ -7,6 +7,7 @@ bench: P-157 — reused
 budget: probes 2/5, canaries 3/5
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 546 — the slot that came back too soon

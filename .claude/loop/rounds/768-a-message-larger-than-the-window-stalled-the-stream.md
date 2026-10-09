@@ -6,6 +6,7 @@ lens: RPC-01
 bench: P-268 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 768 — a message larger than the window stalled the stream

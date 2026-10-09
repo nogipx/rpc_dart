@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a new device test, `example/integration_test/concurrent_check_support_test.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 689 — concurrent support probes agree

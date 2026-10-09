@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S2
 ---
 
 # Round 336 — the unary call that was never answered

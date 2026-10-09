@@ -6,6 +6,7 @@ lens: RPC-15
 bench: none — a code-shape item with no failure to measure, as the lead says; the existing drain test is the witness
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 674 — the drain reads a number, not a map

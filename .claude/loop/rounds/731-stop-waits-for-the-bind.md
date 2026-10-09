@@ -6,6 +6,7 @@ lens: RPC-21
 bench: P-242 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 731 — stop waits for the bind

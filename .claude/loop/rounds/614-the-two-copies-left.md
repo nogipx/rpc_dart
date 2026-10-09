@@ -7,6 +7,7 @@ bench: P-218 — new
 budget: probes 4/5, canaries 3/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 614 — the two copies left

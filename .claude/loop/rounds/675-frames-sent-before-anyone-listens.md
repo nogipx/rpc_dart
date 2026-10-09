@@ -6,6 +6,7 @@ lens: RPC-20
 bench: none — the device witness is the measurement: `example/integration_test/boot_frames_test.dart`, on the iOS 18.6 simulator and an Android API 30 emulator
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 675 — frames sent before anyone listens

@@ -5,6 +5,7 @@ packages: [rpc_dart_compression]
 lens: RPC-07
 bench: P-34 — new
 commit: yes
+severity: S1
 ---
 
 # Round 286 — twelve milliseconds against sixteen seconds

@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — three defects from B-56's nine-site sweep; the evidence is two
   ablations, one of which is a WALL-CLOCK number the witness asserts directly
 commit: yes
+severity: S1
 ---
 
 # Round 424 — the rule written thirty lines above

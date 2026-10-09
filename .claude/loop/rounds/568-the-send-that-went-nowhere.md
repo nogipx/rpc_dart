@@ -7,6 +7,7 @@ bench: P-187 — reused
 budget: probes 0/5, canaries 2/5
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 568 — the send that went nowhere

@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-13
 bench: P-168 — new
 commit: yes
+severity: S1
 ---
 
 # Round 535 — the grab-bag graded itself backwards

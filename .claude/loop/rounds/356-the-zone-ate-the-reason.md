@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-13
 bench: P-48 — new
 commit: yes
+severity: S2
 ---
 
 # Round 356 — the zone ate the reason

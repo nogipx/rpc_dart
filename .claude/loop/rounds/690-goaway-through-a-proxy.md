@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — a new test with an in-test CONNECT proxy, `packages/transport/rpc_dart_http2/test/goaway_through_a_proxy_test.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 690 — GOAWAY through a proxy

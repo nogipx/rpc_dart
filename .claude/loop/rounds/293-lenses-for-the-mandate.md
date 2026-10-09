@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 293 — lenses for the mandate

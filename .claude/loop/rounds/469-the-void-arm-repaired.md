@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-118 — new
 commit: yes
+severity: S2
 ---
 
 # Round 469 — the void arm repaired, and the fix still unwitnessed

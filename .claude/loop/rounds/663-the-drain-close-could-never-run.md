@@ -6,6 +6,7 @@ lens: RPC-15
 bench: none — the witness test is the measurement; it reuses round 537's harness in the same file
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 663 — the drain close() could never run

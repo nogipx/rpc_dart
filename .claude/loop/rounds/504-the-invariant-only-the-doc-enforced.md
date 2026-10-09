@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-08
 bench: P-142 — new
 commit: yes
+severity: S2
 ---
 
 # Round 504 — the invariant only the doc enforced

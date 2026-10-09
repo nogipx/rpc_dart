@@ -6,6 +6,7 @@ lens: RPC-07
 bench: none — a dart2wasm websocket client run in node 22 against a VM server (`.dart_tool/probe/b256_client.dart`, `b256_server.dart`), dart2js as the control
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 699 — the web under dart2wasm decodes

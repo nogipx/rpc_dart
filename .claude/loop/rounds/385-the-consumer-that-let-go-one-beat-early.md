@@ -5,6 +5,7 @@ packages: [rpc_dart_isolate, rpc_dart_http2]
 lens: RPC-10
 bench: P-78 — new
 commit: yes
+severity: S2
 ---
 
 # Round 385 — the consumer that let go one beat early

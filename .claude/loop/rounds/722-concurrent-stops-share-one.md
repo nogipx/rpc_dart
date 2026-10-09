@@ -6,6 +6,7 @@ lens: RPC-21
 bench: P-237 — reused
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 722 — concurrent stops share one

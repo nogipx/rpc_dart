@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-79 — reused
 commit: yes
+severity: S1
 ---
 
 # Round 391 — the order without the rule

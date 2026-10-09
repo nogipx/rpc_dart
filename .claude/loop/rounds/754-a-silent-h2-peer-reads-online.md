@@ -6,6 +6,7 @@ lens: RPC-08
 bench: P-259 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 754 — a silent h2 peer reads online

@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-17
 bench: P-167 — new
 commit: yes
+severity: S2
 ---
 
 # Round 534 — the pause that bounded only delivery

@@ -7,6 +7,7 @@ bench: P-216 — reused
 budget: probes 3/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 624 — the refusal that kept reading

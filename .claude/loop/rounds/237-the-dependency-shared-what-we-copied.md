@@ -7,6 +7,7 @@ bench: P-16 — new
 budget: probes 1/3, canaries 3/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record. Approved 7 of 7, with Q4 the one that changed the round (see Canary)
 commit: yes
+severity: S1
 ---
 
 # Round 237 — the dependency shared what we copied

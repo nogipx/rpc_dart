@@ -7,6 +7,7 @@ bench: P-155 — reused
 budget: probes 0/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 554 — one rule, where the parser is

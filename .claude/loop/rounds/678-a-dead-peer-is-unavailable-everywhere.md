@@ -6,6 +6,7 @@ lens: RPC-19
 bench: none — the parity matrix filed with the lead (`.dart_tool/probe/parity_matrix.dart`, row 6.call-after-peer-dead), re-run, plus a witness for the isolate case the matrix does not drive
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 678 — a dead peer is UNAVAILABLE everywhere

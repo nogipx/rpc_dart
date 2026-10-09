@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket, rpc_dart]
 lens: RPC-25
 bench: P-88 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 403 — the drain that only waits

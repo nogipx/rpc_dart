@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-14
 bench: P-166 — new
 commit: yes
+severity: S2
 ---
 
 # Round 533 — the timeout that only stopped waiting

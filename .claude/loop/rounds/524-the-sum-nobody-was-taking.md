@@ -6,6 +6,7 @@ lens: RPC-08
 bench: P-159 — reused
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 524 — the sum nobody was taking

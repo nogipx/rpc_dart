@@ -6,6 +6,7 @@ lens: RPC-22
 bench: P-287 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 794 — every rejected http request was a warning

@@ -6,6 +6,7 @@ lens: RPC-25
 bench: P-284 — reused
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 796 — a response after the answer was a warning

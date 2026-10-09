@@ -6,6 +6,7 @@ lens: RPC-25
 bench: P-240 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 727 — teardown stops the server first, everywhere

@@ -6,6 +6,7 @@ lens: RPC-18
 bench: P-279 — new
 commit: yes
 release: none
+severity: S1
 ---
 
 # Round 784 — a 303 carries metadata to another origin

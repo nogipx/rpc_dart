@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-25
 bench: P-107 — new
 commit: yes
+severity: S1
 ---
 
 # Round 455 — the guess over bytes the peer chose

@@ -7,6 +7,7 @@ bench: P-192 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: breaking
+severity: S1
 ---
 
 # Round 571 — the retry that charged three times

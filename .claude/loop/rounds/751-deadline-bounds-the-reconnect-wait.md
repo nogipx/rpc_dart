@@ -6,6 +6,7 @@ lens: RPC-09
 bench: P-255 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 751 — deadline bounds the reconnect wait

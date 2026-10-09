@@ -6,6 +6,7 @@ lens: RPC-17
 bench: none — `.dart_tool/probe/b257_sockets.dart` (websocket and http2 on localhost) and `.dart_tool/probe/b257_chunks.dart` (a channel delivering one chunk of up to B bytes per task, optional latency)
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 709 — message credit

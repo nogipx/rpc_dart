@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket, rpc_dart_isolate, rpc_dart_http2]
 lens: RPC-25
 bench: P-72 — new
 commit: yes
+severity: S1
 ---
 
 # Round 384 — the sibling told the peer and this one did not

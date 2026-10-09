@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-95 — new
 commit: yes
+severity: S1
 ---
 
 # Round 425 — the cancel path the table had no column for

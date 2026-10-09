@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-15
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 339 — the margin nobody measured

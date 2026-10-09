@@ -7,6 +7,7 @@ bench: P-207 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 587 — eight calls, eight errors

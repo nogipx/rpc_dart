@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http]
 lens: RPC-25
 bench: P-109 — new
 commit: yes
+severity: S2
 ---
 
 # Round 458 — a message at exactly the limit

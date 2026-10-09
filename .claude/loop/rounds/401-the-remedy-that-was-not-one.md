@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-21
 bench: P-87 — new
 commit: yes
+severity: S3
 ---
 
 # Round 401 — the remedy that was not one

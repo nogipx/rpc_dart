@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-25
 bench: P-105 — new
 commit: yes
+severity: S2
 ---
 
 # Round 452 — the weakest lead had a leak in it

@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-14
 bench: P-169 — new
 commit: yes
+severity: S2
 ---
 
 # Round 536 — the release that freed only bookkeeping

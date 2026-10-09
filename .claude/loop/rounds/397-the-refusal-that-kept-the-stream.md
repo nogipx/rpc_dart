@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-22
 bench: P-84 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 397 — the refusal that kept the stream

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-30 — new
 commit: yes
+severity: S1
 ---
 
 # Round 280 — the second budget that weighs payload only

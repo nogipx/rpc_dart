@@ -5,6 +5,7 @@ packages: [rpc_dart_isolate]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 302 — the shape is not a density

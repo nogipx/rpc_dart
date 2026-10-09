@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; the coverage-review probe i
 budget: probes 2/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 646 — a zero-copy refusal sent twice

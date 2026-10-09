@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-62 — new
 commit: yes
+severity: S1
 ---
 
 # Round 371 — the mirror of the same missing pause

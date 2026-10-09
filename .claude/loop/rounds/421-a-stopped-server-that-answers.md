@@ -7,6 +7,7 @@ bench: none — both are a refusal that accounted for nothing, or answered
   nobody; the evidence is the four existing tests that inverted and two
   ablations
 commit: yes
+severity: S1
 ---
 
 # Round 421 — a stopped server that answers

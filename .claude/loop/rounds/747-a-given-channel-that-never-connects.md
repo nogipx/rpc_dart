@@ -6,6 +6,7 @@ lens: RPC-13
 bench: P-251 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 747 — a given channel that never connects

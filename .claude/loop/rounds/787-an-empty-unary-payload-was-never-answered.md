@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-281 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 787 — an empty unary payload was never answered

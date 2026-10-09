@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-06
 bench: P-47 — new
 commit: yes
+severity: S3
 ---
 
 # Round 355 — the encoding both sides agreed on and neither checked

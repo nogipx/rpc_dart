@@ -8,6 +8,7 @@ bench: none — the lead's own witness line reads "None"; every claim is about d
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 580 — eight claims and what each was worth

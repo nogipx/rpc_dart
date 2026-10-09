@@ -6,6 +6,7 @@ lens: RPC-25
 bench: P-230 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 666 — the message behind the refusal

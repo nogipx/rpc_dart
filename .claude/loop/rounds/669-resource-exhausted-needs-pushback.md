@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-232 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 669 — RESOURCE_EXHAUSTED is retried only with pushback

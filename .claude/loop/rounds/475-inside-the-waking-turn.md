@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-119 — new
 commit: yes
+severity: S1
 ---
 
 # Round 475 — inside the waking turn

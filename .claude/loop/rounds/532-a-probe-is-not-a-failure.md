@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-22
 bench: P-165 — new
 commit: yes
+severity: S3
 ---
 
 # Round 532 — a probe is not a failure

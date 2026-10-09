@@ -6,6 +6,7 @@ lens: RPC-15
 bench: P-237 — reused
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 730 — stop does not outwait a hung start

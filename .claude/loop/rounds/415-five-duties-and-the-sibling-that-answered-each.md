@@ -8,6 +8,7 @@ bench: none — the evidence is seven ablations, one per half of each fix; no
   disagree", whose control is the sibling that already answers it correctly and
   whose confirmation is switching the fix off and watching a named witness fail
 commit: yes
+severity: S1
 ---
 
 # Round 415 — five duties, and the sibling that answered each

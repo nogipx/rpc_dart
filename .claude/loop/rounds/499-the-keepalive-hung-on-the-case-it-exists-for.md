@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-14
 bench: P-137 — new
 commit: yes
+severity: S1
 ---
 
 # Round 499 — the keepalive hung on the case it exists for

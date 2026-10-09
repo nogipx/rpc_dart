@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-05
 bench: P-146 — new
 commit: yes
+severity: S2
 ---
 
 # Round 508 — work added to undo work

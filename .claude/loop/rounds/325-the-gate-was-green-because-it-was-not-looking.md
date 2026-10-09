@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-26
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 325 — the gate was green because it was not looking

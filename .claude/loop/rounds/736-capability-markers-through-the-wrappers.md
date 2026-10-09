@@ -6,6 +6,7 @@ lens: RPC-04
 bench: none — a sweep of every wrapper against every capability marker added since round 659; the one gap is filed, not measured
 commit: yes
 release: none
+severity: S2
 ---
 
 # Round 736 — capability markers through the wrappers

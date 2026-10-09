@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: none — the copies AGREE today, so there is no quantity to take; the evidence is a canary that reproduces the drift on command
 commit: yes
+severity: S3
 ---
 
 # Round 453 — one home per default

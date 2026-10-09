@@ -5,6 +5,7 @@ packages: [rpc_dart_http2, rpc_dart_websocket]
 lens: RPC-24
 bench: none — a complete sweep of every reference is the evidence; the user-visible cost is what has no number, and that is why it is deferred
 commit: yes
+severity: S2
 ---
 
 # Round 409 — the transports' two types

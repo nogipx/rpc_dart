@@ -6,6 +6,7 @@ lens: RPC-08
 bench: P-173 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 540 — the value that never left

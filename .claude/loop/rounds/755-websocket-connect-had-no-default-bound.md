@@ -6,6 +6,7 @@ lens: RPC-08
 bench: P-260 — new
 commit: yes
 release: breaking
+severity: S1
 ---
 
 # Round 755 — websocket connect had no default bound

@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — the lead's own probe, `.dart_tool/probe/codec_mode_response.dart`, re-run; the fix is prose, pinned by a witness of the behaviour it now states
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 677 — what `auto` means

@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-290 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 799 — data after the cancel read as lost

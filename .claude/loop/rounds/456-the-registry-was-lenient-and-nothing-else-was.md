@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-108 — new
 commit: yes
+severity: S2
 ---
 
 # Round 456 — the registry was lenient and nothing else was

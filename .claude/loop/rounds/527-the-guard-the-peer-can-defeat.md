@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-03
 bench: P-161 — new
 commit: yes
+severity: S2
 ---
 
 # Round 527 — the guard the peer can defeat

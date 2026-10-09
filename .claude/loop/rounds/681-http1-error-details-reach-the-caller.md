@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — the lead's witness, built as a test
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 681 — http1 error details reach the caller

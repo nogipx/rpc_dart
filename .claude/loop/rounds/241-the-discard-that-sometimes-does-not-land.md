@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-21
 bench: P-19 — new
 commit: no
+severity: S2
 ---
 
 # Round 241 — the discard that sometimes does not land

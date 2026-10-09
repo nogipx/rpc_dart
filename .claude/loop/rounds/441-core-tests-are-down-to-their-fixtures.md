@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is the count, and a correction
   to how the remainder has been reported for six rounds
 commit: yes
+severity: S0
 ---
 
 # Round 441 — core's tests are down to their fixtures

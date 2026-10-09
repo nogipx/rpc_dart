@@ -6,6 +6,7 @@ lens: RPC-18
 bench: P-266 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 766 — a subscriber that stops reading held the topic

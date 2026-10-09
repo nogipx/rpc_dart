@@ -6,6 +6,7 @@ lens: RPC-15
 bench: none — the lead's own probe, `refused_upgrade_flake.dart`, run beside the gate; a second probe for the callback case
 commit: yes
 release: none
+severity: S0
 ---
 
 # Round 670 — the body no upgrade carries

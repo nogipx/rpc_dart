@@ -7,6 +7,7 @@ bench: none — the witness reads every status a raw client gets, and the probe 
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 638 — the deadline answers itself

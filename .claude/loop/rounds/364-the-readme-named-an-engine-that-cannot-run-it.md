@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm, rpc_dart_websocket]
 lens: RPC-23
 bench: P-55 — new
 commit: yes
+severity: S3
 ---
 
 # Round 364 — the README named an engine that cannot run it

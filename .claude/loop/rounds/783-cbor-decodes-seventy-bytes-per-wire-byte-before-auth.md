@@ -6,6 +6,7 @@ lens: RPC-27
 bench: P-278 — new
 commit: yes
 release: none
+severity: S1
 ---
 
 # Round 783 — cbor decodes seventy bytes per wire byte before auth

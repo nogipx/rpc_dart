@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-19
 bench: P-45 — new
 commit: yes
+severity: S2
 ---
 
 # Round 353 — "reported rather than fatal" was half true

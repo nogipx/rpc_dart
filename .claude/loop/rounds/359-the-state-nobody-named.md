@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-19
 bench: P-50 — new
 commit: yes
+severity: S2
 ---
 
 # Round 359 — the state nobody named

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-21
 bench: P-126 — new
 commit: yes
+severity: S1
 ---
 
 # Round 487 — the frame that swaps a running handler's context

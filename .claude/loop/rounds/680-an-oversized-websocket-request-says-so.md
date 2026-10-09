@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — the parity matrix filed with the lead (`.dart_tool/probe/parity_matrix.dart`, 5.request-over-limit), as a test
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 680 — an oversized websocket request says so

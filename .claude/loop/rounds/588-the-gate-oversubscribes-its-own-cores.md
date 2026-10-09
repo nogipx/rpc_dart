@@ -7,6 +7,7 @@ bench: P-208 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: none
+severity: S0
 ---
 
 # Round 588 — the gate oversubscribes its own cores

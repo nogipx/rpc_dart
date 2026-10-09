@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; reviewer probe res2_rate_li
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 654 — a metered stream opened for free

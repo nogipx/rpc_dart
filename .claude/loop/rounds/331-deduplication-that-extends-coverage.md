@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 331 — deduplication that extends coverage

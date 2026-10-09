@@ -7,6 +7,7 @@ bench: P-187 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 565 — the canary that reported a pass

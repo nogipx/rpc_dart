@@ -7,6 +7,7 @@ bench: none — the witness is git against the published tags, which is what CLA
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 556 — no published core satisfies any floor, and it does not matter yet

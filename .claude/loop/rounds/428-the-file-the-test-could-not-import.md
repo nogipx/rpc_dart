@@ -6,6 +6,7 @@ lens: RPC-07
 bench: none — the evidence is two ablations restoring round 310's defect in
   place, each failing a different clause's witness with a real message
 commit: yes
+severity: S0
 ---
 
 # Round 428 — the file the test could not import

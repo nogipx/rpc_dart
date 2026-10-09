@@ -7,6 +7,7 @@ bench: P-174 — new
 budget: probes 1/5, canaries 3/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 541 — the number that belonged to somebody else

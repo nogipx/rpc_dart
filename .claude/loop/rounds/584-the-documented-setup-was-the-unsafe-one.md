@@ -7,6 +7,7 @@ bench: P-204 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: breaking
+severity: S1
 ---
 
 # Round 584 — the documented setup was the unsafe one

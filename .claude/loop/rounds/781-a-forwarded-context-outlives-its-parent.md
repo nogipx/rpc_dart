@@ -6,6 +6,7 @@ lens: RPC-14
 bench: P-276 — new
 commit: yes
 release: none
+severity: S2
 ---
 
 # Round 781 — a forwarded context outlives its parent

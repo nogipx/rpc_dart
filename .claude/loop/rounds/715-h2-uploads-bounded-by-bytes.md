@@ -6,6 +6,7 @@ lens: RPC-17
 bench: none — `.dart_tool/probe/audit_h2/depth.dart`, `bidi.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 715 — h2 uploads bounded by bytes

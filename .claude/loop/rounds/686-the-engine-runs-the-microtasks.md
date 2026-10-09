@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a new device test, `example/integration_test/guest_awaits_a_native_promise_test.dart`, and a guest method for it
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 686 — the engine runs the microtasks

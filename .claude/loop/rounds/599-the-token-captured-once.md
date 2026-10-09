@@ -7,6 +7,7 @@ bench: none — the observable is which header value crossed the wire on each up
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 599 — the token captured once

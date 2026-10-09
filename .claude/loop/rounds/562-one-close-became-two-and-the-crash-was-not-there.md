@@ -7,6 +7,7 @@ bench: P-185 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 562 — one close became two, and the crash was not there

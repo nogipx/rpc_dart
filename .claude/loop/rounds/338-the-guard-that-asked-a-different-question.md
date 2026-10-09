@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-15
 bench: P-37 — new
 commit: yes
+severity: S3
 ---
 
 # Round 338 — the guard that asked a different question

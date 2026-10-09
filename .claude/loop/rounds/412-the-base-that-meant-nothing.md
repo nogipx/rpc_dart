@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http2, rpc_dart_http, rpc_notify, rpc_dart_framewo
 lens: RPC-25
 bench: P-93 — new
 commit: yes
+severity: S2
 ---
 
 # Round 412 — the base that meant nothing

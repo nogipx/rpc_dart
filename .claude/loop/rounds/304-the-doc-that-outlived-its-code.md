@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 304 — the doc that outlived its code

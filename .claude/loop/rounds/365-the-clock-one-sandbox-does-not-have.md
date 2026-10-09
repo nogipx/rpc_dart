@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-06
 bench: P-56 — new
 commit: yes
+severity: S1
 ---
 
 # Round 365 — the clock one sandbox does not have

@@ -7,6 +7,7 @@ bench: none — the observable is a count of warning records per connection, rea
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 604 — the peer chose how many lines

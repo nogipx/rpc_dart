@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-15
 bench: none — the evidence is B-62's own sweep plus four assertions on the type, one of them the deny that had to survive
 commit: yes
+severity: S2
 ---
 
 # Round 413 — the envelope that threw it away

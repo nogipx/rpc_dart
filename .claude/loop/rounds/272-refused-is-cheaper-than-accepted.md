@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-22
 bench: P-23 — new
 commit: yes
+severity: S1
 ---
 
 # Round 272 — refused is cheaper than accepted

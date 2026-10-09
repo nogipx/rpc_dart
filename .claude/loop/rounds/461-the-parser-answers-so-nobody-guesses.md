@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http2]
 lens: RPC-25
 bench: P-107 — reused
 commit: yes
+severity: S1
 ---
 
 # Round 461 — the parser answers, so nobody guesses

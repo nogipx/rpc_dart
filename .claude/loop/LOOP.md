@@ -7,7 +7,7 @@ with a particular question.
 process in `SKILL.md`, the file schemas in `specs/`, the working methods in
 `methods/`, the universal defect shapes in `catalog/`.
 
-## Six entities, one directory each
+## Seven entities, one directory each
 
 - **Lens** — what to look for, and how to find instances of it?
   `lenses/RPC-NN-*.md`, ordered by `rank:`.
@@ -22,6 +22,9 @@ process in `SKILL.md`, the file schemas in `specs/`, the working methods in
   defect? `probes/P-NN-*.md`.
 - **Lesson** — what a round paid for, and where that rule was promoted?
   `lessons/L-NN-*.md`.
+- **Invariant** — what must hold on every transport, and which test enforces
+  it? `invariants/I-N-*.md`. The owner's: a round reads them and never edits
+  them. `loop.py next` lists each with whether its test exists.
 
 There are no index files. The records are the only copy; `loop.py find`,
 `status` and `next` read them.

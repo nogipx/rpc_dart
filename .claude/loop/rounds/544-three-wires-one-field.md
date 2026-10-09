@@ -7,6 +7,7 @@ bench: P-176 — new
 budget: probes 1/5, canaries 3/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 544 — three wires, one field

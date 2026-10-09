@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-80 — new
 commit: yes
+severity: S1
 ---
 
 # Round 389 — the call that never ended

@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — `.dart_tool/probe/b266/proxy_tls_socket.dart`; the native fixes by reading, with the device suite as the regression check
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 716 — the audit tail

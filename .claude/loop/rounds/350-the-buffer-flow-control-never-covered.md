@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-31 — reused
 commit: yes
+severity: S1
 ---
 
 # Round 350 — the buffer flow control never covered

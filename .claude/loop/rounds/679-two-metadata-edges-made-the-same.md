@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — the parity matrix filed with the lead (`.dart_tool/probe/parity_matrix.dart`, group 2), re-run
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 679 — two metadata edges made the same

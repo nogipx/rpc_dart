@@ -7,6 +7,7 @@ bench: P-225 — new
 budget: probes 4/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 639 — a header sent twice

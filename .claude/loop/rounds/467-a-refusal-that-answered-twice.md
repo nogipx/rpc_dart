@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-05
 bench: P-106 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 467 — a refusal that answered twice

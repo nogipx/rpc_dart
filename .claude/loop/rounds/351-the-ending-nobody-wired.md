@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-05
 bench: P-43 — new
 commit: yes
+severity: S1
 ---
 
 # Round 351 — the probe ending nobody wired

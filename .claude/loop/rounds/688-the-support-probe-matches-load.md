@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a VM unit test, `packages/transport/rpc_dart_wasm/test/support_probe_matches_load_test.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 688 — the support probe matches load

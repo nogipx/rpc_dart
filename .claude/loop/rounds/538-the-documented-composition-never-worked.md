@@ -6,6 +6,7 @@ lens: RPC-23
 bench: P-171 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 538 — the documented composition never worked

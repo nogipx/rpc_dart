@@ -7,6 +7,7 @@ bench: none — the probe reads the message a remote caller receives
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 633 — every subclass is ours

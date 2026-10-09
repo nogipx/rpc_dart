@@ -7,6 +7,7 @@ bench: P-198 — new
 budget: probes 2/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 577 — the process that could not exit

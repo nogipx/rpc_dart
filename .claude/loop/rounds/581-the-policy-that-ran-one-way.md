@@ -7,6 +7,7 @@ bench: P-201 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 581 — the policy that ran one way

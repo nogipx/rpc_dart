@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-231 — reused
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 668 — one dropped request retired the connection

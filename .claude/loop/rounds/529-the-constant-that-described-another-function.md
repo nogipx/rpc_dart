@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a witness and three controls, no numbers to compare
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 529 — the constant that described another function

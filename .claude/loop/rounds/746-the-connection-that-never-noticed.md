@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-250 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 746 — the connection that never noticed

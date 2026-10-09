@@ -5,6 +5,7 @@ packages: [rpc_blob_sqlite]
 lens: RPC-11
 bench: none — the instrument is the suite's own exit status, and the fix is that the gate now runs it
 commit: yes
+severity: S0
 ---
 
 # Round 476 — the exclusion that belonged to a sibling

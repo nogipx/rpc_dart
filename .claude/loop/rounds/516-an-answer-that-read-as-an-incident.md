@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-23
 bench: P-153 — new
 commit: yes
+severity: S3
 ---
 
 # Round 516 — an answer that read as an incident

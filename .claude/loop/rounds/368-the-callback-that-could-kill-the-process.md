@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-13
 bench: P-59 — new
 commit: yes
+severity: S1
 ---
 
 # Round 368 — the callback that could kill the process

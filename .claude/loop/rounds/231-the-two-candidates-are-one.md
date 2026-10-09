@@ -7,6 +7,7 @@ bench: P-11 — reused
 budget: probes 0/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record. Approved 10 of 10, and Q4 is what produced the finding
 commit: yes
+severity: S1
 ---
 
 # Round 231 — the two candidates are one

@@ -5,6 +5,7 @@ packages: [rpc_blob, rpc_blob_sqlite, rpc_blob_webdav, rpc_blob_minio]
 lens: RPC-25
 bench: none — the matrix is four implementations read against the tree, then pinned by one test per adapter
 commit: yes
+severity: S2
 ---
 
 # Round 478 — one contract for a conditional delete

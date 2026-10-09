@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-79 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 390 — the signal the caller never had

@@ -7,6 +7,7 @@ bench: P-211 — new
 budget: probes 2/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 594 — the two buffers the stream bound never saw

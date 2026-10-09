@@ -7,6 +7,7 @@ bench: P-199 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 578 — the transfer that cost more than it saved

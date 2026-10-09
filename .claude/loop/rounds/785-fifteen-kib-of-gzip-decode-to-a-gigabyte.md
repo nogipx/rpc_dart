@@ -6,6 +6,7 @@ lens: RPC-27
 bench: P-278 — reused
 commit: yes
 release: none
+severity: S1
 ---
 
 # Round 785 — fifteen KiB of gzip decode to a gigabyte

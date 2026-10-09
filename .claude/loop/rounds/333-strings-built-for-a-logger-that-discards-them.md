@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 333 — strings built for a logger that discards them

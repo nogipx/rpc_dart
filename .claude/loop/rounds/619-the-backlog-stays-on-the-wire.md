@@ -7,6 +7,7 @@ bench: P-221 — new
 budget: probes 3/5, canaries 0/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 619 — the backlog stays on the wire

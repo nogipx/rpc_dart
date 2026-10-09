@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-15
 bench: none
 commit: no
+severity: S0
 ---
 
 # Round 247 — B-11's blocker still holds

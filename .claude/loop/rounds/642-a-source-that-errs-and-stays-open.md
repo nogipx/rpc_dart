@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; the coverage-review probes 
 budget: probes 3/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 642 — a source that errs and stays open

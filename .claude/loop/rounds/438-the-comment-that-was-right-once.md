@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is the count, a 13th fixture
   found for C-47, and a second stale comment of the shape round 437 named
 commit: yes
+severity: S0
 ---
 
 # Round 438 — the comment that was right once

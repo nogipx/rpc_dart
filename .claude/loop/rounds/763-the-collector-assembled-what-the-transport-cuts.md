@@ -6,6 +6,7 @@ lens: RPC-18
 bench: P-264 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 763 — the collector assembled what the transport cuts

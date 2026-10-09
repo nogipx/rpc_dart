@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is a grep count before and
   after, and the gate
 commit: yes
+severity: S3
 ---
 
 # Round 432 — the half a user reads

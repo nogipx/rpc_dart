@@ -7,6 +7,7 @@ bench: P-04 — reused
 budget: probes 0/3, canaries 1/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record, the bench and the canary; approved 10 of 10
 commit: yes
+severity: S2
 ---
 
 # Round 212 — a late grant resurrects a dead stream's credit

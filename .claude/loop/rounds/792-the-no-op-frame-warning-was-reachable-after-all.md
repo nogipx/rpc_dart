@@ -6,6 +6,7 @@ lens: RPC-22
 bench: none — the observable is a count of warning records per connection, read by overriding LogController.add in round 604's test rig
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 792 — the no-op frame warning was reachable after all

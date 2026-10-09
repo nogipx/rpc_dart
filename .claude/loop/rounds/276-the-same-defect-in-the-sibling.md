@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-22
 bench: P-26 — new
 commit: yes
+severity: S1
 ---
 
 # Round 276 — the same defect in the sibling

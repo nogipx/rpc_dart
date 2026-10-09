@@ -5,6 +5,7 @@ packages: []
 lens: RPC-15
 bench: none — the observable is a gate script's exit status; the variation is removing one path from it
 commit: yes
+severity: S0
 ---
 
 # Round 379 — the gate that failed on a missing file

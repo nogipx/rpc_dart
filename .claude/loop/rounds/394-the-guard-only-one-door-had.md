@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-08
 bench: P-83 — new
 commit: yes
+severity: S1
 ---
 
 # Round 394 — the guard only one door had

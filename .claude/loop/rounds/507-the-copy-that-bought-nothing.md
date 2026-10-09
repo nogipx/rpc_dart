@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-145 — new
 commit: yes
+severity: S3
 ---
 
 # Round 507 — the copy that bought nothing

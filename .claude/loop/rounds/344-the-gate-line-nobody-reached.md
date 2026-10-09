@@ -5,6 +5,7 @@ packages: [rpc_dart_isolate]
 lens: RPC-11
 bench: none
 commit: yes
+severity: S1
 ---
 
 # Round 344 — the gate line nobody reached

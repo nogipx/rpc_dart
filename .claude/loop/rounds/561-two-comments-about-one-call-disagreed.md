@@ -7,6 +7,7 @@ bench: none — both items are settled by reading the call's own documented cont
 budget: probes 0/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 561 — two comments about one call disagreed

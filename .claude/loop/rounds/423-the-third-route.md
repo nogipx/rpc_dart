@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-94 — new
 commit: yes
+severity: S3
 ---
 
 # Round 423 — the third route

@@ -6,6 +6,7 @@ lens: RPC-17
 bench: none — `.dart_tool/probe/audit_core_ep/credit_probe2.dart` (client stream, depth and stall point as arguments)
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 711 — pre-bind requests credited once

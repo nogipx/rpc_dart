@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-07
 bench: P-81 — new
 commit: yes
+severity: S2
 ---
 
 # Round 392 — a hundred characters, two hundred bytes

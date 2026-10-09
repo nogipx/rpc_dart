@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-04
 bench: P-127 — new
 commit: yes
+severity: S2
 ---
 
 # Round 488 — a frame that names no method cannot open a call

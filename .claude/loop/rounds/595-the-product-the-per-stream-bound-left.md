@@ -7,6 +7,7 @@ bench: P-211 — reused
 budget: probes 0/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 595 — the product the per-stream bound left

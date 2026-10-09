@@ -7,6 +7,7 @@ bench: P-203 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 583 — the row the table was missing

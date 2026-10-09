@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-05
 bench: P-22 — new
 commit: yes
+severity: S1
 ---
 
 # Round 271 — the stream opened before the request existed

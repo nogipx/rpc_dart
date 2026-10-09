@@ -7,6 +7,7 @@ bench: none — the instrument is `loop.py next` and its own output, run before 
 budget: probes 0/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record. Approved 10 of 10
 commit: yes
+severity: S0
 ---
 
 # Round 232 — the selector read an archive as a decision

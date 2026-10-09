@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-15
 bench: P-108 — reused
 commit: yes
+severity: S1
 ---
 
 # Round 457 — my own premise was false

@@ -7,6 +7,7 @@ bench: none — the witness round-trips the trimmed message on VM and node
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 630 — half a character

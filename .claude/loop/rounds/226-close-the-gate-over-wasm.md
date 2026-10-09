@@ -7,6 +7,7 @@ bench: none — the instrument is a planted lint and the gate's own exit code, r
 budget: probes 0/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record. Approved 9 of 10, A1 not applicable (no attacker/victim; this is a build gate)
 commit: yes
+severity: S0
 ---
 
 # Round 226 — close the gate over wasm

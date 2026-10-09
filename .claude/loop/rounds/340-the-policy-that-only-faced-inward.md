@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-10
 bench: P-38 — new
 commit: yes
+severity: S3
 ---
 
 # Round 340 — the policy that only faced inward

@@ -7,6 +7,7 @@ bench: P-182 — new
 budget: probes 1/5, canaries 0/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 557 — the comment named a zone that was not there

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-08
 bench: P-139 — new
 commit: yes
+severity: S2
 ---
 
 # Round 501 — the fallback nobody chose

@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-05
 bench: P-132 — new
 commit: yes
+severity: S2
 ---
 
 # Round 494 — minting is what a methodPath means

@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http, rpc_dart_http2, rpc_dart_websocket, rpc_dart
 lens: RPC-04
 bench: P-09 — reused
 commit: yes
+severity: S3
 ---
 
 # Round 430 — the guard the type walked past

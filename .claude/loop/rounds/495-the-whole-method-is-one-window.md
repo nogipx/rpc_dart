@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-19
 bench: P-133 — new
 commit: yes
+severity: S2
 ---
 
 # Round 495 — the whole method is one window

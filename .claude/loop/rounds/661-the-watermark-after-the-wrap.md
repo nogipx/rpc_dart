@@ -6,6 +6,7 @@ lens: RPC-03
 bench: P-228 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 661 — the watermark after the wrap

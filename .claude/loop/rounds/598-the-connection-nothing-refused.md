@@ -7,6 +7,7 @@ bench: none — the cap is a count of connections, read and asserted directly by
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 598 — the connection nothing refused

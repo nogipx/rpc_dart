@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 301 — the language server saw it too

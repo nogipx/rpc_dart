@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-144 — new
 commit: yes
+severity: S2
 ---
 
 # Round 506 — the limit that waited for the payload

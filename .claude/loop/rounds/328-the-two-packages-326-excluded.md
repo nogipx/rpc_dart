@@ -5,6 +5,7 @@ packages: [rpc_dart_generator, rpc_dart_wasm]
 lens: RPC-26
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 328 — the two packages 326 excluded

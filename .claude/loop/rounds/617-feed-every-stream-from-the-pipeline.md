@@ -7,6 +7,7 @@ bench: P-219 — reused
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 617 — feed every stream from the pipeline

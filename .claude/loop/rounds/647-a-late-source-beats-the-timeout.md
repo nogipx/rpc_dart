@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; the coverage-review probe i
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 647 — a late source beats the timeout

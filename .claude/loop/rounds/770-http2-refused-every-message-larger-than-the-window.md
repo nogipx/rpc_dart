@@ -6,6 +6,7 @@ lens: RPC-08
 bench: P-270 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 770 — http2 refused every message larger than the window

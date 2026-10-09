@@ -6,6 +6,7 @@ lens: RPC-20
 bench: none — a Chrome test reading the worker's connection credit, run against a dart2js worker and a dart2wasm module worker (`.dart_tool/probe/zz_grant_wasm_test.dart.txt`, artefacts in `.dart_tool/probe/isolate_wasm_worker/`)
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 704 — the window grant reaches a module worker

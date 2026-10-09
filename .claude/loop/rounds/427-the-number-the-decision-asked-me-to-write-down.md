@@ -5,6 +5,7 @@ packages: [rpc_dart_compression]
 lens: RPC-07
 bench: P-34 — reused
 commit: yes
+severity: S1
 ---
 
 # Round 427 — the number the decision asked me to write down

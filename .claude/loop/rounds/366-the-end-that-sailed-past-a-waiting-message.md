@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-58 — new
 commit: yes
+severity: S1
 ---
 
 # Round 366 — the end that sailed past a waiting message

@@ -5,6 +5,7 @@ packages: [rpc_dart_log, rpc_dart_compression, rpc_dart_opentelemetry, rpc_dart_
 lens: RPC-26
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 326 — three packages had no lints at all

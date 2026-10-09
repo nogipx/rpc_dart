@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-15
 bench: none
 commit: no
+severity: S1
 ---
 
 # Round 248 — the obvious fix for B-22 is wrong

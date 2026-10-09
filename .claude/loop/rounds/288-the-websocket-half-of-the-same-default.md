@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-22
 bench: P-35 — new
 commit: yes
+severity: S2
 ---
 
 # Round 288 — the websocket half of the same default

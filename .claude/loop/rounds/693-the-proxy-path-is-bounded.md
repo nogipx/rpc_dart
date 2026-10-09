@@ -6,6 +6,7 @@ lens: RPC-09
 bench: none — a new test against a proxy that answers CONNECT and then stays silent, `packages/transport/rpc_dart_http2/test/a_silent_tunnel_is_bounded_test.dart`
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 693 — the proxy path is bounded

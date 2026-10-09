@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-08
 bench: P-159 — new
 commit: yes
+severity: S2
 ---
 
 # Round 523 — the knob that is off by sixteen

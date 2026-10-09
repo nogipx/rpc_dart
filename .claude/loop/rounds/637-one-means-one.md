@@ -7,6 +7,7 @@ bench: none — the witness reads each side's outcome for one and for two messag
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 637 — one means one

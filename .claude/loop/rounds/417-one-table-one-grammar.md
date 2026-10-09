@@ -7,6 +7,7 @@ bench: none — both defects are a DISAGREEMENT between two written-down answers
   read off the source; the confirmation is three ablations, each restoring one
   of the old answers and failing a named witness
 commit: yes
+severity: S2
 ---
 
 # Round 417 — one table, one grammar

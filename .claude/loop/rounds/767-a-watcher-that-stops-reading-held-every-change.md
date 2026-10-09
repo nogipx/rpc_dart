@@ -6,6 +6,7 @@ lens: RPC-18
 bench: P-267 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 767 — a watcher that stops reading held every change

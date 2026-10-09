@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-98 — new
 commit: yes
+severity: S2
 ---
 
 # Round 444 — the one merge site the reserved-header sweep never reached

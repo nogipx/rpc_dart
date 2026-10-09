@@ -7,6 +7,7 @@ bench: P-178 — reused
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: breaking
+severity: S1
 ---
 
 # Round 550 — a queue depth for an object

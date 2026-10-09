@@ -6,6 +6,7 @@ lens: RPC-28
 bench: P-273 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 773 — the documented reconnect factory waited forever

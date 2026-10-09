@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-06
 bench: none — the witness needs the sandbox process killed from the HOST, and the process could not be identified on the emulator in five runs
 commit: yes
+severity: S2
 ---
 
 # Round 493 — the instrument is built, the kill is not

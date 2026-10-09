@@ -7,6 +7,7 @@ bench: none — the observable added here IS the instrument, and the canary is w
 budget: probes 0/5, canaries 2/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 564 — the unreported map, and a vacuous zero

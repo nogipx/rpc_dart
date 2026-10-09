@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-60 — new
 commit: yes
+severity: S3
 ---
 
 # Round 369 — OK over three of seventeen

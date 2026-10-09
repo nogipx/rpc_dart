@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a new device test, `example/integration_test/guest_timer_order_test.dart`, and a guest method for it
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 687 — guest timers fire in deadline order

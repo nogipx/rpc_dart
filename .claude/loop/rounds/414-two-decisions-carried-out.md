@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket, rpc_dart_http2]
 lens: RPC-08
 bench: P-88 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 414 — two decisions carried out

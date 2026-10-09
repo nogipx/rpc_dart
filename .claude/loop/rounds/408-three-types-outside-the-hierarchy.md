@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-15
 bench: P-92 — new
 commit: yes
+severity: S2
 ---
 
 # Round 408 — three types outside the hierarchy

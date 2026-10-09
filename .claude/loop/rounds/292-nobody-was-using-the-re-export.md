@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-04
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 292 — nobody was using the re-export

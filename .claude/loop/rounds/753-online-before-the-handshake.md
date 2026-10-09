@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-258 — new
 commit: yes
 release: none
+severity: S2
 ---
 
 # Round 753 — online before the handshake

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-135 — new
 commit: yes
+severity: S1
 ---
 
 # Round 497 — vary the limit to see whether it is the limit

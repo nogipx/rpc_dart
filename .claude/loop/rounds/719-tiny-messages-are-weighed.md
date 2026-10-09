@@ -6,6 +6,7 @@ lens: RPC-17
 bench: P-235 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 719 — tiny messages are weighed

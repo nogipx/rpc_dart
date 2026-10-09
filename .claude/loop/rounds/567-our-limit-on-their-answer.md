@@ -7,6 +7,7 @@ bench: P-189 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 567 — our limit on their answer

@@ -7,6 +7,7 @@ bench: P-156 — reused
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 606 — eight timers for disposers that cannot hang

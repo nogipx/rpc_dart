@@ -7,6 +7,7 @@ bench: P-158 — reused
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 628 — the reconnect nobody asked for

@@ -7,6 +7,7 @@ bench: P-136 — reused
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 548 — no deadline, no bound

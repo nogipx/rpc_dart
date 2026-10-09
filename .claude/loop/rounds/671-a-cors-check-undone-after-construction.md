@@ -6,6 +6,7 @@ lens: RPC-22
 bench: none — a direct read of applyTo/handlePreflight output for each claim; the file is `rpc_dart_http/.dart_tool/probe/b153_cors_claims.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 671 — a CORS check undone after construction

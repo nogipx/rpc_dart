@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — a new test against a self-signed TLS server behind an in-test CONNECT proxy, `packages/transport/rpc_dart_http2/test/tls_through_a_proxy_test.dart`
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 692 — TLS through a proxy reaches the server

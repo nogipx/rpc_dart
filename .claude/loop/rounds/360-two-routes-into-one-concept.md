@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-51 — new
 commit: yes
+severity: S2
 ---
 
 # Round 360 — two routes into one concept

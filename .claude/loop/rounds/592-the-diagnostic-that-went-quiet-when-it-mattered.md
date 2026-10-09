@@ -7,6 +7,7 @@ bench: none — the lead forbids starting with a reproduction under load and pre
 budget: probes 0/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 592 — the diagnostic that went quiet when it mattered

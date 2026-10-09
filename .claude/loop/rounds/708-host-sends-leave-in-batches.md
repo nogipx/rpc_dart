@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — the device probe from round 707 (`.dart_tool/probe/zz_probe_frame_rate.dart.txt`), 2000 frames of about 1 KiB each way plus a 10000-frame burst of tiny ones, on the Android emulator
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 708 — host sends leave in batches

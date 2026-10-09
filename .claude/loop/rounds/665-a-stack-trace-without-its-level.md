@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — the witness test drives the bridge's console channel exactly as the plugins send it
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 665 — a stack trace without its level

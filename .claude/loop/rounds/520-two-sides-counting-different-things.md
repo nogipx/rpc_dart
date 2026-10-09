@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-05
 bench: P-157 — new
 commit: yes
+severity: S2
 ---
 
 # Round 520 — two sides counting different things

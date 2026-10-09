@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-14
 bench: P-152 — new
 commit: yes
+severity: S3
 ---
 
 # Round 514 — the drain waited for a tick

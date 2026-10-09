@@ -6,6 +6,7 @@ lens: RPC-17
 bench: none — `.dart_tool/probe/parity_matrix.dart`, group 7 (volume and pace), five transports
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 710 — the window fits the buffer

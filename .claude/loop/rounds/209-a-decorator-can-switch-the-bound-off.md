@@ -7,6 +7,7 @@ bench: P-03 — new
 budget: probes 0/3, canaries 1/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record, the bench and the canary; approved 10 of 10
 commit: yes
+severity: S1
 ---
 
 # Round 209 — a decorator that declares a capability can switch the bound off

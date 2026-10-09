@@ -7,6 +7,7 @@ bench: P-160 — reused
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 602 — the name only one side could say

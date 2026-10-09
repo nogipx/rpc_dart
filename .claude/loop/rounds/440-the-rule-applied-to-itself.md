@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is the count, plus a repo-wide
   sweep for the damage pattern round 439 introduced
 commit: yes
+severity: S0
 ---
 
 # Round 440 — the rule applied to itself

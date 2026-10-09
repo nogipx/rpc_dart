@@ -7,6 +7,7 @@ bench: none — the witness reads the parser's own answer and each shape's statu
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 629 — a header with nothing after it

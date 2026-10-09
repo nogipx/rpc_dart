@@ -6,6 +6,7 @@ lens: RPC-17
 bench: none — `.dart_tool/probe/audit_h1/oversize.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 714 — an oversized h1 stream is cancelled

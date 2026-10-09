@@ -7,6 +7,7 @@ bench: P-14 — new
 budget: probes 1/3, canaries 1/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record. Approved 7 of 7
 commit: yes
+severity: S1
 ---
 
 # Round 235 — the one hop nobody guarded

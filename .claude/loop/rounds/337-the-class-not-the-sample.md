@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_framework, rpc_dart_http, rpc_dart_http2]
 lens: RPC-23
 bench: P-36 — new
 commit: yes
+severity: S3
 ---
 
 # Round 337 — the class, not the sample

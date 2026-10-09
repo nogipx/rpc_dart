@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — `packages/core/rpc_dart/test/endpoint/request_metadata_edges_test.dart`, five new cases
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 697 — connection headers are refused on send

@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-22
 bench: P-52 — new
 commit: yes
+severity: S2
 ---
 
 # Round 361 — the only place to authenticate

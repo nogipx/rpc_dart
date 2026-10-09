@@ -6,6 +6,7 @@ lens: RPC-22
 bench: P-284 — reused
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 795 — a peer's invalid input was logged as our fault

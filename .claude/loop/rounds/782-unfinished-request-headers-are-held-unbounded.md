@@ -6,6 +6,7 @@ lens: RPC-18
 bench: P-277 — new
 commit: yes
 release: none
+severity: S1
 ---
 
 # Round 782 — unfinished request headers are held unbounded

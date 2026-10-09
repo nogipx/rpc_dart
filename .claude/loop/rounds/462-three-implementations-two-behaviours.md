@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http, rpc_dart_http2]
 lens: RPC-25
 bench: P-111 — new
 commit: yes
+severity: S3
 ---
 
 # Round 462 — three implementations, two behaviours, four sites

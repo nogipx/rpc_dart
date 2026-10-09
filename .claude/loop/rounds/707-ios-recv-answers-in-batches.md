@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a device probe, 2000 frames of about 1 KiB each way, three rounds (`example/integration_test/zz_probe_frame_rate.dart`, untracked; a copy in `.dart_tool/probe/zz_probe_frame_rate.dart.txt`), and a guest method `Kilobytes` for it
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 707 — iOS recv answers in batches

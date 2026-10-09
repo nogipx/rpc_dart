@@ -7,6 +7,7 @@ bench: P-208 — reused
 budget: probes 0/5, canaries 3/5
 commit: yes
 release: none
+severity: S0
 ---
 
 # Round 589 — every arm ablated

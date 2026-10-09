@@ -7,6 +7,7 @@ bench: none — both defects are a capability that EXISTS and cannot be reached
   from where it is needed; the evidence is two ablations, each restoring the
   unreachable version and failing a named witness
 commit: yes
+severity: S2
 ---
 
 # Round 418 — the drain the interface could not ask for

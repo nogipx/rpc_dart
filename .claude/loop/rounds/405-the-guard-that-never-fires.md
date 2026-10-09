@@ -5,6 +5,7 @@ packages: [rpc_dart_http2, rpc_dart_websocket]
 lens: RPC-19
 bench: P-90 — new
 commit: yes
+severity: S2
 ---
 
 # Round 405 — the guard that never fires

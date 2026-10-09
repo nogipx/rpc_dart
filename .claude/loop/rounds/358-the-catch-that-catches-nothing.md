@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-13
 bench: P-49 — new
 commit: yes
+severity: S1
 ---
 
 # Round 358 — the catch that catches nothing

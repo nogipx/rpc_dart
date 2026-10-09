@@ -6,6 +6,7 @@ lens: RPC-21
 bench: P-257 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 752 — a dead worker reads healthy

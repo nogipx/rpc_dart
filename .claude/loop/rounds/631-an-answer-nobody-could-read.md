@@ -7,6 +7,7 @@ bench: none — the witness reads the type and status every shape's caller recei
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 631 — an answer nobody could read

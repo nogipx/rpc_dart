@@ -6,6 +6,7 @@ lens: RPC-07
 bench: none — a Chrome probe, 20 unary calls of 1 MiB host-to-worker, three rounds, dart2js and dart2wasm (`.dart_tool/probe/zz_bytes_bench_test.dart.txt`, `zz_bytes_bench_w_test.dart.txt`)
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 706 — worker bytes cross as one block

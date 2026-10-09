@@ -6,6 +6,7 @@ lens: RPC-25
 bench: P-285 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 791 — a cancelled client stream was a warning per call

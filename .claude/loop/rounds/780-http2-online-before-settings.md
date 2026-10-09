@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-275 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 780 — http2 online before settings

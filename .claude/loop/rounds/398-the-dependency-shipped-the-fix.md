@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-15
 bench: P-73 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 398 — the dependency shipped the fix

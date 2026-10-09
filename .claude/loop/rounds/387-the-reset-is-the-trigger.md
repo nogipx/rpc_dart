@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-18
 bench: P-78 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 387 — the reset is the trigger, and both easy guards are dead

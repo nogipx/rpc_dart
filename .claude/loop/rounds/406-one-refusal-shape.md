@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket, rpc_dart_http2]
 lens: RPC-25
 bench: P-90 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 406 — one refusal shape, and the half that could not ship

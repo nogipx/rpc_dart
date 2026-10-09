@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 295 — the invariant, not the evidence

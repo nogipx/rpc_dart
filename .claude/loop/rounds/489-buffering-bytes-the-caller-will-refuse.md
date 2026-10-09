@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-17
 bench: P-128 — new
 commit: yes
+severity: S1
 ---
 
 # Round 489 — buffering bytes the caller will refuse

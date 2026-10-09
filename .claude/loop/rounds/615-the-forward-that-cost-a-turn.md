@@ -7,6 +7,7 @@ bench: P-219 — new
 budget: probes 5/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 615 — the forward that cost a turn

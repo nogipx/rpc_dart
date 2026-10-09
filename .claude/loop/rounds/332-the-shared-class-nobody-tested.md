@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 332 — the shared class nobody tested

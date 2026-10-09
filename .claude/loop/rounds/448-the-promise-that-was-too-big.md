@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-102 — new
 commit: yes
+severity: S2
 ---
 
 # Round 448 — the promise that was too big

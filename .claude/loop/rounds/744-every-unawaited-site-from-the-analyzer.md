@@ -6,6 +6,7 @@ lens: RPC-13
 bench: P-248 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 744 — every unawaited site, from the analyzer

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-149 — new
 commit: yes
+severity: S3
 ---
 
 # Round 511 — forty per cent of a call is entropy

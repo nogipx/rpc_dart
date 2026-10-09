@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-20
 bench: P-64 — new
 commit: yes
+severity: S1
 ---
 
 # Round 373 — the subscription that never reached the server

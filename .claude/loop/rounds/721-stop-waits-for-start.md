@@ -6,6 +6,7 @@ lens: RPC-21
 bench: P-237 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 721 — stop waits for start

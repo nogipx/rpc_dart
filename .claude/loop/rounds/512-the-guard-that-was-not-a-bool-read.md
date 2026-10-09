@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-150 — new
 commit: yes
+severity: S3
 ---
 
 # Round 512 — the guard that was not a bool read

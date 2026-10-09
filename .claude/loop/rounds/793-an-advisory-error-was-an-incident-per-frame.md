@@ -6,6 +6,7 @@ lens: RPC-22
 bench: P-286 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 793 — an advisory error was an incident per frame

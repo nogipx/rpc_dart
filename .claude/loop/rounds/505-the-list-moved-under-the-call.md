@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-16
 bench: P-143 — new
 commit: yes
+severity: S2
 ---
 
 # Round 505 — the list moved under the call

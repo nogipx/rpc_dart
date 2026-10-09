@@ -5,6 +5,7 @@ packages: [rpc_dart_isolate, rpc_dart_websocket]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S2
 ---
 
 # Round 310 — the lens applied after all

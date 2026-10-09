@@ -7,6 +7,7 @@ bench: P-222 — new
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 620 — a floor the format sets

@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http2]
 lens: RPC-19
 bench: none — the evidence is a classification of all 83 raw sites plus two named tests that failed on the first, incomplete fix
 commit: yes
+severity: S2
 ---
 
 # Round 411 — a programming error doing wire duty

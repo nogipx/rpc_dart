@@ -7,6 +7,7 @@ bench: P-193 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: breaking
+severity: S1
 ---
 
 # Round 572 — reconnect crashed before it stranded anyone

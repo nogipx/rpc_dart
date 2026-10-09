@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-15
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 267 — the documentation B-23 was hiding

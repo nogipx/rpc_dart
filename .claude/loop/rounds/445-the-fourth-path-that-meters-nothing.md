@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-99 — new
 commit: yes
+severity: S1
 ---
 
 # Round 445 — the fourth path that meters nothing

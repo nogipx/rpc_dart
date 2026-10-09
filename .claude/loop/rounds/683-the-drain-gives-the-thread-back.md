@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a device probe (`integration_test/zz_probe_burst.dart`, untracked) and the device suite
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 683 — the drain gives the thread back

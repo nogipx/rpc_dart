@@ -6,6 +6,7 @@ lens: RPC-22
 bench: P-284 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 790 — a malformed request was a log line per call

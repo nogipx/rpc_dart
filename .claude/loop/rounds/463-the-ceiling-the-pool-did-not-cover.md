@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-05
 bench: P-112 — new
 commit: yes
+severity: S2
 ---
 
 # Round 463 — the ceiling the connection pool did not cover

@@ -7,6 +7,7 @@ bench: P-211 — reused
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 609 — one window counted twice

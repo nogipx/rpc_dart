@@ -7,6 +7,7 @@ bench: P-09 — reused
 budget: probes 0/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered against the record and the bench; approved 9 of 10, Q6 n/a (nothing shipped, so no canary)
 commit: no
+severity: S1
 ---
 
 # Round 218 — generation tagging cannot work, and the measurement says so

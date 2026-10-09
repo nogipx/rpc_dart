@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-23
 bench: P-60 — reused
 commit: yes
+severity: S3
 ---
 
 # Round 375 — the count that answers the wrong question

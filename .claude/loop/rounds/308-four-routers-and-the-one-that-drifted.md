@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http, rpc_dart_http2]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S2
 ---
 
 # Round 308 — four routers, and the one that drifted

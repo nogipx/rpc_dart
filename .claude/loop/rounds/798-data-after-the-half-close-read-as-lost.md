@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-289 — new
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 798 — data after the half-close read as lost

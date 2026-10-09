@@ -6,6 +6,7 @@ lens: RPC-14
 bench: none — the witness round 584 could not build, now built: `rpc_dart_http/.dart_tool/probe/b223_slow_versus_stalled.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 673 — a slow upload is not a stalled one

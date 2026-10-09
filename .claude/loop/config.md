@@ -160,6 +160,34 @@ probes: 5
 canaries: 5
 round cap: 850
 
+Stop after this many rounds in a row with no `severity: S1`. The owner set it
+after the round-798 review: rounds 787-798 were log levels while four S1 waited
+on owner decisions.
+
+s1 drought: 25
+
+## Siblings
+
+Implementations of one contract. A FIXED round that changes a file of one
+member accounts for every member of its group in `## Siblings`
+(methods/siblings.md in the skill). Round 770 is why: http2 refused every
+message larger than its window while websocket and isolate carried it.
+
+```siblings
+transport/channel: packages/core/rpc_dart/lib/src/rpc/transports/**
+transport/http: packages/transport/rpc_dart_http/lib/**
+transport/http2: packages/transport/rpc_dart_http2/lib/**
+transport/websocket: packages/transport/rpc_dart_websocket/lib/**
+transport/isolate: packages/transport/rpc_dart_isolate/lib/**
+transport/wasm: packages/transport/rpc_dart_wasm/lib/**
+side/caller: packages/core/rpc_dart/lib/src/endpoint/caller_*.dart, packages/core/rpc_dart/lib/src/rpc/streams/*/caller.dart, packages/transport/*/lib/**/*caller*.dart, packages/transport/*/lib/**/*client*.dart
+side/responder: packages/core/rpc_dart/lib/src/endpoint/responder_*.dart, packages/core/rpc_dart/lib/src/rpc/streams/*/responder.dart, packages/transport/*/lib/**/*responder*.dart, packages/transport/*/lib/**/*server*.dart
+shape/unary: packages/core/rpc_dart/lib/src/rpc/streams/unary/**
+shape/client: packages/core/rpc_dart/lib/src/rpc/streams/client/**
+shape/server: packages/core/rpc_dart/lib/src/rpc/streams/server/**
+shape/bidirectional: packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**
+```
+
 ## Out of scope
 
 Publishing, versions, changelog, dependency floors, `publish:dry`, tags (the

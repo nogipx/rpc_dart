@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; the coverage-review probe i
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 641 — a request that cannot be sent

@@ -7,6 +7,7 @@ bench: none — both defects are a fact known at CONSTRUCTION that the code went
   somewhere destructive to rediscover, or never carried at all; the evidence is
   two ablations against named witnesses
 commit: yes
+severity: S2
 ---
 
 # Round 419 — asking is not the same as destroying

@@ -7,6 +7,7 @@ bench: none — the observable is the count of caller error records per failed c
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 605 — one failure, one record

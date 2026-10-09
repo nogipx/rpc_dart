@@ -6,6 +6,7 @@ lens: RPC-22
 bench: P-229 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 664 — a failed response keeps downloading

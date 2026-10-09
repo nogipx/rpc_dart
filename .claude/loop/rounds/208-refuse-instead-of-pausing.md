@@ -7,6 +7,7 @@ bench: P-02 — reused
 budget: probes 0/3, canaries 2/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record, the bench and both canaries; approved 10 of 10
 commit: yes
+severity: S1
 ---
 
 # Round 208 — refuse the stalled call instead of pausing the read

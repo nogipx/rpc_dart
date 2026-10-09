@@ -7,6 +7,7 @@ bench: none — the witness is the measurement: a round trip per typed list, on 
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 625 — every element kept only its low byte

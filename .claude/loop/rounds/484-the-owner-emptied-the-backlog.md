@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-06
 bench: none — an owner decision, not a measurement
 commit: yes
+severity: S1
 ---
 
 # Round 484 — the owner emptied the backlog

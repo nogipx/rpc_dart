@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-07
 bench: P-116 — new
 commit: yes
+severity: S1
 ---
 
 # Round 466 — the gap measured, and two public promises priced

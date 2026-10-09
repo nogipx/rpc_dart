@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: none — the evidence is a complete enumeration of eleven construction sites plus the status each now carries, asserted in the canary
 commit: yes
+severity: S2
 ---
 
 # Round 410 — three kinds, one status

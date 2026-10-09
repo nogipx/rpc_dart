@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-25
 bench: P-101 — new
 commit: yes
+severity: S1
 ---
 
 # Round 447 — the same loss, on the other frame

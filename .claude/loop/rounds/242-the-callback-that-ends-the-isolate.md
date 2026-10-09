@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-13
 bench: P-20 — new
 commit: yes
+severity: S1
 ---
 
 # Round 242 — the callback that ends the isolate

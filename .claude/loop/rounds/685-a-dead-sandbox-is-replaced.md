@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — a new gated kill probe (`example/integration_test/reload_after_sandbox_death_test.dart`) on round 684's rooted AVD
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 685 — a dead sandbox is replaced

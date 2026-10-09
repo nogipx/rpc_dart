@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-151 — new
 commit: yes
+severity: S3
 ---
 
 # Round 513 — the compression that grew the message

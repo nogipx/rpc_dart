@@ -7,6 +7,7 @@ bench: none — the observable is the count of error records per call, read by t
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 603 — every streaming answer was an incident

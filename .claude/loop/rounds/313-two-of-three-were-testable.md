@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http2]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 313 — two of the three were testable

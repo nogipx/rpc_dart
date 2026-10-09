@@ -6,6 +6,7 @@ lens: RPC-23
 bench: P-271 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 771 — a data error lost its status on the wire

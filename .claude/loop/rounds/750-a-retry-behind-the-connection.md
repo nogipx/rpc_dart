@@ -6,6 +6,7 @@ lens: RPC-08
 bench: P-254 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 750 — a retry behind the connection

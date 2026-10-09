@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; reviewer probes peer_middle
 budget: probes 2/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 659 — an interceptor with its own token

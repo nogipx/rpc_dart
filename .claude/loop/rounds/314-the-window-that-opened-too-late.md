@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-15
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 314 — the window that opened too late

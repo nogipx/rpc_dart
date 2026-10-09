@@ -6,6 +6,7 @@ lens: RPC-17
 bench: P-227 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 660 — metadata the policy accepts

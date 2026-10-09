@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-100 — new
 commit: yes
+severity: S2
 ---
 
 # Round 446 — the knob that only turned down

@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-258 — reused
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 779 — online only once the channel is ready

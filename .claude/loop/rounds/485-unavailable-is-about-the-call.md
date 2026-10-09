@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-19
 bench: P-124 — new
 commit: yes
+severity: S2
 ---
 
 # Round 485 — UNAVAILABLE is about the call, so ask the transport about the connection

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-29 — new
 commit: yes
+severity: S2
 ---
 
 # Round 279 — a header weighs more than its characters

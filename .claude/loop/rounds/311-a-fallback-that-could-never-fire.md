@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 311 — a fallback that could never fire

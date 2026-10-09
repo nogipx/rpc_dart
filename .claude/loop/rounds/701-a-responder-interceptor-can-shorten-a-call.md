@@ -6,6 +6,7 @@ lens: RPC-14
 bench: none — `packages/core/rpc_dart/test/endpoint/a_responder_interceptor_deadline_is_enforced_test.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 701 — a responder interceptor can shorten a call

@@ -7,6 +7,7 @@ bench: P-11 — new
 budget: probes 1/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks; the `loop.py review` prompt was answered against the record and the bench. Approved 10 of 10
 commit: yes
+severity: S1
 ---
 
 # Round 228 — the branch round 206 did not cover

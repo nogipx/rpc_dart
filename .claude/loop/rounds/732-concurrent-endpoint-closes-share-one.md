@@ -6,6 +6,7 @@ lens: RPC-21
 bench: P-243 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 732 — concurrent endpoint closes share one

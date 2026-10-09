@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-82 — new
 commit: yes
+severity: S2
 ---
 
 # Round 393 — two hundred listeners for one frame

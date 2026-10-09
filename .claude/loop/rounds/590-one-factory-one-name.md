@@ -7,6 +7,7 @@ bench: none — an API rename has no quantity to measure; the detector is `grep 
 budget: probes 0/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 590 — one factory, one name

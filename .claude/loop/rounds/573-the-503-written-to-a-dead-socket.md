@@ -7,6 +7,7 @@ bench: P-194 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 573 — the 503 written to a dead socket

@@ -7,6 +7,7 @@ bench: P-197 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 576 — the fix that cost more than the defect

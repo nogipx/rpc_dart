@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 315 — eight places for one rule

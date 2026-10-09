@@ -6,6 +6,7 @@ lens: RPC-27
 bench: P-265 — reused
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 765 — the log buffers are bounded in bytes

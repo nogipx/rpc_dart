@@ -6,6 +6,7 @@ lens: RPC-13
 bench: none — `.dart_tool/probe/audit_h2/h2c_silent.dart`, `tls_only.dart`, `tls_detach.dart`, `tls_detach2.dart`, `tls_firstbyte.dart`
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 712 — a silent h2 client

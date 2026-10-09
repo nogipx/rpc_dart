@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is the count, and a self-
   inflicted defect the round's own detector caught
 commit: yes
+severity: S0
 ---
 
 # Round 439 — the replace that matched a prefix

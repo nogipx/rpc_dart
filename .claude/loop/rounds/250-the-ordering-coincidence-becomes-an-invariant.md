@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-20
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 250 — the ordering coincidence becomes an invariant

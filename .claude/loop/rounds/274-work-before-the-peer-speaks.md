@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-22
 bench: P-25 — new
 commit: yes
+severity: S2
 ---
 
 # Round 274 — work before the peer speaks

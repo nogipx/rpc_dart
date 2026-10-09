@@ -7,6 +7,7 @@ bench: P-200 — new
 budget: probes 1/5, canaries 0/5
 commit: yes
 release: none
+severity: S3
 ---
 
 # Round 579 — the budget that was never doubled

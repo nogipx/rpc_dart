@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-156 — new
 commit: yes
+severity: S3
 ---
 
 # Round 519 — nine timers before the deadline

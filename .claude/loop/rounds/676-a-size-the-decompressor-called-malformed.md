@@ -6,6 +6,7 @@ lens: RPC-19
 bench: none — the parity matrix filed with the lead, `.dart_tool/probe/parity_matrix.dart` (row 5.stream-item-over-limit), re-run before and after
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 676 — a size the decompressor called malformed

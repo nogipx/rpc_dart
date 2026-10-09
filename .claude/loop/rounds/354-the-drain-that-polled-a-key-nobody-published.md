@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-25
 bench: P-46 — new
 commit: yes
+severity: S2
 ---
 
 # Round 354 — the drain polled a key nobody published

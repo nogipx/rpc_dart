@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-24
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 307 — seventeen promises nobody made

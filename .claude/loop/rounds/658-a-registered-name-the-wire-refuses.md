@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; reviewer probe peer_registr
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 658 — a registered name the wire refuses

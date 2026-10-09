@@ -7,6 +7,7 @@ bench: P-202 — new
 budget: probes 1/5, canaries 2/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 582 — two answers to one question

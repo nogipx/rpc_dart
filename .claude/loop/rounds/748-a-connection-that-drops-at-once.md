@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-252 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 748 — a connection that drops at once

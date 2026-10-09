@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-04
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 334 — the caller that logged to nobody

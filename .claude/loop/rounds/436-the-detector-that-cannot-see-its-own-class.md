@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is a census of the fixture
   class the lead's detector cannot enumerate, plus the gate
 commit: yes
+severity: S0
 ---
 
 # Round 436 — the detector that cannot see its own class

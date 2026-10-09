@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-15
 bench: P-170 — new
 commit: yes
+severity: S3
 ---
 
 # Round 537 — the drain that always threw

@@ -7,6 +7,7 @@ bench: none — a grep whose instrument is the sweep itself (`throw StateError`
   across 22 packages, 80 sites to 0) plus six ablations. The damage is a wrong
   STATUS on the wire, which is a classification and not a quantity
 commit: yes
+severity: S2
 ---
 
 # Round 416 — every error names its status, and no message is a contract

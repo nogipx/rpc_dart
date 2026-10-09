@@ -7,6 +7,7 @@ bench: none
 budget: probes 0/3, canaries 0/3
 review: self (record migrated into the schema; the round itself had no review)
 commit: yes
+severity: S1
 ---
 
 # Round 201 — a cancelled call told the server before telling itself

@@ -7,6 +7,7 @@ bench: P-175 — new
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: breaking
+severity: S1
 ---
 
 # Round 543 — the encoding nobody could perform

@@ -7,6 +7,7 @@ bench: none — the witness reads each call's grpc-status and the slot afterward
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 627 — a call with nothing in it

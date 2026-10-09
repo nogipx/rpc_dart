@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-08
 bench: P-160 — new
 commit: yes
+severity: S3
 ---
 
 # Round 525 — routable and uncallable

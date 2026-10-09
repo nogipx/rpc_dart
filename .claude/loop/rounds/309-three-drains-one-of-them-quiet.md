@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket, rpc_dart_http, rpc_dart_http2]
 lens: RPC-25
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 309 — three drains, one of them quiet

@@ -7,6 +7,7 @@ bench: P-181 — new
 budget: probes 1/5, canaries 4/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 553 — the parser knew all along

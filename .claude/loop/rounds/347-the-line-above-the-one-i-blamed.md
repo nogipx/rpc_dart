@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-13
 bench: P-42 — new
 commit: yes
+severity: S3
 ---
 
 # Round 347 — the line above the one I blamed

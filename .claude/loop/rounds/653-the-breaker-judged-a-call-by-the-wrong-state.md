@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; reviewer probes res2_breake
 budget: probes 3/5, canaries 3/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 653 — the breaker judged a call by the wrong state

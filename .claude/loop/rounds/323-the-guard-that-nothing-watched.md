@@ -5,6 +5,7 @@ packages: [rpc_dart_isolate]
 lens: RPC-14
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 323 — the guard that nothing watched

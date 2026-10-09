@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-07
 bench: P-71 — new
 commit: yes
+severity: S3
 ---
 
 # Round 383 — slicing the wire does not do it

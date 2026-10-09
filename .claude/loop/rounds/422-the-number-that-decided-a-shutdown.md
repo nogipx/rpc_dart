@@ -6,6 +6,7 @@ lens: RPC-25
 bench: none — four mechanics with no shared owner; the evidence is one ablation
   whose reading is the whole point, plus the sweep's own counts
 commit: yes
+severity: S3
 ---
 
 # Round 422 — the number that decided a shutdown

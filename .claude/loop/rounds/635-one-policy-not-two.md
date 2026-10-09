@@ -7,6 +7,7 @@ bench: P-216 — reused
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 635 — one policy, not two

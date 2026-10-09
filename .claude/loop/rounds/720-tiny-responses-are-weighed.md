@@ -6,6 +6,7 @@ lens: RPC-17
 bench: P-236 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 720 — tiny responses are weighed

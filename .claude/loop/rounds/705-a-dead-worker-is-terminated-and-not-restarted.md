@@ -6,6 +6,7 @@ lens: RPC-21
 bench: none — by reading, with the existing Chrome death test as the gate; neither change is observable through the public API
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 705 — a dead worker is terminated, and not restarted

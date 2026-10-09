@@ -6,6 +6,7 @@ lens: RPC-27
 bench: P-265 — new
 commit: yes
 release: none
+severity: S2
 ---
 
 # Round 764 — the collector counts records not bytes

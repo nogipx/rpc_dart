@@ -6,6 +6,7 @@ lens: RPC-25
 bench: P-241 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 728 — a failed test-app start rolls back

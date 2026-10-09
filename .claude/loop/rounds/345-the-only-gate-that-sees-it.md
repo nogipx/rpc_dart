@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-07
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 345 — the only gate that sees it

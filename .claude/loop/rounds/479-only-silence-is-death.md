@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-07
 bench: P-120 — new
 commit: yes
+severity: S1
 ---
 
 # Round 479 — only silence is death

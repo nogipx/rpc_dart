@@ -6,6 +6,7 @@ lens: RPC-13
 bench: none — B-39's own probe re-run unchanged, and what this round ADDED is a
   read of two construction sites rather than a number
 commit: yes
+severity: S1
 ---
 
 # Round 431 — the guard that guards nobody

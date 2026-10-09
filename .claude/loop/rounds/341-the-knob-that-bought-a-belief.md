@@ -5,6 +5,7 @@ packages: [rpc_dart_http, rpc_dart]
 lens: RPC-10
 bench: P-39 — new
 commit: yes
+severity: S2
 ---
 
 # Round 341 — the knob that bought a belief

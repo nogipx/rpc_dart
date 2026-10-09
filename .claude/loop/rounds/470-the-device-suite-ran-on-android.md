@@ -5,6 +5,7 @@ packages: [rpc_dart_wasm]
 lens: RPC-11
 bench: none — the bench is a device, and the instrument is the suite's own exit status
 commit: yes
+severity: S0
 ---
 
 # Round 470 — the device suite ran on Android, and it was red

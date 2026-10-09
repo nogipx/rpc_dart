@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-05
 bench: P-21 — new
 commit: yes
+severity: S2
 ---
 
 # Round 245 — the dimension round 236 excluded

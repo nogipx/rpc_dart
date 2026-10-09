@@ -6,6 +6,7 @@ lens: RPC-07
 bench: none — a dart2wasm probe in node (`.dart_tool/probe/b254_jsview.dart`) and the device suite
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 682 — a JS-backed view cannot be sliced

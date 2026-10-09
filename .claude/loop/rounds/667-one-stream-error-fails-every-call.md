@@ -6,6 +6,7 @@ lens: RPC-19
 bench: P-231 — new
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 667 — one stream's error failed every call beside it

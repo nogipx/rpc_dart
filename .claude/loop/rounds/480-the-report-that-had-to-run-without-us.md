@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-13
 bench: P-122 — new
 commit: yes
+severity: S3
 ---
 
 # Round 480 — the report that had to run without us

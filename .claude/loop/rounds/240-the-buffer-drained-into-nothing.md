@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-20
 bench: P-18 — new
 commit: yes
+severity: S1
 ---
 
 # Round 240 — the buffer drained into nothing

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-04
 bench: P-44 — new
 commit: yes
+severity: S1
 ---
 
 # Round 352 — the wrapper that declared nothing

@@ -7,6 +7,7 @@ bench: none — the witness checks where each shape's error arrives
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S3
 ---
 
 # Round 632 — the error before the Future

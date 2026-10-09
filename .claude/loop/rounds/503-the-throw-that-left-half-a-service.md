@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-21
 bench: P-141 — new
 commit: yes
+severity: S2
 ---
 
 # Round 503 — the throw that left half a service

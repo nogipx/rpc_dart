@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_http]
 lens: RPC-15
 bench: P-97 — new
 commit: yes
+severity: S2
 ---
 
 # Round 429 — two of three were already done

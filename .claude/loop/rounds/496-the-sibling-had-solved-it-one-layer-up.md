@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-134 — new
 commit: yes
+severity: S2
 ---
 
 # Round 496 — the sibling had solved it one layer up

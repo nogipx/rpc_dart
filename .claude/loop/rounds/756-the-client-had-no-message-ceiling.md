@@ -6,6 +6,7 @@ lens: RPC-18
 bench: P-261 — new
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 756 — the client had no message ceiling

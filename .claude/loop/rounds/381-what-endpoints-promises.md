@@ -5,6 +5,7 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-23
 bench: none — the owner's decision was doc-only; the measurement that justified it is round 354's, not re-taken here
 commit: yes
+severity: S3
 ---
 
 # Round 381 — what `endpoints` promises

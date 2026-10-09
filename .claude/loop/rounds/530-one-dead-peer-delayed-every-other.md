@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-14
 bench: P-163 — new
 commit: yes
+severity: S2
 ---
 
 # Round 530 — one dead peer delayed every other

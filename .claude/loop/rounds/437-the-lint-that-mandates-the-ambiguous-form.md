@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is that the swept directory is
   now 100% fixture and the list matches C-47 exactly, plus the gate
 commit: yes
+severity: S0
 ---
 
 # Round 437 — the lint that mandates the ambiguous form

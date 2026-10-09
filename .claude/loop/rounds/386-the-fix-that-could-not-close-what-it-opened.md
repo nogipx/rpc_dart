@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-79 — new
 commit: yes
+severity: S1
 ---
 
 # Round 386 — the fix that could not close what it opened

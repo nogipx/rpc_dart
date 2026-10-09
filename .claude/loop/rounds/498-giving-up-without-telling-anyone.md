@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-136 — new
 commit: yes
+severity: S2
 ---
 
 # Round 498 — giving up without telling anyone

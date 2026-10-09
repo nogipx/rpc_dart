@@ -6,6 +6,7 @@ lens: RPC-18
 bench: none — `.dart_tool/probe/audit_ws/ping_server.dart` + `ping_attacker.dart <port> 10 pongs`, two processes
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 713 — pings are rate-limited

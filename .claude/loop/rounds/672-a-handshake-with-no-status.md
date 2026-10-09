@@ -6,6 +6,7 @@ lens: RPC-15
 bench: none — a direct read of reconnect() and of a failed TLS call; `rpc_dart_http/.dart_tool/probe/b152_caller_items.dart`
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 672 — a handshake with no status

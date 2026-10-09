@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-02
 bench: none
 commit: yes
+severity: S2
 ---
 
 # Round 349 — the refusal that could not fit

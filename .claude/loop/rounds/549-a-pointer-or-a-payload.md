@@ -7,6 +7,7 @@ bench: P-178 — new
 budget: probes 1/5, canaries 0/5
 commit: yes
 release: none
+severity: S1
 ---
 
 # Round 549 — a pointer, or a payload

@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; reviewer probe res2_backoff
 budget: probes 1/5, canaries 0/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 655 — a zero base delay sleeps the maximum

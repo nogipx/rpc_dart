@@ -7,6 +7,7 @@ bench: none — the witness reads RSS across 300 packed chunks; the audit's prob
 budget: probes 2/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S1
 ---
 
 # Round 636 — the byte that held a megabyte

@@ -5,6 +5,7 @@ packages: [rpc_dart_websocket]
 lens: RPC-23
 bench: none
 commit: yes
+severity: S3
 ---
 
 # Round 300 — a class doc that documented a function

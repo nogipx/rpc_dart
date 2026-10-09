@@ -7,6 +7,7 @@ bench: none — three decided leads, each a place where the code answered a
   question it had not been asked; the evidence is three ablations against named
   witnesses
 commit: yes
+severity: S2
 ---
 
 # Round 420 — three decisions that invented a result

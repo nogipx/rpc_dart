@@ -6,6 +6,7 @@ lens: RPC-23
 bench: P-162 — new
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 528 — the code the peer never sent

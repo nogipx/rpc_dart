@@ -6,6 +6,7 @@ lens: RPC-23
 bench: none — a translation sweep; the evidence is a count taken on three axes
   the lead had not separated, plus the gate
 commit: yes
+severity: S0
 ---
 
 # Round 435 — the half that ships

@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-15
 bench: P-11 — reused
 commit: no
+severity: S1
 ---
 
 # Round 249 — the mark works, and was reverted

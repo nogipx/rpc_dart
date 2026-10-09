@@ -5,6 +5,7 @@ packages: [rpc_dart_http2]
 lens: RPC-25
 bench: P-78 — reused
 commit: yes
+severity: S2
 ---
 
 # Round 388 — the reset the dependency already sends

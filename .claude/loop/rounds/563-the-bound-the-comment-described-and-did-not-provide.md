@@ -7,6 +7,7 @@ bench: P-186 — new
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 563 — the bound the comment described and did not provide

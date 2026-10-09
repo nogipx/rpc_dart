@@ -7,6 +7,7 @@ bench: P-01 — new
 budget: probes 2/3, canaries 3/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record and the probes rather than by a subagent; approved 10 of 10, one qualification on Q3 (the counter lives in the bench, what it counts is a library event)
 commit: yes
+severity: S1
 ---
 
 # Round 206 — connection credit is never repaid for bytes nobody consumed

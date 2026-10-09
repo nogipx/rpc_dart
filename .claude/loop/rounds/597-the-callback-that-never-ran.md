@@ -7,6 +7,7 @@ bench: none — construction-time behaviour, read off the code and witnessed by 
 budget: probes 0/5, canaries 0/5
 commit: yes
 release: breaking
+severity: S2
 ---
 
 # Round 597 — the callback that never ran

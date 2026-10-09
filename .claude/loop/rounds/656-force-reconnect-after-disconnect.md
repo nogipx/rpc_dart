@@ -7,6 +7,7 @@ bench: none — the witness test is the measurement; reviewer probe res2_force_r
 budget: probes 1/5, canaries 1/5
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 656 — forceReconnect after disconnect

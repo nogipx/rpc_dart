@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-17
 bench: P-147 — new
 commit: yes
+severity: S3
 ---
 
 # Round 509 — the wrapper around an empty list

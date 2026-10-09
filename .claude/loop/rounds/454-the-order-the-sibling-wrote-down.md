@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-25
 bench: P-106 — new
 commit: yes
+severity: S2
 ---
 
 # Round 454 — the order the sibling wrote down

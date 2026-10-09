@@ -7,6 +7,7 @@ bench: P-05 — new
 budget: probes 0/3, canaries 0/3
 review: self — the session forbids the Agent tool unless the user asks, so the `loop.py review` prompt was answered in full against the record and the bench; approved 9 of 10, Q6 is n/a (no fix, so no canary)
 commit: no
+severity: S2
 ---
 
 # Round 213 — a slow handler is killed, not throttled

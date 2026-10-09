@@ -6,6 +6,7 @@ lens: RPC-06
 bench: none — the committed kill probe (`example/integration_test/idle_sandbox_death_test.dart`), driven to a kill for the first time
 commit: yes
 release: changelog
+severity: S2
 ---
 
 # Round 684 — a killed sandbox is reported

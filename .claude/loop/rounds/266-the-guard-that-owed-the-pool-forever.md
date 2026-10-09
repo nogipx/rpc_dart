@@ -5,6 +5,7 @@ packages: [rpc_dart]
 lens: RPC-05
 bench: P-11 — reused
 commit: yes
+severity: S1
 ---
 
 # Round 266 — the guard that owed the pool forever

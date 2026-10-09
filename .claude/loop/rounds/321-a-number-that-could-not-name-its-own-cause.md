@@ -5,6 +5,7 @@ packages: [rpc_dart_http]
 lens: RPC-15
 bench: none
 commit: yes
+severity: S0
 ---
 
 # Round 321 — a number that could not name its own cause
