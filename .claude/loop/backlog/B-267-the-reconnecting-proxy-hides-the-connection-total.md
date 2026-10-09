@@ -5,7 +5,7 @@ commit: ad501d86
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/r762_proxy_hides_total.dart
 reason: risk — a flow-control-ignoring peer only, bounded at 2x the window; the forwarding fix needs a per-charge handle the interface lacks
-rank: 4
+rank: 3
 ---
 
 # B-267 — the reconnecting proxy hides the connection total
