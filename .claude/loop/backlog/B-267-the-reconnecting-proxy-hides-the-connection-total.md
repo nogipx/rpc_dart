@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 778)
 round: 762
 commit: ad501d86
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
@@ -52,4 +52,6 @@ built.
 
 ## Owner decision
 
-—
+2026-10-09: accept the 2x bound and close. Honest peers cannot reach it
+(round 762), and a peer ignoring flow control behind a client's own
+reconnecting connection is rare; the bound still holds.
