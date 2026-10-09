@@ -21,6 +21,13 @@ final class _UnaryStreamState {
   String? clientAcceptEncoding;
   String? clientRequestEncoding;
 
+  /// An empty payload frame was accepted and the request is still awaited.
+  ///
+  /// [handleMessage] waits after an empty chunk, and the parser buffers
+  /// nothing — so without this flag [isAwaitingRequest] reads false while the
+  /// responder is in fact waiting, and the half-close is answered by nobody.
+  bool awaitingAfterEmptyChunk = false;
+
   /// Reassembly parser for THIS stream's request frames.
   ///
   /// [RpcMessageParser] carries a buffer between invocations, so it belongs
@@ -564,6 +571,12 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           // Not handled after all: the next fragment must be let through, and
           // the state (which owns the parser and its buffer) must survive.
           state.requestHandled = false;
+          // An empty chunk leaves the parser holding nothing, so this is the
+          // only record that the responder is waiting. Without it
+          // isAwaitingRequest reads false, the half-close reaches no branch
+          // that answers, and the stream holds its slot until the peer
+          // disconnects.
+          if (message.payload!.isEmpty) state.awaitingAfterEmptyChunk = true;
           if (_logger.isInternal) {
             _logger.internal(
               'Request frame incomplete, awaiting the rest [streamId: $streamId]',
@@ -697,10 +710,14 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   /// is running. Answering the peer on that reading closes the responder out from
   /// under its own handler, which is silent, because a closed responder writes
   /// nothing.
+  /// Both ways the responder can be waiting are read here. An empty chunk is
+  /// awaited too ([handleMessage]), and it buffers nothing, so the parser alone
+  /// answered false for a stream that was waiting all the same.
   bool isAwaitingRequest(int streamId) {
     final state = _streamStates[streamId];
     if (state == null || state.requestHandled) return false;
-    return state.parser?.holdsPartialFrame ?? false;
+    return (state.parser?.holdsPartialFrame ?? false) ||
+        state.awaitingAfterEmptyChunk;
   }
 
   /// Answers a peer that half-closed while a frame was still incomplete.
@@ -713,9 +730,20 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     final state = _streamStates[streamId];
     if (state == null || state.requestHandled) return;
     state.requestHandled = true;
+    // Two ways to get here, and they are different malformed requests: bytes
+    // that stop mid-frame, and a frame carrying no bytes at all. One message
+    // for both would misreport whichever it did not describe.
+    final partial = state.parser?.holdsPartialFrame ?? false;
+    final detail = partial
+        ? 'Request stream closed mid-message: the last gRPC frame is incomplete'
+        : 'Request stream closed after an empty payload frame, with no request '
+              'message';
     _logger.warning(
-      'Client half-closed mid-frame [streamId: $streamId]; the last gRPC frame '
-      'is incomplete',
+      partial
+          ? 'Client half-closed mid-frame [streamId: $streamId]; the last gRPC '
+                'frame is incomplete'
+          : 'Client half-closed after an empty payload frame '
+                '[streamId: $streamId]; no request message arrived',
     );
     try {
       if (!state.initialHeadersSent) {
@@ -729,9 +757,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         streamId,
         RpcMetadata.forTrailer(
           RpcStatus.invalidArgument,
-          message:
-              'Request stream closed mid-message: the last gRPC frame is '
-              'incomplete',
+          message: detail,
           maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
         ),
         endStream: true,
