@@ -6,9 +6,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_websocket/io.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
-import 'package:stream_channel/stream_channel.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'contract/log_responder.dart';
 import 'contract/messages.dart';
@@ -64,7 +63,6 @@ class LogCollectorServer {
 
   HttpServer? _httpServer;
   RpcWebSocketServer? _rpcServer;
-  StreamController<WebSocketChannel>? _wsController;
   int _nextSessionId = 1;
   final Map<int, LogCollectorSession> _sessions = {};
   final Map<RpcResponderEndpoint, LogCollectorSession> _endpointSessions = {};
@@ -107,34 +105,8 @@ class LogCollectorServer {
 
   Future<void> _start() async {
     _httpServer = await HttpServer.bind(host, port);
-    _wsController = StreamController<WebSocketChannel>();
-
-    _httpServer!.listen((request) {
-      if (WebSocketTransformer.isUpgradeRequest(request)) {
-        WebSocketTransformer.upgrade(request).then(
-          (socket) {
-            final channel = _WebSocketAdapter(socket);
-            _wsController!.add(channel);
-          },
-          // A failed client upgrade is noteworthy but not fatal: log it and
-          // keep serving. Logged to stderr rather than `controller` because the
-          // controller is the collected-records pipeline, not a server diagnostic.
-          onError: (Object error) {
-            stderr.writeln(
-              'LogCollectorServer: WebSocket upgrade failed: $error',
-            );
-          },
-        );
-      } else {
-        request.response
-          ..statusCode = HttpStatus.badRequest
-          ..write('WebSocket upgrade required')
-          ..close();
-      }
-    });
-
     _rpcServer = RpcWebSocketServer(
-      connections: _wsController!.stream,
+      connections: rpcWebSocketConnections(_httpServer!),
       onEndpointCreated: _onEndpointCreated,
     );
     await _rpcServer!.start();
@@ -151,7 +123,6 @@ class LogCollectorServer {
       // start() reports its own failure.
     }
     await _rpcServer?.stop();
-    await _wsController?.close();
     await _httpServer?.close(force: true);
     _httpServer = null;
     _rpcServer = null;
@@ -219,58 +190,4 @@ class LogCollectorServer {
       }
     }
   }
-}
-
-/// Adapter to wrap a dart:io [WebSocket] as a [WebSocketChannel].
-///
-/// This is needed because [RpcWebSocketServer] expects
-/// `Stream<WebSocketChannel>` but [WebSocketTransformer.upgrade]
-/// returns a raw [WebSocket].
-class _WebSocketAdapter
-    with StreamChannelMixin<dynamic>
-    implements WebSocketChannel {
-  final WebSocket _socket;
-
-  _WebSocketAdapter(this._socket);
-
-  @override
-  Stream<dynamic> get stream => _socket;
-
-  @override
-  WebSocketSink get sink => _WebSocketSinkAdapter(_socket);
-
-  @override
-  int? get closeCode => _socket.closeCode;
-
-  @override
-  String? get closeReason => _socket.closeReason;
-
-  @override
-  String? get protocol => _socket.protocol;
-
-  @override
-  Future<void> get ready => Future.value();
-}
-
-class _WebSocketSinkAdapter implements WebSocketSink {
-  final WebSocket _socket;
-
-  _WebSocketSinkAdapter(this._socket);
-
-  @override
-  void add(dynamic data) => _socket.add(data);
-
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) =>
-      _socket.addError(error, stackTrace);
-
-  @override
-  Future<void> addStream(Stream<dynamic> stream) => _socket.addStream(stream);
-
-  @override
-  Future<void> close([int? closeCode, String? closeReason]) =>
-      _socket.close(closeCode, closeReason);
-
-  @override
-  Future<void> get done => _socket.done;
 }

@@ -374,7 +374,9 @@ HH:MM:SS [DeviceLabel] LEVEL scope.name  message  err=...  trace=...  key=val
 
 ## Transport and protocol
 
-- WebSocket transport (`rpc_dart_websocket`)
+- WebSocket transport (`rpc_dart_websocket`), upgraded through
+  `rpcWebSocketConnections`: no compression, a 30 s keepalive ping, and a
+  message larger than the default policy admits (16 MiB) closes the connection
 - CBOR codec via `rpc_dart` contracts
 - Messages: `LogCollectorHandshake` → `LogCollectorWelcome`, then stream of `LogCollectorRecord` → `LogCollectorAck`
 - MCP: plain JSON-RPC 2.0 over HTTP POST (no SSE, no streaming)
