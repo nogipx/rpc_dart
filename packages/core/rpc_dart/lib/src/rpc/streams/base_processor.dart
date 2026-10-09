@@ -268,7 +268,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
           final encoding =
               _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding);
           if (RpcGrpcCompression.isIdentity(encoding)) {
-            throw RpcStatusException(
+            throw RpcPeerFaultException(
               RpcStatus.internal,
               'Compressed gRPC payload received without grpc-encoding',
             );
@@ -1032,7 +1032,7 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
           decompressor: (payload, {int? maxOutputBytes}) {
             final encoding = _peerGrpcEncoding;
             if (RpcGrpcCompression.isIdentity(encoding)) {
-              throw RpcStatusException(
+              throw RpcPeerFaultException(
                 RpcStatus.internal,
                 'Compressed gRPC payload received without grpc-encoding',
               );

@@ -97,7 +97,13 @@ typedef _Run = ({
 });
 
 /// [calls] calls of [method], each carrying [payload], then a half-close.
-Future<_Run> _run(String method, Uint8List payload, {int calls = 10}) async {
+/// [encoding] goes out as the request's `grpc-encoding`.
+Future<_Run> _run(
+  String method,
+  Uint8List payload, {
+  int calls = 10,
+  String? encoding,
+}) async {
   final controller = LogController(minLevel: RpcLogLevel.warning);
   final errors = <String>[];
   final warnings = <String>[];
@@ -122,10 +128,16 @@ Future<_Run> _run(String method, Uint8List payload, {int calls = 10}) async {
   });
   for (var k = 0; k < calls; k++) {
     final id = 1 + 2 * k;
+    final request = RpcMetadata.forClientRequest('Svc', method);
     chan.feed(
       RpcChannelFrame.encodeMetadata(
         streamId: id,
-        metadata: RpcMetadata.forClientRequest('Svc', method),
+        metadata: encoding == null
+            ? request
+            : RpcMetadata([
+                ...request.headers,
+                RpcHeader(RpcHeaders.grpcEncoding, encoding),
+              ], methodPath: '/Svc/$method'),
       ),
     );
     await Future<void>.delayed(Duration.zero);
@@ -167,6 +179,38 @@ void main() {
       expect(r.errors, isEmpty);
       expect(r.statuses, {'${RpcStatus.internal}'});
     });
+
+    test(
+      '$method: a corrupt compression flag is answered, not an error',
+      () async {
+        final r = await _run(method, Uint8List.fromList([2, 0, 0, 0, 1, 0]));
+        expect(r.errors, isEmpty);
+        expect(r.statuses, {'${RpcStatus.internal}'});
+      },
+    );
+
+    test(
+      '$method: compressed with no grpc-encoding is answered, not an error',
+      () async {
+        final r = await _run(method, Uint8List.fromList([1, 0, 0, 0, 1, 0]));
+        expect(r.errors, isEmpty);
+        expect(r.statuses, {'${RpcStatus.internal}'});
+      },
+    );
+
+    test(
+      '$method: a gzip body that does not inflate is answered, not an error',
+      () async {
+        final r = await _run(
+          method,
+          Uint8List.fromList([1, 0, 0, 0, 4, 1, 2, 3, 4]),
+          encoding: 'gzip',
+        );
+        expect(r.errors, isEmpty);
+        expect(r.statuses, {'${RpcStatus.internal}'});
+      },
+      testOn: 'vm',
+    );
 
     test('GUARD $method: a handler that crashes is still an error', () async {
       final r = await _run(method, crash);

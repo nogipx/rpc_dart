@@ -119,7 +119,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
           if (RpcGrpcCompression.isIdentity(encoding)) {
             // INTERNAL: the peer set the compressed bit and named no encoding,
             // which is a protocol violation no retry can fix.
-            throw RpcStatusException(
+            throw RpcPeerFaultException(
               RpcStatus.internal,
               'Compressed gRPC payload received without grpc-encoding',
             );

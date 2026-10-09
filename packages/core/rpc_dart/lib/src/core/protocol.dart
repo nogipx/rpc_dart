@@ -151,8 +151,10 @@ abstract interface class RpcMessageFrame {
   /// limit", so a corrupt frame came back retryable — measured, `grpc-status 8`
   /// for a compression flag of 2.
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
+    // Both refusals are the PEER's malformed prefix (IRpcPeerFault): INTERNAL
+    // on the wire, as gRPC answers it, but not a fault of this side.
     if (headerBytes.length < RpcConstants.messagePrefixSize) {
-      throw RpcStatusException(
+      throw RpcPeerFaultException(
         RpcStatus.internal,
         'Invalid gRPC message header length',
       );
@@ -161,7 +163,7 @@ abstract interface class RpcMessageFrame {
     final compressionFlag = headerBytes[RpcConstants.compressionFlagIndex];
     if (compressionFlag != RpcConstants.noCompression &&
         compressionFlag != RpcConstants.compressed) {
-      throw RpcStatusException(
+      throw RpcPeerFaultException(
         RpcStatus.internal,
         'Invalid compression flag in gRPC message: $compressionFlag',
       );

@@ -128,7 +128,7 @@ final class UnaryCaller<TRequest, TResponse> {
       decompressor: (payload, {int? maxOutputBytes}) {
         final encoding = peerGrpcEncoding;
         if (RpcGrpcCompression.isIdentity(encoding)) {
-          throw RpcStatusException(
+          throw RpcPeerFaultException(
             RpcStatus.internal,
             'Compressed gRPC payload received without grpc-encoding',
           );

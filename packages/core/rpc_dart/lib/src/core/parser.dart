@@ -313,7 +313,7 @@ final class RpcMessageParser {
             // codec that signals its limit some other way, and this catch
             // cannot tell those apart. grpc-go answers a decompression failure
             // INTERNAL too.
-            throw RpcStatusException(
+            throw RpcPeerFaultException(
               RpcStatus.internal,
               'Compressed gRPC payload could not be decompressed: it is '
               'malformed, or it expands beyond the configured limit '
