@@ -11,7 +11,7 @@ reason: "REFUTED in round 596: the wrapper forwards only what the core broadcast
 
 Split out of B-117, which round 508 closed by skipping the global broadcast for a message
 already delivered to its own per-stream controller. Bench
-`../probes/P-146-how-many-times-is-a-frame-dispatched.md`.
+`../probes/P-146-what-the-second-dispatch-costs.md`.
 
 **Only the core channel transport was varied.** `RpcWebSocketCallerTransport._attach`
 listens to the inner transport's `incomingMessages` and re-adds every message into its own

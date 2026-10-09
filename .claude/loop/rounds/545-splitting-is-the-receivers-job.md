@@ -138,7 +138,7 @@ question is always whether the siblings agree, and here they agree by having dif
 
 ## Links
 
-Lead `../backlog/archive/B-200-the-response-split-cuts-standard-headers.md` — closed by this
+Lead `../backlog/B-200-the-response-split-cuts-standard-headers.md` — closed by this
 round; its owner decision is what the fix carries out.
 Bench `../probes/P-173-do-repeated-metadata-values-survive.md` — reused; one arm added for a
 repeated custom key.

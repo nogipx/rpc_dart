@@ -241,7 +241,7 @@ bad frame, still open       200    200    200      200  grpc-status 8
 The refusal is also where a running call has to be ENDED, not only where state
 is released: the parse error reaches an upload handler's request stream but
 nothing closes it, so the handler sat in its `await for` with the stream already
-answered. `../rounds/397-the-refusal-that-kept-the-stream.md`, `../probes/P-84`.
+answered. `../rounds/397-the-refusal-that-kept-the-stream.md`, `../probes/P-84-what-a-refused-stream-leaves.md`.
 
 **Round 277 aimed it at the canonical instance and came back CLEAN.** HTTP/2
 Rapid Reset (CVE-2023-44487) is this shape exactly — a stream opened and reset

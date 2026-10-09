@@ -184,7 +184,7 @@ it cannot be measured (A2).
 
 ## Links
 
-Lead `../backlog/archive/B-195-the-window-is-much-looser-than-its-number.md` — CLOSED: the
+Lead `../backlog/B-195-the-window-is-much-looser-than-its-number.md` — CLOSED: the
 decision is carried out and its premise refuted.
 Lead `../backlog/B-218-the-other-half-closes-are-unmeasured.md` — new, what this round did not
 cover.

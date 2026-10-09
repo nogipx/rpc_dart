@@ -197,9 +197,9 @@ compression, and `test:web` is not in the config's gate sequence. Filed as B-211
 
 ## Links
 
-Lead `../backlog/archive/B-199-a-reused-peer-id-defeats-the-stale-id-guard.md` — closed by this
+Lead `../backlog/B-199-a-reused-peer-id-defeats-the-stale-id-guard.md` — closed by this
 round; its owner decision is what the fix carries out.
-Lead `../backlog/archive/B-211-the-web-target-has-been-red-since-round-513.md` — new; round 543
+Lead `../backlog/B-211-the-web-target-has-been-red-since-round-513.md` — new; round 543
 closed it and corrected its diagnosis, which blamed the test for a library defect.
 Lead `../backlog/B-212-the-streaming-shapes-tail-cleanup-is-unmeasured.md` — new.
 Bench `../probes/P-174-what-a-reused-peer-id-answers.md` — new.

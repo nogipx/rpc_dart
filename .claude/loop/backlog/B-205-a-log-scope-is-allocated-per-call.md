@@ -11,7 +11,7 @@ reason: "CLEAN in round 608: the five per-call derivations cost 228 ns of a 66.8
 
 Split out of B-121, which round 512 closed after caching the resolved level per scope, so
 `isInternal` is no longer a linear scan over scope overrides. Bench
-`../probes/P-150-what-does-a-log-guard-cost.md`.
+`../probes/P-150-what-the-log-guard-costs.md`.
 
 **The half nothing varied.** `child()` and `withContext()` build a new `LogScope` and
 concatenate its name on every call, at `UnaryCaller`, `StreamProcessor`, `CallProcessor`

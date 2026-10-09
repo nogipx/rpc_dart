@@ -11,7 +11,7 @@ reason: "CLEAN in round 622, closed by the owner on the attribution: the endpoin
 
 Split out of B-118, which round 509 closed after making the middleware helpers return the
 source stream unchanged when no middleware is registered. Bench
-`../probes/P-147-what-does-a-streaming-message-pay.md`.
+`../probes/P-147-what-an-empty-middleware-wrapper-costs.md`.
 
 **What remains, and where.** Roughly 4.4 us per message in layers the parent lead also
 named and round 509 did not touch: `handleServerStream`, `_withHandlerSlotStream`,

@@ -137,7 +137,7 @@ caller's, and the library no longer has an opinion.
 
 ## Links
 
-Lead `../backlog/archive/B-107-hidden-sixty-second-timeouts.md` — closed by this round; its owner
+Lead `../backlog/B-107-hidden-sixty-second-timeouts.md` — closed by this round; its owner
 decision is what the fix carries out.
 Bench `../probes/P-136-what-bounds-a-call-with-no-deadline.md` — reused; its no-deadline rows now
 read the probe's own budget.

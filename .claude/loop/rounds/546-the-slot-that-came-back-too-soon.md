@@ -150,7 +150,7 @@ disagreeing, and this closes the gap by moving the client, not both.
 
 ## Links
 
-Lead `../backlog/archive/B-128-the-client-active-stream-count-ends-at-half-close.md` — closed by
+Lead `../backlog/B-128-the-client-active-stream-count-ends-at-half-close.md` — closed by
 this round; its owner decision is what the fix carries out.
 Bench `../probes/P-157-what-the-client-ceiling-counts.md` — reused, reproduced at today's sha.
 Bench `../probes/P-177-does-every-ending-return-the-slot.md` — new, for the opposite failure.

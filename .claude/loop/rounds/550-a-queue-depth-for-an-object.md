@@ -149,7 +149,7 @@ costs it nothing.
 
 ## Links
 
-Lead `../backlog/archive/B-106-zero-copy-has-no-backpressure.md` — closed by this round.
+Lead `../backlog/B-106-zero-copy-has-no-backpressure.md` — closed by this round.
 Lead `../backlog/B-217-the-connection-wide-buffer-has-no-depth.md` — new.
 Bench `../probes/P-178-minting-against-holding.md` — reused; its consumer moved to the per-stream
 path and a bounded arm added.

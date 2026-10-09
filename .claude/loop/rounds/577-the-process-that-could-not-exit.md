@@ -110,7 +110,7 @@ machine loaded past that it would read as a leak.
 Lead `../backlog/B-155-isolate-spawn-failure-leaks-ports.md` — CLOSED.
 Lead `../backlog/B-162-isolate-web-ondone-starts-the-entrypoint.md` — the web spawn path, untouched.
 Bench `../probes/P-198-does-a-failed-spawn-let-the-process-exit.md` — new.
-Lens `../lenses/RPC-13-unhandled-async-error-class.md` — `applied: [577]`.
+Lens `../lenses/RPC-13-unhandled-async-error.md` — `applied: [577]`.
 Lesson: none. `measurement.md` item 6 is what the rig error cost, and it is already written; the
 instance is recorded above because the failure mode — a bench whose own resource reproduces the
 symptom — is worth a reader's time.

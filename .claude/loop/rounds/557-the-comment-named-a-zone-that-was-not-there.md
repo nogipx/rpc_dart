@@ -124,7 +124,7 @@ calls in this transport drop futures was not swept; this round answered the site
 
 ## Links
 
-Lead `../backlog/archive/B-178-http2-discard-connection-lets-an-error-reach-the-zone.md` — CLOSED:
+Lead `../backlog/B-178-http2-discard-connection-lets-an-error-reach-the-zone.md` — CLOSED:
 severity refuted, prose fixed.
 Bench `../probes/P-182-where-terminate-s-error-lands.md` — new.
 Round `556-no-published-core-satisfies-any-floor.md` — whose open grading question picked this lead.

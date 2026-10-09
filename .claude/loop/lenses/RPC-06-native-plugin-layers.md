@@ -110,7 +110,7 @@ Chrome. One had booted earlier in the same session.
 
 > **The lens applies to the round, not only to the code.** Its whole point is
 > that compiling is not running; a round that stops at compiling and ships
-> anyway has failed its own detector. `../backlog/archive/B-38-ios-recv-loop-dies-silently.md`
+> anyway has failed its own detector. `../backlog/B-38-ios-recv-loop-dies-silently.md`
 > holds the patch so the next round with a device spends its time measuring
 > rather than rediscovering.
 
@@ -152,7 +152,7 @@ of up to 4 MiB per drain — and the measurement says it is not the cost:
 
 Reverted, not shipped. `../probes/P-53-android-main-thread-during-transfer.md`
 (`broken` by its own ablation),
-`../backlog/archive/B-41-android-base64-on-the-main-thread.md`,
+`../backlog/B-41-android-base64-on-the-main-thread.md`,
 `../rounds/362-the-thread-was-not-the-cost.md`.
 
 ## Round 363 — one platform answers the Ask and the other cannot
@@ -187,7 +187,7 @@ today. Mutating the REAL glue, on Android:
 > runs in Kotlin and Swift; a trimmed `hasPrefix` means the same thing in both,
 > which no two regex engines guarantee. That is what let the Android measurement
 > carry any weight at all for the unrun Swift half — an argument recorded as
-> `../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md` rather than passed off as
+> `../backlog/B-42-ios-strip-failfast-unwitnessed.md` rather than passed off as
 > evidence.
 
 `../probes/P-54-unstripped-module-syntax.md`,

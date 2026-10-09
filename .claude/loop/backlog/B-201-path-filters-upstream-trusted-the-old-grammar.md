@@ -12,7 +12,7 @@ reason: "CLEAN in round 613: rpc_dart_http refuses /a/b.c with a policy (400) an
 Split out of B-113, which round 504 closed after fixing the collision: `/a.b/c` and
 `/a/b.c` no longer resolve to the same method key, because the service and method
 grammars are now separate (`kServiceTokenPattern` allows a dot, `kMethodTokenPattern`
-does not). Bench `../probes/P-142-do-two-paths-collide.md`.
+does not). Bench `../probes/P-142-which-paths-reach-one-method.md`.
 
 **What the fix cannot reach.** Anything upstream that matched on the path STRING while
 both forms reached one method — a reverse-proxy rule, a gateway ACL, an access-log

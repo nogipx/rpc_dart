@@ -158,7 +158,7 @@ this; named in B-213 as the smaller remaining question.
 
 ## Links
 
-Lead `../backlog/archive/B-111-the-rate-limiter-global-is-not-global.md` — closed by this
+Lead `../backlog/B-111-the-rate-limiter-global-is-not-global.md` — closed by this
 round; its owner decision is what the fix carries out.
 Lead `../backlog/B-213-the-rate-limiter-resolves-its-counters-per-message.md` — new.
 Bench `../probes/P-140-what-the-rate-limiter-admits.md` — reused; five original arms repeated

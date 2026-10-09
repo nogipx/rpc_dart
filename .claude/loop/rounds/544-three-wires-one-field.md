@@ -155,7 +155,7 @@ question from this one and nothing here asks it.
 
 ## Links
 
-Lead `../backlog/archive/B-209-two-layers-count-different-bytes-for-one-limit.md` — closed by
+Lead `../backlog/B-209-two-layers-count-different-bytes-for-one-limit.md` — closed by
 this round, with its decision revised by the owner on the measurement.
 Bench `../probes/P-176-which-wire-does-max-metadata-bytes-mean.md` — new.
 Bench `../probes/P-159-is-metadata-bounded-in-total.md` — the lead's own bench, which measured

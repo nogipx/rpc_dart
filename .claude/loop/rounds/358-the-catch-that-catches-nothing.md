@@ -129,8 +129,8 @@ are worth deciding together.
 
 Lens `../lenses/RPC-13-unhandled-async-error.md`, eighth application.
 Bench `../probes/P-49-send-into-a-dead-socket.md`, new.
-Lead `../backlog/archive/B-39-websocket-send-throws-into-the-root-zone.md`, new; sibling
-of `../backlog/archive/B-35-finish-throws-into-the-zone.md`.
+Lead `../backlog/B-39-websocket-send-throws-into-the-root-zone.md`, new; sibling
+of `../backlog/B-35-finish-throws-into-the-zone.md`.
 Round `../rounds/353-reported-not-fatal-was-half-true.md`, whose fixture hit this
 first and left it named.
 Catalog shape U-17.

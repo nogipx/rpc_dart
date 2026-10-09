@@ -11,7 +11,7 @@ reason: "FIXED in round 620 by the owner's choice: a gzip payload no longer than
 
 Split out of B-122, which round 513 closed the growth half: `compressIfSmaller` sends the
 smaller of the two, so a 32 B payload no longer leaves as 62 B, with the crossover between
-192 and 256 B. Bench `../probes/P-151-does-compression-ever-make-a-message-bigger.md`.
+192 and 256 B. Bench `../probes/P-151-does-compression-make-a-message-bigger.md`.
 
 **The fix trades size for CPU, and the trade is unmeasured.** Compression still RUNS on
 every payload; the comparison only decides what to send. So a small message now costs a

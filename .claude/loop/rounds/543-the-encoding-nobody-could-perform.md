@@ -192,7 +192,7 @@ removes one cause. It is not shown to make the target deterministic, and nothing
 it from load. Filed as B-215 with the sequence above, to be re-measured on a quiet machine.
 
 ## Links
-Lead `../backlog/archive/B-211-the-web-target-has-been-red-since-round-513.md` — closed, and
+Lead `../backlog/B-211-the-web-target-has-been-red-since-round-513.md` — closed, and
 its own diagnosis corrected: filed as a test defect, and the library was at fault.
 Lead `../backlog/B-214-compare-and-keep-smaller-has-no-web-arm.md` — new.
 Lead `../backlog/B-215-the-chrome-suites-fail-differently-every-run.md` — new; the only red

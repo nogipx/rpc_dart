@@ -36,8 +36,8 @@ Attach `.catchError` (or actually zone-guard it) and fix the comment.
 
 ## Outcome (round 557) — severity REFUTED, prose CONFIRMED and fixed
 
-`../../rounds/557-the-comment-named-a-zone-that-was-not-there.md`. Bench
-`../../probes/P-182-where-terminate-s-error-lands.md`.
+`../rounds/557-the-comment-named-a-zone-that-was-not-there.md`. Bench
+`../probes/P-182-where-terminate-s-error-lands.md`.
 
 ```
   CONTROL healthy, future discarded            nothing escaped

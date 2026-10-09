@@ -118,6 +118,6 @@ direct channel was ever driven.
 ## Links
 
 Lead `../backlog/B-174-in-memory-payload-aliasing-and-close-asymmetry.md` — CLOSED.
-Lead `../backlog/B-224-...` — closed in 589, and this round found a sixth member of its
+Lead `../backlog/B-224-the-wire-byte-window-test-flakes-under-the-gates-concurrency.md` — closed in 589, and this round found a sixth member of its
 family in `rpc_dart_websocket`.
 Lens `../lenses/RPC-24-public-by-omission.md` — `applied: [590]`.

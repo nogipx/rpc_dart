@@ -170,7 +170,7 @@ more route.
 
 ## Links
 
-Lead `../backlog/archive/B-126-unary-assumes-one-message-per-transport-frame.md` — CLOSED after
+Lead `../backlog/B-126-unary-assumes-one-message-per-transport-frame.md` — CLOSED after
 three attempts.
 Bench `../probes/P-181-which-branch-took-the-fragment.md` — new.
 Bench `../probes/P-155-does-unary-survive-a-fragmented-frame.md` — reused.

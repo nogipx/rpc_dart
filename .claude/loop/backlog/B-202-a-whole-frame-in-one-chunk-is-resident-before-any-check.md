@@ -12,7 +12,7 @@ reason: "FIXED in round 611: an unfinished message (fragments, no FIN) was buffe
 Split out of B-115, which round 506 closed by moving the metadata-size check ABOVE the
 "do I have the whole payload" return, so an oversized metadata frame is refused from its
 header rather than after it is buffered. Bench
-`../probes/P-144-when-is-an-oversized-metadata-frame-refused.md`.
+`../probes/P-144-how-much-is-held-before-the-refusal.md`.
 
 **The case that fix cannot reach.** On `dart:io`'s WebSocket a message arrives as a
 SINGLE chunk, so the peak is resident before `RpcFrameMultiplexedChannel` sees a byte —

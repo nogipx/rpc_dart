@@ -158,8 +158,8 @@ unreleased http2 endpoint, two failures away from the code that caused them.
 
 ## Attempt 3 (round 553) — CLOSED, and the blocker was a getter
 
-`../../rounds/553-the-parser-knew-all-along.md`. Benches
-`../../probes/P-181-which-branch-took-the-fragment.md` (new) and `P-155` (reused).
+`../rounds/553-the-parser-knew-all-along.md`. Benches
+`../probes/P-181-which-branch-took-the-fragment.md` (new) and `P-155` (reused).
 
 **The distinction attempt 2 needed was already inside the parser.** Every refusal path calls
 `clear()` before it throws, so leftover bytes mean "incomplete" and nothing else:

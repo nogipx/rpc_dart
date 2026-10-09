@@ -14,7 +14,8 @@ process in `SKILL.md`, the file schemas in `specs/`, the working methods in
 - **Round** — what was done, with which numbers, and what proves it?
   `rounds/NNN-*.md`.
 - **Lead** — what has not been done yet, and why? `backlog/B-NN-*.md`, open
-  ones ordered by `rank:`; closed ones in `backlog/archive/`.
+  ones ordered by `rank:`. A closed lead stays here with `status: closed`:
+  it is the record that the question was answered.
 - **Negative** — what has been checked and must not be re-run?
   `checked/C-NN-*.md`.
 - **Bench** — what the measurement ran on, and what proves it can see the
@@ -81,7 +82,7 @@ target or to measure?** Then it belongs here, whatever else also mentions it.
   correct: inventing a file that does not exist is not allowed.
 - **Rounds 251-265 have no files either.** They were one investigation, B-22,
   and their findings are in that lead,
-  `backlog/archive/B-22-paused-consumer-never-repays-the-pool.md`, which names
+  `backlog/B-22-paused-consumer-never-repays-the-pool.md`, which names
   them by number. The commits are in git.
 - **Records marked `(not re-measured)`** were carried over from private memory
   and have not been reproduced since.

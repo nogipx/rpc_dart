@@ -59,7 +59,7 @@ signal has to cross that boundary — which is the same seam round 547 crossed f
 
 ## Outcome (round 554) — FIXED, in one place, for all three shapes
 
-`../../rounds/554-one-rule-where-the-parser-is.md`. Bench `P-155`, reused unchanged.
+`../rounds/554-one-rule-where-the-parser-is.md`. Bench `P-155`, reused unchanged.
 
 ```
    unary         status 3   (round 553)
@@ -88,3 +88,7 @@ separately, with unary unaffected, which is what confirms this lead's claim that
 independent.
 
 Bidi is fixed by construction and measured by nothing; that column goes to B-218.
+
+## Owner decision
+
+—

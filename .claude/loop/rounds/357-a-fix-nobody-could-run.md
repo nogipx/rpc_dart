@@ -58,7 +58,7 @@ allowlist, so nothing available here can start it.
 
 ## Mechanism
 
-Written up in full in `../backlog/archive/B-38-ios-recv-loop-dies-silently.md`, along
+Written up in full in `../backlog/B-38-ios-recv-loop-dies-silently.md`, along
 with the fix, because the fix is worth more than the round.
 
 ## After
@@ -105,5 +105,5 @@ rejection with the runtime alive — the same shape WebKit produces on its own.
 Lens `../lenses/RPC-06-native-plugin-layers.md` — `applied:` gains 357, as every
 verdict does; its STATUS is unchanged, because an INCONCLUSIVE round confirms
 nothing. The lens's own Ask is what produced this verdict.
-Lead `../backlog/archive/B-38-ios-recv-loop-dies-silently.md`, new, reason "bench".
+Lead `../backlog/B-38-ios-recv-loop-dies-silently.md`, new, reason "bench".
 Catalog shapes U-13 and U-14 — the fix exists on the sibling platform.

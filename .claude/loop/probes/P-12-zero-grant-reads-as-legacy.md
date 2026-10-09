@@ -43,7 +43,7 @@ off rather than one that was merely loose; 16 KiB afterwards is exactly the
 seeded initial window, which is what says the sender is now spending only what
 it had before the peer spoke.
 
-Lead: `../backlog/archive/B-05-isolate-null-credit-silent.md`.
+Lead: `../backlog/B-05-isolate-null-credit-silent.md`.
 
 ## Reading
 

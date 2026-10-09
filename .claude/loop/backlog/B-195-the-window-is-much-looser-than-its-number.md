@@ -96,8 +96,8 @@ text has to reach.
 
 ## Outcome (round 552) — CLOSED, and this lead's premise was the artefact
 
-`../../rounds/552-the-window-was-off-not-loose.md`. Bench
-`../../probes/P-180-what-the-window-actually-charges.md`.
+`../rounds/552-the-window-was-off-not-loose.md`. Bench
+`../probes/P-180-what-the-window-actually-charges.md`.
 
 **The window is exact, and the overshoot was this lead's own probe.** It charges WIRE bytes:
 `66 messages x 993 B = 65 538` against a 65 536-byte window, and the sweep reads 15 B/msg at
@@ -121,6 +121,6 @@ the only record such a stream exists, so `_onGrant` then discarded every grant a
 ended call. `tryConsume`'s seed hid it completely at the defaults. FIXED; the doc the decision
 asked for now describes measured behaviour in every configuration.
 
-What is left is in `../B-218-the-other-half-closes-are-unmeasured.md`: the client-stream
+What is left is in `B-218-the-other-half-closes-are-unmeasured.md`: the client-stream
 and bidi shapes, and what a decoded backlog actually costs — the quantity an operator reading
 this field cares about, and the one nothing here measures.

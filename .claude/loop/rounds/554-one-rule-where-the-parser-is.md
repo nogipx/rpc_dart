@@ -130,7 +130,7 @@ on every shape. This answers a half-close; it does not invent an idle-stream tim
 
 ## Links
 
-Lead `../backlog/archive/B-216-a-server-stream-hangs-on-a-truncated-frame.md` — CLOSED.
+Lead `../backlog/B-216-a-server-stream-hangs-on-a-truncated-frame.md` — CLOSED.
 Lead `../backlog/B-218-the-other-half-closes-are-unmeasured.md` — the bidi column goes here.
 Bench `../probes/P-155-does-unary-survive-a-fragmented-frame.md` — reused, unchanged.
 Round `553-the-parser-knew-all-along.md` — built `holdsPartialFrame`, which this round spends.
