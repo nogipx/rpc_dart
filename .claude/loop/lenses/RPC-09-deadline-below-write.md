@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751]
-status: swept here (round 743, a94aca2c)
+applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751, 758]
+status: swept here (round 758, a0a78cac)
 rank: 18
 ---
 
@@ -157,3 +157,7 @@ code is the call-scope disposer, bounded by `RpcCallScope.disposerTimeout`.
 P-247: two closes over four stuck handlers return in 404 ms, and both hang
 with the bound lifted. **When a fix makes callers share a future, look again
 at the bounds beneath it.** `../rounds/743-a-shared-close-is-still-bounded.md`.
+
+- **Round 758** — six wake paths by `find_callers`, the same six as 717; P-10
+  unchanged, its `_onGrant` ablation still hangs the draining call at 20 s while
+  the answered one returns in 0.4 s. `../rounds/758-the-wake-paths-recounted-again.md`.

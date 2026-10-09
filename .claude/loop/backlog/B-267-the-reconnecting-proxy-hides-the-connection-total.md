@@ -1,10 +1,10 @@
 ---
 status: open
-round: 736
-commit: a94aca2c
+round: 762
+commit: ad501d86
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-probe: —
-reason: risk — forwarding the capability through a proxy whose inner transport changes on reconnect lets charges taken on one connection be released on the next
+probe: packages/core/rpc_dart/.dart_tool/probe/r762_proxy_hides_total.dart
+reason: risk — a flow-control-ignoring peer only, bounded at 2x the window; the forwarding fix needs a per-charge handle the interface lacks
 rank: 4
 ---
 
@@ -33,6 +33,22 @@ charged to the old one, and drive it negative. A correct fix tracks, per
 charge, which inner it went to.
 
 Lens RPC-04, round 736.
+
+**Round 762 measured the honest case and it does not reach the doubling.**
+A victim `RpcPeerEndpoint` whose client-stream handler never reads, 1 MiB
+connection window, 8 honest calls sending 64 KiB messages
+(`packages/core/rpc_dart/.dart_tool/probe/r762_proxy_hides_total.dart`):
+
+```
+  direct (no proxy)   32 messages = 2048 KiB taken, every call parked
+  proxy               32 messages = 2048 KiB taken, every call parked
+```
+
+Flow control stops an honest sender before both layers fill, so the proxy
+changes nothing for it. What remains is a peer that ignores credit: then each
+layer refuses at its own total and the sum is 2x the window, bounded. That
+needs a raw-frame sender built on the library's serializer (L-10); it was not
+built.
 
 ## Owner decision
 

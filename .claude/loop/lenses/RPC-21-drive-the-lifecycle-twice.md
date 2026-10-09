@@ -3,7 +3,7 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
 breaks: a connection leak; or a running call detached from everything that can stop it.
-applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732, 752]
+applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732, 752, 761]
 status: confirmed (round 752)
 rank: 2
 ---
@@ -102,3 +102,9 @@ U-15 had no lens.
   `checkHealth() => null`. An aggregate health report is only as good as the
   members that report. `../rounds/752-a-dead-worker-reads-healthy.md`,
   `../probes/P-257-a-dead-worker-and-what-health-says.md`.
+- **Round 761** — the websocket open of rounds 755-756 driven through a failed
+  `reconnect()` and back, twice: unhealthy and 14 while down, healthy and `ok`
+  once up, both cycles alike. Clean. **A new open path is measured on its
+  reconnect, not only its first connect.**
+  `../rounds/761-the-bounded-open-reconnects-twice.md`,
+  `../probes/P-263-reconnect-through-a-failure-twice.md`.

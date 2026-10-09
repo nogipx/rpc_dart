@@ -4,7 +4,7 @@ round: 747
 commit: bdbfc742
 paths: [pubspec.yaml, packages/transport/rpc_dart_isolate/test/web_worker/**]
 probe: none
-reason: unmeasured — intermittent, and the failure text was never captured
+reason: bench — intermittent, not reproduced in 13 runs since, the failure text never captured
 rank: 1
 ---
 
@@ -28,7 +28,16 @@ Not reproduced since:
   the whole gate, foreground, 3 runs            3 passed
   the whole gate beside the websocket suite     passed
   the whole gate, unfiltered, round 755         passed
+  the whole gate, unfiltered, round 760         5 passed, idle machine
+  the whole gate beside the websocket suite     2 passed, round 760; both
+                                                websocket runs 295/295, so the
+                                                load was real
 ```
+
+Round 760 varied the one variable the two failures share a guess about, load,
+and it did not bring the failure back (L-19). The full logs are kept for a
+run that does fail: `melos run test:web --no-select > <file> 2>&1`, then
+the lines after `loading test/web_worker/echo_worker_test.dart`.
 
 One of the two failures ran beside the websocket suite; the other ran alone.
 

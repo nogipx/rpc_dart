@@ -3,8 +3,8 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320, 327, 349, 734]
-status: swept here (round 734, a94aca2c)
+applied: [216, 243, 320, 327, 349, 734, 757]
+status: swept here (round 757, bdebb983)
 rank: 19
 ---
 
@@ -85,6 +85,14 @@ read.
 > **Only a trailer that passes through a validating hop is at risk.** Sort the
 > sites by that first — it cut the surface here from 21 to 12 — and check the
 > hand-built ones for which side emits them, not just for a cap.
+
+- **Round 757** — re-swept and re-ablated over rounds 735-756: 21 sites, 16
+  with a message (15 capped), 5 without; the uncapped one, `_dropLateResponse`,
+  only ever carries a fixed reason of at most 17 characters, because a peer's
+  cancel closes the responder first. P-08 with `_fcRefuseOverrun`'s cap removed:
+  status 8 became 13 (a `catchError` replaced round 327's raw `ArgumentError`).
+  **Read a call's arguments to the closing paren, not a line window.**
+  `../rounds/757-the-refusal-trailers-re-swept.md`.
 
 Beware the knob itself: below about 40, `maxHeaderValueBytes` refuses rpc_dart's
 own request headers and every call fails with INVALID_ARGUMENT, which reads like

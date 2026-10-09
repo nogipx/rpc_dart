@@ -3,7 +3,7 @@ refines: —
 paths: [packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart, packages/transport/*/lib/**]
 applies: a producer starts before the consumer subscribes, and the carrier in between drops rather than buffers
 breaks: broken delivery.
-applied: [240, 250, 373, 574, 615, 617, 675, 704]
+applied: [240, 250, 373, 574, 615, 617, 675, 704, 759]
 status: confirmed (round 373)
 rank: 1
 ---
@@ -95,3 +95,10 @@ Bench `../probes/P-18-early-frames-through-the-proxy.md`; the witness is
 > stopped at "the transport buffers" would have called the whole thing clean.
 > The victim frame is the same one as in the isolate case — the connection-window
 > advertisement, whose absence reads as a peer that does not do flow control.
+
+- **Round 759** — round 756's `connectBounded` detaches the socket after the
+  101 and re-wraps it; the server's grant still arrives, 67108864 on 5 of 5,
+  also with the first listener held off 200 ms, against `null` from a server
+  that sends none. Clean. **Run this lens on your own new open path before
+  anyone else does.** `../rounds/759-the-grant-survives-the-bounded-upgrade.md`,
+  `../probes/P-262-a-grant-after-the-bounded-upgrade.md`.
