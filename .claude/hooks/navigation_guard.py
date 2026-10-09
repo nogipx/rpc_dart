@@ -22,7 +22,8 @@ import sys
 
 READERS = {"grep", "rg", "find", "cat", "head", "tail", "sed", "awk"}
 TEXT_SEARCH = {"grep", "rg"}
-SEPARATORS = {"|", "||", "&&", ";", "&"}
+SEPARATORS = {"|", "||", "&&", ";", "&", ";;", "(", ")"}
+KEYWORDS = {"do", "then", "else", "elif", "done", "fi", "{", "}", "!"}
 
 DART_HINT = (
     "Dart code: load dart-runner via ToolSearch and use outline / read_symbol "
@@ -45,8 +46,12 @@ def emit(decision, text):
 def check_bash(command):
     if re.search(r"\.dart\b", command) is None:
         return
+    # punctuation_chars splits `-1;` and `x|y` into separate operators, so a
+    # `;` glued to a word still ends the segment.
     try:
-        tokens = shlex.split(command, posix=True)
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        tokens = list(lexer)
     except ValueError:
         tokens = command.split()
     # Only a reader whose OWN arguments name Dart: `loop.py brief --path x.dart
@@ -55,6 +60,8 @@ def check_bash(command):
     segment = []
     for tok in [*tokens, ";"]:
         if tok in SEPARATORS:
+            while segment and segment[0] in KEYWORDS:
+                segment = segment[1:]
             if segment:
                 name = segment[0].rsplit("/", 1)[-1]
                 if name in READERS and any(
