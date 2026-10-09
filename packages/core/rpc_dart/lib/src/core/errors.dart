@@ -61,6 +61,24 @@ class RpcException implements Exception {
 /// dropping. It just stops there.
 abstract interface class IRpcAdvisoryChannelError {}
 
+/// Marks an error raised because the PEER sent something invalid: a second
+/// request on a call that carries one, or a payload the request codec could
+/// not decode.
+///
+/// The peer is told, with the status the error carries. It is not a fault of
+/// this side, so [RpcStatus.isFaultError] reads false and it is not logged as
+/// one: a peer repeating the call would otherwise choose how many error
+/// records the server writes.
+abstract interface class IRpcPeerFault {}
+
+/// An [RpcStatusException] raised for the peer's own invalid input. See
+/// [IRpcPeerFault].
+final class RpcPeerFaultException extends RpcStatusException
+    implements IRpcPeerFault {
+  /// Creates a peer fault with [statusCode] and [message].
+  RpcPeerFaultException(super.statusCode, super.message);
+}
+
 /// An exception thrown from an RPC handler to return a specific gRPC status
 /// code to the caller.
 ///

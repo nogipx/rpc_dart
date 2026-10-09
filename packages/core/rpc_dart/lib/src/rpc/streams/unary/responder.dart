@@ -594,7 +594,17 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
 
       if (messages.length > 1) throw tooManyMessages('request');
-      final request = _requestSerializer.deserialize(messages.first);
+      final TRequest request;
+      try {
+        request = _requestSerializer.deserialize(messages.first);
+      } catch (_) {
+        // The PEER's bytes: answered INTERNAL as gRPC does, logged as its
+        // fault rather than ours.
+        throw RpcPeerFaultException(
+          RpcStatus.internal,
+          'Request payload could not be decoded',
+        );
+      }
 
       // Handle request.
       final response = await _handler(request);
@@ -645,15 +655,15 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       // A handler that THROWS a status is answering, not failing: NOT_FOUND is
       // the documented way to say "no such record". Only a genuine fault, or a
       // throw carrying no status at all, is an incident worth an error record.
-      final code = e is RpcStatusException ? e.statusCode : null;
-      if (code == null || RpcStatus.isFault(code)) {
+      // So is a peer's own invalid input (IRpcPeerFault): answered, not logged.
+      if (RpcStatus.isFaultError(e)) {
         _logger.error(
           'Request processing failed [streamId: $streamId]',
           error: e,
           stackTrace: stackTrace,
         );
       } else if (_logger.isDebug) {
-        _logger.debug('Handler answered $code: $e [streamId: $streamId]');
+        _logger.debug('Handler answered: $e [streamId: $streamId]');
       }
 
       // Send initial headers if not already sent.

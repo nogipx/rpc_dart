@@ -79,7 +79,11 @@ Future<void> callIt(RpcCallerContract api) async {
 10, `outOfRange` 11, `unimplemented` 12, `internal` 13, `unavailable` 14,
 `dataLoss` 15, `unauthenticated` 16. `RpcStatus.isFault(code)` is true for
 UNKNOWN, INTERNAL, UNAVAILABLE and DATA_LOSS. `RpcStatus.isFaultError(e)` is also true for any error that is not an
-`RpcStatusException`.
+`RpcStatusException`, and false for an error the library raises because the
+peer sent something invalid (a second request on a unary or server-stream
+call, a payload the request codec cannot decode): those are answered INTERNAL
+as gRPC does, but the server does not log them as faults. The status message
+for an undecodable payload is "Request payload could not be decoded".
 
 ## Error details (`grpc-status-details-bin`, `google.rpc.Status`)
 

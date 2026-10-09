@@ -28,7 +28,9 @@ export 'logger.dart';
 export 'src/_index.dart'
     hide
         CallProcessor,
+        IRpcPeerFault,
         RpcCallerPipelineMixin,
+        RpcPeerFaultException,
         RpcLongTimer,
         RpcResponderMethodBinding,
         RpcResponderMethodRegistry,

@@ -143,10 +143,14 @@ final class BidirectionalStreamResponder<
   /// NOT_FOUND plus an RpcErrorInfo and an RpcBadRequest, unary, server-stream
   /// and client-stream all reported 2 details and bidirectional reported 0.
   /// Status code and message came through, so the loss was silent.
+  ///
+  /// [fault] false: the status answers the peer's own invalid input; see
+  /// `StreamProcessor.sendError`.
   Future<void> sendError(
     int statusCode,
     String message, {
     Uint8List? statusDetailsBin,
+    bool fault = true,
   }) async {
     if (!_isActive) return;
 
@@ -155,6 +159,7 @@ final class BidirectionalStreamResponder<
         statusCode,
         message,
         statusDetailsBin: statusDetailsBin,
+        fault: fault,
       );
     } finally {
       _completeDone();

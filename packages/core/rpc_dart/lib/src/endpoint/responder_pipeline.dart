@@ -1954,6 +1954,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           wire.status,
           wire.message,
           statusDetailsBin: wire.detailsBin,
+          fault: RpcStatus.isFaultError(error),
         );
       }
     }());

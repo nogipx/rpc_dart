@@ -99,9 +99,12 @@ abstract interface class RpcStatus {
       status == dataLoss;
 
   /// [isFault] for a caught [error]. A throw that carries no status is a fault:
-  /// an unclassifiable failure is not an application answering.
-  static bool isFaultError(Object error) =>
-      error is! RpcStatusException || isFault(error.statusCode);
+  /// an unclassifiable failure is not an application answering. An
+  /// [IRpcPeerFault] is not, whatever its status: the peer sent it.
+  static bool isFaultError(Object error) {
+    if (error is IRpcPeerFault) return false;
+    return error is! RpcStatusException || isFault(error.statusCode);
+  }
 }
 
 /// Packs and unpacks the 5-byte gRPC message prefix: one compression-flag byte
@@ -193,6 +196,7 @@ typedef RpcErrorSender =
       int status,
       String message, {
       Uint8List? statusDetailsBin,
+      bool fault,
     });
 
 /// Reports [error] to the peer with the status [wireStatusFor] permits.
@@ -205,7 +209,14 @@ typedef RpcErrorSender =
 /// foreign error's text on the wire.
 Future<void> sendWireError(Object error, RpcErrorSender send) {
   final wire = wireStatusFor(error);
-  return send(wire.status, wire.message, statusDetailsBin: wire.detailsBin);
+  return send(
+    wire.status,
+    wire.message,
+    statusDetailsBin: wire.detailsBin,
+    // The status alone cannot tell a peer's invalid input from our own
+    // failure; the error can.
+    fault: RpcStatus.isFaultError(error),
+  );
 }
 
 /// The gRPC status for a non-200 HTTP response, for every transport.
@@ -329,7 +340,7 @@ const String kInternalErrorWireMessage = 'Internal server error';
 /// What a side that carries exactly one message -- the response of unary and
 /// client-stream, the request of unary and server-stream -- answers a second
 /// one, with INTERNAL, as gRPC does. [what] is `request` or `response`.
-RpcStatusException tooManyMessages(String what) => RpcStatusException(
+RpcStatusException tooManyMessages(String what) => RpcPeerFaultException(
   RpcStatus.internal,
   'More than one $what on a call that carries one',
 );

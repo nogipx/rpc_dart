@@ -680,22 +680,38 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
             );
           }
         } catch (e, stackTrace) {
-          _logger.error(
-            'request_deserialization error [methodPath: $_methodPath, streamId: $_streamId, size: ${msgBytes.length}]',
-            error: e,
-            stackTrace: stackTrace,
-          );
+          // The PEER's bytes did not decode: its fault, answered INTERNAL as
+          // gRPC does, but not an incident here (IRpcPeerFault).
+          if (_logger.isInternal) {
+            _logger.internal(
+              'request_deserialization error [methodPath: $_methodPath, '
+              'streamId: $_streamId, size: ${msgBytes.length}]: $e',
+            );
+          }
           if (!_requestController.isClosed) {
-            _requestController.addError(e, stackTrace);
+            _requestController.addError(
+              RpcPeerFaultException(
+                RpcStatus.internal,
+                'Request payload could not be decoded',
+              ),
+              stackTrace,
+            );
           }
         }
       }
     } catch (e, stackTrace) {
-      _logger.error(
-        'message_parsing error [methodPath: $_methodPath, streamId: $_streamId, size: ${messageBytes.length}]',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      if (RpcStatus.isFaultError(e)) {
+        _logger.error(
+          'message_parsing error [methodPath: $_methodPath, streamId: $_streamId, size: ${messageBytes.length}]',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      } else if (_logger.isInternal) {
+        _logger.internal(
+          'message_parsing refused [methodPath: $_methodPath, '
+          'streamId: $_streamId]: $e',
+        );
+      }
       if (!_requestController.isClosed) {
         _requestController.addError(e, stackTrace);
       }
@@ -739,10 +755,15 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   }
 
   /// Sends an error to the client.
+  ///
+  /// [fault] false says the status, though a fault code, answers the PEER's
+  /// own invalid input (see `RpcStatus.isFaultError`), so it is not an
+  /// incident here.
   Future<void> sendError(
     int statusCode,
     String message, {
     Uint8List? statusDetailsBin,
+    bool fault = true,
   }) async {
     if (!_isActive) {
       _logger.warning('Attempted to send error on inactive processor');
@@ -750,7 +771,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     }
 
     // An application status is an answer, not an incident.
-    if (RpcStatus.isFault(statusCode)) {
+    if (fault && RpcStatus.isFault(statusCode)) {
       _logger.error(
         'Sending error to client: $statusCode - $message [streamId: $_streamId]',
       );

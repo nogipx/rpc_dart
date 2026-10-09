@@ -179,12 +179,13 @@ final class RpcMessageParser {
   List<Uint8List> call(Uint8List data) {
     try {
       return _call(data);
-    } catch (e, trace) {
-      _logger.error(
-        'Failed to parse incoming data: $e',
-        error: e,
-        stackTrace: trace,
-      );
+    } catch (e) {
+      // Rethrown to the owner, which answers the peer and decides whether this
+      // is a fault worth a record. Logging it here too made every refused
+      // frame an error, written by whichever peer sent it.
+      if (_logger.isInternal) {
+        _logger.internal('Failed to parse incoming data: $e');
+      }
       rethrow;
     }
   }
