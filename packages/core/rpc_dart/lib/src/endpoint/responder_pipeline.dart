@@ -1180,6 +1180,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       return;
     }
 
+    // A message after the peer's OWN half-close is a protocol violation, not
+    // a request: dropped, and not counted. Counted, it read as data the
+    // pipeline lost -- an error per call, at a count the peer chose -- and
+    // the real loss this alarm exists for could hide among them.
+    if (binding.type == RpcMethodType.clientStream && state.clientEnded) {
+      if (_log.isInternal) {
+        _log.internal(
+          'Ignoring a request message after half-close [streamId: ${state.id}]',
+        );
+      }
+      return;
+    }
+
     // Counted HERE, where the frame is accepted for delivery — after the
     // method is known and the binding found, so a frame refused above was
     // never ours to deliver and must not read as lost.

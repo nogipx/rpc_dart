@@ -34,6 +34,18 @@ Round 787, before its fix: `noControl`, seed 7, failed 2 of 60 sessions
   99     0           0
 ```
 
+Round 798 added a fourth oracle: at most 3 records at warning or above per
+session (only once-per-connection warnings may appear), and a `minlog`
+mode (`minlog seed session needle`) that minimises a session to the frames
+that still produce a record containing `needle`, replaying the fuzz's own
+timing. Seed 11, 60 sessions, mode `full`:
+
+```
+  code                         sessions over the log oracle
+  round 787 (6bf688cd)         26 of 60
+  round 797 (b204ccd6)          5 of 60
+```
+
 ## Control
 
 The round-787 run of the same seed before the fix, where the oracle fired
