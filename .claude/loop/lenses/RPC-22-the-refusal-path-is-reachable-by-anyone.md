@@ -5,7 +5,7 @@ applies: a server-side entry point has rejection exits that run before the reque
 breaks: DoS.
 applied: [272, 274, 275, 276, 277, 283, 284, 287, 288, 361, 395, 397, 399, 400, 532, 591, 604, 610, 624, 662, 664, 671, 725]
 status: confirmed (round 397)
-rank: 7
+rank: 9
 ---
 
 # RPC-22 — The path a peer reaches without being accepted

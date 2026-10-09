@@ -5,7 +5,7 @@ applies: something is read, then an operation is awaited, then the read is relie
 breaks: a connection leak; or an in-flight call failing with a StateError instead of its status.
 applied: [235, 505, 510, 522, 616, 628, 646]
 status: confirmed (round 235)
-rank: 10
+rank: 12
 ---
 
 # RPC-16 — The guard read before the await

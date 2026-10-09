@@ -5,7 +5,7 @@ applies: something is HELD and must be given back — an RpcSecurityPolicy field
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
 applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502, 508, 520, 733]
 status: confirmed (round 494)
-rank: 20
+rank: 22
 ---
 
 # RPC-05 — Where a concurrency limit is charged

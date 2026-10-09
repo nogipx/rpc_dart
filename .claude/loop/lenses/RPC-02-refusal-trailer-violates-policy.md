@@ -5,7 +5,7 @@ applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
 applied: [216, 243, 320, 327, 349, 734, 757]
 status: swept here (round 757, bdebb983)
-rank: 19
+rank: 21
 ---
 
 # RPC-02 — A refusal trailer that violates the policy it enforced

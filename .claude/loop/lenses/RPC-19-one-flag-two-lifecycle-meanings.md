@@ -5,7 +5,7 @@ applies: one signal carries both "this is terminal" and "this is recoverable, or
 breaks: a hang; or every in-flight call answered by something that concerned one of them.
 applied: [238, 268, 324, 353, 359, 405, 411, 419, 421, 485, 486, 495, 531, 552, 572, 592, 651, 653, 667, 668, 669, 676, 678, 691, 746, 748, 753]
 status: confirmed (round 748)
-rank: 15
+rank: 17
 ---
 
 # RPC-19 — One flag, two lifecycle meanings

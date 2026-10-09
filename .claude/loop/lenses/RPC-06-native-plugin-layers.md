@@ -5,7 +5,7 @@ applies: the plugin has a native layer in Swift and Kotlin — and a contract AC
 breaks: a hang until the watchdog fires, a silent death of the runtime, a diagnostic that arrives corrupted.
 applied: [348, 355, 357, 362, 363, 365, 482, 484, 492, 493, 665, 683, 684, 685, 686, 687, 688, 689, 707, 708, 716]
 status: confirmed (round 365)
-rank: 24
+rank: 26
 ---
 
 # RPC-06 — The plugin's native layers

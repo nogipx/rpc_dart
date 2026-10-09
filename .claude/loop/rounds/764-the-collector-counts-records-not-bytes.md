@@ -2,7 +2,7 @@
 round: 764
 verdict: DEFERRED
 packages: [rpc_dart_log]
-lens: RPC-17
+lens: RPC-27
 bench: P-265 — new
 commit: yes
 release: none
@@ -16,8 +16,7 @@ release: none
 is bounded by record count, and what a record weighs is bounded only by the
 transport's message ceiling. Proposed to the owner as a candidate lens, "a
 bound counted in the wrong unit"; this round is its first measurement.
-Filed under RPC-17, the nearest shape (a bound that does not stop the bytes
-it is meant to), until the lens set is re-derived.
+Became lens RPC-27 after round 765.
 
 ## Hypothesis
 

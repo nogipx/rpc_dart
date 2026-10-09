@@ -2,7 +2,7 @@
 round: 765
 verdict: FIXED
 packages: [rpc_dart_log]
-lens: RPC-17
+lens: RPC-27
 bench: P-265 — reused
 commit: yes
 release: changelog

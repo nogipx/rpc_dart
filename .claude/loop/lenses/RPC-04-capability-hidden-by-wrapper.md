@@ -5,7 +5,7 @@ applies: there are caller/responder wrappers around the transport
 breaks: "security hole: limits silently switched off with the tests green."
 applied: [209, 289, 290, 291, 292, 334, 335, 352, 418, 430, 488, 539, 597, 659, 736, 762]
 status: confirmed (round 488)
-rank: 12
+rank: 14
 ---
 
 # RPC-04 — Transport capabilities hidden by a wrapper

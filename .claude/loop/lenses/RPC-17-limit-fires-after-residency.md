@@ -3,9 +3,9 @@ refines: —
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart_compression/lib/**]
 applies: a size limit exists on one direction, and something buffers in the other before any limit is consulted
 breaks: DoS.
-applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593, 594, 595, 598, 636, 645, 660, 709, 710, 711, 714, 715, 719, 720, 724, 764, 765]
+applied: [236, 279, 280, 350, 489, 506, 507, 509, 511, 512, 513, 519, 534, 549, 550, 564, 565, 568, 570, 578, 593, 594, 595, 598, 636, 645, 660, 709, 710, 711, 714, 715, 719, 720, 724]
 status: confirmed (round 720)
-rank: 9
+rank: 11
 ---
 
 # RPC-17 — A limit that fires after the bytes are resident

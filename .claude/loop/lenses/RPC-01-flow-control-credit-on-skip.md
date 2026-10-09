@@ -5,7 +5,7 @@ applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
 applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497, 558, 738]
 status: confirmed (round 558)
-rank: 11
+rank: 13
 ---
 
 # RPC-01 — Flow-control credit on the skip path

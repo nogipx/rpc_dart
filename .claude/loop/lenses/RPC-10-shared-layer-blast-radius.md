@@ -5,7 +5,7 @@ applies: several transports share parts of one layer
 breaks: "wrong result: a claim about a fix's blast radius that the code does not support. It reached two commit messages, and through them the decision not to check the neighbour."
 applied: [340, 341, 342, 343, 377, 385, 575, 703]
 status: confirmed (round 150, off-journal)
-rank: 25
+rank: 27
 ---
 
 # RPC-10 — A shared layer does not reach every neighbour

@@ -5,7 +5,7 @@ applies: identifiers are issued locally and outlive a reconnect
 breaks: data loss on a live call.
 applied: [217, 218, 224, 234, 527, 541, 643, 661, 739]
 status: confirmed (round 661)
-rank: 13
+rank: 15
 ---
 
 # RPC-03 — Stream ids that outlive a reconnect

@@ -5,7 +5,7 @@ applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
 applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533, 536, 638, 673, 696, 701]
 status: confirmed (round 499)
-rank: 16
+rank: 18
 ---
 
 # RPC-14 — A timeout abandons the wait, not the work

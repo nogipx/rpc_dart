@@ -5,7 +5,7 @@ applies: the web is a real build target (dart2js)
 breaks: "wrong result: the web suite silently fails to compile a whole file, and a green run proves nothing. After that, anything, up to a crash on a target nobody ran."
 applied: [219, 227, 285, 286, 345, 383, 392, 427, 428, 466, 479, 607, 625, 630, 634, 682, 699, 706]
 status: confirmed (round 428)
-rank: 22
+rank: 24
 ---
 
 # RPC-07 — The web as a separate runtime
