@@ -32,6 +32,11 @@ final class ClientStreamResponder<
   /// True when handler started.
   bool _handlerStarted = false;
 
+  /// True until [close] runs. A handler that finishes after the call was torn
+  /// down (the peer cancelled, the deadline passed) has nobody to answer, and
+  /// sending anyway wrote a warning per call that the peer chose to cancel.
+  bool _isActive = true;
+
   /// Creates a client-stream responder.
   ClientStreamResponder({
     required this.id,
@@ -109,6 +114,16 @@ final class ClientStreamResponder<
     // Invoke handler directly with the request stream.
     handler(_processor.requests)
         .then((response) async {
+          if (!_isActive) {
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Handler completed after the call ended; response dropped '
+                '[id: $id]',
+              );
+            }
+            _completeDone();
+            return;
+          }
           if (_logger.isInternal) {
             _logger.internal(
               'Handler completed, sending response: $response [id: $id]',
@@ -158,6 +173,7 @@ final class ClientStreamResponder<
   /// Closes the stream and releases resources.
   @override
   Future<void> close() async {
+    _isActive = false;
     await _processor.close();
     _completeDone();
   }
