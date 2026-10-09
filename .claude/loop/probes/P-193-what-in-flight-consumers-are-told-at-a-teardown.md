@@ -79,3 +79,15 @@ Does NOT chart what the crash leaves behind — a transport with every map clear
 true and no connection. The round fixed the crash rather than measuring its aftermath.
 
 Does NOT witness the `_fcRefused` / `_resetStreams` carry-over: `fcOutstanding` read 0 in every arm.
+
+## Reading
+
+rpc_dart_http2 — three in-flight server streams, then a teardown, recording
+per consumer what it was told and when. **A hang has no number, so the
+measurement is the absence**: `STILL WAITING` against a three-second settle
+where the calls that do fail take ~10 ms. Drives BOTH teardowns, which is how
+`close()` came out a measured NEGATIVE — and how its MIXED `14/13/13` for one
+event surfaced. Reads leftover `streamControllers` beside the outcomes. Does
+NOT separate `closeAll`'s `error:` argument from the call: disabling only the
+argument still read three errors, because closing the controller and the
+terminate error race

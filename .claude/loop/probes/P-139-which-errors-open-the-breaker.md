@@ -90,3 +90,14 @@ blast radius of one shared instance and shows it is the whole endpoint; whether
 that should be narrowed is a design question the round left to the owner. Nor does
 it say anything about the half-open probe path — round 351's territory, untouched
 here.
+
+## Reading
+
+rpc_dart — the arms vary the STATUS a method throws, not the count, so the rig
+is about classification; every arm ends with a call to a DIFFERENT healthy
+method, which is how the blast radius of one shared breaker instance gets
+measured at all. Its control is the cancellation arm: `closed`/`0` where every
+other row reads `open`/`5`, so the rig demonstrably distinguishes the two
+states. Also answers two questions a regression test needed: an unregistered
+method returns `RpcStatusException(12)` rather than timing out, and a throwing
+response codec arrives as a bare `StateError`.

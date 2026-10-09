@@ -32,3 +32,9 @@ RSS retained while nothing per-stream consumes.
 ## Control
 
 `paused` against `draining` — the same subscription with and without the pause.
+
+## Reading
+
+rpc_dart — 400 minted 1 MiB direct objects, no per-stream consumer: a PAUSED
+`incomingMessages` subscription `+392 MiB`, a consuming one `+6`, none `+376`;
+paused against consuming is the control

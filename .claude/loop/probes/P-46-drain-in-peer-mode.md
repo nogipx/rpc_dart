@@ -35,3 +35,10 @@ peer        1                 1726ms        returned "finished"    <- after
 The responder arm is what makes the peer arm readable: the same server, the same
 drain, the same budget, differing only in the endpoint class. `null` rather than
 `0` is the give-away — the key was absent, not zero.
+
+## Reading
+
+core endpoints — does a graceful drain see a peer-mode call. Reads
+`activeResponders` off the endpoint's own `collectEndpointMetrics()`, the same
+map the drain polls, so the column says what the DRAIN saw; `null` rather than
+`0` is what identifies an absent key from an idle server

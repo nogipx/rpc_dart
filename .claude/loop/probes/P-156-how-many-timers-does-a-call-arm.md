@@ -71,3 +71,15 @@ would remove.
 
 Does NOT measure token listeners, the lead's other half, which are not timers and are
 invisible here.
+
+## Reading
+
+rpc_dart — a Zone is the only place that sees every `Timer` whoever creates
+it, so counting by reading would mean trusting the reading found them all.
+**Everything runs inside ONE zone, endpoints included, and that is the rig's
+whole correctness**: a subscription creates its timers in the zone it was
+registered in, so endpoints built outside it leave every RESPONDER timer
+uncounted — which is the half the lead is about. The first version did that
+and reported `1.0 timers/call` with the deadline apparently free. Its controls
+are the no-deadline arms, which make the figure attributable — and which
+produced the larger finding, a nine-timer floor on a server stream.

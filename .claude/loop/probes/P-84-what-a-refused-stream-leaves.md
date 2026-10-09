@@ -83,3 +83,17 @@ content-type, the 256-violation backstop), nor a peer that refuses to read its
 own refusal. On that last one: the refusal is a trailers-only HEADERS frame and
 HTTP/2 flow control covers DATA only, so a zero receive window will not park it
 — that needs TCP-level backpressure.
+
+## Reading
+
+rpc_dart_http2 — what a refused stream leaves on the responder. **Two rebuilds
+worth reading**: it first read the counters after `conn.terminate()`, which
+runs `close()` and clears every map, so both arms said 0 and it measured its
+own teardown; and its first control was a POST with no body, which the
+pipeline refuses for its own reason, so there was no served arm at all. Every
+arm now reports the `grpc-status` the peer saw. Control is `open, never
+ended`, reading 200/200. Grown twice since: round 396 added the pump column
+and a `streaming, mid-answer` arm (200 live writers, the retention control for
+it), round 397 the framing-violation arms and `activeResponders` — and there
+the PAIR is the measurement, one refusal driven with a half-close and one
+without, since that is the only difference between 0 and 200

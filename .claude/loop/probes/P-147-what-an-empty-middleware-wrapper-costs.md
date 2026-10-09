@@ -73,3 +73,13 @@ the ~4.4 us per message that remains is where those layers live.
 
 Nor does it say the 19% is visible to a user: at 4.4 us per message this path
 sustains well over 200 000 messages/s on one isolate, which no real transport feeds.
+
+## Reading
+
+rpc_dart — **the same FILE as P-146, registered under its own number**,
+because round 508's bench already measured this exact quantity and rebuilding
+it would have been the waste. Reports run-set MINIMA rather than medians, and
+says why: noise here only ever adds time, so the floor is closest to the
+quantity. That mattered — two run sets read `4.710` against `5.763` and looked
+conclusive, and the next set's median of `5.949` would have reversed it; seven
+sets later the minima never overlap.

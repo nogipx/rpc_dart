@@ -66,3 +66,18 @@ Does not establish that `startHttp2Keepalive`'s catch-all is harmless in
 general. It is still "any throw means dead"; what this measures is that the one
 known non-death throw cannot reach it. A future `ping` implementation that
 allocates anything would put the shape back in play.
+
+## Reading
+
+rpc_dart_http2 — **the sweep arm: does the stream ceiling reach HTTP/2
+keepalive?** P-120 found the websocket heartbeat closed a healthy connection
+at `maxActiveStreams`, and `startHttp2Keepalive` is the same loop with the
+same `catch (error) { … onDead(error) }`. Reading says it cannot bite — the
+probe is `connection.ping`, a protocol frame charged to no stream limit — and
+this is that argument turned into a measurement: `ready` at 4 of 4 held and at
+3 of 4. **The third arm is the reason it is a bench**: two `ready`s are
+equally consistent with a keepalive that never fired in the 700 ms window, so
+a frozen relay (both sockets open, bytes stopped) shows the same loop at the
+same interval flipping health to `down`. Clean, and clean for a structural
+reason — a future `ping` that allocated anything would put the shape back in
+play

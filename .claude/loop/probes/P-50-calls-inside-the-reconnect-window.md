@@ -54,3 +54,12 @@ that column throw would be a worse defect than the one being fixed.
 reporting honestly that it cannot see that half: the frame channel refuses
 zero-copy whatever the state, so the missing guard had no observable effect
 until the guard existed to change the answer.
+
+## Reading
+
+rpc_dart_websocket — six transport methods against three transport states, as
+a table. **Two of the three arms ARE the controls**: `healthy` and
+`disconnected` are the states the code means to have, so a correct transport
+makes the third column equal one of them. Its `finishSending` row returning in
+every arm is load-bearing rather than noise — that method runs from `finally`
+blocks, so a fix that made it throw would be worse than the defect

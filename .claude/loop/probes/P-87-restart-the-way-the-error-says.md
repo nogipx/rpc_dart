@@ -66,3 +66,12 @@ Does not measure how long the gap lasts under a real `stop(drainTimeout:)`, nor
 what a browser client does with such a socket, nor whether the same window
 exists on `RpcHttp2Server` — that one rebinds its own socket, so it is a
 different shape and worth its own arm.
+
+## Reading
+
+rpc_dart_websocket — restart the server the way its own `StateError` says to,
+one arm per remedy the message names. The arms differ ONLY in how the
+connections stream was built, so a difference is attributable to that.
+Contaminated observable, caught and recorded: the abandoned-socket flag was
+first read after the arm's own `sink.close()` and reported `closed` — its own
+teardown, the same trap as P-84's first rebuild

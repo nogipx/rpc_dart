@@ -79,3 +79,16 @@ claim is the state rows, not the loop.
 Does NOT cover B-192's other four items: serial endpoint close on `stop()`, `start()` re-entrancy
 (partly addressed in round 560), `createWithContracts` dropping options, and the comment the lead calls
 probably false.
+
+## Reading
+
+rpc_dart_http2 — three instruments for two claims: callback counts per
+connection, a 200x connect-and-RST loop inside a guarded zone **followed by a
+real call** ("still running" is a flag a dying isolate still reports), and the
+address read in three socket states. **That third arm is the positive control
+that turns an absence into a refutation** — `just accepted` and `peer reset,
+still open` both answer, `after our own destroy()` throws, so the throwing
+state needs OUR end closed and the accept path cannot be in it. No logger
+attached anywhere, because the read is unconditional while only being used
+under `isDebug`. `opened=1` in every row is a third control: the guard added
+for the close half was never needed for the open half.

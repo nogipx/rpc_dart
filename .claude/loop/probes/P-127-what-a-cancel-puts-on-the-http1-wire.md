@@ -60,3 +60,11 @@ pre-fire window it cost the REAL request — path and 16-byte body replaced.
 Does NOT establish that cancellation now works. The server's handler runs to
 completion in every arm; stopping it needs a real abort (B-140). This bench
 cannot see that at all, since it counts requests rather than handler lifetimes.
+
+## Reading
+
+rpc_dart_http — records every request PATH at the server, because the caller
+reports `RpcCancelledException` whether or not a phantom request went out, so
+the caller's own outcome cannot be the instrument. Two levels: through the
+endpoint for the ordinary cancel, and on the transport directly for the window
+before the request fires, which core releases too quickly to reach otherwise

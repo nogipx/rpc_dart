@@ -5,6 +5,7 @@ applies: the repository has packages outside the pub workspace
 breaks: "wrong result: a green gate with the package broken, because what was checked is the published core rather than the one about to ship."
 applied: [220, 226, 269, 270, 344, 470, 471, 472, 473, 476, 477, 481]
 status: confirmed (round 220)
+rank: 21
 ---
 
 # RPC-11 — A package outside the workspace

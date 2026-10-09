@@ -74,3 +74,13 @@ done silently.
 
 Does NOT cover the streaming shapes. `StreamProcessor.sendError` is named in the same
 lead and only the unary paths were varied here.
+
+## Reading
+
+rpc_dart — **counts by overriding `LogController.add`, which is the method
+round 515 paid for**: `LogScope.child()` returns a plain scope, so a subclass
+override is lost wherever code derives one, and both endpoints here do. Prints
+the SCOPE and MESSAGE, not just a count — that is what showed the caller's two
+records came from different sites rather than one firing twice. **Two of its
+three controls run the other way**: INTERNAL and a bare `StateError` must
+still log, because silencing everything would pass the witness perfectly.

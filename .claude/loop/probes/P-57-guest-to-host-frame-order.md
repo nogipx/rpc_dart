@@ -45,3 +45,10 @@ frames, rather than being assumed.
 Ordering is not a nicety here — `RpcChannelTransport` reassembles a byte STREAM,
 so two frames swapped on the wire are corruption, not a reordered pair: the
 second frame's header is read from the middle of the first frame's payload.
+
+## Reading
+
+— do 10k guest frames arrive in order, compared against the generated sequence
+so a swap, a duplicate and a gap all fail the same assertion. Its iOS row is
+the first measurement that the undocumented WebKit FIFO convention actually
+holds rather than being assumed

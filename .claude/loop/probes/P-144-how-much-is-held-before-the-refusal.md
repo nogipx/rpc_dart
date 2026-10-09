@@ -84,3 +84,15 @@ doing nothing.
 Nor does it cover the client half (`closeOnOversizedFrame: false`). That path already
 applied the metadata ceiling from the header in `_refusedFrameHeader`, with a comment
 saying why; the fix brings the server path level with it.
+
+## Reading
+
+rpc_dart — measures the PEAK, not the outcome: the limit fires either way, so
+"is the frame refused" is the wrong question and a test asking it passes
+against the defect. Counts bytes accepted before the error, **yielding a
+microtask turn between chunks** — without that the writer outruns the decoder
+and the figure measures how fast the probe can call `add`. One bit varies (the
+metadata flag) at a size chosen to sit between the two ceilings, and the
+control is that same size without the flag: legal, accepted in full in both
+tables, which pins the cause to the classification and keeps a small
+after-figure from reading as a broken rig.

@@ -67,3 +67,17 @@ reproduction. This probe explains why that works.
 
 Does NOT measure the other members of the family (a wall-clock ratio, a process RSS
 bound, a latency ceiling); it measures the one the gate reported.
+
+## Reading
+
+rpc_dart — **asks the one question that converts "flaky" into a quantity: what
+is the MARGIN?** A 250 ms settle requiring a parked sender, run at six settles
+with the counter the test throws away: the park arrives at `produced 66` and
+needs **5-25 ms**, so 10-50x and not the 250x the number looks like. **Its
+control is what refuted the previous round's explanation** — 14 busy isolates
+in another process at load `84.76`, eight times the figure blamed, and the arm
+still reads `waiters 1`. So external CPU pressure is not the variable; `dart
+test`'s own suite concurrency is, and `--concurrency=24` is the instrument
+that reproduces. Reports `produced` beside `waiters` deliberately: `waiters 0`
+means either "never got there" or "got there and was released", and only the
+counter separates them

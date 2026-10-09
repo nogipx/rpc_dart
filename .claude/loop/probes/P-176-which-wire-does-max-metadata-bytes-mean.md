@@ -77,3 +77,18 @@ would only widen the spread.
 Does NOT establish severity. The gap between the policy's count and a wire is bounded by
 `maxHeaders` times that wire's per-header overhead — at the defaults, 512 bytes on HTTP against
 a 64 KiB field — and this probe does not exercise a peer trying to exploit it.
+
+## Reading
+
+rpc_dart + rpc_dart_http — **prices a decision's PREMISE before it is
+implemented.** Three counts of the same metadata side by side: the text
+`validateMetadata` totals, the JSON a frame channel encodes, the header lines
+HTTP sends. The knob is the SHAPE, not the size — a per-header framing
+overhead is invisible at few large headers (all three agree within 1%, which
+is the control) and dominant at many small ones. Two refutations: the framing
+differs by transport (`8.2` B/header JSON against exactly `4.0` HTTP), and the
+JSON size depends on a value's CONTENT rather than its length (`127` bytes
+against `227` for the same 100 characters). Its JSON figure copies a private
+encoder, which is why the round's TEST uses the public `encodeMetadata`
+instead — a bench may stand in for the code under test to size a question, a
+regression test may not.

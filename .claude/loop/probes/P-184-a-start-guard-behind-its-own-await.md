@@ -76,3 +76,18 @@ not cover the four other items in B-151, none of which is about this guard.
 
 Does NOT show the race is reachable from the framework. `RpcApp` drives phase one then phase two once
 each; the reachable form is a misuse or a supervisor retry, which the round records.
+
+## Reading
+
+rpc_dart_http + rpc_dart_http2 — two files, one question: what two concurrent
+starts do to a server that is already binding. **A FIXED port is the whole
+rig** — with `port: 0` each concurrent bind gets its own ephemeral port,
+nothing fails, and the catch under test never runs; the first version hung
+with no output rather than reporting that. Four observables, because the two
+packages fail differently: what each start returned, `isRunning`, `endpoints`,
+a real call, and whether the port is free after `stop()`. **That last one is
+the only thing that can see http2's defect**, since `stop()` returns normally
+and `isRunning` is already false — every in-process check says the server is
+down, and a bind attempt from outside says the listener is still there. `THREE
+concurrent start()` answering `ok:x` is a second control and a refutation of
+the lead's own claim.

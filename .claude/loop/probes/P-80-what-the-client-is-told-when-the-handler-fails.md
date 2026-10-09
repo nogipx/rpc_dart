@@ -68,3 +68,11 @@ that reason.
 
 Does not cover the endpoint pipeline (which never uses this sink), a source that
 errors and keeps going, or the responder's request direction.
+
+## Reading
+
+389), rpc_dart — what the client is told when a bidi handler's source fails.
+**Measures with an OVERALL deadline, not a per-event `Stream.timeout`**, which
+is the only reason it can see this defect: the answer was *never ended*, and a
+per-event timeout re-arms on every payload. Its first witness asserted only
+`isNot(contains('ended OK'))` and passed on the broken tree

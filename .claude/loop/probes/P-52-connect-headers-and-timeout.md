@@ -50,3 +50,11 @@ the first handshake.
 
 The `10016ms` is the PROBE's own bound, not a measurement of how long dart:io
 would wait: the point is only that nothing in the library stopped it.
+
+## Reading
+
+rpc_dart_websocket — what `connect()` can and cannot express. **The headers
+half is read on the SERVER side**, off a recording `HttpServer`, so the number
+is what crossed the wire rather than what the client believes it set. Its
+`after reconnect()` row is what decides whether the feature is usable: a token
+that goes only on the first upgrade authenticates exactly once

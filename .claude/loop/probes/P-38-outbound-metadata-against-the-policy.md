@@ -48,3 +48,11 @@ carries, so the peer refused every call including the control — and the output
 read exactly as though the violating frame had poisoned the connection. The
 "clean call BEFORE" arm is what exposed it. **A limit chosen to be violated must
 still admit the control.**
+
+## Reading
+
+http2 + core — whether a transport refuses outbound metadata its own policy
+forbids, with `RpcChannelTransport.pair()` as the control arm because four of
+five transports already have the check. Carries the trap that cost a
+measurement: a limit chosen to be violated must still admit the control, or
+the peer refuses every call and it reads as connection poisoning

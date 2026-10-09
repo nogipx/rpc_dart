@@ -99,3 +99,15 @@ The `64 B copied out` row is faster than `64 B view only` (0.29 vs 0.75) in both
 tables. That is systematic rather than noise and is unexplained; it is recorded
 because an unexplained systematic difference is exactly what a later round should not
 have to rediscover.
+
+## Reading
+
+rpc_dart — turns a copy COUNT read off the source into a cost. **Measures the
+layer the lead names**: a first version echoed through `RpcCallerEndpoint` and
+the JSON codec dominated at 1 MiB, which would have attributed the time to the
+wrong layer entirely. Each size is run twice — payload left a view, payload
+copied out — because a receive path that hands out views reads as infinitely
+fast per byte, and only the second is the end-to-end figure a receiver pays.
+Its controls are a raw `setRange` of the same megabyte (so the figures have
+something to be a fraction of, generously, since it stays cache-hot) and the
+64 B rows, which must NOT move.

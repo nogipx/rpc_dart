@@ -70,3 +70,12 @@ on the counters listed.
 Does not establish anything about RSS or about objects no counter names — a
 retained closure that no map keys would not appear here. Nor about latency-shaped
 endings: `RpcChannelTransport.pair()` flattens those (P-58's lesson).
+
+## Reading
+
+eleven counters read after a bidi call settles, across seven ways of ending
+it, at three scales on ONE connection. **Its evidence is the ablation, not the
+zeros**: every cell is 0, and a zero cannot be told from a blind instrument,
+so removing the bidi responder's cleanup is what shows the same counters
+climbing 5 / 25 / 85. Unary rides along as the control shape. Says nothing
+about RSS, about latency-shaped endings, or about duplex semantics

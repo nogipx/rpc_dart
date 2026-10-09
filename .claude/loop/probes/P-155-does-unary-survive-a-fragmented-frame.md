@@ -101,3 +101,14 @@ before the responder is dispatched. It was built to witness "feed every buffered
 just the first" and **it does not**: ablating that part changes no arm, because the routing
 reaches every case. Recorded so a third attempt does not mistake that part for verified.
 
+## Reading
+
+rpc_dart — the lead's own note says no shipped transport can show this, so the
+fragmenting channel is BUILT: every DATA frame re-framed as two on the same
+stream, with the end-of-stream bit kept on the second only. **Its second
+control is the other two call shapes in the same run** — same transport,
+channel, codec and payload, only the responder differs — which is what makes
+"unary only" a measurement rather than a reading. A **fresh context per call**
+matters more than it looks: one shared context is one deadline, so the first
+arm to time out left the others none and all three read TIMEOUT for a single
+arm's failure.

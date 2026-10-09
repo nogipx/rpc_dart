@@ -85,3 +85,16 @@ caller first and fails the call, so a second terminal event never surfaces — `
 
 Does NOT cover the responder role, which is deliberately unchanged, nor HTTP/1.1, which does not
 validate inbound response headers at all (`B-145`).
+
+## Reading
+
+rpc_dart + rpc_dart_http2 — what a call ends with when the peer's trailers
+break our policy, at BOTH sites of the class in one file: `http2 details-bin
+10 KiB status 3 -> 9`, `200 trailer headers status 3 -> 9`, `core channel
+[frame] + RpcFrameException -> [frame, status 9]`, against a 16-byte-details
+CONTROL reading 9 throughout. **No grpc-go needed** — what the defect turns on
+is a server answering a status with one header we refuse, and
+`package:http2`'s own `ServerTransportConnection` sends arbitrary trailers.
+The core half gives the two sides SEPARATE policy objects, or the sender's own
+outbound check refuses the frame before the victim sees it. Connection health
+is read in every arm, which separates a lost status from a dead socket

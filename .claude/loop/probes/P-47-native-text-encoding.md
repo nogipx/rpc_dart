@@ -41,3 +41,10 @@ accents            19 ch / 22 B  19 ch     I:für später, naïve           <- a
 
 The control reads `22 ch -> 22 ch` on both sides of the fix, which is what makes
 the other rows mean something: the decoder changed only what was broken.
+
+## Reading
+
+what reaches Dart when native sends non-ASCII text, in characters sent against
+characters arrived WITH the byte count beside them: on a byte-per-character
+read the arrived count equals the byte count, so the pair names the failure
+mode. Its ASCII arm is the control and is also the reason the defect shipped

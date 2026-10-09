@@ -74,3 +74,17 @@ predicate.
 Does NOT prove the predicate was the cause; the canary does. It also cannot see a
 decision nothing logs, which was the original difficulty: the two guard clauses that
 return silently are invisible here and were found by elimination.
+
+## Reading
+
+rpc_dart — **a TRACER, not a measurement**: it prints every record the
+pipeline decides to emit, in order, with each inbound frame announced before
+the pipeline sees it. Built because three read statuses said `status 4` and
+none said which of five paths took the second fragment of a split frame. What
+it showed was the fragment delivered AND parsed with no answer after it —
+which moved the question from routing to "what silently dropped the answer",
+and the only silent exit there is a closed responder. The subclass overrides
+`add` on the CONTROLLER, since `child()` returns a plain `LogScope` and a
+scope subclass loses its override the moment the pipeline derives one. Cannot
+see a decision nothing logs: the two silent guard clauses were found by
+elimination, not here.

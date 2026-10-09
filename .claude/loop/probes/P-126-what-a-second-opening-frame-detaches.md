@@ -67,3 +67,13 @@ Does NOT establish that the ping double-answer has the same cause — it does no
 By the time the second frame arrives the ping's stream state is already cleaned
 up, so `hasMethod` is false and the frame opens what looks like a new call on a
 reused id. The guard does not apply and the `2 -> 4` is unchanged by it.
+
+## Reading
+
+rpc_dart — counts two things from INSIDE the handler's own closure (did it
+observe its cancel, did its disposer run), so the numbers say what the handler
+saw rather than what the pipeline believes it sent. **Its second arm is a
+worked example of an instrument that reads zero for the wrong reason**:
+counted on `getMessagesForStream(id)` the repeat-ping arm reads `2 -> 2` in
+both arms AND with the fix ablated, because that controller closes when the
+ping ends; counted on `incomingMessages` filtered by id it reads `2 -> 4`

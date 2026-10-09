@@ -57,3 +57,14 @@ Nor the duty those subscriptions carried — that a transport error which does n
 close the stream is still answered. That is
 `one_listener_not_one_per_handler_test`'s GUARD, which passes on both sides of
 the control, not this probe.
+
+## Reading
+
+many listeners sit on the connection-wide broadcast per parked unary handler?
+**A COUNT, not a duration**: the defect is O(N) listener invocations per
+inbound frame, and a wall clock on an in-memory pair measures the machine — an
+earlier record of this shape (48 ms against 333) is a reading nobody can
+reproduce on other hardware. The control is one flag, `listensToTransport`,
+and reads exactly N+1 against a flat 1: `2/11/51/201` at 1/10/50/200 parked
+handlers. Does NOT measure the per-frame cost of each listener, nor the duty
+they were carrying — that is the witness's GUARD

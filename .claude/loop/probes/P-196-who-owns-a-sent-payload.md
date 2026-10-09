@@ -60,3 +60,15 @@ duplicate factory name.
 
 Does NOT check any other transport. The rule now written on `RpcTransportMessage.payload` binds all of
 them; only this channel was driven, and one that serializes cannot have the defect.
+
+## Reading
+
+rpc_dart — one variable, whether the sender scribbles 0xFF over its buffer
+after `await sendMessage` returns: `the receiver read 0xFF 0xFF 0xFF 0xFF`
+against a CONTROL at `0xAA`. The frame is built BY HAND, prefix and body both
+known, because a codec would put the body somewhere unknown and the scribble
+with it. Reads the bytes as bytes — a length or checksum would hide which end
+the corruption came from. Unchanged by its round: the behaviour IS the
+contract, and what the round added was the rule plus a test that fails if a
+copy is added quietly. Does NOT establish that a copy is wrong; B-116 priced
+one at `389.76 -> 191.45 us` per 1 MiB, which makes it the owner's

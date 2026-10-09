@@ -65,3 +65,18 @@ tree.
 
 Does NOT cover the proxy path's own `Socket.connect`, or the TLS handshake separately from the socket —
 `SecureSocket.connect`'s `timeout:` covers both together and the probe does not separate them.
+
+## Reading
+
+rpc_dart_http2 — times a connect against three addresses: a REFUSED loopback
+port (10 ms, the control that prompt failures stay prompt), a BLACK HOLE with
+the bound passed explicitly (1730 ms), and the same hole with the bound OFF
+(still pending at 8 s). **That third row is the canary** — without it `1730ms`
+could be the network answering rather than the timeout firing. `198.51.100.1`
+is TEST-NET-2, reserved and unrouted, so its SYN is dropped rather than
+refused, which is the whole difference. **The bound is driven by argument,
+never from the default**: the shipped default is 30 s, so a probe capped below
+it reads `STILL PENDING` with the fix already in. **Deliberately NOT in the
+gate** — whether a network drops or refuses that address is outside this
+repo's control, and a refusing firewall turns the black-hole rows into the
+refused row.

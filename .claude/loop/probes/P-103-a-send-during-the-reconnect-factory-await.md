@@ -60,3 +60,12 @@ Does not establish what the other two machines answer. The proxy was read rather
 than benched (`_inner = null` before any factory, `_require()` throws on null),
 and the WEBSOCKET arm was not exercised at all. Finishing that table is what
 B-76 is now for.
+
+## Reading
+
+rpc_dart_http2 — the window is a matter of TIMING, so it is made 800 ms wide
+on purpose rather than raced. **Reads `health()` INSIDE the window**, which is
+what turns "the send was refused" into a refutation rather than an untested
+claim: without it the refusal could be the flag having been set after all.
+Controls on both sides of the window, both ACCEPTED. `connect()` does not take
+the injectable factory — only `viaSocket` does

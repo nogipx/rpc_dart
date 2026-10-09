@@ -43,3 +43,11 @@ CONTROL, maxHeaders=8
 
 **960 000 bytes accepted against a 64 KiB bound**, every individual header legal.
 dart:io imposes no limit of its own here, so nothing else was catching it.
+
+## Reading
+
+whether `maxMetadataBytes` is enforced, asked with a raw HTTP/1.1 POST because
+our own caller would never build the block. **960 000 bytes accepted against a
+64 KiB bound**, every header individually legal, and dart:io imposes no limit
+of its own. Its control is a second server at `maxHeaders: 8`: without a row
+that refuses, the 200s prove nothing

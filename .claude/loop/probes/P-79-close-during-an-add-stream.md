@@ -71,3 +71,11 @@ Does not establish anything about the responder's `responseSink` — a second
 probe was written for that and hangs before its first arm reports, so B-55 rests
 on a reading rather than a measurement. Nor about the endpoint bridge, which
 owns its own subscriptions and was never in this class.
+
+## Reading
+
+`close()` while an `addStream` runs, inside `runZonedGuarded` so an unhandled
+async error is COUNTED rather than killing the probe. **Its control is the
+PRODUCER SHAPE**: the identical path reads 1 zone error with a source that
+survives its own error and 0 with an `async*` that ends at its throw — which
+is exactly why round 384's witness passed. B-54's arm lives here too

@@ -86,3 +86,14 @@ numbers in rounds 370/371/374 stand.
 
 Does not cover bandwidth limits, packet slicing or jitter, all of which this rig
 could now add. Nor http2 or isolate under latency.
+
+## Reading
+
+rpc_dart + rpc_dart_websocket — back-pressure over a link with a real RTT, via
+**toxiproxy** (its own container, not the one another project is using) with a
+50 ms latency toxic on each stream. **Its ablation runs THROUGH the proxy**,
+not beside it, which is what makes the latency rig demonstrably sensitive
+rather than merely slower. Answers the question P-58 raised and comes out the
+other way: latency does NOT change this result. Trap: reach a docker-published
+port over IPv4 explicitly — `localhost` resolves to `::1` first and returns
+`000`. Has bandwidth, jitter and slicing available and used none of them

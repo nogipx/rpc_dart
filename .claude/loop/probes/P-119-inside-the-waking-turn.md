@@ -76,3 +76,19 @@ adding an await to the hop-free path.
 
 Does NOT cover http2 or HTTP/1.1, which have their own send paths and no
 equivalent seam here. Whether they share the shape is a separate question.
+
+## Reading
+
+rpc_dart — **the seam is the RECEIVE side, and it is free.** P-118 measured
+the flow-control window at the controller's API and stopped, because the
+transport-level consequence needs a caller inside the turn a grant lands and
+"every entry point is async". True of the SEND side: the transport also
+LISTENS, `IRpcMultiplexedChannel` is five members, and a
+`StreamController(sync: true)` for `incoming` runs `handleInbound` →
+`_onGrant` → `wakeAll()` before `add` returns — so the woken sender's
+continuation is a queued microtask and the next statement is in the window.
+Measures the ORDER the transport handed to the channel, recorded inside
+`send`. **The control is asserting the frame is still parked BEFORE the
+grants**: without it, "the ending came second" is equally consistent with
+nothing having parked, which is how round 445's 0-of-200 went void. Policy
+must SEED the sender or nothing parks at all

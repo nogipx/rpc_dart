@@ -70,3 +70,13 @@ claim is refuted.
 
 Either could be a defect, a deadline interacting, or a property of the interceptor
 nobody has written down. Nothing here distinguishes them.
+
+## Reading
+
+rpc_dart — **its never-cancelled control was added second and is what made the
+table readable**: with only the two cancel arms both read ~1.7 s and the
+result was uninterpretable, because there was nothing for them to be shorter
+THAN. Against `5237 ms` it is clear cancellation shortens the call. Reports
+the STATUS as well as the time — `1` says cancellation won, `14` says the
+retries were exhausted — and leaves two numbers explicitly unexplained rather
+than rounding them off.

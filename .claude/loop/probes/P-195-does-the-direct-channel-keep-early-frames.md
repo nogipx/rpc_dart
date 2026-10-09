@@ -72,3 +72,15 @@ so only the count binds on this channel — `B-217`'s subject on a third queue.
 
 Does NOT cover what else may arrive in that window. The grant is the frame the lead names and the one
 with an observable; a request frame landing there would be lost the same way and is not read here.
+
+## Reading
+
+rpc_dart — `pair()` with ONE event-loop turn between constructing the two
+transports, read through an observable that already exists:
+`flowControlConnectionCredit`, which answers `null` for a side that never got
+the peer's grant. `WITNESS server null -> 67108864`, with a no-gap arm and
+`memoryPair()` both reading `67108864` throughout — the two controls are the
+lead's own point, that `memoryPair` is safe only by building both ends in one
+expression. Reads BOTH sides, because which one loses is the finding. Drives
+neither of the buffer's bounds, and cannot drive the byte one at all: a
+`directPayload` weighs 0

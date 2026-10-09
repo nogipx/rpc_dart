@@ -44,3 +44,11 @@ absolute numbers with the hardware they came from.
 
 Not measured: the same table on iOS, and the latency a guest `Timer` sees while
 the WKWebView is offscreen. Both need a simulator.
+
+## Reading
+
+what one call over the bridge costs, p50/p95/p99 at four payload sizes, with a
+discarded warm-up. **Its empty-unary row is the control for every other row**:
+that an empty call and a 1 KiB call cost the same is the finding — the price
+is the round trip, not the bytes. Published in the README with its hardware
+named, because an emulator is a floor and not a prediction

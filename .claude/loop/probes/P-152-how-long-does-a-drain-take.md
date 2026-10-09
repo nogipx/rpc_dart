@@ -65,3 +65,14 @@ Does NOT cover `drainUntilIdle`, which still polls at 25 ms. It is generic over 
 `pending()` callback, so it has nothing to be signalled by; only its budget changed.
 
 Does NOT measure `activeResponderCount`'s O(n) `where`, the lead's third claim.
+
+## Reading
+
+rpc_dart — a poll interval is invisible in any measurement that lets the work
+take longer than the interval, so the handler parks on a completer and the
+moment it finishes is controlled exactly. **Its control did more than validate
+the rig**: the 120 ms arm read `156 ms` before against `122 ms` after, which
+is how the round learned polling added ~36 ms of rounding even when the work
+dominated — a fact the lead does not mention. A 60 ms settle before the drain
+starts, because a drain with nothing yet in flight returns immediately and
+measures nothing.

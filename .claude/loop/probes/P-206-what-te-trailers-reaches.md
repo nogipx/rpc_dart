@@ -71,3 +71,15 @@ cannot run this reliably (B-215).
 Does NOT read bytes on the wire. `te: trailers` is 11 characters of name plus
 value, counted once per request against `maxMetadataBytes`; the probe reads the
 header's presence, not a byte total.
+
+## Reading
+
+rpc_dart_http — **asks where a header GOES, not whether it is sent**: `headers
+delivered 10, carries te YES` -> `9, no`, read on the responder TRANSPORT's
+`incomingMessages` and not on the handler's `RpcContext`, because those are
+two different sets and the difference IS the finding — core's
+`_createContextFromMessage` excludes `te` by name, so no handler ever saw it.
+The other nine names are the control. Substitutes for the lead's prescribed
+browser console, which `B-215` puts out of reach; the "XHR refuses it" half
+stays a spec citation rather than a reading, and is moot once the header is
+gone

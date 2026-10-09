@@ -71,3 +71,14 @@ Does NOT measure the second consequence directly — that each entry makes
 `_liveHere` true for a dead id, so the stale-id guard is inverted for exactly the
 ids the connection has finished with. That follows from `_liveHere`'s two-line
 body and is not separately witnessed here.
+
+## Reading
+
+rpc_dart_websocket — reads `peerStreamIds` out of `health().details`, which
+the round had to ADD (the wrapper delegated health to its inner transport,
+which cannot see either of the wrapper's own sets). **Measures an INVARIANT,
+not a size**: the set means "streams the peer minted and this side is still
+answering", so on an idle connection the answer is zero or it is wrong — no
+threshold needed. Built through the transport's CONSTRUCTOR, not `connect()`,
+because only that takes `platformHandlesPing` and so puts the rig on the
+app-level heartbeat a browser is on

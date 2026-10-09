@@ -56,3 +56,12 @@ own guard exists to name. B-61.
 Does not drive `pingInterval` ON, which the keepalive path suggests would close
 the gap; nor the `rpc_dart_http` or isolate callers, neither of which carries
 this sentence.
+
+## Reading
+
+websocket and http2 — which type escapes a disconnected transport. **Its
+design IS its control**: each arm polls the transport's own `health()` until
+it stops reporting healthy and PRINTS what it says, before touching the guard,
+because otherwise "the two transports behave differently" and "one of them had
+not noticed yet" are the same output. That gate is what turned a recorded
+curiosity into B-61

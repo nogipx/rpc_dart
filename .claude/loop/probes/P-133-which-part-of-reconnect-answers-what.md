@@ -68,3 +68,13 @@ reported degraded.
 Does NOT measure the duration of the real window against a real peer. The 600 ms
 is chosen; dart:io's actual wait for a close frame the peer never sends is
 reported elsewhere as seconds (B-134), and nothing here confirms that number.
+
+## Reading
+
+rpc_dart_websocket — **makes the SEGMENTS of one method separately
+addressable**: a fake channel whose close is slow holds the teardown await
+open, a slow factory holds the next one, and each arm issues one call 50 ms
+in. The already-fixed segment is the control. Reports `health()` alongside the
+status, which is where its second finding came from. Trap: the fake's stream
+must stay OPEN — `Stream.empty()` ends at once and the transport then treats
+the peer as dropped at construction, making every arm read alike

@@ -79,3 +79,17 @@ than the pump's and needs a different rig; it is left on the lead.
 Does NOT drive a real server. The states are reproduced at the pump, which is where both defects
 live; an end-to-end client-stream against a handler that never reads would exercise the same
 mechanism through more layers and was not built.
+
+## Reading
+
+rpc_dart_http2 — **records three observables, not a verdict**: the sink's
+contents in arrival order, and whether the parked send returned or threw.
+`parked send, then endStreamNow() -> data 0B eos=true` against a CONTROL of
+`data 64B, data 0B` is what makes the missing frame a loss rather than a rig
+that never delivers. Needs no server: the pump parks because its controller's
+subscription is paused, so a sink nothing listens to reproduces a closed peer
+window exactly. The `dispose()` arm is its own control for the second half —
+the sink is EXPECTED to stay empty there, so an arm that only counted frames
+would have called that case correct. Does not cover the lead's third claim
+(`_halfClosedLocal` leaking an entry per stream), which is the caller
+transport's bookkeeping.

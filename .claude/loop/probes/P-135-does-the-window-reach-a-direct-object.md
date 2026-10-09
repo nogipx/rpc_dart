@@ -82,3 +82,13 @@ is a second defect, measured here and filed as B-195, not this bench's subject.
 
 Does NOT cover the isolate transport, which declares `supportsZeroCopy` and deep-
 copies through `SendPort`; the lead's second question is untouched.
+
+## Reading
+
+rpc_dart — **varies the LIMIT rather than ablating a guard**, which is the
+only way to separate "unmetered" from "metered with a generous bound": shrink
+the window 64-fold and the codec path moves 32x while zero-copy does not move
+at all. Its draining-consumer arm is a control that shows the bench CANNOT see
+the defect from the paused rows alone, because the library does not throttle
+producers by decision. Counts in the HANDLER; RSS was tried first and
+abandoned for negative deltas

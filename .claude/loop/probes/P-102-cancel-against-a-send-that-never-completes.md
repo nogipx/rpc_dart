@@ -68,3 +68,13 @@ Does not establish that any SHIPPING transport hangs this way. The wrapper is
 constructed for the purpose. What the comment in `base_processor` asserts — that
 a transport whose send awaits a platform reply can do this — is still an
 assertion; this bench shows only what happens IF one does.
+
+## Reading
+
+rpc_dart — supplies the transport class a comment merely NAMED: a decorator
+whose end-of-stream send never completes. Reports a hang as the string `hung`,
+so it is an assertable value rather than a test that dies on a timeout. **Two
+controls**, the same path with the send completing and the SIBLING ordering
+against the same hanging send — the second is what makes the reading about
+ordering. **Trap**: the wrapper must NOT implement `IRpcStreamReset`, or the
+notice takes the reset path and never reaches `sendMetadata`

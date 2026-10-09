@@ -5,6 +5,7 @@ applies: cancellation is delivered into the handler's request stream
 breaks: a process crash in user code that looks like a library bug.
 applied: [202, 203, 204, 626]
 status: retracted (round 204)
+rank: 26
 ---
 
 # RPC-12 — Cancellation delivered into the handler's request stream

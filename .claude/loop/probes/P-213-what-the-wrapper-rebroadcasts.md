@@ -37,3 +37,10 @@ Messages the transport broadcasts on `incomingMessages` per call.
 
 Round 508's routed-message skip in `RpcChannelTransport._onMessage` forced off in
 place: every frame of a call appears.
+
+## Reading
+
+rpc_dart_websocket — events on `incomingMessages` per call over a real socket:
+`0.00` per unary and per 100-message stream for the wrapper and a bare channel
+transport; `3.00` / `101.00` with round 508's routed-message skip forced off,
+which is the control

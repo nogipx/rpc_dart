@@ -65,3 +65,11 @@ reach, and that is recorded rather than assumed.
 Nor does it cover dart2js, where the owner's report says WHATWG `close()` throws
 `SyntaxError` past 123 bytes. `melos run test:web` cannot host a socket server,
 so that arm has no bench here.
+
+## Reading
+
+rpc_dart_websocket — does a protocol close survive a non-ASCII reason? **Its
+fixture IS the design**: 84 characters and 138 bytes, both bounds asserted in
+the test, because the arm only isolates the byte-vs-character bug if it clears
+the byte cap AND sits under the old character trim. A first version used 140
+characters and failed its own second assertion

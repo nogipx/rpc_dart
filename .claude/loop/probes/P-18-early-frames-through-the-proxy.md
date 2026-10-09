@@ -40,3 +40,10 @@ returns when the frame is written, not when it lands, so the frame was still in
 flight when the proxy attached and every ordering passed. The 50 ms settle
 before the arms is what makes the window real; without it this bench is a
 tautology.
+
+## Reading
+
+resilience and transports — do frames that arrived before the app subscribed
+survive a hop? Two controls, because one cannot tell "never existed" from
+"dropped here": 0 late through the proxy against 1 early through it and 1
+straight off the transport. Its first build measured nothing and says why

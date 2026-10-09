@@ -78,3 +78,15 @@ Does not measure memory, a peer that reads none of the answers it provokes, or
 several connections at once. Wall clock on one machine is a weak instrument for
 CPU; the ratio against the `served` control is what it is used for, not the
 absolute.
+
+## Reading
+
+rpc_dart_http2 — what a refusal grind costs, **against a served-call
+control**, which is the whole point: RPC-22's question is comparative and an
+absolute refusal cost means nothing. Bytes come from a RELAY between peer and
+server, because neither endpoint can report both directions without the
+other's cooperation. Two columns earn their place — `ops`, because the
+backstop-bearing arm stops part-way and dividing by the attempt count would
+understate it 6x; and `grpc-status`, which caught this round's first ablation
+arm measuring the wrong site (`maxHeaderValueBytes: 8` refuses the request's
+own `content-type`, so it never reached the framing path)

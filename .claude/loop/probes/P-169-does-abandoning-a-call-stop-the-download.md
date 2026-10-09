@@ -58,3 +58,13 @@ Does NOT test the web implementation. `package:http`'s browser client honours `a
 
 Does NOT say what a cancel does to the server's HANDLER. Aborting the request closes the socket; the
 handler learns only when it next writes, and this transport still implements no `IRpcStreamReset`.
+
+## Reading
+
+rpc_dart_http — **reads the abandoned side from the OTHER end**, because a
+dropped future reports nothing locally whether the work stopped or not: the
+server streams a long response and records how far it got and whether it
+finished. Two readings, since "wrote fewer" alone also describes a server that
+crashed. Its control (a call nobody abandons) is identical BEFORE the fix —
+which is the finding — and separates after it, which is what says the
+transport still completes ordinary calls.

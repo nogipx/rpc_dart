@@ -49,3 +49,11 @@ validates OUTBOUND metadata, so a well-behaved sender refuses to emit the frame
 and the control arm reads `refused after 0 sends` — which looks like the shared
 layer having no inbound check at all. **A hostile peer is not a well-behaved
 sender**, so the arm needs a channel stub that injects directly.
+
+## Reading
+
+what bounds a peer that only sends frames the policy refuses, at the DEFAULT
+policy. Its control is the shared layer's 256-violation backstop, and reaching
+that control needs a hostile CHANNEL STUB: since round 340 a well-behaved
+sender refuses to emit the frame, so `RpcChannelTransport.pair()` reads
+"refused after 0 sends" and looks like no inbound check at all

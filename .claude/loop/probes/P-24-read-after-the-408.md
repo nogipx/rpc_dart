@@ -40,3 +40,9 @@ timeout  500ms            408              384 KiB, then a      0
 > is `flush().timeout(3s)`, so a server that has stopped reading produces a
 > number rather than freezing the probe. 384 KiB is the socket's own buffering
 > and reproduced exactly across runs.
+
+## Reading
+
+the server keep reading after it has answered? Measured as the PEER's send
+pressure with every flush deadlined, so a stopped read is a number rather than
+a hang. The control is the same bench against a server with no deadline

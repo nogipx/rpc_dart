@@ -67,3 +67,15 @@ could be built. That is the open half of B-50.
 
 Taken on `RpcChannelTransport.pair()`, so nothing here settles a question made
 of latency (P-58's lesson).
+
+## Reading
+
+rpc_dart — can a caller tell that the other side read everything it sent? Both
+numbers are taken where an APPLICATION reads them (what the handler was given,
+what the caller was told), never from a private field. **Three controls in the
+same run**: `fullRead` differs by exactly one line of handler code, `throws`
+proves a non-OK ending is readable on this path at all, and the server-stream
+mirror answers differently — so an `OK` is the call being reported successful
+rather than the bench being blunt. Does NOT establish whether
+`droppedRequests` is reachable by any path: two were tried, neither reached
+it, and the probe budget was spent

@@ -62,3 +62,13 @@ mechanisms.
 Does not cover latency (in-process pair; round 378's argument for why this
 class survives an RTT applies but was not re-run), nor which part of the
 transport's own metering carries the bound on the bidi arm.
+
+## Reading
+
+many messages the library pulls from the CALLER's producer while a handler
+that read one stalls. Two controls: a draining handler that pulls the producer
+dry (so a low number is a bound, not a slow producer), and an ablation of
+`deferFlowCredit`. **The ablation did more than confirm sensitivity — it
+corrected attribution**, moving the arm the lead did NOT name and leaving the
+one it did, which is how `_pipelineFedRequestStream` was identified as the
+CLIENT-STREAM path rather than bidi's

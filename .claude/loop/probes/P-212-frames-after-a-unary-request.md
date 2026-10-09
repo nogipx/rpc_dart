@@ -38,3 +38,9 @@ instead.
 ## Control
 
 N = 0.
+
+## Reading
+
+rpc_dart — data frames sent on a unary stream while its handler runs: RSS
+tracks the bytes 1:1 at three scales (`+51/+117/+313 MiB` for 78/156/312 MiB)
+before the fix, `+57` and a RESOURCE_EXHAUSTED after

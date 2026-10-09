@@ -84,3 +84,16 @@ Does NOT cover `_reject`, which builds its own `Response` for 415, 400, 408 and
 503. Every ordinary ending, including the oversized-response answer at
 `_answerOversizedResponse`, reaches the one header map in `_completeResponse`, so
 the method shape is not a variable here.
+
+## Reading
+
+rpc_dart_http — **TWO views of one response, and they disagree, which is the
+whole point**: shelf's `headersAll` through `transport.handler` reads what the
+code PRODUCED (`2 [application/grpc+proto, application/grpc]`),
+`HttpClient.headers[]` through `shelf_io` reads what a peer RECEIVES (`1
+[application/grpc]` — dart:io keeps the last). The lead asked only for the
+first; the first alone grades the defect wrongly in BOTH directions, calling a
+duplicate nobody receives an interop break and missing that every caller was
+told the bare form whatever it asked for. Cannot see a non-dart:io adapter —
+none is in this repository's dependency set — so "another host may emit two
+lines" stays unmeasured

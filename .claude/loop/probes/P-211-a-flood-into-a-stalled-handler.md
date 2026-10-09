@@ -69,3 +69,11 @@ Messages the responder side held for a parked client-stream handler.
 ## Control
 
 The same call with the peer honouring the window: 257 against 19999.
+
+## Reading
+
+at 8/16 streams before, `4093` after), rpc_dart — P-210's repair: a real
+responder with a parked client-stream handler, a peer with its windows off.
+**RETAINED is counted by releasing the handler with the producer stopped**, so
+it is what the responder side held; RSS read `+202` and `-145` MiB for one
+arm. Control 257, witness 19999 before and 1023 after, bidi sibling 1023

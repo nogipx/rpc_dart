@@ -34,3 +34,9 @@ onStateChanged throws       0            2     <- after
 > error is the obvious damage and the smaller one: an unhandled async error is
 > fatal in the root zone, but the same throw also aborted the connect loop
 > before it built anything, and no state, log or exception says so.
+
+## Reading
+
+what a throwing user callback costs on the reconnect path. Counts what the
+throw PREVENTED as well as what it emitted: unhandled 1 and transports built 0
+against a control's 0 and 2

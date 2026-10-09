@@ -56,3 +56,14 @@ Establishes: the window bounds a burst by a factor of 38, and deriving it from
 Does not establish anything about a SINGLE message larger than the window: that
 one passes regardless, because the gate admits on `credit > 0` rather than on
 fit. Both facts are true, and conflating them is what round 366 did.
+
+## Reading
+
+rpc_dart_websocket — how many frames a caller gets out BEFORE the first grant
+can throttle it, through toxiproxy at 50 ms RTT with a handler that never
+reads. **The RTT is not optional**: credit exists only once a grant arrives,
+so on an in-process pair the field looks inert — which is how round 366 came
+to call it useless. The `null` arm is the control that matters, running the
+producer to exhaustion (40000 frames, 156.25 MiB), so every other row is a
+real bound rather than a slow producer. Reproduces the field's own doc comment
+to within 0.01 MiB, which is a second control from a different session

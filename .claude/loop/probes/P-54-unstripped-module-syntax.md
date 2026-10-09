@@ -48,3 +48,11 @@ for `plainJs.contains("export")` takes the suite from **`+21 ~2` to `+3 ~2 -13`*
 Android only, measured. The same arms would report differently on iOS, where a
 SyntaxError kills the whole `<script>` tag and the failure surfaces as the 30 s
 boot watchdog instead — see `../backlog/archive/B-42-ios-strip-failfast-unwitnessed.md`.
+
+## Reading
+
+what a caller is told when the dart2wasm glue uses a module form the plugin
+does not strip, by mutating the REAL glue one way per arm. **Its control is
+the finding**: swapping the line-anchored check for a `contains` takes the
+device suite from `+21 ~2` to `+3 ~2 -13`, because `export`/`import` appear 19
+times in the glue and only 4 at statement position

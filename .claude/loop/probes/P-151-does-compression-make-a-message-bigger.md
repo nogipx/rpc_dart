@@ -92,3 +92,15 @@ half is not addressed at all — only the bytes.
 
 Does NOT cover the isolate transport specifically. `memoryPair` is the zero-copy
 shape available in-process; a real isolate pair was not run.
+
+## Reading
+
+rpc_dart — **its first version would have refuted a true claim**, and the
+record keeps why: it used `'a' * n` as the payload while testing whether
+compression makes messages BIGGER, which is the case least likely to grow.
+Incompressible input is what tests growth; the repeated-character rows survive
+as the control, and they carry the design argument too — gzip beats plain even
+at 32 B when bytes repeat, so a size threshold would discard a real saving.
+The `compression OFF` column makes every row a paired comparison rather than
+an absolute to be interpreted. Measures bytes only: the lead's CPU half is not
+instrumented here at all.

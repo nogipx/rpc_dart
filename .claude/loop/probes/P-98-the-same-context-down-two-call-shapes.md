@@ -47,3 +47,15 @@ reassurance: the two reserved keys a peer ACTS on do travel on the ping frame
 on `methodPath == null` and a ping frame carries one.
 
 After the fix A1 reads `OK status=0` and no other arm moves.
+
+## Reading
+
+rpc_dart — one caller `RpcContext` sent down two call shapes, so the SHAPE is
+the only variable. Seven arms over a channel pair; the reading is the
+difference between two arms holding the same context. **Two controls, and one
+would not have done**: the sibling shape (whose merge site has the filter) and
+a clean context down the shape under test — A1 differing from both is what
+separates "the header is the cause" from "ping is broken". Two further arms
+BOUND the severity rather than reassure: the reserved keys a peer acts on do
+reach the frame and change nothing, because their consumers gate on
+`methodPath == null`

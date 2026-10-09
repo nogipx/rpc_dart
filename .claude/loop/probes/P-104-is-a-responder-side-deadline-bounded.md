@@ -66,3 +66,15 @@ Nothing about the reclaim backstop: `reclaimed=false` everywhere, because the
 token cancellation did reach the handler — a `yield` on a cancelled scope
 terminates the stream, so even the uncooperative arm stopped. A handler that
 cannot be unwound is a different bench.
+
+## Reading
+
+rpc_dart — a handler yielding every 100 ms against a 300 ms deadline, so the
+ITEM COUNT is the clock. **The reading is a responder-side LOG record, not the
+caller's exception**: one `grpc-timeout` header arms a timer on BOTH ends, so
+`RpcDeadlineExceededException` at the caller is equally consistent with the
+responder doing nothing. Only `_onDeadlineExceeded` emits its notice. Control
+is the no-deadline arm, where the line is ABSENT — which is the whole risk
+with a log-based reading. `RpcResponderEndpoint` takes a `LogController`, not
+a `LogScope`. Carries a VOID arm on purpose: a hand-driven responder read
+`payloads=0` in the timeout row AND its control

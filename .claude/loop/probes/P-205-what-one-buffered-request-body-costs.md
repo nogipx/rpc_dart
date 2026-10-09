@@ -81,3 +81,16 @@ Does NOT measure the multi-chunk path. `takeBytes()` concatenates when there is
 more than one chunk, so a client stream of N messages pays one copy at fire time;
 the single-chunk case — every unary call — pays none. The suite covers the
 multi-chunk correctness.
+
+## Reading
+
+rpc_dart_http — **two BARE arms outside the library, there to bracket a number
+that alone means nothing**: the library's buffer against a bare `List<int>`
+and a bare `BytesBuilder(copy: false)`. `+205 MiB` for a 32 MiB body sat with
+the list; after the fix `+0` sits with the builder. RSS read THREE times in
+the library arm — before the payload, after it, after the buffer took it — so
+the buffer is not charged for bytes the caller had already allocated. **The
+bare arms are a bracket and NOT a ratio**: `LIST` read `+165` in one run and
+`+528` in the next on identical input, because RSS for a growable list depends
+on the heap's state; quote which arm the library matches, never the arms
+themselves. Reads no TIME, and does not cover the multi-chunk path

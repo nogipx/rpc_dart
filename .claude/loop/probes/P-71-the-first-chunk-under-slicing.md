@@ -63,3 +63,14 @@ WebSocket framing reassembles above TCP, so the parser never sees the split.
 Does not cover COALESCING (the inverse toxic), the consumer's pinned `55159adf`,
 or Electron's renderer. It also runs on the VM, while B-44 is reported on
 dart2js — so it tests the wire, not the runtime.
+
+## Reading
+
+rpc_dart_websocket — B-44's shape (17 chunks, ids on the first only) through
+toxiproxy's `slicer`. **Every field is a function of the index**, so lost,
+reordered, duplicated and mis-decoded are four distinguishable outcomes rather
+than one. **Its control is recorded as WEAK and that is what made round 383
+inconclusive**: the ablation was meant to drop frame 0 and print the
+consumer's symptom, and instead removed the responder's dispatch, proving only
+that the probe separates delivered from not-delivered. Sharper control named
+in the record. Runs on the VM, so it tests the wire and not the runtime

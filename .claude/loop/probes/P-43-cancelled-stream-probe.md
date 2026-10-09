@@ -47,3 +47,10 @@ cancel-bidi           halfOpen            5/5     <- after
 
 The control is identical before and after, which is what makes the case arms
 mean something: the fix moved only the ending it was aimed at.
+
+## Reading
+
+what a circuit breaker admits after a half-open STREAM probe, by how the probe
+ended. Its control is the same consumer that does NOT cancel, with the source
+closed at the same point in both arms — the first version varied the cancel
+and the source's termination together and could not tell the two apart

@@ -102,3 +102,16 @@ nothing here varies the shape.
 
 Does NOT measure the context-copy half of B-120, which is a separate claim in the same lead and
 still barely measured.
+
+## Reading
+
+rpc_dart — **counts the secure draws one unary call makes, and identifies
+each.** The instrument needs no instrumentation: every token's last 4 bytes
+carry a process-wide monotonic counter, so a token is its own receipt — decode
+it and bytes 12..16 are its mint number. `RpcContext.empty() 1 token / the
+call itself 0 / one call with no context 1`, and every id in the call — caller
+`requestId`, both wire headers, both the handler sees — carries the SAME mint
+number, which is the control that rules out "one count, several ids". `one
+token 42.4 us`. Cannot compare its cost SHARE with round 511's (42.4 of 264.5
+over a byte pipe against ~40 of ~97), and does not vary the call shape, so
+streaming is uncovered.

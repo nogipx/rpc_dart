@@ -64,3 +64,14 @@ exists.
 
 Does NOT measure how wide the windows are in a deployment. Both are made wide on purpose (a
 slow close, a slow handler); how likely a supervisor is to land in one is not addressed.
+
+## Reading
+
+rpc_dart_websocket — **reads the KIND of ending, not a boolean**: refused,
+torn down, or never closed. A shutdown has two phases and each wrecks a
+connection differently, so one "did it break" arm describes neither. **Its
+drain arm needs a REAL in-flight call** — the first version had none, so the
+drain returned on its first poll and the arm became a duplicate of the next
+one, two identical rows reading as a consistent finding rather than a broken
+rig. Controls: a restart that WAITS, and a server that never stops — without
+them "held nothing" is indistinguishable from "delivered nothing".

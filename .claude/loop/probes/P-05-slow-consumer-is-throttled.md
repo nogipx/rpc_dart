@@ -49,3 +49,8 @@ not MOVED, not to watch it go green.
 
 The row to watch is `fast`: if it ever stops completing, the refusal has started
 biting consumers that keep up, which would be a real defect.
+
+## Reading
+
+rpc_dart_http2 — a consumer that falls behind is failed; ACCEPTED behaviour,
+see [C-19](../checked/C-19-http2-refuses-a-slow-consumer.md)

@@ -67,3 +67,18 @@ Fix before reuse: attach a responder endpoint whose handler never returns.
 3. **`health().details` carries no buffer depth.** `activeStreams` counts streams
    THIS side opened and `streamControllers` counts `getMessagesForStream` calls — on
    this rig, the probe's own subscriptions.
+
+## Reading
+
+rpc_dart — reads the transport's DEMAND via an `async*` generator counting its
+own yields: `PULLED 20001 of 20001` with flow control ON and OFF alike, 320
+MiB offered, consumer paused. The control not differing IS the reading — flow
+control is a SEND-side credit protocol and never throttles reading. **Marked
+broken because residency of `+34 MiB` against 320 MiB offered with nothing
+refused means the frames are DISCARDED**, and the likeliest cause is the rig:
+a peer-minted stream with no responder endpoint has nowhere to be dispatched,
+so `_admitToStreamBuffer` is not shown to have been reached. Attach a
+responder with a parked handler before reuse. Carries three rig failures that
+each read as a result — a `StreamController` source measuring the bench (`+316
+MiB`), a data frame for an unopened stream being silently dropped, and
+`health().details` having no buffer depth

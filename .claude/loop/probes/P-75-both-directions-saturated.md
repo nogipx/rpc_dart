@@ -62,3 +62,12 @@ Does not cover a handler that is itself concurrent (this one is a mirror), a
 window smaller than one message, or a link that loses packets. The arms share a
 process, so a still-running handler from a previous arm can touch the shared
 counters — read each arm's shape, not a single cell.
+
+## Reading
+
+rpc_dart_websocket + core — both directions of ONE bidi call past the
+flow-control window at the same time, the only configuration in which one can
+hold the other. Its two SINGLE-direction arms are the control that makes the
+stall readable: each runs flat out, so the stall in the mirror arm is the
+handler's coupling and not the library's, and the resume proves back-pressure
+rather than deadlock

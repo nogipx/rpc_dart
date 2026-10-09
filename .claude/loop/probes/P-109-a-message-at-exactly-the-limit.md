@@ -64,3 +64,14 @@ not measured. B-79 is the lead for what http2 bounds.
 Note the two transports also disagree on the STATUS for an oversized message —
 RESOURCE_EXHAUSTED against UNAVAILABLE, the latter because a channel server closes
 the connection on an oversized frame. Pre-existing, visible in the guard rows.
+
+## Reading
+
+rpc_dart_http + core — an off-by-five defect cannot be measured approximately,
+so **the limit is set to the message's own serialized length**: "exactly at
+the limit" is then true by construction and nothing has to predict what CBOR
+does to a 1000-character string. Varies the TRANSPORT, holds message and limit
+fixed. Two arms on the far side: `limit + 5` accepted everywhere (so the
+refusal is the five bytes) and `limit - 1` refused everywhere (so widening the
+bound did not remove it). The handler echoes the LENGTH it received, so an
+acceptance also proves nothing was truncated

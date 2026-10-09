@@ -59,3 +59,13 @@ accepts unconditionally by contract. The bound reaches producers driven through
 Taken on `RpcChannelTransport.pair()`. That is adequate here and was checked:
 the control lands on the window rather than on zero, so the in-process pair does
 apply the window (unlike P-58's park question, which it flattens).
+
+## Reading
+
+rpc_dart — how many messages the library pulls out of an application's
+producer while the handler is stalled, counted INSIDE the producer's own
+generator so it measures demand the library created. **The control is the
+sibling and it lands ON the window** (66 x 16 KiB = 1.03 MB against a 1 MB
+window), which is what makes the reading a measurement rather than "fewer".
+Exists because B-49 deliberately refused to borrow the sibling's own 32.8 MB
+figure, taken on a different API

@@ -90,3 +90,16 @@ peer was backwards.
 Does NOT establish why `gzip` fails. Both spellings fail identically, before and
 after the fix, so it is a different defect — B-91 — and this bench only shows the
 symptom, behind an INTERNAL that names nothing.
+
+## Reading
+
+rpc_dart_http2 + core — varies the SPELLING against the same codec, and
+crosses it with the compression FLAG, because the flag decides whether a
+decompressor is looked up at all. **Two halves, and the second is where the
+defect lives**: a hand-built peer (where the case turns out to be INERT at
+flag 0) and the library's OWN caller with the encoding in the call context —
+which is the supported way to select it, so the lead's assumption that a
+foreign peer was needed was backwards. Controls: `identity` in every arm,
+`absent` for the null branch, and `nosuchcodec` to show the refusal machinery
+is informative — which is what makes the opaque INTERNAL elsewhere worth
+noticing (B-91)

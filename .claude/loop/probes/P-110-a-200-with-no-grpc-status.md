@@ -55,3 +55,13 @@ Does not cover the streaming shapes — they reach the same single terminal emit
 that is read, not driven. And it says nothing about http2, where the same empty
 metadata WAS a defect (round 447): there the transport emitted two terminal
 messages and the first closed the consumer before the second could carry a status.
+
+## Reading
+
+rpc_dart_http — a raw `HttpServer`, because only a non-conforming peer ends a
+response without a status. **200 is the load-bearing choice**: the caller
+synthesises a status from the HTTP code for non-2xx, so at any other code the
+trailer set is never empty and the arm does not exist. Body built with the
+library's own serializer (L-10). Controls: `grpc-status: 0` on the same server
+returning cleanly, and `grpc-status: 5` reported as itself — so the
+UNAVAILABLE is neither the harness nor a catch-all

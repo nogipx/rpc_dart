@@ -49,3 +49,12 @@ hoping a realistic scenario lands inside it.
 The `ZONED` arm is not an observation, it is a candidate fix under test: it
 builds the `IOWebSocketChannel` inside `runZonedGuarded`. That it alone survives
 is what identifies the construction zone as the thing that decides.
+
+## Reading
+
+— does a websocket send throw when the socket is already gone, one arm per way
+it can be dead. **Each arm prints its sampled flags BEFORE the send**, because
+one arm throws into the root zone and takes the process with it: a row that
+never prints is a row that was never measured. Rebuilt once — the first
+version drove a full endpoint pair and could not tell the arms apart, because
+`onDone` always won the race

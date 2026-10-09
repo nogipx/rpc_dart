@@ -87,3 +87,16 @@ grpc-status was silent data loss, and the DATA path's guard did not cover it.
 
 Does not establish anything about the HTTP/1.1 caller, which B-86 also names as
 unproven. Its trailer path was not exercised here.
+
+## Reading
+
+rpc_dart_http2 — holds the missing grpc-status fixed and varies the FRAME TYPE
+the ending rides on. Extends round 429's raw-HTTP/2 probe with two cases
+rather than building a server again. **Three controls**: the same frame type
+with a status (so the fix did not just stop ending streams), the same
+malformation on the already-guarded DATA path (the sharpest pair in the
+table), and the shape measured at the CORE boundary, which is what proved the
+gap http2-local and refuted the owner's decision. **Trap**: print the label
+BEFORE the arm — `'${await run(x)}'` evaluates first, so each trace lands
+under the previous heading, which is how the first reading looked like a
+passing arm

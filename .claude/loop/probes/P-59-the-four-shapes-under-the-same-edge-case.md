@@ -72,3 +72,16 @@ is the CANCELLATION TOKEN. One rebuild, counted against the round's three.
 
 `RpcChannelTransport.pair()` is adequate here, unlike in P-58: none of these
 cells is about latency.
+
+## Reading
+
+rpc_dart — the same edge case asked of all four call shapes at once, reporting
+three things per cell: payloads the consumer received, the exception type that
+ended the call, and errors that reached the zone. **The third has the teeth**
+— a clean `DONE` where the handler failed is silent truncation, an `uncaught`
+is exit 255. Ends with a deliberate `listen((_) async { throw ... })` that
+must report `+1`, because otherwise a `0` cannot be told from "nothing was
+watching"; it stayed at +1 after round 368's fix. Trap: cancelling the call
+with `close()` closes the producer's sink too, so the later `add` is API
+misuse rather than the case under test — the route that leaves the sink open
+is the cancellation token

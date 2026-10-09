@@ -75,3 +75,16 @@ rewinds.
 
 Does NOT cover several concurrent calls, repeated reconnects, or an id released
 and re-minted within one connection. Unary shape only.
+
+## Reading
+
+all three caller-side reconnect machines in one run — mint an id, **leave the
+call open**, reconnect, mint another, then `finishSending(oldId)`. The open
+call is load-bearing: an id is only reusable-and-harmful while something still
+holds it. The second measure is what makes the first mean something — two
+equal integers are a curiosity, a teardown landing on a live call is the
+defect the lead describes. Control: `_nextStreamId = 1` restored in http2's
+reconnect, the reset its own comment says is deliberately absent, which reads
+`1 / 1 / YES`. **That control also answered a question about another
+machine**: with http2 rewound, the PROXY arm still read `no`, so its
+`_idWatermark` carries the sequence across a transport that restarts its own

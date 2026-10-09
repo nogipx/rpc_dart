@@ -64,3 +64,14 @@ at zero.
 
 Does NOT hold on any platform. `lsof` is not portable, and the address being a black hole is a
 property of the network the run is on — which is why both are asserted rather than assumed.
+
+## Reading
+
+rpc_dart_websocket — **counts the leaked thing from OUTSIDE the runtime**
+(`lsof` against this process), because a held descriptor leaves the process
+working, the socket invisible to Dart and the attempt failing on time: every
+in-process observable sits behind a retry schedule the OS owns. **Both of its
+assumptions are asserted, not assumed** — every attempt must settle as
+`TimeoutException` (or the address is not a black hole here) and a missing
+`lsof` exits 2 — because either failing silently yields the answer the fix is
+supposed to produce. Control: forty opens that succeed and close.

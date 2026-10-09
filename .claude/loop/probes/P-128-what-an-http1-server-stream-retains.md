@@ -65,3 +65,11 @@ caller then refused.
 Does NOT measure the handler's own cost. It keeps running after the stream is
 ended — this transport has no reset — so what is bounded is what is RETAINED,
 not what is computed.
+
+## Reading
+
+rpc_dart_http — peak RSS against production at three scales, plus the caller's
+delivered item count, which is what turns the cost into a defect (`received 0`
+in every over-limit arm). **Run it LARGEST FIRST**: RSS never returns, so in
+ascending order every arm after the first reads `+0` whatever happens and the
+first mixes warm-up with retention

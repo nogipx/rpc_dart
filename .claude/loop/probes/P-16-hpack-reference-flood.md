@@ -50,3 +50,9 @@ decoder said "unbounded List<Header>, therefore a bomb"; the identity column is
 what refuted that and moved the finding one layer up.
 
 Lens: `../lenses/RPC-18-dependency-buffers-below-your-limits.md`.
+
+## Reading
+
+what does a header block cost once decoded? Attributes the decoder and the
+adapter separately: +7 MiB vs +258 MiB for the same 63 KiB block, with
+`distinct: 1` the number that refuted the first hypothesis

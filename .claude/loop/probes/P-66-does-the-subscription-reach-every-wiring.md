@@ -61,3 +61,13 @@ Establishes: 373's fix is load-bearing on three wirings its own round never ran.
 Does not touch real transports — http2, websocket and isolate each build their
 own metadata frame, and none of them is exercised here. That is the largest
 remaining gap in the bidi work and needs a transport-level bench.
+
+## Reading
+
+rpc_dart — asks round 373's question of the wirings 373 never ran: the peer
+endpoint, the zero-copy branch, and eight concurrent calls. **Its evidence is
+the ablation, not the good values** — removing 373's dispatch collapses every
+`silent` arm to 0 HANG while every `control` survives, which says the probe
+sees the defect AND that it was present on all three. Trap: the zero-copy arm
+first failed in both columns, which is a broken rig rather than a finding
+(measurement item 4) — that branch needs `RpcInMemoryTransport.pair()`

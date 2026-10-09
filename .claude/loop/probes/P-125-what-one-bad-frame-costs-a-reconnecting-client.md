@@ -75,3 +75,13 @@ it, and retiring on `onDone` instead keeps the fatal cases working.
 
 Does NOT measure the flapping the lead describes — a proxy keepaliving every N
 seconds — only the single event that causes it.
+
+## Reading
+
+(round 486), rpc_dart + rpc_dart_websocket — **counts the transports a factory
+BUILDS**, one per reconnect, with the websocket transports constructed bare so
+the proxy is the only reconnect machinery in the rig. Four arms, each with its
+own control; the load-bearing one is the FOURTH, which sends arm 2's identical
+`RpcFrameException.policy` with `closeOnProtocolError: true` and must still
+read `1 -> 2`. A fix keyed on the error type passes the first three arms and
+fails that one

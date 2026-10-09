@@ -118,3 +118,17 @@ Since round 568 it DOES measure the wire, and the answer is that the payload nev
 server read `[(64, false)]` against the control's three frames.
 
 Does NOT cover `_waiters` being overtaken by a new `add`, B-184's other unmeasured item.
+
+## Reading
+
+rpc_dart_http2 — four arms around one race: a peer RST_STREAM landing while an
+`endStream: true` send is parked on the window. `WITNESS halfClosedLocal 1 /
+CONTROL 0 / REACH 1 then 0 after releaseStreamId / STACK 0 through
+RpcCallerEndpoint`. **The window is owned by the rig** — hand-rolled SETTINGS
+with `INITIAL_WINDOW_SIZE=64`, because no real server holds a window closed on
+cue, which is what round 564 could not arrange. **The control's load-bearing
+row is `window open halfClosedLocal: 1`**, taken between the grant and the
+reset: it proves the add site is reached, so the witness's 0 after the fix is
+the guard working rather than a map nothing fills (`L-15`). Two readings it
+did not vary are `B-221`: the parked send returns `threw=null` after the
+reset, and the pump survives it

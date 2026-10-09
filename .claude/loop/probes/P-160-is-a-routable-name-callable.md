@@ -65,3 +65,13 @@ limits, not about a field report.
 Does NOT say which limit is correct. The 128 may be an RFC-scale header bound, a gRPC
 constraint, or an arbitrary guard; nothing here distinguishes them, and a fix that
 moves it without knowing is how a limit ends up wrong the other way.
+
+## Reading
+
+rpc_dart — **asks BOTH questions per row** — routable by the policy, buildable
+by the caller — because a disagreement between two limits on one quantity is
+invisible when either is read alone. The disagreement IS the measurement; a
+count of refusals would say nothing. Its control is a name past the policy's
+own limit, where both answers turn negative together, and the short rows are
+the other half: at 32 characters both are positive, so neither column is
+stuck.

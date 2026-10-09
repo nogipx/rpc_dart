@@ -71,3 +71,16 @@ and was not built.
 
 Does NOT cover package:http2 2.3.1, which the workspace also resolves for some packages. Measured
 on 3.1.0 only, and `finish()`'s behaviour already changed once across versions (B-53).
+
+## Reading
+
+rpc_dart_http2 — **measures WHERE an error arrives**, by destination: the zone
+handler, the call site's `catch`, or nowhere. Four arms on `terminate()`
+(healthy or socket destroyed, future dropped or awaited) all silent, against a
+POSITIVE CONTROL where `finish()` escapes `Bad state: Cannot add event after
+closing`. **That control is the whole probe** — four clean rows mean
+"terminate is safe" or "this rig cannot produce the condition", and nothing
+else separates them. Its first version had no working control: the peer was a
+bare TCP listener and `finish()` never completed against it, so the silence
+would have read as proof. Measured on package:http2 3.1.0 only, and does not
+drive the transport's own `reconnect()`.

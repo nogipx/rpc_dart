@@ -38,3 +38,11 @@ BOTH removes deleted                      1          2001
 exactly like "the bench cannot see a leak" — and would have made this round's
 CLEAN worthless. The redundancy is deliberate belt-and-braces in the transport,
 and it masks a single-site ablation completely (L-01).
+
+## Reading
+
+does per-stream state come back to zero after the calls that made it, read
+from the transports' own `health()` details so nothing needs instrumenting.
+Its control had to delete **both** prunes: `_streamParsers` is removed in two
+places and either alone suffices, so the single-site ablation changed nothing
+and read exactly like a bench that cannot see a leak (L-01)

@@ -61,3 +61,14 @@ later costs. Nothing here exercised `releaseStreamId` or a terminal inbound fram
 
 Does NOT cover the streaming shapes. A client-stream call holds its request stream
 open, so it may well be counted for its whole life — untested.
+
+## Reading
+
+rpc_dart — **each SIDE carries its own policy, over a hand-built byte pipe,
+and that is the rig's whole correctness.** `RpcChannelTransport.pair(policy:)`
+gives both sides the same one, and from the caller a server refusing at ITS
+ceiling is indistinguishable from a client doing so — the first run produced
+`4 refused` and the lead looked refuted. The both-sides run is now kept as the
+CONTROL: it proves the mechanism works and the rig can provoke a refusal, so
+`0 refused` on the client-only run is the client declining to count rather
+than the probe failing to fill anything.

@@ -54,3 +54,10 @@ full duplex preserves order on both. It does NOT establish that http2 is clean â
 it is the bench that found B-53's ordinary trigger, which P-78 then isolated.
 
 Does not cover packet loss, coalescing, dart2js or RSS.
+
+## Reading
+
+C-41's endings over real HTTP/2 on both links. Worth reading for how a useless
+reading became a usable one: a fresh connection per duplex case (the death
+FOLLOWS a call that succeeded) and a SEQUENTIAL arm beside the concurrent one
+(concurrency is not the variable)

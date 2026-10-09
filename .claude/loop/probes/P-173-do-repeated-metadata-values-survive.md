@@ -64,3 +64,14 @@ needs either a standard-field list or a decision to stop splitting. Filed, not c
 
 Does NOT cover the responder direction, where shelf joins repeats and the transport never
 splits them.
+
+## Reading
+
+rpc_dart_http — **quotes and COUNTS every value, because the question is how
+many there are and Dart's list printing cannot answer it**: `['Mon', '29 Sep
+…']` and `['Mon, 29 Sep …']` have the same `toString()`, and the first reading
+of this probe called a split intact for that reason. Its response arm uses two
+standard fields whose comma sits INSIDE one value (`date`,
+`www-authenticate`), with single-value headers in the same table as the
+control. Passes `methodPath:` explicitly — rebuilding `RpcMetadata` from
+`.headers` drops it and no request fires.

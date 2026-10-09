@@ -46,3 +46,11 @@ finish() and NOTHING else   StateError: Cannot add event after closing
 The last row is the one that identifies the source. Add it before believing any
 conclusion about the row above it: `finish()` throws after its own future has
 completed, so anything still in flight when it lands looks like the culprit.
+
+## Reading
+
+connection state puts an error in the zone, with a REACHABILITY column that is
+the control: three arms reported zero unhandled errors while the line under
+test never ran. Its last row, `finish()` and nothing after it, is what
+identifies the source — `finish()` throws after its own future completes, so
+whatever is in flight when it lands looks like the culprit

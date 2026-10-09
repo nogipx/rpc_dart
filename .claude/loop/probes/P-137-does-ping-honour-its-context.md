@@ -67,3 +67,12 @@ drivable from here. The RTT has its own witness in
 `ping_honours_its_context_test.dart`, which injects a skewed `sentAt` (an hour in
 the past) in place of a clock step and reads `1:00:00.012557` under ablation. The
 `.ignore()` is reasoned from the code and unwitnessed.
+
+## Reading
+
+— a transport decorator that swallows ONLY the ping frame, so nothing ends
+that stream and every arm is a statement about the caller's own bound rather
+than about the peer. **Two controls pulling opposite ways**: a peer that
+answers must stay fast, and a ping with NO bound asked for must STILL hang —
+without the second, "everything returns quickly" reads as success while the
+fix has invented a bound nobody requested

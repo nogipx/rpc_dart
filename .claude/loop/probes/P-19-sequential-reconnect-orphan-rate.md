@@ -50,3 +50,10 @@ same power the fix verdict does.
 **Underpowered for verdicts about a FIX.** At 1.3%, 150 iterations expect two
 orphans, so "0 in 150" is not evidence. Round 241's candidate fix measured 1 in
 150 against 5 in 390 and that difference is noise; see B-25.
+
+## Reading
+
+rpc_dart_http2 — how often does a SEQUENTIAL reconnect orphan a connection? 5
+in 390 direct cycles, 0 in 90 through the stalling proxy, and it names WHICH
+of the three connections leaked, which is what separates this from the
+concurrent defect. Underpowered for judging a fix: read its last paragraph

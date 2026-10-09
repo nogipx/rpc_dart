@@ -82,3 +82,16 @@ apart.
 > same bench, the same servers, one load-shape change: `112 / 70` against
 > `3006 / 1347`. A reader who only saw the second could not tell which arm
 > earns the conclusion.
+
+## Reading
+
+http2 — does a graceful drain converge or merely expire? **Broken in 402 and
+repaired in 403, with both sets of numbers kept side by side**, which is the
+reason to read it. Broken: the ordering between the transports REVERSED with
+load (`112 ms / 70` against `8 ms / 6`, then the opposite at 64 lanes),
+because `drainUntilIdle` samples an instantaneous count and 5 ms handlers
+always leave a gap, so both exited on the first zero sample and admission
+never came into it. Repaired by parking eight server-streams across the drain
+so the count cannot read zero: `websocket 3006 ms / 1347 served after` against
+`http2 3016 ms / 4` — **337x**, direction independent of load. One load-shape
+change between noise and three orders of magnitude

@@ -51,7 +51,7 @@ lost, so the failure mode is a stream whose remaining frames belong to nobody.
 
 ## What the 2026-09-15 session eliminated
 
-The bench exists now — [P-51](../probes/P-51-browser-client-stream-delivery.md),
+The bench exists now — [P-256](../probes/P-256-browser-client-stream-delivery.md),
 plus `client_stream_delivery_test.dart` for the two cheaper arms — and it did
 NOT reproduce. Four candidates are out:
 
@@ -80,7 +80,7 @@ reconnect, which they do not use.
 
 - **The pinned ref.** They run `55159adf` (6.0.0) on both sides; the bench ran
   HEAD, 26 commits later. Cheapest next step by a wide margin: pin both sides at
-  `55159adf` and re-run P-51.
+  `55159adf` and re-run P-256.
 - **The network path.** Production is `wss://` through a Caddy ingress; the
   bench is a bare local socket. A proxy that splits or coalesces frames is the
   kind of difference that would not show anywhere else.
@@ -202,9 +202,9 @@ Every axis reachable from this repository is now measured and clean:
 
 | axis | verdict | where |
 | --- | --- | --- |
-| VM + core pipeline | clean | P-51 |
-| dart2js semantics | clean | P-51, and round 383 again |
-| real browser WebSocket | clean | P-51 |
+| VM + core pipeline | clean | P-256 |
+| dart2js semantics | clean | P-256, and round 383 again |
+| real browser WebSocket | clean | P-256 |
 | lenient send after close | not the cause | C-38 |
 | wire SLICING | clean | P-71 |
 | stream-id reuse | unreachable | round 383 |

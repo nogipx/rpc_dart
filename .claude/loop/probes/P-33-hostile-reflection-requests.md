@@ -36,3 +36,9 @@ of which  a 1 MiB symbol name        answered 1048629 bytes
 > name comes back as a 1 MiB response, because the reflection proto requires
 > `original_request` in every reply. A bench that printed `ok` per case would
 > have reported seventeen clean rows and missed it.
+
+## Reading
+
+P-28's shape aimed at the OTHER hand-rolled parser here, the reflection
+service's request decoder. Prints the response SIZE and not just a verdict,
+which is the only reason its one interesting row is visible

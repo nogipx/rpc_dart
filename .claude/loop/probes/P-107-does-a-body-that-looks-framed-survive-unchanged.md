@@ -85,3 +85,15 @@ Does not establish how OFTEN a real body satisfies it. The arm constructs the
 input deliberately; the probability that, say, CBOR output begins with a valid
 flag byte and a length field matching its own remainder was not estimated, and the
 fix does not depend on it.
+
+## Reading
+
+rpc_dart_http2 — constructs the input rather than hoping to observe it, and
+READING came first: knowing the function is fed `RpcMessageParser` output,
+which is de-framed, is what made the arm constructible at all. Measured at the
+TRANSPORT boundary, because there is no `RpcBytes` message type to carry
+arbitrary bytes through a contract. **The control is a body of the SAME length
+whose first byte cannot be a compression flag**, so the heuristic could never
+fire on it — without that, "the crafted body was re-framed" is equally
+consistent with everything being re-framed for another reason. LENGTH alone
+separates the outcomes, which is why both arms use 13 bytes

@@ -68,3 +68,15 @@ threshold sits at the first measured winner rather than the true crossing.
 
 Does NOT weigh the frame MIX. That this transport mostly carries small frames comes from reading what it
 sends, not from counting a workload.
+
+## Reading
+
+rpc_dart_isolate — **a SWEEP, because a copy's cost is a function of size and
+the lead asked for one point**: `32 B 2.71 vs 2.34`, `128 KiB 20.44 vs 14.03`,
+then inverting at `256 KiB 103.71 vs 160.67` and `1 MiB 383.08 vs 486.63`.
+Each size is the other arm's control, and the two columns cross between 128
+and 256 KiB. `fromList` is INSIDE the timed loop, which is the whole question;
+the worker materialises the TTD so the receiver's share is in the arm; minimum
+of three runs after 200 warm-up frames. Does NOT measure through the transport
+— raw ports carrying the two expressions the channel picks between, so the
+comparison is sound and the absolutes are not a frame's true cost

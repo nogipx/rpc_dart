@@ -52,3 +52,10 @@ root        rpc                                    guard: false  delivered: true
 child       rpc.ServerResponder                    guard: false  delivered: true
 grandchild  rpc.ServerResponder.StreamProcessor    guard: false  delivered: true
 ```
+
+## Reading
+
+level guard predicts the filter it stands in for, asked at the controller's
+own stream rather than of the guard. Two of four configurations disagreed and
+one was a MUTE. Needs no instrumentation, which is what makes it cheap to
+re-run after any change to `_resolveLevel`

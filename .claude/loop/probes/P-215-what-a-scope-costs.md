@@ -32,3 +32,8 @@ Nanoseconds per call spent deriving scopes, as a share of the call.
 ## Control
 
 The call itself.
+
+## Reading
+
+rpc_dart — the five `LogScope` derivations one unary call makes, timed against
+the call itself: `228 ns` of `66801 ns`, 0.34 %; medians of five

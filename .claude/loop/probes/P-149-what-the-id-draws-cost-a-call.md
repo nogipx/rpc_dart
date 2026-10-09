@@ -79,3 +79,16 @@ Does NOT measure the context copies as a share of a real call, and does not meas
 `withAdditionalHeaders` re-running the header regex, or `forClientRequest`'s two
 regexes — the other halves of the lead. The 6-link chain says only that the chain is
 not free.
+
+## Reading
+
+rpc_dart — **ablates the generator in place and re-times the whole call**,
+because a microbench of `Random.secure()` invites the objection that it is not
+measuring what a call actually pays. The microbench is supporting evidence
+only: two tokens at ~31 us predicts ~62 us of saving where ~40 us is measured,
+and being in the right range without being exact is what says it measures the
+right thing without substituting for the real path. **One number in it is
+explicitly NOT a share of anything** and the probe prints that warning itself
+— the 6-link context chain is a synthetic worst case, and an earlier draft
+quoted it as "37.8% of a call", double-counting against a figure it was never
+measured inside.

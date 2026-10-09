@@ -105,3 +105,16 @@ than a candidate for sharing.
 
 Does NOT decide B-93. Where one copy should live is the owner's question; this
 only measures how much "one copy" would cover.
+
+## Reading
+
+rpc_dart_wasm — **the instrument B-93 named and nobody ran.** Extracts every
+top-level named function from both boot literals by BRACE MATCHING (a
+non-greedy regex stops at the first inner `}` and silently compares a prefix),
+normalises indentation (the literals sit at different nesting depths, so a
+byte compare reports 100% drift and means nothing), and buckets them IDENTICAL
+/ DIFFERENT / one-sided. **5 identical of 14, all trivial**; every difference
+host-forced. Its control is that it returns BOTH answers in one pass — an
+extractor stuck on either verdict cannot. Its first run was wrong in both
+directions and printed an equally tidy table, so it now asserts its own `"""`
+line bounds and exits 2 when either literal moves

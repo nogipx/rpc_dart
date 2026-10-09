@@ -49,3 +49,10 @@ is exactly why the defect survived seven rounds. `handlers ended` is a BASELINE
 of 1, not 0: losing the first connection ends A's own handler, correctly.
 
 Lens: `../lenses/RPC-03-stream-ids-restart-on-reconnect.md`.
+
+## Reading
+
+and core reconnect — does the stream-id sequence survive a reconnect the PEER
+started? Two arms differing by one event: 1 then 3 when this side calls
+`reconnect()`, 1 then 1 when the socket dies first, and a dead call's
+half-close then ended a live one

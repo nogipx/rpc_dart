@@ -62,3 +62,13 @@ is still attached when the response completes and dart:io detaches it then — w
 explanation, now confirmed twice.
 
 Does NOT cover `close()`'s drain, which the lead also names.
+
+## Reading
+
+rpc_dart_http — **two claims, two instruments**: a library rule asked of a
+bare shelf `Request` in three lines, and a re-run of `checked/C-31` against
+the REAL transport behind `shelf_io`. Its first version used a hand-written
+stand-in server and reported `closed with nothing` where the transport reports
+`408` — the two differ in exactly the detail under test, so **a stand-in for
+the code under test measures its author**. Control: the undeadlined arm,
+without which `384 KiB` is just a number.

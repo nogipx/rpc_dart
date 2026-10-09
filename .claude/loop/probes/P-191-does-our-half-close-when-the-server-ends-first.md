@@ -74,3 +74,14 @@ entry is gone for another reason.
 `transport.close()` and reported the two arms backwards: `close()` terminates whatever the
 transport still tracks, so the teardown ended the streams and the arm that released its ids looked
 worse. `measurement.md` item 5 in one line.
+
+## Reading
+
+rpc_dart_http2 — **the observable is at the SERVER**, because every per-stream
+map on our side reads 0 either way: a raw `ServerTransportConnection` answers
+as soon as the first DATA frame arrives, and `onDone` on its incoming side
+fires when the client ends its half and not otherwise. `WITNESS 0 of 3 -> 3 of
+3` against a `CONTROL 3 of 3` whose request carries `endStream`. The accepted
+count is a second control, on the premise. **Its first version read the counts
+AFTER `transport.close()` and reported the arms backwards**, since close()
+terminates what the transport still tracks and ended the streams itself

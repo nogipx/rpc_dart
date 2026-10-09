@@ -107,3 +107,18 @@ other.
 Nor does it cover the transports that parse paths themselves; `rpc_dart_http`'s
 responder calls `policy.isValidMethodPath`, so it inherits the fix, but that was
 not run here.
+
+## Reading
+
+rpc_dart — holds the REGISTRATION fixed and varies the PATH, which is what
+refuted the lead's "low likelihood": an ordinary package-qualified service is
+enough and only the request is crafted. **Three levels, and the first two
+cannot answer what a grammar fix has to answer** — the caller transport
+validates outbound metadata against the same policy, so an ordinary call is
+refused locally and says nothing about a foreign peer; the third level
+hand-builds the frame past it. Its controls include `/a/c` and `/zzz/c`
+staying UNIMPLEMENTED, and the honest path through the raw level reading
+"accepted" in both tables — a unary call needs a payload the frame omits, so
+an accepted path answers nothing and that is otherwise indistinguishable from
+being ignored. **The interceptor level was built to confirm an auth bypass and
+refuted it.**

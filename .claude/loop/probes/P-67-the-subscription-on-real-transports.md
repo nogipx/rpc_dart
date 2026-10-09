@@ -63,3 +63,12 @@ Does not establish anything about LATENCY — all three run on loopback. That is
 adequate for this question, which is not flow-control shaped, and it is NOT
 adequate for the flow-control results in rounds 370, 371 and 374 (P-58's
 lesson). Nor does it cover dart2js.
+
+## Reading
+
+websocket + http2 + isolate — three files, one per package, real servers on
+loopback and a real spawned isolate, no fakes. **Its evidence is the
+ablation**: removing round 373's dispatch from CORE (which all three resolve
+from local source through the pub workspace) collapses every `silent` arm to 0
+HANG while every `control` survives, on all three. Loopback only, which is
+adequate for this question and NOT for a flow-control one (P-58)

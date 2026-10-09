@@ -80,3 +80,17 @@ settled in B-106.
 
 Does NOT read the 313 MiB as exact. The nominal payload is 400 MiB and the shortfall is GC of the
 wrappers plus RSS granularity; the direction is what the arm is for.
+
+## Reading
+
+rpc_dart — **measures ATTRIBUTION, not a count**: how much memory exists
+because the queue holds these objects, over and above what exists anyway.
+`HOLDING -1 MiB` against `MINTING 313 MiB` for 400 direct objects of 1 MiB,
+which settles that "a directPayload weighs nothing" is a statement about the
+SHAPE rather than the mechanism. **Its `after building` control caught the rig
+twice** — a zero-filled `Uint8List` is not resident until written, so 400 MiB
+of allocation moved RSS by 6 and the queue cost read `1 MiB`; and both arms in
+one process made the second's baseline the first's high-water mark, so the
+deltas were not comparable. One arm per PROCESS, selected by argument. Cannot
+answer which shape applications actually use — that is not a fact about this
+library.

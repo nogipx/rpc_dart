@@ -44,3 +44,9 @@ seeded initial window, which is what says the sender is now spending only what
 it had before the peer spoke.
 
 Lead: `../backlog/archive/B-05-isolate-null-credit-silent.md`.
+
+## Reading
+
+is a zero grant read as a peer that does not participate? A FOREIGN peer
+driven at the channel level, which is the only way to reach the path: 800 KiB
+through a 64 KiB window against 20 KiB in the control

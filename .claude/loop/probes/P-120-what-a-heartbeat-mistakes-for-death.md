@@ -73,3 +73,16 @@ Does not establish anything about a peer that answers with an error rather than
 silence — `unimplemented` from a responder with no ping handler. That path is
 now a skip rather than a close, but no arm here drives it; every peer in the
 harness answers ping normally.
+
+## Reading
+
+rpc_dart_websocket — **what does a heartbeat mistake for a dead peer?** Built
+for the item B-71's decision called unresolved — a heartbeat competing with a
+long call for the connection window — and reading moved the question before
+the first arm ran: the ping sends only `sendMetadata`, which never consults
+credit, so the window is not where they meet. `createStream()` is. Every arm
+runs against a LIVE responder, so **every close it reports is a false positive
+by construction**: `CLOSED` at 4 of 4 ids held, `open` at 3 of 4, `open` under
+a 120000 x 1 KiB stream. The one-id-free arm is load-bearing — same peer, same
+interval, same wait — and the "before fix" column is not hypothetical, it is
+what this round's fix looked like when first written

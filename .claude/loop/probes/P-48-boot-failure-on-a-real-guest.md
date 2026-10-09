@@ -43,3 +43,12 @@ bridge cleanup removed          (never reached)                   0 of 9 pass
 The two ablations fail DIFFERENTLY, which is what makes them two halves rather
 than one: dropping the rethrow corrupts the ERROR, dropping the cleanup kills
 the host-to-guest pipe for everything that follows.
+
+## Reading
+
+— what a failed boot hands back, inside a REAL dart2wasm guest on a device.
+**The only bench that can see `rpc_wasm.dart` at all**: it is
+`dart:js_interop`, so no VM runs it and `test:wasm`/`test:web` cannot reach a
+line. Its control is the suite's other nine guest tests, which exercise the
+second, successful boot over the same JS globals — so an ablation that breaks
+the retry is told apart from one that corrupts the error

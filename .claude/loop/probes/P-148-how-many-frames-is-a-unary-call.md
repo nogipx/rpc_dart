@@ -86,3 +86,16 @@ fails AFTER initial headers have gone out. The `handler throws` arm still shows
 `content-type` preceding the trailer, which is precisely the case the lead names and
 this round did not change. Nor does it measure latency or CPU, or the JSON-versus-
 binary header encoding the lead raises as a wire change.
+
+## Reading
+
+rpc_dart — counts frames where one `send` on the byte channel is exactly one
+frame, so nothing inside the library needs instrumenting. **Then DECODES each
+frame and prints its stream id, which is what turned a cost item into a
+defect**: a count of 4 is unremarkable, `grpc-status 12` three times on `s3`
+is one call answered three times. The metadata payload is printed because
+whether a frame carries a `methodPath` decides if the responder treats it as a
+new call. One call is made and the counters reset before the measured one,
+since the first call on a connection pays setup. Its controls are the two arms
+that must NOT change — a success and a throwing handler — both byte-for-byte
+identical across the fix.

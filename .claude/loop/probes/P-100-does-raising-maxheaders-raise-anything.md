@@ -80,3 +80,13 @@ confusing ArgumentError". The send-time text is now measured —
 `RpcMetadataViolation: Invalid argument: Too many metadata headers: 205 > 128` —
 which names the count, the limit and the field, but WHERE a caller would rather
 learn this is a judgement and not in these numbers.
+
+## Reading
+
+rpc_dart — varies the KNOB and holds the input fixed, which is the shape for
+any "this limit is wired to nothing" claim. Four static arms plus three
+end-to-end ones, the count read INSIDE the handler so the caller's own object
+can be compared against what crossed. **Three controls, and the third is what
+stops a wrong reading**: asking `validateMetadata` about the same 200 headers,
+without which the context's truncation and the policy's refusal are
+indistinguishable and the defect reads as "the limit works"

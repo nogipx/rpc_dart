@@ -63,3 +63,10 @@ against its 400 MiB bound. The two fixtures look interchangeable and are not.
 > which is `@TestOn('vm')` because it needs `dart:io` to build a true wrap — so
 > the platform without the defence was the one the test could not reach. Making
 > the fixture buildable everywhere is what turned a reading into a measurement.
+
+## Reading
+
+that is also the regression test**, because the thing measured is a platform
+difference and the only honest way to show one is the identical code on both
+runtimes. Forges the ISIZE trailer so the fixture builds without `dart:io`;
+asserts the contract, PRINTS the time

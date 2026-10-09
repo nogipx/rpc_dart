@@ -60,3 +60,13 @@ Does not drive the transports' own types (`RpcHttp2StreamError`,
 `RpcWebSocketNonBinaryFrame`), nor the 83 raw `StateError` / `ArgumentError`
 sites, which need a reachability split first: programmer error versus a runtime
 condition a peer can cause.
+
+## Reading
+
+rpc_dart — what a handler's error TYPE costs the peer. **Three of its five
+arms are controls and they are the whole design**: a type inside the
+hierarchy, the supported `RpcStatusException`, and a foreign `StateError`.
+Without them "the subjects come back INTERNAL" and "everything comes back
+INTERNAL" are the same output. The foreign arm doubles as the standing GUARD:
+`wireStatusFor` is default-deny, so if it ever stops being redacted the deny
+has been broken by whatever widened the hierarchy

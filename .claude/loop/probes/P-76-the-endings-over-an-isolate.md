@@ -54,3 +54,10 @@ and the zero-copy path behaves identically to the serialized one on all of it.
 Does not cover latency, which has no analogue here and was NOT simulated: an
 isolate port is not a link. Nor RSS, nor a worker that dies mid-call, nor
 payloads large enough to engage flow control.
+
+## Reading
+
+rpc_dart_isolate — the same matrix over a real isolate, serialized AND
+zero-copy, the codec-less branch no endings matrix had ever run. Counters come
+back OVER THE WIRE from the worker, so the baseline is 1 and the unary arm is
+what fixes it

@@ -55,3 +55,11 @@ bounds reassembly with it. Left at the default it refused the 20 MiB body with
 `Incoming frame buffer overflow` — in BOTH arms, control included. A neighbouring
 limit fired first and the bench said nothing about the proxy. Set every other
 limit generously, and read WHICH limit the refusal names.
+
+## Reading
+
+resilience and endpoint — what the layers above lose to a transport wrapper,
+in EFFECT rather than in `is`: the largest response the caller's parser takes,
+whether a codec-free call is accepted, whether the responder pipeline could
+defer metering. Rebuilt once because the frame channel's OWN policy refused
+the body in both arms — a neighbouring limit firing first

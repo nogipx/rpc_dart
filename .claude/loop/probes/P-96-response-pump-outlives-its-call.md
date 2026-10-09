@@ -46,3 +46,12 @@ E  CONTROL caller side (390)    +1         +1        --
 B and C are unchanged on purpose: no signal reaches a hand-built responder when
 the peer leaves, so there is nothing for the pump to watch. In the library's own
 path the pipeline closes the responder, which is arm D.
+
+## Reading
+
+rpc_dart — does a producer stop when its call ends, and on WHICH endings? Six
+arms, one per way a bidi call can end; the number is messages pulled in the
+250 ms after the ending, counted inside the `async*` generator. **+1 is a pump
+that stopped, +30-odd is one that did not**, with two controls at +1. Also
+reports whether `responder.done` fired, which separates "an ending nobody
+watched" from "an ending with no signal at all" — two arms are the second kind

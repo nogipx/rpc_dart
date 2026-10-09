@@ -73,3 +73,15 @@ reachable only from the public transport surface.
 Does NOT cover the websocket transport, which uses `RpcStreamIdManager` and is
 the rule's first home rather than a fourth. Nor the http2 responder, which has no
 entry point at all — established by reading its `implements` clause, not here.
+
+## Reading
+
+rpc_dart_http2 + core — **two arms at different LEVELS, and neither
+substitutes**: `resumeStreamIdsAfter` driven at its own boundary at every
+parity (does the rule work?) and through `RpcClientConnection` across three
+swaps, three ids between each — an ODD count on purpose, so a naive carry
+lands on an even one (is the rule ever asked?). Control: the alignment
+deleted, which reports `PARITY BROKEN` on three rows — **and leaves the proxy
+arm CLEAN**, which is the sharper result. An ablation that cannot reach an arm
+has said something about that arm: `lastIssuedStreamId` is `_nextStreamId -
+2`, odd by construction, so the alignment is never exercised there

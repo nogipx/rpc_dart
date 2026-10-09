@@ -62,3 +62,13 @@ lands it on the sibling's value.
 Does not establish anything about a direct `responseSink.add()`, unbounded by
 the `StreamSink` contract, nor about the endpoint pipeline's own bidi pump,
 which does not go through the sink.
+
+## Reading
+
+rpc_dart — the mirror of P-61 on the RESPONSE side: how many messages the
+library pulls out of the HANDLER's producer while the consumer is not reading,
+counted inside that producer. Control is `ServerStreamResponder`, which
+already forwards pause through `relay.onPause`, on the same rig in the same
+run; it lands on the window and reports the same number before and after, so
+the reading is of the mechanism and not the timing. `responseSink` is only
+reachable on the responder class, so that arm builds it directly

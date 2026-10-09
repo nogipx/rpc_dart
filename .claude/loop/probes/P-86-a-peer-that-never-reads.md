@@ -75,3 +75,14 @@ Does not measure `package:http2`'s outgoing queue, which is where the unread
 answers actually sit and which has no observable. What bounds THAT is the
 dependency's own read backpressure: once it cannot write, it stops admitting,
 which is why only 394 of 20000 became streams at all.
+
+## Reading
+
+rpc_dart_http2 — what a peer that never reads its own refusals costs the
+server. "Never reads" is a RELAY whose server-to-peer subscription is paused,
+not a peer that skips `listen`: dart:io drains into its own buffer, so that
+version applies no pressure at all. Two controls, and the second is the
+unusual one — the counters are read TWICE, twelve seconds apart, because one
+sample cannot separate a plateau from a slow climb and that distinction is the
+whole verdict. Its RSS column decides nothing and says so: the process holds
+both peers and two of three arms read NEGATIVE

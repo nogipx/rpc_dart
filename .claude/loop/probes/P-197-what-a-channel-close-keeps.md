@@ -69,3 +69,17 @@ but whose close ordering was not driven.
 
 Does NOT measure how often the race matters in practice — whether a real peer typically has a frame
 queued at the moment the other side closes.
+
+## Reading
+
+rpc_dart — **the rig has to create a moment, not measure a quantity**: both
+ends queue a tagged frame in the SAME event-loop turn and then one closes,
+with nothing awaited between the three calls, because awaiting any of them
+drains the queue and the question disappears. `the CLIENT closes -> client []
+/ server [from-client]`, mirrored when the server closes, which is how "the
+closing side loses" is told from "the client loses". For the closed-send arm
+it reads three facts at once — the send's outcome, the peer's inbound list,
+and the sender's own `isClosed`, the third being what made the claim sharper
+than filed. **It also priced the obvious fix**: a yield before the cancel
+delivers the frame and breaks `in_memory_transport_test`'s named requirement,
+both orderings tried

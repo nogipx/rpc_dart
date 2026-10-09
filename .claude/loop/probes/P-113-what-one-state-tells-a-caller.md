@@ -85,3 +85,16 @@ for two states; and after the fix the type and the code agree across both.
 Does NOT establish whether 14 is the RIGHT answer for the in-flight state. That
 is a claim about what a caller does with it, and it is a different bench —
 P-114.
+
+## Reading
+
+rpc_dart_websocket + rpc_dart_http2 + core — **two arms per machine, which is
+the design**: a send during a reconnect that is IN FLIGHT, and one after a
+reconnect that FAILED. Every earlier record collapses those into
+"disconnected"; separated, they turn out to want opposite advice, and
+`health()` already told them apart (`degraded` / `unhealthy`) while the status
+did not. One injectable factory with a `stall` and a `failNext`, so both arms
+come off one transport in one process. Reports the exception TYPE as well as
+the code, because http2 read the right code by ACCIDENT — from a discarded
+connection rather than from its guard. Controls: a send with no reconnect
+(accepted), and one after it completes (accepted)

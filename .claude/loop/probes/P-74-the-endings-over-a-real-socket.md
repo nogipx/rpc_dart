@@ -68,3 +68,11 @@ ending.
 Does not cover 100 ms+ links, packet loss, coalescing, a connection that DROPS
 mid-call, dart2js, or RSS. And the `deadline` row is bounded retention by
 design, not a clean zero — read it against `_reclaimGrace`.
+
+## Reading
+
+rpc_dart_websocket + core — C-41's seven endings over a real socket and over a
+Dart TCP relay with a 50 ms round trip. Two things P-63 lacks: **a unary call
+after every scale**, because an ending that WEDGES a connection leaves every
+counter at zero, and the duplex cases. Its sensitivity proof is the `deadline`
+row, the one arm that reads non-zero

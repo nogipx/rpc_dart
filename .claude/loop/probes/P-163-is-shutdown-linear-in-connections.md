@@ -64,3 +64,15 @@ serialisation visible, and no arm involved a real socket.
 
 Does NOT say anything about `drainTimeout`. Every arm passes null, so the drain path is
 untouched by this measurement.
+
+## Reading
+
+rpc_dart_websocket — **fixes the per-item cost small and varies N**, because
+the property under test is the serialisation and the honest magnitude
+(dart:io's close timeout for a peer that never answers) needs a raw TCP peer
+and makes every arm slow. Read as a RATIO to the single-peer arm, so the
+assertion does not encode the machine. Its control is twenty peers whose close
+is INSTANT — without it the growth is equally consistent with a per-endpoint
+bookkeeping cost. Its channel's inbound controller must stay OPEN:
+`Stream.empty()` tears the endpoint down before `stop()` sees it and every arm
+reads fast for the wrong reason.

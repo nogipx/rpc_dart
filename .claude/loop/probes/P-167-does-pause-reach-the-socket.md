@@ -61,3 +61,13 @@ Does NOT use a real socket, so the claim that the pause reaches the wire rests o
 
 Does NOT measure the cost of a long pause. dart:io answers pings inside the subscription this
 suspends, so a consumer that stays paused stops answering them — named in the code, not measured.
+
+## Reading
+
+rpc_dart_websocket — **reframes a memory question as a DEMAND question**,
+because P-128 established RSS across arms here is noise: the source is an
+`async*` generator counting its own yields, which suspends while its
+subscription is paused, so "did the pause reach the producer" is a count with
+no allocator in the loop. Reads BOTH sides — pulled and delivered — since the
+defect is that they disagree. Controls: unpaused, and paused-then-resumed,
+which rule out a channel that stopped reading and a pause that never lifts.

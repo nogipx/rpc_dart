@@ -3,10 +3,10 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probes/ws_collect_server.
 round: — (2026-09-15, from a consumer's incident)
 commit: bb8548939524ee67a53dcc5339d15f772e3f032e
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: broken (round 751) — no control has shown it can see a lost message
 ---
 
-# P-51 — does a client-stream lose a message on the browser WebSocket?
+# P-256 — does a client-stream lose a message on the browser WebSocket?
 
 The one combination the suite never had: **dart2js in a real browser, a real
 `WebSocketChannel.connect`, and a real dart:io server.**
@@ -32,6 +32,17 @@ paid for:
 2. Chrome's first launch times out in `BrowserManager._start` on this machine
    about half the time. Re-run; it is the harness, not the code.
 3. The messages are 256 KiB, so only the first 12 characters identify them.
+
+## Measures
+
+Messages delivered per call, and their order, as the handler reports them in
+its response.
+
+## Control
+
+None. No arm drops a message on purpose, so the bench's clean reading cannot
+be told from a bench that cannot see a loss. Before reuse: add an arm whose
+handler skips one message, and check the bench reports it.
 
 ## Arms
 

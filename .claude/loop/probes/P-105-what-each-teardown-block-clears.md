@@ -72,3 +72,15 @@ disposes no pump either, and on the normal path `releaseStreamId` is what cleans
 up, so its omission is covered by the pipeline calling that. Whether every
 normally-ended stream reaches `releaseStreamId` is a different question and
 belongs with the leak audit.
+
+## Reading
+
+rpc_dart_http2 — one arm per teardown path on a stream left MID-FLIGHT, so no
+ending clears the state before the path under test runs. A silent server is
+the point. **The instrument had to be built first**: `_outgoingPumps`,
+`_fcOutstanding` and the stream-controller router were private, which is why
+the lead sat unmeasured for 26 rounds — three counts in `health()` made it
+askable. Control is `releaseStreamId` on the same shape, `1 -> 0` every run,
+and the BEFORE value is asserted too because an arm with no pump to lose would
+pass silently. Carries a VOID arm: a 256 KiB send did not park, so the hang
+the sibling's comment promises was not reproduced

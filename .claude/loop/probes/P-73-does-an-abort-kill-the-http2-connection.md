@@ -75,3 +75,10 @@ Does not establish WHICH side closes the connection, nor the mechanism inside
 (`!_connection.isOpen`, no GOAWAY recorded, no active streams). That is B-53's
 first job. Nor whether the websocket and isolate transports have an analogue:
 their notice is a metadata frame, not a reset, and both stayed clean.
+
+## Reading
+
+rpc_dart_http2 — a control MATRIX rather than a number: eight arms differing
+one variable at a time, which is what eliminated the await and the sink path
+and left *responses in flight at the instant of the reset* as the only thing
+every dead arm shares. B-53

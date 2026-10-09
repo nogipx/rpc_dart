@@ -57,3 +57,12 @@ decode — and it did not help: run 4 and run 5 differ by more than the fix does
 **What would resolve it**: a physical device rather than an emulator, or an
 in-plugin timer reporting main-thread occupancy directly instead of a
 scheduling proxy. See `../backlog/archive/B-41-android-base64-on-the-main-thread.md`.
+
+## Reading
+
+rpc_dart_wasm android — platform-channel round-trip latency as a direct read
+of Android main-thread availability, with an idle control in the same run. It
+resolves THAT the byte path occupies the main thread and not BY WHAT: its own
+ablation (Base64 back on Main) reads no worse than the fix. Kept because the
+negative is the result, and because the design — measure the thread, not frame
+timings two layers away — is the reusable part

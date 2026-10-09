@@ -62,3 +62,13 @@ DoS.
 
 Does NOT weigh the encoding overhead — the policy's number and the channel decoder's
 bound count slightly different quantities, which a fix should reconcile.
+
+## Reading
+
+rpc_dart — every header individually LEGAL, varying only how many, which is
+the whole design: one oversized header would make the refusal say nothing
+about totals. **Prints the REASON for each refusal**, and that is what makes
+the last row readable — it is refused by the header COUNT, not by size, so it
+is not evidence of a size bound. Its control is one header past the per-header
+limit, which IS refused; without it, four rows of ACCEPTED are equally
+consistent with `validateMetadata` checking nothing at all.

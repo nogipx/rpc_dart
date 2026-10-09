@@ -72,3 +72,12 @@ names it.
 
 Does NOT test the ping-pong bidi the lead also describes (send, await a reply,
 send again), which would hang rather than fail. Nothing here would see a hang.
+
+## Reading
+
+490), rpc_dart_http — **two ceilings of different kinds, so the shapes are
+chosen to trip exactly one each**: `1500 x 10 B` is inside any byte budget and
+past the 1024-message count, `20 x 1 MiB` the reverse. Both answer
+RESOURCE_EXHAUSTED, so only the shape that provoked it says which fired. The
+control is the same contract over a channel pair, which meets neither ceiling
+the same way

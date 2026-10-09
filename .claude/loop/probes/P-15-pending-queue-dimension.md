@@ -49,3 +49,9 @@ moves while the bytes scale linearly, which is the finding:
 ```
 
 Lens: `../lenses/RPC-17-limit-fires-after-residency.md`.
+
+## Reading
+
+which dimension does the unlistened queue bound? Same pendingCount at three
+payload sizes while the retained bytes scale 64 -> 256 -> 1024 MiB; +549 vs +2
+MiB through a real transport. Records the two RSS traps it was rebuilt for

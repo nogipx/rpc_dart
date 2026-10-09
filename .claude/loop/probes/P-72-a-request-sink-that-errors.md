@@ -69,3 +69,10 @@ Does not establish anything about the CONNECTION's health afterwards — that
 needs a call on the same connection after the ending, which the transport
 witnesses do and which is how B-53 was found. Nor about latency: this runs on a
 pair. Nor about a `send()` that throws (C-35: unreachable).
+
+## Reading
+
+what the server keeps when a bidi request sink errors: 1 / 6 / 26 and
+permanent, against a half-close and an explicit `abort()` at 0. The **paced**
+arm is the one that earns its place — it separates *the fix drops a message*
+from *the abort raced a message still in flight*

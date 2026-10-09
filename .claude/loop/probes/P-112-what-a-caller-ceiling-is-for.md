@@ -93,3 +93,19 @@ needed.
 Does NOT establish anything about the streaming shapes: every arm is unary. The
 charge point is `createStream()`, which every shape goes through, but the
 ENDINGS differ and only the unary ones were driven.
+
+## Reading
+
+rpc_dart_http + rpc_dart_http2 + core — twelve concurrent calls against a
+handler that PARKS, ceiling 4 on the caller and 1024 on the responder, one arm
+per caller transport. **The parked handler is what makes the ceiling
+observable**: with a handler that returns, calls retire faster than they are
+issued and twelve never hold four slots at once. Three measures, and the third
+answers the lead's counter-hypothesis — admitted/refused, peak concurrent
+HANDLER entries counted on the far side of the wire, and for HTTP/1.1 peak
+concurrent requests open at the server (12 of 12, so the connection pool
+bounds nothing). Two further arms: a SEQUENTIAL one, which is RPC-05's ratchet
+canary made into a measurement, and the four ENDINGS run with the second
+release site ablated — which is how that site is known redundant rather than
+assumed necessary. Controls: the two siblings for the outcome, a high ceiling
+for the refusal

@@ -85,3 +85,17 @@ whether a real responder spends a handler slot on `/Unknown/Unknown` is not driv
 Does NOT drive the other two routes to `resetStream == false` the lead names — an id cleared by
 reconnect, and one reserved but never opened. Both reach the same early return by construction,
 which is not the same as witnessed.
+
+## Reading
+
+rpc_dart_http2 — a raw `ServerTransportConnection` recording the `:path` of
+every stream it accepts, which makes a phantom stream a path the client never
+asked for: `cancel after a completed call [/Svc/Echo, /Unknown/Unknown] ->
+[/Svc/Echo]`, and `a second OPENING frame on a live id [/Svc/Slow, /Svc/Again]
+-> [/Svc/Slow]`. **The cheapest route to `resetStream == false` is a COMPLETED
+call**, not the server-stream setup the lead asked for. Reads `activeStreams`
+beside the paths because in the overwrite arm the count is 1 before and after
+while meaning two different streams. Its second arm is kept as documentation
+of the trap: a second frame after an ANSWERING server ended the stream takes
+the no-methodPath branch and says nothing about the overwrite, which needs a
+server that never answers

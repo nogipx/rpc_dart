@@ -51,3 +51,12 @@ magnitude larger than the signal. Only the counters are valid here.
 **It is core-only.** A wrong guard in `rpc_dart_http2` leaves every number
 above unchanged — verified by ablating one and re-running. The transports need
 their own witness, which is why round 337 wrote one.
+
+## Reading
+
+log messages built for a level that discards them, per round trip, on **all
+four call shapes** and under **two logger configurations**. Round 333's
+ancestor took one shape and one configuration and so measured 6 discarded
+messages where serverStream had 42; attaching a real logger at `error` removes
+none of them. Core-only by construction: a wrong guard in a transport leaves
+every cell unchanged

@@ -62,3 +62,12 @@ not. A site that observed the token with a bare `.then(` and no subscription
 WOULD retain its callback until the token completed; the round checked all five
 named sites and none does. And a site that stores a subscription but never
 cancels it would leak for an unrelated reason; all five cancel.
+
+## Reading
+
+rpc_dart — **twelve lines with no library code in them**, because the lead's
+mechanism was a claim about `Future.asStream()` rather than about this
+repository. Its control is the uncancelled arm: `100` fired against `0`, same
+loop and one line different, which is what makes the zero admissible. Its
+level-2 arm is a worked example of what NOT to trust — RSS across 20 000
+calls, `+24 MiB` against `-25 MiB` with the signs flipping between runs

@@ -5,6 +5,7 @@ applies: a package's public surface comes from a barrel that re-exports wholesal
 breaks: "wrong result: a type nobody meant to publish becomes a compatibility promise, and the implementation starts depending on its own public API."
 applied: [289, 290, 291, 292, 307, 409, 580, 590, 735]
 status: confirmed (round 590)
+rank: 4
 ---
 
 # RPC-24 — Public by omission

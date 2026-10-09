@@ -72,3 +72,8 @@ overdraft" rather than a fixed number.
 > When a bench's ablation targets one of several paths to the same effect,
 > re-running it is not a formality: the other paths are what decide whether it
 > still sees anything.
+
+## Reading
+
+does a parked sender learn its call is over? Written in 210, registered in 221
+once an ablation showed it can see a credit hang

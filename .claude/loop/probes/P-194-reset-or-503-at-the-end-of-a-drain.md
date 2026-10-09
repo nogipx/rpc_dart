@@ -78,3 +78,16 @@ anything that does not fit the socket buffer in one turn is not measured.
 
 Does NOT read what the rpc_dart caller makes of the 503 — deliberately, since the probe's subject is
 what reaches the wire.
+
+## Reading
+
+rpc_dart_http — a 30 s handler against a 200 ms drain budget, read with a
+**raw `package:http` POST** so the number is the HTTP outcome and not a
+caller's interpretation of it: `ClientException: Connection closed before full
+header was received -> HTTP 503`, against a CONTROL at `HTTP 200` whose
+handler finishes inside the budget. Reads once while running and once after
+`stop()`, so a reset is distinguishable from a request that never started.
+Picks a free port by binding and releasing a `ServerSocket`, since
+`RpcHttpServer` exposes none. **It also established the yield**: reordering
+alone still read `ClientException`, because completing the completer only
+hands the response to shelf and nothing can be awaited for the write

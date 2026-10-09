@@ -36,3 +36,12 @@ CONTROL complete         items=2  NO ERROR                  endedClean=true
 B-09 item 3 expected `d` to read `items=2, NO ERROR` — the reading carried over
 from private memory. It does not, and the control is what makes that a
 measurement rather than an instrument that only knows one answer.
+
+## Reading
+
+how does a server stream END when the peer vanishes mid-stream? Three arms
+over a channel pair; the reading is the COMBINATION of items delivered, error
+or not, and whether `onDone` ran clean — `items=2, NO ERROR, endedClean=true`
+is a truncated response nobody can tell from a complete one. **The third arm
+is the control and it is what makes the negative readable**: a handler that
+ends properly, so the probe has to report `NO ERROR` for something

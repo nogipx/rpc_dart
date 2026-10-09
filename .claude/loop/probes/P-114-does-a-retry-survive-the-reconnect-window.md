@@ -72,3 +72,16 @@ FAILED_PRECONDITION loses.
 Does NOT establish anything about the state after a FAILED reconnect, where
 nothing is running and a retry would land in the same refusal. That is why the
 status stayed FAILED_PRECONDITION there, and P-113 is the bench that covers it.
+
+## Reading
+
+core + rpc_dart_websocket — **a sentence, measured**: a prior round chose
+FAILED_PRECONDITION for the reconnect window because "a synthetic UNAVAILABLE
+is RETRYABLE and invites the caller to repeat what cannot work". One call
+through `RpcRetryInterceptor` fired 100 ms into an 800 ms window, first
+backoff 250 ms — `status=9 after 0ms` versus `OK pong after 711ms`. The
+DURATION is the measure: 0 ms proves no retry was attempted, 711 ms proves the
+retry waited the window out rather than racing it. Timings chosen so the
+question has a fair answer both ways — a window longer than the retry budget
+would prove only that retries can be exhausted. Control: the same call with no
+reconnect, 30 ms

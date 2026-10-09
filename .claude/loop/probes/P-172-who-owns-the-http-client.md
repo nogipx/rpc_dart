@@ -60,3 +60,13 @@ gone, not which layer released it.
 
 Does NOT cover the responder transport or the isolate/websocket siblings, none of which take an
 injected client.
+
+## Reading
+
+rpc_dart_http — **two directions, two instruments.** Whether an injected
+client survives is asked by USING it afterwards, because "was `close()`
+called" is the correct outcome for one kind of client and the defect for the
+other. Whether an OWNED client is still closed cannot be asked that way at all
+— it is unreachable from outside — so it is read as a TCP descriptor across
+the close. That second arm is the control, and it is what stops the fix being
+a trade. A missing `lsof` exits 2.

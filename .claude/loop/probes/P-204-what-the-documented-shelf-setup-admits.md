@@ -104,3 +104,19 @@ process at `socket.close()` once the responder has answered and gone. See B-223.
 
 Does NOT drive `maxActiveStreams`, the method path, or the metadata bound, which
 sat behind the same `if (policy != null)`. The suite covers the metadata one.
+
+## Reading
+
+rpc_dart_http — **measures RESIDENCY, because the status cannot grade this
+defect**: the pipeline refuses an over-size body either way, so `413` against
+`200` only says which layer refused and `RSS +37` against `+524 MiB` says what
+was resident when it did. 256 MiB streamed from one reused 1 MiB chunk, so the
+client's own share stays flat. **Four arms, and two are easy to omit**:
+`securityPolicy: null` is NOT the same arm as omitting the parameter (one
+measures the opt-out, the other the default), and the policy arm is run both
+FIRST and LAST because RSS does not come back down — the trailing `+0` is what
+kills "the second arm inherited the first's heap". Second half re-measures a
+documented sentence rather than code: an `Expect: 100-continue` client with a
+1 s fallback reads `500 ms -> 408` against `30 s -> 200 OK`. Cannot separate a
+slow upload from a stalled one — that rig deadlocks the process at
+`socket.close()`, recorded on B-217 rather than quietly dropped

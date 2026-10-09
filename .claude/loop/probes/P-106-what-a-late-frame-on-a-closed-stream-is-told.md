@@ -83,3 +83,13 @@ the ceiling, it does not; and it still refuses new streams.
 Does NOT establish anything about the double refusal in the guard arm. It reads
 `status=14, status=14` on BOTH sides of the change, so it is pre-existing and
 untouched — B-90.
+
+## Reading
+
+rpc_dart — varies the endpoint's DRAIN FLAG and holds the arriving frame
+fixed. **One COMPLETE call first is the setup that matters**: it is what puts
+the id in the closed-stream set, and without it the arm measures a fresh
+stream instead of a finished one. Stream 1 on purpose, so the late frame is
+provably not new. The third arm is a GUARD rather than a control — moving a
+refusal later is the change that can disable it — and it is what surfaced
+B-90, because the refusal COUNT matters as much as its presence

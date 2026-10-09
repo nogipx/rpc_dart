@@ -86,3 +86,18 @@ raw-socket arm in `a_slow_upload_is_worth_retrying_test.dart` instead.
 
 Does NOT cover the HTTP/2 caller, which reads the same table for a non-200
 `:status` and therefore inherits the 408 row from a foreign proxy.
+
+## Reading
+
+rpc_dart + rpc_dart_http — **a TABLE, one row per rejection, with two columns
+because the lead's argument is about the second**: the gRPC status an
+application receives, and how many attempts the default retry predicate
+spends. `400 13/1, 405 2/1, 408 2/1, 413 8/3, 415 2/1, 503 14/3`, and 408
+becomes `14/3`. The status column alone cannot grade a claim about retry
+semantics, and the attempts column alone cannot say which rejection it belongs
+to. Five unmoved rows are the control; the three named statuses at the bottom
+(`INVALID_ARGUMENT 3/1` against `INTERNAL 13/1`) are the control for the
+comment's claim, and they are what showed its conclusion never rested on its
+wrong premise. Fakes each HTTP status with a plain `HttpServer` rather than
+driving six hostile clients; the 408 premise is pinned by a raw-socket arm in
+the suite instead

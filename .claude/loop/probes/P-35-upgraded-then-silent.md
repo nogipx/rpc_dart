@@ -42,3 +42,9 @@ upgraded socket has left that management.
 > experiment; the conclusion survived re-measurement, but the round had no right
 > to it until these numbers existed. A number you did not produce is not a
 > measurement.
+
+## Reading
+
+P-25's question one stage later: the peer COMPLETES the upgrade and then never
+speaks websocket, so it answers no PING. A raw socket on purpose — a real
+client would answer them, which is the one thing it must not do

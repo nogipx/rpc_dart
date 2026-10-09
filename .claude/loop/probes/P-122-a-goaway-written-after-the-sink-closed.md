@@ -115,3 +115,17 @@ and never ended the stream, and `makeRequest` left the client half open too, so
 reached the code under test and reported quiet anyway** (L-15). Ending both
 halves fixed it; the harness now prints `VOID` rather than `silent` when
 `finish()` does not return.
+
+## Reading
+
+rpc_dart_http2 — **the same defect as P-40, rebuilt so it runs WITHOUT us.**
+B-35's decision left one task, the upstream report, and a report measured
+through `RpcHttp2CallerTransport` asks a maintainer to install this library to
+see their own bug. Both ends are `package:http2` here. It sharpened the
+finding twice: the trigger is `finish()` on a connection that **never opened a
+stream** (every arm with traffic is silent), and `finish()` completes
+**normally**, so the invariant is that the error never reaches its future
+rather than that it arrives late. 5 of 5 runs, http2 3.1.0 (latest). Two
+companion files on purpose — the matrix with the controls, and a minimal
+`upstream_minimal.dart` that is the pasted issue text kept as a file that RUNS
+rather than a quotation that rots. Its own first version was VOID and says so

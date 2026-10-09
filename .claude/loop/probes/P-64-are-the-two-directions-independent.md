@@ -69,3 +69,14 @@ still gets a call.
 Does not establish ordering under LATENCY — `RpcChannelTransport.pair()`
 flattens that (P-58) — nor anything about a caller that sends after the server
 has finished, which is B-50's question in the other shape.
+
+## Reading
+
+rpc_dart — with one direction of a bidi call idle, finished or busy, what does
+the OTHER side observe? **The control is one line of the caller's own code**:
+the same handler driven with `Stream.empty()` instead of a request stream that
+never closes, `5 DONE` against `0 HANG`, which named the trigger as the
+half-close rather than the payload. Carries a HOP CHECK that samples the
+server mid-call, because "the caller got nothing" cannot separate *the
+responder never heard of this call* from *the answer was lost* — that is what
+found the second hop instead of assuming it (L-07)

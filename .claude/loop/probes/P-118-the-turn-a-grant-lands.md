@@ -87,3 +87,17 @@ Does NOT establish the transport-level ORDERING consequence — that an ending p
 out on the fast path overtakes a parked data frame on the wire. That needs a
 caller inside the waking turn, and from outside `RpcChannelTransport` every entry
 point is async.
+
+## Reading
+
+rpc_dart — **an interleaving CONSTRUCTED rather than raced for**, which is
+what repaired a 0-of-200 void arm. `RpcFlowController` driven at its own API
+(it is on no barrel; `channel_transport.dart` is its only importer): spend the
+window, park a frame, deliver the peer's grant through `handleInbound`, then
+contend in that same synchronous turn. `fast path took it=true, parked sender
+resumed=FALSE` against a control at `false/TRUE`. **Two void versions preceded
+it and the tell was one extra column**: `returnCredit` is the RECEIVE side and
+never wakes a sender, and `initialSendWindowBytes: null` leaves the sender
+unseeded so `tryConsume` can never refuse — both read as "the fast path won"
+while measuring nothing, and `parked sender resumed=true` with the credit
+exactly spent is what contradicted them

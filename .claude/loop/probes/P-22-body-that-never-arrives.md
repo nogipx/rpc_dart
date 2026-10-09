@@ -43,3 +43,10 @@ timeout  500ms            0 -> 0           8 -> 0       status 8 -> OK
 
 The attacker holds no rpc_dart configuration at all: it is a bare socket. The
 victim's policy and the ordinary caller's are separate objects.
+
+## Reading
+
+the responder pipeline — what a body that never arrives costs, reported as TWO
+budgets: the transport's `pendingRequests` and the pipeline's `openStreams`.
+The control is the ablation, not the completed-request arm, and the `abort`
+arm's 503 is a neighbouring limit

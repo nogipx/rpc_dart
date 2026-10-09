@@ -56,3 +56,10 @@ it, and JavaScriptSandbox is a bare V8 isolate that does not. Fixed in round
 > A bench built to answer one question found a defect the question did not
 > mention, because it was the first guest code in this repository to use
 > `Stopwatch`.
+
+## Reading
+
+a guest `Timer` is, clocked INSIDE the guest because a bridge round trip costs
+more than the delays under test. Each platform is the other's control, and
+building it is what found the `performance.now()` gap: the Android arm threw
+where iOS reported numbers

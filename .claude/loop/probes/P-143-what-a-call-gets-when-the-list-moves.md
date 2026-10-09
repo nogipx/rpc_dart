@@ -84,3 +84,15 @@ Nor does it cover the streaming middleware paths beyond what they inherit:
 `_applyRequestMiddlewaresToStream` calls the same function per message, so each
 message takes a fresh snapshot. That preserves the previous behaviour, where a
 middleware added mid-stream applied to later messages, and was not varied here.
+
+## Reading
+
+rpc_dart — measures the error TYPE the caller receives, not whether the call
+succeeded, because the defect and the fix agree that a call interrupted by
+`close()` fails; only the type differs (`ConcurrentModificationError` versus
+`RpcCancelledException`). Two controls, and the second localises the defect:
+with the collection EMPTY the loop never awaits, so it never observes the
+mutation — without that arm, "close() breaks an in-flight call" explains the
+table equally well and the fix gets aimed at the wrong function. Timing is
+one-sided by construction: a mistimed disturbance shows up as an unexpected
+`OK`, never as a false positive.

@@ -59,3 +59,11 @@ Does NOT measure how long the socket then stays open, nor what the client
 eventually does with it — the arm ends at three seconds. And it drives only the
 DEADLINE reclaim; `releaseStreamId` has other callers, which the fix covers by
 construction but which this bench does not exercise.
+
+## Reading
+
+491), rpc_dart_http — counts requests `arrived` and `answered` in a shelf
+middleware wrapped around `responder.handler`, so "answered" means the future
+the server awaits actually completed. **The caller cannot be the instrument**:
+it reports `RpcDeadlineExceededException` in every arm because its own
+deadline fires regardless of what the server does

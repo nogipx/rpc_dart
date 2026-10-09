@@ -70,3 +70,11 @@ Does not establish the line inside `package:http2` that does it, nor whether a
 conforming server would tolerate the reset (RFC 9113 says it should). Nor
 anything about websocket or isolate, whose cancellation is a metadata frame
 rather than a stream reset — both were measured clean in the same round.
+
+## Reading
+
+rpc_dart_http2 — four arms differing by ONE thing each, the link and the
+instant the consumer lets go, which is what turned "the connection sometimes
+dies" into `50 ms + cancel before the trailer`. Its relay also ATTRIBUTES the
+hangup (labelled pipes) and a `LogController` on the server says rpc_dart
+never sees it — two instruments, not one. B-53

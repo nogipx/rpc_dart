@@ -37,3 +37,9 @@ things".
 > **A bound with an exempt dimension is not a bound.** Point this at any other
 > `sizeOf` before trusting its cap: the question is not whether the weigher is
 > called, it is whether anything the attacker controls weighs zero.
+
+## Reading
+
+buffering — which dimension of a frame does the queue's byte bound see? The
+same 64 KiB as payload stops at 256 frames / 16 MiB, as metadata ran to 4096 /
+256 MiB. The unmoving payload arm is the control

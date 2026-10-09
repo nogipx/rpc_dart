@@ -34,3 +34,10 @@ comment promised *"reported rather than fatal, so the connection stays usable"*
 and the connection WAS usable. A bench that only asked about the connection —
 which is what the channel-level suite asked — reads the before-state as correct.
 Ask what the layer above does with the report.
+
+## Reading
+
+core transports — what one stray frame costs the calls already in flight. Its
+`connection alive` column is the instructive part: it reads the same in every
+arm, which is exactly what the channel-level suite was asserting while every
+call on the connection died

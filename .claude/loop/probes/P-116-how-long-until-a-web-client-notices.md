@@ -86,3 +86,18 @@ incoherent as a dose-response and is the signature of the fixed arm ORDER rather
 than of ping load. The bound the bench supports: smaller than the ~7-15% spread
 at 120 MB, with no dose-response visible. Resolving it needs randomised or
 interleaved arms.
+
+## Reading
+
+rpc_dart_websocket — **a web-platform gap measured without a browser**: the
+stub `openWebSocket` IS the portable fallback as well as the web one, so both
+implementations run on the VM against one server, differing in exactly the
+code under test. **The server has to be RAW** — handshake by hand, then total
+silence — because a `dart:io` WebSocket server answers a ping inside its own
+implementation, and against one of those neither arm can detect anything and
+both read clean. `626ms` versus `NEVER`, with `io` + no interval as the
+control that also reads NEVER. Second half, for the owner's cost question, is
+deliberately reported as INCONCLUSIVE: the arm ORDER dominates, and the **ping
+count** is what exposed the first version as void — at 2000 messages the
+stream outran the first timer tick and zero pings landed while the row read
+"free"

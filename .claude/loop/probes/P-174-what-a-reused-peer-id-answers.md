@@ -96,3 +96,16 @@ attached where the call is made.
 including ones where frames demonstrably flowed. Dropped in favour of the client's own
 inbound stream and the pipeline's records; an observable that reads empty in the control is
 not an observable.
+
+## Reading
+
+rpc_dart_websocket + rpc_dart — **measures the ANSWER a caller gets, not a
+frame count.** Two callers on two connections share one stream number, and the
+only way to say the wrong one was served is to read what each was told: row 1
+handed the caller asking `two` the answer to `one`. The collision is the
+server's ordinary behaviour, not staged — a dropped connection gets a FRESH
+endpoint, which numbers from the bottom. Captures the client pipeline's own
+records at `internal`, because ignored-as-a-repeat, served, and
+torn-down-by-the-old-call all look identical from outside. Supersedes
+`P-161`'s open question: that bench said in its own record that it never drove
+a pipeline.

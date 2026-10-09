@@ -47,3 +47,10 @@ slow".
 > the drain costs the status. That is the intended answer to a slowloris and the
 > same trade round 272 made on the HTTP/1.1 sibling; the `refused` arm is what
 > shows an ordinary refusal still gets its 403.
+
+## Reading
+
+rpc_dart_websocket — P-23's shape aimed at the origin gate. Three arms, and
+the REQUEST SHAPE is the load-bearing one: dart:io hands a connection-upgrade
+request no body, so the holding attack is a plain POST and the upgrade-shaped
+one reads as clean

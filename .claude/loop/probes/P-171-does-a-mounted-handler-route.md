@@ -55,3 +55,14 @@ that package ever mounts differently, this rig would not notice.
 
 Does NOT check the caller side of a prefix. `RpcHttpCallerTransport` takes the prefix as part of
 `baseUrl`, which worked in both arms and was never in question.
+
+## Reading
+
+rpc_dart_http — **the rig IS the documented composition**, not a description
+of it: the mount is built from shelf's own `Request.change(path:)`, which is
+what `shelf_router.mount` does, so the real mechanism is exercised with
+nothing added to the dependency list. Two readings per run — the `methodPath`
+the transport saw and the caller's outcome — because a wrong path and a
+missing service give the same status from different causes. Its control is the
+UNMOUNTED arm, which is also the reason the defect survived: there the two
+path forms are identical.

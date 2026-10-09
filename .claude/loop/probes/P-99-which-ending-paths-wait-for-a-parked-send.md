@@ -79,3 +79,14 @@ wait and now does; the two that call `_claimEnding` do.
 fires only while credit is positive, and a parked frame means credit is not. So
 the arm re-measured the parked branch instead. Reaching it needs a grant landing
 in the same turn as a synchronous send — see B-88.
+
+## Reading
+
+rpc_dart — which of the four send paths waits for a credit-parked frame before
+ending the stream. Six arms over both transport pairs; the reading is the
+ORDER of arrival at the peer, not a quantity. **Two controls**: the ablation
+(the witness flips to OVERTAKEN) and the guarded sibling run on the SAME pair
+kind as each witness — a witness on `memoryPair` controlled only on `pair()`
+would not establish the rule. **It also corrects P-58**: a pair never parks on
+the LATENCY-shaped park and parks reliably on the VOLUME-shaped one, so no
+relay is needed here. One arm is VOID and says so (B-88)

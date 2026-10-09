@@ -73,3 +73,13 @@ own `health()` stops that without giving up recovery on a genuinely dead path.
 Does NOT establish anything about N concurrent retrying calls cascading into
 serial reconnects — the lead names it and one failing call is enough to settle
 the mechanism.
+
+## Reading
+
+485), rpc_dart + rpc_dart_websocket — **two calls on one socket, only one of
+them failing.** Counts sockets ACCEPTED at a real `RpcWebSocketServer`, so the
+blast radius is a connection count rather than an inference from a log. Its
+control is the same rig with one constant changed — the status the failing
+handler throws — and the arm that keeps the fix honest is a third one where
+the path really dies, carrying its own ablation: remove the reconnect and it
+falls from `sockets=2, slow:x` to `sockets=1, RpcNoConnectionException`

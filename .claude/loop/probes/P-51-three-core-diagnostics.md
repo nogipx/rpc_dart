@@ -56,3 +56,11 @@ service name round-trips through the ordinary path, because `methodPath` is
 carried on the frame and `_methodPathFromKey` is only consulted when no metadata
 message was retained. Deleting the arm would leave the next round re-deriving
 that the happy path is fine; the negative is the result.
+
+## Reading
+
+places the library answers wrongly rather than failing, in one file. **Each
+section's control is the SIBLING that gets the same question right**, which is
+what makes each defect legible rather than merely surprising. Its section (b)
+came back CLEAN and is kept for that reason: the negative is the result, and
+deleting the arm would leave the next round re-deriving it

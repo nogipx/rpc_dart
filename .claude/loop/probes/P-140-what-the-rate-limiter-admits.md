@@ -124,3 +124,18 @@ B-213 names are untouched.
 
 Does NOT measure TIME anywhere. Every number is an admission count, so the per-message
 resolution cost B-213 asks about cannot be read from this bench as it stands.
+
+## Reading
+
+rpc_dart — holds the LIMIT fixed and varies the call SHAPE, 100 opens per arm
+against `global: max 5`, so every number is comparable and `5` versus `100`
+needs no reasoning. Three controls covering three different rig failures:
+unary (the shape known to charge, so a 100 there invalidates every row), the
+same bidi shape with one message (which is what makes the empty-stream arms
+about ADMISSION rather than about bidi being unmetered — and it is the arm
+that reads collateral damage, dropping to 2 under an additive fix), and one
+call with ten messages (because "the open covers message one" is one edit from
+"the open covers every message"). Round 542 added a clock the run MOVES: the
+only way to read what a refused call cost the counter that did admit it is to
+roll the binding window over and ask what budget is left, since an admission
+count alone cannot see a counter draining behind a tighter one.

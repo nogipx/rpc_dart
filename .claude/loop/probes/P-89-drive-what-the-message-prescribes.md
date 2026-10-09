@@ -72,3 +72,13 @@ DISCONNECTED one and nothing has measured it.
 
 Does not drive the other ~16 prescriptive sites; the class count is in round
 404's record.
+
+## Reading
+
+framework + websocket + http2 — do exactly what an error message says and
+nothing else. Three files because the sites live in three packages. Two design
+notes worth reusing: every arm carries its PRE-STATE (`first call: served`),
+so an arm that never reached the state it names cannot read as clean — P-84's
+`grpc-status` lesson in another currency; and a message with an `and` in it is
+SPLIT into one arm per claim, because "a failed reconnect leaves the transport
+recoverable" buys nothing if it only means `isClosed == false`

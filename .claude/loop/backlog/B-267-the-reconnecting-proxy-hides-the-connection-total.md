@@ -5,6 +5,7 @@ commit: a94aca2c
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
 probe: —
 reason: risk — forwarding the capability through a proxy whose inner transport changes on reconnect lets charges taken on one connection be released on the next
+rank: 4
 ---
 
 # B-267 — the reconnecting proxy hides the connection total

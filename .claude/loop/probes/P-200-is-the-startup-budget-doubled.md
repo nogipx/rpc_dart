@@ -64,3 +64,15 @@ enough to make the isolate's own creation take a measurable share of the budget 
 
 Does NOT touch the lead's other two claims: the extra handshake round trip, and the kill/close ordering
 (which was settled by reading, since the isolate it concerns is killed before it could report).
+
+## Reading
+
+rpc_dart_isolate — a worker that never reaches `ready`, timed against three
+budgets across a 4x range so the answer is a RATIO: `1.04x / 1.00x / 1.00x`,
+which REFUTES "two phases, so 2x". **The stall must be SYNCHRONOUS** — `ready`
+is sent immediately after `userEntrypoint(...)` RETURNS, so a stall written as
+`Future.delayed(...).then(...)` schedules and returns and spawn succeeds in 28
+ms. That first version is kept in the record as the negative control it
+accidentally was: `0.00x` with `thrown == Null` is what this measurement looks
+like when its subject never happens (`measurement.md` item 8). Reports the
+thrown TYPE beside each timing, which is the premise check

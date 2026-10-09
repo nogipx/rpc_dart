@@ -5,6 +5,7 @@ applies: something with a lifecycle — an object with start/stop/close/reconnec
 breaks: a connection leak; or a running call detached from everything that can stop it.
 applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732]
 status: confirmed (round 732)
+rank: 2
 ---
 
 # RPC-21 — Drive the lifecycle twice

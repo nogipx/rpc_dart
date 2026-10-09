@@ -60,3 +60,11 @@ Does not cover the OTHER thing the same construction block applies — the
 advertised `SETTINGS_MAX_CONCURRENT_STREAMS` — which was fixed alongside it on
 the strength of reading, not of a measurement. A bench for that would have to
 read the peer's SETTINGS frame.
+
+## Reading
+
+rpc_dart_http2 — the same CONTINUATION flood against three construction paths,
+the server being the control. **Its number is FRAMES ACCEPTED, not RSS**: the
+unguarded arm read +178 MiB and +27 MiB across runs for identical input, while
+65-against-4096 is deterministic. Recorded because RSS is the more quotable
+figure and would have been the wrong one to quote

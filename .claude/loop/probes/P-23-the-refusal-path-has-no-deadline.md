@@ -47,3 +47,10 @@ dart:io cannot flush a response on a request whose body was not consumed. That
 is the intended answer to a slowloris and the reason the accept arm is kept as
 the control — it still answers 408, so "the server settled everything" cannot be
 mistaken for "the server stopped talking".
+
+## Reading
+
+rpc_dart_http — N slowloris sockets against a REJECTION exit, counting how
+many the server lets go inside a window. The control is one header:
+`application/grpc` reaches the guarded read, `text/plain` reaches the
+unguarded one

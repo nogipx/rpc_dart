@@ -107,3 +107,15 @@ service `a`'s method `b.c` in the after-table, which is B-113 and untouched here
 this round only stops a failed registration from leaving debris. Nor does it cover
 `unregisterContract`, or a `setup()` that throws asynchronously — `setup()` is
 synchronous, so that case does not exist.
+
+## Reading
+
+rpc_dart — varies WHERE a failure lands relative to the mutation, and prints
+three things per arm: what threw, the state the failure left, and whether the
+one recovery a caller has still works. The third is what turns an untidy
+internal state into a defect. Its control is a clean contract registered
+twice, also refused — without it the shared "already registered" message reads
+as the finding instead of as correct behaviour. Measures the actual KEY SETS,
+not counts: an early version had the recovery contract reuse a method name the
+failing contract also declared, so the after-state was identical to the
+before-state and the arm proved nothing.

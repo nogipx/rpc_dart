@@ -75,3 +75,17 @@ that runs the finaliser. A peer cannot ask for a refusal cheaply.
 Does NOT read the native side directly. Dart exposes no handle on an outstanding
 zlib filter, so RSS is the only observable, and RSS here is the whole process — fine
 for a probe run alone, not for a test (see B-224).
+
+## Reading
+
+rpc_dart — **the control is the arm that GROWS, which is the whole reading**:
+20000 successful decompressions (reaching `close()`) against 20000 refusals
+(skipping it) give `+12/+12`, `+30/+6`, `+31/-53` MiB across three runs. If
+the skipped close accumulated native filters the witness would be the climbing
+arm; it is not, and once it handed 53 MiB back mid-arm. **GC is deliberately
+not encouraged between arms** — the claim is that release happens at a
+finaliser rather than at the throw, so a forced collection would measure the
+finaliser working and say nothing about when. Cannot create the one condition
+that would keep the claim alive (low GC pressure) and explains why: tripping
+the limit requires allocating up to it. Also prices the sketched fix, which
+turned out free — `close()` after the throw is clean

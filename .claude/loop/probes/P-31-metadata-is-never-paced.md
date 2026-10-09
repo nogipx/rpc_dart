@@ -47,3 +47,10 @@ is measuring the window and not a coincidence.
 > reported no connection error and that meant nothing — 1.6 MiB is a tenth of
 > the queue's 16 MiB ceiling. Only 4000 frames (32 MiB, twice the ceiling) makes
 > "no error" evidence rather than an artefact of the offer being too small.
+
+## Reading
+
+first SEND-path bench here**: does this path apply backpressure? A real
+transport pair, a consumer that TOOK a stream and paused, and the observable
+is whether a send blocks. Its control parks at exactly the window, which is
+what makes it a measurement rather than a coincidence

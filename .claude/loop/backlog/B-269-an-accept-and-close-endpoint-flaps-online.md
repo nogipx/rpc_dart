@@ -5,6 +5,7 @@ commit: 8d6a35a2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
 probe: packages/transport/rpc_dart_http2/.dart_tool/probe/r746_drop.dart
 reason: unmeasured — the shape is seen; its cost against a real endpoint is not
+rank: 3
 ---
 
 # B-269 — an endpoint that accepts TCP and closes it flaps the connection online

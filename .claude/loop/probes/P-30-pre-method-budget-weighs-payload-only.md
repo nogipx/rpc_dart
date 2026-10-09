@@ -45,3 +45,10 @@ apply.
 > and the fixed library, because the thing being fixed is WHICH FRAMES GET IN,
 > and a bench that admits everything cannot see it. The number only became a
 > verdict once refusal was part of the bench.
+
+## Reading
+
+core — the pre-method budget with the pipeline's admission check TRANSCRIBED
+beside it, because the thing under test is which frames get in and a bench
+that admits everything cannot see it. Carries its own ablation: pass `old` to
+charge the pre-fix expression without touching the library

@@ -16,7 +16,7 @@ the first message's identity fields null — `blobId`, `vaultId`, `totalLength` 
 **86 times in 3.6 days across two replicas**, on dart2js through a browser
 WebSocket, never on the VM.
 
-The 2026-09-15 session built P-51, eliminated four candidates and did not
+The 2026-09-15 session built P-256, eliminated four candidates and did not
 reproduce it. Its own ranked list of what was left put **the network path**
 second: production is `wss://` through a Caddy ingress, the bench was a bare
 local socket, and "a proxy that splits or coalesces frames is the kind of
@@ -219,6 +219,6 @@ too blunt to certify the reading.
 - RPC-07 — the lens; `applied:` gains 383
 - B-44 — still open; this round removes one suspect from its ranked list
 - P-71 — the bench, with its own weakness recorded
-- P-51 — the 2026-09-15 bench, which eliminated the other four
+- P-256 — the 2026-09-15 bench, which eliminated the other four
 - Round 378 — put toxiproxy in reach and named slicing as the interesting toxic
   for a framed protocol

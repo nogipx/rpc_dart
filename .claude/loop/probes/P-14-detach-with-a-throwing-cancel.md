@@ -47,3 +47,9 @@ the second transport was never built because `forceReconnect()` runs
 entirely.
 
 Lens: `../lenses/RPC-16-check-before-await.md`.
+
+## Reading
+
+resilience — does a throwing `onCancel` on a user-supplied transport abandon
+it? One arm differs by that throw alone: leaked 0 vs 1, unhandled zone errors
+0 vs 1, and the reconnect that never happened

@@ -56,3 +56,12 @@ Establishes: the endpoint's bidi pump created unbounded demand on an ordinary
 
 Says nothing about the request direction of the same pump, nor about latency:
 `RpcChannelTransport.pair()` flattens that (P-58).
+
+## Reading
+
+rpc_dart — the same back-pressure question as P-61 and P-62, asked of the
+THIRD copy: the endpoint's own `_pumpBidirectionalResponses`. **The one an
+ordinary application reaches** — the sinks need the caller/responder classes
+built directly, this one is an `async*` handler on a contract. Control is a
+server-stream handler whose relay already forwards pause, on the same rig,
+landing on the window and unchanged before and after

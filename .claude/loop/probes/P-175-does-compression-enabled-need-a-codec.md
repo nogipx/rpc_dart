@@ -76,3 +76,17 @@ Does NOT establish anything about compression RATIOS, which is what
 
 Does NOT cover the responder's own response encoding: that path already asks the registry
 through `selectResponseEncoding`, and this probe never varies it.
+
+## Reading
+
+rpc_dart — **the knob is the REGISTRY, not the platform.** A platform
+difference is the obvious way to ask whether `compressionEnabled` needs a
+codec, and the wrong way: it needs a browser, takes minutes, and conflates
+"fails on the web" with "fails because the registry is empty".
+`unregister('gzip')` puts a VM run into dart2js's shipped state in under a
+second. Reads the DECLARED encoding off the responder's inbound metadata
+rather than inferring it from the outcome, since a call can fail for many
+reasons and only one is the header. **Its first version used `memoryPair` and
+reported every arm healthy** — the declaration is guarded by
+`!supportsZeroCopy`, so a zero-copy pair never reaches it, and an arm that
+cannot touch the code under test reads exactly like a pass.

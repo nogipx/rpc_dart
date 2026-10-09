@@ -76,3 +76,15 @@ measures the transport's contract rather than the odds of reaching it.
 Does NOT measure the harm downstream of the grant. A peer clamps an incoming grant at its
 own window, so the over-statement is bounded by one window per reused stream; this rig
 does not read the peer's credit.
+
+## Reading
+
+rpc_dart_websocket — **puts the same question to a GUARDED operation and an
+unguarded one, for the same stale id at the same moment**, and varies the one
+thing the guard cannot see: whether the peer reopened the number. Read at the
+WIRE, by counting frames written to the new socket, because the guard is
+membership in two sets the reconnect clears and the traffic refills — every
+bookkeeping observable sits downstream of that. The connection pool is
+switched off so a returned credit is exactly one frame. Its control is an arm
+with no reconnect, without which `dropped` is equally consistent with a pipe
+that never carried anything.

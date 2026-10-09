@@ -5,6 +5,7 @@ commit: f8dd6a88
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/r746_drop.dart
 reason: unmeasured — seen once, in the control arm of round 746
+rank: 2
 ---
 
 # B-268 — a transport built on an unconnected channel reports online, then crashes

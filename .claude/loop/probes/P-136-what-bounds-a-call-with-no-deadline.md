@@ -75,3 +75,15 @@ lead names as a fourth shape with no bound.
 
 Does NOT decide whether the 60 s should exist. The rows say what happens; the
 choice is in B-107.
+
+## Reading
+
+rpc_dart — a handler that never answers, a transport decorator recording the
+`grpc-timeout` header, and two counters inside the handler. **Its own budget
+is 65 s, one second over the library's hidden 60 s**, which is what makes "the
+library gave up at 60.0s" readable against "the probe gave up at 65.0s on a
+call nothing bounds". Four minutes to run, and there is no shortcut: the
+number under test IS 60 seconds, and a shorter stand-in exercises the deadline
+path, which works. Its control rows are also what proved a witness mis-aimed —
+the deadline path cancels the handler via the call scope, so a short-deadline
+test passes whether or not the timeout path notifies

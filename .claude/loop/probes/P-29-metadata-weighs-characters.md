@@ -57,3 +57,10 @@ payload        -       256   16.0     16.0    39.9   2.5x  the byte bound
 > 16 MiB bound: retention, not churn. And at 500 the byte bound did not engage
 > at all — the event count stopped it, which is round 236's hole reopening one
 > dimension over.
+
+## Reading
+
+extended with the shape P-21 lacks: many TINY headers, where characters and
+cost diverge 12x. Two traps it had to survive — the metadata must be DECODED
+from a wire frame or Dart interns the literals and the cost vanishes, and
+`maxRss` one-arm-per-process because `currentRss` went negative

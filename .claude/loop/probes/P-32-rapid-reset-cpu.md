@@ -45,3 +45,9 @@ event loop between writes, so absolute starvation is muted against a
 cross-process attacker. What stays valid is the COMPARISON between arms, since
 all three run in the same harness — which is why the verdict rests on
 `normal > reset` and not on either number alone.
+
+## Reading
+
+costs an UNRELATED client, measured as a second connection's call latency
+rather than as CPU. Report the WORST case, not the median: only the worst
+moves here, and a median-only reading calls every arm identical

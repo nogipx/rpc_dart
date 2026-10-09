@@ -5,6 +5,7 @@ applies: there are paths that run user code outside a guarded zone — or inside
 breaks: a process crash.
 applied: [222, 225, 242, 330, 346, 347, 356, 358, 368, 431, 443, 480, 483, 500, 535, 557, 577, 639, 647, 712, 744, 747]
 status: confirmed (round 747)
+rank: 17
 ---
 
 # RPC-13 — An unhandled async error is fatal to the isolate

@@ -69,3 +69,16 @@ stay green with either one removed.
 
 Does NOT cover the streaming shapes. A client-stream call holds its request stream open, so it
 may be counted for its whole life either way, and nothing here varies that.
+
+## Reading
+
+rpc_dart — **the instrument for the OPPOSITE failure**, built because holding
+a slot until completion turns "admits too much" into "refuses everything for
+the life of the connection" if any ending forgets to give it back. Five
+endings — completion, an error status, a cancel, a deadline, a peer that
+simply stops answering — each run `ceiling + 2` times SEQUENTIALLY, so a slot
+released one turn late still counts. **Its control row is what makes it a
+probe at all**: five rows of zero refusals read identically against a ceiling
+that had been deleted, so one arm keeps its calls overlapping and must refuse.
+The first version lacked it, and labelled the control's correct refusal `<- A
+SLOT LEAKED`.

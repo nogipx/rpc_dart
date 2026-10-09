@@ -39,3 +39,13 @@ does not park, and site 6's bridge, which already had the clause.
 
 Arm 3 at 6 ms against arms 1-2 hung is what makes the bench valid: the park
 alone does not produce the number, the await does.
+
+## Reading
+
+does a CONSUMER's `cancel()` take on a bridge whose source is a user `async*`
+parked at an await? Five arms, 3000 ms cap. The control is the same parked
+source through a controller that drops the cancel Future instead of returning
+it: 6 ms against HUNG, so the park alone does not produce the number, the
+await does. Two arms are real code paths with the defect absent, one of them a
+full server-stream call — the premise check for B-56's designated extraction
+source

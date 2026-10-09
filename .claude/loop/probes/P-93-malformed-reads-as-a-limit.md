@@ -61,3 +61,11 @@ Does not drive the other three limit sites (`buffer overflow`, `decompressed too
 large`, `too many messages in a chunk`); they share the parser path and the type
 with the arm that is driven. Nor the decompression site, which is neither kind —
 see round 412 for why it is INTERNAL.
+
+## Reading
+
+rpc_dart_http2 — does malformed framing read as a resource limit? **The two
+arms differ by FIVE BYTES and nothing else** — same connection, same headers,
+one gRPC prefix apart — which is the entire design: with any other difference,
+a difference in the answer would not be attributable to the classification.
+`8` and `8` before, `8` and `13` after

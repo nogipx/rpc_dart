@@ -55,3 +55,9 @@ control silently proves nothing.
 > what separated them.
 
 Lens: `../lenses/RPC-19-one-flag-two-lifecycle-meanings.md`.
+
+## Reading
+
+does the recovery API work more than ONCE? Server down, four failed attempts,
+server back, a real call — twice. Records both ways it lied first: the rig
+closing its own client, and an ablation aimed at the wrong observable

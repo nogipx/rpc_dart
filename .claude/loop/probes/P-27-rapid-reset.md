@@ -41,3 +41,10 @@ reset       200            0               0
 > header printed is what separates "the server refused me" from "the server
 > answered and my bench cannot see it". Build the body with
 > `codec.serialize(...)`; see `../lessons/L-10-a-hand-built-peer-needs-the-real-serializer.md`.
+
+## Reading
+
+Rapid Reset, and **the only bench here that speaks HTTP/2 to the server
+without rpc_dart's own caller**: reuse it for anything needing frame-level
+control. Carries a `diagnose` arm, which is what caught a fixture that could
+not dispatch a handler at all

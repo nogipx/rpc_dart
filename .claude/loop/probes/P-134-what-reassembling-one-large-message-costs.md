@@ -68,3 +68,12 @@ throughput cannot cite this.
 Does NOT measure allocation, only time. The `maxBufferedBytes` bound is what
 limits allocation, and the round moved its check BEFORE the append for that
 reason; the peak itself is unmeasured.
+
+## Reading
+
+496), rpc_dart — **five message sizes at ONE chunk size, reported as us/KiB**,
+because "is it slow" and "is it quadratic" are different questions and a
+single timing answers only the first. Flat means linear; doubling with the
+message means quadratic. Feeds `Uint8List.sublistView` pieces so the harness's
+own slicing is not in the number, and warms up first or the first scale pays
+the JIT for the rest

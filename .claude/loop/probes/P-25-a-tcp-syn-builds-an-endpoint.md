@@ -53,3 +53,10 @@ preface  500ms           24                 200
 > to a 15s deadline gives `endpoints 0, contracts disposed 201` — the teardown is
 > slow, not missing. The claim "nothing releases it" is only worth making
 > against a deadline.
+
+## Reading
+
+websocket — what a connection that never speaks costs a server, counted on the
+library's own `endpoints` and a contract-construction counter (RSS moved by
+-28.7 to +0.4 MiB across identical runs and is unusable). Three controls: the
+keepalive arm, the preface arm, and the sibling server

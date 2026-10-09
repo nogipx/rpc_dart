@@ -71,3 +71,15 @@ arm here varies it, so its truncated end is now always non-retryable.
 
 Does NOT measure the streaming shapes. Both witnesses are unary, which is where "the work ran" is
 sharpest; a server stream cut off after delivering items is the same branch and is not varied.
+
+## Reading
+
+rpc_dart + rpc_dart_http2 — **counts server EXECUTIONS, not statuses**,
+because the damage is work re-run: one unary call named `Charge` went `status
+14, ran 3 times -> status 13, ran 1`, with a no-retry ARM at 1 that attributes
+the 3 to the interceptor and a trailers-sent CONTROL returning "ok" at 1 that
+says the interceptor is attached and healthy. Both sites of the class in one
+file, the second built by writing the shape by hand on a frame-channel pair.
+Does NOT distinguish a dying channel from a forgetful peer at the CORE site —
+the http2 half splits on `goawayReceived || !isOpen` and the channel transport
+has no equivalent

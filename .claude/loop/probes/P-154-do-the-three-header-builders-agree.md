@@ -79,3 +79,14 @@ metadata frame and precedes the request, so the first version reported
 exactly what the true answer also looks like. A negative that arrives that easily
 needs a second look; the rig now skips frames carrying nothing but `x-rpc-`
 bookkeeping.
+
+## Reading
+
+rpc_dart — diffs three builders by reading the WIRE, because two of them are
+private and what a peer receives is what the claim is about. **Its false start
+is the lesson**: the transport's connection window-update is itself a metadata
+frame and precedes the request, so the first version reported
+`x-rpc-conn-window-update` alone from all three arms — three identical rows,
+which is exactly what the true answer also looks like. The with-context arms
+are the control that catches it, since `grpc-timeout` varying is what proves
+the rig can see a difference at all.

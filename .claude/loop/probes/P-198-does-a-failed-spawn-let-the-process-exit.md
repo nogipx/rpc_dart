@@ -63,3 +63,15 @@ Does NOT cover the web bridge, which has its own spawn path (`B-162`'s neighbour
 Does NOT establish a time bound. "Never exits" is read as "not within 90 s"; the regression test uses 45
 s, which is generous for a process that does one failed spawn but is a judgement rather than a
 measurement.
+
+## Reading
+
+rpc_dart_isolate — **the probe IS the subject**: it fails a spawn, prints, and
+returns from `main` with no `exit()` call, so the verdict is whether the
+command returns at all. `guard ablated -> no exit at 25 s / 60 s / 90 s`,
+`guard in place -> immediate`. The printed `spawn threw ArgumentError` is the
+premise check. **Its first version was wrong in a way that read exactly like
+the defect**: the `ReceivePort` it used as the unsendable value held the
+process open by itself, so it hung with the fix in place too — bench and
+subject holding the same kind of handle, `measurement.md` item 6. Does NOT
+bound the hang: "never exits" means "not within 90 s"

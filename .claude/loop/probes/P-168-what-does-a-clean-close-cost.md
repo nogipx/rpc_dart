@@ -56,3 +56,12 @@ there — but it would fire in either order, so it is not evidence about this li
 
 Does NOT cover the web implementation, where `close()` goes through a different channel class
 entirely.
+
+## Reading
+
+rpc_dart_websocket — **its control is the SDK doing the same thing with none
+of our code in the way**, which is what lets a zero be read as "this line
+costs nothing" rather than as a broken timer. Three arms, minima of five,
+because noise here only adds time. Subscribes `incoming` in every arm on
+purpose: an unlistened single-subscription controller changes what `close()`
+can do and would make the arms incomparable.

@@ -60,3 +60,12 @@ recover.
 
 Does not drive the worker dying mid-STREAM rather than mid-unary, nor the web
 (`isolate_transport_web.dart`) half, which is a different file.
+
+## Reading
+
+rpc_dart_isolate — the isolate's row in P-90's table, for a transport with
+neither `_disconnected` nor `reconnect()`. Its arms come from READING
+`spawn()` — an errorPort and an exitPort that after startup do the same thing
+— rather than from guessing, and `kill()` is the control on both, since it
+reaches neither port. All three deaths answer UNAVAILABLE, including an
+uncaught throw from a timer after the handler's frame is gone

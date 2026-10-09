@@ -40,3 +40,9 @@ CONTROL  valid metadata frame     ok: 1 frame, 26 bytes consumed
 > metadata cap was never reached — the row read `ok: 0 frames` and looked like a
 > pass. Delivering the payload IN FULL is what makes it test the cap it is named
 > for. Whenever a hostile case comes back clean, ask which check actually fired.
+
+## Reading
+
+malformed frames through the real decoder, each with a hand-written header so
+the declared length can lie. Sorts outcomes into typed refusal / short-read /
+**leaked Error**, which is the one that matters

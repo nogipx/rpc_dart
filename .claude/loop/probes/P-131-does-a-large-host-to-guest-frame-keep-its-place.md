@@ -71,3 +71,12 @@ lead; the test is what would say so.
 Does NOT cover a large frame concurrent with an unawaited flow-control GRANT
 specifically, which the lead names as a trigger. Grants are small and were
 certainly among the 492 overlaps, but nothing here pins one.
+
+## Reading
+
+(round 492), rpc_dart_wasm — 5 frames of 192 KiB and 50 small ones issued in
+ONE turn, three bursts, on a device. **Its `_CountingBridge` decorator asserts
+the bench's own precondition**: forwards in flight must peak above 1, or the
+run proves nothing about ordering. Copy that anywhere the hypothesis is a RACE
+— a bench that failed to drive the concurrency is green in exactly the way a
+negative is

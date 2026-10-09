@@ -62,3 +62,12 @@ Does NOT establish anything about the fan-out COUNT, which is unchanged: 200
 handlers still mean 200 listener invocations per frame. Nor about a real
 transport, since this runs on an in-process pair — the cost measured is CPU per
 frame, which a socket adds to rather than replaces.
+
+## Reading
+
+rpc_dart — what N live unary handlers cost every other frame. **Its first
+version read a FLAT line and was wrong**: it pumped with a server-stream while
+the parked responders sit on the server, whose broadcast carries inbound
+frames only. Two planted counters said `3` listener entries for 3000 frames;
+pumped upstream the same counter reads 600 400 at N=200. A flat line means "no
+defect" and "cannot reach it" equally. Control is N=1

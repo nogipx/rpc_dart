@@ -60,3 +60,13 @@ of it.
 Does NOT cover the slow-body path. This probe's requests are ordinary GETs;
 `a_refused_upgrade_has_a_deadline_test.dart` is what holds the bounded-drain behaviour, and it
 is the test that caught this round's first attempt.
+
+## Reading
+
+rpc_dart_websocket — **reads the noise and the ANSWER from one run**, because
+a fix can trade one for the other and a server that went quiet by not
+answering would score perfectly on the first. Counts error records inside a
+`LogController` subclass rather than off a filtered record stream — the guard
+around a log call cannot be seen downstream of the filter. Its control is ten
+real handshakes, without which `0 errors` is equally consistent with a counter
+that counts nothing.

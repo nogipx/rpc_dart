@@ -73,3 +73,15 @@ Does NOT drive a character violation. `HttpServer` will not emit a CR inside a v
 
 Does NOT model an attacker. The server here is one the caller chose to talk to; what the arm shows is the
 ASYMMETRY the lead names, not a reachable attack.
+
+## Reading
+
+rpc_dart_http — a `dart:io` server answering a real `grpc-status: 9` plus N
+headers of noise: `1000 extra -> 1007 delivered` against a `CONTROL 2 extra ->
+9`, now `2`. **It reads TWO things and the second is why it exists**: the
+header count AND whether the server's status survived — a probe measuring only
+the count would have called the first fix a success, when it read `headers 4,
+grpc-status 3`. First-status-wins is load-bearing: a status manufactured on
+the initial frame arrives ahead of the trailers, and recording the LAST one
+would have missed it. Does NOT drive a character violation (`HttpServer` will
+not emit a CR in a value) and models no attacker
