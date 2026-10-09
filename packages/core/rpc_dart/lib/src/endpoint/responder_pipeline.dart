@@ -1400,6 +1400,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     RpcResponderStreamState state,
     String reason,
   ) async {
+    // Before the first await, as in [_sendGrpcErrorAndCleanup]: a frame the
+    // peer sends after its own cancel would otherwise reach a client-stream
+    // responder whose sink the cancel just detached, and be reported as a
+    // request the pipeline LOST -- two errors per cancelled call.
+    _rememberClosedStream(state.id);
+
     final token = state.cachedContext?.cancellationToken;
     if (token != null && !token.isCancelled) token.cancel(reason);
 
