@@ -5,7 +5,7 @@ commit: c40f00a7
 paths: [packages/data/rpc_data/lib/src/change_journal.dart, packages/data/rpc_data/lib/src/repository/base_data_repository.dart, packages/data/rpc_data_sqlite/lib/src/repository/sqlite_data_repository.dart]
 probe: packages/data/rpc_data/.dart_tool/probe/r772_journal_by_count.dart
 reason: owner — decided to remove the journal; out of the current focus (rpc_dart and transports only)
-rank: 4
+rank: 6
 ---
 
 # B-272 — the data change journal is bounded in events, not bytes

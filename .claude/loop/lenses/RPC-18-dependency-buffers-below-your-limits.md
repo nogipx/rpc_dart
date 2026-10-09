@@ -3,7 +3,7 @@ refines: —
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723, 756, 763, 766, 767]
+applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784]
 status: confirmed (round 756)
 rank: 10
 ---
