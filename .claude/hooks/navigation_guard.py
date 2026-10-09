@@ -42,20 +42,6 @@ def emit(decision, text):
     sys.exit(0)
 
 
-def command_words(tokens):
-    """The program names of every command in a pipeline or list."""
-    words = []
-    expect = True
-    for tok in tokens:
-        if tok in SEPARATORS:
-            expect = True
-            continue
-        if expect:
-            words.append(tok.rsplit("/", 1)[-1])
-            expect = False
-    return words
-
-
 def check_bash(command):
     if re.search(r"\.dart\b", command) is None:
         return
@@ -63,7 +49,21 @@ def check_bash(command):
         tokens = shlex.split(command, posix=True)
     except ValueError:
         tokens = command.split()
-    readers = set(command_words(tokens)) & READERS
+    # Only a reader whose OWN arguments name Dart: `loop.py brief --path x.dart
+    # | sed ...` filters another command's output.
+    readers = set()
+    segment = []
+    for tok in [*tokens, ";"]:
+        if tok in SEPARATORS:
+            if segment:
+                name = segment[0].rsplit("/", 1)[-1]
+                if name in READERS and any(
+                    re.search(r"\.dart\b", t) for t in segment[1:]
+                ):
+                    readers.add(name)
+            segment = []
+        else:
+            segment.append(tok)
     if not readers:
         return
     if readers <= TEXT_SEARCH:
