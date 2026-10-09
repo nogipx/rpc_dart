@@ -333,6 +333,7 @@ class RpcWebSocketCallerTransport
       enableCompression: enableCompression,
       headers: headersProvider != null ? await headersProvider() : headers,
       connectTimeout: connectTimeout,
+      maxMessageBytes: _guardCeiling(policy),
     );
 
     return RpcWebSocketCallerTransport(
@@ -348,6 +349,19 @@ class RpcWebSocketCallerTransport
       // assume it -- see its doc.
       platformHandlesPing: platformHonoursPingInterval,
     );
+  }
+
+  /// The frame guard's ceiling: the multiplexer's reassembly cap, never below
+  /// the default policy's, as on the server.
+  ///
+  /// A whole message past a stricter policy must still reach the multiplexer,
+  /// which fails that one call; the guard can only drop the connection.
+  static int _guardCeiling(RpcSecurityPolicy policy) {
+    int capOf(RpcSecurityPolicy p) =>
+        p.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
+    final own = capOf(policy);
+    final floor = capOf(const RpcSecurityPolicy());
+    return own > floor ? own : floor;
   }
 
   /// Attaches a fresh socket, CONTINUING the id sequence rather than restarting

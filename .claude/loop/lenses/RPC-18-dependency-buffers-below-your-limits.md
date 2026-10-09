@@ -3,8 +3,8 @@ refines: —
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723]
-status: confirmed (round 237)
+applied: [237, 387, 611, 713, 723, 756]
+status: confirmed (round 756)
 rank: 8
 ---
 
@@ -122,3 +122,20 @@ Bench `../probes/P-16-hpack-reference-flood.md`; round
 `../rounds/237-the-dependency-shared-what-we-copied.md`.
 
 Imported from private memory in the curate pass after round 234.
+
+## Round 756 — the same one-door gap on websocket
+
+Round 611 guarded the websocket SERVER against a message without FIN; the
+client opened through `WebSocket.connect` with no guard at all:
+
+```
+  256 x 1 MiB, no FIN, to the client    before  RSS +354 MiB, never closed
+                                        after   closed after 18, RSS +30 MiB
+```
+
+The server's http2 lesson above ("the CALLER side measured WORSE") had not
+been carried across transports. **When a guard lands on one side of a
+connection, the next round asks about the other side, on every transport.**
+And keep the server's floor: a ceiling at a strict policy's own cap turned
+every whole oversized response into a dropped connection, 5 tests of 5.
+`../rounds/756-the-client-had-no-message-ceiling.md`.

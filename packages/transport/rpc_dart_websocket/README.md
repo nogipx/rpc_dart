@@ -101,6 +101,12 @@ message without an output limit before rpc_dart sees it, so a hostile server can
 send a small compressed message that expands to hundreds of MiB. Enable it only
 against servers you control.
 
+With compression off (VM), `connect` checks each incoming frame header as it
+arrives, as the server does: a message larger than the multiplexer's
+reassembly cap, never below the default policy's, closes the connection before
+its payload is buffered. A whole message past a stricter `policy` still fails
+only its own call.
+
 If you build the `WebSocketChannel` yourself, wrap it with the constructor:
 `RpcWebSocketCallerTransport(channel, reconnectFactory: ..., pingInterval: ...)`.
 Here `pingInterval` runs the library's own ping. If the channel already has a

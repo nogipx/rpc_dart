@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
@@ -75,6 +76,75 @@ Future<WebSocket> upgradeBounded(
     _BoundedSocket(socket, maxMessageBytes),
     protocol: protocol,
     serverSide: true,
+    compression: CompressionOptions.compressionOff,
+  );
+}
+
+/// Opens a client [WebSocket] to [uri] whose inbound messages may not exceed
+/// [maxMessageBytes]; the client side of [upgradeBounded].
+///
+/// The handshake is dart:io's own `WebSocket.connect`, done here so the socket
+/// can be guarded before `WebSocket.fromUpgradedSocket` reads it. [client]
+/// carries TLS, proxies and the connect timeout. No `permessage-deflate`.
+Future<WebSocket> connectBounded(
+  Uri uri, {
+  required HttpClient client,
+  required int maxMessageBytes,
+  Iterable<String>? protocols,
+  Map<String, Object>? headers,
+}) async {
+  final httpUri = uri.replace(scheme: uri.isScheme('wss') ? 'https' : 'http');
+  final nonce = Uint8List(16);
+  final random = Random.secure();
+  for (var i = 0; i < nonce.length; i++) {
+    nonce[i] = random.nextInt(256);
+  }
+  final key = base64Encode(nonce);
+
+  final request = await client.openUrl('GET', httpUri);
+  if (uri.userInfo.isNotEmpty) {
+    request.headers.set(
+      HttpHeaders.authorizationHeader,
+      'Basic ${base64Encode(utf8.encode(uri.userInfo))}',
+    );
+  }
+  headers?.forEach(request.headers.add);
+  request.headers
+    ..set(HttpHeaders.connectionHeader, 'Upgrade')
+    ..set(HttpHeaders.upgradeHeader, 'websocket')
+    ..set('Sec-WebSocket-Key', key)
+    ..set('Cache-Control', 'no-cache')
+    ..set('Sec-WebSocket-Version', '13');
+  if (protocols != null) {
+    request.headers.add('Sec-WebSocket-Protocol', protocols.toList());
+  }
+  final response = await request.close();
+
+  final expected = base64Encode(
+    sha1.convert(utf8.encode('$key$_webSocketGuid')).bytes,
+  );
+  final connection = response.headers[HttpHeaders.connectionHeader];
+  final upgraded =
+      response.statusCode == HttpStatus.switchingProtocols &&
+      connection != null &&
+      connection.any((v) => v.toLowerCase().contains('upgrade')) &&
+      response.headers.value(HttpHeaders.upgradeHeader)?.toLowerCase() ==
+          'websocket' &&
+      response.headers.value('Sec-WebSocket-Accept') == expected;
+  if (!upgraded) {
+    try {
+      (await response.detachSocket()).destroy();
+    } catch (_) {}
+    throw WebSocketException(
+      "Connection to '$httpUri' was not upgraded to websocket",
+    );
+  }
+  final protocol = response.headers.value('Sec-WebSocket-Protocol');
+  final socket = await response.detachSocket();
+  return WebSocket.fromUpgradedSocket(
+    _BoundedSocket(socket, maxMessageBytes),
+    protocol: protocol,
+    serverSide: false,
     compression: CompressionOptions.compressionOff,
   );
 }

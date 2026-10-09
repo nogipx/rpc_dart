@@ -8,6 +8,8 @@ import 'dart:io';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'websocket_bounded_upgrade.dart';
+
 /// Whether THIS platform's `openWebSocket` actually applies `pingInterval`.
 ///
 /// True here: dart:io owns the ping and closes the socket itself when no pong
@@ -51,6 +53,12 @@ const bool platformHonoursPingInterval = true;
 /// The raw dart:io WebSocket is opened here rather than through
 /// [IOWebSocketChannel.connect], which passes no compression argument and so
 /// always takes dart:io's default (ON).
+///
+/// [maxMessageBytes] bounds each inbound message, checked from frame headers
+/// before dart:io buffers the payload; past it the socket is destroyed. dart:io
+/// alone assembles a message with no ceiling, so a server that never sends a
+/// final fragment grows the client for as long as it writes. Not applied with
+/// compression on, where dart:io's own handshake is used.
 Future<WebSocketChannel> openWebSocket(
   Uri uri, {
   Iterable<String>? protocols,
@@ -58,17 +66,36 @@ Future<WebSocketChannel> openWebSocket(
   bool enableCompression = false,
   Map<String, Object>? headers,
   Duration? connectTimeout,
+  int? maxMessageBytes,
 }) async {
   Future<WebSocketChannel> open(HttpClient? client) async {
-    final webSocket = await WebSocket.connect(
-      uri.toString(),
-      protocols: protocols,
-      headers: headers,
-      compression: enableCompression
-          ? CompressionOptions.compressionDefault
-          : CompressionOptions.compressionOff,
-      customClient: client,
-    );
+    final ceiling = enableCompression ? null : maxMessageBytes;
+    final WebSocket webSocket;
+    if (ceiling != null) {
+      final own = client ?? HttpClient();
+      try {
+        webSocket = await connectBounded(
+          uri,
+          client: own,
+          maxMessageBytes: ceiling,
+          protocols: protocols,
+          headers: headers,
+        );
+      } finally {
+        // The upgraded socket is detached, so this closes only what is idle.
+        if (client == null) own.close();
+      }
+    } else {
+      webSocket = await WebSocket.connect(
+        uri.toString(),
+        protocols: protocols,
+        headers: headers,
+        compression: enableCompression
+            ? CompressionOptions.compressionDefault
+            : CompressionOptions.compressionOff,
+        customClient: client,
+      );
+    }
     webSocket.pingInterval = pingInterval;
     final channel = IOWebSocketChannel(webSocket);
     await channel.ready;

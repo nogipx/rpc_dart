@@ -44,6 +44,9 @@ const bool platformHonoursPingInterval = false;
 /// piece of cross-platform code can pass a token that the VM honours — throwing
 /// here would make every such program branch on the platform.
 ///
+/// [maxMessageBytes] is accepted and ignored: the browser assembles each
+/// message itself, before the page sees a byte.
+///
 /// [connectTimeout] IS honoured here: the bound is around `ready`, which needs
 /// no platform API. Every parameter exists so the signature matches the dart:io
 /// implementation; which of them bite differs, and is stated per parameter.
@@ -54,11 +57,12 @@ Future<WebSocketChannel> openWebSocket(
   bool enableCompression = false,
   Map<String, Object>? headers,
   Duration? connectTimeout,
+  int? maxMessageBytes,
 }) async {
   // Referenced so the analyzer does not flag them, and so a reader sees the
   // platform cannot honour them rather than that somebody forgot. pingInterval
   // belongs here too: it is the one whose absence actually costs something.
-  final _ = (pingInterval, enableCompression, headers);
+  final _ = (pingInterval, enableCompression, headers, maxMessageBytes);
   final channel = WebSocketChannel.connect(uri, protocols: protocols);
   final ready = connectTimeout == null
       ? channel.ready
