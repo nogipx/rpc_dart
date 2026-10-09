@@ -8,9 +8,17 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_data/rpc_data.dart';
 
+import 'data_error_interceptor.dart';
+
 /// Клиентская инкапсуляция. Хранит endpoint и caller и реализует интерфейс DataService.
 class DataServiceClient implements IDataClient {
-  DataServiceClient(this._endpoint, this._caller);
+  ///
+  /// Installs [RpcDataErrorInterceptor] on [_endpoint], so a data error the
+  /// service sends arrives as the [RpcDataError] it was, status and code
+  /// included.
+  DataServiceClient(this._endpoint, this._caller) {
+    RpcDataErrorInterceptor.installOn(_endpoint);
+  }
 
   final RpcCallerEndpoint _endpoint;
   final DataServiceCaller _caller;

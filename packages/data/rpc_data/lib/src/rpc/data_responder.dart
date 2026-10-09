@@ -177,18 +177,18 @@ class DataServiceResponder extends DataServiceContractResponder {
     ExportDatabaseRequest request, {
     RpcContext? context,
   }) async* {
-    _ensureAuthorized(context);
     try {
+      _ensureAuthorized(context);
       var chunkIndex = 0;
       await for (final bytes in _repository.exportDatabase(request)) {
         yield DatabaseChunk(bytes: bytes, chunkIndex: chunkIndex++);
       }
     } catch (error, stackTrace) {
       if (error is RpcDataError) {
-        Error.throwWithStackTrace(_reportInternal(error), stackTrace);
+        Error.throwWithStackTrace(_toWire(error), stackTrace);
       }
       Error.throwWithStackTrace(
-        _reportInternal(
+        _toWire(
           RpcDataError.internal('Failed to export database', error: error),
         ),
         stackTrace,
@@ -201,7 +201,11 @@ class DataServiceResponder extends DataServiceContractResponder {
     Stream<DatabaseChunk> chunks, {
     RpcContext? context,
   }) {
-    _ensureAuthorized(context);
+    try {
+      _ensureAuthorized(context);
+    } on RpcDataError catch (error) {
+      return Stream<ImportProgress>.error(_toWire(error));
+    }
     return Stream<ImportProgress>.multi((emitter) async {
       final iterator = StreamIterator<DatabaseChunk>(chunks);
       if (!await iterator.moveNext()) {
@@ -371,12 +375,16 @@ class DataServiceResponder extends DataServiceContractResponder {
     WatchChangesRequest request, {
     RpcContext? context,
   }) {
-    _ensureAuthorized(context);
+    try {
+      _ensureAuthorized(context);
+    } on RpcDataError catch (error) {
+      return Stream<DataChangeEvent>.error(_toWire(error));
+    }
     return _repository.watch(request).handleError((error, stackTrace) {
       if (error is RpcDataError) {
-        throw _reportInternal(error);
+        throw _toWire(error);
       }
-      throw _reportInternal(
+      throw _toWire(
         RpcDataError.internal('Failed to stream changes', error: error),
       );
     });
@@ -422,15 +430,17 @@ class DataServiceResponder extends DataServiceContractResponder {
       context?.cancellationToken?.throwIfCancelled();
       return await action();
     } on RpcCancelledException catch (error) {
-      throw RpcDataError.cancelled(error.message);
+      throw _toWire(RpcDataError.cancelled(error.message));
     } on RpcDeadlineExceededException catch (_) {
-      throw RpcDataError.deadlineExceeded(
-        'Deadline exceeded for request ${context?.requestId}',
+      throw _toWire(
+        RpcDataError.deadlineExceeded(
+          'Deadline exceeded for request ${context?.requestId}',
+        ),
       );
     } on RpcDataError catch (error) {
-      throw _reportInternal(error);
+      throw _toWire(error);
     } catch (error) {
-      throw _reportInternal(
+      throw _toWire(
         RpcDataError.internal('Unhandled repository error', error: error),
       );
     }
@@ -445,10 +455,12 @@ class DataServiceResponder extends DataServiceContractResponder {
   /// провод, ни в лог, то есть исчезала совсем. Всё, что не `internal`,
   /// проходит как есть: `notFound`, `conflict` и остальные адресованы именно
   /// вызывающему и ничего не разглашают.
-  RpcDataError _reportInternal(RpcDataError error) {
-    if (error.status != RpcStatus.internal) return error;
-    _onInternalError?.call(error);
-    return error.withoutCause();
+  ///
+  /// И отдаёт её как [RpcStatusException]: только у него rpc_dart пересылает
+  /// статус, а любое другое исключение доходит до вызывающего как INTERNAL.
+  RpcStatusException _toWire(RpcDataError error) {
+    if (error.status == RpcStatus.internal) _onInternalError?.call(error);
+    return error.withoutCause().toStatusException();
   }
 
   @override

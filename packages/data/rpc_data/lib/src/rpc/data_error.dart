@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:convert';
+
 import 'package:meta/meta.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -120,4 +122,66 @@ class RpcDataError extends RpcException {
     status: RpcStatus.deadlineExceeded,
     code: 'DEADLINE_EXCEEDED',
   );
+
+  /// The `google.rpc.ErrorInfo` domain a data error travels under.
+  static const wireDomain = 'rpc_data';
+
+  /// This error as it goes on the wire: its [status], its message, and an
+  /// `ErrorInfo` carrying [code] and [details] (each value JSON-encoded).
+  ///
+  /// rpc_dart forwards the status of an [RpcStatusException] only; any other
+  /// [RpcException] reaches the caller as INTERNAL. So without this a version
+  /// conflict, a permission denial and a validation failure all arrived as
+  /// status 13, and `on RpcDataError` caught none of them. Call
+  /// [withoutCause] first: [cause] must not cross the process boundary.
+  RpcStatusException toStatusException() => RpcStatusException(
+    status,
+    message,
+    details: [
+      RpcErrorInfo(
+        reason: code ?? '',
+        domain: wireDomain,
+        metadata: {
+          for (final entry in (details ?? const <String, dynamic>{}).entries)
+            if (entry.key != 'cause') entry.key: _encodeDetail(entry.value),
+        },
+      ),
+    ],
+  );
+
+  /// The data error [error] carries, or null when it was not sent by
+  /// [toStatusException].
+  static RpcDataError? fromStatusException(RpcStatusException error) {
+    for (final detail in error.details) {
+      if (detail is! RpcErrorInfo || detail.domain != wireDomain) continue;
+      return RpcDataError(
+        error.message,
+        status: error.statusCode,
+        code: detail.reason.isEmpty ? null : detail.reason,
+        details: detail.metadata.isEmpty
+            ? null
+            : {
+                for (final entry in detail.metadata.entries)
+                  entry.key: _decodeDetail(entry.value),
+              },
+      );
+    }
+    return null;
+  }
+
+  static String _encodeDetail(Object? value) {
+    try {
+      return jsonEncode(value);
+    } on Object {
+      return jsonEncode(value.toString());
+    }
+  }
+
+  static Object? _decodeDetail(String value) {
+    try {
+      return jsonDecode(value);
+    } on FormatException {
+      return value;
+    }
+  }
 }
