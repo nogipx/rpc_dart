@@ -303,7 +303,11 @@ endpoint enforces:
   A peer that exceeds it has its socket destroyed, and `onConnectionError`
   receives a `RESOURCE_EXHAUSTED` status.
 - `flowControlWindowBytes` bounds request payload that a handler has received
-  but not consumed. Past it the call is refused, not the connection.
+  but not consumed. Past it the call is refused, not the connection. The
+  message being delivered is not counted against it, so a single message up
+  to `maxMessageLengthBytes` always fits; it is the backlog behind that
+  message that must stay within the window. Responses are bounded the same
+  way on the caller.
 - Requests that are not `POST` are refused.
 
 The caller's `policy` bounds what a response may cost, and `maxActiveStreams`

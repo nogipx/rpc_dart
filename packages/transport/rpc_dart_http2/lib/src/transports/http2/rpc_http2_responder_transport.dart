@@ -131,9 +131,14 @@ class RpcHttp2ResponderTransport
     if (!_fcDeferred.contains(streamId) && !_streams.contains(streamId)) {
       return;
     }
-    final now = (_fcOutstanding[streamId] ?? 0) + bytes;
+    final before = _fcOutstanding[streamId] ?? 0;
+    final now = before + bytes;
     _fcOutstanding[streamId] = now;
-    if (now > _fcWindow) _fcRefuseOverrun(streamId, now);
+    // By what was already waiting: a message is delivered whole, so counting
+    // the one that just arrived refused every request message larger than
+    // the window from a handler reading as fast as it could. See the
+    // caller's _fcOnDelivered.
+    if (before > _fcWindow) _fcRefuseOverrun(streamId, now);
   }
 
   /// Ends a call whose consumer has stopped taking its request.

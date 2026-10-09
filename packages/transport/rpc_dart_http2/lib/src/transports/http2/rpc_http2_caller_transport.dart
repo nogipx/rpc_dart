@@ -1870,9 +1870,15 @@ class RpcHttp2CallerTransport
 
   void _fcOnDelivered(int streamId, int bytes) {
     if (bytes <= 0 || !_streams.contains(streamId)) return;
-    final now = (_fcOutstanding[streamId] ?? 0) + bytes;
+    final before = _fcOutstanding[streamId] ?? 0;
+    final now = before + bytes;
     _fcOutstanding[streamId] = now;
-    if (now <= _fcWindow || !_fcRefused.add(streamId)) return;
+    // Past the window by what was ALREADY waiting, not by the message that
+    // just arrived: one message is delivered whole and cannot be consumed
+    // before it is here, so counting it refused every response message
+    // larger than the window -- 4 MiB by default, against a 16 MiB message
+    // limit -- from a caller reading as fast as it could.
+    if (before <= _fcWindow || !_fcRefused.add(streamId)) return;
     _logger?.warning(
       'Stream $streamId holds $now un-consumed response bytes '
       '(window: $_fcWindow); failing the call',
