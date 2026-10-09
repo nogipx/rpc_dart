@@ -113,6 +113,11 @@ Here `pingInterval` runs the library's own ping. If the channel already has a
 native ping (`IOWebSocketChannel.connect(url, pingInterval: ...)`), leave
 `pingInterval` null or pass `platformHandlesPing: true`.
 
+The channel may still be connecting when you wrap it. The transport's `ready`
+(`IRpcTransportReadiness`) completes when the handshake answers and fails if
+it never does; until then `health()` reads degraded. `RpcClientConnection`
+waits on it before it reports Online.
+
 ### Reconnect
 
 The transport implements `IRpcReconnectableTransport`. `reconnect()` opens a new

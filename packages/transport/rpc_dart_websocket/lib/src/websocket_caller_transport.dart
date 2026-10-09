@@ -28,7 +28,8 @@ class RpcWebSocketCallerTransport
         IRpcReconnectableTransport,
         IRpcSecurityPolicyAware,
         IRpcFlowControlled,
-        IRpcConnectionLossReporting {
+        IRpcConnectionLossReporting,
+        IRpcTransportReadiness {
   final Future<WebSocketChannel> Function()? _reconnectFactory;
   final RpcSecurityPolicy _policy;
 
@@ -56,6 +57,14 @@ class RpcWebSocketCallerTransport
 
   late RpcChannelTransport _inner;
   bool _closed = false;
+
+  /// The current socket's `ready`: complete once the WebSocket handshake has
+  /// answered. A transport built on a channel that is still connecting is
+  /// returned at once; `RpcClientConnection` waits on this before Online.
+  @override
+  Future<void> get ready => _ready;
+  late Future<void> _ready;
+  bool _isReady = false;
 
   /// Stream ids minted on the CURRENT connection.
   ///
@@ -385,6 +394,13 @@ class RpcWebSocketCallerTransport
     // the root zone in an app, which ends the isolate. The failure reaches this
     // transport through the stream as well, which is what closes it.
     unawaited(ws.ready.catchError((Object _) {}));
+    _isReady = false;
+    final ready = _ready = ws.ready;
+    unawaited(
+      ready.then((_) {
+        if (identical(_ready, ready)) _isReady = true;
+      }, onError: (Object _) {}),
+    );
     // Every id minted on the previous connection is stale, and with the resume
     // above they can no longer be confused with new ones. The peer's ids go
     // too: its numbering restarts on the new socket, so a remembered one would
@@ -653,6 +669,22 @@ class RpcWebSocketCallerTransport
         component: 'RpcWebSocketCallerTransport',
         message: 'WebSocket connection is down. Reconnect is required.',
         details: {'supported': true, ..._ownDetails},
+      );
+    }
+    if (!_isReady) {
+      // A `ready` that has already completed reports on a later microtask;
+      // let it, rather than calling a connected socket not ready.
+      try {
+        await _ready.timeout(Duration.zero);
+      } catch (_) {
+        // Still connecting, or failed: the stream reports a failure.
+      }
+    }
+    if (!_isReady) {
+      return RpcHealthStatus.degraded(
+        component: 'RpcWebSocketCallerTransport',
+        message: 'WebSocket handshake has not completed',
+        details: _ownDetails,
       );
     }
     final inner = await _inner.health();

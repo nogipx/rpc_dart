@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: closed (round 779)
 round: 753
 commit: 36a2241a
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -46,4 +46,6 @@ Round 746 found it, 747 fixed the crash, 753 measured the rest.
 
 ## Owner decision
 
-—
+2026-10-09: add the readiness capability in core. Carried out in round
+779: `IRpcTransportReadiness`, awaited by `RpcClientConnection` before
+Online, implemented by `RpcWebSocketCallerTransport`.
