@@ -24,6 +24,9 @@ final class _BodyTooLarge implements Exception {
   String toString() => 'Request body exceeds limit of $limitBytes bytes';
 }
 
+/// The pre-dispatch rejections, each reported once per transport.
+enum _Rejection { method, streams, contentType, path, metadataSize, metadata }
+
 /// Pending outgoing HTTP response state.
 final class _PendingResponse {
   final Request shelfRequest;
@@ -82,6 +85,16 @@ class RpcHttpResponderTransport
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: false);
   bool _isClosed = false;
   final LogScope? _logger;
+
+  /// Rejection kinds already reported. Any client chooses how many requests
+  /// it sends, a scanner or a cross-origin preflight included, so each kind is
+  /// a warning ONCE per transport; every rejected request still gets its
+  /// status.
+  final Set<_Rejection> _reported = {};
+
+  void _warnRejected(_Rejection kind, String message) {
+    if (_reported.add(kind)) _logger?.warning(message);
+  }
 
   /// The security policy this transport's OWN checks read: concurrent requests,
   /// the method path, metadata size, and the request body.
@@ -263,7 +276,10 @@ class RpcHttpResponderTransport
     // gRPC-over-HTTP/2 must always send 200 plus grpc-status, but HTTP/1.1 need
     // not.
     if (request.method != 'POST') {
-      _logger?.warning('Rejected request: method ${request.method}, not POST');
+      _warnRejected(
+        _Rejection.method,
+        'Rejected request: method ${request.method}, not POST',
+      );
       return _reject(405, request, extraHeaders: const {'allow': 'POST'});
     }
 
@@ -276,7 +292,8 @@ class RpcHttpResponderTransport
     // able to see the policy, which is what the getter is for.
     final policy = _securityPolicy;
     if (policy != null && _pending.length >= policy.maxActiveStreams) {
-      _logger?.warning(
+      _warnRejected(
+        _Rejection.streams,
         'Rejected request: too many active streams (${_pending.length})',
       );
       return _reject(503, request);
@@ -297,7 +314,8 @@ class RpcHttpResponderTransport
       contentTypeValue,
       RpcContentTypeValidation.strict,
     )) {
-      _logger?.warning(
+      _warnRejected(
+        _Rejection.contentType,
         'Rejected request: unsupported Content-Type '
         '"${contentTypeValue ?? ''}" — expected application/grpc[+subtype]',
       );
@@ -315,7 +333,10 @@ class RpcHttpResponderTransport
     // is why nothing noticed.
     final methodPath = '/${request.url.path}';
     if (policy != null && !policy.isValidMethodPath(methodPath)) {
-      _logger?.warning('Rejected request: invalid method path "$methodPath"');
+      _warnRejected(
+        _Rejection.path,
+        'Rejected request: invalid method path "$methodPath"',
+      );
       return _reject(400, request);
     }
 
@@ -357,7 +378,8 @@ class RpcHttpResponderTransport
           metadataBytes += h.name.length + h.value.length;
         }
         if (metadataBytes > policy.maxMetadataBytes) {
-          _logger?.warning(
+          _warnRejected(
+            _Rejection.metadataSize,
             'Rejected request: metadata block of $metadataBytes bytes exceeds '
             '${policy.maxMetadataBytes} [streamId: $streamId]',
           );
@@ -375,7 +397,8 @@ class RpcHttpResponderTransport
         try {
           policy.validateMetadata(RpcMetadata(requestHeaders));
         } on ArgumentError catch (e) {
-          _logger?.warning(
+          _warnRejected(
+            _Rejection.metadata,
             'Rejected request: metadata violation — $e [streamId: $streamId]',
           );
           _pending.remove(streamId);
