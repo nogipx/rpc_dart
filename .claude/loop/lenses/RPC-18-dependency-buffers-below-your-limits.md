@@ -1,9 +1,9 @@
 ---
 refines: —
-paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**]
+paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723, 756, 763]
+applied: [237, 387, 611, 713, 723, 756, 763, 766]
 status: confirmed (round 756)
 rank: 10
 ---
@@ -139,3 +139,9 @@ connection, the next round asks about the other side, on every transport.**
 And keep the server's floor: a ceiling at a strict policy's own cap turned
 every whole oversized response into a dropped connection, 5 tests of 5.
 `../rounds/756-the-client-had-no-message-ceiling.md`.
+- **Round 766** — `rpc_notify`: a paused subscription to a broadcast
+  `StreamController` buffers in dart:async with no limit; a remote subscriber
+  that stopped reading held 2934 of 3000 events on the server. Flow control
+  worked and paused the source; pausing a broadcast source is what buffers.
+  Bounded in `NotifySubscribeResponder`, which never pauses the source.
+  `../rounds/766-a-subscriber-that-stops-reading-held-the-topic.md`.

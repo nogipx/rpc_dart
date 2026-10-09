@@ -11,22 +11,43 @@ import '../contract/notify_publish_contract.dart';
 import '../models/notify_event.dart';
 import '../models/notify_publish_request.dart';
 import '../models/notify_subscribe_request.dart';
+import 'paused_subscriber_bound.dart';
 
 // ---------------------------------------------------------------------------
 // Subscribe-side responder
 // ---------------------------------------------------------------------------
 
 /// Handles subscribe RPC calls — opens a server-stream per topic.
+///
+/// A subscriber that stops reading is held at most [maxPendingEvents] events
+/// and [maxPendingBytes] bytes; events past either are dropped for it, in
+/// keeping with fire-and-forget delivery. Without the bound the server would
+/// hold every event published to the topic for as long as that subscriber
+/// stays connected.
 class NotifySubscribeResponder extends NotifySubscribeContractResponder {
   NotifySubscribeResponder({
     required INotifySubscriber subscriber,
     LogScope? logger,
+    this.maxPendingEvents = 1024,
+    this.maxPendingBytes = 8 * 1024 * 1024,
     super.dataTransferMode,
   }) : _subscriber = subscriber,
        _log = logger ?? LogScope.noop;
 
   final INotifySubscriber _subscriber;
   final LogScope _log;
+
+  /// Most events held for one subscriber that is not reading.
+  final int maxPendingEvents;
+
+  /// Most bytes held for one subscriber that is not reading, by an estimate
+  /// of each event's topic and payload.
+  final int maxPendingBytes;
+
+  /// Events dropped because a subscriber was not reading.
+  int get droppedEvents => _dropped;
+  int _dropped = 0;
+  bool _warnedDrop = false;
 
   INotifySubscriber get subscriber => _subscriber;
 
@@ -35,8 +56,23 @@ class NotifySubscribeResponder extends NotifySubscribeContractResponder {
     NotifySubscribeRequest request, {
     RpcContext? context,
   }) {
-    _log.debug('subscribe topic=${request.topic}');
-    return _subscriber.subscribe(request.topic, context: context);
+    if (_log.isDebug) _log.debug('subscribe topic=${request.topic}');
+    return boundWhilePaused(
+      _subscriber.subscribe(request.topic, context: context),
+      maxEvents: maxPendingEvents,
+      maxBytes: maxPendingBytes,
+      onDrop: _onDrop,
+    );
+  }
+
+  void _onDrop() {
+    _dropped++;
+    if (_warnedDrop) return;
+    _warnedDrop = true;
+    _log.warning(
+      'A subscriber is not reading; events past its pending bound are '
+      'dropped for it',
+    );
   }
 
   @override

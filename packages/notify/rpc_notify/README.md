@@ -16,6 +16,12 @@ subscribers only. There is no persistence, backlog, replay, cursor, or
 acknowledgement — a subscriber receives only events published while it is
 subscribed.
 
+A remote subscriber that stops reading is held at most 1024 events and 8 MiB
+on the server (`NotifySubscribeResponder.maxPendingEvents` /
+`maxPendingBytes`); events past either are dropped for that subscriber and
+counted in `droppedEvents`. Without the bound the server would keep every
+event published to the topic for as long as the subscriber stays connected.
+
 ## Quick start
 
 ### In-memory (tests / single process)
