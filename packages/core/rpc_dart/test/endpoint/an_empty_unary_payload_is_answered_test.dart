@@ -118,7 +118,7 @@ void main() {
     // WITNESS. Before the fix: no status at all, and one responder held.
     final r = await _call(Uint8List(0));
     expect(r.status, '${RpcStatus.invalidArgument}');
-    expect(r.message, contains('empty payload frame'));
+    expect(r.message, contains('without a request message'));
     expect(r.held, 0);
   });
 

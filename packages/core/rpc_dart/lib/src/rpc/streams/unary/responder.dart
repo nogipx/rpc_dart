@@ -730,21 +730,20 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     final state = _streamStates[streamId];
     if (state == null || state.requestHandled) return;
     state.requestHandled = true;
-    // Two ways to get here, and they are different malformed requests: bytes
-    // that stop mid-frame, and a frame carrying no bytes at all. One message
-    // for both would misreport whichever it did not describe.
+    // Two ways to get here: bytes that stop mid-frame, and no bytes at all (an
+    // empty payload frame, which is also how a channel transport carries a bare
+    // half-close). One message for both would misreport whichever it did not
+    // describe.
     final partial = state.parser?.holdsPartialFrame ?? false;
     final detail = partial
         ? 'Request stream closed mid-message: the last gRPC frame is incomplete'
-        : 'Request stream closed after an empty payload frame, with no request '
-              'message';
-    _logger.warning(
-      partial
-          ? 'Client half-closed mid-frame [streamId: $streamId]; the last gRPC '
-                'frame is incomplete'
-          : 'Client half-closed after an empty payload frame '
-                '[streamId: $streamId]; no request message arrived',
-    );
+        : 'Request stream closed without a request message';
+    // Internal, not a warning: the peer sent a malformed request and is told so
+    // in the status. The other three shapes answer the same input without a
+    // log line; a warning here let a peer write one per call.
+    if (_logger.isInternal) {
+      _logger.internal('$detail [streamId: $streamId]');
+    }
     try {
       if (!state.initialHeadersSent) {
         await _transport.sendMetadata(

@@ -226,11 +226,16 @@ final class ServerStreamResponder<
         }
       },
       onError: (Object error, StackTrace stackTrace) async {
-        _logger.error(
-          'Error in request stream [id: $id]',
-          error: error,
-          stackTrace: stackTrace,
-        );
+        // Faults only, as the handler path above does: a malformed request is
+        // the peer's (INVALID_ARGUMENT, answered below), and logging it at
+        // error let a peer write one record per call.
+        if (RpcStatus.isFaultError(error)) {
+          _logger.error(
+            'Error in request stream [id: $id]',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
         // ANSWERED, not just logged. A server stream carries exactly one
         // request, so an error here means none will ever arrive and the handler
         // will never run -- yet this used to end in silence, and the caller
