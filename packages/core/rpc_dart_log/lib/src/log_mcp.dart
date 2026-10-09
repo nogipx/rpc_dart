@@ -44,11 +44,15 @@ class LogCollectorMcpServer {
     int collectorPort = 9500,
     int mcpPort = 9501,
     int bufferSize = 5000,
+    int bufferBytes = 64 * 1024 * 1024,
     bool colored = true,
   }) async {
     final server = await _buildCollectorServer(host, collectorPort);
     final console = LogCollectorConsole(colored: colored);
-    final buffer = LogCollectorMcpBuffer(maxRecords: bufferSize);
+    final buffer = LogCollectorMcpBuffer(
+      maxRecords: bufferSize,
+      maxBytes: bufferBytes,
+    );
 
     final mcp = LogCollectorMcpServer._(
       server: server,

@@ -49,3 +49,20 @@ LogRecord? deserializeRecord(Map<String, dynamic> json) {
   if (type == 'event') return LogEvent.fromJson(json);
   return null;
 }
+
+/// Approximate size of a record's JSON form: the UTF-16 code units of every
+/// string in it, keys included, plus 8 for each other scalar. What the record
+/// buffers charge against their byte budgets.
+int approxJsonBytes(Object? value) => switch (value) {
+  null => 0,
+  final String s => s.length,
+  final Map<dynamic, dynamic> m => m.entries.fold(
+    0,
+    (sum, e) => sum + approxJsonBytes(e.key) + approxJsonBytes(e.value),
+  ),
+  final Iterable<dynamic> items => items.fold(
+    0,
+    (sum, item) => sum + approxJsonBytes(item),
+  ),
+  _ => 8,
+};

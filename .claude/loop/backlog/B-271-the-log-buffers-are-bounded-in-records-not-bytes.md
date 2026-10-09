@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 765)
 round: 764
 commit: c75ded51
 paths: [packages/core/rpc_dart_log/lib/src/mcp_buffer.dart, packages/core/rpc_dart_log/lib/src/log_output.dart]
@@ -32,4 +32,5 @@ is in records and large payloads multiply it, or nothing.
 
 ## Owner decision
 
-—
+2026-10-09: add `maxBytes`, a byte budget beside the count on both buffers,
+oldest evicted first. Carried out in round 765.

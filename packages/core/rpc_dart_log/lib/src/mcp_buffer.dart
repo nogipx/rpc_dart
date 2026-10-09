@@ -16,11 +16,22 @@ import 'protocol.dart';
 /// Extracted from [LogCollectorMcpServer] to enable unit testing without a live
 /// WebSocket server.
 class LogCollectorMcpBuffer {
+  /// Most records kept; the oldest is evicted first.
   final int maxRecords;
+
+  /// Most bytes kept, by [approxJsonBytes] of each record; the oldest is
+  /// evicted first. The newest record is kept even when it alone is larger.
+  ///
+  /// [maxRecords] alone does not bound memory: a record weighs whatever its
+  /// sender logged, up to the transport's message ceiling.
+  final int maxBytes;
 
   // ListQueue gives O(1) indexed access AND amortized O(1) removeFirst(),
   // so oldest-eviction is O(1) instead of List.removeAt(0)'s O(n) shift.
   final ListQueue<TaggedRecord> _records = ListQueue();
+  // Parallel to _records: the charge of each record against [maxBytes].
+  final ListQueue<int> _sizes = ListQueue();
+  int _bytes = 0;
   int _cursor = 0;
 
   // Incremental stats
@@ -49,23 +60,38 @@ class LogCollectorMcpBuffer {
   /// and 5000 scope entries.
   static const _maxScopes = 500;
 
-  LogCollectorMcpBuffer({this.maxRecords = 5000});
+  LogCollectorMcpBuffer({
+    this.maxRecords = 5000,
+    this.maxBytes = 64 * 1024 * 1024,
+  });
 
   int get cursor => _cursor;
   int get recordCount => _records.length;
+
+  /// Bytes the buffered records are charged, by [approxJsonBytes].
+  int get bufferedBytes => _bytes;
 
   // ---------------------------------------------------------------------------
   // Mutation
   // ---------------------------------------------------------------------------
 
   void addRecord(TaggedRecord tagged) {
+    final r = tagged.record;
+    final size = approxJsonBytes(switch (r) {
+      final LogEvent event => event.toJson(),
+      final LogSpan span => span.toJson(),
+      _ => null,
+    });
     _records.add(tagged);
+    _sizes.add(size);
+    _bytes += size;
     _cursor++;
-    while (_records.length > maxRecords) {
+    while (_records.length > maxRecords ||
+        (_bytes > maxBytes && _records.length > 1)) {
       _records.removeFirst();
+      _bytes -= _sizes.removeFirst();
     }
 
-    final r = tagged.record;
     // Same insertion-order FIFO the trace-id index uses below, so a device
     // with rotating scope names cannot grow this without bound.
     if (!_scopeStats.containsKey(r.scope)) {
@@ -140,7 +166,7 @@ class LogCollectorMcpBuffer {
 
     final first = _records.first.record.timestamp;
     final last = _records.last.record.timestamp;
-    final overflow = _records.length >= maxRecords
+    final overflow = _cursor > _records.length
         ? ' (buffer full -- oldest evicted)'
         : '';
     buf.writeln(

@@ -42,7 +42,8 @@ Neither library re-exports `package:rpc_dart`; import it for `LogController`.
   the controller's filters is shipped, including the endpoint logs when that
   controller is the endpoints' `logger:`.
 - `LogCollectorOutput({required Uri uri, required DeviceInfo device,
-  bufferSize = 2000, maxInFlight = 32, scopeFilter, channelFactory})`.
+  bufferSize = 2000, bufferBytes = 8 MiB, maxInFlight = 32, scopeFilter,
+  channelFactory})`.
   The constructor starts connecting at once. `uri` is `ws://host:port`.
 - `DeviceInfo({required name, required app, os, appVersion})`. The collector
   labels records `<name>/<sessionId>`; `sessionId` is a random 6-hex-char id
@@ -51,8 +52,9 @@ Neither library re-exports `package:rpc_dart`; import it for `LogController`.
   are sent once the connection is up. On a drop the connection reconnects with
   exponential backoff (core `RpcClientConnection` defaults: 1 s up to 60 s, no
   attempt limit) and resends unacknowledged records in order.
-- `bufferSize` caps buffered plus in-flight records. Past it the oldest are
-  dropped.
+- `bufferSize` caps buffered plus in-flight records and `bufferBytes` their
+  size, as the characters of each record's JSON form. Past either the oldest
+  are dropped; the newest is kept even when it alone is larger.
 - Only `LogEvent` and finished `LogSpan` records are shipped. `LogSpanStart`
   is skipped.
 - The collector side needs `dart:io`. Run it on a dev machine or a server,
@@ -119,7 +121,7 @@ To embed the collector in your own Dart program:
 - `LogCollectorConsole({colored = true, IOSink? sink})` renders events:
   `printConnection(event)` and `printRecord(tagged)`. Default sink is stdout.
 - `LogCollectorMcpServer.run({host, collectorPort, mcpPort, bufferSize,
-  colored})` starts a collector, a console and the MCP HTTP server together
+  bufferBytes, colored})` starts a collector, a console and the MCP HTTP server together
   (what the executable does). `stop()` stops both.
 
 ```dart

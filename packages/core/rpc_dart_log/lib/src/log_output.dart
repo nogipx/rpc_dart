@@ -60,6 +60,14 @@ class LogCollectorOutput extends LogOutput {
   /// Maximum number of records to buffer while disconnected or in flight.
   final int bufferSize;
 
+  /// Maximum bytes to buffer while disconnected or in flight, by
+  /// [approxJsonBytes] of each record. The newest record is kept even when it
+  /// alone is larger.
+  ///
+  /// [bufferSize] alone does not bound memory: a record weighs whatever was
+  /// logged, and this buffer lives in the application's process.
+  final int bufferBytes;
+
   /// Maximum number of unacked records allowed on the wire at once.
   final int maxInFlight;
 
@@ -75,6 +83,9 @@ class LogCollectorOutput extends LogOutput {
   final Queue<LogCollectorRecord> _buffer = Queue();
   // Records sent but not yet acked, in send order. Requeued on reconnect.
   final Queue<LogCollectorRecord> _inFlight = Queue();
+  // Bytes charged by the records in both queues; a record keeps its charge
+  // while it moves between them.
+  int _bytes = 0;
 
   // Auto-reconnect wrapper. Builds the transport via the factory and exposes a
   // stable proxy the endpoint is built on once.
@@ -98,6 +109,7 @@ class LogCollectorOutput extends LogOutput {
     required Uri uri,
     required DeviceInfo device,
     this.bufferSize = 2000,
+    this.bufferBytes = 8 * 1024 * 1024,
     this.maxInFlight = 32,
     this.scopeFilter,
     Future<WebSocketChannel> Function(Uri uri)? channelFactory,
@@ -135,6 +147,10 @@ class LogCollectorOutput extends LogOutput {
   /// Exposed for tests/diagnostics.
   int get inFlightCount => _inFlight.length;
 
+  /// Bytes charged by the buffered and in-flight records.
+  /// Exposed for tests/diagnostics.
+  int get bufferedBytes => _bytes;
+
   /// Whether the client currently has a live, handshaken connection.
   /// Exposed for tests/diagnostics.
   bool get isConnected => _connected;
@@ -157,19 +173,21 @@ class LogCollectorOutput extends LogOutput {
 
   void _enqueue(LogCollectorRecord record) {
     _buffer.addLast(record);
+    _bytes += approxJsonBytes(record.payload);
     _trim();
   }
 
-  // Enforces the bounded-buffer cap across both queues, dropping the oldest
+  // Enforces the bounded-buffer caps across both queues, dropping the oldest
   // (in-flight first, then buffered) so memory stays bounded under sustained
   // offline/backpressure.
   void _trim() {
-    while (_buffer.length + _inFlight.length > bufferSize) {
-      if (_inFlight.isNotEmpty) {
-        _inFlight.removeFirst();
-      } else {
-        _buffer.removeFirst();
-      }
+    while (true) {
+      final count = _buffer.length + _inFlight.length;
+      if (count <= bufferSize && (_bytes <= bufferBytes || count <= 1)) return;
+      final dropped = _inFlight.isNotEmpty
+          ? _inFlight.removeFirst()
+          : _buffer.removeFirst();
+      _bytes -= approxJsonBytes(dropped.payload);
     }
   }
 
@@ -184,6 +202,7 @@ class LogCollectorOutput extends LogOutput {
     _connection.dispose();
     _buffer.clear();
     _inFlight.clear();
+    _bytes = 0;
   }
 
   // ---------------------------------------------------------------------------
@@ -289,7 +308,7 @@ class LogCollectorOutput extends LogOutput {
 
   void _onAck(LogCollectorRecord record) {
     if (_disposed) return;
-    _inFlight.remove(record);
+    if (_inFlight.remove(record)) _bytes -= approxJsonBytes(record.payload);
     // Acked record freed a slot in the in-flight window: keep draining.
     _pump();
   }

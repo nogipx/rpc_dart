@@ -50,6 +50,7 @@ final controller = LogController(
         appVersion: '1.2.0+42', // optional
       ),
       bufferSize: 2000,         // default; buffered plus in-flight records
+      bufferBytes: 8 << 20,     // default; the same records, in bytes
       maxInFlight: 32,          // default; unacked records on the wire
     ),
   ],
@@ -63,8 +64,10 @@ in a buffer while offline and are sent once the connection is up.
   `RpcClientConnection` with its default `ExponentialBackoff`: 1s base, capped
   at 60s, with jitter, no attempt limit. After each reconnect it handshakes
   again and resends unacknowledged records in order.
-- `bufferSize` caps buffered plus in-flight records. Past it the oldest records
-  are dropped.
+- `bufferSize` caps buffered plus in-flight records, and `bufferBytes` caps
+  their size (8 MiB), measured as the characters of the record's JSON form.
+  Past either the oldest records are dropped; the newest is kept even when it
+  alone is larger.
 - Only `LogEvent` and finished `LogSpan` records are sent. `LogSpanStart` is
   skipped.
 - Each instance generates a random 6-hex-char `sessionId`. The collector labels
@@ -110,7 +113,7 @@ The collector binds loopback by default, so only the same machine can reach it.
 A phone or another host needs `--bind-all` or an explicit `--host`. Do this on
 a trusted network only: the MCP endpoint and its OAuth flow have no
 authentication. The buffer size is not a flag; the executable keeps the last
-5000 records.
+5000 records, at most 64 MiB of them.
 
 Terminal output uses ANSI colors with device labels. Colors are also off when
 stdout is not a terminal.
@@ -130,6 +133,7 @@ Future<void> main() async {
     collectorPort: 9500,
     mcpPort: 9501,
     bufferSize: 5000,
+    bufferBytes: 64 << 20,
     colored: true,
   );
 
@@ -387,8 +391,12 @@ HH:MM:SS [DeviceLabel] LEVEL scope.name  message  err=...  trace=...  key=val
 ## Buffer behavior
 
 - Server buffers the last N records (5000 in the executable; `bufferSize` in
-  `LogCollectorMcpServer.run`, `maxRecords` in `LogCollectorMcpBuffer`)
-- When full, oldest records are evicted. Scope stats and error/warning totals
+  `LogCollectorMcpServer.run`, `maxRecords` in `LogCollectorMcpBuffer`), and at
+  most 64 MiB of them (`bufferBytes` / `maxBytes`), measured as the characters
+  of each record's JSON form. A count alone does not bound memory: a record
+  weighs whatever its sender logged
+- When either is full, oldest records are evicted; the newest is kept even
+  when it alone is larger. Scope stats and error/warning totals
   are cumulative, so they can count evicted records
 - Scope stats capped at 500 scopes; oldest evicted when full
 - TraceId index capped at 500 entries; oldest evicted when full
