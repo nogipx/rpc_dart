@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 754)
 round: 746
 commit: 8d6a35a2
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
@@ -32,6 +32,13 @@ forever), and whether connect() should wait for the peer's SETTINGS.
 `maxAttempts: 4`. Fixed in `3fc2fa74`: a connection that drops within 5 s is
 a failed attempt. **What remains** is the second question: Online before
 SETTINGS, now bounded by the backoff.
+
+**Round 754 measured it and found the worse case: a peer that accepts and
+stays silent.** The connection read Online and healthy for good, and a call
+without a deadline never ended. Fixed: `connectTimeout` also bounds the wait
+for the peer's first SETTINGS; past it the socket is destroyed and the call
+gets 14 (2009 ms at a 2 s bound). `connect()` still returns before SETTINGS,
+which the timer and the backoff now bound.
 
 ## Owner decision
 

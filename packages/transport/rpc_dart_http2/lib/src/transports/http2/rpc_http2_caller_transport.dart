@@ -390,6 +390,7 @@ class RpcHttp2CallerTransport
         outgoing: socket,
         destroy: socket.destroy,
         policy: policy,
+        settingsTimeout: connectTimeout,
         logger: logger,
         drainSignal: drainSignal,
       );
@@ -444,6 +445,7 @@ class RpcHttp2CallerTransport
       outgoing: socket,
       destroy: socket.destroy,
       policy: policy,
+      settingsTimeout: _connectTimeout,
       logger: logger,
       drainSignal: drainSignal,
     );
@@ -510,6 +512,7 @@ class RpcHttp2CallerTransport
         outgoing: socket,
         destroy: socket.destroy,
         policy: policy,
+        settingsTimeout: connectTimeout,
         logger: logger,
         drainSignal: drainSignal,
       );
@@ -550,6 +553,9 @@ class RpcHttp2CallerTransport
   /// This is the bound the proxy field's own doc describes and did not provide:
   /// `connect()` is what an application awaits at startup. Pass null for the old
   /// behaviour of waiting on the OS.
+  ///
+  /// It also bounds the wait for the peer's first SETTINGS, after `connect()`
+  /// has returned; see `_guardedConnection`.
   static const Duration _connectTimeout = Duration(seconds: 30);
 
   /// Ceiling on a proxy's CONNECT response headers.
@@ -584,20 +590,41 @@ class RpcHttp2CallerTransport
   /// [skipConnectionPreface] is false here and must stay false: the 24-octet
   /// preface travels client-to-server only, so a client that skipped 24 bytes
   /// would misparse the server's first frames.
+  ///
+  /// [settingsTimeout] bounds the wait for the peer's first SETTINGS. A peer
+  /// that accepts TCP and never speaks h2 otherwise reads as a live connection
+  /// forever, and every call on it waits on its own deadline or never ends.
+  /// On expiry the socket is destroyed, which ends the connection the usual
+  /// way. Null leaves it unbounded.
   static http2.ClientTransportConnection _guardedConnection({
     required Stream<List<int>> incoming,
     required StreamSink<List<int>> outgoing,
     required void Function() destroy,
     required RpcSecurityPolicy policy,
+    required Duration? settingsTimeout,
     LogScope? logger,
     _DrainSignal? drainSignal,
   }) {
     final number = drainSignal == null ? 0 : ++drainSignal.built;
+    Timer? settingsWatch;
+    if (settingsTimeout != null) {
+      settingsWatch = Timer(settingsTimeout, () {
+        logger?.warning(
+          'HTTP/2 peer sent no SETTINGS within $settingsTimeout; '
+          'closing connection',
+        );
+        destroy();
+      });
+    }
     final guarded = guardHttp2HeaderBlock(
       incoming,
       maxHeaderBlockBytes: policy.maxMetadataBytes,
       skipConnectionPreface: false,
-      onEnd: () => drainSignal?.onSocketEnded?.call(number),
+      onEnd: () {
+        // A pending timer would hold the process open after a close.
+        settingsWatch?.cancel();
+        drainSignal?.onSocketEnded?.call(number);
+      },
       onGoaway: () {
         logger?.internal(
           'HTTP/2 peer sent GOAWAY: this connection is draining',
@@ -612,7 +639,19 @@ class RpcHttp2CallerTransport
         destroy();
       },
     );
-    return http2.ClientTransportConnection.viaStreams(guarded, outgoing);
+    final connection = http2.ClientTransportConnection.viaStreams(
+      guarded,
+      outgoing,
+    );
+    if (settingsWatch != null) {
+      unawaited(
+        connection.onInitialPeerSettingsReceived.then(
+          (_) => settingsWatch?.cancel(),
+          onError: (Object _) => settingsWatch?.cancel(),
+        ),
+      );
+    }
+    return connection;
   }
 
   /// Establishes an HTTP/2 connection through an HTTP CONNECT proxy.
@@ -801,6 +840,7 @@ class RpcHttp2CallerTransport
         outgoing: pipe,
         destroy: pipe.destroy,
         policy: policy,
+        settingsTimeout: connectTimeout,
         logger: logger,
         drainSignal: drainSignal,
       );
@@ -816,6 +856,7 @@ class RpcHttp2CallerTransport
       outgoing: pipe,
       destroy: pipe.destroy,
       policy: policy,
+      settingsTimeout: connectTimeout,
       logger: logger,
       drainSignal: drainSignal,
     );

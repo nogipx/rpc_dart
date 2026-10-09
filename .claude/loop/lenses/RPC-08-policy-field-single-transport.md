@@ -3,8 +3,8 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745, 749, 750]
-status: confirmed (round 584)
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745, 749, 750, 754]
+status: confirmed (round 754)
 rank: 23
 ---
 
@@ -511,3 +511,22 @@ behavioural split it shows is `closeOnProtocolError`: honoured by the channel
 transport in both roles, not by the http2 caller, on purpose. A census is not
 the probe this lens asks for; it says where to aim one.
 `../rounds/745-the-policy-matrix-from-the-analyzer.md`.
+
+## Round 754 — `connectTimeout` stopped at the socket on one transport
+
+Round 563's phase question one step later: websocket's `connectTimeout`
+covers the upgrade (round 361), http2's stopped at TCP and TLS. A peer that
+accepts and never sends SETTINGS:
+
+```
+                     acceptclose    silent, before    silent, after (2 s bound)
+  call at Online     14 / 32 ms     waiting at 8 s    14 / 2009 ms
+  health then        unhealthy      healthy           unhealthy
+```
+
+> **Ask what the protocol's own handshake is, not only the socket's.** For
+> h2 the connection is not established until the peer's SETTINGS; a bound on
+> "connect" that ends at TCP covers the half that fails loudly.
+
+`../rounds/754-a-silent-h2-peer-reads-online.md`,
+`../probes/P-259-a-peer-that-never-sends-settings.md`, B-269.

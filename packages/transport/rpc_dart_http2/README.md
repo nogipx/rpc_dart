@@ -67,7 +67,7 @@ Future<RpcHttp2CallerTransport> connectLocal() =>
 | `host` | required | Server host; also sent as `:authority`. |
 | `port` | 443 / 80 | |
 | `policy` | `const RpcSecurityPolicy()` | Limits on what the server may send, and `maxActiveStreams` for concurrent calls. |
-| `connectTimeout` | 30 s | Bound on opening the socket, TLS handshake included. `null` waits for the OS. |
+| `connectTimeout` | 30 s | Bound on opening the socket, TLS handshake included, and on the peer's first SETTINGS: a peer silent past it is dropped and its calls fail with UNAVAILABLE. `null` waits for the OS and for the peer. |
 | `proxyUri` | `null` | HTTP CONNECT proxy, e.g. `http://user:pass@proxy:3128`. Credentials come from the URI's user info. |
 | `proxyHandshakeTimeout` | 30 s | Bound on the proxy's answer to `CONNECT`. |
 | `pingInterval` | `null` (off) | Sends an HTTP/2 PING this often. The only way the client notices a half-open connection. |
