@@ -113,16 +113,18 @@ void main() {
     );
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    final errors = logs.entries
+    // A policy violation on one stream is advisory: reported once per
+    // connection as a warning, not per frame as an error -- but reported.
+    final reported = logs.entries
         .whereType<LogEvent>()
-        .where((e) => e.level == RpcLogLevel.error)
+        .where((e) => e.level.index >= RpcLogLevel.warning.index)
         .toList();
     expect(
-      errors,
+      reported,
       isNotEmpty,
       reason: 'the client silently discarded a transport-level error',
     );
-    expect(errors.first.message, contains('Transport incoming error'));
+    expect(reported.first.message, contains('discarded frame'));
 
     await caller.close();
     await client.close();

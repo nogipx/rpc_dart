@@ -267,6 +267,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// way.
   bool _warnedHalfOpen = false;
   bool _warnedNoOpFrame = false;
+  bool _warnedAdvisoryError = false;
   bool _warnedStreamLimit = false;
   bool _warnedPreMethod = false;
   bool _warnedPreBind = false;
@@ -453,17 +454,26 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         _processResponderMessage(message);
       },
       onError: (Object error, StackTrace stackTrace) {
+        // An advisory error is an OBSERVATION, not a failure: a proxy's
+        // app-level keepalive arriving as a text frame, one stream's metadata
+        // over the policy. The connection still works, so answering it would
+        // fail every call in flight for nothing -- and the peer sends one per
+        // frame, so it is reported once, not at error per frame.
+        if (error is IRpcAdvisoryChannelError) {
+          if (!_warnedAdvisoryError) {
+            _warnedAdvisoryError = true;
+            _log.warning(
+              'Transport reported a discarded frame (logged once per '
+              'connection): $error',
+            );
+          }
+          return;
+        }
         _log.error(
           'Transport incoming error',
           error: error,
           stackTrace: stackTrace,
         );
-
-        // Unless the channel said this is an OBSERVATION rather than a failure.
-        // An advisory error -- a proxy's app-level keepalive arriving as a text
-        // frame -- reports one discarded frame over a connection that still
-        // works, and answering it would fail every call in flight for nothing.
-        if (error is IRpcAdvisoryChannelError) return;
 
         // ANSWER it. This used to LOG ONLY, and the duty was carried instead by
         // one subscription per live unary handler, each on this same

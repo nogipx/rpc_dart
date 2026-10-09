@@ -28,6 +28,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// [startCallerListening].
   StreamSubscription<RpcTransportMessage>? _callerIncomingSub;
 
+  /// An advisory error has been reported on this endpoint. See
+  /// [startCallerListening].
+  bool _warnedCallerAdvisory = false;
+
   /// Whether to compress outgoing requests with gzip by default.
   bool get compressionEnabled;
 
@@ -59,6 +63,19 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         // the buffer drained and to observe the errors below.
       },
       onError: (Object error, StackTrace stackTrace) {
+        // An advisory error is a discarded frame on a working connection, sent
+        // by the peer as often as it likes: reported once, as the responder
+        // pipeline does.
+        if (error is IRpcAdvisoryChannelError) {
+          if (!_warnedCallerAdvisory) {
+            _warnedCallerAdvisory = true;
+            _log.warning(
+              'Transport reported a discarded frame (logged once per '
+              'connection): $error',
+            );
+          }
+          return;
+        }
         _log.error(
           'Transport incoming error',
           error: error,
