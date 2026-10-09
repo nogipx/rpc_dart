@@ -221,6 +221,8 @@ transport closed. Serve `toJson()` from a health check.
 handlers; on the main isolate, `buildProxyContracts` returns responders that
 forward each call over the isolate transport. The worker has no access to the
 container: pass configuration through `isolateParams` (sendable values only).
+A worker that dies is not restarted: calls to it fail with UNAVAILABLE, and the
+module's `checkHealth()` reports `unhealthy`, so `app.health()` does too.
 
 ```dart
 import 'package:rpc_dart_framework/rpc_dart_framework.dart';

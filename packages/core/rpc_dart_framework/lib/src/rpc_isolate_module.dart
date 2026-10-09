@@ -111,6 +111,18 @@ abstract class RpcIsolateModule extends RpcServerModule {
     _killIsolate = null;
   }
 
+  /// Unhealthy once the worker isolate is gone: it is not restarted, so every
+  /// call forwarded to it fails with UNAVAILABLE until the app is restarted.
+  @override
+  Future<RpcHealthStatus?> checkHealth() async {
+    final caller = _isolateCaller;
+    if (caller == null || !caller.transport.isClosed) return null;
+    return RpcHealthStatus.unhealthy(
+      component: name,
+      message: 'Worker isolate is gone; calls to it fail with UNAVAILABLE',
+    );
+  }
+
   /// Return proxy [RpcResponderContract]s whose handlers forward calls
   /// through [isolateCaller] to the worker isolate.
   ///

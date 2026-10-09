@@ -169,6 +169,8 @@ class UserModule extends RpcServerModule {
 
 Runs contract handlers in a dedicated Dart isolate. Use for CPU-intensive work (encryption, image processing, heavy computation) that would block the main event loop.
 
+A worker that dies is not restarted. Calls to it fail with UNAVAILABLE, and the module's `checkHealth()` reports `unhealthy`, so `app.health()` does too.
+
 ```dart
 // 1. Worker entrypoint — must be a top-level or static function
 //    (Isolate.spawn requirement).

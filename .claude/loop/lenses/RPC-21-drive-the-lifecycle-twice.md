@@ -3,8 +3,8 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
 breaks: a connection leak; or a running call detached from everything that can stop it.
-applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732]
-status: confirmed (round 732)
+applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732, 752]
+status: confirmed (round 752)
 rank: 2
 ---
 
@@ -238,3 +238,22 @@ again. A user's `onConnectionClosed` counted two closes for one connection.
 
 `../rounds/562-one-close-became-two-and-the-crash-was-not-there.md`,
 `../probes/P-185-two-paths-release-one-connection.md`, B-192.
+
+## Round 752 — the component died, and the aggregate said healthy
+
+The FAIL step was the worker isolate behind an `RpcIsolateModule` exiting.
+Every later call answered 14, and `RpcApp.health()` read healthy, because the
+module inherited `checkHealth() => null`:
+
+```
+                 control   worker exited
+  calls after    ok        status 14, 3 of 3
+  health after   healthy   healthy   ->  unhealthy
+```
+
+> **An aggregate health report is only as good as the members that report.**
+> When a part can die without restarting, ask what its `checkHealth()` says
+> afterwards; a null default reads as "nothing to report".
+
+`../rounds/752-a-dead-worker-reads-healthy.md`,
+`../probes/P-257-a-dead-worker-and-what-health-says.md`.
