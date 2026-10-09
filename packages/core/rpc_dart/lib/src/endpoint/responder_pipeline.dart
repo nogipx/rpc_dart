@@ -266,6 +266,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// opens, so each warns once per connection; the peer gets its status either
   /// way.
   bool _warnedHalfOpen = false;
+  bool _warnedNoOpFrame = false;
   bool _warnedStreamLimit = false;
   bool _warnedPreMethod = false;
   bool _warnedPreBind = false;
@@ -762,9 +763,14 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     // materialize unbounded state via obtain() with no cleanup path.
     if (_respStreams[message.streamId] == null &&
         !_opensOrAdvancesStream(message)) {
-      _log.warning(
-        'Ignoring no-op frame for unknown stream ${message.streamId}',
-      );
+      // Once per connection: a peer sending pathless headers on fresh ids
+      // chose how many of these were written.
+      if (!_warnedNoOpFrame) {
+        _warnedNoOpFrame = true;
+        _log.warning(
+          'Ignoring no-op frame for unknown stream ${message.streamId}',
+        );
+      }
       return;
     }
 

@@ -178,4 +178,20 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(_count(r.log, 'half-open'), 1, reason: '${r.log.warnings}');
   });
+
+  test('a no-op frame on an unknown stream warns once for five', () async {
+    // Ordinary request headers with no method path open nothing. Round 515's
+    // frames never reached this site; these do, one warning each.
+    final r = _rig(const RpcSecurityPolicy());
+    addTearDown(r.close);
+    final headers = RpcMetadata.forClientRequest('Svc', 'park').headers;
+    for (var s = 0; s < 5; s++) {
+      await r.client.sendMetadata(
+        r.client.createStream(),
+        RpcMetadata(headers),
+      );
+    }
+    await _settle();
+    expect(_count(r.log, 'no-op frame'), 1, reason: '${r.log.warnings}');
+  });
 }
