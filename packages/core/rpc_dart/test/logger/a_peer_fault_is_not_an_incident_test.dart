@@ -90,14 +90,22 @@ final class _Chan implements IRpcChannel {
   }
 }
 
-typedef _Run = ({List<String> errors, Set<String> statuses});
+typedef _Run = ({
+  List<String> errors,
+  List<String> warnings,
+  Set<String> statuses,
+});
 
 /// [calls] calls of [method], each carrying [payload], then a half-close.
 Future<_Run> _run(String method, Uint8List payload, {int calls = 10}) async {
   final controller = LogController(minLevel: RpcLogLevel.warning);
   final errors = <String>[];
+  final warnings = <String>[];
   controller.stream.listen((r) {
     if (r is LogEvent && r.level == RpcLogLevel.error) errors.add(r.message);
+    if (r is LogEvent && r.level == RpcLogLevel.warning) {
+      warnings.add(r.message);
+    }
   });
   final chan = _Chan();
   final transport = RpcChannelTransport.fromChannel(
@@ -134,7 +142,7 @@ Future<_Run> _run(String method, Uint8List payload, {int calls = 10}) async {
     )?.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
     if (s != null) statuses.add(s);
   }
-  return (errors: errors, statuses: statuses);
+  return (errors: errors, warnings: warnings, statuses: statuses);
 }
 
 void main() {
@@ -174,4 +182,12 @@ void main() {
       expect(r.statuses, {'${RpcStatus.internal}'});
     });
   }
+
+  test('s: the handler producing after the answer writes no warning', () async {
+    // The second request is answered INTERNAL, which closes the response
+    // controller while the handler still yields for the first. Before: one
+    // "Attempted to send response to closed controller" warning per call.
+    final r = await _run('s', twoMessages);
+    expect(r.warnings, isEmpty);
+  });
 }

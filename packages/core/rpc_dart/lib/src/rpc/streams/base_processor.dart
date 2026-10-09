@@ -749,8 +749,13 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // the server-stream pump uses to let a slow transport throttle the
       // handler.
       await _sendSequence;
-    } else {
-      _logger.warning('Attempted to send response to closed controller');
+    } else if (_logger.isInternal) {
+      // The call was already answered (an error trailer closes the controller)
+      // while the handler still produced: a race after the end, not a fault. A
+      // warning here let a peer write one per call it made invalid.
+      _logger.internal(
+        'Response after the call was answered; dropped [streamId: $_streamId]',
+      );
     }
   }
 
