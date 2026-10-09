@@ -26,6 +26,10 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
+/// Completed when a handler starts, so a test stops the server only once the
+/// call is really in flight rather than after a sleep that load can outrun.
+var _entered = Completer<void>();
+
 final class _SlowContract extends RpcResponderContract {
   _SlowContract() : super('Svc');
 
@@ -34,6 +38,7 @@ final class _SlowContract extends RpcResponderContract {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Slow',
       handler: (request, {RpcContext? context}) async {
+        if (!_entered.isCompleted) _entered.complete();
         await Future<void>.delayed(const Duration(seconds: 2));
         return 'finished'.rpc;
       },
@@ -50,6 +55,7 @@ void main() {
 
   /// Starts a server, fires a slow call, and returns a future for its outcome.
   Future<Future<String>> startSlowCall() async {
+    _entered = Completer<void>();
     server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
@@ -79,8 +85,8 @@ void main() {
               : e.runtimeType.toString(),
         );
 
-    // Let the call reach the handler before anything is stopped.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    // The call must have reached the handler before anything is stopped.
+    await _entered.future.timeout(const Duration(seconds: 10));
     return call;
   }
 
@@ -126,6 +132,7 @@ void main() {
   test(
     'GUARD: the drain budget is honoured when a call never finishes',
     () async {
+      _entered = Completer<void>();
       // A handler that outlives the budget must not hold shutdown open forever.
       server = RpcHttp2Server(
         host: '127.0.0.1',
@@ -151,7 +158,7 @@ void main() {
             )
             .catchError((Object _) => 'x'.rpc),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      await _entered.future.timeout(const Duration(seconds: 10));
 
       final sw = Stopwatch()..start();
       await server.stop(drainTimeout: const Duration(milliseconds: 600));
@@ -198,6 +205,7 @@ final class _ForeverContract extends RpcResponderContract {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'Forever',
       handler: (request, {RpcContext? context}) async {
+        if (!_entered.isCompleted) _entered.complete();
         await Future<void>.delayed(const Duration(seconds: 30));
         return 'never'.rpc;
       },

@@ -238,8 +238,8 @@ RpcCallerEndpoint connectWithRetry(
 - `connectTimeout` bounds each attempt, 30 s by default; `null` disables it.
   A factory that waits on a silent peer (a WebSocket upgrade nobody answers)
   otherwise keeps the connection in `RpcClientConnecting` forever.
-- A transport implementing `IRpcTransportReadiness` (the WebSocket caller
-  transport does) can be returned before its channel has connected; the
+- A transport implementing `IRpcTransportReadiness` (the WebSocket and HTTP/2
+  caller transports do) can be returned before its peer has answered; the
   connection awaits its `ready` within the same `connectTimeout` and reports
   Online only after it, so a channel that fails fails the attempt.
 - The factory must return `Future<IRpcReconnectableTransport>`.

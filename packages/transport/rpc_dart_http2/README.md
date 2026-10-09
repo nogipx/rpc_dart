@@ -110,7 +110,9 @@ socket ends, or keepalive finds the path dead), calls fail with `UNAVAILABLE`,
 `health()` reports it, and `connectionLost` (`IRpcConnectionLossReporting`)
 emits once; `incomingMessages` stays open and carries no error. For automatic
 reconnect with backoff, give `RpcClientConnection` from `rpc_dart` a factory
-that calls `RpcHttp2CallerTransport.connect`; it reconnects on that event. Or
+that calls `RpcHttp2CallerTransport.connect`; it reconnects on that event, and
+reports Online only once the peer has sent its SETTINGS (the transport's
+`ready`, `IRpcTransportReadiness`; until then `health()` reads degraded). Or
 call `reconnect()` to open a new connection on the same transport:
 
 ```dart

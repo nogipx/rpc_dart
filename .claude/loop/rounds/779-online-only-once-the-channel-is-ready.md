@@ -82,8 +82,9 @@ reference describe the readiness wait.
 
 ## Not fixed
 
-Nothing. Other caller transports return only once connected and need no
-`ready`.
+Nothing here. The claim first written here, that the other caller
+transports need no `ready`, was not measured; round 780 measured http2 and
+it did.
 
 ## Links
 

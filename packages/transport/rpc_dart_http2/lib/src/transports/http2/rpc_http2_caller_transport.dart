@@ -43,9 +43,35 @@ class RpcHttp2CallerTransport
         IRpcReconnectableTransport,
         IRpcStreamReset,
         IRpcSecurityPolicyAware,
-        IRpcConnectionLossReporting {
+        IRpcConnectionLossReporting,
+        IRpcTransportReadiness {
   @override
   bool get isClient => true;
+
+  /// Completes when the peer's first SETTINGS frame has arrived on the current
+  /// connection, the point at which it is known to speak HTTP/2; fails if that
+  /// connection ends first. Until then [health] reads degraded, and
+  /// `RpcClientConnection` does not report Online.
+  @override
+  Future<void> get ready => _ready.future;
+  Completer<void> _ready = Completer<void>();
+
+  /// Re-arms [ready] for the connection just attached.
+  void _armReady() {
+    final ready = _ready.isCompleted ? Completer<void>() : _ready;
+    _ready = ready;
+    // An unobserved failure would reach the root zone; the caller that cares
+    // awaits [ready] itself.
+    unawaited(ready.future.catchError((Object _) {}));
+    final number = _connectionNumber;
+    unawaited(
+      _connection.onInitialPeerSettingsReceived.then((_) {
+        if (number == _connectionNumber && !ready.isCompleted) {
+          ready.complete();
+        }
+      }, onError: (Object _) {}),
+    );
+  }
 
   /// See [IRpcStreamIdSequence]. `_nextStreamId` is the id the NEXT call will
   /// get, so the last issued one is two behind it — and -1 before any call,
@@ -261,6 +287,7 @@ class RpcHttp2CallerTransport
        _drainSignal = drainSignal ?? _DrainSignal() {
     _connectionNumber = _drainSignal.built;
     _drainSignal.onSocketEnded = _connectionLost;
+    _armReady();
     _startKeepalive();
   }
 
@@ -281,6 +308,14 @@ class RpcHttp2CallerTransport
     if (_isClosed) return;
     _lostConnection = number;
     _disconnected = true;
+    if (!_ready.isCompleted) {
+      _ready.completeError(
+        RpcStatusException(
+          RpcStatus.unavailable,
+          'HTTP/2 connection to $_host:$_port ended before its SETTINGS',
+        ),
+      );
+    }
     _discardConnection(_connection);
     if (!_lostCtl.isClosed) _lostCtl.add(null);
   }
@@ -1992,6 +2027,22 @@ class RpcHttp2CallerTransport
       );
     }
 
+    if (!_ready.isCompleted) {
+      // A SETTINGS that has already arrived reports on a later microtask.
+      try {
+        await _ready.future.timeout(Duration.zero);
+      } catch (_) {
+        // Not yet, or the connection ended: reported below or above.
+      }
+    }
+    if (!_ready.isCompleted) {
+      return RpcHealthStatus.degraded(
+        component: runtimeType.toString(),
+        message: 'HTTP/2 peer has not sent its SETTINGS yet',
+        details: details,
+      );
+    }
+
     // Ask the connection, do not assume. Nothing sets `_disconnected` when the
     // PEER dies on its own -- that path runs no code here at all -- so health()
     // reported "transport ready" with the server gone. A supervisor that polls
@@ -2273,6 +2324,7 @@ class RpcHttp2CallerTransport
       // stale flag here would make a freshly reconnected transport claim it was
       // draining and refuse every call.
       _drainSignal.goawayReceived = false;
+      _armReady();
       // Re-arm keepalive against the NEW connection. The old timer closed over
       // the old one, so without this a reconnected transport either pings a
       // corpse forever or (after a keepalive-triggered teardown, which cancels
