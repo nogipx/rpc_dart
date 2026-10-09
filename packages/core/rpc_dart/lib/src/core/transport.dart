@@ -188,6 +188,20 @@ abstract interface class IRpcSecurityPolicyAware {
   RpcSecurityPolicy get securityPolicy;
 }
 
+/// Capability for transports that can exist before they can carry calls.
+///
+/// A transport built on a channel that is still connecting -- a WebSocket
+/// whose upgrade has not answered yet -- is returned at once, and nothing in
+/// [IRpcTransport] says it is not usable. `RpcClientConnection` awaits [ready]
+/// before it reports `RpcClientOnline`, within its `connectTimeout`; without
+/// it every failed attempt reports Online for the few milliseconds the
+/// channel takes to fail.
+abstract interface class IRpcTransportReadiness {
+  /// Completes when the transport can carry calls, and with an error when it
+  /// never will. Already complete for a transport that was usable when built.
+  Future<void> get ready;
+}
+
 /// Capability for transports whose stream-id sequence can be CONTINUED.
 ///
 /// `RpcClientConnection` builds a WHOLE NEW transport on reconnect, and a fresh

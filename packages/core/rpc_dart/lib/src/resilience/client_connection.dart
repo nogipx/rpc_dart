@@ -767,6 +767,7 @@ class RpcClientConnection {
       }
 
       try {
+        final attemptClock = Stopwatch()..start();
         final Future<IRpcReconnectableTransport> factoryFuture = _factory();
         final IRpcTransport inner;
         if (_connectTimeout != null) {
@@ -838,6 +839,36 @@ class RpcClientConnection {
           _emit(RpcClientDisconnected(reason: error));
           guard.complete();
           return;
+        }
+
+        // A transport may be handed over before its channel has connected.
+        // Online is reported once it can carry calls, within what is left of
+        // the attempt's connectTimeout; a channel that fails or never answers
+        // fails the attempt like a factory that threw.
+        if (inner is IRpcTransportReadiness) {
+          final readiness = (inner as IRpcTransportReadiness).ready;
+          try {
+            final timeout = _connectTimeout;
+            if (timeout == null) {
+              await readiness;
+            } else {
+              final left = timeout - attemptClock.elapsed;
+              await readiness.timeout(
+                left.isNegative ? Duration.zero : left,
+                onTimeout: () =>
+                    throw TimeoutException('Connect timed out', timeout),
+              );
+            }
+          } catch (_) {
+            unawaited(inner.close().catchError((_) {}));
+            rethrow;
+          }
+          if (_isStopped || _proxy.isClosed) {
+            _logger?.call('info', 'Discarding transport: connection stopped');
+            unawaited(inner.close().catchError((_) {}));
+            guard.complete();
+            return;
+          }
         }
 
         _proxy.attach(inner);
