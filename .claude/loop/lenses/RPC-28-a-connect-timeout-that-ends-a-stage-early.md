@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/src/rpc_isolate_module.dart, packages/notify/*/lib/**]
 applies: opening a connection takes several stages (TCP, TLS, an upgrade, a protocol preface or SETTINGS, a ready message) and a timeout or a default guards the open
 breaks: a hang that never ends: connect() or reconnect() waits forever on a peer that answered the first stage only.
-applied: [754, 755]
+applied: [754, 755, 773]
 status: confirmed (round 754)
 rank: 6
 ---
@@ -50,3 +50,9 @@ default and an explicit null are different arms.
   null measures a different arm from one that omits it.
   `../rounds/755-websocket-connect-had-no-default-bound.md` (filed under
   RPC-08).
+- **Round 773** — the sweep: every transport's open is bounded at every
+  stage (its witnesses re-run). `RpcClientConnection.connectTimeout`
+  defaulted to null, and its dartdoc factory awaited
+  `WebSocketChannel.ready`: connecting after 40 s against a silent upgrade.
+  Default now 30 s.
+  `../rounds/773-the-documented-reconnect-factory-waited-forever.md`.

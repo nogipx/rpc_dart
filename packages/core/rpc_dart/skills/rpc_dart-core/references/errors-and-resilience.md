@@ -235,6 +235,9 @@ RpcCallerEndpoint connectWithRetry(
 ```
 
 - Create the endpoint ONCE on `connection.transport`. It stays valid across reconnects.
+- `connectTimeout` bounds each factory call, 30 s by default; `null` disables it.
+  A factory that waits on a silent peer (a WebSocket upgrade nobody answers)
+  otherwise keeps the connection in `RpcClientConnecting` forever.
 - The factory must return `Future<IRpcReconnectableTransport>`.
   `RpcChannelTransport` implements it.
 - `connect()` returns `void` and does not wait for the connection. A call made before the state is

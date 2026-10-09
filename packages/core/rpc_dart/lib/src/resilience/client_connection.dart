@@ -525,12 +525,18 @@ final class _ReconnectingTransportProxy
 /// ```
 class RpcClientConnection {
   /// Creates a new [RpcClientConnection].
+  ///
+  /// [connectTimeout] bounds each attempt's [transportFactory] call, 30 s by
+  /// default; pass null for none. Without it a factory waiting on a peer that
+  /// accepted the socket and never answers -- the WebSocket upgrade in the
+  /// example above -- keeps the connection in [RpcClientConnecting] for good,
+  /// because nothing else ends that wait.
   RpcClientConnection({
     required Future<IRpcReconnectableTransport> Function() transportFactory,
     BackoffPolicy backoff = const ExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
     int? maxAttempts,
-    Duration? connectTimeout,
+    Duration? connectTimeout = const Duration(seconds: 30),
     RpcConnectionLogger? logger,
     void Function(RpcClientConnectionState state)? onStateChanged,
   }) : _factory = transportFactory,
