@@ -144,6 +144,26 @@ For automatic reconnect with backoff, give `RpcClientConnection` from `rpc_dart`
 a factory that calls `RpcWebSocketCallerTransport.connect`. The connection
 reconnects on that event.
 
+A failed `connect` throws an `RpcStatusException`, as the http caller does:
+
+| Failure | Status |
+| --- | --- |
+| Upgrade answered 401 / 403 / 404 (VM, compression off) | UNAUTHENTICATED / PERMISSION_DENIED / UNIMPLEMENTED |
+| Upgrade answered with another status (VM, compression off) | as `grpcStatusFromHttpStatus` maps it (503 is UNAVAILABLE) |
+| Upgrade refused on the web or with compression on | UNAVAILABLE (the platform hides the HTTP status) |
+| Connection refused, closed during the upgrade, `connectTimeout` | UNAVAILABLE |
+
+So a `shouldReconnect` can stop on a refusal that a retry will not fix:
+
+```dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+bool shouldReconnect(Object? error) =>
+    error is! RpcStatusException ||
+    (error.statusCode != RpcStatus.unauthenticated &&
+        error.statusCode != RpcStatus.permissionDenied);
+```
+
 ## Server
 
 `RpcWebSocketServer` consumes a `Stream<WebSocketChannel>` of already-upgraded

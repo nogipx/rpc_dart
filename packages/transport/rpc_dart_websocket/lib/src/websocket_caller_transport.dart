@@ -308,6 +308,15 @@ class RpcWebSocketCallerTransport
   /// bounded by nothing else: the OS does not time out a missing HTTP response,
   /// and an `RpcClientConnection` awaiting this stays in Connecting. 30 s by
   /// default, as the http2 caller; pass null to wait without a bound.
+  ///
+  /// A failed open throws an [RpcStatusException], as the http caller reports
+  /// the same failures. A refused upgrade carries its HTTP status mapped by
+  /// [grpcStatusFromHttpStatus], so a `shouldReconnect` can stop on
+  /// UNAUTHENTICATED (401) or PERMISSION_DENIED (403). On the web, and with
+  /// [enableCompression] on, the platform does not expose that status and the
+  /// refusal is UNAVAILABLE. A refused connection, a connection closed during
+  /// the upgrade and [connectTimeout] are UNAVAILABLE. An [Error] (a malformed
+  /// [uri]) and an exception from [headersProvider] pass through unchanged.
   static Future<RpcWebSocketCallerTransport> connect(
     Uri uri, {
     Iterable<String>? protocols,
@@ -335,15 +344,26 @@ class RpcWebSocketCallerTransport
     // no output bound before rpc_dart sees it, turning a fraction of a MiB on
     // the wire into hundreds of MiB of client RSS. Mirrors the server default in
     // rpcWebSocketConnections; enable it only against servers you control.
-    Future<WebSocketChannel> openChannel() async => openWebSocket(
-      uri,
-      protocols: protocols,
-      pingInterval: pingInterval,
-      enableCompression: enableCompression,
-      headers: headersProvider != null ? await headersProvider() : headers,
-      connectTimeout: connectTimeout,
-      maxMessageBytes: _guardCeiling(policy),
-    );
+    Future<WebSocketChannel> openChannel() async {
+      // Outside the try: the provider is the application's code, and its own
+      // failure is reported as it is.
+      final upgradeHeaders = headersProvider != null
+          ? await headersProvider()
+          : headers;
+      try {
+        return await openWebSocket(
+          uri,
+          protocols: protocols,
+          pingInterval: pingInterval,
+          enableCompression: enableCompression,
+          headers: upgradeHeaders,
+          connectTimeout: connectTimeout,
+          maxMessageBytes: _guardCeiling(policy),
+        );
+      } catch (e, st) {
+        Error.throwWithStackTrace(_connectFailure(e), st);
+      }
+    }
 
     return RpcWebSocketCallerTransport(
       await openChannel(),
@@ -371,6 +391,23 @@ class RpcWebSocketCallerTransport
     final own = capOf(policy);
     final floor = capOf(const RpcSecurityPolicy());
     return own > floor ? own : floor;
+  }
+
+  /// A failed open as a gRPC status. See [connect].
+  ///
+  /// Any [Exception] is the I/O underneath -- dart:io's, or the browser's
+  /// through `WebSocketChannelException` -- and UNAVAILABLE: no call was made,
+  /// so a fresh attempt may succeed. dart:io cannot be named here because this
+  /// file compiles for the web. An [Error] is a bug and passes through.
+  static Object _connectFailure(Object error) {
+    if (error is RpcException) return error;
+    if (error is Exception) {
+      return RpcStatusException(
+        RpcStatus.unavailable,
+        'WebSocket connect failed: $error',
+      );
+    }
+    return error;
   }
 
   /// Attaches a fresh socket, CONTINUING the id sequence rather than restarting

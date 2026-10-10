@@ -25,6 +25,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
 
@@ -167,7 +168,11 @@ void main() {
                 addTearDown(() => t.close().catchError((Object _) {}));
                 return 'connected to a black hole';
               })
-              .onError<TimeoutException>((_, _) => 'bounded')
+              .onError<RpcStatusException>(
+                (e, _) => e.statusCode == RpcStatus.unavailable
+                    ? 'bounded'
+                    : 'status ${e.statusCode}',
+              )
               .timeout(
                 const Duration(seconds: 3),
                 onTimeout: () =>
@@ -203,7 +208,11 @@ void main() {
               addTearDown(() => t.close().catchError((Object _) {}));
               return 'connected to a black hole';
             })
-            .onError<TimeoutException>((_, _) => 'bounded')
+            .onError<RpcStatusException>(
+              (e, _) => e.statusCode == RpcStatus.unavailable
+                  ? 'bounded'
+                  : 'status ${e.statusCode}',
+            )
             .timeout(
               const Duration(seconds: 40),
               onTimeout: () => 'STILL HANGING at 40 s: no default bound',

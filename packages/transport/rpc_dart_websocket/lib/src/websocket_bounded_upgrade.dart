@@ -6,9 +6,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 
 const String _webSocketGuid = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
@@ -138,8 +138,14 @@ Future<WebSocket> connectBounded(
     try {
       (await response.detachSocket()).destroy();
     } catch (_) {}
-    throw WebSocketException(
-      "Connection to '$httpUri' was not upgraded to websocket",
+    // The server's HTTP status is the only thing that tells a refusal on
+    // identity (401, 403) from an outage (503), and it is mapped the way the
+    // http caller maps the same answer. The uri is left out: its userinfo and
+    // query can carry credentials.
+    final status = response.statusCode;
+    throw RpcStatusException(
+      grpcStatusFromHttpStatus(status),
+      'WebSocket upgrade refused: HTTP $status',
     );
   }
   final protocol = response.headers.value('Sec-WebSocket-Protocol');
