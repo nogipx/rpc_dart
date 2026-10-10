@@ -1,10 +1,10 @@
 ---
-status: decided by owner (round 809)
+status: closed (round 811)
 round: 806
 commit: 0b9d5a08
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_http/lib/src/peer_watch.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
-reason: owner decision — B-274's option 1, "later": a raw-connection cap and a header deadline are new defaults on public servers
+reason: "FIXED in round 811 as decided: RpcHttpServer bounds a header block by bytes (4x the policy's head), by headerTimeout (owner: 60 s) and optionally by maxConnections (owner: off); 300 x 900 KiB went +289 MiB -> +12 MiB. The websocket side is B-287. Previously: owner decision — B-274's option 1"
 release: changelog
 rank: 9
 ---

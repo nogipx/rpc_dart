@@ -101,16 +101,28 @@ void main() {
   test('a metadata block over the aggregate bound is refused', () async {
     await serve(const RpcSecurityPolicy(maxMetadataBytes: 64 * 1024));
 
-    // 120 headers of 8000 bytes: inside maxHeaders (128) and inside
-    // maxHeaderValueBytes (8192) individually, 960 000 bytes together.
+    // 100 headers of 1000 bytes: inside maxHeaders (128) and inside
+    // maxHeaderValueBytes (8192) individually, 100 000 bytes together -- just
+    // over, so the refusal is the BOUND, answered with its reason.
     expect(
-      await post(port, count: 120, size: 8000),
+      await post(port, count: 100, size: 1000),
       contains('400'),
-      reason: '960 000 bytes of headers against a 64 KiB bound',
+      reason: '100 000 bytes of headers against a 64 KiB bound',
     );
+  });
 
-    // Just over, so the refusal is the BOUND and not the extremity.
-    expect(await post(port, count: 100, size: 1000), contains('400'));
+  test('a block far over the bound is cut before it is held', () async {
+    await serve(const RpcSecurityPolicy(maxMetadataBytes: 64 * 1024));
+
+    // 120 headers of 8000 bytes, 960 000 together: RpcHttpServer closes the
+    // connection while the block arrives (an answer cannot be written while
+    // the client is still sending), rather than letting dart:io hold it.
+    final answer = await post(
+      port,
+      count: 120,
+      size: 8000,
+    ).then((a) => a, onError: (Object e) => '$e');
+    expect(answer, isNot(contains('200')));
   });
 
   test('GUARD: an ordinary metadata block still passes', () async {

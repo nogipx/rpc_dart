@@ -238,6 +238,8 @@ too, so a page sees the real status instead of an opaque CORS error.
 | `corsPolicy` | `null` | CORS for browser callers. |
 | `bodyIdleTimeout` | 30 s | Longest silence while the body arrives, reset by every chunk. A body that keeps arriving is never refused by it. `null` disables it. |
 | `bodyReadTimeout` | `null` | Ceiling on the whole body read. It refuses a slow honest upload as readily as a stalled one. |
+| `headerTimeout` | 60 s | Longest time a request's header block may take, from the accept for the first request and from its first byte for a later one; past it the connection is closed. `null` disables it. |
+| `maxConnections` | `null` | Open connections at most; one more is closed as it is accepted. While attackers fill it, honest clients are refused too. |
 
 `bodyReadTimeout` also runs while a client that sent `Expect: 100-continue`
 waits for a `100 Continue` that `dart:io` never sends (curl sends this header
@@ -277,16 +279,16 @@ the host, or put a proxy with its own body limits in front.
 
 ### Deploy behind a reverse proxy
 
-`RpcHttpServer` bounds requests, not connections. It has no limit on open
-connections and no deadline for a request's headers: a client that sends a
-request line and keeps its header block open is held by dart:io below every
-check above, and `HttpServer.idleTimeout` does not cover it. Each such
-connection costs about what the client sent, up to dart:io's own cap on one
-header block (about 3 MiB), and nothing bounds how many there are.
+dart:io holds a request's header block below every check above. `RpcHttpServer`
+bounds that block itself: by size, at four times what `securityPolicy` admits
+as one request's head (about 270 KiB by default; a block a little over the
+policy is still answered `400` with the reason, one far over it is cut), and by
+time, with `headerTimeout`. The number of connections is not bounded unless you
+set `maxConnections`, so a client may hold up to that size per connection for
+up to `headerTimeout`.
 
-A server exposed to untrusted clients belongs behind a reverse proxy (nginx,
-Envoy, a load balancer) that limits connections per client and the time to
-receive request headers.
+A server exposed to untrusted clients still belongs behind a reverse proxy
+(nginx, Envoy, a load balancer) that limits connections per client.
 
 ## Wire format
 

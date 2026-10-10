@@ -14,33 +14,71 @@ import 'dart:typed_data';
 /// there a caller's cancel does not reach the handler.
 const String kRpcHttpPeerGoneKey = 'rpc_dart_http.peer_gone';
 
-/// A [ServerSocket] that reports when each accepted connection ends.
+/// A [ServerSocket] that watches every connection it accepts for the
+/// [HttpServer] it feeds.
 ///
-/// HTTP/1.1 has no cancel frame: a caller cancels by closing its connection.
-/// dart:io sees the close, and neither it nor shelf tells the handler.
+/// - It reports when a connection ends ([peerGone]). HTTP/1.1 has no cancel
+///   frame: a caller cancels by closing its connection, and neither dart:io
+///   nor shelf tells the handler.
+/// - It bounds a request's header block in bytes ([maxHeaderBytes]) and in
+///   time ([headerTimeout]), and the number of open connections
+///   ([maxConnections]). dart:io holds an unfinished header block below every
+///   rpc_dart limit, up to about 3 MiB per connection, for as long as the
+///   client keeps it open.
 final class PeerWatchingServerSocket extends Stream<Socket>
     implements ServerSocket {
-  PeerWatchingServerSocket(this._server);
+  PeerWatchingServerSocket(
+    this._server, {
+    this.maxHeaderBytes,
+    this.headerTimeout,
+    this.maxConnections,
+  });
 
   final ServerSocket _server;
-  final Map<String, Completer<void>> _gone = {};
+
+  /// Bytes a request may send before its header block ends; past it the
+  /// connection is closed. Null for no bound.
+  final int? maxHeaderBytes;
+
+  /// How long a request's header block may take, from the connection's
+  /// accept or the first byte of a later request; past it the connection is
+  /// closed. Null for no bound.
+  final Duration? headerTimeout;
+
+  /// Open connections at most; one more is closed as it is accepted. Null for
+  /// no bound.
+  final int? maxConnections;
+
+  final Map<String, _WatchedSocket> _open = {};
 
   /// Completes when the connection [info] describes has ended; null for one
   /// this socket did not accept.
   Future<void>? peerGone(HttpConnectionInfo info) =>
-      _gone[_key(info.remoteAddress, info.remotePort)]?.future;
+      _open[_key(info.remoteAddress, info.remotePort)]?.gone;
+
+  /// The response to the connection's current request has been written: the
+  /// next bytes start a new header block.
+  void responseWritten(HttpConnectionInfo info) =>
+      _open[_key(info.remoteAddress, info.remotePort)]?._expectHeaders();
 
   static String _key(InternetAddress address, int port) =>
       '${address.address}:$port';
 
-  Socket _watch(Socket socket) {
+  Iterable<Socket> _accept(Socket socket) {
+    final cap = maxConnections;
+    if (cap != null && _open.length >= cap) {
+      socket.destroy();
+      return const [];
+    }
     final key = _key(socket.remoteAddress, socket.remotePort);
-    final gone = Completer<void>();
-    _gone[key] = gone;
-    return _WatchedSocket(socket, () {
-      _gone.remove(key);
-      if (!gone.isCompleted) gone.complete();
-    });
+    final watched = _WatchedSocket(
+      socket,
+      maxHeaderBytes: maxHeaderBytes,
+      headerTimeout: headerTimeout,
+      onEnded: () => _open.remove(key),
+    );
+    _open[key] = watched;
+    return [watched];
   }
 
   @override
@@ -50,7 +88,7 @@ final class PeerWatchingServerSocket extends Stream<Socket>
     void Function()? onDone,
     bool? cancelOnError,
   }) => _server
-      .map<Socket>(_watch)
+      .expand<Socket>(_accept)
       .listen(
         onData,
         onError: onError,
@@ -71,12 +109,87 @@ final class PeerWatchingServerSocket extends Stream<Socket>
   }
 }
 
-/// A [Socket] that calls [_ended] when its inbound stream ends or fails.
+/// A [Socket] that reports its end and bounds each request's header block.
 final class _WatchedSocket extends Stream<Uint8List> implements Socket {
-  _WatchedSocket(this._socket, this._ended);
+  _WatchedSocket(
+    this._socket, {
+    required int? maxHeaderBytes,
+    required Duration? headerTimeout,
+    required void Function() onEnded,
+  }) : _maxHeaderBytes = maxHeaderBytes,
+       _headerTimeout = headerTimeout,
+       _onEnded = onEnded {
+    // The first request is due from the accept on.
+    _armDeadline();
+  }
 
   final Socket _socket;
-  final void Function() _ended;
+  final int? _maxHeaderBytes;
+  final Duration? _headerTimeout;
+  final void Function() _onEnded;
+  final Completer<void> _gone = Completer<void>();
+
+  /// Whether the bytes arriving belong to a header block.
+  bool _inHeaders = true;
+  int _headerBytes = 0;
+
+  /// How much of `\r\n\r\n` the bytes so far end with.
+  int _matched = 0;
+  Timer? _deadline;
+
+  Future<void> get gone => _gone.future;
+
+  void _ended() {
+    _deadline?.cancel();
+    _onEnded();
+    if (!_gone.isCompleted) _gone.complete();
+  }
+
+  void _armDeadline() {
+    final limit = _headerTimeout;
+    if (limit == null) return;
+    _deadline?.cancel();
+    _deadline = Timer(limit, _socket.destroy);
+  }
+
+  /// Called once a response is written; a keep-alive connection idles until
+  /// its next request, which dart:io's own `idleTimeout` bounds.
+  void _expectHeaders() {
+    _inHeaders = true;
+    _headerBytes = 0;
+    _matched = 0;
+  }
+
+  /// Counts [chunk] against the current header block; false once the block
+  /// is over [_maxHeaderBytes] and the connection has been closed.
+  bool _admit(Uint8List chunk) {
+    if (!_inHeaders) return true;
+    if (_headerBytes == 0 && _matched == 0 && _deadline?.isActive != true) {
+      // A later request on a kept-alive connection: due from its first byte.
+      _armDeadline();
+    }
+    for (var i = 0; i < chunk.length; i++) {
+      final b = chunk[i];
+      _matched = b == (_matched.isEven ? 13 : 10)
+          ? _matched + 1
+          : (b == 13 ? 1 : 0);
+      if (_matched == 4) {
+        _headerBytes += i + 1;
+        _inHeaders = false;
+        _deadline?.cancel();
+        return _withinCap();
+      }
+    }
+    _headerBytes += chunk.length;
+    return _withinCap();
+  }
+
+  bool _withinCap() {
+    final cap = _maxHeaderBytes;
+    if (cap == null || _headerBytes <= cap) return true;
+    _socket.destroy();
+    return false;
+  }
 
   @override
   StreamSubscription<Uint8List> listen(
@@ -85,7 +198,9 @@ final class _WatchedSocket extends Stream<Uint8List> implements Socket {
     void Function()? onDone,
     bool? cancelOnError,
   }) => _socket.listen(
-    onData,
+    (chunk) {
+      if (_admit(chunk)) onData?.call(chunk);
+    },
     onError: (Object e, StackTrace st) {
       _ended();
       switch (onError) {

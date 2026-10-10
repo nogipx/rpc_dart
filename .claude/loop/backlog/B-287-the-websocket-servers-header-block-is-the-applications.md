@@ -1,0 +1,28 @@
+---
+status: open
+round: 811
+commit: 68023a57
+paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
+probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
+reason: cost — rpcWebSocketConnections is handed the application's HttpServer, so the bound needs a helper that binds the socket for it
+release: changelog
+rank: 11
+---
+
+# B-287 — the websocket server's header block is the application's
+
+Round 811 bounded an unfinished request header block on `RpcHttpServer`
+(bytes from the policy, `headerTimeout`, `maxConnections`), because that
+server binds its own socket. `rpcWebSocketConnections` is handed the
+APPLICATION's `HttpServer`; P-277 measured the same +313 MiB for 300 x 900
+KiB there (round 782), and nothing in rpc_dart sees those bytes.
+
+The way B-274's option 1 put it: a helper of the same shape the
+application may bind instead of its own `HttpServer` (it can reuse
+`PeerWatchingServerSocket`, now in rpc_dart_http, if it moves to a place
+both packages can import). Until then the websocket README tells the
+application to put a proxy in front.
+
+## Owner decision
+
+—

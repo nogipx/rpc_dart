@@ -67,6 +67,8 @@ class RpcHttpServer implements IRpcServer {
   final RpcSecurityPolicy? _securityPolicy;
   final Duration? _bodyReadTimeout;
   final Duration? _bodyIdleTimeout;
+  final Duration? _headerTimeout;
+  final int? _maxConnections;
   final void Function(RpcResponderEndpoint) _onEndpointCreated;
   final LogScope? _logger;
   final LogController? _logController;
@@ -98,6 +100,14 @@ class RpcHttpServer implements IRpcServer {
   /// ceiling on the whole body read. It also rejects a client sending
   /// `Expect: 100-continue`, whose fallback wait runs inside this budget — see
   /// [RpcHttpResponderTransport.bodyReadTimeout] for that trade-off.
+  ///
+  /// [headerTimeout] closes a connection whose request header block has not
+  /// ended in that time, counted from the accept for the first request and
+  /// from the first byte for a later one; `null` disables it. dart:io holds
+  /// an unfinished block indefinitely, and `HttpServer.idleTimeout` does not
+  /// cover it. [maxConnections] closes a connection accepted past that many
+  /// open ones; `null` disables it. The header block is also bounded in
+  /// bytes by [securityPolicy] (its method path, metadata and header count).
   RpcHttpServer({
     required String host,
     required int port,
@@ -106,6 +116,8 @@ class RpcHttpServer implements IRpcServer {
     RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
     Duration? bodyReadTimeout,
     Duration? bodyIdleTimeout = const Duration(seconds: 30),
+    Duration? headerTimeout = const Duration(seconds: 60),
+    int? maxConnections,
     LogScope? logger,
     LogController? logController,
   }) : _host = host,
@@ -114,6 +126,8 @@ class RpcHttpServer implements IRpcServer {
        _securityPolicy = securityPolicy,
        _bodyReadTimeout = bodyReadTimeout,
        _bodyIdleTimeout = bodyIdleTimeout,
+       _headerTimeout = headerTimeout,
+       _maxConnections = maxConnections,
        _onEndpointCreated = onEndpointCreated,
        _logController = logController,
        _logger = logger?.child('HttpServer');
@@ -250,11 +264,36 @@ class RpcHttpServer implements IRpcServer {
       // Bound here rather than by shelf_io.serve, so a connection's close
       // reaches the transport and a caller's cancel its handler
       // (kRpcHttpPeerGoneKey).
+      final policy = _securityPolicy;
       final sockets = PeerWatchingServerSocket(
         await ServerSocket.bind(_host, _port),
+        // Four times what the policy admits as one request's head (method
+        // path, metadata text, the `: ` and CRLF around each header, the
+        // request line): a block a little over the policy still reaches the
+        // transport and is answered 400 with the reason; a block far over it
+        // is cut here, before dart:io holds it (up to ~3 MiB per connection).
+        maxHeaderBytes: policy == null
+            ? null
+            : 4 *
+                  (policy.maxMethodPathLength +
+                      policy.maxMetadataBytes +
+                      4 * policy.maxHeaders +
+                      1024),
+        headerTimeout: _headerTimeout,
+        maxConnections: _maxConnections,
       );
       final httpServer = HttpServer.listenOn(sockets);
-      shelf_io.serveRequests(httpServer, (request) {
+      final requests = httpServer.map((r) {
+        final info = r.connectionInfo;
+        if (info != null) {
+          r.response.done.then(
+            (_) => sockets.responseWritten(info),
+            onError: (Object _) {},
+          );
+        }
+        return r;
+      });
+      shelf_io.serveRequests(requests, (request) {
         final info = request.context['shelf.io.connection_info'];
         final gone = info is HttpConnectionInfo ? sockets.peerGone(info) : null;
         return handler(
