@@ -59,6 +59,17 @@ void main() {
     expect(outcome, isA<RpcStatusException>());
     expect(ms, greaterThanOrEqualTo(4500));
   });
+
+  // Past the web's timer ceiling (2^31 - 1 ms, about 24.86 days) a plain Timer
+  // fires at once there, which would end the wait before the reconnect.
+  test('a deadline past the web timer ceiling waits like none', () async {
+    final (outcome, ms) = await _call(
+      connection.transport,
+      RpcContext.withTimeout(const Duration(days: 30)),
+    );
+    expect(outcome, isA<RpcStatusException>());
+    expect(ms, greaterThanOrEqualTo(4500), reason: 'the wait ended early');
+  });
 }
 
 /// The outcome and elapsed milliseconds of one call through a retry

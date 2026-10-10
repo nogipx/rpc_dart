@@ -207,7 +207,9 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     final ends = <Future<void>>[reconnect];
     if (remaining != null) {
       final expired = Completer<void>();
-      timer = Timer(remaining, expired.complete);
+      // A deadline can be past the web's timer ceiling, where a plain Timer
+      // fires at once and the reconnect would not be waited for.
+      timer = RpcLongTimer.create(remaining, expired.complete);
       ends.add(expired.future);
     }
     if (token != null) ends.add(token.cancelled);
