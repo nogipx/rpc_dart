@@ -76,13 +76,13 @@ class ConsoleOutput extends LogOutput {
     if (event.spanId != null) buf.write(' ${_shortId(event.spanId!)}');
     if (event.scope.isNotEmpty) buf.write(' ${event.scope}');
     if (event.tag != null) buf.write(' [${event.tag}]');
-    buf.write('  ${event.message}');
+    buf.write('  ${_oneLine(event.message)}');
 
     // Structured fields: trace, request, data — logfmt style
     if (event.traceId != null) buf.write('  trace=${event.traceId}');
     _writeData(buf, event.data);
 
-    if (event.error != null) buf.write('  err=${event.error}');
+    if (event.error != null) buf.write('  err=${_oneLine('${event.error}')}');
 
     final line = buf.toString();
     if (colored) {
@@ -107,7 +107,7 @@ class ConsoleOutput extends LogOutput {
     if (span.traceId != null) buf.write('  trace=${span.traceId}');
     _writeData(buf, span.data);
 
-    if (span.error != null) buf.write('  err=${span.error}');
+    if (span.error != null) buf.write('  err=${_oneLine('${span.error}')}');
 
     final line = buf.toString();
     if (colored) {
@@ -123,14 +123,39 @@ class ConsoleOutput extends LogOutput {
   void _writeData(StringBuffer buf, Map<String, Object>? data) {
     if (data == null || data.isEmpty) return;
     for (final entry in data.entries) {
-      final value = entry.value;
-      if (value is String && value.contains(' ')) {
+      final value = _oneLine('${entry.value}');
+      if (entry.value is String && value.contains(' ')) {
         buf.write(' ${entry.key}="$value"');
       } else {
         buf.write(' ${entry.key}=$value');
       }
     }
   }
+
+  /// [text] with control characters escaped, so one record stays one line.
+  ///
+  /// A message often quotes a peer: a status message, a close reason, a path.
+  /// Printed raw, a CR/LF in it starts a forged record of the peer's choosing,
+  /// and an ESC sequence acts on the terminal.
+  static String _oneLine(String text) {
+    if (!text.codeUnits.any(_isControl)) return text;
+    final out = StringBuffer();
+    for (final unit in text.codeUnits) {
+      if (!_isControl(unit)) {
+        out.writeCharCode(unit);
+      } else if (unit == 0x0a) {
+        out.write(r'\n');
+      } else if (unit == 0x0d) {
+        out.write(r'\r');
+      } else {
+        out.write('\\u{${unit.toRadixString(16)}}');
+      }
+    }
+    return out.toString();
+  }
+
+  static bool _isControl(int unit) =>
+      (unit < 0x20 && unit != 0x09) || unit == 0x7f;
 
   void _writeJson(LogRecord record) {
     switch (record) {
@@ -150,7 +175,7 @@ class ConsoleOutput extends LogOutput {
       case final LogEvent event:
         final time = _formatTime(event.timestamp);
         final level = event.level.name.toUpperCase().substring(0, 3);
-        print('$time $level ${event.scope}: ${event.message}');
+        print('$time $level ${event.scope}: ${_oneLine(event.message)}');
       case final LogSpan span:
         final time = _formatTime(span.endTime);
         final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
@@ -223,7 +248,14 @@ class ConsoleOutput extends LogOutput {
         case '\t':
           buf.write(r'\t');
         default:
-          buf.write(ch);
+          // JSON admits no raw control character: one (an ESC from a peer's
+          // text) made the line unparseable.
+          final unit = ch.codeUnitAt(0);
+          if (unit < 0x20) {
+            buf.write('\\u${unit.toRadixString(16).padLeft(4, '0')}');
+          } else {
+            buf.write(ch);
+          }
       }
     }
     buf.write('"');

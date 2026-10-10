@@ -116,7 +116,11 @@ Future<RpcString> echo(RpcString request, {RpcContext? context}) async {
 ### Outputs, enrichers, sampling
 
 - `ConsoleOutput({colored = true, format = ConsoleFormat.pretty, scopeFilter})`;
-  formats `pretty`, `json`, `compact`. Uses `print`.
+  formats `pretty`, `json`, `compact`. Uses `print`. One record is one line:
+  control characters in the message, error and data (a peer's status message
+  or close reason can carry CR/LF or an ESC sequence) are printed escaped, and
+  `json` escapes every one, so each line parses. A custom `LogOutput` that
+  writes text has to do the same.
 - `RingBufferOutput({maxEntries = 1000, scopeFilter})`; read with `entries`,
   `query(LogFilter(...), limit:)`, `length`, `clear()`. Use it in tests and for
   an in-app log viewer.
