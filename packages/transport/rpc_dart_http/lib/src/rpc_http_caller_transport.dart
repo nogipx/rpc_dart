@@ -685,6 +685,9 @@ class RpcHttpCallerTransport
       //
       // The call is still ANSWERED either way — only the level moves, and the
       // status comes from `_closedDuringCall` by way of `closeAll`.
+      // The status, not the raw exception: a `ClientException` prints its
+      // uri, and a `baseUrl` with userinfo carries the password in it.
+      final failure = _asRpcStatus(e, call.methodPath);
       if (_isClosed) {
         if (_log.isInternal) {
           _log.internal('HTTP request ended by close() [streamId: $streamId]');
@@ -692,11 +695,11 @@ class RpcHttpCallerTransport
       } else {
         _log.error(
           'HTTP request failed for [streamId: $streamId]',
-          error: e,
+          error: failure,
           stackTrace: st,
         );
       }
-      _emitError(streamId, _asRpcStatus(e, call.methodPath), st);
+      _emitError(streamId, failure, st);
     } finally {
       _abortTriggers.remove(streamId);
       _inFlight.remove(streamId);
@@ -782,6 +785,12 @@ class RpcHttpCallerTransport
   /// A literal: `runtimeType.toString()` is minified on the web.
   static const _component = 'RpcHttpCallerTransport';
 
+  /// [_baseUrl] as health reports it: without its userinfo, which is a
+  /// password when the server takes Basic auth, and health details are often
+  /// served to whoever asks.
+  late final String _shownBaseUrl =
+      Uri.tryParse(_baseUrl)?.replace(userInfo: '').toString() ?? _baseUrl;
+
   @override
   Future<RpcHealthStatus> health() async {
     if (_isClosed) {
@@ -794,7 +803,7 @@ class RpcHttpCallerTransport
       component: _component,
       message: 'HTTP caller transport ready',
       details: {
-        'baseUrl': _baseUrl,
+        'baseUrl': _shownBaseUrl,
         // Per-call bookkeeping, exposed so growth is observable from outside:
         // all three must return to a baseline once calls finish.
         'pendingCalls': _pending.length,
@@ -811,7 +820,7 @@ class RpcHttpCallerTransport
     return RpcHealthStatus.healthy(
       component: _component,
       message: 'HTTP is stateless, no reconnect required',
-      details: {'baseUrl': _baseUrl},
+      details: {'baseUrl': _shownBaseUrl},
     );
   }
 
