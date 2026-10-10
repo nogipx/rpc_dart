@@ -125,7 +125,9 @@ void main() {
         99,
       ], const Duration(seconds: 2));
       for (var i = 0; i < frames; i++) {
-        await c.client.sendMessage(99, _payload('x' * _payloadBytes));
+        // Not awaited: once the server has refused the stream it grants it no
+        // more credit, so the flooding sender parks there after the refusal.
+        c.client.sendMessage(99, _payload('x' * _payloadBytes)).ignore();
       }
       final got = await trailers;
 

@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 802)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**, packages/core/rpc_dart/lib/src/endpoint/**]
 probe: none — packages/test/rpc_dart_conformance/test/i5_resources_return_test.dart, the KNOWN FAILING channel and isolate cells
-reason: bench — KNOWN FAILING cells of I-5 and of the lifecycle model; severity S1, the residue grows by one entry per call
-rank: 3
+reason: "FIXED in round 802: a late frame no longer re-advertises a forgotten stream, and credit skips the per-stream grant of an ended one; the cells and the model's fc.* exclusion are gone"
 ---
 
 # B-279 — flow-control credit stays on the server after some endings

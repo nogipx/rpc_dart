@@ -109,5 +109,10 @@ extension _ChannelTransportFlow on RpcChannelTransport {
   void _forgetStream(int streamId) {
     _fc.forget(streamId);
     _buffers.forget(streamId);
+    if (_forgottenStreams.add(streamId) &&
+        _forgottenStreams.length >
+            RpcChannelTransport._maxRememberedFinishedStreams) {
+      _forgottenStreams.remove(_forgottenStreams.first);
+    }
   }
 }

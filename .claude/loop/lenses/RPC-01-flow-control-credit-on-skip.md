@@ -3,8 +3,8 @@ refines: U-07
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: there is credit accounting released on message delivery
 breaks: a wedged connection — a hang.
-applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497, 558, 738, 768, 769]
-status: confirmed (round 558)
+applied: [206, 207, 208, 212, 213, 228, 229, 230, 231, 281, 282, 366, 445, 469, 475, 497, 558, 738, 768, 769, 802]
+status: confirmed (round 802)
 rank: 13
 ---
 
@@ -102,3 +102,10 @@ off-journal).
   an undeliverable send throw); one witness per mechanism.
   `../rounds/558-the-half-close-overtook-the-payload.md`,
   `../probes/P-183-what-reaches-the-wire-when-a-parked-send-meets-a-half-close.md`, B-184.
+- **Round 802** — the skip path after the END: a late frame on a forgotten
+  stream was a "first frame" to `advertiseStream`, which made the stream live
+  again, and its grants rebuilt the credit; `credit()` left a pending grant
+  for any id. One entry per call ended by deadline or failure, 0->5 over 5
+  calls. **A set that admits an id on first sight readmits one it has
+  forgotten; remember what was dropped.**
+  `../rounds/802-a-late-frame-revived-an-ended-streams-credit.md`, B-279.

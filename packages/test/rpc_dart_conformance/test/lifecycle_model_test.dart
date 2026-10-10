@@ -24,8 +24,7 @@
 //   - nothing escapes as an uncaught async error (I-4);
 // and at the end:
 //   - every handler that entered was disposed and released its timer, and the
-//     gauges the I-5 row reads are back at baseline on both sides (I-5),
-//     but for the server's `fc.*` on channel and isolate (lead B-279);
+//     gauges the I-5 row reads are back at baseline on both sides (I-5);
 //   - a call nothing interfered with ends the way its handler and deadline
 //     say, when the two are at least [_margin] apart.
 //
@@ -804,10 +803,6 @@ final class _Run {
     // The gauges are back at baseline. A closed endpoint has dropped its
     // registrations, on both sides of the connection, which is not a leak.
     final ignore = {..._notAGauge, if (_closing != null) ..._registrations};
-    // The server's flow-control residue on the channel transport (the
-    // isolate one is built on it) is lead B-279 in .claude/loop/backlog and
-    // still caught by the I-5 rows; here it would hide everything else.
-    final skipFc = _rig is ChannelRig || _rig is IsolateRig;
     Map<String, String> drift = {};
     while (true) {
       drift = serverGone
@@ -818,7 +813,7 @@ final class _Run {
                 await _rig.serverMetrics(),
                 ignore,
               ).entries)
-                if (!(skipFc && e.key.startsWith('fc.'))) e.key: e.value,
+                e.key: e.value,
             };
       if (drift.isEmpty) {
         drift = {

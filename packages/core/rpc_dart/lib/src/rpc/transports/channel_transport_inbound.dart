@@ -63,7 +63,9 @@ extension _ChannelTransportInbound on RpcChannelTransport {
     // ends reports a 186x blow-up, because the flood fills the SENDER's own
     // credit map and the unbounded send is self-inflicted.
     _fc.advertiseConnection();
-    _fc.advertiseStream(message.streamId);
+    if (!_forgottenStreams.contains(message.streamId)) {
+      _fc.advertiseStream(message.streamId);
+    }
 
     // A response that ends with no grpc-status is TRUNCATED, and the end flag
     // must not reach the consumer: it would close the stream cleanly and the

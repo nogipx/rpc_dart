@@ -564,6 +564,9 @@ final class RpcFlowController {
   /// too.
   void credit(int streamId, int bytes, {int messages = 0}) {
     if (bytes > 0) _creditConnection(bytes);
+    // An ended stream takes no more frames, so its grant serves nobody, and
+    // the pending entry it would leave is never removed again.
+    if (!_isStreamLive(streamId)) return;
     final window = _policy.advertisedWindowBytes;
     if (window == null) return;
     if (!_canTrack(_pendingGrant, streamId)) return;

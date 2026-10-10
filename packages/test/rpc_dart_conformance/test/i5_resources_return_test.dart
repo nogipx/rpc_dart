@@ -33,13 +33,6 @@ enum _Ending { completes, deadline, callerCancels, handlerFails }
 
 const _notAGauge = {'transport.finishedStreams'};
 
-/// The server's per-stream flow-control maps keep entries for streams that
-/// ended. core's flow_control_state_returns_to_zero_test pins the same rule
-/// for one path (a late grant after teardown); these are other endings.
-const _fcResidue =
-    'server fc.sendCredit / fc.messageCredit / fc.advertised not back at '
-    'baseline 2 s after the call ended';
-
 /// Same cause as I-6's http cells: the responder is never told of the cancel,
 /// so the handler, its scope and its timer outlive the call.
 const _httpCancel =
@@ -47,11 +40,6 @@ const _httpCancel =
     'cancelled; the http responder is not told of a caller cancel';
 
 const _knownFailing = <String, String>{
-  'isolate | unary deadline': _fcResidue,
-  'isolate | serverStream deadline': _fcResidue,
-  'isolate | bidi handlerFails': _fcResidue,
-  'channel | 40 calls, every shape and ending': _fcResidue,
-  'isolate | 40 calls, every shape and ending': _fcResidue,
   'http | unary callerCancels': _httpCancel,
   'http | clientStream callerCancels': _httpCancel,
   'http | serverStream callerCancels': _httpCancel,

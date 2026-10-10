@@ -52,6 +52,12 @@ class RpcChannelTransport
   /// `first` is the oldest entry.
   final Set<int> _finishedStreams = {};
 
+  /// Ids whose flow-control state has been dropped. A late frame for one must
+  /// not advertise its window again: that made it live, and its grants then
+  /// rebuilt the credit, one entry per call that ended by deadline or failure.
+  /// Bounded like [_finishedStreams]; insertion-ordered.
+  final Set<int> _forgottenStreams = {};
+
   /// A send on this stream that is PARKED for flow-control credit.
   ///
   /// [finishSending] waits for it, so an end-of-stream — which carries no
@@ -363,6 +369,7 @@ class RpcChannelTransport
     }
     final id = _idManager.generateId();
     _activeStreams.add(id);
+    _forgottenStreams.remove(id);
     return id;
   }
 
