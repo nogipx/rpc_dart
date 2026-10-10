@@ -17,6 +17,12 @@ server binds its own socket. `rpcWebSocketConnections` is handed the
 APPLICATION's `HttpServer`; P-277 measured the same +313 MiB for 300 x 900
 KiB there (round 782), and nothing in rpc_dart sees those bytes.
 
+A FINISHED block is bounded only by dart:io too: P-299 (round 813) got 101
+for 100 000 headers (1.29 MB on the wire), and the connection closed only
+past dart:io's 1 MiB `_headerTotalSizeLimit`, which counts name and value
+bytes, about 1.4 MB on the wire. The http server answers 400 at the
+policy's header count.
+
 The way B-274's option 1 put it: a helper of the same shape the
 application may bind instead of its own `HttpServer` (it can reuse
 `PeerWatchingServerSocket`, now in rpc_dart_http, if it moves to a place
