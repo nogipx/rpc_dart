@@ -386,8 +386,14 @@ class RpcHttp2Server implements IRpcServer {
   bool get isRunning => _isRunning;
 
   /// Binds the listening socket and starts accepting connections.
+  ///
+  /// A [stop] in flight is finished first, as on the websocket server. A
+  /// restart overlapping it would leave a later [stop] returning that first
+  /// stop's future while the restarted server keeps serving.
   @override
   Future<void> start() async {
+    final stopping = _stopping;
+    if (stopping != null) await stopping;
     // `_isRunning` alone cannot hold this: it is assigned AFTER the bind's await,
     // so two concurrent callers both passed the guard and both bound. The loser's
     // catch then set it FALSE over the winner's true — measured: the socket is
