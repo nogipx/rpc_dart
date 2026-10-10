@@ -122,6 +122,10 @@ typedef RpcBidirectionalStreamNext<TRequest, TResponse> =
 ///
 /// Wraps user handlers and may short-circuit the chain by returning a custom
 /// result.
+///
+/// Every method passes through by default. An interceptor that CHECKS calls
+/// (authentication, authorization) must override all four: a call of a shape
+/// it does not override is served unchecked.
 abstract class IRpcInterceptor {
   /// Creates a constant interceptor instance.
   const IRpcInterceptor();

@@ -225,7 +225,9 @@ set is fixed when a call starts.
 
 Per call: request middlewares, then interceptors, then the handler (on a caller
 endpoint: the wire), then response middlewares. Defaults pass through; override
-only what you need. `RpcMiddlewareContext` has `endpoint`, `serviceName`,
+only what you need, except for a CHECK: an interceptor that authenticates or
+authorizes must override all four methods, because a call of a shape it does
+not override passes through unchecked. `RpcMiddlewareContext` has `endpoint`, `serviceName`,
 `methodName`, a mutable `context`, and `direction`
 (`RpcCallDirection.outgoing` for a call the endpoint makes, `.incoming` for one
 it serves). On an `RpcPeerEndpoint` one middleware list runs both ways, so
@@ -253,8 +255,16 @@ final class TrimMiddleware extends IRpcMiddleware {
   }
 }
 
+/// Refuses every call without a token: all four shapes, or the streaming
+/// ones are served unauthenticated.
 final class RequireTokenInterceptor extends IRpcInterceptor {
   const RequireTokenInterceptor();
+
+  static void _check(RpcMiddlewareContext call) {
+    if (call.context.getHeader('authorization') == null) {
+      throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
+    }
+  }
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
@@ -262,10 +272,38 @@ final class RequireTokenInterceptor extends IRpcInterceptor {
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
-    if (call.context.getHeader('authorization') == null) {
-      throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
-    }
+    _check(call);
     return next(call.context, request);
+  }
+
+  @override
+  FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    TRequest request,
+    RpcServerStreamNext<TRequest, TResponse> next,
+  ) {
+    _check(call);
+    return next(call.context, request);
+  }
+
+  @override
+  Future<TResponse> interceptClientStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    Stream<TRequest> requests,
+    RpcClientStreamNext<TRequest, TResponse> next,
+  ) async {
+    _check(call);
+    return next(call.context, requests);
+  }
+
+  @override
+  FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    Stream<TRequest> requests,
+    RpcBidirectionalStreamNext<TRequest, TResponse> next,
+  ) {
+    _check(call);
+    return next(call.context, requests);
   }
 }
 
