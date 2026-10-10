@@ -99,7 +99,7 @@ Status codes are `RpcStatus` constants; the caller sees an
 | `maxActiveStreams`, own call | caller, before sending | `RpcStatusException.atCapacity`: RESOURCE_EXHAUSTED with `RpcRetryInfo` (retryable). |
 | `maxActiveStreams`, peer's stream | responder | That stream answered RESOURCE_EXHAUSTED (retryable). Connection stays. |
 | `maxConcurrentHandlers` | responder, at dispatch | RESOURCE_EXHAUSTED with retry info. Connection stays. |
-| `maxMessageLengthBytes`, inbound on a server frame channel | server | Connection closed. The caller sees the call end without a status: UNAVAILABLE. |
+| `maxMessageLengthBytes`, inbound on a server frame channel | server | That call is answered RESOURCE_EXHAUSTED, then the connection is closed: other calls on it end UNAVAILABLE. |
 | `maxMessageLengthBytes`, inbound on a client frame channel | client | That call fails RESOURCE_EXHAUSTED; other calls continue. |
 | `maxBufferedBytes` / `maxBufferedMessagesPerStream` | either side | That stream fails RESOURCE_EXHAUSTED. Connection stays. |
 | `maxMessagesPerChunk` | parser | RESOURCE_EXHAUSTED. |

@@ -56,6 +56,10 @@ class RpcFrameMultiplexedChannel
   /// against the right one.
   int _skipStreamId = 0;
 
+  /// Set once the receive path has failed the channel: nothing more is decoded
+  /// while the close (and a refused stream's answer) is under way.
+  bool _failed = false;
+
   /// Whether an oversized inbound frame kills the connection.
   ///
   /// The two sides of a connection want opposite answers:
@@ -225,9 +229,10 @@ class RpcFrameMultiplexedChannel
   /// Logical offset 0 is always a frame start: every complete frame is consumed
   /// on the chunk it arrives in, so the buffer only ever holds an incomplete
   /// prefix.
-  ({int streamId, int payloadLen})? _refusedFrameHeader(Uint8List data) {
+  ({int streamId, int payloadLen, bool isMetadata})? _refusedFrameHeader(
+    Uint8List data,
+  ) {
     const headerSize = RpcChannelFrame.headerSize;
-    if (closeOnOversizedFrame) return null;
     if (_bufLen + data.length < headerSize) return null;
 
     final header = Uint8List(headerSize);
@@ -251,8 +256,13 @@ class RpcFrameMultiplexedChannel
     // ceiling and every metadata frame between the two is buffered and then
     // rejected inside decodeAll, which reaches _failChannel -- so refusing a big
     // RESPONSE works while big TRAILERS still kill the connection.
-    if (!_refuses(view.getUint8(4), payloadLen)) return null;
-    return (streamId: view.getUint32(0), payloadLen: payloadLen);
+    final flags = view.getUint8(4);
+    if (!_refuses(flags, payloadLen)) return null;
+    return (
+      streamId: view.getUint32(0),
+      payloadLen: payloadLen,
+      isMetadata: (flags & RpcChannelFrame.flagMetadata) != 0,
+    );
   }
 
   /// Whether a frame with these [flags] declaring [payloadLen] is over its
@@ -363,7 +373,7 @@ class RpcFrameMultiplexedChannel
   }
 
   void _onData(Uint8List chunk) {
-    if (_closed || chunk.isEmpty) return;
+    if (_closed || _failed || chunk.isEmpty) return;
 
     var data = chunk;
     while (true) {
@@ -388,6 +398,22 @@ class RpcFrameMultiplexedChannel
         if (!_decodeAndEmit(Uint8List.sublistView(data, 0, cut))) return;
         data = Uint8List.sublistView(data, cut);
         continue;
+      }
+
+      if (closeOnOversizedFrame) {
+        // The wording RpcChannelFrame.decodeAll uses for the same refusal.
+        _failChannel(
+          RpcFrameException.limit(
+            refused.isMetadata
+                ? 'Incoming metadata frame too large: ${refused.payloadLen} '
+                      'bytes (max: ${_policy.maxMetadataBytes})'
+                : 'Incoming frame payload too large: ${refused.payloadLen} '
+                      'bytes (max: $_maxFramePayloadBytes)',
+          ),
+          oversize: true,
+          refusedStreamId: refused.streamId,
+        );
+        return;
       }
 
       final total = RpcChannelFrame.headerSize + refused.payloadLen;
@@ -421,7 +447,6 @@ class RpcFrameMultiplexedChannel
   /// Only the first frame can straddle `_buf` and [data]: the buffer holds an
   /// incomplete prefix, so every later frame starts inside [data].
   int? _nextRefusedFrame(Uint8List data) {
-    if (closeOnOversizedFrame) return null;
     const headerSize = RpcChannelFrame.headerSize;
     if (_bufLen + data.length < headerSize) return null;
     int byteAt(int i) => i < _bufLen ? _buf[i] : data[i - _bufLen];
@@ -564,21 +589,45 @@ class RpcFrameMultiplexedChannel
   /// so there is nothing to resynchronise to and carrying on would decode the
   /// rest as garbage.
   ///
-  /// An oversized DECLARED payload used to come here too, and that was wrong on
-  /// its own terms: the header states the length, so the next boundary is known
-  /// exactly. [_onData] now steps over such a frame and answers its stream with
-  /// RESOURCE_EXHAUSTED. Measured against a server sending 2 MiB to a client
-  /// capped at 256 KiB: the call failed AND every later call on the connection
-  /// got "Transport is disconnected and has no socket", where http2 -- the same
-  /// library, the same scenario -- failed only the call.
+  /// An oversized DECLARED payload states its length, so the next boundary is
+  /// known: a client ([closeOnOversizedFrame] false) steps over the frame and
+  /// fails only its call. A server comes here with [refusedStreamId], and that
+  /// stream is answered RESOURCE_EXHAUSTED before the close: a channel with no
+  /// close code on the wire otherwise leaves the caller only "the stream
+  /// closed", UNAVAILABLE, which it retries.
   ///
   /// [oversize] marks a message larger than the policy allows, which the peer
   /// is told as such: it is a limit the peer can correct, not malformed bytes.
-  void _failChannel(RpcFrameException error, {bool oversize = false}) {
+  void _failChannel(
+    RpcFrameException error, {
+    bool oversize = false,
+    int? refusedStreamId,
+  }) {
+    _failed = true;
     if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
     // Drop any partially buffered bytes immediately; do not keep allocating.
     _buf = Uint8List(0);
     _bufLen = 0;
+
+    if (refusedStreamId != null && !_closed) {
+      final answer = send(
+        RpcTransportMessage(
+          metadata: RpcMetadata.forTrailer(
+            RpcStatus.resourceExhausted,
+            message: error.message,
+            maxMessageLength: _policy.maxHeaderValueBytes,
+          ),
+          isEndOfStream: true,
+          streamId: refusedStreamId,
+        ),
+      );
+      unawaited(
+        answer
+            .catchError((Object _) {})
+            .then((_) => closeForOversize(error.message)),
+      );
+      return;
+    }
 
     // Tell the peer this was ITS fault, where the underlying protocol can say
     // so. A framing violation is deterministic -- the peer will send the same

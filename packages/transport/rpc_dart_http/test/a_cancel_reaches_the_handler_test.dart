@@ -26,8 +26,9 @@ final _codec = RpcCodec(RpcString.fromJson);
 const _bound = Duration(seconds: 5);
 
 final class _Hanging extends RpcResponderContract {
-  _Hanging(this.cancelled) : super('Svc');
+  _Hanging(this.entered, this.cancelled) : super('Svc');
 
+  final Completer<void> entered;
   final Completer<void> cancelled;
 
   @override
@@ -35,6 +36,7 @@ final class _Hanging extends RpcResponderContract {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'hang',
       handler: (request, {RpcContext? context}) async {
+        if (!entered.isCompleted) entered.complete();
         final token = context?.cancellationToken;
         if (token != null) {
           await token.cancelled;
@@ -50,15 +52,22 @@ final class _Hanging extends RpcResponderContract {
   }
 }
 
-Future<({RpcCallerEndpoint caller, Completer<void> cancelled})> _serve({
-  LogScope? logger,
-}) async {
+Future<
+  ({
+    RpcCallerEndpoint caller,
+    Completer<void> entered,
+    Completer<void> cancelled,
+  })
+>
+_serve({LogScope? logger}) async {
+  final entered = Completer<void>();
   final cancelled = Completer<void>();
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
     logger: logger,
-    onEndpointCreated: (e) => e.registerServiceContract(_Hanging(cancelled)),
+    onEndpointCreated: (e) =>
+        e.registerServiceContract(_Hanging(entered, cancelled)),
   );
   await server.start();
   await server.afterModulesStart();
@@ -71,7 +80,7 @@ Future<({RpcCallerEndpoint caller, Completer<void> cancelled})> _serve({
     await caller.close();
     await server.stop();
   });
-  return (caller: caller, cancelled: cancelled);
+  return (caller: caller, entered: entered, cancelled: cancelled);
 }
 
 Future<void> _call(RpcCallerEndpoint caller, RpcContext context) => caller
@@ -90,14 +99,17 @@ void main() {
     final s = await _serve();
     final token = RpcCancellationToken();
     final call = _call(s.caller, RpcContext.empty().withCancellation(token));
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    // Cancelled once the handler runs: cancelled earlier, under load, the
+    // request never reached it and there was nothing to tell.
+    await s.entered.future.timeout(_bound);
     token.cancel('the caller gave up');
     await call;
 
     await s.cancelled.future.timeout(
       _bound,
       onTimeout: () => fail(
-        'the handler was not told within $_bound that its caller cancelled',
+        'the handler was not told within $_bound that its caller cancelled '
+        '(handler entered: ${s.entered.isCompleted})',
       ),
     );
   });
@@ -115,7 +127,7 @@ void main() {
     final s = await _serve(logger: LogScope(controller, 'server'));
     final token = RpcCancellationToken();
     final call = _call(s.caller, RpcContext.empty().withCancellation(token));
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await s.entered.future.timeout(_bound);
     token.cancel('the caller gave up');
     await call;
     await s.cancelled.future.timeout(_bound);

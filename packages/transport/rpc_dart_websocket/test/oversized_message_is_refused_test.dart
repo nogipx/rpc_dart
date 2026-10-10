@@ -143,7 +143,8 @@ void main() {
     socket.add(_framed(8 * 1024 * 1024));
     await Future<void>.delayed(const Duration(milliseconds: 800));
 
-    expect(socket.closeReason, contains('frame buffer overflow'));
+    // Refused from the frame header, before the buffer: the payload ceiling.
+    expect(socket.closeReason, contains('frame payload too large'));
     await socket.close();
   });
 

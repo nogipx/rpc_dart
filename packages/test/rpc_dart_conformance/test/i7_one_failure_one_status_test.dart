@@ -37,20 +37,7 @@ enum _Failure {
   final int status;
 }
 
-/// A server frame channel closes the connection on an oversized request, and
-/// only a channel with a close code (`IRpcChannelOversizeClose`, websocket)
-/// can say why. Over any other byte channel -- the core's own `pair()`
-/// included, measured -- the caller sees the connection end and reports
-/// UNAVAILABLE, which is also retryable.
-const _channelOversize =
-    'status 14 "The stream closed before the peer sent a status", expected 8';
-
-const _knownFailing = <String, String>{
-  'channel | unary oversizeRequest': _channelOversize,
-  'channel | clientStream oversizeRequest': _channelOversize,
-  'channel | serverStream oversizeRequest': _channelOversize,
-  'channel | bidi oversizeRequest': _channelOversize,
-};
+const _knownFailing = <String, String>{};
 
 void main() {
   for (final failure in _Failure.values) {

@@ -1,10 +1,10 @@
 ---
-status: open
+status: closed (round 809)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
 probe: none — packages/test/rpc_dart_conformance/test/i7_one_failure_one_status_test.dart, the 4 "channel | ... oversizeRequest" cells
-reason: bench — KNOWN FAILING cells of I-7; severity S2 (a status a caller branches on)
+reason: "FIXED in round 809: a server answers the oversized frame's stream RESOURCE_EXHAUSTED before the close (14 -> 8 on channel). Previously: bench — KNOWN FAILING cells of I-7; severity S2"
 rank: 2
 ---
 
