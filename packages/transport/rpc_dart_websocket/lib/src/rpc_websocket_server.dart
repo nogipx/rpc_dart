@@ -222,7 +222,9 @@ class RpcWebSocketServer implements IRpcServer {
   /// hold shutdown open forever.
   @override
   Future<void> stop({Duration? drainTimeout}) {
-    if (!_isRunning) return Future<void>.value();
+    // A second stop while one is draining waits for it, or it returns at once
+    // and its caller goes on as if the server were stopped.
+    if (!_isRunning) return _stopping ?? Future<void>.value();
     // Published BEFORE the first await, so a start on the very next turn already
     // sees it. See [_stopping].
     late final Future<void> attempt;
