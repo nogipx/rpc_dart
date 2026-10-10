@@ -404,8 +404,16 @@ class RpcHttpServer implements IRpcServer {
   /// So the wait is explicit, as on the other two servers: stop accepting, poll
   /// until the transport reports no pending requests, and only then close the
   /// endpoint that has to answer them.
+  ///
+  /// A second [stop] while one is in flight returns that one's future, so it
+  /// completes only when the server has stopped.
   @override
-  Future<void> stop({Duration? drainTimeout}) async {
+  Future<void> stop({Duration? drainTimeout}) =>
+      _stopping ??= _stop(drainTimeout).whenComplete(() => _stopping = null);
+
+  Future<void>? _stopping;
+
+  Future<void> _stop(Duration? drainTimeout) async {
     final bind = _bind;
     if (_binding && _httpServer == null && bind != null) await bind;
     _isRunning = false;
