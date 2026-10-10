@@ -109,6 +109,28 @@ void main() {
   );
 
   test(
+    'a second stop during a drain waits for it',
+    () async {
+      final call = await startSlowCall();
+
+      var first = false;
+      final draining = server
+          .stop(drainTimeout: const Duration(seconds: 10))
+          .then((_) => first = true);
+      await server.stop(drainTimeout: const Duration(seconds: 10));
+
+      expect(
+        first,
+        isTrue,
+        reason: 'the second stop returned while the first was still draining',
+      );
+      await draining;
+      expect(await call, 'returned finished');
+    },
+    timeout: const Timeout(Duration(seconds: 90)),
+  );
+
+  test(
     'CONTROL: without a drain the in-flight call is cut off, but correctly',
     () async {
       // Proves the slow call really is in flight when stop() lands -- otherwise

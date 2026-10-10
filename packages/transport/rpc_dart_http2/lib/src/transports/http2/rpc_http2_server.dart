@@ -465,8 +465,16 @@ class RpcHttp2Server implements IRpcServer {
   Future<void>? _bind;
 
   /// Stops the server, optionally letting in-flight calls finish first.
+  ///
+  /// A second [stop] while one is in flight returns that one's future, so it
+  /// completes only when the server has stopped.
   @override
-  Future<void> stop({Duration? drainTimeout}) async {
+  Future<void> stop({Duration? drainTimeout}) =>
+      _stopping ??= _stop(drainTimeout).whenComplete(() => _stopping = null);
+
+  Future<void>? _stopping;
+
+  Future<void> _stop(Duration? drainTimeout) async {
     final bind = _bind;
     if (!_isRunning && _starting && bind != null) await bind;
     if (!_isRunning) return;
