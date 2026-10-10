@@ -1,10 +1,11 @@
 ---
-status: open
+status: closed (round 814)
 round: 812
 commit: 1580403e
+release: breaking
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/r812_fd_attack.dart
-reason: risk — S3, a failure type; noticed in round 812, not measured on its own
+reason: "FIXED in round 814 as decided (breaking); the http2 sibling is B-289. Previously: risk — S3, a failure type; noticed in round 812, not measured on its own"
 rank: 12
 ---
 
@@ -23,4 +24,6 @@ origin gate, a timeout, a redirect after round 807) and what each throws.
 
 ## Owner decision
 
-—
+Owner, 2026-10-10: fix it now, breaking. `connect` throws
+`RpcStatusException`: a refused upgrade's HTTP status through
+`grpcStatusFromHttpStatus`, every other I/O failure UNAVAILABLE, VM and web.
