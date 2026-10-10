@@ -186,7 +186,9 @@ class RpcWebSocketChannel
             code == 1006;
         if (!_closed && !saidNothing && !_incoming.isClosed) {
           final reason = _ws.closeReason;
-          final tail = reason == null || reason.isEmpty ? '' : ': $reason';
+          final tail = reason == null || reason.isEmpty
+              ? ''
+              : ': ${_printable(reason)}';
           _incoming.addError(
             RpcStatusException(
               grpcStatusFromWebSocketCloseCode(code),
@@ -337,5 +339,20 @@ class RpcWebSocketChannel
     // controller DROPS events arriving before the frame channel subscribes,
     // where this one buffers them.
     if (!_incoming.isClosed) unawaited(_incoming.close());
+  }
+
+  /// The peer's close [reason] for a message that is logged, with characters
+  /// outside printable ASCII escaped: a CR/LF in it would otherwise forge a
+  /// line in this side's log. The protocol caps a reason at 123 bytes.
+  static String _printable(String reason) {
+    final out = StringBuffer();
+    for (final rune in reason.runes) {
+      if (rune >= 0x20 && rune <= 0x7e) {
+        out.writeCharCode(rune);
+      } else {
+        out.write('\\u{${rune.toRadixString(16)}}');
+      }
+    }
+    return out.toString();
   }
 }
