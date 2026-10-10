@@ -5,7 +5,7 @@ commit: 9e0e3d85
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/r814_connect_failures.dart
 reason: owner — the sibling of B-288, and changing a public method's thrown type is breaking; http2 is the owner's low priority
-rank: 13
+rank: 2
 ---
 
 # B-289 — http2 connect throws raw io errors

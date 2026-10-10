@@ -6,7 +6,7 @@ paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.d
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
 reason: cost — rpcWebSocketConnections is handed the application's HttpServer, so the bound needs a helper that binds the socket for it
 release: changelog
-rank: 11
+rank: 4
 ---
 
 # B-287 — the websocket server's header block is the application's
