@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533, 536, 638, 673, 696, 701, 778, 781, 804]
+applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533, 536, 638, 673, 696, 701, 778, 781, 804, 805]
 status: confirmed (round 804)
 rank: 18
 ---
@@ -118,3 +118,8 @@ transport must still SERVE a call afterwards.
   close's own latency here) against never. Two of five fix halves were
   refuted by their canaries and removed.
   `../rounds/804-a-caller-cancel-reaches-the-http-handler.md`, B-280, B-284.
+- **Round 805** — the deadline half: a context derived for a downstream call
+  replaced its parent's deadline, so with 200 ms left B was told 2 s
+  (1999 -> 198 ms after). A derived builder may shorten, never extend;
+  `forward()` keeps deadline and token and drops credentials.
+  `../rounds/805-a-derived-context-cannot-outlive-its-parent.md`, B-273.

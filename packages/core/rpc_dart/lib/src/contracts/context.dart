@@ -392,14 +392,17 @@ final class RpcContext {
     return !context.isExpired && !context.isCancelled;
   }
 
-  /// Creates a "safe" copy of the context without sensitive data.
-  static RpcContext sanitize(RpcContext context) {
-    final sanitizedHeaders = Map<String, String>.from(context.headers);
+  /// Headers [sanitize] and [RpcContextExtensions.forward] drop.
+  static const _credentialHeaders = {'authorization', 'x-api-key', 'cookie'};
 
-    // Remove sensitive headers.
-    sanitizedHeaders.remove('authorization');
-    sanitizedHeaders.remove('x-api-key');
-    sanitizedHeaders.remove('cookie');
+  /// Creates a copy of the context without sensitive data, for logging.
+  ///
+  /// It drops the deadline and the cancellation token too, so a call made
+  /// with it outlives the incoming one; a downstream call wants
+  /// [RpcContextExtensions.forward].
+  static RpcContext sanitize(RpcContext context) {
+    final sanitizedHeaders = Map<String, String>.from(context.headers)
+      ..removeWhere((name, _) => _credentialHeaders.contains(name));
 
     return RpcContextBuilder()
         .withHeaders(sanitizedHeaders)
@@ -584,6 +587,10 @@ abstract final class RpcContextUtils {
 class RpcContextBuilder {
   RpcContext _context;
 
+  /// Set by [RpcContextBuilder.inheritFrom]: a context derived from a parent
+  /// may shorten its deadline and never extend it.
+  bool _derived = false;
+
   /// Creates a builder with an empty context.
   RpcContextBuilder() : _context = RpcContext.empty();
 
@@ -592,6 +599,10 @@ class RpcContextBuilder {
 
   /// Creates a builder with automatic trace ID inheritance from the parent
   /// context. If parent == null or traceId == null, generates a new trace ID.
+  ///
+  /// [withDeadline] and [withTimeout] on the result keep the parent's
+  /// deadline when it is the earlier one: the child of a call cannot outlive
+  /// it.
   factory RpcContextBuilder.inheritFrom(RpcContext? parent) {
     // No parent: brand-new context with fresh trace + request IDs.
     if (parent == null) {
@@ -604,7 +615,8 @@ class RpcContextBuilder {
     // values) regardless of whether it carries a trace ID. Always generate a
     // new request ID for the new call; only generate a trace ID when the parent
     // lacks one.
-    final builder = RpcContextBuilder.from(parent).withGeneratedRequestId();
+    final builder = RpcContextBuilder.from(parent).withGeneratedRequestId()
+      .._derived = true;
     return parent.traceId != null ? builder : builder.withGeneratedTraceId();
   }
 
@@ -649,17 +661,22 @@ class RpcContextBuilder {
     return this;
   }
 
-  /// Sets the deadline.
+  /// Sets the deadline; on a builder from [RpcContextBuilder.inheritFrom],
+  /// only if it is earlier than the parent's.
   RpcContextBuilder withDeadline(DateTime deadline) {
+    final current = _context.deadline;
+    if (_derived && current != null && current.isBefore(deadline)) {
+      return this;
+    }
     _context = _context.withDeadline(deadline);
     return this;
   }
 
-  /// Sets the timeout.
-  RpcContextBuilder withTimeout(Duration timeout) {
-    _context = _context.withTimeout(timeout);
-    return this;
-  }
+  /// Sets the timeout, measured on the context's clock; on a builder from
+  /// [RpcContextBuilder.inheritFrom], only if it ends before the parent's
+  /// deadline.
+  RpcContextBuilder withTimeout(Duration timeout) =>
+      withDeadline(_context.clock().add(timeout));
 
   /// Sets the cancellation token.
   RpcContextBuilder withCancellation(RpcCancellationToken token) {
@@ -706,7 +723,8 @@ extension RpcContextExtensions on RpcContext {
     return RpcContextBuilder.inheritFrom(this).build();
   }
 
-  /// Creates a child context with additional headers.
+  /// Creates a child context with additional headers. A [timeout] that ends
+  /// after this context's deadline is ignored.
   RpcContext createChildWith({
     Map<String, String>? headers,
     Duration? timeout,
@@ -717,5 +735,26 @@ extension RpcContextExtensions on RpcContext {
     if (timeout != null) builder = builder.withTimeout(timeout);
 
     return builder.build();
+  }
+
+  /// The context for a downstream call made on behalf of this one.
+  ///
+  /// Like [createChildWith]: the trace, deadline, cancellation token, values
+  /// and headers carry over, and a new request id is minted. The credentials
+  /// (`authorization`, `x-api-key`, `cookie`) do not.
+  RpcContext forward({Map<String, String>? headers, Duration? timeout}) {
+    final child = createChildWith(headers: headers, timeout: timeout);
+    return RpcContext._(
+      headers: Map.of(
+        child._headers,
+      )..removeWhere((name, _) => RpcContext._credentialHeaders.contains(name)),
+      deadline: child.deadline,
+      cancellationToken: child.cancellationToken,
+      traceId: child.traceId,
+      requestId: child.requestId,
+      log: child.log,
+      values: child._values,
+      clock: child.clock,
+    );
   }
 }

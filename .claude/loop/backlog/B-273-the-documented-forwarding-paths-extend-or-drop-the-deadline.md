@@ -1,11 +1,11 @@
 ---
-status: decided by owner (round 802)
+status: closed (round 805)
 round: 781
 commit: 2f469332
 release: breaking
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/skills/rpc_dart-core/references/context-and-metadata.md]
 probe: packages/core/rpc_dart/.dart_tool/probe/deadline_extension.dart
-reason: owner — changing what withDeadline/withTimeout/createChildWith mean is an API decision
+reason: "FIXED in round 805 as decided: a derived context keeps the earlier deadline (B told 1999 -> 198 ms), RpcContext.forward() added, sanitize documented as logging-only. Previously: owner — changing what withDeadline/withTimeout/createChildWith mean is an API decision"
 rank: 1
 ---
 

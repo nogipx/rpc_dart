@@ -67,7 +67,11 @@ receives one as its named `context` parameter.
 
 `RpcContextBuilder.inheritFrom(parent)` keeps the parent's headers, deadline,
 token and values. It always generates a new `requestId`, and generates a `traceId` only if the parent has none.
+Its `withDeadline` / `withTimeout` keep the parent's deadline when that is
+earlier: a derived context can shorten the deadline, never extend it.
 `ctx.createChild()` and `ctx.createChildWith({headers, timeout})` are shortcuts for it.
+`ctx.forward({headers, timeout})` is the same with `authorization`, `x-api-key`
+and `cookie` dropped: the context for a downstream call.
 
 `RpcContextUtils`: `withBearerToken`, `withBasicAuth`, `withApiKey`,
 `withTracing({traceId, spanId, parentSpanId})`, `generateTraceId()`,
@@ -83,15 +87,18 @@ RpcContext outgoing(String token) => RpcContextBuilder()
     .withTimeout(const Duration(seconds: 5))
     .build();
 
-// Inside a handler: forward to a downstream call, keeping the trace.
+// Inside a handler: a downstream call keeps the trace, the deadline (at
+// most 1 s more of it) and the cancellation, without the caller's
+// credentials.
 RpcContext downstream(RpcContext incoming) =>
-    incoming.createChildWith(timeout: const Duration(seconds: 1));
+    incoming.forward(timeout: const Duration(seconds: 1));
 ```
 
 Pitfall when forwarding: `createChild` copies EVERY header of the incoming
-context, including `authorization` and the framework headers the server received.
-Forward only what you mean to, e.g.
-`RpcContextBuilder().withTraceId(incoming.traceId!).withHeader('x-tenant', incoming.getHeader('x-tenant') ?? '').build()`.
+context, including `authorization` and the framework headers the server
+received. `forward` drops only the three credential headers; another secret,
+such as an API key under a custom header name, still travels. A context built
+from scratch instead loses the deadline and the cancellation.
 
 ## Deadlines
 
@@ -170,7 +177,9 @@ Stream<int> watch(int id, {RpcContext? context}) {
 
 ## `RpcContext.sanitize` (static)
 
-`RpcContext.sanitize(ctx)` returns a NEW context for logging or forwarding. It contains:
+`RpcContext.sanitize(ctx)` returns a NEW context for logging. Not for a
+downstream call: without the deadline and token, that call outlives the
+incoming one (use `forward`). It contains:
 
 - the headers, minus exactly `authorization`, `x-api-key` and `cookie`. Other
   secrets stay, e.g. an API key under a custom `headerName`.
