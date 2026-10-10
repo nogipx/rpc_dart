@@ -97,6 +97,23 @@ Gitignored, excluded from analysis, inside the package so that `package:`
 imports resolve. Overwrite, do not delete (`rm` is forbidden). The probe's file
 name must appear in the round record.
 
+## Class-wide detectors
+
+What `methods/siblings.md` in the skill calls the matrix, stateful sequences
+and surviving mutants, as they exist here:
+
+- **The matrix**: `packages/test/rpc_dart_conformance`, in `test:unit`. One
+  file per invariant, every transport, every call shape, hostile peers. A
+  witness for a transport defect is a row here when the harness can build it.
+  A failing cell is marked `KNOWN FAILING` in that file's `_knownFailing` and
+  filed as a lead; `fvm dart test --run-skipped` runs them.
+- **Stateful sequences**: `test/lifecycle_model_test.dart` in the same
+  package. Fixed seeds; a failure prints the shrunk sequence and a replay
+  command (`LIFECYCLE_OPS=...`). A sequence worth keeping goes in `_pinned`.
+- **Surviving mutants**: `fvm dart run tool/mutants/mutants.dart --file <lib
+  file> --tests <tests>`, in a throwaway worktree of HEAD, ~15 min per file.
+  Never in the gate. A survivor is a target, not a finding.
+
 ## Targets nobody runs
 
 - `fvm dart test -p node`, a.k.a. `melos run test:web` — dart2js traps: cancel

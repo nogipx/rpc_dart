@@ -5,7 +5,7 @@ commit: 2f469332
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/skills/rpc_dart-core/references/context-and-metadata.md]
 probe: packages/core/rpc_dart/.dart_tool/probe/deadline_extension.dart
 reason: owner — changing what withDeadline/withTimeout/createChildWith mean is an API decision
-rank: 8
+rank: 9
 ---
 
 # B-273 — the documented forwarding paths extend or drop the deadline
