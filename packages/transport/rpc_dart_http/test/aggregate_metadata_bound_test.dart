@@ -68,7 +68,10 @@ Future<String> post(int port, {required int count, required int size}) async {
 
   socket.write(buf.toString());
   socket.add(const <int>[0, 0, 0, 0, 0]);
-  await socket.flush();
+  // Not awaited: the server closes the connection while a block far over the
+  // bound is still being written, and a flush into a closed socket may never
+  // complete -- under load that held the test to its 30 s timeout.
+  unawaited(socket.flush().catchError((Object _) {}));
 
   final reply = await answered.future.timeout(
     const Duration(seconds: 10),
