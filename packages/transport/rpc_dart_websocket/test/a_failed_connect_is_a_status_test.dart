@@ -110,6 +110,30 @@ void main() {
     );
   });
 
+  // dart:io writes the whole uri into its errors, and the query is where a web
+  // client puts its token.
+  test('WITNESS: the message carries no userinfo and no query', () async {
+    final closer = await ServerSocket.bind('127.0.0.1', 0);
+    addTearDown(closer.close);
+    closer.listen((s) => s.listen((_) => s.destroy()));
+
+    Object? error;
+    try {
+      await RpcWebSocketCallerTransport.connect(
+        Uri.parse(
+          'ws://user:pw-secret@127.0.0.1:${closer.port}/rpc?token=q-secret',
+        ),
+      );
+    } catch (e) {
+      error = e;
+    }
+
+    expect(error, isA<RpcStatusException>());
+    expect('$error', isNot(contains('pw-secret')));
+    expect('$error', isNot(contains('q-secret')));
+    expect('$error', contains('127.0.0.1'), reason: 'the address stays');
+  });
+
   test('GUARD: an exception from headersProvider is not rewritten', () async {
     expect(
       await _failureOf(

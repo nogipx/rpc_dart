@@ -361,7 +361,7 @@ class RpcWebSocketCallerTransport
           maxMessageBytes: _guardCeiling(policy),
         );
       } catch (e, st) {
-        Error.throwWithStackTrace(_connectFailure(e), st);
+        Error.throwWithStackTrace(_connectFailure(e, uri), st);
       }
     }
 
@@ -399,12 +399,21 @@ class RpcWebSocketCallerTransport
   /// through `WebSocketChannelException` -- and UNAVAILABLE: no call was made,
   /// so a fresh attempt may succeed. dart:io cannot be named here because this
   /// file compiles for the web. An [Error] is a bug and passes through.
-  static Object _connectFailure(Object error) {
+  ///
+  /// The message quotes the error with [uri]'s userinfo and query blanked.
+  /// dart:io writes the whole uri into its errors, and the query is where a
+  /// web client puts its token, so the text would carry it into every log
+  /// that records a failed attempt (`RpcClientConnection` warns on each).
+  static Object _connectFailure(Object error, Uri uri) {
     if (error is RpcException) return error;
     if (error is Exception) {
+      var text = '$error';
+      for (final secret in [uri.userInfo, uri.query]) {
+        if (secret.isNotEmpty) text = text.replaceAll(secret, '<redacted>');
+      }
       return RpcStatusException(
         RpcStatus.unavailable,
-        'WebSocket connect failed: $error',
+        'WebSocket connect failed: $text',
       );
     }
     return error;
