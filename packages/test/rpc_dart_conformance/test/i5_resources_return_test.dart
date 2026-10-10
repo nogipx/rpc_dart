@@ -25,6 +25,8 @@
 @TestOn('vm')
 library;
 
+import 'dart:io';
+
 import 'package:test/test.dart';
 
 import 'support/matrix.dart';
@@ -33,18 +35,21 @@ enum _Ending { completes, deadline, callerCancels, handlerFails }
 
 const _notAGauge = {'transport.finishedStreams'};
 
-/// The same as I-6's http cells: the release follows the cancel, which
-/// reaches the server about 4.2 s late through the harness (B-284).
-const _httpLate =
-    'the handler reports "disposed" after the 2000 ms bound: the cancel '
-    'reaches the http server about 4.2 s late through the harness';
+/// The same as I-6's http cells: the release follows the cancel, which on
+/// macOS reaches the server about 4.2 s late through the harness; on Linux
+/// these cells pass (B-284).
+const _httpLateOnMacOS =
+    'macOS only: the handler reports "disposed" after the 2000 ms bound: '
+    'the cancel reaches the http server about 4.2 s late through the harness';
 
-const _knownFailing = <String, String>{
-  'http | unary callerCancels': _httpLate,
-  'http | clientStream callerCancels': _httpLate,
-  'http | serverStream callerCancels': _httpLate,
-  'http | bidi callerCancels': _httpLate,
-  'http | 40 calls, every shape and ending': _httpLate,
+final _knownFailing = <String, String>{
+  if (Platform.isMacOS) ...{
+    'http | unary callerCancels': _httpLateOnMacOS,
+    'http | clientStream callerCancels': _httpLateOnMacOS,
+    'http | serverStream callerCancels': _httpLateOnMacOS,
+    'http | bidi callerCancels': _httpLateOnMacOS,
+    'http | 40 calls, every shape and ending': _httpLateOnMacOS,
+  },
 };
 
 Future<Map<String, int>> _client(ConformanceCaller caller) async {

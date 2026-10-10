@@ -31,9 +31,21 @@ read a 1.5 s handler's answer as "dart:io does not read while a request is
 handled"; the answer simply came before the 2.1 s close. Canary 2c of round
 804 is what refuted that reading.
 
+Round 809 added `r809_close_latency.dart` (+ `r809_close_client.dart`): the
+client in ANOTHER Dart process prints when it closes. Round 810 ran it on
+Linux (`docker run dart:3.10.1`, linux/arm64, the probe directory mounted,
+the client path as the third argument):
+
+```
+  arm                         macOS (host)   Linux (docker)
+  close, Socket server        2101 ms        5 / 4 ms
+  destroy, Socket server      —              4 ms
+  close, RawSocket server     2097 ms        1 ms
+```
+
 ## Control
 
-None separates the client's side from the server's: the delay is the same
-for a destroy, a FIN and an HTTP abort, and an `nc` client in another
-process was inconclusive (its own close time is unknown). What the probe
-does establish is the floor for any cancel http can signal on this machine.
+The OS is the variable: the same probe, the same Dart version, the client
+in its own process on both. 2.1 s on macOS, a few ms on Linux, so the delay
+belongs to macOS (or Dart's event handler there), not to rpc_dart or to
+`Socket`.

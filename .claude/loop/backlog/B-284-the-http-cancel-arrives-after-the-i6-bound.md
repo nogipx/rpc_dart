@@ -1,10 +1,10 @@
 ---
-status: decided by owner (round 809)
+status: closed (round 810)
 round: 804
 commit: 4b9a575d
 paths: [packages/transport/rpc_dart_http/lib/**, packages/test/rpc_dart_conformance/test/i6_cancel_reaches_responder_test.dart, packages/test/rpc_dart_conformance/test/i5_resources_return_test.dart]
 probe: packages/transport/rpc_dart_http/.dart_tool/probe/r804_client_abort.dart
-reason: owner decision — I-6 says 1 s on every transport, and http's only cancel signal is a TCP close the platform reports about 2.1 s late
+reason: "CLEAN in round 810 as decided: on Linux the close arrives in 1-5 ms and every http cell of I-6 and I-5 passes at its bound; the marks now apply on macOS only. Previously: owner decision — I-6 says 1 s on every transport, and http's only cancel signal is a TCP close the platform reports about 2.1 s late"
 release: none
 rank: 7
 ---
