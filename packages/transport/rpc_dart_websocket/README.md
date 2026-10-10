@@ -308,6 +308,14 @@ rule) at or below your `maxMessageLengthBytes`.
 the server is exposed: each accepted socket holds an endpoint until it closes or
 the keepalive reclaims it.
 
+`maxConnections` counts upgraded connections only. Before the upgrade a
+connection belongs to your `HttpServer`, which has no limit on connections and
+no deadline for a request's headers: a client that keeps its upgrade request's
+header block open is held there, at about the size it sent (up to dart:io's cap
+of about 3 MiB per block), and `HttpServer.idleTimeout` does not cover it. The
+proxy in front should also limit connections per client and the time to
+receive request headers.
+
 ## Lower level
 
 - `RpcWebSocketResponderTransport(channel, policy: ...)` — server-side transport

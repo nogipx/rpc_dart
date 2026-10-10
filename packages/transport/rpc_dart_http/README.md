@@ -275,6 +275,19 @@ of up to `maxBufferedBytes` each can be held together: at the defaults, 4096
 of 16 MiB. A client has to upload every byte it pins, but size those two for
 the host, or put a proxy with its own body limits in front.
 
+### Deploy behind a reverse proxy
+
+`RpcHttpServer` bounds requests, not connections. It has no limit on open
+connections and no deadline for a request's headers: a client that sends a
+request line and keeps its header block open is held by dart:io below every
+check above, and `HttpServer.idleTimeout` does not cover it. Each such
+connection costs about what the client sent, up to dart:io's own cap on one
+header block (about 3 MiB), and nothing bounds how many there are.
+
+A server exposed to untrusted clients belongs behind a reverse proxy (nginx,
+Envoy, a load balancer) that limits connections per client and the time to
+receive request headers.
+
 ## Wire format
 
 ```

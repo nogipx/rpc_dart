@@ -1,11 +1,11 @@
 ---
-status: decided by owner (round 802)
+status: closed (round 806)
 round: 782
 commit: 5db1dd59
 release: changelog
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
-reason: owner decision — a raw-connection cap and a header deadline are new defaults on public servers, and the alternative is a documented "deploy behind a proxy"
+reason: "DOCUMENTED in round 806 as decided (option 3, its first half); the code half is B-285. Previously: owner decision — a raw-connection cap and a header deadline are new defaults on public servers, and the alternative is a documented \"deploy behind a proxy\""
 rank: 4
 ---
 
