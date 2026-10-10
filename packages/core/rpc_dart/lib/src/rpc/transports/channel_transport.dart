@@ -12,6 +12,10 @@ import 'flow_controller.dart';
 import 'frame_multiplexed_channel.dart';
 import 'stream_buffer_ledger.dart';
 
+part 'channel_transport_flow.dart';
+part 'channel_transport_inbound.dart';
+part 'channel_transport_outbound.dart';
+
 /// A policy violation in ONE stream's metadata. Advisory, because the
 /// endpoints answer every active call on a broadcast error: without the marker
 /// one request with too many headers failed every call beside it.
@@ -345,91 +349,6 @@ class RpcChannelTransport
     return _metered(streamId, ctl.stream);
   }
 
-  /// Charges [message] against the per-stream buffer bound; false means it must
-  /// not be queued.
-  ///
-  /// Fails THE STREAM, not the connection. A peer flooding one call must not
-  /// take down the others sharing the socket — the same reasoning as
-  /// `closeOnOversizedFrame: !isClient` in [RpcChannelTransport.fromChannel],
-  /// and the reason this is not routed through `closeOnProtocolError`.
-  bool _admitToStreamBuffer(
-    RpcTransportMessage message,
-    StreamController<RpcTransportMessage> ctl,
-  ) {
-    final streamId = message.streamId;
-    final admission = _buffers.admit(
-      streamId,
-      message.bufferedBytes,
-      events: RpcFlowController.carriesMessage(message) ? 1 : 0,
-    );
-    switch (admission) {
-      case RpcBufferAdmission.admitted:
-        return true;
-      case RpcBufferAdmission.refused:
-        return false;
-      case RpcBufferAdmission.overflowed:
-      case RpcBufferAdmission.overflowedConnection:
-        // WHICH ceiling, because there are three and they bound different
-        // things: a zero-copy payload weighs 0 bytes, so a message-count
-        // overflow reported as a byte overflow names a number the stream never
-        // approached.
-        final byCount =
-            _buffers.eventsFor(streamId) >= _buffers.limitEvents ||
-            message.bufferedBytes == 0;
-        final reason = admission == RpcBufferAdmission.overflowedConnection
-            ? 'past the connection total of ${_buffers.limitTotalBytes} '
-                  'bytes un-consumed'
-            : byCount
-            ? 'more than ${_buffers.limitEvents} un-consumed messages'
-            : 'more than ${_buffers.limitBytes} bytes un-consumed';
-        // The consumer gets the error; without this the OPERATOR gets nothing,
-        // which is what the http2 responder already avoids for its own version
-        // of this bound.
-        _log.warning('Stream $streamId buffered $reason; failing the stream');
-        ctl.addError(
-          RpcStatusException(
-            RpcStatus.resourceExhausted,
-            'Stream $streamId buffered $reason without being consumed',
-          ),
-        );
-        return false;
-    }
-  }
-
-  /// Releases both charges as each message is handed to the consumer.
-  ///
-  /// `map` is lazy: a paused consumer pauses this subscription too, so nothing
-  /// is released while messages sit in the controller's buffer. That is what
-  /// carries the consumer's pause all the way to the remote producer.
-  ///
-  /// Two mechanisms, released together because they are charged together and
-  /// nowhere else — the buffer ledger unconditionally, since its bound applies
-  /// whether or not flow control is on, and the window only when there is one.
-  Stream<RpcTransportMessage> _metered(
-    int streamId,
-    Stream<RpcTransportMessage> source,
-  ) {
-    if (!_fc.enabled) {
-      return source.map((message) {
-        _release(streamId, message);
-        return message;
-      });
-    }
-    return source.map((message) {
-      _release(streamId, message);
-      _fc.onConsumed(streamId, message);
-      return message;
-    });
-  }
-
-  void _release(int streamId, RpcTransportMessage message) {
-    _buffers.release(
-      streamId,
-      message.bufferedBytes,
-      events: RpcFlowController.carriesMessage(message) ? 1 : 0,
-    );
-  }
-
   @override
   int createStream() {
     if (_activeStreams.length >= _policy.maxActiveStreams) {
@@ -459,30 +378,6 @@ class RpcChannelTransport
     _statusSeen.remove(streamId);
     _forgetStream(streamId);
     return _idManager.releaseId(streamId);
-  }
-
-  /// Refuses a WRITE on a closed transport.
-  ///
-  /// These three used to `return`, so a caller awaiting a send was told the
-  /// bytes went out while nothing reached the wire. On a client-stream that is
-  /// not a lost frame but a lost MESSAGE: the peer's handler is given a shorter
-  /// sequence than the caller sent and answers normally, so both sides report
-  /// success over different data.
-  ///
-  /// [RpcClosedException] rather than a bare `StateError`: it is classifiable
-  /// by the caller and it survives the wire if it ever crosses one. This site
-  /// spelled it `RpcStatusException(unavailable, ...)` while ten siblings threw
-  /// `StateError`, and `_isTransportClosed` had to accept both by comparing
-  /// message text.
-  ///
-  /// READS and teardown stay lenient: [finishSending] and [releaseStreamId] run
-  /// from `finally` blocks, where a throw masks the error that got there.
-  void _refuseIfClosed() {
-    if (_closed) {
-      throw _closedByPeer
-          ? RpcClosedException.byPeer('Transport')
-          : RpcClosedException('Transport');
-    }
   }
 
   /// The channel ended under us, rather than this side calling [close].
@@ -557,63 +452,6 @@ class RpcChannelTransport
     );
   }
 
-  /// Sends [message] once the windows admit [bytes] and one message, parking
-  /// for credit when they do not.
-  Future<void> _sendMetered(
-    RpcTransportMessage message,
-    int bytes, {
-    bool direct = false,
-  }) async {
-    final streamId = message.streamId;
-    final endStream = message.isEndOfStream;
-    // Fast path FIRST, synchronously: with flow control off, or with credit in
-    // hand, this must not introduce an `await`. An unconditional await adds a
-    // microtask hop to every send even when the window is disabled, which
-    // reorders frames on a path that was synchronous.
-    if (!_fc.tryConsume(streamId, bytes, direct: direct)) {
-      final parked = Completer<void>();
-      _parkedSends[streamId] = parked;
-      try {
-        await _fc.awaitCredit(streamId, bytes, direct: direct);
-        // Closed WHILE parked for credit — the reachable half, and the one that
-        // loses a message on a live call rather than a dead one.
-        _refuseIfClosed();
-        await _channel.send(message);
-        if (endStream) _markFinished(streamId);
-      } finally {
-        // Cleared whether the send went out or was refused: either way nothing
-        // is waiting on the window any more, and `finishSending` must not be
-        // held by a ghost.
-        if (identical(_parkedSends[streamId], parked)) {
-          _parkedSends.remove(streamId);
-        }
-        parked.complete();
-      }
-      return;
-    }
-    // The fifth ending site, and the only one that did not claim its ending.
-    //
-    // `tryConsume` admits on `credit > 0` rather than on fit and never consults
-    // `_sendWaiters`, so in the turn a grant lands a parked sender is woken —
-    // its continuation a MICROTASK — while this path takes the credit and goes
-    // out first. Measured with a synchronous channel, which is what puts a
-    // caller inside that turn:
-    //
-    //     [meta, meta, data(64), data(8)+END, data(64)]
-    //                            ^ the ending, ahead of the parked frame
-    //
-    // GUARDED on `containsKey`, not an unconditional `await`: with the window
-    // off nothing ever parks, and an await here would add a microtask hop to
-    // every send on a path the comment above keeps deliberately synchronous.
-    if (endStream &&
-        _parkedSends.containsKey(streamId) &&
-        !await _claimEnding(streamId)) {
-      return;
-    }
-    await _channel.send(message);
-    if (endStream) _markFinished(streamId);
-  }
-
   @override
   Future<void> finishSending(int streamId) async {
     if (_closed) return;
@@ -643,27 +481,6 @@ class RpcChannelTransport
     // The half-close, which is where this defect lived: the slot stays charged
     // until the call actually ends. See [_markFinished].
     _markFinished(streamId);
-  }
-
-  /// Claims the right to end [streamId] and waits for anything parked on it.
-  ///
-  /// Every ending goes through here EXCEPT the one in [_sendMetered]'s parked
-  /// branch, which IS the parked send: it would await its own completer, and
-  /// that completes only after it returns.
-  ///
-  /// Returns false only when the transport closed, before the wait or during
-  /// it. A repeat ending is not refused here — [finishSending] keeps its own
-  /// `_finishedStreams` guard for that.
-  Future<bool> _claimEnding(int streamId) async {
-    if (_closed) return false;
-    _rememberFinished(streamId);
-    final parked = _parkedSends[streamId];
-    if (parked != null) {
-      try {
-        await parked.future;
-      } catch (_) {}
-    }
-    return !_closed;
   }
 
   @override
@@ -869,27 +686,6 @@ class RpcChannelTransport
   // The accounting lives in [RpcFlowController]; what stays here is the wiring
   // it cannot own — which stream ids are still live, and where a grant goes.
 
-  /// Whether anything still tracks [streamId] as a live call.
-  ///
-  /// A stream this side opened is in [_activeStreams] until it is released; one
-  /// the PEER opened is known to the controller from the first frame we saw of
-  /// it, since that is where the window is advertised; either kind has a
-  /// per-stream controller while a consumer is bound. "None of them" means the
-  /// call is over, and a late grant for it must not resurrect its credit.
-  bool _isStreamLive(int streamId) =>
-      _activeStreams.contains(streamId) ||
-      _streamControllers.containsKey(streamId) ||
-      _fc.isAdvertised(streamId);
-
-  /// Drops BOTH per-stream ledgers for a finished stream.
-  ///
-  /// Two mechanisms, dropped at the same moment because both are keyed on the
-  /// PEER's stream id and both become unreachable when the call ends.
-  void _forgetStream(int streamId) {
-    _fc.forget(streamId);
-    _buffers.forget(streamId);
-  }
-
   @override
   void deferFlowCredit(int streamId) => _fc.defer(streamId);
 
@@ -902,20 +698,6 @@ class RpcChannelTransport
 
   @override
   void releaseConnectionBuffer(int bytes) => _buffers.releaseTotal(bytes);
-
-  /// Records that this side has ended its half of [streamId].
-  ///
-  /// Does NOT release the stream. Half-closing means "I have finished SENDING",
-  /// and the call is outstanding until its response arrives — so releasing here
-  /// made [RpcSecurityPolicy.maxActiveStreams] count senders rather than calls,
-  /// and a client parked on four responses had its whole ceiling free again.
-  ///
-  /// The slot comes back on the terminal INBOUND frame (see [_onMessage]), on
-  /// [releaseStreamId] for a call that ends without one — cancelled, failed, or
-  /// abandoned — and on [close] for all of them at once.
-  void _markFinished(int streamId) {
-    _rememberFinished(streamId);
-  }
 
   /// Records [streamId] as finished, keeping [_finishedStreams] bounded.
   ///
@@ -934,214 +716,6 @@ class RpcChannelTransport
     if (!_finishedStreams.add(streamId)) return;
     if (_finishedStreams.length > _maxRememberedFinishedStreams) {
       _finishedStreams.remove(_finishedStreams.first);
-    }
-  }
-
-  void _releaseStream(int streamId) {
-    _activeStreams.remove(streamId);
-    _idManager.releaseId(streamId);
-  }
-
-  void _onMessage(RpcTransportMessage incoming) {
-    // The policy applies to INBOUND metadata. Validating only in sendMetadata
-    // constrains this side's own honest sender and not the untrusted peer,
-    // which is backwards for a security control: the frame layer bounds payload
-    // length, so header count and size are bounded only here.
-    var message = incoming;
-    final asReceived = message.metadata;
-    if (asReceived != null) {
-      final checked = _validateInbound(asReceived, message.streamId);
-      if (checked == null) return;
-      // Rebuilt rather than mutated, and only when the policy reduced it: every
-      // read below this point must see the same metadata the consumer will.
-      if (!identical(checked, asReceived)) {
-        message = RpcTransportMessage(
-          streamId: message.streamId,
-          payload: message.payload,
-          directPayload: message.directPayload,
-          metadata: checked,
-          isEndOfStream: message.isEndOfStream,
-          methodPath: message.methodPath,
-        );
-      }
-    }
-    final metadata = message.metadata;
-
-    // Recorded BEFORE dispatch, because trailers arrive as a metadata frame
-    // that is itself the end of the stream.
-    //
-    // Gated on a per-stream controller, which exists only on LOCAL initiative.
-    // The id is the peer's choice, exactly like the flow-control maps above,
-    // and those are capped for that reason; this set is read only for an id
-    // that has a controller (see `truncatedEnd` below), so gating it there
-    // bounds it by our own traffic instead. Ungated, a peer can grow it without
-    // limit with metadata-only frames on ids we never minted -- frames the
-    // responder pipeline ignores as no-ops, so nothing above the transport ever
-    // sees them.
-    if (metadata != null &&
-        _streamControllers.containsKey(message.streamId) &&
-        metadata.getHeaderValue(RpcHeaders.grpcStatus) != null) {
-      _statusSeen.add(message.streamId);
-    }
-
-    // A grant is transport bookkeeping, not part of the call: consume it here
-    // so no upper layer ever sees it.
-    if (_fc.handleInbound(message)) return;
-
-    // Tell the peer our window as soon as it opens a stream. Until this lands
-    // the peer sends unbounded, which is what keeps an unaware peer working.
-    //
-    // **Measure that on the right side.** A probe using ONE policy for both
-    // ends reports a 186x blow-up, because the flood fills the SENDER's own
-    // credit map and the unbounded send is self-inflicted.
-    _fc.advertiseConnection();
-    _fc.advertiseStream(message.streamId);
-
-    // A response that ends with no grpc-status is TRUNCATED, and the end flag
-    // must not reach the consumer: it would close the stream cleanly and the
-    // error raised below would arrive too late to be seen. Any payload the
-    // frame carries is still delivered; only the end marker is withheld.
-    //
-    // CLIENT SIDE ONLY. A grpc-status travels server -> client, so a client's
-    // ordinary half-close carries none and is not truncation. Apply this on the
-    // responder and every request stream's end looks truncated.
-    final truncatedEnd =
-        isClient &&
-        message.isEndOfStream &&
-        !_statusSeen.contains(message.streamId);
-
-    // Per-stream controllers are single-subscription and buffer until their
-    // consumer binds, so route there directly.
-    //
-    // NOT when a higher layer has claimed the metering. A client-stream
-    // responder is fed by the pipeline (`_pipelineFedRequestStream`), which
-    // deliberately does not subscribe to `getMessagesForStream` — so for those
-    // streams this controller has NO consumer, and routing through it is not
-    // merely wasted:
-    //
-    //   * `_admitToStreamBuffer` charges every message against the bound and
-    //     the charge is released only by `_fcMetered`, which is that same
-    //     unsubscribed path, so it only ever grows;
-    //   * over the bound the message is REFUSED, and the refusal returns before
-    //     `_incoming.add` — so the pipeline never sees the message either;
-    //   * the error it raises goes into that unread controller.
-    //
-    // A request then vanishes between two peers that both report success,
-    // which is what a consumer measured: 17 messages handed to `send()`, 16
-    // given to the handler, no error on either side. A stream whose credit is
-    // deferred takes the branch below instead, where it is accounted for and
-    // dispatched.
-    final ctl = _fc.isDeferred(message.streamId)
-        ? null
-        : _streamControllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) {
-      // Credited by _metered when the consumer takes it; outstanding against
-      // the connection pool until then, and repaid if it never does. A refused
-      // message is dropped, so its bytes go straight back to the pool, or the
-      // refusal wedges every other stream's sender.
-      final bytes = message.payload?.length ?? 0;
-      if (!_admitToStreamBuffer(message, ctl)) {
-        if (bytes > 0) _fc.credit(message.streamId, bytes);
-        return;
-      }
-      _fc.oweConnection(message.streamId, bytes);
-      if (!truncatedEnd) {
-        ctl.add(message);
-      } else if (message.payload != null || message.isDirect) {
-        ctl.add(
-          RpcTransportMessage(
-            streamId: message.streamId,
-            payload: message.payload,
-            directPayload: message.directPayload,
-            metadata: message.metadata,
-            methodPath: message.methodPath,
-          ),
-        );
-      }
-    } else if (_fc.isDeferred(message.streamId)) {
-      // A higher layer claimed the metering (IRpcFlowControlled), so the same
-      // debt applies -- settled by returnFlowCredit as it consumes, repaid at
-      // teardown for whatever it does not.
-      _fc.oweConnection(message.streamId, message.payload?.length ?? 0);
-    } else {
-      // Nothing meters this one and no layer has claimed it, so it goes
-      // straight into the pipeline's own buffers and is consumed as soon as it
-      // is dispatched. Crediting on arrival keeps such a stream from stalling
-      // at the window, at the cost of not bounding it.
-      _fc.onConsumed(message.streamId, message);
-    }
-    // Global dispatch exists for NEW-STREAM ROUTING: the responder pipeline
-    // discovers a peer-initiated call here, and the buffered controller retains
-    // the message if that pipeline has not subscribed yet rather than dropping
-    // it. A response on a stream WE opened is already routed to its own
-    // controller above, so broadcasting it serves nobody.
-    //
-    // Broadcasting it is not free either. The controller buffers while
-    // unlistened, and a caller-only endpoint has nothing to do with these events,
-    // so `startCallerListening` subscribes a no-op listener purely to keep the
-    // buffer drained — where that is missed, it retains every response the caller
-    // already consumed.
-    //
-    // Errors are unaffected: a channel failure or a policy violation with no
-    // known stream goes through `_incoming.addError`, which this does not touch,
-    // so the caller's observer still has something to observe.
-    final locallyInitiated = _idManager.isClient
-        ? message.streamId.isOdd
-        : message.streamId.isEven;
-    final wasRouted = ctl != null && !ctl.isClosed;
-    if (!(locallyInitiated && wasRouted)) {
-      _incoming.add(message);
-    }
-    if (message.isEndOfStream) {
-      // Only for a stream WE opened, where an inbound end-of-stream is the
-      // response's last frame and so the end of the call. On one the PEER
-      // opened it is their half-close and we may still be sending the whole
-      // response — dropping the flow-control state there leaves every later
-      // grant looking like one for a call that has ended, so `_onGrant`
-      // discards it and the per-stream window never engages again. A server
-      // stream half-closes its request immediately, so that is every server
-      // stream. The state is pruned by `releaseStreamId` when the call really
-      // ends, which the responder pipeline always calls.
-      if (locallyInitiated) {
-        _releaseStream(message.streamId);
-        _finishedStreams.remove(message.streamId);
-        _forgetStream(message.streamId);
-      } else {
-        // The INBOUND half is over and nothing more will arrive on it, so what
-        // it owes the pool is owed for good — repaying it here is what keeps a
-        // handler that never read from draining the connection window. The
-        // send-side state is NOT the inbound half's to drop.
-        _fc.repayConnection(message.streamId);
-      }
-      // A truncated response is an ERROR, not a clean end: a clean end hands
-      // the consumer partial data as if it were complete, and a client paging
-      // results believes it has them all.
-      //
-      // This only holds because rpc_dart's own teardown and deadline paths
-      // always send a status now (see the ping handler and _cleanupStream). Let
-      // any of them end a stream status-lessly again and every such teardown
-      // starts reporting UNAVAILABLE to its own caller.
-      _statusSeen.remove(message.streamId);
-      final ended = _streamControllers.remove(message.streamId);
-      if (ended != null && !ended.isClosed) {
-        if (truncatedEnd) {
-          // INTERNAL, not UNAVAILABLE: the difference is whether the call is
-          // RETRIED. The request reached a peer that answered and then ended
-          // without its status, so the work may have run -- measured with
-          // `maxAttempts: 3`, the peer served one unary call THREE times.
-          // UNAVAILABLE is what `RpcRetryInterceptor` retries by design and
-          // belongs to a connection that died, not to a peer that forgot.
-          ended.addError(
-            RpcStatusException(
-              RpcStatus.internal,
-              'Stream ended without a gRPC status (truncated response)',
-            ),
-          );
-        }
-        // Closed after the error is enqueued, so the subscriber observes the
-        // final message, then the error, then done.
-        unawaited(ended.close());
-      }
     }
   }
 }

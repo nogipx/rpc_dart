@@ -8,6 +8,8 @@ import 'dart:async';
 import '../../_internal.dart';
 
 part 'base_processor.dart';
+part 'base_processor_caller.dart';
+part 'base_processor_responder.dart';
 
 part 'bidirectional/caller.dart';
 part 'bidirectional/responder.dart';
