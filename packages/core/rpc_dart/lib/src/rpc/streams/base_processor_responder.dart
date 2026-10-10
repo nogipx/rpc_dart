@@ -284,7 +284,11 @@ extension _StreamProcessorInternals<
 
       for (var msgBytes in messages) {
         try {
-          final request = _requestCodec!.deserialize(msgBytes);
+          final request = _decodePeerMessage(
+            _requestCodec!,
+            msgBytes,
+            _transport,
+          );
 
           if (!_requestController.isClosed) {
             _requestController.add(request);
@@ -304,10 +308,12 @@ extension _StreamProcessorInternals<
           }
           if (!_requestController.isClosed) {
             _requestController.addError(
-              RpcPeerFaultException(
-                RpcStatus.internal,
-                'Request payload could not be decoded',
-              ),
+              e is RpcPeerFaultException
+                  ? e
+                  : RpcPeerFaultException(
+                      RpcStatus.internal,
+                      'Request payload could not be decoded',
+                    ),
               stackTrace,
             );
           }

@@ -15,6 +15,8 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
+import 'calls.dart' show CallShape;
+
 /// Wire name of the conformance service.
 const conformanceService = 'Conformance';
 
@@ -124,6 +126,44 @@ final blobCodec = RpcBinaryCodec<Blob>(
   fromBytes: Blob.decode,
 );
 
+/// A message the core's CBOR codec decodes: an id, how many items to answer
+/// with, and a list of empty maps. Each empty map is one byte on the wire and
+/// one decoded item, so `items` sets what a message decodes to.
+final class Doc implements IRpcSerializable {
+  Doc(this.json);
+
+  /// A request carrying [items] empty maps that asks for [reply] in return.
+  factory Doc.request({required int id, required int items, int reply = 0}) =>
+      Doc({'id': id, 'reply': reply, 'items': _emptyMaps(items)});
+
+  /// A response to call [id] carrying [items] empty maps.
+  factory Doc.response(int id, int items) =>
+      Doc({'id': id, 'items': _emptyMaps(items)});
+
+  /// Decoded items of a request besides the list's elements: the top map,
+  /// its three keys and values (the list counts as one).
+  static const requestOverhead = 7;
+
+  /// The same for a response, which has no `reply`.
+  static const responseOverhead = 5;
+
+  final Map<String, dynamic> json;
+
+  @override
+  Map<String, dynamic> toJson() => json;
+
+  int get id => json['id'] as int;
+  int get reply => json['reply'] as int? ?? 0;
+  int get items => (json['items'] as List).length;
+
+  static List<Map<String, dynamic>> _emptyMaps(int n) =>
+      List.filled(n, const <String, dynamic>{});
+}
+
+/// The codec I-8's rows use: the core's own CBOR codec, which is what a
+/// generated contract decodes with.
+final docCodec = RpcCodec<Doc>.withDecoder(Doc.new);
+
 /// The responder half.
 final class ConformanceResponder extends RpcResponderContract {
   ConformanceResponder(this._emit)
@@ -157,6 +197,47 @@ final class ConformanceResponder extends RpcResponderContract {
       requestCodec: blobCodec,
       responseCodec: blobCodec,
     );
+
+    // The same four shapes over CBOR. Each reports `received` with the item
+    // count of every request it decodes, and answers `reply` items.
+    addUnaryMethod<Doc, Doc>(
+      methodName: 'cborUnary',
+      handler: (r, {RpcContext? context}) async => _answerDoc(r),
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    );
+    addClientStreamMethod<Doc, Doc>(
+      methodName: 'cborClientStream',
+      handler: (requests, {RpcContext? context}) async {
+        Doc? last;
+        await for (final r in requests) {
+          last = _answerDoc(r);
+        }
+        if (last == null) {
+          throw RpcStatusException(RpcStatus.invalidArgument, 'no request');
+        }
+        return last;
+      },
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    );
+    addServerStreamMethod<Doc, Doc>(
+      methodName: 'cborServerStream',
+      handler: (r, {RpcContext? context}) => Stream.value(_answerDoc(r)),
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    );
+    addBidirectionalMethod<Doc, Doc>(
+      methodName: 'cborBidi',
+      handler: (requests, {RpcContext? context}) => requests.map(_answerDoc),
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    );
+  }
+
+  Doc _answerDoc(Doc request) {
+    _emit('received', request.id, request.items);
+    return Doc.response(request.id, request.reply);
   }
 
   /// Records `enter`, and arranges `cancelled`, `disposed` and
@@ -314,4 +395,32 @@ final class ConformanceCaller extends RpcCallerContract {
         responseCodec: blobCodec,
         context: context,
       );
+
+  /// One CBOR call of [shape] sending [request], ending with its responses.
+  Future<List<Doc>> cbor(CallShape shape, Doc request) => switch (shape) {
+    CallShape.unary => callUnary<Doc, Doc>(
+      methodName: 'cborUnary',
+      request: request,
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    ).then((r) => [r]),
+    CallShape.clientStream => callClientStream<Doc, Doc>(
+      methodName: 'cborClientStream',
+      requests: Stream.value(request),
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    ).then((r) => [r]),
+    CallShape.serverStream => callServerStream<Doc, Doc>(
+      methodName: 'cborServerStream',
+      request: request,
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    ).toList(),
+    CallShape.bidi => callBidirectionalStream<Doc, Doc>(
+      methodName: 'cborBidi',
+      requests: Stream.value(request),
+      requestCodec: docCodec,
+      responseCodec: docCodec,
+    ).toList(),
+  };
 }

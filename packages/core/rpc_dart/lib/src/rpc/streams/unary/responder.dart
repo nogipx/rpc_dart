@@ -596,7 +596,13 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       if (messages.length > 1) throw tooManyMessages('request');
       final TRequest request;
       try {
-        request = _requestSerializer.deserialize(messages.first);
+        request = _decodePeerMessage(
+          _requestSerializer,
+          messages.first,
+          _transport,
+        );
+      } on RpcPeerFaultException {
+        rethrow;
       } catch (_) {
         // The PEER's bytes: answered INTERNAL as gRPC does, logged as its
         // fault rather than ours.

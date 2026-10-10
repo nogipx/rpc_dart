@@ -120,6 +120,15 @@ abstract interface class CborCodec {
   /// which have a real int type.
   static const bool _singleNumericType = identical(0, 0.0);
 
+  /// Data items one decode produces at most, unless the caller or the
+  /// endpoint's `RpcSecurityPolicy.maxDecodedItems` says otherwise.
+  ///
+  /// Every item counts one: each map key, each value, each container. A byte
+  /// limit does not bound what the bytes decode to -- one byte is an empty map
+  /// -- so without this a message within `maxMessageLengthBytes` decodes to
+  /// tens of times its size before any interceptor sees it.
+  static const int defaultMaxItems = 1024 * 1024;
+
   /// Encodes Map(String, dynamic) into CBOR bytes.
   static Uint8List encode(Map<String, dynamic> value) {
     final writer = _FastCborWriter();
@@ -128,8 +137,11 @@ abstract interface class CborCodec {
   }
 
   /// Decodes CBOR bytes into Dart objects.
-  static Map<String, dynamic> decode(Uint8List bytes) {
-    final reader = _FastCborReader(bytes);
+  ///
+  /// Throws a [FormatException] past [maxItems] data items (see
+  /// [defaultMaxItems]).
+  static Map<String, dynamic> decode(Uint8List bytes, {int? maxItems}) {
+    final reader = _FastCborReader(bytes, _itemBudget(maxItems));
     final value = reader.readMap();
     reader.expectEnd();
     return value;
@@ -147,8 +159,8 @@ abstract interface class CborCodec {
   /// Unsafe decoding of CBOR bytes.
   /// Returns dynamic instead of Map(String, dynamic).
   /// Intended for tests and special cases.
-  static dynamic decodeUnsafe(Uint8List bytes) {
-    final reader = _FastCborReader(bytes);
+  static dynamic decodeUnsafe(Uint8List bytes, {int? maxItems}) {
+    final reader = _FastCborReader(bytes, _itemBudget(maxItems));
     final value = reader.readValue();
     reader.expectEnd();
     return value;
@@ -158,6 +170,44 @@ abstract interface class CborCodec {
   static int _getMajorTypeByte(int majorType, int additionalInfo) {
     return (majorType << 5) | (additionalInfo & 0x1F);
   }
+
+  /// The explicit argument, else the budget [withCborItemBudget] set, else
+  /// [defaultMaxItems].
+  static int _itemBudget(int? maxItems) =>
+      maxItems ?? _scopedMaxItems ?? defaultMaxItems;
+}
+
+/// The budget [withCborItemBudget] put in force; null outside one.
+int? _scopedMaxItems;
+
+/// Runs [decode] with [maxItems] as the item budget of every
+/// [CborCodec.decode] and [CborCodec.decodeUnsafe] inside it that does not
+/// pass its own.
+///
+/// This is how an endpoint's policy reaches a codec it did not build: a
+/// generated codec calls `CborCodec.decode` as a tear-off, and a codec's
+/// `deserialize` takes no policy. A decode is synchronous, so nothing else
+/// runs while the budget is in force.
+T withCborItemBudget<T>(int maxItems, T Function() decode) {
+  final previous = _scopedMaxItems;
+  _scopedMaxItems = maxItems;
+  try {
+    return decode();
+  } finally {
+    _scopedMaxItems = previous;
+  }
+}
+
+/// A decode refused because it would produce more data items than its
+/// budget. A [FormatException], so code that catches malformed input still
+/// does; the endpoints answer it RESOURCE_EXHAUSTED.
+final class CborItemLimitException extends FormatException {
+  /// Creates the refusal for a decode bounded at [maxItems].
+  CborItemLimitException(this.maxItems)
+    : super('CBOR data decodes to more than $maxItems items');
+
+  /// The budget the decode ran out of.
+  final int maxItems;
 }
 
 /// OPTIMIZED: Fast CBOR reader.
@@ -184,7 +234,16 @@ class _FastCborReader {
   final Uint8List _bytes;
   int _offset = 0;
 
-  _FastCborReader(this._bytes);
+  /// Data items this decode may still produce. See [CborCodec.defaultMaxItems].
+  int _itemsLeft;
+  final int _maxItems;
+
+  _FastCborReader(this._bytes, this._maxItems) : _itemsLeft = _maxItems;
+
+  /// Charges one data item against the budget.
+  void _countItem() {
+    if (--_itemsLeft < 0) throw CborItemLimitException(_maxItems);
+  }
 
   /// Refuses bytes after the one data item: RFC 8949 does not call that
   /// well-formed, and accepting it dropped whatever followed without a word.
@@ -222,6 +281,7 @@ class _FastCborReader {
       throw FormatException('Expected map, got major type: $majorType');
     }
 
+    _countItem();
     return _readMapFast(additionalInfo, 0);
   }
 
@@ -240,6 +300,7 @@ class _FastCborReader {
     if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
       // Indefinite-length map: read key/value pairs until a break marker.
       while (!_consumeBreakMarker('indefinite-length map')) {
+        _countItem();
         final key = _readStringFast();
         final value = _readValueFast(depth + 1);
         result[key] = value;
@@ -251,6 +312,7 @@ class _FastCborReader {
 
     for (int i = 0; i < length; i++) {
       // Keys are always strings.
+      _countItem();
       final key = _readStringFast();
       // Then read the value.
       final value = _readValueFast(depth + 1);
@@ -331,6 +393,7 @@ class _FastCborReader {
     final byte = _bytes[_offset++];
     final majorType = byte >> 5;
     final additionalInfo = byte & 0x1F;
+    _countItem();
 
     // Optimized for the most common types.
     switch (majorType) {

@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/*/lib/**, packages/transport/*/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**, packages/blob/*/lib/**]
 applies: a container is capped by how many items it holds, and what one item weighs is set by someone else — a peer, a caller, a logged payload
 breaks: memory exhaustion: the cap holds and the process still runs out.
-applied: [764, 765, 783, 785]
-status: confirmed (round 765)
+applied: [764, 765, 783, 785, 803]
+status: confirmed (round 803)
 rank: 5
 ---
 
@@ -56,3 +56,9 @@ that owns the container; RSS only as a cross-check, it also carries garbage.
   buffer that moves items between two queues keeps one byte total and
   refunds it where an item leaves for good (the ack), not where it moves.
   `../rounds/765-the-log-buffers-are-bounded-in-bytes.md`.
+- **Round 803** — the inverse case: the CBOR decoder was bounded in wire
+  bytes and the cost is per decoded item (an empty map is one byte and a
+  heap map). +1128 MiB / 1265 ms per 16 MiB call -> +96 MiB / 138 ms with
+  `RpcSecurityPolicy.maxDecodedItems`. A budget that must reach code which
+  takes no policy (generated tear-offs) can ride a scope around a
+  synchronous call. `../rounds/803-cbor-decode-is-bounded-in-items.md`.

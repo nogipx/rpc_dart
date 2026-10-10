@@ -1,11 +1,11 @@
 ---
-status: decided by owner (round 802)
+status: closed (round 803)
 round: 783
 commit: 8471b02c
 release: breaking
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/codec/codec.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/cbor_amplification_e2e.dart
-reason: owner decision — the fix is a new default bound on decoded items, and any value refuses some legitimate payload
+reason: "FIXED in round 803 as decided: RpcSecurityPolicy.maxDecodedItems, default 1 Mi items; +1128 MiB / 1265 ms per call -> +96 MiB / 138 ms. Previously: owner decision — the fix is a new default bound on decoded items, and any value refuses some legitimate payload"
 rank: 1
 ---
 

@@ -5,6 +5,7 @@
 
 // For RpcMetadataViolation: peer metadata failing this policy is a wire fact,
 // not a caller's programming mistake, and the type says which.
+import '../codec/special_cbor.dart' show CborCodec;
 import 'channel_frame.dart';
 import 'metadata.dart';
 import 'protocol.dart';
@@ -43,6 +44,20 @@ final class RpcSecurityPolicy {
 
   /// Max number of messages emitted from a single incoming chunk.
   final int maxMessagesPerChunk;
+
+  /// Max CBOR data items one inbound message may decode to: each map key,
+  /// each value, each container counts one.
+  ///
+  /// [maxMessageLengthBytes] bounds the bytes, not what they decode to, and one
+  /// byte is an empty map. The request is decoded before any interceptor runs,
+  /// so this is what bounds the cost of a call that authentication refuses.
+  /// Past it the call fails RESOURCE_EXHAUSTED. Applies to every CBOR decode
+  /// an endpoint makes of a peer's message, in both directions, including the
+  /// generated codecs; a codec that does not use CBOR is not affected.
+  ///
+  /// Raise it on an endpoint that receives large lists: a list of N ints is
+  /// N + 1 items.
+  final int maxDecodedItems;
 
   /// Max UN-CONSUMED messages held for one stream.
   ///
@@ -280,6 +295,7 @@ final class RpcSecurityPolicy {
   // writes a literal back in.
   static const int _defaultMaxMessageLengthBytes = 16 * 1024 * 1024;
   static const int _defaultMaxMessagesPerChunk = 1024;
+  static const int _defaultMaxDecodedItems = CborCodec.defaultMaxItems;
   static const int _defaultMaxActiveStreams = 4096;
   static const int _defaultMaxMetadataBytes = 64 * 1024;
   static const int _defaultMaxHeaders = 128;
@@ -300,6 +316,7 @@ final class RpcSecurityPolicy {
     this.maxMessageLengthBytes = _defaultMaxMessageLengthBytes,
     this.maxBufferedBytes,
     this.maxMessagesPerChunk = _defaultMaxMessagesPerChunk,
+    this.maxDecodedItems = _defaultMaxDecodedItems,
     this.maxBufferedMessagesPerStream = _defaultMaxBufferedMessagesPerStream,
     this.maxActiveStreams = _defaultMaxActiveStreams,
     this.maxConcurrentHandlers,
@@ -323,6 +340,7 @@ final class RpcSecurityPolicy {
     'maxMessageLengthBytes': maxMessageLengthBytes,
     'maxBufferedBytes': ?maxBufferedBytes,
     'maxMessagesPerChunk': maxMessagesPerChunk,
+    'maxDecodedItems': maxDecodedItems,
     'maxBufferedMessagesPerStream': maxBufferedMessagesPerStream,
     'maxActiveStreams': maxActiveStreams,
     // Omitted when unset, because absent already means "no limit" for this one.
@@ -369,6 +387,7 @@ final class RpcSecurityPolicy {
         'maxMessagesPerChunk',
         _defaultMaxMessagesPerChunk,
       ),
+      maxDecodedItems: readInt('maxDecodedItems', _defaultMaxDecodedItems),
       maxBufferedMessagesPerStream: readInt(
         'maxBufferedMessagesPerStream',
         _defaultMaxBufferedMessagesPerStream,

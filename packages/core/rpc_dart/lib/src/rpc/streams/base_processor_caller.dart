@@ -628,7 +628,11 @@ extension _CallProcessorInternals<
               'Deserializing response of ${msgBytes.length} bytes [streamId: $_streamId]',
             );
           }
-          final response = _responseCodec!.deserialize(msgBytes);
+          final response = _decodePeerMessage(
+            _responseCodec!,
+            msgBytes,
+            _transport,
+          );
 
           final rpcMessage = RpcMessage.withPayload<TResponse>(response);
 

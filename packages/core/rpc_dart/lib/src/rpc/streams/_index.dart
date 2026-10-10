@@ -6,6 +6,8 @@
 import 'dart:async';
 
 import '../../_internal.dart';
+import '../../codec/special_cbor.dart'
+    show CborItemLimitException, withCborItemBudget;
 
 part 'base_processor.dart';
 part 'base_processor_caller.dart';

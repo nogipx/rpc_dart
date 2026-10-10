@@ -298,7 +298,11 @@ final class UnaryCaller<TRequest, TResponse> {
                         'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
                       );
                     }
-                    pendingResponse = _responseSerializer.deserialize(msgBytes);
+                    pendingResponse = _decodePeerMessage(
+                      _responseSerializer,
+                      msgBytes,
+                      _transport,
+                    );
                     hasPendingResponse = true;
                     if (_logger.isInternal) {
                       _logger.internal(

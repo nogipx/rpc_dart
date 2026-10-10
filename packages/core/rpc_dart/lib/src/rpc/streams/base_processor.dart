@@ -64,6 +64,27 @@ RpcMessageParser _policyBoundParser({
   );
 }
 
+/// Decodes the peer's [bytes] with [codec] inside [transport]'s
+/// [RpcSecurityPolicy.maxDecodedItems].
+///
+/// The budget reaches every CBOR decode the codec makes, generated codecs
+/// included. Past it the PEER is at fault and is answered RESOURCE_EXHAUSTED;
+/// any other failure is the codec's own exception, for the caller to map.
+T _decodePeerMessage<T>(
+  IRpcCodec<T> codec,
+  Uint8List bytes,
+  IRpcTransport transport,
+) {
+  try {
+    return withCborItemBudget(
+      _policyOf(transport).maxDecodedItems,
+      () => codec.deserialize(bytes),
+    );
+  } on CborItemLimitException catch (e) {
+    throw RpcPeerFaultException(RpcStatus.resourceExhausted, e.message);
+  }
+}
+
 /// Answers a peer whose payload SHAPE does not match this side's transfer mode.
 ///
 /// The two ends pick their mode from their OWN contract, so they can disagree:
