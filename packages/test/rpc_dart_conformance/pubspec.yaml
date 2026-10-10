@@ -16,13 +16,17 @@ environment:
 
 resolution: workspace
 
+# The workspace resolves the siblings from local source, whatever their
+# version, so the matrix always tests the tree it sits in. `any` keeps a
+# version bump of a transport from breaking `pub get` here; it is allowed
+# because this package is never published.
 dev_dependencies:
   http2: ^3.1.0
   lints: ^6.0.0
-  rpc_dart: '>=6.0.0 <7.0.0'
-  rpc_dart_http: '>=0.4.0 <0.5.0'
-  rpc_dart_http2: '>=0.3.0 <0.4.0'
-  rpc_dart_isolate: '>=0.4.0 <0.5.0'
-  rpc_dart_websocket: '>=0.5.0 <0.6.0'
+  rpc_dart: any
+  rpc_dart_http: any
+  rpc_dart_http2: any
+  rpc_dart_isolate: any
+  rpc_dart_websocket: any
   test: ^1.29.0
   web_socket_channel: ^3.0.3
