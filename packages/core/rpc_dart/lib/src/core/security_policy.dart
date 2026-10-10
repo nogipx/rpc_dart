@@ -670,7 +670,7 @@ final class RpcSecurityPolicy {
     for (final header in metadata.headers) {
       if (!isValidHeaderName(header.name)) {
         throw RpcMetadataViolation(
-          'Invalid metadata header name: ${header.name}',
+          'Invalid metadata header name: ${_peerText(header.name)}',
           name: 'metadata.headers.name',
           invalidValue: header.name,
         );
@@ -695,10 +695,28 @@ final class RpcSecurityPolicy {
     final methodPath = metadata.methodPath;
     if (!isValidMethodPath(methodPath)) {
       throw RpcMetadataViolation(
-        'Invalid methodPath in metadata: $methodPath',
+        'Invalid methodPath in metadata: ${_peerText(methodPath!)}',
         name: 'metadata.methodPath',
         invalidValue: methodPath,
       );
     }
+  }
+
+  /// [text] from a peer, for a message that is logged: characters outside
+  /// printable ASCII escaped, and at most 128 of them. The text is what made
+  /// the metadata invalid, so a CR/LF in it would otherwise forge a line in
+  /// the receiver's log, and its length is the peer's to choose.
+  static String _peerText(String text) {
+    const max = 128;
+    final out = StringBuffer();
+    for (final rune in text.runes.take(max)) {
+      if (rune >= 0x20 && rune <= 0x7e) {
+        out.writeCharCode(rune);
+      } else {
+        out.write('\\u{${rune.toRadixString(16)}}');
+      }
+    }
+    if (text.runes.length > max) out.write('...');
+    return out.toString();
   }
 }
