@@ -1,11 +1,12 @@
 ---
-status: awaiting owner
+status: decided by owner (round 802)
 round: 783
 commit: 8471b02c
+release: breaking
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/codec/codec.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/cbor_amplification_e2e.dart
 reason: owner decision — the fix is a new default bound on decoded items, and any value refuses some legitimate payload
-rank: 6
+rank: 1
 ---
 
 # B-275 — the CBOR decoder has no item budget
@@ -50,4 +51,8 @@ Options for the owner:
 
 ## Owner decision
 
-—
+Owner, 2026-10-10: option 2. An item budget as an `RpcSecurityPolicy` field
+that reaches the codec, default about 1 Mi items (worst case about 70 MiB
+and 60 ms), so a server that receives bulk lists raises it. Breaking: the
+default refuses a payload that decoded before; the CHANGELOG line names the
+field and how to raise it. I-8's `test:` waits on this.

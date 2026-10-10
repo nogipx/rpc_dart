@@ -1,7 +1,8 @@
 ---
-status: awaiting owner
+status: closed (round 802)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
+release: none
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/transport/rpc_dart_http/lib/**]
 probe: none — packages/test/rpc_dart_conformance/test/i9_reconnect_is_honest_test.dart, cells "channel | ..." and "http | ..." of "never Online before the peer speaks"
 reason: owner decision — HTTP/1.1 has no connection to be ready; whether I-9's second half applies to http and to a bare channel is the owner's
@@ -23,4 +24,8 @@ missing readiness signal. Which of the two does I-9 cover?
 
 ## Owner decision
 
-—
+Owner, 2026-10-10 (owner review after round 802): the second half of I-9
+covers neither http nor a bare channel. Online-on-build is the expected
+reading for both. At the owner's request the exception was written into
+`invariants/I-9` in the same review, and the two matrix cells are skipped as
+NOT APPLICABLE instead of KNOWN FAILING.

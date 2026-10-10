@@ -1,11 +1,12 @@
 ---
-status: awaiting owner
+status: decided by owner (round 802)
 round: 781
 commit: 2f469332
+release: breaking
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/skills/rpc_dart-core/references/context-and-metadata.md]
 probe: packages/core/rpc_dart/.dart_tool/probe/deadline_extension.dart
 reason: owner — changing what withDeadline/withTimeout/createChildWith mean is an API decision
-rank: 9
+rank: 3
 ---
 
 # B-273 — the documented forwarding paths extend or drop the deadline
@@ -40,4 +41,9 @@ Options for the owner:
 
 ## Owner decision
 
-—
+Owner, 2026-10-10: options 1 and 3. `createChildWith(timeout:)` and
+`RpcContextBuilder.inheritFrom(...).withTimeout` keep the earlier deadline;
+a forwarding helper keeps deadline, token and trace and drops credentials;
+`sanitize` stays a logging helper and its doc says so. `withDeadline` and
+`withTimeout` on a context keep replacing. Breaking for a caller that
+extended a child's deadline on purpose; the CHANGELOG line says so.

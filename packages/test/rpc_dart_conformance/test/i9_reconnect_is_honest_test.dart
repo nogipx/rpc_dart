@@ -5,7 +5,8 @@
 // I-9 -- reconnect is honest.
 //
 // A reconnecting client is Online again after the server restarts, and is
-// never Online before the peer has proven it speaks the protocol.
+// never Online before the peer has proven it speaks the protocol. The second
+// half does not apply to http or to a bare channel (see `_notApplicable`).
 //
 // Both rows drive `RpcClientConnection` from core with a factory that builds
 // the member's client transport, which is the reconnect path every transport
@@ -30,15 +31,15 @@ import 'support/matrix.dart';
 import 'support/pipe.dart';
 import 'support/tcp_peer.dart';
 
-/// Neither transport has a readiness signal (`IRpcTransportReadiness`), so
-/// RpcClientConnection reports Online the moment the factory returns.
-const _knownFailing = <String, String>{
-  'channel | peer that never speaks the protocol':
-      'states [Connecting, Online] against a byte pipe whose peer never '
-      'sent a byte: RpcChannelTransport.fromChannel is Online on construction',
-  'http | peer that never speaks the protocol':
-      'states [Connecting, Online] against a server that accepts and never '
-      'answers: RpcHttpCallerTransport is Online on construction',
+/// Members the invariant's second half exempts. Neither has a readiness
+/// signal (`IRpcTransportReadiness`), so RpcClientConnection reports Online
+/// the moment the factory returns, and that is the expected reading.
+const _notApplicable = <String, String>{
+  'channel':
+      'NOT APPLICABLE (I-9): a bare channel has no handshake; websocket and '
+      'isolate, built on it, prove readiness at their own layer',
+  'http':
+      'NOT APPLICABLE (I-9): no HTTP/1.1 connection exists before a request',
 };
 
 const _backoff = ExponentialBackoff(
@@ -103,7 +104,7 @@ Future<IRpcReconnectableTransport> _reconnectable(
 void main() {
   group('I-9 Online again after the server restarts:', () {
     for (final member in members) {
-      cell(member, 'server restart', knownFailing: _knownFailing, () async {
+      cell(member, 'server restart', () async {
         final rig = await member.serve();
         addTearDown(rig.close);
         const policy = RpcSecurityPolicy();
@@ -161,7 +162,7 @@ void main() {
       cell(
         member,
         'peer that never speaks the protocol',
-        knownFailing: _knownFailing,
+        skip: _notApplicable[member.name],
         () async {
           const policy = RpcSecurityPolicy();
           final Future<IRpcReconnectableTransport> Function() factory;

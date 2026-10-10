@@ -1,11 +1,12 @@
 ---
-status: awaiting owner
+status: decided by owner (round 802)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
+release: changelog
 paths: [packages/transport/rpc_dart_http/lib/**]
 probe: none — packages/test/rpc_dart_conformance/test/i6_cancel_reaches_responder_test.dart and i5_resources_return_test.dart, the KNOWN FAILING http cells
 reason: owner decision — rpc_dart_http's README documents that a cancel does not reach the handler; invariants I-5 and I-6 say it must
-rank: 12
+rank: 2
 ---
 
 # B-280 — the http responder is never told the caller cancelled
@@ -28,4 +29,13 @@ needs a stated exception, written by the owner)?
 
 ## Owner decision
 
-—
+Owner, 2026-10-10: I-5 and I-6 hold for http; fix it. This replaces the
+B-265 decision of 2026-10-08 (document that a cancel stays on the caller's
+side), so the README line round 715 wrote goes when the fix lands.
+
+The constraint, from B-265: shelf gives the server no signal that the
+connection closed, and the response is not written until the handler ends.
+The route B-265 named is watching the underlying dart:io connection where
+the server is `RpcHttpServer`, not any shelf adapter; its cost is not
+measured. A responder mounted on a foreign shelf server may stay out of
+reach, and the round says so rather than skipping the cells silently.

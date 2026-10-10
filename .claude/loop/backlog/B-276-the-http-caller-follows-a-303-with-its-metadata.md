@@ -1,11 +1,12 @@
 ---
-status: awaiting owner
+status: decided by owner (round 802)
 round: 784
 commit: e1ae2a36
+release: changelog
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
 probe: packages/transport/rpc_dart_http/.dart_tool/probe/redirect_follow.dart
 reason: owner decision — below the loop's severity bar, and the fix is one line
-rank: 10
+rank: 8
 ---
 
 # B-276 — the http caller follows a 303 with its metadata
@@ -28,4 +29,4 @@ are. An RPC never wants a POST turned into a GET.
 
 ## Owner decision
 
-—
+Owner, 2026-10-10: fix it. A 303 becomes a refusal like 301/307/308.

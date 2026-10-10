@@ -1,11 +1,12 @@
 ---
-status: awaiting owner
+status: decided by owner (round 802)
 round: 782
 commit: 5db1dd59
+release: changelog
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
 reason: owner decision — a raw-connection cap and a header deadline are new defaults on public servers, and the alternative is a documented "deploy behind a proxy"
-rank: 7
+rank: 6
 ---
 
 # B-274 — servers hold unfinished request headers for any number of peers
@@ -40,4 +41,9 @@ Options for the owner:
 
 ## Owner decision
 
-—
+Owner, 2026-10-10: option 3. Now: document in the READMEs of rpc_dart_http
+and rpc_dart_websocket, and in the skill, that both servers belong behind a
+reverse proxy that bounds connections and header time. Later: option 1 (a
+raw-connection cap and a header deadline on `RpcHttpServer`, a helper for
+the websocket side), filed as its own lead by the round that writes the
+documentation.
