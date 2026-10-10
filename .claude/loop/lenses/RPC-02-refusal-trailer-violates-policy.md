@@ -3,8 +3,8 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320, 327, 349, 734, 757, 775]
-status: swept here (round 775, 8d804d9f)
+applied: [216, 243, 320, 327, 349, 734, 757, 775, 818]
+status: swept here (round 818, 16b052a6)
 rank: 21
 ---
 
@@ -93,6 +93,17 @@ read.
   status 8 became 13 (a `catchError` replaced round 327's raw `ArgumentError`).
   **Read a call's arguments to the closing paren, not a line window.**
   `../rounds/757-the-refusal-trailers-re-swept.md`.
+
+- **Round 818** — re-swept over rounds 776-817 (40 files moved) by a script
+  that reads each `forTrailer(` call to its closing paren: 23 sites, 17 with
+  a message (16 capped), 6 without. The one new refusal path, round 809's
+  oversize answer in `RpcFrameMultiplexedChannel._failChannel`, caps at
+  `maxHeaderValueBytes`; ablated, the caller still gets status 8 with the
+  full text, because that send does not pass a validating hop, so the cap
+  there is cosmetic. The uncapped `_dropLateResponse` measured with a
+  handler cancelling its own token with a 2000-character reason: the caller
+  gets CANCELLED with the message cut to the policy's 1024, so the transport
+  reduces it on the way out. `../rounds/818-the-refusal-trailers-re-swept-again.md`.
 
 Beware the knob itself: below about 40, `maxHeaderValueBytes` refuses rpc_dart's
 own request headers and every call fails with INVALID_ARGUMENT, which reads like

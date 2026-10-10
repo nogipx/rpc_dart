@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751, 758, 774]
-status: swept here (round 774, 8d804d9f)
+applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751, 758, 774, 819]
+status: swept here (round 819, 16b052a6)
 rank: 20
 ---
 
@@ -161,3 +161,9 @@ at the bounds beneath it.** `../rounds/743-a-shared-close-is-still-bounded.md`.
 - **Round 758** — six wake paths by `find_callers`, the same six as 717; P-10
   unchanged, its `_onGrant` ablation still hangs the draining call at 20 s while
   the answered one returns in 0.4 s. `../rounds/758-the-wake-paths-recounted-again.md`.
+- **Round 819** — over 37 moved files (rounds 775-818): six wake paths by
+  `find_callers` on `_wake` and `wakeAll`, the same six; P-10 both columns
+  as in 774 (ablated `_onGrant`: draining call HUNG at 20 s with 16 pulled,
+  answered call 0.4 s); P-233 on the http caller after rounds 806-807: the
+  deadline still aborts an upload into a deaf server (status 4 at 1070 ms,
+  closed by the client). `../rounds/819-the-deadline-still-sits-above-the-write-again.md`.
