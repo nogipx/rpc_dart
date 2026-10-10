@@ -5,7 +5,7 @@ commit: 8471b02c
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/codec/codec.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/cbor_amplification_e2e.dart
 reason: owner decision — the fix is a new default bound on decoded items, and any value refuses some legitimate payload
-rank: 1
+rank: 5
 ---
 
 # B-275 — the CBOR decoder has no item budget

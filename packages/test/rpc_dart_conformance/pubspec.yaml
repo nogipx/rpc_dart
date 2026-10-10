@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+name: rpc_dart_conformance
+description: >
+  The transport conformance matrix: the owner's invariants (I-1 .. I-9) run
+  against every transport. Test-only; never published.
+# The only package in this repository that is not on pub.dev. It holds tests
+# and nothing else, and it depends on every transport, so publishing it would
+# ship a package with no library and a dependency on all of them.
+publish_to: none
+
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+
+resolution: workspace
+
+dev_dependencies:
+  http2: ^3.1.0
+  lints: ^6.0.0
+  rpc_dart: '>=6.0.0 <7.0.0'
+  rpc_dart_http: '>=0.4.0 <0.5.0'
+  rpc_dart_http2: '>=0.3.0 <0.4.0'
+  rpc_dart_isolate: '>=0.4.0 <0.5.0'
+  rpc_dart_websocket: '>=0.5.0 <0.6.0'
+  test: ^1.29.0
+  web_socket_channel: ^3.0.3

@@ -36,6 +36,7 @@ workspace:
   - packages/notify/rpc_notify
   - packages/notify/rpc_notify_postgres
   - packages/notify/rpc_notify_redis
+  - packages/test/rpc_dart_conformance
   - packages/transport/rpc_dart_http
   - packages/transport/rpc_dart_http2
   - packages/transport/rpc_dart_isolate
@@ -58,6 +59,9 @@ melos:
     data: [packages/data/**]
     notify: [packages/notify/**]
     blob: [packages/blob/**]
+    # The transport conformance matrix (packages/test/rpc_dart_conformance):
+    # test-only, publish_to: none, and part of test:unit like any member.
+    conformance: [packages/test/**]
 
   # Versioning is MANUAL (no `melos version`): the changelog is hand-written and
   # the version is bumped by hand per package. See CLAUDE.md "Release flow".

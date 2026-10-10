@@ -5,7 +5,7 @@ commit: e1ae2a36
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
 probe: packages/transport/rpc_dart_http/.dart_tool/probe/redirect_follow.dart
 reason: owner decision — below the loop's severity bar, and the fix is one line
-rank: 5
+rank: 9
 ---
 
 # B-276 — the http caller follows a 303 with its metadata

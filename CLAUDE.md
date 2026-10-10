@@ -28,6 +28,8 @@ Transport-agnostic RPC framework for Dart. This is a **monorepo** managed with
   - `rpc_dart_opentelemetry` — OpenTelemetry tracing, metrics and logs.
 - `packages/transport/*` — transports: http, http2, isolate, websocket, wasm.
 - `packages/data/*`, `packages/notify/*`, `packages/blob/*` — higher layers.
+- `packages/test/rpc_dart_conformance` — the transport conformance matrix
+  (test-only, unpublished; see "Publishing").
 - Root `pubspec.yaml` declares the pub `workspace:` and the `melos:` config.
 
 ## Toolchain — ALWAYS use fvm
@@ -85,7 +87,7 @@ melos exec --scope=rpc_dart_http2 -- fvm dart test   # one package
 melos list --category transport                      # group filter
 ```
 
-Categories: `core`, `transport`, `data`, `notify`, `blob`.
+Categories: `core`, `transport`, `data`, `notify`, `blob`, `conformance`.
 
 Before committing: `melos run analyze` and the relevant `melos run test` must be
 green. Do not edit generated files (`*.g.dart`, `*.freezed.dart`) by hand — run
@@ -138,6 +140,13 @@ sets `publish_to:` (the default is pub.dev). Only the root `pubspec.yaml` is
 `publish_to: none`. A new package is therefore public by default: before adding
 one, make sure it has no `path:` deps on siblings (the pub workspace already
 links them — see "Workspace resolution") and no dependency on anything unpublished.
+
+The one exception is `packages/test/rpc_dart_conformance`, which is
+`publish_to: none` on purpose: it is the transport conformance matrix (the
+owner's invariants, `.claude/loop/invariants/`, run against every transport),
+it holds tests and no library, and it depends on every transport. `melos
+publish` and `tag:release` skip private packages, so it is never published or
+tagged; it still runs in `test:unit` (category `conformance`).
 
 `rpc_dart_wasm` is not a pub-workspace member, so `melos publish` cannot see it;
 both `publish:dry` and `publish:release` run `flutter pub publish` for it
