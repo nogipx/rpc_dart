@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 801)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
 paths: [packages/transport/rpc_dart_isolate/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
 probe: none — packages/test/rpc_dart_conformance/test/i3_memory_per_peer_test.dart, cell "isolate | server stream, caller paused"
-reason: bench — a KNOWN FAILING cell of I-3; severity S1 (memory a paused caller lets grow)
-rank: 2
+reason: "closed in round 801, premise wrong: the window paced wire bytes, which were gzipped because a zero-copy caller offered gzip it never enabled; fixed there (S2), the cell passes"
 ---
 
 # B-278 — a paused isolate caller does not hold the producer back by bytes

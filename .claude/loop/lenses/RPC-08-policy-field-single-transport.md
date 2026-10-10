@@ -3,8 +3,8 @@ refines: U-19
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: policy fields are enforced by each transport separately
 breaks: a security hole on the transport nobody picked.
-applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745, 749, 750, 754, 755, 770, 772, 776]
-status: confirmed (round 754)
+applied: [205, 394, 414, 501, 504, 517, 518, 523, 524, 525, 540, 542, 543, 544, 545, 546, 547, 548, 553, 554, 556, 560, 563, 566, 567, 569, 571, 581, 584, 602, 613, 635, 745, 749, 750, 754, 755, 770, 772, 776, 801]
+status: confirmed (round 801)
 rank: 25
 ---
 
@@ -98,3 +98,4 @@ barren (three rounds running, 80, 81, 82). Clean results from the battery are in
 - **Round 745** — the census by `find_references`: all 18 fields across core, http and http2 in one table, every empty cell explained; the one behavioural split, `closeOnProtocolError` not honoured by the http2 caller, is on purpose. `../rounds/745-the-policy-matrix-from-the-analyzer.md`.
 - **Round 754** — websocket's `connectTimeout` covers the upgrade (round 361), http2's stopped at TCP/TLS: a peer that never sends SETTINGS left a call waiting at 8 s and `health` healthy; after, 14 / 2009 ms with a 2 s bound. **Ask what the protocol's own handshake is, not only the socket's.** `../rounds/754-a-silent-h2-peer-reads-online.md`, `../probes/P-259-a-peer-that-never-sends-settings.md`, B-269.
 - **Round 755** — the same peer against websocket: the bound covered the upgrade but defaulted to null (http2's is 30 s), so `RpcClientConnection` sat in Connecting; now 30 s, null still opts out. **Compare the siblings' defaults, not only their parameters** — the shape of round 584 in a second package. `../rounds/755-websocket-connect-had-no-default-bound.md`.
+- **Round 801** — `compressionEnabled` was honoured only on non-zero-copy transports: the caller pipeline set `grpc-accept-encoding` behind `!supportsZeroCopy`, so on isolate and the memory pair the metadata's default `identity,gzip` stood and every codec response was gzipped (630 against 460 ms for 4000 x 16 KiB). Found through the matrix's I-3 cell, whose premise (no byte pacing) was wrong. **A capability flag that gates a SETTING makes the setting one more sibling axis.** `../rounds/801-a-zero-copy-caller-offered-gzip-it-never-enabled.md`.

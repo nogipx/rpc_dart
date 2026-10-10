@@ -47,6 +47,20 @@ unfiltered, or with `-A30`, so the load error itself is recorded. Do not add
 a retry to the script: it hides exactly this, as the script's comment on the
 cold-start flake explains.
 
+## Third occurrence, round 801 — a different file, and the text lost again
+
+```
+  00:00 +0 -1: loading test/web_worker/worker_startup_failure_test.dart [E]
+  00:00 +0 -1: Some tests failed.
+```
+
+Not `echo_worker_test.dart`: the load error is not tied to one file. The run
+before it, on the same tree, had reached core's 2105 tests; the two after it
+were green (15 suites each). **And the text after `[E]` was lost the same way
+as before**: the run was piped through a grep keeping the `[E]` line, which is
+exactly what the paragraph above says not to do. The next gate run that is
+not captured whole with `> <file> 2>&1` repeats it.
+
 ## Owner decision
 
 —

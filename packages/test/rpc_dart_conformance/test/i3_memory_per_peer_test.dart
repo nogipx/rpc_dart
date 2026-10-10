@@ -36,16 +36,7 @@ import 'package:test/test.dart';
 
 import 'support/matrix.dart';
 
-/// Measured: 172 messages at the first sample over the bound; left alone, the
-/// producer runs to maxBufferedMessagesPerStream + 1 (8193 messages of
-/// 1 KiB), or to the 4000-message cap of this row (64 MiB). Channel and
-/// websocket under the same policy stop at 33.
-const _knownFailing = <String, String>{
-  'isolate | server stream, caller paused':
-      'the handler produced 172 messages of 16384 bytes past a paused caller; '
-      'the policy bounds it near 104. The byte window does not pace the '
-      'isolate transport: only the message credit (8192) does',
-};
+const _knownFailing = <String, String>{};
 
 const _httpDiscards =
     'no library-side observable while the body arrives: past the limit the '

@@ -198,8 +198,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       }
     }
 
-    if (!transport.supportsZeroCopy &&
-        !result.headers.containsKey(RpcHeaders.grpcAcceptEncoding)) {
+    // On a zero-copy transport too: a codec call there is framed like any other,
+    // and the request metadata's own default offers gzip, so leaving the header
+    // out had every response compressed without compression enabled.
+    if (!result.headers.containsKey(RpcHeaders.grpcAcceptEncoding)) {
       final accept = compressionEnabled
           ? RpcGrpcCompression.supportedEncodings().join(',')
           : RpcGrpcCompression.identity;
