@@ -1,5 +1,5 @@
 ---
-status: awaiting owner
+status: decided by owner (round 809)
 round: 804
 commit: 4b9a575d
 paths: [packages/transport/rpc_dart_http/lib/**, packages/test/rpc_dart_conformance/test/i6_cancel_reaches_responder_test.dart, packages/test/rpc_dart_conformance/test/i5_resources_return_test.dart]
@@ -40,6 +40,15 @@ only cancel signal is a TCP close? Options:
    matter.
 3. Accept it as is and close this lead.
 
+Round 809 measured more (P-295's `r809_close_latency.dart`): the same 2.1 s
+with the client in ANOTHER PROCESS (2101 ms) and with a `RawSocket` server
+(2097 ms), so the delay is below `Socket` and below rpc_dart.
+
 ## Owner decision
 
-—
+Owner, 2026-10-10 (owner review after round 809): option 2, measure on
+Linux first. If a server there sees a client's close well inside 1 s, I-6's
+bound stays and the http cells come off KNOWN FAILING where it holds; if
+Linux shows the same delay, put the question again with that number. The
+bench to run there is `r809_close_latency.dart` (both arms) and the I-6 http
+cells with `--run-skipped`.

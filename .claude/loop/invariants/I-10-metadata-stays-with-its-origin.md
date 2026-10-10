@@ -1,6 +1,6 @@
 ---
 across: transport
-test: —
+test: packages/test/rpc_dart_conformance/test/i10_metadata_stays_with_its_origin_test.dart
 severity: S1
 ---
 
@@ -9,5 +9,4 @@ severity: S1
 ## Statement
 
 Call metadata is never sent to an origin other than the one dialed: redirects,
-proxies. The http caller's 303 handling waits on the owner in B-276; until
-that is answered this invariant is not enforced.
+proxies.

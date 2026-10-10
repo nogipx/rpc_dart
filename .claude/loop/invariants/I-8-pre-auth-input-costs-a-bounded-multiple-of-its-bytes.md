@@ -1,6 +1,6 @@
 ---
-across: —
-test: —
+across: transport
+test: packages/test/rpc_dart_conformance/test/i8_decode_is_bounded_test.dart
 severity: S1
 ---
 
@@ -9,5 +9,4 @@ severity: S1
 ## Statement
 
 Decoding before authentication (CBOR, gzip) allocates at most K x the wire
-size. K is the owner's decision, pending in B-275; until it is set this
-invariant is not enforced.
+size. K is set by `RpcSecurityPolicy.maxDecodedItems` (B-275, round 803).

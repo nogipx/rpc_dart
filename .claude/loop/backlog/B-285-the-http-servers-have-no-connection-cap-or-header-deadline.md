@@ -1,5 +1,5 @@
 ---
-status: open
+status: decided by owner (round 809)
 round: 806
 commit: 0b9d5a08
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_http/lib/src/peer_watch.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
@@ -32,4 +32,7 @@ and new API; the values are the owner's.
 
 ## Owner decision
 
-—
+Owner, 2026-10-10 (owner review after round 809): do it now. The round
+measures and proposes the default values (connection cap, header deadline)
+and asks before committing them: new defaults on public servers are the
+owner's to set.
