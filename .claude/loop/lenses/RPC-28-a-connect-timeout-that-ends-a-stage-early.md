@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/src/rpc_isolate_module.dart, packages/notify/*/lib/**]
 applies: opening a connection takes several stages (TCP, TLS, an upgrade, a protocol preface or SETTINGS, a ready message) and a timeout or a default guards the open
 breaks: a hang that never ends: connect() or reconnect() waits forever on a peer that answered the first stage only.
-applied: [754, 755, 773]
-status: confirmed (round 754)
+applied: [754, 755, 773, 800]
+status: confirmed (round 800)
 rank: 6
 ---
 
@@ -31,6 +31,11 @@ Every open path, by text (dart-runner has no search for parameters):
 list the stages in order and mark which one the timer's future spans, and
 what the default is when the caller passes nothing.
 
+Then the closes: every `close()` reachable while an open is still in a
+stage. A close that awaits what the open was waiting on (a sink that opens
+with the upgrade, a ready future) inherits the open's unbounded wait. Round
+800's was a websocket sink close.
+
 ## Ask
 
 A server that completes stage k and then stays silent, k for each stage in
@@ -56,3 +61,9 @@ default and an explicit null are different arms.
   `WebSocketChannel.ready`: connecting after 40 s against a silent upgrade.
   Default now 30 s.
   `../rounds/773-the-documented-reconnect-factory-waited-forever.md`.
+- **Round 800** — the CLOSE side of the same stage: `close()` on a websocket
+  transport given an unopened channel (directly or by `reconnectFactory`)
+  awaited a sink that closes only after the upgrade, so it never returned:
+  still pending at 20 s against 7 ms for an answered peer. Found by the
+  conformance matrix, not by this lens's detector, which looks only at opens.
+  `../rounds/800-websocket-close-waited-on-an-unanswered-upgrade.md`.

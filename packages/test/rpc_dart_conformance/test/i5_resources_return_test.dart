@@ -59,10 +59,6 @@ const _knownFailing = <String, String>{
   'http | 40 calls, every shape and ending':
       'the handler of a cancelled call never reported "timerCancelled" '
       'within 2000 ms; the http responder is not told of a caller cancel',
-  'websocket | close after peer silent':
-      'the caller transport did not close within 3 s: '
-      'RpcWebSocketCallerTransport.close() never completes while the '
-      'WebSocket handshake is unanswered (measured: still pending at 40 s)',
 };
 
 Future<Map<String, int>> _client(ConformanceCaller caller) async {

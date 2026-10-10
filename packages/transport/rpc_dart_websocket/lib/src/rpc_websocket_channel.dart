@@ -113,8 +113,10 @@ class RpcWebSocketChannel
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
   late final StreamSubscription<void> _sub;
   bool _closed = false;
+  bool _upgraded = false;
 
   RpcWebSocketChannel(this._ws) {
+    unawaited(_ws.ready.then((_) => _upgraded = true, onError: (Object _) {}));
     _sub = _ws.stream.listen(
       (data) {
         if (_incoming.isClosed) return;
@@ -286,20 +288,36 @@ class RpcWebSocketChannel
     if (_closed) return;
     _closed = true;
     await _sub.cancel();
-    try {
-      await _ws.sink.close(code, _trimCloseReason(reason));
-    } catch (_) {
-      // The reason is a courtesy; the CLOSE is the contract. `_closed` is
-      // already true above, so a throw here would leave the socket open with no
-      // second chance: the peer never learns it violated the policy and never
-      // stops resending. Not reachable from the VM test beside this -- the trim
-      // keeps it under the cap -- and kept for the platform where close()
-      // rejects a reason this one would accept.
+    await _closeSink(() async {
       try {
+        await _ws.sink.close(code, _trimCloseReason(reason));
+      } catch (_) {
+        // The reason is a courtesy; the CLOSE is the contract. `_closed` is
+        // already true above, so a throw here would leave the socket open with
+        // no second chance: the peer never learns it violated the policy and
+        // never stops resending. Not reachable from the VM test beside this --
+        // the trim keeps it under the cap -- and kept for the platform where
+        // close() rejects a reason this one would accept.
         await _ws.sink.close(code);
-      } catch (_) {}
-    }
+      }
+    });
     if (!_incoming.isClosed) unawaited(_incoming.close());
+  }
+
+  /// Runs [close] on the sink, awaiting it only once the upgrade has answered.
+  ///
+  /// Before that the sink closes only when the peer answers, and a silent peer
+  /// never does: awaiting it held `close()` past any bound. Unawaited, the
+  /// socket still closes if the upgrade ever completes.
+  Future<void> _closeSink(Future<void> Function() close) async {
+    final closing = Future<void>.sync(close);
+    if (!_upgraded) {
+      unawaited(closing.catchError((Object _) {}));
+      return;
+    }
+    try {
+      await closing;
+    } catch (_) {}
   }
 
   @override
@@ -307,9 +325,7 @@ class RpcWebSocketChannel
     if (_closed) return;
     _closed = true;
     await _sub.cancel();
-    try {
-      await _ws.sink.close();
-    } catch (_) {}
+    await _closeSink(() async => _ws.sink.close());
     // NOT awaited. `_incoming` is single-subscription, and closing one that was
     // never listened to returns a future that never completes until someone
     // listens -- so awaiting here deadlocks close() outright. Reachable

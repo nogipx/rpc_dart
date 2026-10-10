@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 800)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
 probe: none — packages/test/rpc_dart_conformance/test/i5_resources_return_test.dart, cell "websocket | close after silent"
-reason: bench — a KNOWN FAILING cell of I-5; severity S1 (a close that never ends)
-rank: 1
+reason: "FIXED in round 800: the close no longer awaits the sink of a channel whose upgrade is unanswered; 20 s+ -> 5 ms, the matrix cell un-marked"
 ---
 
 # B-277 — the websocket caller's close never completes against a silent peer
