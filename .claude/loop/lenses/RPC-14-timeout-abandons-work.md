@@ -1,10 +1,10 @@
 ---
 refines: U-17
-paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**]
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: there are timeouts around operations that hold a resource
 breaks: "unbounded growth: the held resource is never released. On this project the price is a leaked isolate rather than a socket: it holds ports and keeps the process from exiting."
-applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533, 536, 638, 673, 696, 701, 778, 781]
-status: confirmed (round 499)
+applied: [223, 233, 246, 273, 323, 433, 499, 514, 530, 533, 536, 638, 673, 696, 701, 778, 781, 804]
+status: confirmed (round 804)
 rank: 18
 ---
 
@@ -111,3 +111,10 @@ transport must still SERVE a call afterwards.
   the abandoned side from the other end; freeing a `maxActiveStreams` slot without
   stopping the work inverts the limit; cancellation must report NOTHING.
   `../probes/P-169-does-abandoning-a-call-stop-the-download.md`, B-140.
+- **Round 804** — the other side of 536: the caller's abort closed the
+  connection, and the http SERVER's handler ran on, because shelf passes no
+  connection-end signal. `RpcHttpServer` now watches each accepted socket
+  and the transport emits `x-client-cancelled`: cancelled at ~2.1 s (the
+  close's own latency here) against never. Two of five fix halves were
+  refuted by their canaries and removed.
+  `../rounds/804-a-caller-cancel-reaches-the-http-handler.md`, B-280, B-284.

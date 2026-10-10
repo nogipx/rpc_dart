@@ -5,7 +5,7 @@ commit: 91ec33ea
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
 probe: none — packages/test/rpc_dart_conformance/test/i7_one_failure_one_status_test.dart, the 4 "channel | ... oversizeRequest" cells
 reason: bench — KNOWN FAILING cells of I-7; severity S2 (a status a caller branches on)
-rank: 4
+rank: 2
 ---
 
 # B-281 — an oversized request on a channel ends UNAVAILABLE, not RESOURCE_EXHAUSTED

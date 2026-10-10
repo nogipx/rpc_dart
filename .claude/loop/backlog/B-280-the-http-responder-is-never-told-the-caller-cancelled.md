@@ -1,11 +1,11 @@
 ---
-status: decided by owner (round 802)
+status: closed (round 804)
 round: — (not re-measured by a round; measured by the conformance matrix)
 commit: 91ec33ea
 release: changelog
 paths: [packages/transport/rpc_dart_http/lib/**]
 probe: none — packages/test/rpc_dart_conformance/test/i6_cancel_reaches_responder_test.dart and i5_resources_return_test.dart, the KNOWN FAILING http cells
-reason: owner decision — rpc_dart_http's README documents that a cancel does not reach the handler; invariants I-5 and I-6 say it must
+reason: "FIXED in round 804 as decided: under RpcHttpServer the connection's close cancels the handler, ~2.1 s after the cancel here; the bound question is B-284. Previously: owner decision — rpc_dart_http's README documents that a cancel does not reach the handler; invariants I-5 and I-6 say it must"
 rank: 2
 ---
 

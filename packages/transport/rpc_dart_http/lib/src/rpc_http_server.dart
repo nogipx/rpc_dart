@@ -9,6 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
+import 'peer_watch.dart';
 import 'rpc_http_cors_policy.dart';
 import 'rpc_http_responder_transport.dart';
 
@@ -73,6 +74,10 @@ class RpcHttpServer implements IRpcServer {
   RpcHttpResponderTransport? _transport;
   RpcResponderEndpoint? _endpoint;
   HttpServer? _httpServer;
+
+  /// The listening socket under [_httpServer]. `HttpServer.listenOn` does not
+  /// close it, so [stop] does.
+  PeerWatchingServerSocket? _sockets;
   bool _isRunning = false;
 
   /// Claimed by [afterModulesStart] before its first await, so a concurrent
@@ -242,7 +247,24 @@ class RpcHttpServer implements IRpcServer {
     }
 
     try {
-      _httpServer = await shelf_io.serve(handler, _host, _port);
+      // Bound here rather than by shelf_io.serve, so a connection's close
+      // reaches the transport and a caller's cancel its handler
+      // (kRpcHttpPeerGoneKey).
+      final sockets = PeerWatchingServerSocket(
+        await ServerSocket.bind(_host, _port),
+      );
+      final httpServer = HttpServer.listenOn(sockets);
+      shelf_io.serveRequests(httpServer, (request) {
+        final info = request.context['shelf.io.connection_info'];
+        final gone = info is HttpConnectionInfo ? sockets.peerGone(info) : null;
+        return handler(
+          gone == null
+              ? request
+              : request.change(context: {kRpcHttpPeerGoneKey: gone}),
+        );
+      });
+      _httpServer = httpServer;
+      _sockets = sockets;
     } catch (_) {
       // The bind is the one fallible step here, and it fails for the most
       // ordinary reason there is: the port is taken. By now the endpoint has
@@ -353,9 +375,11 @@ class RpcHttpServer implements IRpcServer {
     _binding = false;
 
     final httpServer = _httpServer;
+    final sockets = _sockets;
     final endpoint = _endpoint;
     final transport = _transport;
     _httpServer = null;
+    _sockets = null;
     _endpoint = null;
     _transport = null;
 
@@ -370,6 +394,7 @@ class RpcHttpServer implements IRpcServer {
       if (drainTimeout != null && httpServer != null) {
         // Stop accepting without killing what is running...
         await httpServer.close();
+        await sockets?.close();
         // ...then actually wait for it.
         await _drainRequests(transport, drainTimeout);
         // Anything still going when the budget expires is cut here -- AFTER it has
@@ -379,6 +404,7 @@ class RpcHttpServer implements IRpcServer {
       } else {
         await _answerStragglers(transport);
         await httpServer?.close(force: true);
+        await sockets?.close();
       }
     } catch (e) {
       _logger?.warning('Error closing the HTTP server: $e');

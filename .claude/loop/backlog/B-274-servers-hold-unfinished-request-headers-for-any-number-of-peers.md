@@ -6,7 +6,7 @@ release: changelog
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
 reason: owner decision — a raw-connection cap and a header deadline are new defaults on public servers, and the alternative is a documented "deploy behind a proxy"
-rank: 6
+rank: 4
 ---
 
 # B-274 — servers hold unfinished request headers for any number of peers

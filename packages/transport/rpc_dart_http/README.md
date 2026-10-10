@@ -24,9 +24,10 @@ one request, so streaming methods do not fail here; they degrade:
   `RESOURCE_EXHAUSTED`.
 - An unbounded stream never returns, because the response cannot start until
   the handler ends. Give it a deadline if it has to run here.
-- A cancelled call does not reach the server, so a streaming handler called
-  without a deadline holds its slot (`maxActiveStreams`) until it ends. Every
-  streaming call over this transport needs a deadline.
+- A cancel reaches the handler only as the close of the caller's connection,
+  and only under `RpcHttpServer`: mounted on another shelf server the handler
+  is not told, and a streaming handler without a deadline holds its slot
+  (`maxActiveStreams`) until it ends.
 
 For streaming use [`rpc_dart_http2`], [`rpc_dart_websocket`] or
 [`rpc_dart_isolate`].
@@ -76,8 +77,9 @@ ignored. A call posts to `{baseUrl}/{Service}/{method}`.
 
 The transport has no timeout of its own. Bound calls with a deadline in the
 `RpcContext`; it travels as `grpc-timeout`. Cancelling a call aborts its HTTP
-request on the caller's side only: the server is not told, and its handler
-runs until it finishes or its deadline passes. `reconnect()` is a no-op that reports healthy, because there is no
+request, which closes the connection; `RpcHttpServer` turns that close into a
+cancel of the handler's token, so it arrives as late as the platform reports
+the close. `reconnect()` is a no-op that reports healthy, because there is no
 connection to restore.
 
 ### Custom HTTP client

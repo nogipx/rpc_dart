@@ -22,20 +22,21 @@ import 'support/matrix.dart';
 
 const _within = Duration(seconds: 1);
 
-/// The http caller aborts its own request and the responder is never told:
-/// its handler runs until it ends or its deadline passes. rpc_dart_http's
-/// README states this as the transport's behaviour; the invariant says it is
-/// not allowed.
-const _httpNeverTold =
-    'the handler never reported "cancelled" within 1000 ms; the http '
-    'responder is not told of a caller cancel';
+/// HTTP/1.1 has no cancel frame: the server learns of a cancel from the TCP
+/// close, which dart:io here reports about 2.1 s after it happens, and the
+/// harness's proxy adds a second such hop. The cancel does arrive (about
+/// 4.2 s here; rpc_dart_http's a_cancel_reaches_the_handler_test, no
+/// proxy, about 2.1 s). B-284 asks the owner about the bound.
+const _httpLate =
+    'the handler reports "cancelled" about 4.2 s after the cancel, past the '
+    '1 s bound: a TCP close reaches dart:io about 2.1 s late, twice here';
 
 const _knownFailing = <String, String>{
-  'http | unary': _httpNeverTold,
-  'http | clientStream': _httpNeverTold,
-  'http | serverStream': _httpNeverTold,
-  'http | bidi': _httpNeverTold,
-  'http | 20 calls on one connection, all cancelled': _httpNeverTold,
+  'http | unary': _httpLate,
+  'http | clientStream': _httpLate,
+  'http | serverStream': _httpLate,
+  'http | bidi': _httpLate,
+  'http | 20 calls on one connection, all cancelled': _httpLate,
 };
 
 void main() {

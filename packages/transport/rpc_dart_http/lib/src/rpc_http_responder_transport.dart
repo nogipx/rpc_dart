@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:shelf/shelf.dart';
 
+import 'peer_watch.dart' show kRpcHttpPeerGoneKey;
 import 'rpc_http_cors_policy.dart';
 
 /// A request body over [RpcSecurityPolicy.maxMessageLengthBytes].
@@ -496,6 +497,10 @@ class RpcHttpResponderTransport
           methodPath: methodPath,
         ),
       );
+      final gone = request.context[kRpcHttpPeerGoneKey];
+      if (gone is Future<void>) {
+        unawaited(gone.then((_) => _cancelForGonePeer(streamId, pending)));
+      }
     } catch (e, st) {
       _pending.remove(streamId);
       _idManager.releaseId(streamId);
@@ -529,6 +534,30 @@ class RpcHttpResponderTransport
     }
 
     return pending.completer.future;
+  }
+
+  /// Cancels the call on [streamId] whose client has gone, unless it was
+  /// already answered. The same `x-client-cancelled` frame the http2 and
+  /// websocket responders send, so the pipeline tears the call down and the
+  /// handler's token fires.
+  void _cancelForGonePeer(int streamId, _PendingResponse pending) {
+    if (!identical(_pending[streamId], pending) ||
+        pending.answered ||
+        pending.completer.isCompleted) {
+      return;
+    }
+    _emit(
+      RpcTransportMessage.withMetadata(
+        streamId: streamId,
+        metadata: RpcMetadata([
+          RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+          RpcHeader(
+            RpcHeaders.xCancellationReason,
+            'the client closed the connection',
+          ),
+        ]),
+      ),
+    );
   }
 
   @override

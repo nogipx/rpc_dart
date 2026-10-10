@@ -33,20 +33,18 @@ enum _Ending { completes, deadline, callerCancels, handlerFails }
 
 const _notAGauge = {'transport.finishedStreams'};
 
-/// Same cause as I-6's http cells: the responder is never told of the cancel,
-/// so the handler, its scope and its timer outlive the call.
-const _httpCancel =
-    'the handler never reported "disposed" within 2000 ms after the caller '
-    'cancelled; the http responder is not told of a caller cancel';
+/// The same as I-6's http cells: the release follows the cancel, which
+/// reaches the server about 4.2 s late through the harness (B-284).
+const _httpLate =
+    'the handler reports "disposed" after the 2000 ms bound: the cancel '
+    'reaches the http server about 4.2 s late through the harness';
 
 const _knownFailing = <String, String>{
-  'http | unary callerCancels': _httpCancel,
-  'http | clientStream callerCancels': _httpCancel,
-  'http | serverStream callerCancels': _httpCancel,
-  'http | bidi callerCancels': _httpCancel,
-  'http | 40 calls, every shape and ending':
-      'the handler of a cancelled call never reported "timerCancelled" '
-      'within 2000 ms; the http responder is not told of a caller cancel',
+  'http | unary callerCancels': _httpLate,
+  'http | clientStream callerCancels': _httpLate,
+  'http | serverStream callerCancels': _httpLate,
+  'http | bidi callerCancels': _httpLate,
+  'http | 40 calls, every shape and ending': _httpLate,
 };
 
 Future<Map<String, int>> _client(ConformanceCaller caller) async {
