@@ -455,6 +455,10 @@ class RpcHttpCallerTransport
         uri,
         abortTrigger: abort.future,
       );
+      // A redirect is answered as a refusal (in a browser, a fetch error).
+      // Followed, a 303 is re-sent as a GET to wherever it points, with the
+      // call's metadata (x-api-key too).
+      request.followRedirects = false;
       request.headers[RpcHeaders.contentType] = 'application/grpc+proto';
       // No `te: trailers` here. It signals trailer support and this wire format
       // sends no trailers -- the class doc above says where the status goes:

@@ -315,6 +315,7 @@ use [`rpc_dart_http2`] to talk to them.
 | Non-200 response | Mapped by `grpcStatusFromHttpStatus` from `rpc_dart`: `400` INTERNAL, `401` UNAUTHENTICATED, `403` PERMISSION_DENIED, `404` UNIMPLEMENTED, `408` UNAVAILABLE, `413` RESOURCE_EXHAUSTED, `429`/`502`/`503`/`504` UNAVAILABLE, `499` CANCELLED, anything else UNKNOWN. The message names the status, the path and the start of the body. |
 | `200` with a non-gRPC `content-type` (a proxy's HTML page) | INTERNAL |
 | Connection refused or reset, failed TLS handshake | UNAVAILABLE |
+| A redirect (`301`, `302`, `303`, `307`, `308`) | Not followed. On the VM it is a non-200 response (UNKNOWN). In a browser `fetch` reports it as a network error, so UNAVAILABLE. Point `baseUrl` at the final address. |
 | Response body over the caller's limit | RESOURCE_EXHAUSTED |
 | Transport closed during the call | UNAVAILABLE |
 

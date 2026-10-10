@@ -1,11 +1,11 @@
 ---
-status: decided by owner (round 802)
+status: closed (round 807)
 round: 784
 commit: e1ae2a36
 release: changelog
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
 probe: packages/transport/rpc_dart_http/.dart_tool/probe/redirect_follow.dart
-reason: owner decision — below the loop's severity bar, and the fix is one line
+reason: "FIXED in round 807 as decided (VM and web, by the owner's choice); the websocket caller's default handshake fixed with it, its compressed path is B-286. Previously: owner decision — below the loop's severity bar, and the fix is one line"
 rank: 6
 ---
 

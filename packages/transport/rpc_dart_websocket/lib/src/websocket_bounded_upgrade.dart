@@ -102,6 +102,9 @@ Future<WebSocket> connectBounded(
   final key = base64Encode(nonce);
 
   final request = await client.openUrl('GET', httpUri);
+  // A redirect is a refused upgrade. Followed, the upgrade request and its
+  // headers (x-api-key too) go to wherever the Location points.
+  request.followRedirects = false;
   if (uri.userInfo.isNotEmpty) {
     request.headers.set(
       HttpHeaders.authorizationHeader,
