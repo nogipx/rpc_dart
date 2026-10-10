@@ -130,6 +130,27 @@ void main() {
   );
 
   test(
+    'a restart during a drain is stopped by the next stop',
+    () async {
+      final call = await startSlowCall();
+
+      final draining = server.stop(drainTimeout: const Duration(seconds: 10));
+      await server.start();
+      await server.afterModulesStart();
+      await server.stop();
+
+      expect(
+        server.isRunning,
+        isFalse,
+        reason: 'the last stop returned the first stop and left this running',
+      );
+      await draining;
+      expect(await call, 'returned finished');
+    },
+    timeout: const Timeout(Duration(seconds: 60)),
+  );
+
+  test(
     'CONTROL: without a drain the request is cut off, but correctly',
     () async {
       // Proves the slow request really is in flight when stop() lands, and pins

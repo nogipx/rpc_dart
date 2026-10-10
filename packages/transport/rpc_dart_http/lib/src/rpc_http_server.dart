@@ -153,8 +153,14 @@ class RpcHttpServer implements IRpcServer {
   /// The guard is on [_transport], NOT on [isRunning]: [isRunning] only goes
   /// true at the END of [afterModulesStart], so between the two phases it
   /// reports false while a transport very much exists.
+  ///
+  /// A [stop] in flight is finished first, as on the websocket server. A
+  /// restart overlapping it would leave a later [stop] returning that first
+  /// stop's future while the restarted server keeps serving.
   @override
   Future<void> start() async {
+    final stopping = _stopping;
+    if (stopping != null) await stopping;
     if (_transport != null) {
       _logger?.warning('start() called again; the server is already set up');
       return;
