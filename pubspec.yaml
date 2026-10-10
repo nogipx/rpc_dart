@@ -427,6 +427,18 @@ melos:
     #   melos run bump:rpc_dart_generator
     #   fvm dart run tool/bump_dep.dart rpc_dart 4.3.0
     #   fvm dart run tool/bump_dep.dart rpc_dart --dry-run
+    # --- Mutation testing: lines no test constrains (NOT a gate) ---
+    # One full test run per mutant, so a run on one file takes minutes, and a
+    # surviving mutant is a target for an evidence-loop round, not a defect.
+    # Never add this to prepare, test or any CI step. It takes per-run
+    # arguments, so call the tool directly; this entry prints the usage:
+    #   fvm dart run tool/mutants/mutants.dart --file <lib file> \
+    #     --tests <test file or dir>[,<more>] [--limit N] [--report <path>]
+    # See tool/mutants/README.md.
+    mutants:
+      description: Usage of the mutation-testing tool (not a gate).
+      run: fvm dart run tool/mutants/mutants.dart --help
+
     bump:rpc_dart:
       description: Raise the rpc_dart dependency floor across all packages.
       run: fvm dart run tool/bump_dep.dart rpc_dart
