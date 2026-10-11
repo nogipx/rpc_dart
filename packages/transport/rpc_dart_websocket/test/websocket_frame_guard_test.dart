@@ -50,6 +50,29 @@ void main() {
     }
   });
 
+  // dart:io holds each fragment of an unfinished message as its own buffer,
+  // so a byte ceiling alone let one-byte fragments hold many times their
+  // payload.
+  test('WITNESS a message in more fragments than the cap is refused', () {
+    final guard = WebSocketFrameGuard(1 << 20);
+    expect(guard.admit(_frame(2, 1, fin: false)), isTrue);
+    for (var i = 1; i < WebSocketFrameGuard.maxFragmentsPerMessage; i++) {
+      expect(guard.admit(_frame(0, 1, fin: false)), isTrue, reason: '$i');
+    }
+    expect(guard.admit(_frame(0, 1, fin: false)), isFalse);
+  });
+
+  test('GUARD the fragment count starts again with each message', () {
+    final guard = WebSocketFrameGuard(1 << 20);
+    for (var m = 0; m < 3; m++) {
+      expect(guard.admit(_frame(2, 1, fin: false)), isTrue);
+      for (var i = 2; i < WebSocketFrameGuard.maxFragmentsPerMessage; i++) {
+        expect(guard.admit(_frame(0, 1, fin: false)), isTrue, reason: '$m/$i');
+      }
+      expect(guard.admit(_frame(0, 1, fin: true)), isTrue, reason: '$m');
+    }
+  });
+
   test('a control frame between fragments does not reset the count', () {
     final guard = WebSocketFrameGuard(1000);
     expect(guard.admit(_frame(2, 600, fin: false)), isTrue);

@@ -265,7 +265,8 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
 }
 
 /// Reads WebSocket frame headers off a byte stream and refuses a message whose
-/// declared length crosses [maxMessageBytes], or a peer pinging faster than
+/// declared length crosses [maxMessageBytes] or that arrives in more than
+/// [maxFragmentsPerMessage] fragments, or a peer pinging faster than
 /// [maxPingsPerSecond].
 ///
 /// Counts what a header DECLARES, so the refusal comes before the payload is
@@ -287,6 +288,14 @@ final class WebSocketFrameGuard {
 
   /// Ceiling on one message's payload, summed over its fragments.
   final int maxMessageBytes;
+
+  /// Fragments one message may arrive in.
+  ///
+  /// dart:io keeps every fragment of an unfinished message as its own buffer,
+  /// with a fixed cost whatever its payload, so under a byte ceiling alone a
+  /// message sent as one-byte fragments held many times its payload in heap.
+  /// Peers fragment a large message into a few dozen frames, not thousands.
+  static const int maxFragmentsPerMessage = 4096;
 
   /// Pings admitted at once before the rate applies.
   static const int maxPingBurst = 256;
@@ -319,6 +328,7 @@ final class WebSocketFrameGuard {
   bool _inPayload = false;
   bool _finalData = false;
   int _messageBytes = 0;
+  int _messageFragments = 0;
 
   /// Feeds [data]; false once a frame is past a ceiling, after which nothing
   /// more should be read.
@@ -369,6 +379,7 @@ final class WebSocketFrameGuard {
     } else {
       _messageBytes += length;
       if (_messageBytes > maxMessageBytes) return false;
+      if (++_messageFragments > maxFragmentsPerMessage) return false;
       _finalData = fin;
     }
     _remaining = length;
@@ -379,7 +390,10 @@ final class WebSocketFrameGuard {
 
   void _endFrame() {
     _inPayload = false;
-    if (_finalData) _messageBytes = 0;
+    if (_finalData) {
+      _messageBytes = 0;
+      _messageFragments = 0;
+    }
     _finalData = false;
   }
 }
