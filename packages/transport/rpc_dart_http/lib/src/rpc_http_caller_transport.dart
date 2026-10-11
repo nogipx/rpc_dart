@@ -8,6 +8,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:rpc_dart/rpc_dart.dart';
 
+import 'body_accumulator.dart';
+
 /// Pending outgoing HTTP call state.
 final class _PendingCall {
   final String methodPath;
@@ -282,7 +284,8 @@ class RpcHttpCallerTransport
     final limit = _policy.effectiveMaxBufferedBytes;
     final configured =
         _policy.maxBufferedBytes ?? _policy.maxMessageLengthBytes;
-    final builder = BytesBuilder(copy: false);
+    // See BodyAccumulator: the server chooses the chunk sizes.
+    final builder = BodyAccumulator();
     await for (final chunk in response.stream) {
       builder.add(chunk);
       if (builder.length > limit) {

@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:shelf/shelf.dart';
 
+import 'body_accumulator.dart';
 import 'peer_watch.dart' show kRpcHttpPeerGoneKey;
 import 'rpc_http_cors_policy.dart';
 
@@ -431,7 +432,8 @@ class RpcHttpResponderTransport
       // of MiB of peak for ONE accepted request.
       final idle = _IdleDeadline(bodyIdleTimeout);
       Future<Uint8List> readBody() async {
-        final builder = BytesBuilder(copy: false);
+        // See BodyAccumulator: the peer chooses the chunk sizes.
+        final builder = BodyAccumulator();
         var exceeded = false;
         idle.arm();
         await for (final chunk in request.read()) {
