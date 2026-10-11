@@ -18,6 +18,36 @@ import 'websocket_bounded_upgrade.dart';
 /// application-level heartbeat instead.
 const bool platformHonoursPingInterval = true;
 
+/// A connection factory for an `HttpClient` that connects only to [target]'s
+/// origin: a redirect elsewhere fails the connect instead of carrying the
+/// upgrade request's headers there.
+///
+/// With a factory set, `HttpClient` leaves TLS to it for a direct connection
+/// and still tunnels through a proxy itself, so both are done here as dart:io
+/// would: `SecureSocket` for https, the proxy's plain socket otherwise.
+Future<ConnectionTask<Socket>> Function(Uri, String?, int?) _sameOriginOnly(
+  Uri target,
+) {
+  final scheme = target.isScheme('wss') ? 'https' : 'http';
+  final host = target.host;
+  final port = target.port;
+  return (uri, proxyHost, proxyPort) {
+    if (uri.scheme != scheme || uri.host != host || uri.port != port) {
+      return Future.error(
+        const WebSocketException(
+          'WebSocket upgrade redirected to another origin; not followed',
+        ),
+      );
+    }
+    if (proxyHost != null && proxyPort != null) {
+      return Socket.startConnect(proxyHost, proxyPort);
+    }
+    return uri.isScheme('https')
+        ? SecureSocket.startConnect(host, port)
+        : Socket.startConnect(host, port);
+  };
+}
+
 /// Opens a WebSocket, applying [pingInterval] where the platform supports it.
 ///
 /// The VM implementation, where [pingInterval] is real: dart:io pings every
@@ -86,15 +116,24 @@ Future<WebSocketChannel> openWebSocket(
         if (client == null) own.close();
       }
     } else {
-      webSocket = await WebSocket.connect(
-        uri.toString(),
-        protocols: protocols,
-        headers: headers,
-        compression: enableCompression
-            ? CompressionOptions.compressionDefault
-            : CompressionOptions.compressionOff,
-        customClient: client,
-      );
+      // dart:io's handshake follows a redirect with every header the caller
+      // set, and offers no setting against it; its client is given a
+      // connection factory that refuses any other origin instead.
+      final own = client ?? HttpClient();
+      own.connectionFactory = _sameOriginOnly(uri);
+      try {
+        webSocket = await WebSocket.connect(
+          uri.toString(),
+          protocols: protocols,
+          headers: headers,
+          compression: enableCompression
+              ? CompressionOptions.compressionDefault
+              : CompressionOptions.compressionOff,
+          customClient: own,
+        );
+      } finally {
+        if (client == null) own.close();
+      }
     }
     webSocket.pingInterval = pingInterval;
     final channel = IOWebSocketChannel(webSocket);
