@@ -1,11 +1,11 @@
 ---
-status: open
+status: closed (round 835)
 round: 834
 commit: 5b62856f
+release: changelog
 paths: [packages/core/rpc_dart/lib/src/endpoint/middleware.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/r834_auth_interceptor_shapes.dart
-reason: owner — a new public API (a hook that covers every call shape), or a change to IRpcInterceptor's defaults
-rank: 2
+reason: "FIXED in round 835 as decided: IRpcCallCheck, an opt-in interface whose check runs for every shape. Previously: owner — a new public API (a hook that covers every call shape), or a change to IRpcInterceptor's defaults"
 ---
 
 # B-291 — a check interceptor covers only the shapes it overrides
@@ -29,4 +29,7 @@ Options for the owner:
 
 ## Owner decision
 
-—
+Owner, 2026-10-11: option 1, a `beforeCall` hook. Implemented in round 835,
+it broke `rpc_dart_opentelemetry`, which `implements IRpcInterceptor` (and
+would break its published versions against the new core). Asked again with
+that: a separate opt-in interface, `IRpcCallCheck`.

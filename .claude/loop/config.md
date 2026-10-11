@@ -97,23 +97,6 @@ Gitignored, excluded from analysis, inside the package so that `package:`
 imports resolve. Overwrite, do not delete (`rm` is forbidden). The probe's file
 name must appear in the round record.
 
-## Checkpoint at round 825
-
-The owner reviews the new regime (severity, siblings, invariants, the
-matrix, the lifecycle model, mutants; introduced after round 799) against
-these five measurements, taken over rounds 800-825. Report them, nothing else
-first:
-
-- S1 per round, against 0.17 for rounds 700-799; S1 closed from the matrix's
-  leads (B-277..B-283) apart from S1 found anew.
-- `## Siblings` lines: how many are `clean` with a measurement, how many are
-  `n/a`. Over half `n/a` means the `side` and `shape` groups are too wide.
-- Rounds that fix a defect an earlier round of this loop introduced, in a
-  class the matrix covers. The target is none.
-- Five S1 self-ratings re-checked against the rubric in the skill's
-  `specs/round.md`, by someone other than the round that wrote them.
-- Whether `s1 drought` fired, at which round, and what leads were left.
-
 ## Class-wide detectors
 
 What `methods/siblings.md` in the skill calls the matrix, stateful sequences
