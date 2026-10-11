@@ -35,14 +35,7 @@ const _notApplicable = <String, String>{
   'isolate': 'NOT APPLICABLE (I-10): a worker has no origin to dial or leave',
 };
 
-const _knownFailing = <String, String>{
-  'websocket | compressed, a 303 to another origin':
-      'B-286: with enableCompression the client opens through dart:io '
-      'WebSocket.connect, which follows the redirect with every header',
-  'websocket | compressed, a 307 to another origin':
-      'B-286: with enableCompression the client opens through dart:io '
-      'WebSocket.connect, which follows the redirect with every header',
-};
+const _knownFailing = <String, String>{};
 
 /// A bare socket counting the connections it accepts.
 final class _Elsewhere {
