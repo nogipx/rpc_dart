@@ -325,6 +325,9 @@ Future<void> _drainThenAnswer(
     await sub?.cancel();
   }
   try {
+    // A refused connection is closed after its answer, so each connection
+    // carries one header block: what `bindRpcWebSocketHttpServer` bounds.
+    request.response.persistentConnection = false;
     request.response.statusCode = status;
     request.response.headers.contentType = ContentType.text;
     request.response.write(message);

@@ -183,7 +183,8 @@ import 'package:rpc_dart_websocket/io.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 
 Future<RpcWebSocketServer> serve(RpcResponderContract service) async {
-  final http = await HttpServer.bind(InternetAddress.anyIPv4, 8080);
+  // Bounds each connection's upgrade request; see "Deploy behind a proxy".
+  final http = await bindRpcWebSocketHttpServer(InternetAddress.anyIPv4, 8080);
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(
       http,
@@ -329,12 +330,30 @@ the server is exposed: each accepted socket holds an endpoint until it closes or
 the keepalive reclaims it.
 
 `maxConnections` counts upgraded connections only. Before the upgrade a
-connection belongs to your `HttpServer`, which has no limit on connections and
-no deadline for a request's headers: a client that keeps its upgrade request's
-header block open is held there, at about the size it sent (up to dart:io's cap
-of about 3 MiB per block), and `HttpServer.idleTimeout` does not cover it. The
-proxy in front should also limit connections per client and the time to
-receive request headers.
+connection belongs to your `HttpServer`. A plain `HttpServer.bind` has no limit
+on connections and no deadline for a request's headers: a client that keeps its
+upgrade request's header block open is held there, at about the size it sent
+(up to dart:io's cap of about 3 MiB per block), and `HttpServer.idleTimeout`
+does not cover it. Bind it with `bindRpcWebSocketHttpServer` instead, which
+bounds the block as `RpcHttpServer` does its own:
+
+| Option | Default | |
+| --- | --- | --- |
+| `maxHeaderBytes` | 4x what `policy` admits as one request's head | A longer block is cut. |
+| `headerTimeout` | 60 s | A block not finished by then is cut; `null` disables it. |
+| `maxConnections` | `null` | Open connections at most, upgraded or not; while attackers fill it, honest clients are refused too. |
+
+```dart
+import 'dart:io';
+
+import 'package:rpc_dart_websocket/io.dart';
+
+Future<HttpServer> bind() =>
+    bindRpcWebSocketHttpServer(InternetAddress.anyIPv4, 8080);
+```
+
+Close it as any `HttpServer`. A proxy in front should still limit connections
+per client.
 
 ## Lower level
 

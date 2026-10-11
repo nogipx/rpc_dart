@@ -10,4 +10,5 @@
 /// server, so it only makes sense on the VM.
 library;
 
+export 'src/websocket_http_server.dart' show bindRpcWebSocketHttpServer;
 export 'src/websocket_io_connections.dart' show rpcWebSocketConnections;
