@@ -5,7 +5,6 @@ packages: [rpc_dart_conformance]
 lens: RPC-18
 bench: none — the matrix row is the bench; its control is round 807's fix switched off
 commit: yes
-severity: S3
 release: none
 ---
 

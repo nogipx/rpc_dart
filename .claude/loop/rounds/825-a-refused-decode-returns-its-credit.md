@@ -5,7 +5,6 @@ packages: [rpc_dart]
 lens: RPC-01
 bench: P-306 — new
 commit: yes
-severity: S1
 release: none
 ---
 

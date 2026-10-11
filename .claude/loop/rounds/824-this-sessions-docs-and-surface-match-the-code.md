@@ -5,7 +5,6 @@ packages: [rpc_dart, rpc_dart_http, rpc_dart_websocket]
 lens: RPC-23
 bench: none — a reading of each claim against a measurement this session already took
 commit: yes
-severity: S3
 release: none
 ---
 

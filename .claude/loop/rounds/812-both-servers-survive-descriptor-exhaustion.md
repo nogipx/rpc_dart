@@ -5,7 +5,6 @@ packages: [rpc_dart_http, rpc_dart_websocket]
 lens: RPC-22
 bench: P-298 — new
 commit: yes
-severity: S3
 release: none
 ---
 

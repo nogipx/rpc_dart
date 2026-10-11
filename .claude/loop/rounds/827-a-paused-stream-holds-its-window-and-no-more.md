@@ -5,7 +5,6 @@ packages: [rpc_dart, rpc_dart_websocket]
 lens: RPC-17
 bench: none — one probe, below; it re-measures C-07
 commit: yes
-severity: S3
 release: none
 ---
 

@@ -5,7 +5,6 @@ packages: [rpc_dart]
 lens: RPC-22
 bench: P-302 — new
 commit: yes
-severity: S3
 release: none
 ---
 

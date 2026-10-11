@@ -5,7 +5,6 @@ packages: [rpc_dart, rpc_dart_http]
 lens: RPC-09
 bench: P-10 — reused
 commit: yes
-severity: S3
 release: none
 ---
 

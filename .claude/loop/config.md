@@ -175,13 +175,20 @@ see the defect does not prove its absence.
 
 probes: 5
 canaries: 5
-round cap: 850
+round cap: 900
 
 Stop after this many rounds in a row with no `severity: S1`. The owner set it
 after the round-798 review: rounds 787-798 were log levels while four S1 waited
 on owner decisions.
 
 s1 drought: 25
+
+From this round on a FIXED or DEFERRED round's `severity:` quotes the rubric
+line that decides it, and a `clean` sibling names its measurement. The owner
+set it after the round-835 review, where four of five self-ratings disagreed
+with an independent re-check.
+
+strict records from: 836
 
 ## Siblings
 
@@ -197,6 +204,7 @@ transport/http2: packages/transport/rpc_dart_http2/lib/**
 transport/websocket: packages/transport/rpc_dart_websocket/lib/**
 transport/isolate: packages/transport/rpc_dart_isolate/lib/**
 transport/wasm: packages/transport/rpc_dart_wasm/lib/**
+transport.http-like: http, http2, websocket
 side/caller: packages/core/rpc_dart/lib/src/endpoint/caller_*.dart, packages/core/rpc_dart/lib/src/rpc/streams/*/caller.dart, packages/transport/*/lib/**/*caller*.dart, packages/transport/*/lib/**/*client*.dart
 side/responder: packages/core/rpc_dart/lib/src/endpoint/responder_*.dart, packages/core/rpc_dart/lib/src/rpc/streams/*/responder.dart, packages/transport/*/lib/**/*responder*.dart, packages/transport/*/lib/**/*server*.dart
 shape/unary: packages/core/rpc_dart/lib/src/rpc/streams/unary/**

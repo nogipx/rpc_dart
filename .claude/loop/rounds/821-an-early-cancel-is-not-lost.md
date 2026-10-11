@@ -5,7 +5,6 @@ packages: [rpc_dart, rpc_dart_http]
 lens: RPC-20
 bench: P-304 — new
 commit: yes
-severity: S2
 release: none
 ---
 

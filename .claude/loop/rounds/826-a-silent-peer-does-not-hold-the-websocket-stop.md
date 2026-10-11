@@ -5,7 +5,6 @@ packages: [rpc_dart_websocket]
 lens: RPC-28
 bench: none — one probe, below; a CLEAN with a control
 commit: yes
-severity: S3
 release: none
 ---
 

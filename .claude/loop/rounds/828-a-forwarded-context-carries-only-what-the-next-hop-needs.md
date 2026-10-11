@@ -5,7 +5,6 @@ packages: [rpc_dart]
 lens: RPC-19
 bench: none — one probe, below; a CLEAN with a control
 commit: yes
-severity: S3
 release: none
 ---
 

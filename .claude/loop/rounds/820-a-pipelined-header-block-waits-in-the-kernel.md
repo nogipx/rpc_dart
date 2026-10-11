@@ -5,7 +5,6 @@ packages: [rpc_dart_http]
 lens: RPC-17
 bench: P-303 — new
 commit: yes
-severity: S3
 release: none
 ---
 

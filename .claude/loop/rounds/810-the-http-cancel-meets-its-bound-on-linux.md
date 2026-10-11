@@ -5,7 +5,6 @@ packages: [rpc_dart_conformance]
 lens: RPC-14
 bench: P-295 — reused
 commit: yes
-severity: S3
 release: none
 ---
 

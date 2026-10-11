@@ -5,7 +5,7 @@ packages: [rpc_dart]
 lens: RPC-23
 bench: none — the witness test is the measurement; the probe is below
 commit: yes
-severity: S2
+severity: S1 — "a security or limit bypass"
 release: changelog
 ---
 

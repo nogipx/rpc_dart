@@ -5,7 +5,6 @@ packages: [rpc_dart]
 lens: RPC-02
 bench: none — two probes, below
 commit: yes
-severity: S3
 release: none
 ---
 
