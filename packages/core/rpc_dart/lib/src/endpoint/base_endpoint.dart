@@ -393,6 +393,18 @@ abstract base class RpcEndpointBase {
     return ctx;
   }
 
+  /// Runs [interceptor]'s [IRpcCallCheck.check], if it has one, and returns
+  /// its future, or null when there is none or it finished synchronously:
+  /// awaiting anyway would cost every call a turn per interceptor.
+  static Future<void>? _beforeCall(
+    IRpcInterceptor interceptor,
+    RpcMiddlewareContext call,
+  ) {
+    if (interceptor is! IRpcCallCheck) return null;
+    final pending = (interceptor as IRpcCallCheck).check(call);
+    return pending is Future<void> ? pending : null;
+  }
+
   Future<({TResponse response, RpcContext context})>
   _invokeUnaryInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
@@ -412,6 +424,8 @@ abstract base class RpcEndpointBase {
       final previous = next;
       next = (ctx, req) async {
         context.updateContext(ctx);
+        final before = _beforeCall(interceptor, context);
+        if (before != null) await before;
         return interceptor.interceptUnary<TRequest, TResponse>(
           context,
           req,
@@ -444,6 +458,8 @@ abstract base class RpcEndpointBase {
       final previous = next;
       next = (ctx, req) async {
         context.updateContext(ctx);
+        final before = _beforeCall(interceptor, context);
+        if (before != null) await before;
         return interceptor.interceptServerStream<TRequest, TResponse>(
           context,
           req,
@@ -482,6 +498,8 @@ abstract base class RpcEndpointBase {
       final previous = next;
       next = (ctx, reqs) async {
         context.updateContext(ctx);
+        final before = _beforeCall(interceptor, context);
+        if (before != null) await before;
         return interceptor.interceptClientStream<TRequest, TResponse>(
           context,
           reqs,
@@ -520,6 +538,8 @@ abstract base class RpcEndpointBase {
       final previous = next;
       next = (ctx, reqs) async {
         context.updateContext(ctx);
+        final before = _beforeCall(interceptor, context);
+        if (before != null) await before;
         return interceptor.interceptBidirectionalStream<TRequest, TResponse>(
           context,
           reqs,

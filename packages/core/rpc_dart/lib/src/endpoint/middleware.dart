@@ -124,8 +124,9 @@ typedef RpcBidirectionalStreamNext<TRequest, TResponse> =
 /// result.
 ///
 /// Every method passes through by default. An interceptor that CHECKS calls
-/// (authentication, authorization) must override all four: a call of a shape
-/// it does not override is served unchecked.
+/// (authentication, authorization, a quota) implements [IRpcCallCheck] as
+/// well, whose [IRpcCallCheck.check] runs for every call shape: a check put
+/// in [interceptUnary] alone leaves the three streaming shapes unchecked.
 abstract class IRpcInterceptor {
   /// Creates a constant interceptor instance.
   const IRpcInterceptor();
@@ -168,4 +169,29 @@ abstract class IRpcInterceptor {
   ) async {
     return next(call.context, requests);
   }
+}
+
+/// A check an [IRpcInterceptor] makes on every call, whatever its shape.
+///
+/// Implement it on an interceptor alongside [IRpcInterceptor]; the endpoint
+/// runs [check] before that interceptor's method for unary, server-stream,
+/// client-stream and bidirectional calls alike, so a check cannot miss a
+/// shape. A separate interface, not a method on [IRpcInterceptor], so that
+/// classes implementing [IRpcInterceptor] keep compiling.
+///
+/// ```dart
+/// final class RequireToken extends IRpcInterceptor implements IRpcCallCheck {
+///   @override
+///   void check(RpcMiddlewareContext call) {
+///     if (call.context.getHeader('authorization') == null) {
+///       throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
+///     }
+///   }
+/// }
+/// ```
+abstract interface class IRpcCallCheck {
+  /// Throw (an [RpcStatusException]) to refuse the call: it ends with that
+  /// status and nothing after this interceptor runs. Return a future only when
+  /// the check is asynchronous; a synchronous one costs the call nothing.
+  FutureOr<void> check(RpcMiddlewareContext call);
 }

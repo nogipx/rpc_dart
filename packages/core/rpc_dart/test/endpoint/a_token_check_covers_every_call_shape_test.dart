@@ -2,63 +2,61 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The shipped skill's `RequireTokenInterceptor` (contracts-and-endpoints.md),
-// copied here as written there. It used to override `interceptUnary` only, so
-// a caller without a token was refused a unary call and served every
-// streaming one. Keep this copy in step with the skill's.
+// `IRpcCallCheck.check` runs for every call shape, so a check put there
+// cannot miss one. The skill's `RequireTokenInterceptor`
+// (contracts-and-endpoints.md) is copied here as written there; it used to
+// override `interceptUnary` only, and a caller without a token was refused a
+// unary call and served every streaming one. Keep this copy in step with the
+// skill's.
 
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-final class RequireTokenInterceptor extends IRpcInterceptor {
+final class RequireTokenInterceptor extends IRpcInterceptor
+    implements IRpcCallCheck {
   const RequireTokenInterceptor();
 
-  static void _check(RpcMiddlewareContext call) {
+  @override
+  void check(RpcMiddlewareContext call) {
     if (call.context.getHeader('authorization') == null) {
       throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
     }
   }
+}
+
+/// The same check, asynchronous: a token store that answers later.
+final class AsyncTokenInterceptor extends IRpcInterceptor
+    implements IRpcCallCheck {
+  const AsyncTokenInterceptor();
+
+  @override
+  Future<void> check(RpcMiddlewareContext call) async {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    if (call.context.getHeader('authorization') == null) {
+      throw RpcStatusException(RpcStatus.permissionDenied, 'no grant');
+    }
+  }
+}
+
+/// Records the order hooks run in.
+final class _Order extends IRpcInterceptor implements IRpcCallCheck {
+  _Order(this.name, this.seen);
+  final String name;
+  final List<String> seen;
+
+  @override
+  void check(RpcMiddlewareContext call) => seen.add('$name.check');
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
     RpcMiddlewareContext call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
-  ) async {
-    _check(call);
-    return next(call.context, request);
-  }
-
-  @override
-  FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    TRequest request,
-    RpcServerStreamNext<TRequest, TResponse> next,
   ) {
-    _check(call);
+    seen.add('$name.unary');
     return next(call.context, request);
-  }
-
-  @override
-  Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    Stream<TRequest> requests,
-    RpcClientStreamNext<TRequest, TResponse> next,
-  ) async {
-    _check(call);
-    return next(call.context, requests);
-  }
-
-  @override
-  FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    Stream<TRequest> requests,
-    RpcBidirectionalStreamNext<TRequest, TResponse> next,
-  ) {
-    _check(call);
-    return next(call.context, requests);
   }
 }
 
@@ -139,25 +137,30 @@ final class _Caller extends RpcCallerContract {
   }
 }
 
-void main() {
-  late _Caller caller;
-
-  setUp(() {
-    final (ct, st) = RpcChannelTransport.pair();
-    final server = RpcResponderEndpoint(transport: st)
-      ..registerServiceContract(_Svc())
-      ..addInterceptor(const RequireTokenInterceptor())
-      ..start();
-    final endpoint = RpcCallerEndpoint(transport: ct);
-    caller = _Caller(endpoint);
-    addTearDown(() async {
-      await endpoint.close();
-      await server.close();
-    });
+/// A caller to a server whose responder carries [serverSide], and whose own
+/// endpoint carries [callerSide].
+_Caller _rig({IRpcInterceptor? serverSide, IRpcInterceptor? callerSide}) {
+  final (ct, st) = RpcChannelTransport.pair();
+  final server = RpcResponderEndpoint(transport: st)
+    ..registerServiceContract(_Svc());
+  if (serverSide != null) server.addInterceptor(serverSide);
+  server.start();
+  final endpoint = RpcCallerEndpoint(transport: ct);
+  if (callerSide != null) endpoint.addInterceptor(callerSide);
+  addTearDown(() async {
+    await endpoint.close();
+    await server.close();
   });
+  return _Caller(endpoint);
+}
 
-  for (final shape in ['unary', 'serverStream', 'clientStream', 'bidi']) {
+final _token = RpcContext.withHeaders({'authorization': 'Bearer t'});
+const _shapes = ['unary', 'serverStream', 'clientStream', 'bidi'];
+
+void main() {
+  for (final shape in _shapes) {
     test('WITNESS: a $shape call without a token is refused', () async {
+      final caller = _rig(serverSide: const RequireTokenInterceptor());
       expect(
         await caller.call(shape, RpcContext.empty()),
         RpcStatus.unauthenticated,
@@ -165,13 +168,43 @@ void main() {
     });
 
     test('GUARD: a $shape call with a token is served', () async {
+      final caller = _rig(serverSide: const RequireTokenInterceptor());
+      expect(await caller.call(shape, _token), isNot(isA<int>()));
+    });
+
+    test('an asynchronous check refuses a $shape call too', () async {
+      final caller = _rig(serverSide: const AsyncTokenInterceptor());
       expect(
-        await caller.call(
-          shape,
-          RpcContext.withHeaders({'authorization': 'Bearer t'}),
-        ),
-        isNot(RpcStatus.unauthenticated),
+        await caller.call(shape, RpcContext.empty()),
+        RpcStatus.permissionDenied,
+      );
+      expect(await caller.call(shape, _token), isNot(isA<int>()));
+    });
+
+    test('a check on the caller endpoint refuses a $shape call', () async {
+      final caller = _rig(callerSide: const RequireTokenInterceptor());
+      expect(
+        await caller.call(shape, RpcContext.empty()),
+        RpcStatus.unauthenticated,
       );
     });
   }
+
+  test('check runs outermost first, each before its own method', () async {
+    final seen = <String>[];
+    final (ct, st) = RpcChannelTransport.pair();
+    final server = RpcResponderEndpoint(transport: st)
+      ..registerServiceContract(_Svc())
+      ..addInterceptor(_Order('a', seen))
+      ..addInterceptor(_Order('b', seen))
+      ..start();
+    final endpoint = RpcCallerEndpoint(transport: ct);
+    addTearDown(() async {
+      await endpoint.close();
+      await server.close();
+    });
+
+    await _Caller(endpoint).call('unary', RpcContext.empty());
+    expect(seen, ['a.check', 'a.unary', 'b.check', 'b.unary']);
+  });
 }
