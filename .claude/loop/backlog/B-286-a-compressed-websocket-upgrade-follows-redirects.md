@@ -1,12 +1,11 @@
 ---
-status: open
+status: closed (round 837)
 round: 807
 commit: b51c7ba7
 paths: [packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/r807_upgrade_redirect.dart
-reason: cost — dart:io's WebSocket.connect has no setting for redirects; refusing them means doing the compressed handshake ourselves
+reason: "FIXED in round 837 without the cost the lead named: dart:io's client gets a connection factory that refuses another origin. Our own compressed handshake turned out impossible anyway: WebSocket.fromUpgradedSocket passes no deflate state, so compression is off on any socket upgraded outside dart:io. Previously: cost — dart:io's WebSocket.connect has no setting for redirects; refusing them means doing the compressed handshake ourselves"
 release: changelog
-rank: 5
 ---
 
 # B-286 — a compressed websocket upgrade follows redirects
