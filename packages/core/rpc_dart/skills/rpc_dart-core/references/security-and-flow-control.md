@@ -25,9 +25,11 @@ interceptor or middleware.
 - Defaults are meant for a server exposed to untrusted peers. Change a field
   only to tighten or relax that one bound.
 - The policy bounds what reaches rpc_dart. It does not bound the number of raw
-  connections, nor, on a WebSocket server, unfinished request headers, which
-  dart:io holds first: put an exposed server behind a reverse proxy that limits
-  connections and header time (each transport's README says where).
+  connections, nor unfinished request headers, which dart:io holds first. The
+  HTTP and WebSocket servers bound those when they bind the socket themselves
+  (`RpcHttpServer`, `bindRpcWebSocketHttpServer`); each transport's README says
+  how. An exposed server still belongs behind a reverse proxy that limits
+  connections per client.
 - Construct with `const RpcSecurityPolicy(...)`. There are no preset
   constructors. Nullable fields are disabled by passing `null` explicitly.
 - To ship a policy across an isolate or worker boundary use `toMap()` /
