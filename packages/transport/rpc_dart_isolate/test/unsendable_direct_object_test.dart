@@ -371,7 +371,9 @@ void main() {
         ),
         reason: 'the peer must not be told a truncated stream succeeded',
       );
-      expect(items, isNot(contains(2)));
+      // Nothing after the item that failed: 3 and 4 arriving would read as the
+      // stream continuing past a gap.
+      expect(items, [0, 1]);
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
