@@ -96,8 +96,14 @@ final class BidirectionalStreamResponder<
   StreamSink<TResponse> get responseSink =>
       (_responsePump ??= SinkPump<TResponse>(
         what: 'responseSink [id: $id]',
-        // The processor directly, to avoid a cyclic dependency.
-        send: _processor.send,
+        // The processor directly, to avoid a cyclic dependency. A response
+        // that could not go out ends the call here: finishing answers the
+        // failure and completes [done], which stops the pump, so nothing
+        // behind it reads as the stream continuing past a gap.
+        send: (response) async {
+          await _processor.send(response);
+          if (_processor.isAnswered) await finishReceiving();
+        },
         halfClose: finishReceiving,
         // END the call, the way ServerStreamResponder does when its handler
         // throws. `addStream` does NOT close the controller, so a source
