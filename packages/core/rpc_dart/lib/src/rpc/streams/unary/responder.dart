@@ -593,7 +593,11 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
         );
       }
 
-      if (messages.length > 1) throw tooManyMessages('request');
+      // Bytes after the one message are the start of a second: refused as two
+      // whole ones are, not left in the parser while the call answers OK.
+      if (messages.length > 1 || parser.holdsPartialFrame) {
+        throw tooManyMessages('request');
+      }
       final TRequest request;
       try {
         request = _decodePeerMessage(
