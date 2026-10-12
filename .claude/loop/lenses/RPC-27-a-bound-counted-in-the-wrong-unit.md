@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/*/lib/**, packages/transport/*/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**, packages/blob/*/lib/**]
 applies: a container is capped by how many items it holds, and what one item weighs is set by someone else — a peer, a caller, a logged payload
 breaks: memory exhaustion: the cap holds and the process still runs out.
-applied: [764, 765, 783, 785, 803, 836]
-status: confirmed (round 803)
+applied: [764, 765, 783, 785, 803, 836, 840]
+status: confirmed (round 840)
 rank: 2
 ---
 
@@ -62,3 +62,10 @@ that owns the container; RSS only as a cross-check, it also carries garbage.
   `RpcSecurityPolicy.maxDecodedItems`. A budget that must reach code which
   takes no policy (generated tear-offs) can ride a scope around a
   synchronous call. `../rounds/803-cbor-decode-is-bounded-in-items.md`.
+- **Round 840** — a byte limit in the right unit and still wrong: the http
+  body limit counted body bytes while each kept chunk was a dart:io VIEW
+  holding its whole read buffer, filled by a chunk extension. 372.6 MiB held
+  for 23.8 MiB counted -> 63.1 MiB. **A kept view weighs its buffer; count
+  `buffer.lengthInBytes` once per buffer, not the view's length.**
+  `../rounds/840-a-body-chunk-cannot-pin-its-read-buffer.md`,
+  `../probes/P-311-chunk-views-pin-read-buffers.md`.

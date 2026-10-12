@@ -197,7 +197,8 @@ class RpcHttpCallerTransport
   /// fail. Consumption stops at the cap rather than draining the rest: a body
   /// already known to be too big has nothing left worth reading.
   Future<Uint8List> _readErrorBody(http.StreamedResponse response) async {
-    final builder = BytesBuilder(copy: false);
+    // See BodyAccumulator: the server chooses the chunk sizes.
+    final builder = BodyAccumulator();
     try {
       await for (final chunk in response.stream) {
         builder.add(chunk);
