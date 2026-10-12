@@ -23,10 +23,18 @@ abstract final class RpcCallerTrailer {
   /// The gRPC status on [metadata], or null when it carries none.
   ///
   /// Parsed, never compared as text: `!= '0'` reads a peer's `00` as an error.
+  /// A code outside gRPC's 0..16 is UNKNOWN, as a non-number is: a caller
+  /// branches on the code, and a peer's `99` or `-1` matches nothing it knows.
   static int? statusOf(RpcMetadata metadata) {
     final raw = metadata.getHeaderValue(RpcHeaders.grpcStatus);
     if (raw == null) return null;
-    return int.tryParse(raw) ?? RpcStatus.unknown;
+    final code = int.tryParse(raw);
+    if (code == null ||
+        code < RpcStatus.ok ||
+        code > RpcStatus.unauthenticated) {
+      return RpcStatus.unknown;
+    }
+    return code;
   }
 
   /// The exception a non-OK trailer means.
