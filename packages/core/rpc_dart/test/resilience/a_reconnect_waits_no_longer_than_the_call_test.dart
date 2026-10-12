@@ -61,6 +61,21 @@ void main() {
     }
   });
 
+  // The wait re-reads the context's clock to catch a Timer firing a sliver
+  // early; a clock that jumps back must not stretch it to the reconnect's own
+  // 5 s limit.
+  test('a clock that jumps back does not extend the wait', () async {
+    var offset = Duration.zero;
+    final ctx = RpcContext.empty()
+        .withClock(() => DateTime.now().add(offset))
+        .withTimeout(const Duration(seconds: 1));
+    Timer(const Duration(milliseconds: 300), () {
+      offset = const Duration(hours: -1);
+    });
+    final (_, ms) = await _call(connection.transport, ctx);
+    expect(ms, lessThan(2000), reason: 'held past the deadline: $ms ms');
+  });
+
   test('the wait ends when the call is cancelled', () async {
     final token = RpcCancellationToken();
     Timer(const Duration(milliseconds: 300), () => token.cancel('x'));

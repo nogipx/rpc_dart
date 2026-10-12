@@ -196,6 +196,10 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// [RpcClientConnection] it waits up to 5 s for the next attempt -- and a
   /// call is not held past the deadline its caller set. The reconnect itself
   /// runs on; the attempt after it fails DEADLINE_EXCEEDED or CANCELLED.
+  /// How early a Timer may fire against the context's clock and still be
+  /// re-armed; see [_withinCall].
+  static const Duration _earlyFire = Duration(milliseconds: 50);
+
   static Future<void> _withinCall(
     Future<RpcHealthStatus> reconnect,
     RpcContext context,
@@ -210,14 +214,16 @@ class RpcRetryInterceptor extends IRpcInterceptor {
       // A Timer runs on a monotonic clock in whole milliseconds, the deadline
       // on the context's clock, and the Timer can fire before the context sees
       // the deadline pass; the next attempt would then find time left and fail
-      // UNAVAILABLE. So the wait ends only once the context's clock agrees.
+      // UNAVAILABLE. So the wait re-arms for that sliver. A larger rest means
+      // the context's clock jumped back, and the wait ends on time anyway:
+      // re-armed for it, it ran to the reconnect's own 5 s limit.
       //
       // A deadline can be past the web's timer ceiling, where a plain Timer
       // fires at once and the reconnect would not be waited for.
       void arm(Duration left) {
         timer = RpcLongTimer.create(left, () {
           final rest = context.remainingTime!;
-          if (rest > Duration.zero) {
+          if (rest > Duration.zero && rest < _earlyFire) {
             arm(rest);
           } else {
             expired.complete();

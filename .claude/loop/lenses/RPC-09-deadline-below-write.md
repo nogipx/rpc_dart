@@ -3,8 +3,8 @@ refines: U-16
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
-applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751, 758, 774, 819]
-status: swept here (round 819, 16b052a6)
+applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751, 758, 774, 819, 849]
+status: confirmed (round 849)
 rank: 7
 ---
 
@@ -167,3 +167,10 @@ at the bounds beneath it.** `../rounds/743-a-shared-close-is-still-bounded.md`.
   answered call 0.4 s); P-233 on the http caller after rounds 806-807: the
   deadline still aborts an upload into a deaf server (status 4 at 1070 ms,
   closed by the client). `../rounds/819-the-deadline-still-sits-above-the-write-again.md`.
+- **Round 849** — a deadline that does not fire because it re-reads a
+  clock: `RpcRetryInterceptor`'s reconnect wait re-armed while the context's
+  wall clock showed time left, so a clock jumped an hour back held a 1 s call
+  for 5112 ms (the reconnect's own limit). Re-armed now only for a sliver
+  under 50 ms: 1000 ms. The call shapes themselves held (C-84). **A timer
+  armed from `remainingTime` is monotonic; re-reading the clock when it fires
+  imports every jump.** `../rounds/849-a-clock-jump-does-not-stretch-the-reconnect-wait.md`.
