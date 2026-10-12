@@ -207,9 +207,25 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     final ends = <Future<void>>[reconnect];
     if (remaining != null) {
       final expired = Completer<void>();
+      // A Timer runs on a monotonic clock in whole milliseconds, the deadline
+      // on the context's clock, and the Timer can fire before the context sees
+      // the deadline pass; the next attempt would then find time left and fail
+      // UNAVAILABLE. So the wait ends only once the context's clock agrees.
+      //
       // A deadline can be past the web's timer ceiling, where a plain Timer
       // fires at once and the reconnect would not be waited for.
-      timer = RpcLongTimer.create(remaining, expired.complete);
+      void arm(Duration left) {
+        timer = RpcLongTimer.create(left, () {
+          final rest = context.remainingTime!;
+          if (rest > Duration.zero) {
+            arm(rest);
+          } else {
+            expired.complete();
+          }
+        });
+      }
+
+      arm(remaining);
       ends.add(expired.future);
     }
     if (token != null) ends.add(token.cancelled);

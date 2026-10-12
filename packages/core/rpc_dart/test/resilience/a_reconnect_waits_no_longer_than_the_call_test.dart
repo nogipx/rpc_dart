@@ -43,6 +43,24 @@ void main() {
     expect(ms, lessThan(2000), reason: 'held past the deadline: $ms ms');
   });
 
+  // A Timer drops the sub-millisecond part of its duration, so one armed for
+  // the time left can fire just before the deadline; the attempt after it
+  // then sees time left and fails UNAVAILABLE.
+  test('the wait ends after the deadline, not just before it', () async {
+    for (var i = 0; i < 300; i++) {
+      final left = <Duration?>[];
+      await _call(
+        connection.transport,
+        RpcContext.withTimeout(const Duration(milliseconds: 5)),
+        backoff: const Duration(milliseconds: 1),
+        onAttempt: left.add,
+      );
+      // A call that started late gives up before the backoff, and makes one
+      // attempt; one that waited must find its deadline passed.
+      if (left.length > 1) expect(left[1], Duration.zero, reason: 'call $i');
+    }
+  });
+
   test('the wait ends when the call is cancelled', () async {
     final token = RpcCancellationToken();
     Timer(const Duration(milliseconds: 300), () => token.cancel('x'));
@@ -75,7 +93,12 @@ void main() {
 /// The outcome and elapsed milliseconds of one call through a retry
 /// interceptor whose every attempt fails UNAVAILABLE, or the call's own
 /// deadline or cancellation once those have passed.
-Future<(Object?, int)> _call(IRpcTransport transport, RpcContext ctx) async {
+Future<(Object?, int)> _call(
+  IRpcTransport transport,
+  RpcContext ctx, {
+  Duration backoff = const Duration(milliseconds: 100),
+  void Function(Duration? left)? onAttempt,
+}) async {
   final call = RpcMiddlewareContext(
     endpoint: RpcCallerEndpoint(transport: transport),
     serviceName: 'Svc',
@@ -84,7 +107,7 @@ Future<(Object?, int)> _call(IRpcTransport transport, RpcContext ctx) async {
   );
   final retry = RpcRetryInterceptor(
     maxAttempts: 2,
-    backoff: const FixedBackoff(Duration(milliseconds: 100)),
+    backoff: FixedBackoff(backoff),
   );
   final sw = Stopwatch()..start();
   Object? outcome;
@@ -92,6 +115,7 @@ Future<(Object?, int)> _call(IRpcTransport transport, RpcContext ctx) async {
     await retry.interceptUnary<String, String>(call, 'r', (c, r) async {
       c.cancellationToken?.throwIfCancelled();
       final left = c.remainingTime;
+      onAttempt?.call(left);
       if (left != null && left <= Duration.zero) {
         throw RpcDeadlineExceededException(c.deadline!, Duration.zero);
       }
