@@ -23,10 +23,15 @@
 // event loop alive, and nothing inside the same isolate can see that directly --
 // which is also why there is no watchdog Timer anywhere here, since a pending
 // Timer would keep the loop alive by itself and report a hang unconditionally.
+//
+// The exit deadline runs from the child's "spawn threw" line, not from its
+// launch: `dart run` compiles first, and under the full gate that alone took
+// past a launch-based 20 s and read as "still running".
 @TestOn('vm')
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -37,8 +42,20 @@ Future<String> _outcome(String script) async {
       ? 'test/support/$script'
       : 'packages/transport/rpc_dart_isolate/test/support/$script';
   final proc = await Process.start(Platform.resolvedExecutable, ['run', path]);
-  unawaited(proc.stdout.drain<void>());
+  final threw = Completer<void>();
+  unawaited(
+    proc.stdout.transform(utf8.decoder).forEach((s) {
+      if (s.contains('spawn threw') && !threw.isCompleted) threw.complete();
+    }),
+  );
   unawaited(proc.stderr.drain<void>());
+  final started = await threw.future
+      .timeout(const Duration(seconds: 150))
+      .then((_) => true, onError: (Object _) => false);
+  if (!started) {
+    proc.kill(ProcessSignal.sigkill);
+    return 'never reached the failed startup';
+  }
   final code = await proc.exitCode
       .timeout(const Duration(seconds: 20))
       .catchError((Object _) => -999);
@@ -61,6 +78,6 @@ void main() {
             'host event loop never drained and the process could not end',
       );
     },
-    timeout: const Timeout(Duration(seconds: 90)),
+    timeout: const Timeout(Duration(seconds: 200)),
   );
 }

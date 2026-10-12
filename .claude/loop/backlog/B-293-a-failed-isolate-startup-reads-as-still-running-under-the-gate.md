@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 860)
 round: 853
 commit: e01302e8
 paths: [packages/transport/rpc_dart_isolate/test/audit/startup_failure_releases_the_isolate_test.dart]
 probe: none — the full gate, `melos run test:unit --no-select`
-reason: bench — intermittent: failed once in the full gate, passed alone and in the next full run
-rank: 7
+reason: "CLOSED in round 860, no leak: under load every child exits (48 at once, 51-53 s, 13-303 ms after its failed startup); the test's 20 s now runs from the failed startup, not from the launch. Previously: bench — intermittent: failed once in the full gate, passed alone and in the next full run"
 ---
 
 # B-293 — a failed isolate startup reads as still running under the gate
