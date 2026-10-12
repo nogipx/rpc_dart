@@ -45,6 +45,14 @@ Four files, all `fvm dart run <file> [count] [seed]`:
   `RpcPeerEndpoint`, which serves and calls on one transport: hostile replies to
   its outbound calls, hostile requests, requests opened on its own outbound ids,
   either role; then a valid inbound unary on an id of the right parity.
+- `packages/transport/rpc_dart_http/.dart_tool/probe/fuzz_http_server.dart`
+  (round 845) — hostile raw HTTP/1.1 requests against a real
+  `RpcHttpServer`: methods, paths, versions, content-type, lying
+  content-length, chunked bodies with junk and extensions, grpc-timeout and
+  grpc-encoding values, gRPC frames with lying prefixes or the compressed
+  flag, pipelined requests; one go, split, byte by byte or cut; a
+  well-formed call every ten attacks. Watch its stderr too: shelf writes
+  there (round 845).
 - `packages/transport/rpc_dart_websocket/.dart_tool/probe/fuzz_ws_client.dart` —
   `RpcWebSocketCallerTransport` against a hostile raw server: 200 instead of
   101, a wrong accept, garbage, silence, or a real 101 followed by close frames

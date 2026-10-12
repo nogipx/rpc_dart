@@ -86,6 +86,40 @@ class RpcHttpServer implements IRpcServer {
   /// second call cannot get past the guard while the bind is in flight.
   bool _binding = false;
 
+  bool _warnedUnparseable = false;
+
+  /// Whether shelf can build a `Request` from [request]; if not, it is
+  /// answered 400 here.
+  ///
+  /// shelf_io answers such a request itself, and writes an ERROR, the peer's
+  /// URI and a stack trace to stderr for every one: a line flood any client can
+  /// drive, with its text unescaped.
+  bool _parseableByShelf(HttpRequest request) {
+    try {
+      if (request.requestedUri.isAbsolute) return true;
+    } catch (_) {
+      // A host or port dart:io cannot parse into a URI.
+    }
+    if (!_warnedUnparseable) {
+      _warnedUnparseable = true;
+      _logger?.warning(
+        'Refused a request whose target is not a valid URL (answered 400); '
+        'further ones are not logged',
+      );
+    }
+    final response = request.response;
+    unawaited(
+      Future<void>.sync(() {
+        response
+          ..statusCode = HttpStatus.badRequest
+          ..headers.contentType = ContentType.text
+          ..write('Bad Request');
+        return response.close();
+      }).catchError((Object _) {}),
+    );
+    return false;
+  }
+
   /// Creates an HTTP/1.1 RPC server.
   ///
   /// [securityPolicy] bounds request body size, header sizes, and concurrent
@@ -289,16 +323,18 @@ class RpcHttpServer implements IRpcServer {
         maxConnections: _maxConnections,
       );
       final httpServer = HttpServer.listenOn(sockets);
-      final requests = httpServer.map((r) {
-        final info = r.connectionInfo;
-        if (info != null) {
-          r.response.done.then(
-            (_) => sockets.responseWritten(info),
-            onError: (Object _) {},
-          );
-        }
-        return r;
-      });
+      final requests = httpServer
+          .map((r) {
+            final info = r.connectionInfo;
+            if (info != null) {
+              r.response.done.then(
+                (_) => sockets.responseWritten(info),
+                onError: (Object _) {},
+              );
+            }
+            return r;
+          })
+          .where(_parseableByShelf);
       shelf_io.serveRequests(requests, (request) {
         final info = request.context['shelf.io.connection_info'];
         final gone = info is HttpConnectionInfo ? sockets.peerGone(info) : null;
