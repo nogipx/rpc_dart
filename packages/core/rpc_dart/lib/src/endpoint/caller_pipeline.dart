@@ -309,6 +309,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       subscribeOnFirstListen: true,
       onFirstListen: () => _trackCallerRequest(serviceName, methodName, ctx),
       onSourceDone: finish,
+      // An error ends the call too, and the consumer's cancel that follows it
+      // (any `await for`, `toList`) would otherwise fire a REUSED context's
+      // token. The server learns of a local failure from the callers' own
+      // abort notices, not from this token.
+      onSourceError: (_, _) => finish(),
       onConsumerCancel: () {
         if (!finished) {
           ctx.cancellationToken?.cancel(cancelReason);
