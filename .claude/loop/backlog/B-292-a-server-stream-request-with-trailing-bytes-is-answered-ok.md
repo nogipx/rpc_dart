@@ -29,9 +29,10 @@ Round 855 found the same dispatch on unary too, whenever the trailing bytes
 arrive in a LATER chunk than the whole message: round 847's check sees the
 parser only within the chunk that carries the message. P-323 on http2, a
 whole frame, then 3 bytes, then END_STREAM on an empty DATA frame or on
-trailers: `echo` and `items` both `grpc=0`, handler run. The core unary
-responder dispatches the same way (`handleMessage`, `requestHandled`), so
-the split is expected to reach it on every transport; not measured there.
+trailers: `echo` and `items` both `grpc=0`, handler run. Round 857 measured
+core (P-325, three chunks): the core unary responder runs the handler on the
+first message too, but then answers the tail 13, so on core only the server
+stream (`items`) ends `grpc=0`.
 
 ## Fix direction
 

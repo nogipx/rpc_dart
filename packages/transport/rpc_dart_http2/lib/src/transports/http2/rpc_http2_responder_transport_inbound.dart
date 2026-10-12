@@ -359,11 +359,14 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   bool _refuseIfEndedMidMessage(int streamId) {
     if (!(_streamParsers[streamId]?.holdsPartialFrame ?? false)) return false;
     _streamParsers.remove(streamId);
+    // The status and text core answers for the same request on every other
+    // transport (`_endRequests`); a different one is a different failure to
+    // the caller.
     _answerFramingViolation(
       streamId,
       RpcStatusException(
-        RpcStatus.internal,
-        'Request stream ended mid-message: the last gRPC frame is incomplete',
+        RpcStatus.invalidArgument,
+        'Request stream closed mid-message: the last gRPC frame is incomplete',
       ),
     );
     return true;
