@@ -158,6 +158,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// call: [finishSending] answers with this instead of grpc-status 0.
   Object? _responseSendFailure;
 
+  /// Whether the call has had, or is about to have, its last word: a handler
+  /// still producing after this is producing for nobody, since [send] drops
+  /// what it is given.
+  bool get isAnswered =>
+      _trailerSent ||
+      _responseController.isClosed ||
+      _responseSendFailure != null;
+
   bool _isActive = true;
   bool _initialMetadataSent = false;
 

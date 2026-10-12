@@ -122,6 +122,10 @@ final class BidirectionalStreamResponder<
     _processor.bindToMessageStream(messageStream);
   }
 
+  /// Whether the call has had, or is about to have, its last word; see
+  /// `StreamProcessor.isAnswered`.
+  bool get isAnswered => _processor.isAnswered;
+
   /// Sends a response to the client.
   Future<void> send(TResponse response) async {
     if (!_isActive) {

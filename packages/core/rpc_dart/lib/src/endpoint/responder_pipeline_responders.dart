@@ -600,6 +600,9 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     try {
       await for (final response in relay.stream) {
         await responder.send(response);
+        // A response that could not go out ends the call; the handler must
+        // not keep producing behind it. The finish that follows answers it.
+        if (responder.isAnswered) break;
       }
     } finally {
       relay.close();

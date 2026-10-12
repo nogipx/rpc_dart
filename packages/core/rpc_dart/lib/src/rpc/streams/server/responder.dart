@@ -180,6 +180,9 @@ final class ServerStreamResponder<
                 // to avoid leaking the handler subscription on broadcast streams.
                 break;
               }
+              // A response that could not go out ends the call; the handler
+              // must not keep producing behind it. finishSending answers it.
+              if (_processor.isAnswered) break;
             }
 
             if (_logger.isInternal) {
