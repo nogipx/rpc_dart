@@ -5,7 +5,7 @@ commit: 42f23cce
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart]
 probe: packages/transport/rpc_dart_http/.dart_tool/probe/r847_http_body_oracle.dart — P-316
 reason: owner — the fix is to dispatch a server stream only once its request stream has ended, which changes when every server-stream handler starts; grpc-go also starts the handler on the first message
-rank: 6
+rank: 3
 ---
 
 # B-292 — a server stream request with trailing bytes is answered ok

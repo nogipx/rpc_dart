@@ -5,7 +5,7 @@ applies: a container is capped by how many items it holds, and what one item wei
 breaks: memory exhaustion: the cap holds and the process still runs out.
 applied: [764, 765, 783, 785, 803, 836, 840, 841]
 status: confirmed (round 841)
-rank: 2
+rank: 3
 ---
 
 # RPC-27 — A bound counted in the wrong unit
