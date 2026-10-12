@@ -100,7 +100,7 @@ gate: rpc_dart_websocket +331.
 ## Siblings
 
 - websocket: fixed here
-- http: n/a — `rpc_dart_http/lib` calls no `detachSocket`, so dart:io never replaces `_WatchedSocket`'s handlers; measured with the http probe at cap 1: "connect, client destroys" and "header timeout cut" served. The two answered arms read REFUSED with the server still holding the socket (lsof ESTABLISHED), the client-socket trap in P-310, not a slot that outlived it
+- http: n/a — `rpc_dart_http/lib` calls no `detachSocket`, so dart:io never replaces `_WatchedSocket`'s handlers; measured with the http probe at cap 1: "connect, client destroys" and "header timeout cut" served. The two answered arms read REFUSED because they were read before the client's close arrived; round 842 measured them again with a 3.5 s settle: served, with an ablation reading REFUSED
 - http2: n/a — no connection cap and no socket wrapper in `rpc_dart_http2/lib`
 - channel: n/a — no listening socket and no connection cap
 - isolate: n/a — no listening socket and no connection cap
@@ -111,11 +111,10 @@ gate: rpc_dart_websocket +331.
 ## Not fixed
 
 - The first version of the second witness destroyed a raw client after the
-  upgrade. A dart:io client `Socket` that has written bytes stays ESTABLISHED
-  in the kernel after `destroy()` (both ends, read by `netstat`), so the
-  server never saw it go; the witness now names what really happens, a silent
-  client ended by the keepalive. Why dart:io holds such a socket was not
-  chased: it is the bench's side.
+  upgrade and read the server 500 ms later, while both ends were still
+  ESTABLISHED. Corrected in round 842: that was the ~2.1 s delay before a
+  peer's close reaches the server here (P-295, L-25), not dart:io holding the
+  socket. The witness, a silent client ended by the keepalive, is unaffected.
 - Never shipped: round 838's helper is unreleased, so the next release carries
   the fix with the feature.
 

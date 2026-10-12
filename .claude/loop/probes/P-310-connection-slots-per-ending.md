@@ -38,7 +38,8 @@ header timeout cut             served     served
 byte cap cut                   served     served
 ```
 
-Trap: a dart:io client `Socket` that has written bytes is still ESTABLISHED
-in the kernel 500 ms after `destroy()` or `close()` (`r839_client_close.dart`
-beside the http probe). An arm that "drops" such a client is really a silent
-client, ended by the server. Kill a process to drop a peer for real.
+Trap (corrected in round 842): on this macOS a peer's close reaches the
+server about 2.1 s late (P-295), so a reading taken 500 ms after a client's
+`destroy()` shows both ends ESTABLISHED. Round 839 took that for dart:io
+holding the socket; it was the delay. Settle 2.5 s or more before reading a
+close (L-25).
