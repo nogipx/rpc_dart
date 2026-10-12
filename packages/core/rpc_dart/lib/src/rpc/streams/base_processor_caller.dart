@@ -491,6 +491,26 @@ extension _CallProcessorInternals<
     }
   }
 
+  /// Ends the call with INTERNAL if the response ended inside a gRPC frame,
+  /// and returns whether it did.
+  ///
+  /// Without this the partial frame was dropped and the call ended OK, so a
+  /// stream cut mid-message read as a complete one with its last item gone.
+  bool _failIfEndedMidMessage() {
+    if (!(_parser?.holdsPartialFrame ?? false)) return false;
+    if (!_responseController.isClosed) {
+      _responseController.addError(
+        RpcStatusException(
+          RpcStatus.internal,
+          'Response stream ended mid-message: the last gRPC frame is '
+          'incomplete',
+        ),
+      );
+      _responseController.close();
+    }
+    return true;
+  }
+
   /// Handles an incoming response.
   void _handleResponse(RpcTransportMessage message) {
     if (!_isActive) return;
@@ -502,6 +522,11 @@ extension _CallProcessorInternals<
     }
 
     try {
+      if (message.isMetadataOnly &&
+          message.isEndOfStream &&
+          _failIfEndedMidMessage()) {
+        return;
+      }
       if (message.isMetadataOnly) {
         final encoding = message.metadata?.getHeaderValue(
           RpcHeaders.grpcEncoding,
@@ -532,6 +557,7 @@ extension _CallProcessorInternals<
       }
 
       if (message.isEndOfStream) {
+        if (!message.isMetadataOnly && _failIfEndedMidMessage()) return;
         if (_logger.isInternal) {
           _logger.internal(
             'END_STREAM received, closing response stream [streamId: $_streamId]',

@@ -420,6 +420,33 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     // A Trailers-Only response is unaffected: its status is on this very frame,
     // so `_statusReceived` is already set above.
     final statusKnown = _statusReceived.contains(streamId);
+
+    // The parser hands up whole frames only, so a response cut inside one
+    // would otherwise end OK with its last message silently gone.
+    if (message.endStream &&
+        statusKnown &&
+        (_streamParsers[streamId]?.holdsPartialFrame ?? false)) {
+      _emit(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata([
+            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
+            RpcHeader(
+              RpcHeaders.grpcMessage,
+              RpcMetadata.encodeGrpcMessage(
+                'Response stream ended mid-message: the last gRPC frame is '
+                'incomplete',
+              ),
+            ),
+          ]),
+          isEndOfStream: true,
+          methodPath: methodPath,
+        ),
+      );
+      _dropFailedResponse(streamId);
+      return;
+    }
+
     final transportMessage = RpcTransportMessage(
       streamId: streamId,
       metadata: metadata,

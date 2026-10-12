@@ -3,8 +3,8 @@ refines: U-24
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585, 587, 603, 605, 606, 609, 614, 631, 632, 637, 641, 642, 649, 650, 652, 654, 658, 666, 679, 680, 681, 690, 692, 694, 697, 698, 700, 718, 727, 728, 791, 796, 814, 829, 835]
-status: confirmed (round 587)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585, 587, 603, 605, 606, 609, 614, 631, 632, 637, 641, 642, 649, 650, 652, 654, 658, 666, 679, 680, 681, 690, 692, 694, 697, 698, 700, 718, 727, 728, 791, 796, 814, 829, 835, 846]
+status: confirmed (round 846)
 rank: 12
 ---
 
@@ -133,3 +133,4 @@ see.
 - **Round 583** — `grpcStatusFromHttpStatus` lacked 405, 408, 415; only 408 needed a row (14, attempts 3). An exception clause is a list to complete, decided by one property (retryability); a copy disagreeing with its source is not automatically a defect. B-147, B-222. `../probes/P-203-what-each-http1-rejection-becomes-at-the-caller.md`, `../rounds/583-the-row-the-table-was-missing.md`
 - **Round 585** — the caller's body buffer was a `List<int>` where the responder used `BytesBuilder(copy: false)`: 32 MiB payload +205 MiB -> +0. Bracket a cost outside the library (the bare `LIST` arm varied +165 to +528 MiB), and pin a performance fix by its deterministic consequence (`identical(sent, payload)`). B-148. `../probes/P-205-what-one-buffered-request-body-costs.md`, `../rounds/585-the-buffer-the-sibling-had-already-replaced.md`
 - **Round 587** — a generic `catch` logged at `error` where `http.RequestAbortedException` above it used `internal`: 8 in-flight calls gave 8 errors on `close()` (8/1/0 scaling). Two `catch` clauses on one `try` are two copies of a decision; when a claim says "each", the arm must scale; a moved log needs an instrument that admits the lower level. B-143. `../probes/P-207-what-an-orderly-close-logs-per-in-flight-call.md`, `../rounds/587-eight-calls-eight-errors.md`
+- **Round 846** — `holdsPartialFrame` was checked on the request side only: a server stream cut mid-frame under an OK trailer ended clean with its last item gone (2 items, no error; http, channel and http2 alike). **Grep a rule's every use and ask which side each is on.** `../rounds/846-a-response-cut-mid-message-is-an-error.md`, `../probes/P-315-a-response-cut-mid-message.md`

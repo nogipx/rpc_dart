@@ -53,6 +53,13 @@ Four files, all `fvm dart run <file> [count] [seed]`:
   flag, pipelined requests; one go, split, byte by byte or cut; a
   well-formed call every ten attacks. Watch its stderr too: shelf writes
   there (round 845).
+- `packages/transport/rpc_dart_http/.dart_tool/probe/fuzz_http_client.dart`
+  (round 846) — `RpcHttpCallerTransport` against a hostile raw HTTP/1.1
+  server answering with mutations of a captured real response (status line,
+  content-type, grpc-status/message/details, lying content-length, frame
+  prefix, compressed flag, chunked junk, two bodies, control bytes),
+  delivered whole, cut, dribbled or not at all. It prints every ACCEPTED
+  answer to a mutation that should fail: that oracle found round 846.
 - `packages/transport/rpc_dart_websocket/.dart_tool/probe/fuzz_ws_client.dart` —
   `RpcWebSocketCallerTransport` against a hostile raw server: 200 instead of
   101, a wrong accept, garbage, silence, or a real 101 followed by close frames
