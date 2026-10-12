@@ -1,12 +1,11 @@
 ---
-status: open
+status: closed (round 838)
 round: 811
 commit: 68023a57
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
 probe: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacker.py
-reason: cost — rpcWebSocketConnections is handed the application's HttpServer, so the bound needs a helper that binds the socket for it
+reason: "FIXED in round 838 as decided: bindRpcWebSocketHttpServer, with its own copy of the watcher. Previously: cost — rpcWebSocketConnections is handed the application's HttpServer, so the bound needs a helper that binds the socket for it"
 release: changelog
-rank: 4
 ---
 
 # B-287 — the websocket server's header block is the application's
@@ -31,4 +30,6 @@ application to put a proxy in front.
 
 ## Owner decision
 
-—
+Owner, 2026-10-11: a copy of the watcher in rpc_dart_websocket, and a helper
+that binds the socket, rather than a shared package or a dependency on
+rpc_dart_http.
