@@ -5,7 +5,7 @@ commit: e01302e8
 paths: [packages/transport/rpc_dart_isolate/test/audit/startup_failure_releases_the_isolate_test.dart]
 probe: none — the full gate, `melos run test:unit --no-select`
 reason: bench — intermittent: failed once in the full gate, passed alone and in the next full run
-rank: 6
+rank: 7
 ---
 
 # B-293 — a failed isolate startup reads as still running under the gate
