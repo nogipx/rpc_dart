@@ -101,6 +101,10 @@ class RpcHttp2ResponderTransport
   /// `grpc-status`).
   final Set<int> _initialHeadersSent = {};
 
+  /// Streams whose request this transport refused, whose end must not reach
+  /// the handler as a clean one before the refusal's cancel does.
+  final Set<int> _requestRefused = {};
+
   bool _isClosed = false;
 
   final LogScope? _logger;
@@ -280,6 +284,7 @@ class RpcHttp2ResponderTransport
 
     _streamParsers.remove(streamId);
     _initialHeadersSent.remove(streamId);
+    _requestRefused.remove(streamId);
     _fcForget(streamId);
 
     // If the peer has already said it will send nothing further, this may have
@@ -512,6 +517,7 @@ class RpcHttp2ResponderTransport
 
     _streamParsers.clear();
     _initialHeadersSent.clear();
+    _requestRefused.clear();
     _fcDeferred.clear();
     _fcOutstanding.clear();
 

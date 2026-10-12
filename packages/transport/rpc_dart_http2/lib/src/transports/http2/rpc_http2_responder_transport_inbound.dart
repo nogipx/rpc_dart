@@ -64,7 +64,11 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
           _logger?.internal('Incoming stream $streamId ended');
         }
         // An empty END_STREAM DATA frame arrives as this, not as a message.
-        if (!_refuseIfEndedMidMessage(streamId)) {
+        // A refused request ends through the refusal's cancel alone: a clean
+        // end ahead of it handed an upload handler its partial input as
+        // complete.
+        if (!_refuseIfEndedMidMessage(streamId) &&
+            !_requestRefused.contains(streamId)) {
           _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
         }
 
@@ -407,6 +411,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     // is default-deny and redacts anything that is not ours.
     final wire = wireStatusFor(error);
     final status = wire.status;
+    _requestRefused.add(streamId);
 
     unawaited(() async {
       try {

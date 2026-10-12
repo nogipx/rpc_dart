@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 856)
 round: 855
 commit: f8523835
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport_inbound.dart]
 probe: packages/transport/rpc_dart_http2/.dart_tool/probe/r855_http2_request_cut.dart — P-323
-reason: bench — seen in a probe built for another question; not yet measured on its own
-rank: 4
+reason: "FIXED in round 856: on http2 a refused request no longer gets a clean end of stream from onDone ahead of the refusal's cancel; on the channel transport a client cancel already reached the handler as RpcCancelledException. Previously: bench — seen in a probe built for another question; not yet measured on its own"
 ---
 
 # B-294 — a refused upload ends its handler input cleanly

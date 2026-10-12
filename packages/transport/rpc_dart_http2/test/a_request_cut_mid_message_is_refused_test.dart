@@ -18,6 +18,9 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
+/// What the upload handlers read as a COMPLETE request stream.
+final _completed = <String>[];
+
 final class _Svc extends RpcResponderContract {
   _Svc() : super('Svc');
 
@@ -39,15 +42,20 @@ final class _Svc extends RpcResponderContract {
     );
     addClientStreamMethod<RpcString, RpcString>(
       methodName: 'collect',
-      handler: (reqs, {RpcContext? context}) async =>
-          (await reqs.map((r) => r.value).toList()).join(',').rpc,
+      handler: (reqs, {RpcContext? context}) async {
+        final all = await reqs.map((r) => r.value).toList();
+        _completed.add('collect $all');
+        return all.join(',').rpc;
+      },
       requestCodec: _codec,
       responseCodec: _codec,
     );
     addBidirectionalMethod<RpcString, RpcString>(
       methodName: 'chat',
       handler: (reqs, {RpcContext? context}) async* {
-        yield (await reqs.map((r) => r.value).toList()).join(',').rpc;
+        final all = await reqs.map((r) => r.value).toList();
+        _completed.add('chat $all');
+        yield all.join(',').rpc;
       },
       requestCodec: _codec,
       responseCodec: _codec,
@@ -141,6 +149,25 @@ void main() {
         await _status(server.port, method, [...frame, 0, 0, 0], 'empty data'),
         '${RpcStatus.internal}',
       );
+    });
+
+    // The refusal's cancel lands after an await; an end of stream ahead of it
+    // handed the handler its partial input as a complete one.
+    for (final end in ['data', 'empty data', 'trailers']) {
+      test('WITNESS $method, refused on $end, never reads its request as '
+          'complete', () async {
+        _completed.clear();
+        await _status(server.port, method, [...frame, 0, 0, 0], end);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(_completed, isEmpty);
+      });
+    }
+
+    test('GUARD $method, a whole request, reads it as complete', () async {
+      _completed.clear();
+      await _status(server.port, method, frame, 'empty data');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(_completed, ['$method [x]']);
     });
   }
 }
