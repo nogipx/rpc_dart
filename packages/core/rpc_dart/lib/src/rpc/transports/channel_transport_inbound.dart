@@ -115,6 +115,8 @@ extension _ChannelTransportInbound on RpcChannelTransport {
         return;
       }
       _fc.oweConnection(message.streamId, bytes);
+      // A message the consumer is not reading yet waits here; see ownedPayload.
+      if (!ctl.hasListener || ctl.isPaused) message = ownedPayload(message);
       if (!truncatedEnd) {
         ctl.add(message);
       } else if (message.payload != null || message.isDirect) {

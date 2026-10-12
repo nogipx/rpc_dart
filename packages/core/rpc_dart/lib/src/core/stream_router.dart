@@ -4,6 +4,7 @@
 
 import 'dart:async';
 
+import 'owned_payload.dart';
 import 'transport.dart';
 
 /// Per-stream delivery for a transport that multiplexes many calls.
@@ -58,7 +59,12 @@ class RpcStreamRouter {
   /// the ordering matters only in that both must happen for every message.
   void add(RpcTransportMessage message) {
     final ctl = _controllers[message.streamId];
-    if (ctl != null && !ctl.isClosed) ctl.add(message);
+    if (ctl != null && !ctl.isClosed) {
+      // A message the consumer is not reading yet waits here; see ownedPayload.
+      ctl.add(
+        ctl.hasListener && !ctl.isPaused ? message : ownedPayload(message),
+      );
+    }
     if (message.isEndOfStream) {
       final ended = _controllers.remove(message.streamId);
       if (ended != null && !ended.isClosed) unawaited(ended.close());

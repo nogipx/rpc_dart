@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../../core/_index.dart';
+import '../../core/owned_payload.dart';
 import '../../logger/_index.dart';
 import 'direct_multiplexed_channel.dart';
 import 'flow_controller.dart';

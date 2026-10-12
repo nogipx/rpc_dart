@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/*/lib/**, packages/transport/*/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**, packages/blob/*/lib/**]
 applies: a container is capped by how many items it holds, and what one item weighs is set by someone else — a peer, a caller, a logged payload
 breaks: memory exhaustion: the cap holds and the process still runs out.
-applied: [764, 765, 783, 785, 803, 836, 840]
-status: confirmed (round 840)
+applied: [764, 765, 783, 785, 803, 836, 840, 841]
+status: confirmed (round 841)
 rank: 2
 ---
 
@@ -69,3 +69,10 @@ that owns the container; RSS only as a cross-check, it also carries garbage.
   `buffer.lengthInBytes` once per buffer, not the view's length.**
   `../rounds/840-a-body-chunk-cannot-pin-its-read-buffer.md`,
   `../probes/P-311-chunk-views-pin-read-buffers.md`.
+- **Round 841** — the caller half of round 636: 300 one-byte responses
+  queued behind a paused consumer held +302 MiB (split control +8) -> +8.
+  `ownedPayload` is now one internal helper, used wherever a message waits
+  on either side. **A fix left on one side with "the other peer is
+  trusted" is a lead, not a decision.**
+  `../rounds/841-a-queued-response-does-not-pin-its-chunk.md`,
+  `../probes/P-312-a-queued-response-pins-its-chunk.md`.
