@@ -3,9 +3,9 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320, 327, 349, 734, 757, 775, 818]
-status: swept here (round 818, 16b052a6)
-rank: 7
+applied: [216, 243, 320, 327, 349, 734, 757, 775, 818, 869]
+status: swept here (round 869, 7ee9fab3)
+rank: 2
 ---
 
 # RPC-02 — A refusal trailer that violates the policy it enforced
@@ -104,6 +104,15 @@ read.
   handler cancelling its own token with a 2000-character reason: the caller
   gets CANCELLED with the message cut to the policy's 1024, so the transport
   reduces it on the way out. `../rounds/818-the-refusal-trailers-re-swept-again.md`.
+
+- **Round 869** — re-swept over rounds 819-868 (36 files moved) by reading
+  each `forTrailer(` call to its closing paren: 22 sites, 17 with a message
+  (16 capped, `_dropLateResponse` as before), 5 without. Rounds 855-857's
+  new refusal (a request cut mid-message on http2) goes through the capped
+  `_answerFramingViolation`; at a cap of 64, under its 68-character text, it
+  answers status 3, and with that cap ablated it answers no status at all
+  (`grpc=null`). P-08 re-run unchanged.
+  `../rounds/869-the-refusal-trailers-re-swept-a-third-time.md`.
 
 Beware the knob itself: below about 40, `maxHeaderValueBytes` refuses rpc_dart's
 own request headers and every call fails with INVALID_ARGUMENT, which reads like

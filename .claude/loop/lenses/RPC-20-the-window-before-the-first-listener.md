@@ -5,7 +5,7 @@ applies: a producer starts before the consumer subscribes, and the carrier in be
 breaks: broken delivery.
 applied: [240, 250, 373, 574, 615, 617, 675, 704, 759, 821]
 status: confirmed (round 373)
-rank: 9
+rank: 10
 ---
 
 # RPC-20 — The window before the first listener

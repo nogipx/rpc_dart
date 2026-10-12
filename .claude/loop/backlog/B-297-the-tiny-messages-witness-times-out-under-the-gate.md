@@ -21,6 +21,11 @@ known wall-clock flake.
 running four packages at once; B-293 (round 860) was the same shape on the
 isolate package.
 
+Round 868 (P-334): 13 runs at 1, 4 and 8 copies at once, no timeout. The
+post-release wait stays at 91-222 ms; the queueing phase grows (6.2 s
+alone, up to 14.3 s at 8x) and has its own 20 s deadline, after which the
+test releases the handlers with the uploads still running.
+
 ## Next step
 
 Time the test under load (P-327's way: several copies at once) and see
