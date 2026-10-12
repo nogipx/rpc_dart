@@ -61,15 +61,27 @@ void main() {
           .then<Object>((r) => r.value, onError: (Object e) => e);
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      final clock = Stopwatch()..start();
-      await transport.close();
-      final closeMs = clock.elapsedMilliseconds;
+      // A grace period is a timer close() waits out. Timing close() instead
+      // fails under load, where the GOAWAY exchange alone takes as long.
+      final waitedOn = <Duration>[];
+      var closing = true;
+      await runZoned(
+        transport.close,
+        zoneSpecification: ZoneSpecification(
+          createTimer: (self, parent, zone, duration, f) =>
+              parent.createTimer(zone, duration, () {
+                if (closing) waitedOn.add(duration);
+                f();
+              }),
+        ),
+      );
+      closing = false;
 
       final outcome = await call.timeout(const Duration(seconds: 3));
       await caller.close().catchError((Object _) {});
 
       expect(outcome, isA<RpcException>(), reason: '$outcome');
-      expect(closeMs, lessThan(50), reason: 'close() took ${closeMs}ms');
+      expect(waitedOn, isEmpty, reason: 'close() waited on timers $waitedOn');
     },
   );
 }
