@@ -182,6 +182,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         // gives: a stream we have NOT half-closed is one the request side never
         // finished, and RST is the legal way to drop it.
         final ending = _activeStreams.remove(streamId);
+        if (ending != null) _peerEnded.add(streamId);
         if (ending != null && !_halfClosedLocal.contains(streamId)) {
           try {
             ending.terminate();

@@ -140,6 +140,10 @@ class RpcHttp2CallerTransport
   /// the id here so no later path sends a second one.
   final Set<int> _halfClosedLocal = {};
 
+  /// Streams the peer ended while their id is still held: a send on one is
+  /// dropped, not refused. Cleared by [releaseStreamId].
+  final Set<int> _peerEnded = {};
+
   /// Streams whose response carried a gRPC status (trailers, or a
   /// Trailers-Only response).
   ///
@@ -594,6 +598,7 @@ class RpcHttp2CallerTransport
     final subscription = _streamSubscriptions.remove(streamId);
     subscription?.cancel();
 
+    _peerEnded.remove(streamId);
     _streamParsers.remove(streamId);
     _initialHeadersReceived.remove(streamId);
     _halfClosedLocal.remove(streamId);
@@ -811,6 +816,17 @@ class RpcHttp2CallerTransport
 
     final stream = _activeStreams[streamId];
     if (stream == null) {
+      // The peer has ended this stream, and its status is the call's outcome:
+      // a request sent after it is dropped, as on the other transports. An
+      // error here reached a paused caller ahead of that status and replaced it.
+      if (_peerEnded.contains(streamId)) {
+        if (_logger?.isInternal ?? false) {
+          _logger?.internal(
+            'Dropped a send on stream $streamId the peer ended',
+          );
+        }
+        return;
+      }
       throw RpcStatusException(
         RpcStatus.failedPrecondition,
         'Stream $streamId not found. Send metadata first.',
@@ -1095,6 +1111,7 @@ class RpcHttp2CallerTransport
     _streamParsers.clear();
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
+    _peerEnded.clear();
     _reservedStreams.clear();
     _statusReceived.clear();
 

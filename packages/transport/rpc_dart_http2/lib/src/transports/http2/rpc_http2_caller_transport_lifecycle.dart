@@ -221,6 +221,7 @@ extension _Http2CallerLifecycle on RpcHttp2CallerTransport {
     _activeStreams.clear();
     _initialHeadersReceived.clear();
     _halfClosedLocal.clear();
+    _peerEnded.clear();
     _reservedStreams.clear();
     _statusReceived.clear();
     // The flow-control ledgers and the reset-id memory belong to the connection

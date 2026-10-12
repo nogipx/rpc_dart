@@ -74,11 +74,7 @@ const _pinned = {
       'wait 52; send c0',
 };
 
-const _knownFailing = <String, String>{
-  'http2 | pinned send after the handler failed, response paused':
-      'the call ends with status 9 "Stream 3 not found. Send metadata '
-      'first." instead of the handler\'s ABORTED',
-};
+const _knownFailing = <String, String>{};
 
 void main() {
   group('Lifecycle model, random operations on one connection:', () {

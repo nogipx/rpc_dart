@@ -1,11 +1,10 @@
 ---
-status: open
+status: closed (round 870)
 round: — (not re-measured by a round; measured by the lifecycle model)
 commit: 4b49fce1
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/**, packages/core/rpc_dart/lib/src/rpc/streams/**]
 probe: none — packages/test/rpc_dart_conformance/test/lifecycle_model_test.dart, cell "http2 | pinned send after the handler failed, response paused"
-reason: bench — a KNOWN FAILING cell of the lifecycle model; severity S2 (the server's status is replaced)
-rank: 7
+reason: "FIXED in round 870: the http2 caller drops a send on a stream the peer has ended instead of refusing it with FAILED_PRECONDITION; the cell left _knownFailing. Previously: bench — a KNOWN FAILING cell of the lifecycle model; severity S2 (the server's status is replaced)"
 ---
 
 # B-283 — a request sent after a paused http2 call failed loses the server's status
