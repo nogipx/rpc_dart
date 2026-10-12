@@ -499,13 +499,7 @@ extension _CallProcessorInternals<
   bool _failIfEndedMidMessage() {
     if (!(_parser?.holdsPartialFrame ?? false)) return false;
     if (!_responseController.isClosed) {
-      _responseController.addError(
-        RpcStatusException(
-          RpcStatus.internal,
-          'Response stream ended mid-message: the last gRPC frame is '
-          'incomplete',
-        ),
-      );
+      _responseController.addError(responseEndedMidMessage());
       _responseController.close();
     }
     return true;

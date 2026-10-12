@@ -16,9 +16,9 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-/// A raw h2 peer answering every stream with two whole frames, [tail] and an
-/// OK trailer.
-Future<int> _peer(List<int> tail) async {
+/// A raw h2 peer answering every stream with [whole] whole frames, [tail] and
+/// an OK trailer.
+Future<int> _peer(List<int> tail, {int whole = 2}) async {
   final socket = await ServerSocket.bind('127.0.0.1', 0);
   addTearDown(socket.close);
   final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
@@ -30,7 +30,7 @@ Future<int> _peer(List<int> tail) async {
         http2.Header.ascii(':status', '200'),
         http2.Header.ascii('content-type', 'application/grpc'),
       ]);
-      stream.sendData([...frame, ...frame, ...tail]);
+      stream.sendData([for (var i = 0; i < whole; i++) ...frame, ...tail]);
       stream.sendHeaders([
         http2.Header.ascii('grpc-status', '0'),
       ], endStream: true);
@@ -68,7 +68,48 @@ Future<(List<String>, Object?)> _call(int port) async {
   return (items, error);
 }
 
+Future<Object?> _unary(int port) async {
+  final client = await RpcHttp2CallerTransport.connect(
+    host: '127.0.0.1',
+    port: port,
+  );
+  final caller = RpcCallerEndpoint(transport: client);
+  addTearDown(() async {
+    await caller.close();
+    await client.close();
+  });
+  return caller
+      .unaryRequest<RpcString, RpcString>(
+        serviceName: 'Svc',
+        methodName: 'echo',
+        request: 'x'.rpc,
+        requestCodec: _codec,
+        responseCodec: _codec,
+      )
+      .then<Object?>((r) => r.value, onError: (Object e) => e)
+      .timeout(const Duration(seconds: 10));
+}
+
 void main() {
+  test(
+    'WITNESS a unary response with a cut second frame ends with INTERNAL',
+    () async {
+      final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
+      expect(
+        await _unary(await _peer(frame.sublist(0, 3), whole: 1)),
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.internal,
+        ),
+      );
+    },
+  );
+
+  test('GUARD a unary response of one whole frame ends OK', () async {
+    expect(await _unary(await _peer(const [], whole: 1)), 'item');
+  });
+
   test('WITNESS a response cut inside a frame ends with INTERNAL', () async {
     final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
     final (items, error) = await _call(await _peer(frame.sublist(0, 7)));

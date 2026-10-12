@@ -13,6 +13,10 @@ and two messages with INTERNAL where the streaming ones accept zero or more.
 Bench `../probes/P-317-what-a-channel-caller-accepts-from-a-hostile-server.md`,
 the probe extended to all four shapes in round 851.
 
+One row did not agree and this record missed it: `one message + 3 bytes,
+OK` read `OK value=a` on unary and INTERNAL on the other three. Round 853
+fixed it (`853-a-unary-response-with-trailing-bytes-is-an-error.md`).
+
 ## Control
 
 P-317's valid row: OK on all four.

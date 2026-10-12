@@ -360,6 +360,10 @@ final class UnaryCaller<TRequest, TResponse> {
                       );
                     }
                     completer.completeError(error);
+                  } else if (parser.holdsPartialFrame) {
+                    // Bytes after the one response: without this the call
+                    // returned it OK where the other three shapes fail.
+                    completer.completeError(responseEndedMidMessage());
                   } else if (hasPendingResponse) {
                     if (_logger.isInternal) {
                       _logger.internal(

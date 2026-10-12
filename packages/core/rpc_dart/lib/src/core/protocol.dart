@@ -347,6 +347,13 @@ RpcStatusException tooManyMessages(String what) => RpcPeerFaultException(
   'More than one $what on a call that carries one',
 );
 
+/// What a caller of any shape ends with when the response ends inside a gRPC
+/// frame: INTERNAL, not the peer's OK.
+RpcStatusException responseEndedMidMessage() => RpcStatusException(
+  RpcStatus.internal,
+  'Response stream ended mid-message: the last gRPC frame is incomplete',
+);
+
 /// Translates an error thrown by a handler into what may go on the wire.
 ///
 /// DEFAULT DENY: nothing reaches the caller unless it is provably safe to send.

@@ -96,7 +96,67 @@ Future<(List<String>, Object?)> _serverStream(int cut) async {
   return (items, error);
 }
 
+/// A unary response of one whole frame and the first [cut] bytes of a second
+/// (none if 0), then an OK trailer. Returns what the call completed with.
+Future<Object?> _unary(int cut) async {
+  final chan = _Chan();
+  final transport = RpcChannelTransport.fromChannel(
+    channel: chan,
+    isClient: true,
+  );
+  final caller = RpcCallerEndpoint(transport: transport);
+  addTearDown(caller.close);
+  final outcome = caller
+      .unaryRequest<RpcString, RpcString>(
+        serviceName: 'Svc',
+        methodName: 'echo',
+        request: 'go'.rpc,
+        requestCodec: _codec,
+        responseCodec: _codec,
+      )
+      .then<Object?>((r) => r.value, onError: (Object e) => e);
+  await Future<void>.delayed(const Duration(milliseconds: 50));
+  final id = chan.sentStreamIds.firstWhere((s) => s != 0);
+  final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
+  final body = BytesBuilder()..add(frame);
+  if (cut > 0) body.add(frame.sublist(0, cut));
+  chan
+    ..feed(
+      RpcChannelFrame.encodeMetadata(
+        streamId: id,
+        metadata: RpcMetadata.forServerInitialResponse(),
+      ),
+    )
+    ..feed(RpcChannelFrame.encodeData(streamId: id, payload: body.takeBytes()))
+    ..feed(
+      RpcChannelFrame.encodeMetadata(
+        streamId: id,
+        metadata: RpcMetadata.forTrailer(0),
+        endOfStream: true,
+      ),
+    );
+  return outcome.timeout(const Duration(seconds: 3));
+}
+
 void main() {
+  test(
+    'WITNESS a unary response with a cut second frame ends with INTERNAL',
+    () async {
+      expect(
+        await _unary(3),
+        isA<RpcStatusException>().having(
+          (e) => e.statusCode,
+          'statusCode',
+          RpcStatus.internal,
+        ),
+      );
+    },
+  );
+
+  test('GUARD a unary response of one whole frame ends OK', () async {
+    expect(await _unary(0), 'item');
+  });
+
   for (final (cut, where) in [
     (2, 'inside the prefix'),
     (5, 'right after the prefix'),
