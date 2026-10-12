@@ -192,6 +192,9 @@ final class _HeaderBoundedSocket extends Stream<Uint8List> implements Socket {
     if (headerTimeout != null) {
       _deadline = Timer(headerTimeout, _socket.destroy);
     }
+    // The upgrade replaces the handlers [listen] installed; without this an
+    // upgraded connection keeps its maxConnections slot after it ends.
+    _socket.done.then((_) => _end(), onError: (Object _) => _end());
   }
 
   final Socket _socket;

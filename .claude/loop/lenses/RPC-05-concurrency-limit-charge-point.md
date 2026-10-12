@@ -1,10 +1,10 @@
 ---
 refines: U-07
-paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**]
+paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_websocket/lib/**]
 applies: something is HELD and must be given back — an RpcSecurityPolicy field, a buffer bound, a one-probe gate, or a request the caller of a lifecycle method is awaiting
 breaks: "one way a dead limit, the other way a DoS: an unbounded rise in handlers, or denial of service."
-applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502, 508, 520, 733, 786]
-status: confirmed (round 494)
+applied: [214, 215, 245, 266, 271, 351, 372, 382, 463, 467, 491, 494, 502, 508, 520, 733, 786, 839]
+status: confirmed (round 839)
 rank: 21
 ---
 
@@ -71,3 +71,4 @@ directions, which is why this lens exists.
 - **Round 502** — `RpcRateLimiter` charged client-stream and bidi per inbound message, so a bidi call sending none was free: 100 of 100 admitted against 5. **A charge driven by a repeating event has a zero case, and the zero case is a bypass.** The control caught the additive fix halving one-message calls; shipped cost is `max(1, messages)`. `../probes/P-140-what-the-rate-limiter-admits.md`, `../rounds/502-the-shape-that-was-never-admitted.md`, B-111.
 - **Round 508** — `RpcChannelTransport` added every inbound message to a buffered broadcast, so `startCallerListening` existed only to drain it (`1001` replayed, then `0`). **That comment is the detector; the fix is to stop charging.** Check which SIDE is charged (`isClient ? id.isOdd : id.isEven`) and separate the things riding on one stream (`addError` still needs the subscription). `../probes/P-146-what-the-second-dispatch-costs.md`, `../rounds/508-work-added-to-undo-work.md`, B-117.
 - **Round 520** — `finishSending` releases a unary client's slot while the call is outstanding: `maxActiveStreams` bounds request-SENDING on a client, outstanding calls on a server. **Measure a two-sided limit on each side SEPARATELY; keep the ambiguous run (`4 refused` vs `0 refused`) as the control; check which direction a fix's failure runs** — never releasing is worse than releasing early. `../probes/P-157-what-the-client-ceiling-counts.md`, `../rounds/520-two-sides-counting-different-things.md`, B-128.
+- **Round 839** — `bindRpcWebSocketHttpServer(maxConnections: 2)` refused an honest client after 4 sessions the client closed, served without the cap: the release lived in read-subscription handlers that dart:io's upgrade REPLACES (`_HttpDetachedIncoming.listen`). Released on `Socket.done` now. **A release hung on handlers you installed is gone once a consumer may re-install them; tie it to the resource's own end.** `../probes/P-310-connection-slots-per-ending.md`, `../rounds/839-maxconnections-counts-open-connections.md`.
