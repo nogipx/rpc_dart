@@ -539,6 +539,9 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Encoding the peer advertised in grpc-encoding, read by the decompressor.
   String? _peerGrpcEncoding;
 
+  /// Set once a response arriving after the call ended has been reported.
+  bool _warnedLateResponse = false;
+
   final bool _isZeroCopy;
 
   final StreamController<TRequest> _requestController =

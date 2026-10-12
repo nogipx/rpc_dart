@@ -515,6 +515,18 @@ extension _CallProcessorInternals<
       );
     }
 
+    // Data after the call ended is dropped undecoded and reported once: a
+    // record per message is a volume the peer chooses.
+    if (_responseController.isClosed && !message.isMetadataOnly) {
+      if (!_warnedLateResponse) {
+        _warnedLateResponse = true;
+        _logger.warning(
+          'Response data after the call ended, dropped [streamId: $_streamId]',
+        );
+      }
+      return;
+    }
+
     try {
       if (message.isMetadataOnly &&
           message.isEndOfStream &&
@@ -676,7 +688,11 @@ extension _CallProcessorInternals<
           );
           if (!_responseController.isClosed) {
             _responseController.addError(_undecodableResponse(e), stackTrace);
+            _responseController.close();
           }
+          // The call has failed. Decoding the rest of the chunk logged an
+          // error with a stack per message, a volume the peer chooses.
+          return;
         }
       }
     } catch (e, stackTrace) {
