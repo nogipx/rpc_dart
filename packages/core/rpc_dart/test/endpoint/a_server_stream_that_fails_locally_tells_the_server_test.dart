@@ -4,7 +4,8 @@
 
 // A server stream that ends on the CALLER side, for a reason the server cannot
 // see, must still tell the server: otherwise its handler keeps producing and
-// holds a handler slot until the connection closes.
+// holds a handler slot until the connection closes. The same holds for bidi,
+// whose bridge told the server only when its own request side failed.
 
 import 'dart:async';
 
@@ -12,6 +13,9 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
+
+/// Responses the bidi handlers have produced, across both calls of a run.
+var _produced = 0;
 
 /// Decodes the first response and refuses the second.
 final class _FailsOnSecond implements IRpcCodec<RpcString> {
@@ -59,6 +63,19 @@ final class _Ticks extends RpcResponderContract {
       requestCodec: _codec,
       responseCodec: _codec,
     );
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'chat',
+      handler: (requests, {RpcContext? context}) async* {
+        var i = 0;
+        while (true) {
+          _produced++;
+          yield '${i++}'.rpc;
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      },
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'ping',
       handler: (request, {RpcContext? context}) async => 'pong'.rpc,
@@ -79,6 +96,7 @@ Future<void> _run({
   IRpcCodec<RpcString> Function()? responseCodec,
   IRpcMiddleware Function()? middleware,
   bool consumerLeaves = false,
+  bool bidi = false,
 }) async {
   const policy = RpcSecurityPolicy(maxConcurrentHandlers: 2);
   final (client, server) = RpcChannelTransport.pair(policy: policy);
@@ -93,20 +111,47 @@ Future<void> _run({
 
   if (middleware != null) caller.addMiddleware(middleware());
   for (var k = 0; k < 2; k++) {
-    final stream = caller.serverStream<RpcString, RpcString>(
-      serviceName: 'Svc',
-      methodName: 'ticks',
-      request: 'a'.rpc,
-      requestCodec: _codec,
-      responseCodec: responseCodec?.call() ?? _codec,
-    );
-    try {
+    final stream = bidi
+        ? caller.bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'chat',
+            // Never ends: the bidi handler must not stop on a half-close.
+            requests: StreamController<RpcString>().stream,
+            requestCodec: _codec,
+            responseCodec: responseCodec?.call() ?? _codec,
+          )
+        : caller.serverStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'ticks',
+            request: 'a'.rpc,
+            requestCodec: _codec,
+            responseCodec: responseCodec?.call() ?? _codec,
+          );
+    if (consumerLeaves) {
       await for (final _ in stream) {
-        if (consumerLeaves) break;
+        break;
       }
-    } catch (_) {}
+      continue;
+    }
+    // A consumer that takes the error and keeps listening: it does not
+    // cancel, so the cancellation token never tells the server.
+    final done = Completer<void>();
+    stream.listen((_) {}, onError: (Object _) {}, onDone: done.complete);
+    await done.future.timeout(const Duration(seconds: 5), onTimeout: () {});
   }
 
+  if (bidi) {
+    // What the handler produces after its call ended, the observable the
+    // probe that found this used.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final settled = _produced;
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(
+      _produced - settled,
+      0,
+      reason: 'a bidi handler kept producing for a call its caller ended',
+    );
+  }
   await _waitFor(() => responder.activeResponderCount == 0);
   expect(
     responder.activeResponderCount,
@@ -134,5 +179,17 @@ void main() {
 
   test('control: the consumer leaves', () async {
     await _run(consumerLeaves: true);
+  });
+
+  test('bidi: a response the caller cannot decode', () async {
+    await _run(responseCodec: _FailsOnSecond.new, bidi: true);
+  });
+
+  test('bidi: a caller response middleware that throws', () async {
+    await _run(middleware: _RejectsSecond.new, bidi: true);
+  });
+
+  test('bidi control: the consumer leaves', () async {
+    await _run(consumerLeaves: true, bidi: true);
   });
 }

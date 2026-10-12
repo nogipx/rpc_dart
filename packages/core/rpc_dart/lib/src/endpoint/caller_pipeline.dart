@@ -702,6 +702,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     Future<void> cleanup({
       bool fromCancel = false,
       bool abortPeer = false,
+      String abortReason = 'bidirectional request stream failed',
     }) async {
       if (isCleaned) return;
       isCleaned = true;
@@ -717,9 +718,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       // Sent BEFORE the teardown below, which closes the processor and with it
       // the only route to the transport.
       if (abortPeer && !finishedNaturally) {
-        await caller
-            .abort('bidirectional request stream failed')
-            .catchError((_) {});
+        await caller.abort(abortReason).catchError((_) {});
       }
 
       // Tell the server the consumer is gone. The cancellation token is the ONLY
@@ -783,10 +782,20 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     controller.onPause = () => responseSub?.pause();
     controller.onResume = () => responseSub?.resume();
 
+    // Set once the SERVER has sent its status. An error without it is local --
+    // a response that cannot be decoded, a transport failure -- and the
+    // server's handler keeps producing unless told, as in the server-stream
+    // caller.
+    var serverEnded = false;
+
     responseSub = caller.responses.listen(
       (msg) {
         if (!msg.isMetadataOnly && msg.payload != null) {
           controller.add(msg.payload!);
+        }
+        final metadata = msg.metadata;
+        if (metadata != null && RpcCallerTrailer.statusOf(metadata) != null) {
+          serverEnded = true;
         }
       },
       onError: (Object e, StackTrace st) {
@@ -799,7 +808,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           );
         }
         controller.addError(e, st);
-        unawaited(cleanup());
+        unawaited(
+          cleanup(
+            abortPeer: !serverEnded && !context.isCancelled,
+            abortReason: 'bidirectional call abandoned locally',
+          ),
+        );
       },
       onDone: () {
         finishedNaturally = true;
