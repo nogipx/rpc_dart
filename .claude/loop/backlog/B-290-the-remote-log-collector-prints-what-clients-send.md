@@ -5,7 +5,7 @@ commit: 6b39a916
 paths: [packages/core/rpc_dart_log/lib/src/log_console.dart, packages/core/rpc_dart_log/lib/src/log_output.dart, packages/core/rpc_dart_log/lib/src/log_server.dart]
 probe: packages/core/rpc_dart/.dart_tool/probe/r833_console_output.dart
 reason: risk — outside the round scope (owner: rounds in rpc_dart and the transports only); a suspicion from round 833, not measured
-rank: 7
+rank: 8
 ---
 
 # B-290 — the remote log collector prints what clients send

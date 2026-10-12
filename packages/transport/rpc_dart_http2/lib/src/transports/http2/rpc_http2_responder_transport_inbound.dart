@@ -63,7 +63,10 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         if (_logger?.isInternal ?? false) {
           _logger?.internal('Incoming stream $streamId ended');
         }
-        _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+        // An empty END_STREAM DATA frame arrives as this, not as a message.
+        if (!_refuseIfEndedMidMessage(streamId)) {
+          _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+        }
 
         // NOT removed from _incomingStreams here: the response still has to go
         // out on it. releaseStreamId or close() reclaims it.
@@ -226,6 +229,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     int streamId,
     http2.HeadersStreamMessage message,
   ) {
+    if (message.endStream && _refuseIfEndedMidMessage(streamId)) return;
+
     // gRPC is POST-only. Without this check EVERY method runs the handler, and
     // GET is the one that matters: a browser can be made to issue a
     // cross-origin GET without a preflight, while a POST carrying
@@ -306,6 +311,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
           ? message.bytes as Uint8List
           : Uint8List.fromList(message.bytes);
       final messages = parser(bytes);
+      if (message.endStream && _refuseIfEndedMidMessage(streamId)) return;
 
       // END_STREAM belongs to the last message of the batch only, matched by
       // INDEX rather than by value: Uint8List compares by identity, which
@@ -337,6 +343,26 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
       _emitStreamError(streamId, e, stackTrace: stackTrace);
       _answerFramingViolation(streamId, e);
     }
+  }
+
+  /// Refuses [streamId] if its request ended inside a gRPC frame, and returns
+  /// whether it did.
+  ///
+  /// The parser hands up whole frames only, so without this the cut message
+  /// was dropped and the handler answered OK on what came before it. The
+  /// parser goes with the refusal, so a later end of the same stream does not
+  /// refuse it twice.
+  bool _refuseIfEndedMidMessage(int streamId) {
+    if (!(_streamParsers[streamId]?.holdsPartialFrame ?? false)) return false;
+    _streamParsers.remove(streamId);
+    _answerFramingViolation(
+      streamId,
+      RpcStatusException(
+        RpcStatus.internal,
+        'Request stream ended mid-message: the last gRPC frame is incomplete',
+      ),
+    );
+    return true;
   }
 
   /// Answers a peer whose frame this transport refused to decode.

@@ -113,7 +113,12 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         }
 
         if (_statusReceived.contains(streamId)) {
-          _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+          // An empty END_STREAM DATA frame arrives as this, not as a message.
+          if (_streamParsers[streamId]?.holdsPartialFrame ?? false) {
+            _failEndedMidMessage(streamId, methodPath);
+          } else {
+            _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
+          }
         } else {
           // No trailers and no Trailers-Only status: the response was cut off.
           // Reporting a clean end here would hand the consumer partial data as
@@ -426,24 +431,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     if (message.endStream &&
         statusKnown &&
         (_streamParsers[streamId]?.holdsPartialFrame ?? false)) {
-      _emit(
-        RpcTransportMessage(
-          streamId: streamId,
-          metadata: RpcMetadata([
-            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
-            RpcHeader(
-              RpcHeaders.grpcMessage,
-              RpcMetadata.encodeGrpcMessage(
-                'Response stream ended mid-message: the last gRPC frame is '
-                'incomplete',
-              ),
-            ),
-          ]),
-          isEndOfStream: true,
-          methodPath: methodPath,
-        ),
-      );
-      _dropFailedResponse(streamId);
+      _failEndedMidMessage(streamId, methodPath);
       return;
     }
 
@@ -518,6 +506,10 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // DIES; `_statusReceived` was added then, but the end-of-stream flag on
       // the data path still short-circuited it for a peer that half-closes.
       final statusKnown = _statusReceived.contains(streamId);
+      // A status already in, and this DATA ends the stream inside a frame: the
+      // trailer path's rule, or the cut message is dropped and the call ends OK.
+      final endsMidMessage =
+          message.endStream && statusKnown && parser.holdsPartialFrame;
       for (var i = 0; i < messages.length; i++) {
         // Already a frame: the parser was asked for frames.
         final framedMessage = messages[i];
@@ -525,11 +517,18 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
           streamId: streamId,
           payload: framedMessage,
           isEndOfStream:
-              message.endStream && i == messages.length - 1 && statusKnown,
+              message.endStream &&
+              i == messages.length - 1 &&
+              statusKnown &&
+              !endsMidMessage,
           methodPath: methodPath,
         );
 
         _emit(transportMessage);
+      }
+      if (endsMidMessage) {
+        _failEndedMidMessage(streamId, methodPath);
+        return;
       }
 
       if (_logger?.isInternal ?? false) {
@@ -547,6 +546,29 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       _emitStreamError(streamId, e, stackTrace: stackTrace);
       _dropFailedResponse(streamId);
     }
+  }
+
+  /// Ends [streamId] with INTERNAL in place of its OK: the response ended
+  /// inside a gRPC frame, and the parser hands up whole frames only.
+  void _failEndedMidMessage(int streamId, String methodPath) {
+    _emit(
+      RpcTransportMessage(
+        streamId: streamId,
+        metadata: RpcMetadata([
+          RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
+          RpcHeader(
+            RpcHeaders.grpcMessage,
+            RpcMetadata.encodeGrpcMessage(
+              'Response stream ended mid-message: the last gRPC frame is '
+              'incomplete',
+            ),
+          ),
+        ]),
+        isEndOfStream: true,
+        methodPath: methodPath,
+      ),
+    );
+    _dropFailedResponse(streamId);
   }
 
   /// Routes an incoming message to the shared broadcast and to its own stream.

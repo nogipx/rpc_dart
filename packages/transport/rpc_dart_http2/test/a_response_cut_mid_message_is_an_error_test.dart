@@ -17,8 +17,15 @@ import 'package:test/test.dart';
 final _codec = RpcCodec(RpcString.fromJson);
 
 /// A raw h2 peer answering every stream with [whole] whole frames, [tail] and
-/// an OK trailer.
-Future<int> _peer(List<int> tail, {int whole = 2}) async {
+/// an OK trailer. With [statusFirst] the OK rides the response HEADERS and
+/// the DATA carries END_STREAM, on an empty DATA frame of its own with
+/// [emptyEnd].
+Future<int> _peer(
+  List<int> tail, {
+  int whole = 2,
+  bool statusFirst = false,
+  bool emptyEnd = false,
+}) async {
   final socket = await ServerSocket.bind('127.0.0.1', 0);
   addTearDown(socket.close);
   final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
@@ -29,8 +36,14 @@ Future<int> _peer(List<int> tail, {int whole = 2}) async {
       stream.sendHeaders([
         http2.Header.ascii(':status', '200'),
         http2.Header.ascii('content-type', 'application/grpc'),
+        if (statusFirst) http2.Header.ascii('grpc-status', '0'),
       ]);
-      stream.sendData([for (var i = 0; i < whole; i++) ...frame, ...tail]);
+      stream.sendData([
+        for (var i = 0; i < whole; i++) ...frame,
+        ...tail,
+      ], endStream: statusFirst && !emptyEnd);
+      if (statusFirst && emptyEnd) stream.sendData(const [], endStream: true);
+      if (statusFirst) return;
       stream.sendHeaders([
         http2.Header.ascii('grpc-status', '0'),
       ], endStream: true);
@@ -128,6 +141,60 @@ void main() {
     final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
     final (items, error) = await _call(await _peer(frame));
     expect(items, ['item', 'item', 'item']);
+    expect(error, isNull);
+  });
+
+  test('WITNESS a status in the headers, then DATA ending mid-frame, ends with '
+      'INTERNAL', () async {
+    final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
+    final (items, error) = await _call(
+      await _peer(frame.sublist(0, 7), statusFirst: true),
+    );
+    expect(items, ['item', 'item']);
+    expect(
+      error,
+      isA<RpcStatusException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        RpcStatus.internal,
+      ),
+    );
+  });
+
+  test(
+    'GUARD a status in the headers, then DATA ending between frames, ends OK',
+    () async {
+      final (items, error) = await _call(
+        await _peer(const [], statusFirst: true),
+      );
+      expect(items, ['item', 'item']);
+      expect(error, isNull);
+    },
+  );
+
+  test('WITNESS a status in the headers, then an empty END_STREAM DATA after a '
+      'cut frame, ends with INTERNAL', () async {
+    final frame = RpcMessageFrame.encode(_codec.serialize('item'.rpc));
+    final (items, error) = await _call(
+      await _peer(frame.sublist(0, 7), statusFirst: true, emptyEnd: true),
+    );
+    expect(items, ['item', 'item']);
+    expect(
+      error,
+      isA<RpcStatusException>().having(
+        (e) => e.statusCode,
+        'statusCode',
+        RpcStatus.internal,
+      ),
+    );
+  });
+
+  test('GUARD a status in the headers, then an empty END_STREAM DATA between '
+      'frames, ends OK', () async {
+    final (items, error) = await _call(
+      await _peer(const [], statusFirst: true, emptyEnd: true),
+    );
+    expect(items, ['item', 'item']);
     expect(error, isNull);
   });
 }
