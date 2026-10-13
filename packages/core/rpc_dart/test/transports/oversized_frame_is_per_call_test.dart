@@ -223,10 +223,15 @@ void main() {
     expect(health, isFalse, reason: 'a declared size is not a reason to close');
   });
 
-  test('GUARD: a dribble with no oversized header still closes', () async {
-    // The path that is NOT recoverable: bytes piling past the buffer cap with a
-    // header that claims they belong to a frame we would have accepted. There
-    // is no boundary to resynchronise to, so the channel still dies.
+  test('bytes behind an accepted frame start the next frame', () async {
+    // This used to be a GUARD that the channel CLOSES here, read as "bytes
+    // piling past the buffer cap with no boundary to resynchronise to". The
+    // boundary is there: the header says where the 60 KiB frame ends, and what
+    // follows is the next frame (zeros: empty data frames on stream 0). The
+    // close came from checking the cap against buffered prefix + the WHOLE
+    // chunk, which spans that boundary -- the same false overflow that failed
+    // a message exactly at the limit over a raw socket
+    // (`a_chunk_spanning_two_frames_is_not_an_overflow_test`).
     final rig = _rig();
 
     rig.feed.feed(_header(11, 60 * 1024));
@@ -236,6 +241,31 @@ void main() {
     }
     await _settle();
 
+    expect(rig.errors, isEmpty);
+    expect(rig.messages.first.streamId, 11);
+    expect(rig.messages.first.payload, hasLength(60 * 1024));
+    expect(rig.channel.isClosed, isFalse);
+  });
+
+  test('GUARD: a chunk still over the cap past its first frame closes', () async {
+    // What the cap still bounds after a chunk is split at its first frame: the
+    // REST meets it as any chunk does, so one chunk can never make the channel
+    // hold more than the cap. Here the rest is a whole accepted frame plus
+    // 10 KiB more, past the cap in one piece.
+    final rig = _rig();
+
+    rig.feed.feed(_concat([_header(11, 60 * 1024), Uint8List(10 * 1024)]));
+    await _settle();
+    rig.feed.feed(
+      _concat([
+        Uint8List(50 * 1024),
+        _header(13, 60 * 1024),
+        Uint8List(70 * 1024),
+      ]),
+    );
+    await _settle();
+
+    expect(rig.messages.first.streamId, 11);
     expect(rig.errors, isNotEmpty);
     expect(rig.errors.first, isA<RpcFrameException>());
     expect(rig.channel.isClosed, isTrue);

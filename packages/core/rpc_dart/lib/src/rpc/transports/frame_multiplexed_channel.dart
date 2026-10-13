@@ -438,7 +438,42 @@ class RpcFrameMultiplexedChannel
       data = Uint8List.sublistView(data, consumedFromData);
     }
 
+    // On a STREAM channel a chunk is wherever the kernel cut it, so the tail of
+    // a maximal frame arrives with the head of the next one, and buffered
+    // prefix plus chunk then exceeds the cap although no frame does. Measured
+    // over a socket at the default policy: 'Incoming frame buffer overflow:
+    // 16777266 bytes (max: 16777230)' for a message exactly at the limit,
+    // with the connection and every call on it torn down.
+    //
+    // Split such a chunk ONCE, where the first frame ends: that frame is
+    // decoded on its own, and the rest meets the cap by itself, as any chunk
+    // does. Only a chunk over the cap is split, so one within it takes the
+    // path it always took. Once and not in a loop, because the cap is also
+    // the defence against one huge chunk: refused on its length, never copied
+    // (see `oversized_chunk_not_copied_test`), and a loop would instead walk
+    // a hostile chunk frame by frame. A frame that is itself over the limit
+    // was refused from its header above and never gets here.
+    if (_bufLen + data.length > _maxBufferedFrameBytes) {
+      final end = _endOfFirstFrame(data);
+      if (end != null && end > 0 && end < data.length) {
+        if (!_decodeAndEmit(Uint8List.sublistView(data, 0, end))) return;
+        data = Uint8List.sublistView(data, end);
+      }
+    }
+
     _decodeAndEmit(data);
+  }
+
+  /// The offset in [data] where the frame begun at logical offset 0 ends, or
+  /// null while its header is incomplete. Logical offset 0 is the start of
+  /// `_buf` when it holds a prefix, else the start of [data].
+  int? _endOfFirstFrame(Uint8List data) {
+    const headerSize = RpcChannelFrame.headerSize;
+    if (_bufLen + data.length < headerSize) return null;
+    int byteAt(int i) => i < _bufLen ? _buf[i] : data[i - _bufLen];
+    final payloadLen =
+        (byteAt(5) << 24) | (byteAt(6) << 16) | (byteAt(7) << 8) | byteAt(8);
+    return headerSize + payloadLen - _bufLen;
   }
 
   /// The offset in [data] of the first frame past logical offset 0 that
