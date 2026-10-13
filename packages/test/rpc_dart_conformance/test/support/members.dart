@@ -18,6 +18,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';
+import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 import 'package:rpc_dart_websocket/io.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
@@ -36,6 +37,7 @@ final List<Member> members = [
   HttpMember(),
   Http2Member(),
   WebSocketMember(),
+  SocketMember(),
   IsolateMember(),
   WasmMember(),
 ];
@@ -501,6 +503,60 @@ final class _WebSocketRig extends NetworkRig {
     await _server?.dispose();
     await _http?.close(force: true);
   }
+}
+
+// ------------------------------------------------------------------ socket --
+
+/// `rpc_dart_socket` over TCP. Its Unix socket path runs the same code and is
+/// covered by the package's own tests; TCP is what the proxy can stand in.
+final class SocketMember extends NetworkMember {
+  @override
+  String get name => 'socket';
+
+  @override
+  NetworkRig newRig(PeerBehaviour behaviour, RpcSecurityPolicy serverPolicy) =>
+      _SocketRig(this, behaviour: behaviour, serverPolicy: serverPolicy);
+
+  /// Returns once the socket is connected, whatever [lazy] says: the server's
+  /// preface is the transport's `ready`, and nothing waits for it here.
+  @override
+  Future<IRpcTransport> connectTo(
+    int port,
+    RpcSecurityPolicy policy, {
+    bool lazy = false,
+  }) => connectRpcSocket(
+    RpcSocketAddress.tcp(InternetAddress.loopbackIPv4, port),
+    policy: policy,
+    connectTimeout: const Duration(seconds: 2),
+  );
+}
+
+final class _SocketRig extends NetworkRig {
+  _SocketRig(
+    super.member, {
+    required super.behaviour,
+    required super.serverPolicy,
+  });
+
+  RpcSocketServer? _server;
+
+  @override
+  int get serverPort => _server!.port;
+
+  @override
+  Future<int> startServer() async {
+    final server = RpcSocketServer(
+      address: RpcSocketAddress.tcp(InternetAddress.loopbackIPv4, 0),
+      policy: serverPolicy,
+      onEndpointCreated: registerOn,
+    );
+    await server.start();
+    _server = server;
+    return server.port;
+  }
+
+  @override
+  Future<void> stopServer() async => _server?.stop();
 }
 
 // ----------------------------------------------------------------- isolate --

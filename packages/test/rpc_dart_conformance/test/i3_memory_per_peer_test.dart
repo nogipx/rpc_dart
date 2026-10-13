@@ -32,6 +32,7 @@ import 'dart:io';
 
 import 'package:http2/http2.dart' as h2;
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 import 'package:test/test.dart';
 
 import 'support/matrix.dart';
@@ -281,6 +282,25 @@ Future<void> _refusedWhileArriving(
         ),
       );
       ws.add(partialFrame());
+      await done;
+    case NetworkRig(member: SocketMember()):
+      final socket = await Socket.connect(
+        InternetAddress.loopbackIPv4,
+        rig.serverPort,
+      );
+      socket.done.catchError((Object _) => socket).ignore();
+      addTearDown(socket.destroy);
+      final done = socket.drain<void>().catchError((Object _) {});
+      socket
+        ..add(RpcSocketChannel.preface)
+        ..add(
+          RpcChannelFrame.encodeMetadata(
+            streamId: 1,
+            metadata: RpcMetadata.forClientRequest(conformanceService, 'unary'),
+          ),
+        )
+        ..add(partialFrame());
+      await socket.flush().catchError((Object _) {});
       await done;
     case NetworkRig(member: Http2Member()):
       final socket = await Socket.connect(

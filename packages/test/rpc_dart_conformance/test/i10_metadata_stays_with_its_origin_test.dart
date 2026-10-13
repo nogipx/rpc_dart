@@ -33,6 +33,9 @@ const _secret = {'x-api-key': 'secret', 'x-tenant': 'acme'};
 const _notApplicable = <String, String>{
   'channel': 'NOT APPLICABLE (I-10): a pipe has no origin to dial or leave',
   'isolate': 'NOT APPLICABLE (I-10): a worker has no origin to dial or leave',
+  'socket':
+      'NOT APPLICABLE (I-10): a raw socket has no redirect to follow; it '
+      'reaches the address it was given or nothing',
 };
 
 const _knownFailing = <String, String>{};

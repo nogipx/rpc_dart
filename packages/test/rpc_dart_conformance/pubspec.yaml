@@ -27,6 +27,7 @@ dev_dependencies:
   rpc_dart_http: any
   rpc_dart_http2: any
   rpc_dart_isolate: any
+  rpc_dart_socket: any
   rpc_dart_websocket: any
   test: ^1.29.0
   web_socket_channel: ^3.0.3

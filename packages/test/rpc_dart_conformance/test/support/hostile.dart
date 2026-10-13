@@ -22,6 +22,7 @@ import 'dart:io';
 
 import 'package:http2/http2.dart' as h2;
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 
 import 'calls.dart';
 import 'contract.dart';
@@ -242,6 +243,12 @@ Future<void> _framedAtServer(NetworkRig rig) async {
       ws.add(garbage(128, seed: 4));
       await closed.timeout(_wait, onTimeout: () {});
       await ws.close().catchError((Object _) {});
+    case SocketMember():
+      await _rawAtServer(rig.serverPort, [
+        ...RpcSocketChannel.preface,
+        for (final f in framedRequest(1)) ...f,
+        ...garbage(128, seed: 4),
+      ], Garbage.framed);
     default:
       throw UnsupportedError('${rig.member}');
   }
@@ -369,6 +376,20 @@ Future<_Fake> _fakeServer(
         }, onError: (Object _) {});
       }, onError: (Object _) {});
       return (port: http.port, close: () => http.close(force: true));
+    case SocketMember():
+      final fake = await FakeServer.start((socket) async {
+        socket.add(RpcSocketChannel.preface);
+        var answered = false;
+        socket.listen((_) {
+          if (answered) return;
+          answered = true;
+          for (final f in framedResponse(1)) {
+            socket.add(f);
+          }
+          socket.add(garbage(128, seed: 2));
+        }, onError: (Object _) {});
+      }, readsItself: true);
+      return (port: fake.port, close: fake.close);
     default:
       throw UnsupportedError('$member');
   }
