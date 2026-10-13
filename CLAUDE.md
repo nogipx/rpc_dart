@@ -26,7 +26,8 @@ Transport-agnostic RPC framework for Dart. This is a **monorepo** managed with
     Postman can discover services.
   - `rpc_dart_log` — remote log collector over WebSocket.
   - `rpc_dart_opentelemetry` — OpenTelemetry tracing, metrics and logs.
-- `packages/transport/*` — transports: http, http2, isolate, websocket, wasm.
+- `packages/transport/*` — transports: http, http2, isolate, socket (Unix
+  domain and TCP), websocket, wasm.
 - `packages/data/*`, `packages/notify/*`, `packages/blob/*` — higher layers.
 - `packages/test/rpc_dart_conformance` — the transport conformance matrix
   (test-only, unpublished; see "Publishing").

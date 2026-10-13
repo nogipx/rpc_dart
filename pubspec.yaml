@@ -40,6 +40,7 @@ workspace:
   - packages/transport/rpc_dart_http
   - packages/transport/rpc_dart_http2
   - packages/transport/rpc_dart_isolate
+  - packages/transport/rpc_dart_socket
   - packages/transport/rpc_dart_websocket
   # rpc_dart_wasm is intentionally NOT a workspace member: it is the only Flutter
   # package, and including it forces the whole workspace into a single lockfile

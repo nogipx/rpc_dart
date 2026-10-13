@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+.dart_tool/
+.fvm/
+
+build/
+pubspec.lock
+**/examples
+
+coverage/
+.chats/
+
+*.bin
+*.pem
+.vscode/
+.idea/
+.docs/
+*.json

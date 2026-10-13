@@ -1,0 +1,415 @@
+// SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+//
+// SPDX-License-Identifier: MIT
+
+import 'dart:async';
+import 'dart:io';
+
+import 'package:rpc_dart/rpc_dart.dart';
+
+import 'rpc_socket_address.dart';
+import 'rpc_socket_channel.dart';
+import 'rpc_socket_connect.dart';
+
+/// rpc_dart server on a Unix domain socket or a TCP port.
+///
+/// Owns its listening socket: [start] binds it, [stop] closes it, and a later
+/// [start] binds again. Each accepted connection gets its own endpoint over
+/// [RpcChannelTransport] and [RpcSocketChannel].
+///
+/// ```dart
+/// final server = RpcSocketServer.createWithContracts(
+///   address: const RpcSocketAddress.unix('/tmp/app/rpc.sock'),
+///   contracts: [MyResponder()],
+/// );
+/// await server.start();
+/// ```
+///
+/// **A stale Unix socket file is replaced.** A process that exits without
+/// closing its server leaves the file behind, and binding over it fails. On
+/// that failure [start] tries to connect to the file: a refused connection
+/// means nobody is listening, so the file is deleted and the bind retried. A
+/// live server answering on it, or a path that is not a socket at all, is left
+/// alone and [start] throws. Two servers starting on one path at the same
+/// moment can still race past each other; use one path per process.
+///
+/// Closing the listener removes the socket file, so a clean [stop] leaves
+/// nothing behind.
+class RpcSocketServer implements IRpcServer {
+  /// Creates a server for [address]. Nothing is bound until [start].
+  ///
+  /// [maxConnections] caps concurrent connections, those still in their
+  /// handshake included; a connection past it is closed at once, which its
+  /// caller reports as UNAVAILABLE. Null means no cap.
+  ///
+  /// [prefaceTimeout] bounds how long an accepted socket may take to send its
+  /// preface (see [RpcSocketChannel]). No endpoint exists before it arrives,
+  /// so a peer that connects and stays silent costs a socket for this long
+  /// and no more. Null waits for ever.
+  ///
+  /// [onEndpointCreated] registers contracts on each connection's responder
+  /// endpoint. Pass [onPeerEndpointCreated] instead for peer mode, where both
+  /// sides may start calls; not both.
+  RpcSocketServer({
+    required RpcSocketAddress address,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    int? maxConnections,
+    Duration? prefaceTimeout = const Duration(seconds: 10),
+    LogScope? logger,
+    LogController? logController,
+    void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
+    void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
+    void Function(Object error, StackTrace? stackTrace)? onConnectionError,
+    void Function(RpcSocketChannel channel)? onConnectionOpened,
+    void Function(RpcSocketChannel channel)? onConnectionClosed,
+  }) : _address = address,
+       _policy = policy,
+       _maxConnections = maxConnections,
+       _prefaceTimeout = prefaceTimeout,
+       _log = logger?.child('SocketServer') ?? LogScope.noop,
+       _logController = logController,
+       _onEndpointCreated = onEndpointCreated,
+       _onPeerEndpointCreated = onPeerEndpointCreated,
+       _onConnectionError = onConnectionError,
+       _onConnectionOpened = onConnectionOpened,
+       _onConnectionClosed = onConnectionClosed {
+    // The endpoint is a peer or a responder, never both, so only one callback
+    // could run and the other's contracts would silently never register.
+    if (onEndpointCreated != null && onPeerEndpointCreated != null) {
+      throw ArgumentError(
+        'Pass onEndpointCreated or onPeerEndpointCreated, not both',
+      );
+    }
+  }
+
+  /// A server that registers [contracts] on every connection.
+  factory RpcSocketServer.createWithContracts({
+    required RpcSocketAddress address,
+    required List<RpcResponderContract> contracts,
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    int? maxConnections,
+    LogScope? logger,
+    LogController? logController,
+  }) {
+    return RpcSocketServer(
+      address: address,
+      policy: policy,
+      maxConnections: maxConnections,
+      logger: logger,
+      logController: logController,
+      onEndpointCreated: (endpoint) {
+        for (final contract in contracts) {
+          endpoint.registerServiceContract(contract);
+        }
+      },
+    );
+  }
+
+  final RpcSocketAddress _address;
+  final RpcSecurityPolicy _policy;
+  final int? _maxConnections;
+  final Duration? _prefaceTimeout;
+  final LogScope _log;
+  final LogController? _logController;
+  final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
+  final void Function(RpcPeerEndpoint endpoint)? _onPeerEndpointCreated;
+  final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
+  final void Function(RpcSocketChannel channel)? _onConnectionOpened;
+  final void Function(RpcSocketChannel channel)? _onConnectionClosed;
+
+  ServerSocket? _listener;
+  StreamSubscription<Socket>? _accepting;
+  bool _isRunning = false;
+  bool _warnedAtCap = false;
+  int _connCounter = 0;
+
+  /// Every endpoint this server created, peer-mode included. Typed
+  /// [RpcEndpointBase] because a peer endpoint is not a responder one, and
+  /// [stop] must close both.
+  final List<RpcEndpointBase> _endpoints = [];
+
+  /// Accepted sockets whose preface has not arrived yet. They hold no
+  /// endpoint, but they do hold a socket, so they count against the cap and
+  /// [stop] closes them.
+  final Set<RpcSocketChannel> _handshaking = {};
+
+  /// The address this server was created for.
+  RpcSocketAddress get address => _address;
+
+  /// The port actually bound: the free port picked for a TCP address with
+  /// port 0, once started. 0 for a Unix socket, and before [start].
+  int get port => _listener?.port ?? _address.port;
+
+  /// Responder endpoints only, so empty in peer mode. See
+  /// [IRpcServer.endpoints].
+  @override
+  List<RpcResponderEndpoint> get endpoints =>
+      List.unmodifiable(_endpoints.whereType<RpcResponderEndpoint>());
+
+  @override
+  bool get isRunning => _isRunning;
+
+  /// Claimed synchronously by [start] before its first await, so two
+  /// overlapping starts cannot both bind.
+  Future<void>? _starting;
+
+  /// The [stop] in flight, so a [start] waits for it and a second [stop] joins
+  /// it.
+  Future<void>? _stopping;
+
+  /// Binds the listening socket and starts accepting.
+  ///
+  /// A [stop] in flight is finished first. A second [start] while one is
+  /// binding joins it. Throws what the bind throws, the server left stopped,
+  /// so a retry works.
+  @override
+  Future<void> start() async {
+    final stopping = _stopping;
+    if (stopping != null) await stopping;
+    if (_isRunning) return;
+    final inFlight = _starting;
+    if (inFlight != null) return inFlight;
+    final attempt = _startOnce().whenComplete(() => _starting = null);
+    _starting = attempt;
+    return attempt;
+  }
+
+  Future<void> _startOnce() async {
+    final listener = await _bind();
+    _listener = listener;
+    _isRunning = true;
+    _accepting = listener.listen(
+      _handleConnection,
+      onError: (Object error, StackTrace st) {
+        _log.error('Listening socket error', error: error, stackTrace: st);
+        _notify('onConnectionError', () => _onConnectionError?.call(error, st));
+      },
+    );
+    _log.info('Listening on $_address');
+  }
+
+  Future<ServerSocket> _bind() async {
+    try {
+      return await ServerSocket.bind(_address.host, _address.port);
+    } on SocketException {
+      final address = _address;
+      if (address is! RpcUnixSocketAddress) rethrow;
+      if (!await _removeStaleSocket(address.path)) rethrow;
+      return ServerSocket.bind(_address.host, _address.port);
+    }
+  }
+
+  /// Deletes the socket file at [path] if nobody is listening on it.
+  ///
+  /// True when the file was removed and the bind is worth retrying. A path
+  /// that is not a socket is never touched: it is somebody's file.
+  Future<bool> _removeStaleSocket(String path) async {
+    if (FileSystemEntity.typeSync(path, followLinks: false) !=
+        FileSystemEntityType.unixDomainSock) {
+      return false;
+    }
+    try {
+      final probe = await Socket.connect(
+        _address.host,
+        0,
+        timeout: const Duration(seconds: 1),
+      );
+      probe.destroy();
+      // Somebody answered: the address is in use, not stale.
+      return false;
+    } on SocketException {
+      // Refused: nobody is listening.
+    }
+    try {
+      File(path).deleteSync();
+    } on FileSystemException {
+      return false;
+    }
+    _log.warning('Removed a stale socket file at $path');
+    return true;
+  }
+
+  /// Stops the server, optionally letting in-flight calls finish first.
+  ///
+  /// The listener closes first, so new connections are refused from the
+  /// start of the stop. With [drainTimeout] null every endpoint is then closed
+  /// at once and a running call fails with UNAVAILABLE. With a budget the
+  /// endpoints stop admitting new calls and the server waits, up to the budget,
+  /// for the running ones to finish before closing them.
+  @override
+  Future<void> stop({Duration? drainTimeout}) {
+    final starting = _starting;
+    if (!_isRunning && starting == null) {
+      return _stopping ?? Future<void>.value();
+    }
+    return _stopping ??= _stopOnce(
+      starting,
+      drainTimeout,
+    ).whenComplete(() => _stopping = null);
+  }
+
+  Future<void> _stopOnce(Future<void>? starting, Duration? drainTimeout) async {
+    // A bind in progress lands first: before it there is nothing to stop, and
+    // the listener it produces would otherwise be reachable by nothing.
+    if (starting != null) {
+      try {
+        await starting;
+      } catch (_) {
+        return;
+      }
+    }
+    if (!_isRunning) return;
+    _isRunning = false;
+
+    await _accepting?.cancel();
+    _accepting = null;
+    try {
+      await _listener?.close();
+    } catch (e) {
+      _log.warning('Error closing the listening socket: $e');
+    }
+    _listener = null;
+
+    for (final channel in List.of(_handshaking)) {
+      unawaited(channel.close());
+    }
+    _handshaking.clear();
+
+    if (drainTimeout != null) {
+      for (final endpoint in _endpoints) {
+        // markDraining, not drain(): the latter cancels every active context,
+        // the opposite of letting in-flight calls finish.
+        endpoint.markDraining();
+      }
+      await drainUntilIdle(
+        pending: () => inFlightResponderCalls(_endpoints),
+        budget: drainTimeout,
+        logger: _log,
+      );
+    }
+
+    // Concurrently: each close may wait on its own peer, and one dead
+    // connection must not delay the rest. Caught per endpoint, because
+    // Future.wait abandons the remaining futures on the first error.
+    await Future.wait([
+      for (final endpoint in List.of(_endpoints))
+        endpoint.close().catchError((Object e) {
+          _log.warning('Error closing an endpoint: $e');
+        }),
+    ]);
+    _endpoints.clear();
+    _log.info('Stopped listening on $_address');
+  }
+
+  void _handleConnection(Socket socket) {
+    if (!_isRunning) {
+      socket.destroy();
+      return;
+    }
+    final cap = _maxConnections;
+    if (cap != null && _endpoints.length + _handshaking.length >= cap) {
+      // Once per stretch at the limit: a client retrying in a loop would
+      // otherwise log every attempt.
+      if (!_warnedAtCap) {
+        _warnedAtCap = true;
+        _log.warning('Refusing connections: at the connection limit ($cap)');
+      }
+      socket.destroy();
+      return;
+    }
+
+    configureRpcSocket(socket, _address);
+    final channel = RpcSocketChannel(socket, prefaceTimeout: _prefaceTimeout);
+    _handshaking.add(channel);
+    channel.ready.then(
+      (_) {
+        if (!_handshaking.remove(channel)) return; // stop() took it
+        if (!_isRunning) {
+          unawaited(channel.close());
+          return;
+        }
+        _serve(channel);
+      },
+      onError: (Object e) {
+        _handshaking.remove(channel);
+        _warnedAtCap = false;
+        if (_log.isDebug) {
+          _log.debug('Dropping ${channel.peer} before its preface: $e');
+        }
+      },
+    );
+  }
+
+  /// Builds the endpoint for a connection whose preface has arrived.
+  void _serve(RpcSocketChannel channel) {
+    final label = 'peer-${++_connCounter}';
+    _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
+
+    // Remembered so the catch can release it: the endpoint is registered
+    // before the user callback that can throw, and the release wiring only
+    // after it.
+    RpcEndpointBase? created;
+    try {
+      final transport = RpcChannelTransport.fromChannel(
+        channel: channel,
+        isClient: false,
+        policy: _policy,
+      );
+      final debugLabel = 'SocketEndpoint-$label';
+      final onPeer = _onPeerEndpointCreated;
+      final RpcEndpointBase endpoint;
+      if (onPeer != null) {
+        final peer = RpcPeerEndpoint(
+          transport: transport,
+          debugLabel: debugLabel,
+          logger: _logController,
+        );
+        _endpoints.add(peer);
+        created = peer;
+        onPeer(peer);
+        endpoint = peer;
+      } else {
+        final responder = RpcResponderEndpoint(
+          transport: transport,
+          debugLabel: debugLabel,
+          logger: _logController,
+        );
+        _endpoints.add(responder);
+        created = responder;
+        _onEndpointCreated?.call(responder);
+        endpoint = responder;
+      }
+      endpoint.start();
+      // The channel closes on every path -- peer hang-up, read error, local
+      // close -- so this is the one place a connection is released.
+      unawaited(channel.done.then((_) => _release(endpoint, channel)));
+    } catch (e, st) {
+      _log.error(
+        'Failed to set up connection $label',
+        error: e,
+        stackTrace: st,
+      );
+      _notify('onConnectionError', () => _onConnectionError?.call(e, st));
+      final orphan = created;
+      if (orphan != null) _release(orphan, channel);
+      unawaited(channel.close());
+    }
+  }
+
+  /// Drops a finished connection's endpoint and closes it, which is what
+  /// disposes its contracts. Idempotent.
+  void _release(RpcEndpointBase endpoint, RpcSocketChannel channel) {
+    if (!_endpoints.remove(endpoint)) return;
+    _warnedAtCap = false;
+    unawaited(
+      endpoint.close().catchError((Object e) {
+        _log.warning('Error closing an endpoint on disconnect: $e');
+      }),
+    );
+    _notify('onConnectionClosed', () => _onConnectionClosed?.call(channel));
+  }
+
+  /// Runs an observability callback without letting it take the server down.
+  void _notify(String what, void Function() body) =>
+      notifyWithoutDying(what, body, logger: _log);
+}
