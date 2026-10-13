@@ -90,7 +90,9 @@ void configureRpcSocket(Socket socket, RpcSocketAddress address) {
   if (address is! RpcTcpSocketAddress) return;
   try {
     socket.setOption(SocketOption.tcpNoDelay, true);
-  } on SocketException {
-    // The peer already hung up; the read side will report it.
+  } catch (e) {
+    if (e is Error) rethrow;
+    // The peer already hung up; the read side will report it. Not only
+    // SocketException: dart:io throws a bare OSError for some resets.
   }
 }
