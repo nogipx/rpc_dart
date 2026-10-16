@@ -157,6 +157,29 @@ melos:
           - "*_minio"
           - rpc_data_sqlite
 
+    # test:unit with each package's output kept in .dart_tool/test_out.txt.
+    # Tests print, and failures-only still passes print() through, so one
+    # test:unit run is ~30 KB of text; this prints a package's failures and
+    # its last line only. Same packages, same exit status.
+    test:unit:quiet:
+      description: test:unit, printing only failures and each package's result.
+      run: >-
+        fvm dart test --reporter failures-only > .dart_tool/test_out.txt 2>&1;
+        s=$?;
+        grep -A4 '\[E\]' .dart_tool/test_out.txt | head -n 60;
+        tail -n 1 .dart_tool/test_out.txt;
+        exit $s
+      exec:
+        concurrency: 4
+      packageFilters:
+        dirExists: test
+        ignore:
+          - rpc_dart_generator
+          - "*_postgres"
+          - "*_redis"
+          - "*_minio"
+          - rpc_data_sqlite
+
     # Coverage for the package(s) you choose: `melos run coverage` prompts a
     # package multi-select, runs coverage for each, and opens its HTML report.
     #   one/few:  melos run coverage            (then pick from the prompt)
