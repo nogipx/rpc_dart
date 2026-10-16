@@ -5,7 +5,7 @@ commit: 911fe219
 paths: [packages/transport/rpc_dart_http2/test/tiny_messages_are_weighed_test.dart]
 probe: none — the full gate, `melos run test:unit --no-select`
 reason: bench — intermittent: timed out once in the full gate, passes alone in 7 s
-rank: 6
+rank: 3
 ---
 
 # B-297 — the tiny-messages witness times out under the gate
@@ -50,11 +50,18 @@ isolate      isolate_verification_test    several isolates run in parallel
 Each has a fixed wall-clock budget (300 ms, a 300 ms head start, a 20 s
 queue phase, a timing ratio). This is a class of tests, not one test.
 
+Round 880 (P-335) fixed the conformance `i1 ... peer normal` red. The
+load was made with spinning processes, and at 24 of them on 8 cores a
+working peer's 300 ms unary call failed status 4 in 3 of 60 calls. Both
+working-peer rows in i1 now use a 10 s deadline. The other six tests
+above are still open.
+
 ## Next step
 
-Time the test under load (P-327's way: several copies at once) and see
-whether its 20 s covers work that grows with load and not with the
-defect it witnesses.
+Drive each remaining test with `P-335 test <burners> <file>`, starting
+from 24 burners, the gate's observed load. For each one, check whether its
+budget covers work that grows with load and not with the defect it
+witnesses.
 
 ## Owner decision
 

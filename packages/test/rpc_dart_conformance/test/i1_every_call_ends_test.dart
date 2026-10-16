@@ -20,7 +20,10 @@ import 'package:test/test.dart';
 import 'support/matrix.dart';
 
 const _deadline = Duration(milliseconds: 300);
-const _bound = Duration(milliseconds: 1300); // deadline + 1 s
+
+/// The deadline of a call to a working peer, which must end OK. At
+/// [_deadline] a loaded machine fails correct calls with DEADLINE_EXCEEDED.
+const _workingDeadline = Duration(seconds: 10);
 
 const _knownFailing = <String, String>{};
 
@@ -39,6 +42,8 @@ void main() {
               addTearDown(rig.close);
               final caller = await rig.caller();
 
+              final working = behaviour == PeerBehaviour.normal;
+              final deadline = working ? _workingDeadline : _deadline;
               final call = Call.start(
                 caller,
                 shape,
@@ -47,11 +52,11 @@ void main() {
                   responseSize: cutResponseSize,
                   count: 2,
                 ),
-                deadline: _deadline,
+                deadline: deadline,
               );
               final outcome = await endsWithin(
                 call,
-                _bound,
+                deadline + const Duration(seconds: 1),
                 'peer ${behaviour.name}',
               );
 
@@ -85,11 +90,15 @@ void main() {
                 caller,
                 shape,
                 Blob.request(id: nextCallId(), responseSize: 1024),
-                deadline: _deadline * 4,
+                deadline: _workingDeadline,
               ),
         ];
         for (final call in calls) {
-          final outcome = await endsWithin(call, _deadline * 4 + _bound, '');
+          final outcome = await endsWithin(
+            call,
+            _workingDeadline + const Duration(seconds: 1),
+            '',
+          );
           expect(outcome.ok, isTrue, reason: '${call.shape.name}: $outcome');
         }
       });
