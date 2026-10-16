@@ -26,6 +26,30 @@ post-release wait stays at 91-222 ms; the queueing phase grows (6.2 s
 alone, up to 14.3 s at 8x) and has its own 20 s deadline, after which the
 test releases the handlers with the uploads still running.
 
+Rounds 877-879 (2026-10-16): the full gate went red on one or two tests in
+five of nine runs, every time green alone and green on the next run. The
+machine's load average was 25 (another application building), and
+`fast_cbor_encoder_test`'s map encode took 81 ms against its usual 18. One
+run with a report per package named the reds:
+
+```
+conformance  i1 every call ends, peer normal: http | unary  status 4, 300 ms deadline
+http         graceful_drain_on_stop_test   'status 14' (300 ms wait before stop)
+http2        tiny_messages_are_weighed_test  WITNESS, refusal list empty
+rpc_dart     audit_frame_reassembly_linear_test  ratio 3.58
+```
+
+A later full gate named three more, all green when run alone:
+
+```
+conformance  i3 an oversized message that never finishes: socket
+http2        graceful_drain_on_stop_test  a second stop during a drain
+isolate      isolate_verification_test    several isolates run in parallel
+```
+
+Each has a fixed wall-clock budget (300 ms, a 300 ms head start, a 20 s
+queue phase, a timing ratio). This is a class of tests, not one test.
+
 ## Next step
 
 Time the test under load (P-327's way: several copies at once) and see

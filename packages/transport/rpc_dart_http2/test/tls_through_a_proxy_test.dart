@@ -155,8 +155,10 @@ void main() {
             await caller.close();
             await transport.close();
           }
-        } on HandshakeException catch (e) {
-          return '$e'.contains('CERTIFICATE_VERIFY_FAILED')
+        } on RpcStatusException catch (e) {
+          // connect() reports a failed handshake as UNAVAILABLE, the
+          // handshake's own text inside.
+          return e.message.contains('CERTIFICATE_VERIFY_FAILED')
               ? 'certificate rejected'
               : '$e';
         } catch (e) {

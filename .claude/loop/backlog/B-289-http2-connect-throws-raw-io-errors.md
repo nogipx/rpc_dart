@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 875)
+status: closed (round 879)
 release: breaking
 round: 814
 commit: 9e0e3d85

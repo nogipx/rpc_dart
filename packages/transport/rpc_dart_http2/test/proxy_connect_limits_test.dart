@@ -28,6 +28,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:test/test.dart';
 
@@ -73,11 +74,13 @@ void main() {
         proxyHandshakeTimeout: const Duration(milliseconds: 400),
       ),
       throwsA(
-        isA<SocketException>().having(
-          (e) => e.message,
-          'message',
-          contains('did not answer CONNECT'),
-        ),
+        isA<RpcStatusException>()
+            .having((e) => e.statusCode, 'status', RpcStatus.unavailable)
+            .having(
+              (e) => e.message,
+              'message',
+              contains('did not answer CONNECT'),
+            ),
       ),
       reason:
           'connect() is awaited at application startup; a proxy that accepts '
@@ -108,11 +111,13 @@ void main() {
         proxyHandshakeTimeout: const Duration(seconds: 10),
       ),
       throwsA(
-        isA<SocketException>().having(
-          (e) => e.message,
-          'message',
-          contains('CONNECT response headers'),
-        ),
+        isA<RpcStatusException>()
+            .having((e) => e.statusCode, 'status', RpcStatus.unavailable)
+            .having(
+              (e) => e.message,
+              'message',
+              contains('CONNECT response headers'),
+            ),
       ),
     );
 

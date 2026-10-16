@@ -327,7 +327,7 @@ class RpcHttp2CallerTransport
 
     final drainSignal = _DrainSignal();
 
-    Future<http2.ClientTransportConnection> createConnection() async {
+    Future<http2.ClientTransportConnection> open() async {
       if (proxyUri != null) {
         return _connectH2ViaProxy(
           proxyUri: proxyUri,
@@ -364,6 +364,9 @@ class RpcHttp2CallerTransport
         drainSignal: drainSignal,
       );
     }
+
+    Future<http2.ClientTransportConnection> createConnection() =>
+        _asStatus(open);
 
     final connection = await createConnection();
     logger?.internal('HTTP/2 connection established');
@@ -456,7 +459,7 @@ class RpcHttp2CallerTransport
 
     final drainSignal = _DrainSignal();
 
-    Future<http2.ClientTransportConnection> createConnection() async {
+    Future<http2.ClientTransportConnection> open() async {
       if (proxyUri != null) {
         return _connectH2ViaProxy(
           proxyUri: proxyUri,
@@ -486,6 +489,9 @@ class RpcHttp2CallerTransport
         drainSignal: drainSignal,
       );
     }
+
+    Future<http2.ClientTransportConnection> createConnection() =>
+        _asStatus(open);
 
     final connection = await createConnection();
     logger?.internal('HTTP/2 connection established');
@@ -526,6 +532,24 @@ class RpcHttp2CallerTransport
   /// It also bounds the wait for the peer's first SETTINGS, after `connect()`
   /// has returned; see `_guardedConnection`.
   static const Duration _connectTimeout = Duration(seconds: 30);
+
+  /// Opens a connection for [connect], [secureConnect] and every reconnect,
+  /// failing with a status as the http and websocket callers do: an
+  /// [RpcException] or an [Error] as it is, any other [Exception] as
+  /// UNAVAILABLE, so a `shouldReconnect` has one type to branch on.
+  static Future<http2.ClientTransportConnection> _asStatus(
+    Future<http2.ClientTransportConnection> Function() open,
+  ) async {
+    try {
+      return await open();
+    } catch (e, st) {
+      if (e is RpcException || e is! Exception) rethrow;
+      Error.throwWithStackTrace(
+        RpcStatusException(RpcStatus.unavailable, 'HTTP/2 connect failed: $e'),
+        st,
+      );
+    }
+  }
 
   @override
   int createStream() {
