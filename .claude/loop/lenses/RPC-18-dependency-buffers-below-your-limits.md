@@ -1,10 +1,10 @@
 ---
 refines: —
-paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**]
+paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_socket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837]
-status: confirmed (round 756)
+applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837, 881]
+status: confirmed (round 881)
 rank: 8
 ---
 
@@ -151,3 +151,11 @@ every whole oversized response into a dropped connection, 5 tests of 5.
   objects. Ended with `WATCH_OVERFLOW` past the bound rather than dropped,
   since a watch promises every change after its cursor.
   `../rounds/767-a-watcher-that-stops-reading-held-every-change.md`.
+- **Round 881** — the OUTBOUND side: dart:io's socket write queue. A TCP
+  peer that never read and kept starting calls answered by a trailer alone
+  (outside flow control) left 59375 KiB waiting for 200000 calls against a
+  kernel ceiling of 8192 KiB; the socket server read on. After writing via
+  `addStream` from a counted controller and pausing reads past 1 MiB unsent:
+  the peer's writes stall at 2452 KiB, 6318 KiB waiting. The websocket server
+  has the same shape and web_socket_channel 3.x hides the dart:io backpressure
+  (B-300). `../rounds/881-a-deaf-reader-grows-the-server-write-queue.md`.

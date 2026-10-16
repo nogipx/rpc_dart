@@ -5,7 +5,7 @@ commit: ecaab2ae
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_server.dart]
 probe: none — not measured
 reason: risk — a hypothesis from reading the code in round 880, not measured
-rank: 4
+rank: 5
 ---
 
 # B-299 — a stale socket file is any connect failure

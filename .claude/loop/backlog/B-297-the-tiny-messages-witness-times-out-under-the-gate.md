@@ -5,7 +5,7 @@ commit: 911fe219
 paths: [packages/transport/rpc_dart_http2/test/tiny_messages_are_weighed_test.dart]
 probe: none — the full gate, `melos run test:unit --no-select`
 reason: bench — intermittent: timed out once in the full gate, passes alone in 7 s
-rank: 3
+rank: 4
 ---
 
 # B-297 — the tiny-messages witness times out under the gate

@@ -105,6 +105,10 @@ class RpcSocketServer implements IRpcServer {
     );
   }
 
+  /// Without it a peer that never reads, starting calls, grows this server's
+  /// write queue by every answer. See [RpcSocketChannel.maxWriteBacklogBytes].
+  static const int _maxWriteBacklogBytes = 1024 * 1024;
+
   final RpcSocketAddress _address;
   final RpcSecurityPolicy _policy;
   final int? _maxConnections;
@@ -319,7 +323,11 @@ class RpcSocketServer implements IRpcServer {
     }
 
     configureRpcSocket(socket, _address);
-    final channel = RpcSocketChannel(socket, prefaceTimeout: _prefaceTimeout);
+    final channel = RpcSocketChannel(
+      socket,
+      prefaceTimeout: _prefaceTimeout,
+      maxWriteBacklogBytes: _maxWriteBacklogBytes,
+    );
     _handshaking.add(channel);
     channel.ready.then(
       (_) {

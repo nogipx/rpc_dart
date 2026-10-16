@@ -1,11 +1,10 @@
 ---
-status: open
-round: 880
-commit: ecaab2ae
+status: closed (round 881)
+round: 881
+commit: ed6f6293
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-probe: none — not measured
-reason: risk — a hypothesis from reading the code in round 880, not measured
-rank: 2
+probe: packages/transport/rpc_dart_socket/.dart_tool/probe/r881_deaf_peer_write_backlog.dart (P-336)
+reason: risk — a hypothesis from reading the code in round 880; measured and fixed for the socket channel in round 881, the websocket half is B-300
 ---
 
 # B-298 — the socket channel writes with no bound on what the peer has not read

@@ -23,10 +23,11 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// on top, reassembles frames from arbitrary chunks. Bytes the peer sends
 /// right behind its preface are kept and delivered after it.
 ///
-/// **No write backpressure of its own.** `Socket.add` buffers, and a flush
-/// cannot be awaited per frame because sends from different streams overlap
-/// and dart:io refuses an `add` while a flush is pending. What bounds the
-/// bytes in flight is rpc_dart's flow control, as on the WebSocket channel.
+/// **Writes never wait; reads do.** [send] queues and returns. Flow control
+/// bounds DATA, but not what a call is answered with outside it (metadata,
+/// trailers), so a peer that never reads and keeps starting calls would grow
+/// the queue without end. With [maxWriteBacklogBytes] set, a queue past it
+/// stops this side reading the peer until the queue has halved.
 ///
 /// **A closing peer cannot say why.** A raw socket has no close code, so a
 /// connection closed for a protocol violation reaches the peer as an ordinary
@@ -41,10 +42,15 @@ class RpcSocketChannel implements IRpcChannel {
   /// [closeTimeout] bounds the orderly close. Closing flushes what is still
   /// buffered and then sends FIN, and a peer that stopped reading can hold
   /// that flush for ever, so past the bound the socket is destroyed.
+  ///
+  /// [maxWriteBacklogBytes] is the unsent bytes past which reading pauses.
+  /// Null never pauses. A server sets it and a client does not: if both ends
+  /// paused, each would wait for the other to read.
   RpcSocketChannel(
     Socket socket, {
     Duration? prefaceTimeout = const Duration(seconds: 10),
     Duration closeTimeout = const Duration(seconds: 5),
+    this.maxWriteBacklogBytes,
   }) : _socket = socket,
        _closeTimeout = closeTimeout,
        peer = _describe(socket) {
@@ -81,20 +87,22 @@ class RpcSocketChannel implements IRpcChannel {
       ..onResume = _sub.resume;
 
     // A write that fails (the peer reset the connection) is reported on
-    // `done`, nowhere else. Unobserved, that is an unhandled async error in
-    // the zone the socket was created in, which in the root zone ends the
-    // isolate.
-    unawaited(
-      _socket.done.then(
-        (_) {},
-        onError: (Object e) => _fail(
-          RpcStatusException(
-            RpcStatus.unavailable,
-            'Socket connection to $peer failed: $e',
-          ),
-        ),
+    // `done` and on the stream being written, nowhere else. Unobserved, that
+    // is an unhandled async error in the zone the socket was created in,
+    // which in the root zone ends the isolate.
+    void failed(Object e) => _fail(
+      RpcStatusException(
+        RpcStatus.unavailable,
+        'Socket connection to $peer failed: $e',
       ),
     );
+    unawaited(_socket.done.then((_) {}, onError: failed));
+    // `addStream` and not `add`: dart:io pauses the stream it writes from
+    // while the kernel is full, so what is still queued sits in `_out`, where
+    // [_unsent] counts it.
+    _writing = _socket
+        .addStream(_out.stream.map(_taken))
+        .then((_) {}, onError: failed);
 
     if (prefaceTimeout != null) {
       _prefaceTimer = Timer(
@@ -108,7 +116,7 @@ class RpcSocketChannel implements IRpcChannel {
       );
     }
 
-    _socket.add(preface);
+    _write(preface);
   }
 
   /// The first bytes each side writes: `rpcsock` and a protocol version.
@@ -123,10 +131,21 @@ class RpcSocketChannel implements IRpcChannel {
   /// The wire revision this channel speaks.
   static const int protocolVersion = 1;
 
+  /// Unsent bytes past which this side stops reading the peer, or null.
+  final int? maxWriteBacklogBytes;
+
   final Socket _socket;
   final Duration _closeTimeout;
   late final StreamSubscription<Uint8List> _sub;
   Timer? _prefaceTimer;
+
+  /// Synchronous, so a write the kernel can take now is not held a microtask.
+  final StreamController<List<int>> _out = StreamController<List<int>>(
+    sync: true,
+  );
+  late final Future<void> _writing;
+  int _unsent = 0;
+  bool _readPausedForWrites = false;
 
   /// Single-subscription, so frames that arrive before the frame channel
   /// subscribes are buffered rather than dropped.
@@ -220,13 +239,27 @@ class RpcSocketChannel implements IRpcChannel {
   @override
   Future<void> send(Uint8List data) async {
     if (_closed) return;
-    try {
-      _socket.add(data);
-    } on StateError {
-      // The sink closed under us between the check and the add: the socket
-      // failed and `done` is about to say so. Nothing to send to.
-      unawaited(close());
+    _write(data);
+  }
+
+  void _write(List<int> data) {
+    _unsent += data.length;
+    _out.add(data);
+    final max = maxWriteBacklogBytes;
+    if (max != null && !_readPausedForWrites && _unsent > max) {
+      _readPausedForWrites = true;
+      _sub.pause();
     }
+  }
+
+  /// dart:io has taken [data] from `_out`.
+  List<int> _taken(List<int> data) {
+    _unsent -= data.length;
+    if (_readPausedForWrites && _unsent <= maxWriteBacklogBytes! ~/ 2) {
+      _readPausedForWrites = false;
+      _sub.resume();
+    }
+    return data;
   }
 
   @override
@@ -248,10 +281,13 @@ class RpcSocketChannel implements IRpcChannel {
     try {
       await _sub.cancel();
     } catch (_) {}
+    // Ending `_out` ends the write once dart:io has taken all of it. Not
+    // awaited: after a failed write nobody listens, and it never completes.
+    unawaited(_out.close());
     try {
-      // Flushes what is buffered, then FIN. A trailer sent just before close
+      // Writes what is queued, then FIN. A trailer sent just before close
       // must still reach the peer, which `destroy` alone would not guarantee.
-      await _socket.close().timeout(_closeTimeout);
+      await _writing.then((_) => _socket.close()).timeout(_closeTimeout);
     } catch (_) {
       // Timed out or failed: the peer is not reading, or is gone.
     }

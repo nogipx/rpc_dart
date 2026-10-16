@@ -17,6 +17,8 @@
 //                  a message that is still arriving past the limit, before
 //                  the peer has finished it
 //   pings          the server closing a connection that pings without end
+//   deaf peer      how many calls the server takes from a peer that reads
+//                  nothing, counted by the handlers
 // A member with no such observable for a row is skipped with the reason.
 //
 // Every refusal is paired with the valid neighbour (tests item 5): admitted
@@ -37,7 +39,10 @@ import 'package:test/test.dart';
 
 import 'support/matrix.dart';
 
-const _knownFailing = <String, String>{};
+const _knownFailing = <String, String>{
+  'websocket | 100000 unary calls answered with a status, peer reads nothing':
+      'B-300: the websocket channel reads on while its writes queue',
+};
 
 const _httpDiscards =
     'no library-side observable while the body arrives: past the limit the '
@@ -242,6 +247,187 @@ void main() {
       );
     }
   });
+
+  group('I-3 a peer that never reads is not answered without bound:', () {
+    // Each call is answered by a trailer alone, which flow control does not
+    // hold back: a DATA answer would park in the send window instead, under
+    // the many-streams bound. 100k trailers are ~30 MiB; what the server may
+    // take on is its write backlog limit plus the kernel's buffers both ways.
+    const calls = 100000;
+    const bound = 60000;
+    const answer = 32 * 1024;
+
+    for (final member in members) {
+      cell(
+        member,
+        '$calls unary calls answered with a status, peer reads nothing',
+        skip: switch (member) {
+          SocketMember() || WebSocketMember() => null,
+          HttpMember() =>
+            'one request per connection at a time: the next is not read '
+                'while an answer is unsent (C-76)',
+          Http2Member() =>
+            'B-301: needs a raw HTTP/2 peer past MAX_CONCURRENT_STREAMS',
+          _ => 'no network peer: the other end is code in this process',
+        },
+        knownFailing: _knownFailing,
+        timeout: const Duration(seconds: 40),
+        () async {
+          final rig = await member.serve() as NetworkRig;
+          addTearDown(rig.close);
+
+          final peer = await _deafPeer(rig, calls: calls);
+          // Poll up to the threshold (tests item 1).
+          final until = DateTime.now().add(const Duration(seconds: 4));
+          while (DateTime.now().isBefore(until)) {
+            final served = rig.probe.count('received');
+            expect(
+              served,
+              lessThanOrEqualTo(bound),
+              reason:
+                  'the server took $served calls from a peer that reads '
+                  'nothing, and holds every unsent answer',
+            );
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+
+          // The release: once the peer reads, the server takes the rest.
+          // Polled: `waitForCount` recounts every event on every event, which
+          // is quadratic at this many calls.
+          peer.hear();
+          final released = DateTime.now().add(const Duration(seconds: 10));
+          var taken = 0;
+          while ((taken = rig.probe.count('received')) < peer.written &&
+              DateTime.now().isBefore(released)) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
+          expect(
+            taken,
+            greaterThanOrEqualTo(peer.written),
+            reason:
+                'the peer reads again, and the server took only $taken of '
+                'the ${peer.written} calls it wrote',
+          );
+
+          // The valid neighbour: a caller that reads gets the same load
+          // answered in full, on the same server.
+          final caller = await rig.caller();
+          final outcomes = await Future.wait([
+            for (var i = 0; i < 400; i++)
+              Call.start(
+                caller,
+                CallShape.unary,
+                Blob.request(id: nextCallId(), responseSize: answer),
+                deadline: const Duration(seconds: 10),
+              ).outcome,
+          ]);
+          final failed = outcomes.where((o) => !o.ok).toList();
+          expect(failed, isEmpty, reason: 'a reading caller was refused');
+        },
+      );
+    }
+  });
+}
+
+const _batch = 500;
+
+/// Starts [calls] unary calls on [rig]'s server that fail at once, from a peer
+/// that does not read its socket until `hear` is called. Returns once every
+/// call is written or the server has stopped taking them, with how many were
+/// written whole.
+Future<({int written, void Function() hear})> _deafPeer(
+  NetworkRig rig, {
+  required int calls,
+}) async {
+  final metadata = RpcMetadata.forClientRequest(conformanceService, 'unary');
+  // [_batch] calls from the [first]th, in one write: the frame protocol
+  // reassembles frames from any chunking, and one call per write leaves the
+  // peer too slow to reach the server's limit inside a test's time.
+  Uint8List batch(int first) {
+    final out = BytesBuilder(copy: false);
+    for (var i = first; i < first + _batch && i < calls; i++) {
+      final streamId = 2 * i + 1;
+      final request = Blob.request(id: nextCallId(), mode: Mode.fail);
+      out
+        ..add(
+          RpcChannelFrame.encodeMetadata(
+            streamId: streamId,
+            metadata: metadata,
+          ),
+        )
+        ..add(
+          RpcChannelFrame.encodeData(
+            streamId: streamId,
+            payload: RpcMessageFrame.encode(blobCodec.serialize(request)),
+            endOfStream: true,
+          ),
+        );
+    }
+    return out.takeBytes();
+  }
+
+  switch (rig.member) {
+    case SocketMember():
+      // Read events off: nothing in this process reads the socket.
+      final raw = await RawSocket.connect(
+        InternetAddress.loopbackIPv4,
+        rig.serverPort,
+      );
+      raw.readEventsEnabled = false;
+      addTearDown(raw.close);
+      final writable = StreamController<void>.broadcast();
+      var reading = false;
+      raw.listen((e) {
+        if (e == RawSocketEvent.write) writable.add(null);
+        if (e == RawSocketEvent.read && reading) raw.read();
+      }, onError: (Object _) {});
+      // False once the kernel has taken nothing for a second: the server
+      // stopped reading.
+      Future<bool> write(Uint8List bytes) async {
+        var offset = 0;
+        while (offset < bytes.length) {
+          offset += raw.write(bytes, offset);
+          if (offset == bytes.length) break;
+          raw.writeEventsEnabled = true;
+          var moved = true;
+          await writable.stream.first.timeout(
+            const Duration(seconds: 1),
+            onTimeout: () => moved = false,
+          );
+          if (!moved) return false;
+        }
+        return true;
+      }
+
+      void hear() {
+        reading = true;
+        raw.readEventsEnabled = true;
+      }
+
+      var written = 0;
+      if (!await write(RpcSocketChannel.preface)) {
+        return (written: 0, hear: hear);
+      }
+      for (var i = 0; i < calls; i += _batch) {
+        if (!await write(batch(i))) break;
+        written = i + _batch < calls ? i + _batch : calls;
+        // The server runs in this isolate: give it the event loop.
+        await Future<void>.delayed(Duration.zero);
+      }
+      return (written: written, hear: hear);
+    case WebSocketMember():
+      final ws = await WebSocket.connect('ws://127.0.0.1:${rig.serverPort}');
+      addTearDown(ws.close);
+      // Paused before anything arrives: dart:io stops reading the socket.
+      final sub = ws.listen((_) {}, onError: (Object _) {})..pause();
+      for (var i = 0; i < calls; i += _batch) {
+        ws.add(batch(i));
+        await Future<void>.delayed(Duration.zero);
+      }
+      return (written: calls, hear: sub.resume);
+    default:
+      throw UnsupportedError('${rig.member.runtimeType}');
+  }
 }
 
 /// Sends the first [count] bytes of the gRPC-framed request [message] to
