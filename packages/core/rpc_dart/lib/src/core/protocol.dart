@@ -354,6 +354,13 @@ RpcStatusException responseEndedMidMessage() => RpcStatusException(
   'Response stream ended mid-message: the last gRPC frame is incomplete',
 );
 
+/// What a responder of any shape answers a request that ends inside a gRPC
+/// frame: INTERNAL, as grpc-go does, raised as the peer's fault.
+RpcStatusException requestEndedMidMessage() => RpcPeerFaultException(
+  RpcStatus.internal,
+  'Request stream closed mid-message: the last gRPC frame is incomplete',
+);
+
 /// Translates an error thrown by a handler into what may go on the wire.
 ///
 /// DEFAULT DENY: nothing reaches the caller unless it is provably safe to send.

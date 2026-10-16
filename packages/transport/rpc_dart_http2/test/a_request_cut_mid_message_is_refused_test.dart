@@ -20,7 +20,7 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-/// What the upload handlers read as a COMPLETE request stream.
+/// What the handlers read as a COMPLETE request.
 final _completed = <String>[];
 
 final class _Svc extends RpcResponderContract {
@@ -30,13 +30,17 @@ final class _Svc extends RpcResponderContract {
   void setup() {
     addUnaryMethod<RpcString, RpcString>(
       methodName: 'echo',
-      handler: (r, {RpcContext? context}) async => r,
+      handler: (r, {RpcContext? context}) async {
+        _completed.add('echo');
+        return r;
+      },
       requestCodec: _codec,
       responseCodec: _codec,
     );
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'items',
       handler: (r, {RpcContext? context}) async* {
+        _completed.add('items');
         yield r;
       },
       requestCodec: _codec,
@@ -141,6 +145,23 @@ void main() {
           expect(await _status(server.port, method, frame, end), '0');
         },
       );
+    }
+  }
+
+  // Unary and server stream run their handler only once the request has
+  // ended, so a tail is refused before it runs.
+  for (final method in ['echo', 'items']) {
+    for (final end in ['data', 'empty data', 'trailers']) {
+      test('WITNESS $method, a whole message and the start of a second ended '
+          'on $end, is refused INTERNAL before the handler runs', () async {
+        _completed.clear();
+        expect(
+          await _status(server.port, method, [...frame, 0, 0, 0], end),
+          '${RpcStatus.internal}',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(_completed, isEmpty);
+      });
     }
   }
 

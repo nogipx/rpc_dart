@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 875)
+status: closed (round 877)
 release: changelog
 round: 847
 commit: 42f23cce

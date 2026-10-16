@@ -28,6 +28,14 @@ final class _UnaryStreamState {
   /// responder is in fact waiting, and the half-close is answered by nobody.
   bool awaitingAfterEmptyChunk = false;
 
+  /// The request, decoded and held until the request stream ends.
+  ///
+  /// The handler runs only on a request the peer has finished, as grpc-go's
+  /// does: a tail or a second message after it is refused before the handler
+  /// has run, instead of after its side effects.
+  bool hasPendingRequest = false;
+  Object? pendingRequest;
+
   /// Reassembly parser for THIS stream's request frames.
   ///
   /// [RpcMessageParser] carries a buffer between invocations, so it belongs
@@ -390,7 +398,8 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       if (!RpcGrpcCompression.isIdentity(requestEnc)) {
         state.clientRequestEncoding = requestEnc;
       }
-      return; // Register metadata only.
+      // A half-close carried on metadata still ends a held request below.
+      if (!message.isEndOfStream) return;
     }
 
     // For data messages, ensure they belong to this method.
@@ -438,10 +447,10 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
     if (message.isEndOfStream &&
         eosState?.belongsToThisMethod == true &&
         eosState?.requestHandled != true) {
-      // Data DID arrive, just not all of a frame. Saying "closed without data"
-      // sends the peer looking for a request it made.
-      if (incomplete) {
-        await answerIncompleteRequest(streamId);
+      // Data DID arrive: a held request, or not all of a frame. Saying "closed
+      // without data" sends the peer looking for a request it made.
+      if (incomplete || isAwaitingRequest(streamId)) {
+        await finishRequest(streamId);
         return;
       }
       eosState!.requestHandled = true;
@@ -553,67 +562,95 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       }
       final parser = _parserFor(state);
       final messages = parser(message.payload!);
-      if (messages.isEmpty) {
-        // The parser is holding the beginning of a frame, so more input would
-        // complete it. Wait, and let the caller route the rest here: the only
-        // transports that split a frame are third-party ones forwarding raw
-        // chunks, and before this they got INTERNAL on unary alone while both
-        // streaming shapes answered.
-        //
-        // `holdsPartialFrame`, not `messages.isEmpty`: a REFUSED frame also
-        // yields nothing, and waiting for a frame the policy already rejected
-        // would report a truncated request where `maxMessageLengthBytes` fired.
-        //
-        // An EMPTY chunk waits too: it carries nothing to refuse, and a legal
-        // request may follow it, as it does on both streaming shapes.
-        if (parser.holdsPartialFrame || message.payload!.isEmpty) {
+      final TRequest request;
+      if (state.hasPendingRequest) {
+        // The request is held for the end of the stream, so anything more is
+        // a second message or the start of one.
+        if (messages.isNotEmpty) throw tooManyMessages('request');
+        if (!message.isEndOfStream) {
           incomplete = true;
-          // Not handled after all: the next fragment must be let through, and
-          // the state (which owns the parser and its buffer) must survive.
           state.requestHandled = false;
-          // An empty chunk leaves the parser holding nothing, so this is the
-          // only record that the responder is waiting. Without it
-          // isAwaitingRequest reads false, the half-close reaches no branch
-          // that answers, and the stream holds its slot until the peer
-          // disconnects.
-          if (message.payload!.isEmpty) state.awaitingAfterEmptyChunk = true;
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Request frame incomplete, awaiting the rest [streamId: $streamId]',
-            );
-          }
           return true;
         }
-        _logger.error(
-          'Failed to extract message from payload [streamId: $streamId]',
-        );
-        throw RpcStatusException(
-          RpcStatus.internal,
-          'Failed to extract message from payload',
-        );
-      }
+        if (parser.holdsPartialFrame) throw tooManyMessages('request');
+        request = state.pendingRequest as TRequest;
+        state
+          ..hasPendingRequest = false
+          ..pendingRequest = null;
+      } else {
+        if (messages.isEmpty) {
+          // The parser is holding the beginning of a frame, so more input
+          // would complete it. Wait, and let the caller route the rest here:
+          // the only transports that split a frame are third-party ones
+          // forwarding raw chunks, and before this they got INTERNAL on unary
+          // alone while both streaming shapes answered.
+          //
+          // `holdsPartialFrame`, not `messages.isEmpty`: a REFUSED frame also
+          // yields nothing, and waiting for a frame the policy already
+          // rejected would report a truncated request where
+          // `maxMessageLengthBytes` fired.
+          //
+          // An EMPTY chunk waits too: it carries nothing to refuse, and a
+          // legal request may follow it, as it does on both streaming shapes.
+          if (parser.holdsPartialFrame || message.payload!.isEmpty) {
+            incomplete = true;
+            // Not handled after all: the next fragment must be let through,
+            // and the state (which owns the parser and its buffer) must
+            // survive.
+            state.requestHandled = false;
+            // An empty chunk leaves the parser holding nothing, so this is the
+            // only record that the responder is waiting. Without it
+            // isAwaitingRequest reads false, the half-close reaches no branch
+            // that answers, and the stream holds its slot until the peer
+            // disconnects.
+            if (message.payload!.isEmpty) state.awaitingAfterEmptyChunk = true;
+            if (_logger.isInternal) {
+              _logger.internal(
+                'Request frame incomplete, awaiting the rest '
+                '[streamId: $streamId]',
+              );
+            }
+            return true;
+          }
+          _logger.error(
+            'Failed to extract message from payload [streamId: $streamId]',
+          );
+          throw RpcStatusException(
+            RpcStatus.internal,
+            'Failed to extract message from payload',
+          );
+        }
 
-      // Bytes after the one message are the start of a second: refused as two
-      // whole ones are, not left in the parser while the call answers OK.
-      if (messages.length > 1 || parser.holdsPartialFrame) {
-        throw tooManyMessages('request');
-      }
-      final TRequest request;
-      try {
-        request = _decodePeerMessage(
-          _requestSerializer,
-          messages.first,
-          _transport,
-        );
-      } on RpcPeerFaultException {
-        rethrow;
-      } catch (_) {
-        // The PEER's bytes: answered INTERNAL as gRPC does, logged as its
-        // fault rather than ours.
-        throw RpcPeerFaultException(
-          RpcStatus.internal,
-          'Request payload could not be decoded',
-        );
+        // Bytes after the one message are the start of a second: refused as
+        // two whole ones are, not left in the parser while the call answers OK.
+        if (messages.length > 1 || parser.holdsPartialFrame) {
+          throw tooManyMessages('request');
+        }
+        try {
+          request = _decodePeerMessage(
+            _requestSerializer,
+            messages.first,
+            _transport,
+          );
+        } on RpcPeerFaultException {
+          rethrow;
+        } catch (_) {
+          // The PEER's bytes: answered INTERNAL as gRPC does, logged as its
+          // fault rather than ours.
+          throw RpcPeerFaultException(
+            RpcStatus.internal,
+            'Request payload could not be decoded',
+          );
+        }
+        if (!message.isEndOfStream) {
+          // Held, not run: see [_UnaryStreamState.hasPendingRequest].
+          state
+            ..hasPendingRequest = true
+            ..pendingRequest = request;
+          incomplete = true;
+          state.requestHandled = false;
+          return true;
+        }
       }
 
       // Handle request.
@@ -736,8 +773,24 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
   bool isAwaitingRequest(int streamId) {
     final state = _streamStates[streamId];
     if (state == null || state.requestHandled) return false;
-    return (state.parser?.holdsPartialFrame ?? false) ||
+    return state.hasPendingRequest ||
+        (state.parser?.holdsPartialFrame ?? false) ||
         state.awaitingAfterEmptyChunk;
+  }
+
+  /// Ends [streamId]'s request at the peer's half-close: a held request is
+  /// served, anything else short of one is answered as incomplete.
+  Future<void> finishRequest(int streamId) async {
+    final state = _streamStates[streamId];
+    if (state == null || state.requestHandled) return;
+    if (!state.hasPendingRequest) return answerIncompleteRequest(streamId);
+    await handleMessage(
+      RpcTransportMessage(
+        streamId: streamId,
+        payload: Uint8List(0),
+        isEndOfStream: true,
+      ),
+    );
   }
 
   /// Answers a peer that half-closed while a frame was still incomplete.

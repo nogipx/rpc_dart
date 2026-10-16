@@ -224,8 +224,8 @@ void main() {
 
   group('the unary request charge', () {
     // The request is charged, then taken by the dispatch. A frame after it is a
-    // second request and is refused INTERNAL (round 637); with none, the call
-    // is answered.
+    // second request and is refused INTERNAL (round 637), before the handler
+    // runs; with none, the call is answered at the half-close.
     Future<String?> extraFrames(int n) async {
       final s = _State();
       final r = _rig(
@@ -242,14 +242,13 @@ void main() {
         RpcMetadata.forClientRequest('Svc', 'slowUnary'),
       );
       final frame = RpcMessageFrame.encode(_codec.serialize(_chunk));
+      s.hold.complete();
       await r.client.sendMessage(id, frame);
-      await s.entered.future.timeout(const Duration(seconds: 5));
       for (var i = 0; i < n; i++) {
         await r.client.sendMessage(id, frame);
       }
-      // Lets the last frame reach the pipeline before the handler returns.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      s.hold.complete();
+      // The handler runs only once the request has ended.
+      await r.client.finishSending(id);
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (status == null && DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -294,6 +293,7 @@ void main() {
         final end = at + piece < frame.length ? at + piece : frame.length;
         await r.client.sendMessage(id, frame.sublist(at, end));
       }
+      await r.client.finishSending(id);
       final deadline = DateTime.now().add(const Duration(seconds: 5));
       while (status == null && DateTime.now().isBefore(deadline)) {
         await Future<void>.delayed(const Duration(milliseconds: 20));

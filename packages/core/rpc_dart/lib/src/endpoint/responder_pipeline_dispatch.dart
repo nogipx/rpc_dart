@@ -615,20 +615,19 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
       return;
     }
 
-    // A unary request that stopped MID-FRAME. Distinct from the case below —
-    // data did arrive, just not all of one message — and it must be answered
-    // rather than awaited: a request that is merely waited for is the hang that
-    // round 518's partial fix produced, which is worse than the error being
-    // fixed here.
+    // A unary request held for this half-close, or one that stopped
+    // MID-FRAME. Distinct from the case below — data did arrive — and the
+    // second must be answered rather than awaited: a request that is merely
+    // waited for is the hang that round 518's partial fix produced.
     final awaiting = state.responder;
     if (awaiting is UnaryResponder<IRpcSerializable, IRpcSerializable> &&
         awaiting.isAwaitingRequest(state.id)) {
       state.unaryAwaitingRequest = false;
       _detached(
         awaiting
-            .answerIncompleteRequest(state.id)
+            .finishRequest(state.id)
             .then((_) => _cleanupStream(state.id, only: state)),
-        'incomplete unary request',
+        'unary request at half-close',
       );
       return;
     }

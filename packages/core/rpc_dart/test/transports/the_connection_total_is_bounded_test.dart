@@ -266,9 +266,10 @@ void main() {
   test(
     'a unary torn down with frames still held returns them',
     () async {
-      // Frames sent while a unary handler runs are charged and never taken; only
-      // the stream's teardown can give them back. Fill the connection that way,
-      // let the refusal end the call, then make an ordinary one.
+      // Frames sent while a unary request is held for its half-close are
+      // charged and never taken; only the stream's teardown can give them back.
+      // Fill the connection that way, let the refusal end the call, then make an
+      // ordinary one.
       final s = _State();
       final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair();
       final client = RpcChannelTransport(
@@ -303,7 +304,7 @@ void main() {
       );
       final frame = RpcMessageFrame.encode(_codec.serialize(_chunk));
       await client.sendMessage(id, frame);
-      await s.entered.future.timeout(const Duration(seconds: 5));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
       // Past the connection total, so the stream is refused and torn down while
       // holding all of it.
       for (var i = 0; i < ceiling + 16 && status == null; i++) {

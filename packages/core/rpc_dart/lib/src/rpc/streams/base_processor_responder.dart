@@ -215,17 +215,9 @@ extension _StreamProcessorInternals<
   void _endRequests() {
     if (_requestController.isClosed) return;
     if (_parser?.holdsPartialFrame ?? false) {
-      _requestController.addError(
-        // INTERNAL, as grpc-go answers it, and as the unary responder and the
-        // http2 transport answer the same request. A peer fault: as a plain
-        // INTERNAL it is logged as this side's error, once per call.
-        RpcPeerFaultException(
-          RpcStatus.internal,
-          'Request stream closed mid-message: the last gRPC frame is '
-          'incomplete',
-        ),
-        StackTrace.current,
-      );
+      // A peer fault: as a plain INTERNAL it is logged as this side's error,
+      // once per call.
+      _requestController.addError(requestEndedMidMessage(), StackTrace.current);
     }
     _requestController.close();
   }

@@ -419,6 +419,8 @@ void main() {
         } catch (e) {
           // The wrong method may well error.
         }
+        // The handler runs at the half-close, which send() does not await.
+        await Future<void>.delayed(const Duration(milliseconds: 50));
 
         // Assert
         expect(handlerCallCount, equals(1));

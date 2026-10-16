@@ -230,17 +230,18 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       batch = state.takePreBindBufferedMessages();
     }
 
-    // Still waiting for the rest of a frame: the stream stays alive so the next
-    // data frame can be routed here, and `_handleEndOfStream` answers the peer
-    // if it half-closes instead. Tearing down now is what turned round 518's
-    // partial fix into a hang.
+    // Still waiting for the rest of a frame, or for the half-close after a
+    // whole request: the stream stays alive so the next data frame can be
+    // routed here, and `_handleEndOfStream` ends the request when the peer
+    // half-closes. Tearing down now is what turned round 518's partial fix
+    // into a hang.
     if (incomplete) {
       state.unaryAwaitingRequest = true;
       // The peer may already have half-closed — the frames and the EOS can all
       // be buffered before the method is known — in which case nothing further
       // will arrive and nobody else will look.
       if (state.clientEnded) {
-        await responder.answerIncompleteRequest(streamId);
+        await responder.finishRequest(streamId);
         await _cleanupStream(streamId, only: state);
       }
       return;

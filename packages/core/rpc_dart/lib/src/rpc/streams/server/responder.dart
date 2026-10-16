@@ -47,8 +47,15 @@ final class ServerStreamResponder<
   /// True until [close] runs; guards the response pump.
   bool _isActive = true;
 
-  /// True after the first request is handled.
+  /// True once the request is answered: served, refused or failed.
   bool _requestHandled = false;
+
+  /// The request, held until the request stream ends.
+  ///
+  /// The handler runs only on a request the peer has finished, as grpc-go's
+  /// does: a tail or a second message after it is refused before the handler
+  /// has run, instead of after its side effects.
+  TRequest? _pendingRequest;
 
   /// Creates a server-stream responder.
   ServerStreamResponder({
@@ -127,105 +134,25 @@ final class ServerStreamResponder<
           );
         }
 
-        if (!_requestHandled) {
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Processing first request for server stream [id: $id]',
-            );
-          }
-          _requestHandled = true;
-
-          try {
-            final handlerStream = handler(request);
-            // ONE record for one event. This was three -- "Invoking request
-            // handler", "Handler invoked, response stream received",
-            // "Processing response stream from handler" -- around a single
-            // synchronous call that cannot fail between them.
-            if (_logger.isInternal) {
-              _logger.internal('Request handler returned a stream [id: $id]');
-            }
-
-            // Relay the handler stream through a bridge we own, so close() can
-            // cancel the upstream subscription and end the `await for`. The
-            // bridge is also what passes the loop's demand back: without that
-            // the relay is an unbounded buffer, and an `async*` handler keeps
-            // allocating while a send is in flight.
-            final relay = StreamBridge<TResponse>(source: handlerStream);
-            _handlerRelay = relay;
-
-            int responseCount = 0;
-            await for (var response in relay.stream) {
-              if (!_isActive) break;
-              responseCount++;
-              if (_logger.isInternal) {
-                _logger.internal(
-                  'Received response #$responseCount from handler: $response [id: $id]',
-                );
-              }
-
-              try {
-                await _processor.send(response);
-                if (_logger.isInternal) {
-                  _logger.internal(
-                    'Response #$responseCount sent to client [id: $id]',
-                  );
-                }
-              } catch (e, stackTrace) {
-                _logger.error(
-                  'Failed to send response #$responseCount to client [id: $id]',
-                  error: e,
-                  stackTrace: stackTrace,
-                );
-                // Client disconnected or processor closed — stop iterating
-                // to avoid leaking the handler subscription on broadcast streams.
-                break;
-              }
-              // A response that could not go out ends the call; the handler
-              // must not keep producing behind it. finishSending answers it.
-              if (_processor.isAnswered) break;
-            }
-
-            if (_logger.isInternal) {
-              _logger.internal(
-                'Handler response stream completed, total responses: $responseCount [id: $id]',
-              );
-            }
-
-            // Finish sending responses.
-            await _processor.finishSending();
-            if (_logger.isInternal) {
-              _logger.internal('Response sending finished [id: $id]');
-            }
-            _completeDone();
-          } catch (error, trace) {
-            if (RpcStatus.isFaultError(error)) {
-              _logger.error(
-                'Request handling failed [id: $id]',
-                error: error,
-                stackTrace: trace,
-              );
-            }
-            await sendWireError(error, _processor.sendError);
-            _completeDone();
-          }
-        } else {
-          // A server stream carries ONE request; another fails the call, and
-          // the handler still producing for it is stopped.
-          if (!_isActive) return;
-          try {
-            await sendWireError(
-              tooManyMessages('request'),
-              _processor.sendError,
-            );
-          } catch (e, stackTrace) {
-            _logger.error(
-              'Failed to refuse a second request [id: $id]',
-              error: e,
-              stackTrace: stackTrace,
-            );
-          } finally {
-            await close();
-          }
+        if (!_requestHandled && _pendingRequest == null) {
+          _pendingRequest = request;
+          return;
+        }
+        // A server stream carries ONE request; another fails the call, and
+        // the handler still producing for it is stopped.
+        if (!_isActive) return;
+        _requestHandled = true;
+        _pendingRequest = null;
+        try {
+          await sendWireError(tooManyMessages('request'), _processor.sendError);
+        } catch (e, stackTrace) {
+          _logger.error(
+            'Failed to refuse a second request [id: $id]',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        } finally {
+          await close();
         }
       },
       onError: (Object error, StackTrace stackTrace) async {
@@ -272,12 +199,18 @@ final class ServerStreamResponder<
         if (_logger.isInternal) {
           _logger.internal('Request stream completed [id: $id]');
         }
+        if (_requestHandled || !_isActive) return;
+        _requestHandled = true;
+        final request = _pendingRequest;
+        if (request != null) {
+          _pendingRequest = null;
+          await _serve(request, handler);
+          return;
+        }
         // A payload frame that decoded to no message (an empty one) bound this
         // responder, so the pipeline's own "no payload" refusal no longer
         // applies. Ending here with no request means the handler will never
         // run; without an answer the call holds its slot until disconnect.
-        if (_requestHandled || !_isActive) return;
-        _requestHandled = true;
         try {
           await sendWireError(
             RpcStatusException(
@@ -297,6 +230,81 @@ final class ServerStreamResponder<
         }
       },
     );
+  }
+
+  /// Runs [handler] on [request] and streams its responses.
+  Future<void> _serve(
+    TRequest request,
+    Stream<TResponse> Function(TRequest request) handler,
+  ) async {
+    try {
+      final handlerStream = handler(request);
+      if (_logger.isInternal) {
+        _logger.internal('Request handler returned a stream [id: $id]');
+      }
+
+      // Relay the handler stream through a bridge we own, so close() can
+      // cancel the upstream subscription and end the `await for`. The bridge
+      // is also what passes the loop's demand back: without that the relay is
+      // an unbounded buffer, and an `async*` handler keeps allocating while a
+      // send is in flight.
+      final relay = StreamBridge<TResponse>(source: handlerStream);
+      _handlerRelay = relay;
+
+      int responseCount = 0;
+      await for (var response in relay.stream) {
+        if (!_isActive) break;
+        responseCount++;
+        if (_logger.isInternal) {
+          _logger.internal(
+            'Received response #$responseCount from handler: $response [id: $id]',
+          );
+        }
+
+        try {
+          await _processor.send(response);
+          if (_logger.isInternal) {
+            _logger.internal(
+              'Response #$responseCount sent to client [id: $id]',
+            );
+          }
+        } catch (e, stackTrace) {
+          _logger.error(
+            'Failed to send response #$responseCount to client [id: $id]',
+            error: e,
+            stackTrace: stackTrace,
+          );
+          // Client disconnected or processor closed — stop iterating to avoid
+          // leaking the handler subscription on broadcast streams.
+          break;
+        }
+        // A response that could not go out ends the call; the handler must
+        // not keep producing behind it. finishSending answers it.
+        if (_processor.isAnswered) break;
+      }
+
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Handler response stream completed, total responses: $responseCount [id: $id]',
+        );
+      }
+
+      await _processor.finishSending();
+      if (_logger.isInternal) {
+        _logger.internal('Response sending finished [id: $id]');
+      }
+      _completeDone();
+    } catch (error, trace) {
+      if (RpcStatus.isFaultError(error)) {
+        _logger.error(
+          'Request handling failed [id: $id]',
+          error: error,
+          stackTrace: trace,
+        );
+      }
+      await sendWireError(error, _processor.sendError);
+      _completeDone();
+    }
   }
 
   /// Closes the stream and releases resources.
