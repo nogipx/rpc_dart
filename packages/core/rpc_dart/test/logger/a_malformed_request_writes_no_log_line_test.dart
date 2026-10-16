@@ -2,8 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A malformed request is the PEER's error: it is answered INVALID_ARGUMENT and
-// is not a server incident. Client-stream and bidi answer it without a log
+// A malformed request is the PEER's error: it is answered with a status
+// (INTERNAL when cut mid-frame, INVALID_ARGUMENT when empty) and is not a
+// server incident. Client-stream and bidi answer it without a log
 // line; unary wrote a WARNING per call and server-stream an ERROR per call, so
 // a peer repeating one malformed call chose how many records the server wrote.
 // Counted over 200 calls on one connection: 200 each, against 0 for the other
@@ -130,12 +131,13 @@ void main() {
   final full = RpcMessageFrame.encode(_codec.serialize('hi'.rpc));
   final truncated = Uint8List.sublistView(full, 0, 5);
   final invalid = '${RpcStatus.invalidArgument}';
+  final cut = '${RpcStatus.internal}';
 
   test('unary: a request cut mid-frame writes no log line', () async {
     // WITNESS. Before: 20 warnings, "Client half-closed mid-frame".
     final r = await _run('u', truncated);
     expect(r.records, isEmpty);
-    expect(r.statuses, everyElement(invalid));
+    expect(r.statuses, everyElement(cut));
   });
 
   test('unary: an empty payload frame writes no log line', () async {
@@ -154,7 +156,7 @@ void main() {
     // WITNESS. Before: 20 errors, "Error in request stream".
     final r = await _run('s', truncated);
     expect(r.records, isEmpty);
-    expect(r.statuses, everyElement(invalid));
+    expect(r.statuses, everyElement(cut));
   });
 
   test('GUARD: a valid call still succeeds and writes nothing', () async {

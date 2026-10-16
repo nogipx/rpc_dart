@@ -326,11 +326,12 @@ void main() {
     'a peer that stops mid-frame gets a STATUS, not a hang',
     () async {
       // The failure the fix can introduce, and the reason round 518's partial
-      // version was reverted. INVALID_ARGUMENT names the malformed request;
-      // DEADLINE_EXCEEDED (status 4) would mean the call was left waiting.
+      // version was reverted. INTERNAL names bytes lost in transit, as grpc-go
+      // answers them; DEADLINE_EXCEEDED (status 4) would mean the call was
+      // left waiting.
       expect(
         await _unary(split: true, truncate: true),
-        startsWith('status ${RpcStatus.invalidArgument}'),
+        startsWith('status ${RpcStatus.internal}'),
         reason: 'an incomplete frame that is merely awaited is a hang',
       );
     },
@@ -347,7 +348,7 @@ void main() {
       // see this one.
       expect(
         await _unary(split: true, truncate: true, lateEnd: true),
-        startsWith('status ${RpcStatus.invalidArgument}'),
+        startsWith('status ${RpcStatus.internal}'),
         reason: 'a request left incomplete must be answered, not awaited',
       );
     },
@@ -365,7 +366,7 @@ void main() {
     () async {
       expect(
         await _serverStream(split: true, truncate: true),
-        startsWith('status ${RpcStatus.invalidArgument}'),
+        startsWith('status ${RpcStatus.internal}'),
         reason:
             'a server stream carries exactly one request, so without this the '
             'handler never runs and the call waits out its deadline',
@@ -379,7 +380,7 @@ void main() {
     () async {
       expect(
         await _clientStream(split: true, truncate: true),
-        startsWith('status ${RpcStatus.invalidArgument}'),
+        startsWith('status ${RpcStatus.internal}'),
         reason:
             'got:0 tells the handler the peer sent nothing, where in fact it '
             'sent an incomplete something — and the call SUCCEEDS',
@@ -395,7 +396,7 @@ void main() {
       // construction; this is what measures it.
       expect(
         await _bidi(split: true, truncate: true),
-        startsWith('status ${RpcStatus.invalidArgument}'),
+        startsWith('status ${RpcStatus.internal}'),
         reason: 'an incomplete frame followed by a half-close must be answered',
       );
     },

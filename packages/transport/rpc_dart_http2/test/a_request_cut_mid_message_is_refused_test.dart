@@ -7,8 +7,8 @@
 // its last message gone: a client stream answered OK on an empty request
 // stream. The request can end on a DATA frame, on an empty DATA frame of its
 // own, or on trailers; each is a separate path here. The refusal is
-// INVALID_ARGUMENT, what core answers the same request on every other
-// transport.
+// INTERNAL, what core answers the same request on every other transport and
+// what grpc-go answers it.
 
 import 'dart:async';
 import 'dart:io';
@@ -128,10 +128,10 @@ void main() {
   for (final method in ['echo', 'items', 'collect', 'chat']) {
     for (final end in ['data', 'empty data', 'trailers']) {
       test('WITNESS $method, a request cut inside its frame and ended on '
-          '$end, is refused INVALID_ARGUMENT', () async {
+          '$end, is refused INTERNAL', () async {
         expect(
           await _status(server.port, method, frame.sublist(0, 7), end),
-          '${RpcStatus.invalidArgument}',
+          '${RpcStatus.internal}',
         );
       });
 
@@ -146,10 +146,10 @@ void main() {
 
   for (final method in ['collect', 'chat']) {
     test('WITNESS $method, a whole message and the start of a second, is '
-        'refused INVALID_ARGUMENT', () async {
+        'refused INTERNAL', () async {
       expect(
         await _status(server.port, method, [...frame, 0, 0, 0], 'empty data'),
-        '${RpcStatus.invalidArgument}',
+        '${RpcStatus.internal}',
       );
     });
 

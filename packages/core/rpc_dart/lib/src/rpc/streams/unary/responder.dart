@@ -742,7 +742,9 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
 
   /// Answers a peer that half-closed while a frame was still incomplete.
   ///
-  /// INVALID_ARGUMENT names the malformed request. Merely waiting is the failure
+  /// Bytes cut mid-frame are INTERNAL, as grpc-go answers them: they were lost
+  /// in transit, not a wrong argument. No request at all is INVALID_ARGUMENT.
+  /// Merely waiting is the failure
   /// this whole mechanism can introduce — round 518's partial version turned an
   /// immediate error into a hang, which is worse — so the caller must reach this
   /// on every path where the request can stop short.
@@ -775,7 +777,7 @@ final class UnaryResponder<TRequest, TResponse> implements IRpcResponder {
       await _transport.sendMetadata(
         streamId,
         RpcMetadata.forTrailer(
-          RpcStatus.invalidArgument,
+          partial ? RpcStatus.internal : RpcStatus.invalidArgument,
           message: detail,
           maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
         ),

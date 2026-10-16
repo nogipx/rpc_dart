@@ -124,7 +124,7 @@ void main() {
 
   test('GUARD: a frame cut mid-message keeps its own answer', () async {
     final r = await _call(Uint8List.sublistView(full, 0, 5));
-    expect(r.status, '${RpcStatus.invalidArgument}');
+    expect(r.status, '${RpcStatus.internal}');
     expect(r.message, contains('mid-message'));
     expect(r.held, 0);
   });

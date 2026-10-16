@@ -365,7 +365,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     _answerFramingViolation(
       streamId,
       RpcStatusException(
-        RpcStatus.invalidArgument,
+        RpcStatus.internal,
         'Request stream closed mid-message: the last gRPC frame is incomplete',
       ),
     );
