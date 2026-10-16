@@ -1,5 +1,6 @@
 ---
-status: open
+status: decided by owner (round 875)
+release: breaking
 round: 814
 commit: 9e0e3d85
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
@@ -26,4 +27,7 @@ through. Breaking, like round 814.
 
 ## Owner decision
 
-—
+2026-10-16: fix it as round 814 did. An `Exception` from the connection
+factory becomes UNAVAILABLE; an `RpcException` or an `Error` passes
+through. Measure the TLS handshake and the proxy CONNECT failures in the
+same round. Breaking: the type a public method throws changes.

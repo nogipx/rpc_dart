@@ -1,5 +1,6 @@
 ---
-status: open
+status: decided by owner (round 875)
+release: changelog
 round: 857
 commit: 98ba93a5
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport_inbound.dart]
@@ -12,11 +13,12 @@ rank: 4
 
 Since rounds 553-554 core answers a request stream that ends inside a gRPC
 frame with INVALID_ARGUMENT ("Request stream closed mid-message"), on all
-four shapes; round 857 aligned http2 to it. grpc-go is believed to answer
-the same request INTERNAL (`recvMsg` turning `io.ErrUnexpectedEOF` into
-`codes.Internal`); that is from memory, not re-checked against its source
-or measured against a grpc-go server, which is the first step here. INVALID_ARGUMENT tells a client its argument was wrong,
-where its bytes were cut in transit.
+four shapes; round 857 aligned http2 to it. grpc-go answers the same
+request INTERNAL. That was read in its source (master, 2026-10-16) and not
+measured against a grpc-go server. `parser.recvMsg` turns an `io.EOF`
+inside a body into `io.ErrUnexpectedEOF`. `serverStream.RecvMsg` maps that
+to `codes.Internal`, and so does `toRPCErr`. INVALID_ARGUMENT tells a
+client its argument was wrong, when in fact its bytes were cut in transit.
 
 A second, smaller split inside the library: a unary request of one whole
 message and the start of a second IN ONE CHUNK is answered INTERNAL ("More
@@ -34,4 +36,7 @@ the code is the one affected.
 
 ## Owner decision
 
-—
+2026-10-16: option 2, INTERNAL everywhere, as grpc-go does. This covers
+all four shapes on every transport, and it also removes the unary
+one-chunk split (http2 moves to INTERNAL too). This reverses the status
+chosen in rounds 553-554 and 857.

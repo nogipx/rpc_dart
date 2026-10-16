@@ -1,5 +1,6 @@
 ---
-status: open
+status: decided by owner (round 875)
+release: changelog
 round: 858
 commit: 6c31366f
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/caller.dart]
@@ -42,4 +43,6 @@ The streaming rule is `_grpcStatusErrorTransformer` in
 
 ## Owner decision
 
-—
+2026-10-16: option 1, the first status wins on every shape. The streaming
+callers end at an OK status even without END_STREAM. The unary rule
+("not gated on isEndOfStream") stays as it is.
