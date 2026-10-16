@@ -56,10 +56,14 @@ The mandatory workspace-wide sequence, run by every round:
 
 ```gate
 melos run analyze
-melos run test:unit --no-select
+melos run test:unit:quiet --no-select
 melos run format:check
 melos run license:check
 ```
+
+`test:unit:quiet` runs the same packages as `test:unit` with the same exit
+status, and prints only failures and each package's last line. The full output
+of the last run is in each package's `.dart_tool/test_out.txt`.
 
 `license:check` joined the gate after round 231, and it is worth saying why: it
 had been RED on CI since `87e9d2f4 add skill` — about thirty commits and twenty
