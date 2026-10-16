@@ -117,8 +117,9 @@ final class BidirectionalStreamCaller<
         yield response.payload!;
       }
 
-      // Check status in metadata.
-      if (response.metadata != null) {
+      // The status on the END_STREAM frame; one on an earlier frame is not a
+      // status yet.
+      if (response.metadata != null && response.isEndOfStream) {
         final status = RpcCallerTrailer.statusOf(response.metadata!);
         if (status != null && status != RpcStatus.ok) {
           final error = RpcCallerTrailer.errorOf(

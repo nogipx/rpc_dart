@@ -130,8 +130,8 @@ final class ServerStreamCaller<
           yield response.payload!;
         }
 
-        // Inspect status in metadata.
-        if (response.metadata != null) {
+        // The status on the END_STREAM frame; see _grpcStatusErrorTransformer.
+        if (response.metadata != null && response.isEndOfStream) {
           final status = RpcCallerTrailer.statusOf(response.metadata!);
           if (status != null && status != RpcStatus.ok) {
             final error = RpcCallerTrailer.errorOf(
@@ -191,8 +191,10 @@ StreamTransformer<RpcMessage<T>, RpcMessage<T>> _grpcStatusErrorTransformer<
     handleData: (response, sink) {
       sink.add(response);
 
+      // Only the status on the END_STREAM frame, as on unary and client
+      // stream and in grpc-go: one on an earlier frame is not a status yet.
       final metadata = response.metadata;
-      if (metadata == null) return;
+      if (metadata == null || !response.isEndOfStream) return;
       final status = RpcCallerTrailer.statusOf(metadata);
       if (status == null || status == RpcStatus.ok) return;
 

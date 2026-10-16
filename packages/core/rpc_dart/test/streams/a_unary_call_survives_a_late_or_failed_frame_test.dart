@@ -89,12 +89,12 @@ void main() {
           ),
         )
         ..feed(_data(id, 'a'))
-        // The status without END_STREAM completes the call, so the stream is
-        // still open for the frame after it.
+        // Only a status with END_STREAM completes the call.
         ..feed(
           RpcChannelFrame.encodeMetadata(
             streamId: id,
             metadata: RpcMetadata.forTrailer(0),
+            endOfStream: true,
           ),
         )
         ..feed(_data(id, 'b'));

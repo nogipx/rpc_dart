@@ -1,5 +1,5 @@
 ---
-status: decided by owner (round 875)
+status: closed (round 878)
 release: changelog
 round: 858
 commit: 6c31366f
@@ -43,6 +43,21 @@ The streaming rule is `_grpcStatusErrorTransformer` in
 
 ## Owner decision
 
-2026-10-16: option 1, the first status wins on every shape. The streaming
-callers end at an OK status even without END_STREAM. The unary rule
-("not gated on isEndOfStream") stays as it is.
+2026-10-16, revised the same day: option 2, the status on the END_STREAM
+frame wins on every shape, as grpc-go does. Unary and client stream wait
+for END_STREAM.
+
+The first answer was option 1, taken on a recommendation made without
+checking grpc-go. Round 878 implemented option 1 and found two facts that
+changed the answer. First, it broke 4 rows of
+`a_response_cut_mid_message_is_an_error_test` (http2, rounds 853/858): a
+status in headers without END_STREAM, then DATA, delivers the messages, as
+grpc-go does, and option 1 dropped them. Second, grpc-go's
+`operateHeaders` parses a grpc-status on a non-END_STREAM HEADERS frame but
+never uses it; the status is built only on the END_STREAM path. Option 1
+was reverted uncommitted.
+
+The constraint: a peer that never sets END_STREAM after its status now
+leaves a unary or client-stream call to its deadline instead of ending it.
+That reverses the deliberate "not gated on isEndOfStream" in the unary
+caller.

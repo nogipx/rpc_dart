@@ -799,7 +799,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           controller.add(msg.payload!);
         }
         final metadata = msg.metadata;
-        if (metadata != null && RpcCallerTrailer.statusOf(metadata) != null) {
+        if (metadata != null &&
+            msg.isEndOfStream &&
+            RpcCallerTrailer.statusOf(metadata) != null) {
           serverEnded = true;
         }
       },
@@ -905,7 +907,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           continue;
         }
 
-        if (response.metadata == null) continue;
+        // The status on the END_STREAM frame, as on the codec path.
+        if (response.metadata == null || !response.isEndOfStream) continue;
         final status = RpcCallerTrailer.statusOf(response.metadata!);
         if (status == null) continue;
 

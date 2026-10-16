@@ -332,7 +332,13 @@ final class UnaryCaller<TRequest, TResponse> {
                 if (encoding != null) {
                   peerGrpcEncoding = encoding;
                 }
-                final code = RpcCallerTrailer.statusOf(message.metadata!);
+                // The status on the END_STREAM frame completes the call, as in
+                // grpc-go and on the streaming shapes; one on any earlier
+                // frame is not a status yet. A peer that sent two used to get
+                // the first here and the last on a stream.
+                final code = message.isEndOfStream
+                    ? RpcCallerTrailer.statusOf(message.metadata!)
+                    : null;
 
                 if (code != null && !completer.isCompleted) {
                   if (_logger.isInternal) {
@@ -340,10 +346,6 @@ final class UnaryCaller<TRequest, TResponse> {
                       'Completion status received: $code [streamId: $streamId]',
                     );
                   }
-                  // The status is what completes the call. Deliberately NOT
-                  // gated on isEndOfStream: a peer that sends the status
-                  // without it would otherwise leave the held response stuck
-                  // until onDone turned a perfectly good answer into an error.
                   if (code != RpcStatus.ok) {
                     final error = RpcCallerTrailer.errorOf(
                       message.metadata!,
@@ -407,8 +409,12 @@ final class UnaryCaller<TRequest, TResponse> {
                   '[streamId: $streamId]',
                 );
               }
+              // Bytes of a frame were left: the response was cut, which the
+              // other three shapes answer INTERNAL, not a retryable "closed".
               completer.completeError(
-                RpcCallerTrailer.closedWithoutStatus(_context),
+                parser.holdsPartialFrame
+                    ? responseEndedMidMessage()
+                    : RpcCallerTrailer.closedWithoutStatus(_context),
               );
             },
           );

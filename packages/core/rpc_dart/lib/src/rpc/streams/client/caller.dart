@@ -114,11 +114,12 @@ final class ClientStreamCaller<
         }
 
         // The STATUS completes the call, never the payload -- see
-        // [_pendingResponse]. Deliberately NOT gated on isEndOfStream: a peer
-        // that sends the status without it would otherwise leave the held
-        // response stuck until onDone turned a good answer into an error.
+        // [_pendingResponse] -- and only the status on the END_STREAM frame,
+        // as in grpc-go and on the streaming shapes.
         if (rpcMessage.isMetadataOnly && rpcMessage.metadata != null) {
-          final status = RpcCallerTrailer.statusOf(rpcMessage.metadata!);
+          final status = rpcMessage.isEndOfStream
+              ? RpcCallerTrailer.statusOf(rpcMessage.metadata!)
+              : null;
           if (_logger.isInternal) {
             _logger.internal('Status code from metadata: $status');
           }
