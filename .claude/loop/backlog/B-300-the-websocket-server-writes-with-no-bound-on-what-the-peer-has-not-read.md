@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 885)
 round: 881
 commit: ed6f6293
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
@@ -41,6 +41,20 @@ default; only a pong resets the timer, `_http/websocket_impl.dart` 1248-1250
 and 1314-1333). The 26 s run never reached it. A peer that reads just enough
 to answer each ping is not closed by it, and is the case to measure.
 
+## Closed by round 885
+
+Re-measured with P-336 arm `ws-raw-deaf`: 60546 KiB waiting for 200000 calls,
+121093 KiB for 400000. Fixed below dart:io, as the owner chose: the bounded
+upgrade's `_BoundedSocket` writes through a counted controller and stops
+reading past 1 MiB unsent, resuming at half. After: the peer stalls at
+2493 KiB, 6233 KiB waiting; the websocket cell of the I-3 row is green. The
+time bound stopped mattering for memory: what the server holds is bounded
+however long the peer stays (the keepalive's effect on a paused peer was not
+measured). Still unbounded,
+and documented: compression on, a foreign `Stream<WebSocketChannel>`, the
+client. `../rounds/885-a-deaf-websocket-peer-and-the-server-write-queue.md`.
+
 ## Owner decision
 
-—
+Fix below dart:io inside `_BoundedSocket`, server side only, no public API
+change (2026-10-17).

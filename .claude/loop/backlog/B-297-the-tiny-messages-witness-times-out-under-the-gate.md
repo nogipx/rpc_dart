@@ -69,6 +69,33 @@ The first passed 3 of 3 runs under 12 spinning processes
 (`packages/transport/rpc_dart_http2/.dart_tool/probe/r884_under_load.dart`,
 P-335's load for any package's test file).
 
+Round 885 ran the quiet gate eight times (5-minute load average 8 to 26,
+desktop apps taking ~2.5 cores). Every run was red on exactly one test, and
+the test rotated:
+
+```
+runs  tree                                   red
+4     the fix, the I-3 websocket deaf cell   conformance i3 an oversized message that never
+      running                                finishes: socket ('a message at the limit:
+                                             status 14 ... stream closed before the peer
+                                             sent a status')
+1     the same                               conformance i9 websocket server restart (still
+                                             RpcClientConnecting after 5 s)
+1     the same                               conformance i1 many calls on one connection:
+                                             http, working peer (clientStream status 14,
+                                             'Connection closed before full header')
+1     the fix, the deaf cell skipped         conformance i9 websocket server restart
+1     no fix, the deaf cell skipped          http policy_reaches_endpoint_test
+                                             maxConcurrentHandlers ('unsolicited response')
+```
+
+Each passed when run alone; the conformance package passed whole alone, whole
+next to rpc_dart_websocket's suite, and whole under 10 spinning processes
+(`packages/test/rpc_dart_conformance/.dart_tool/probe/r885_under_load.dart`,
+P-335's load for that package); the i3 oversized row passed 3 of 3 under 12
+and its socket cell 3 of 3 under 16. CPU load alone did not reproduce any of
+them; only the whole workspace at once did.
+
 ## Next step
 
 Drive each remaining test with `P-335 test <burners> <file>`, starting

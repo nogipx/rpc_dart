@@ -3,8 +3,8 @@ refines: —
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_socket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837, 881, 884]
-status: confirmed (round 884)
+applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837, 881, 884, 885]
+status: confirmed (round 885)
 rank: 8
 ---
 
@@ -170,3 +170,11 @@ every whole oversized response into a dropped connection, 5 tests of 5.
   package:http2's own writer was load-bearing: resumed after its connection
   closed, it wrote into its closed sink ("Cannot add event after closing").
   `../rounds/884-a-deaf-http2-peer-and-the-server-write-queue.md`.
+- **Round 885** — the websocket server, B-300. web_socket_channel hides the
+  dart:io WebSocket, but every byte dart:io writes passes the `Socket` the
+  bounded upgrade hands it, so the count went BELOW dart:io: 60546 KiB
+  waiting for 200000 calls, 121093 KiB for 400000 (8192 KiB kernel ceiling);
+  after, the peer stalls at 2493 KiB, 6233 KiB waiting. New half: a reader
+  paused by the backlog also holds back the done event of a socket whose
+  write has failed, so the end of the write releases the pause.
+  `../rounds/885-a-deaf-websocket-peer-and-the-server-write-queue.md`.

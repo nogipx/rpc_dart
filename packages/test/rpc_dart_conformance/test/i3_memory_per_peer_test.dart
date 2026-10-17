@@ -30,6 +30,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http2/http2.dart' as h2;
@@ -39,10 +40,7 @@ import 'package:test/test.dart';
 
 import 'support/matrix.dart';
 
-const _knownFailing = <String, String>{
-  'websocket | 100000 unary calls answered at once, peer reads nothing':
-      'B-300: the websocket channel reads on while its writes queue',
-};
+const _knownFailing = <String, String>{};
 
 const _httpDiscards =
     'no library-side observable while the body arrives: past the limit the '
@@ -428,15 +426,21 @@ Future<({int written, void Function() hear})> _deafPeer(
         batch: h2Batch,
       );
     case WebSocketMember():
-      final ws = await WebSocket.connect('ws://127.0.0.1:${rig.serverPort}');
-      addTearDown(ws.close);
-      // Paused before anything arrives: dart:io stops reading the socket.
-      final sub = ws.listen((_) {}, onError: (Object _) {})..pause();
-      for (var i = 0; i < calls; i += _batch) {
-        ws.add(batch(i));
-        await Future<void>.delayed(Duration.zero);
-      }
-      return (written: calls, hear: sub.resume);
+      // The upgrade by hand, then each batch as one masked binary frame. The
+      // 101 stays unread with everything after it.
+      final key = base64.encode(List<int>.generate(16, (i) => i));
+      return _rawDeafPeer(
+        rig,
+        calls: calls,
+        preface: Uint8List.fromList(
+          latin1.encode(
+            'GET / HTTP/1.1\r\nhost: 127.0.0.1\r\nupgrade: websocket\r\n'
+            'connection: Upgrade\r\nsec-websocket-version: 13\r\n'
+            'sec-websocket-key: $key\r\n\r\n',
+          ),
+        ),
+        batch: (first) => _wsClientFrame(batch(first)),
+      );
     default:
       throw UnsupportedError('${rig.member.runtimeType}');
   }
@@ -494,6 +498,26 @@ Future<({int written, void Function() hear})> _rawDeafPeer(
     await Future<void>.delayed(Duration.zero);
   }
   return (written: written, hear: hear);
+}
+
+/// One final binary WebSocket frame from a client, masked with a zero key so
+/// [payload] goes as is.
+Uint8List _wsClientFrame(Uint8List payload) {
+  final n = payload.length;
+  final out = BytesBuilder(copy: false)..addByte(0x82);
+  if (n < 126) {
+    out.addByte(0x80 | n);
+  } else if (n < 65536) {
+    out.add([0x80 | 126, n >> 8, n & 0xff]);
+  } else {
+    out
+      ..addByte(0x80 | 127)
+      ..add(Uint8List(8)..buffer.asByteData().setUint64(0, n));
+  }
+  return (out
+        ..add(Uint8List(4))
+        ..add(payload))
+      .takeBytes();
 }
 
 /// One HTTP/2 frame: [type], [flags], [streamId], [payload].

@@ -224,7 +224,9 @@ Future<RpcWebSocketServer> serve(RpcResponderContract service) async {
 With compression off, each WebSocket frame header is checked as it arrives: a
 message larger than the policy allows closes the connection before its payload
 is buffered, and so does a client pinging faster than 16 times a second after
-a burst of 256.
+a burst of 256. And while more than 1 MiB of what the server wrote to a client
+is unsent, it stops reading that client, so a client that sends calls and
+reads nothing is not answered into memory.
 
 ### With another HTTP stack
 
@@ -262,7 +264,9 @@ Future<void> serveWithShelf(List<RpcResponderContract> contracts) async {
 ```
 
 This path has no frame-header check: the WebSocket library buffers a whole
-message before rpc_dart sees it. See "Deploy behind a proxy" below.
+message before rpc_dart sees it. See "Deploy behind a proxy" below. Nor does
+it stop reading a client that reads nothing: the server's unsent answers to
+it are not bounded.
 
 ### Per-connection setup and callbacks
 

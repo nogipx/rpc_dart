@@ -54,7 +54,10 @@ import 'websocket_server_policy.dart';
 /// of its own, so a peer that sends fragments and never a final one is
 /// buffered for as long as it writes. With compression off, each frame's
 /// header is read off the socket first, and a message past the largest frame
-/// the policy admits closes the connection before its payload is read.
+/// the policy admits closes the connection before its payload is read, and a
+/// peer is not read while more than 1 MiB written to it is unsent. With
+/// compression on, or with any other source of `WebSocketChannel`s, neither
+/// holds.
 ///
 /// That policy is the `RpcWebSocketServer`'s: the server hands it over when it
 /// starts, and a limit raised there raises this one. [policy] overrides it for

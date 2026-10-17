@@ -2,7 +2,7 @@
 file: packages/transport/rpc_dart_socket/.dart_tool/probe/r881_deaf_peer_write_backlog.dart
 round: 881
 commit: ed6f6293
-paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_channel.dart, packages/transport/rpc_dart_socket/lib/src/rpc_socket_server.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
+paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_channel.dart, packages/transport/rpc_dart_socket/lib/src/rpc_socket_server.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
 status: valid
 promoted: packages/test/rpc_dart_conformance/test/i3_memory_per_peer_test.dart
 ---
@@ -36,4 +36,12 @@ raw-deaf, after fix    200000    2452 KiB     6318 KiB (STALLED)   +31 MiB
 deaf (paused Socket)    20000    2304 KiB     5937 KiB
 reads                   20000    2304 KiB        0 KiB
 ws-deaf, unfixed       200000   23046 KiB    59375 KiB
+ws-raw-deaf, unfixed   200000   24218 KiB    60546 KiB             +180 MiB
+ws-raw-deaf, unfixed   400000   48437 KiB   121093 KiB             +295 MiB
+ws-raw-deaf, fixed     200000    2493 KiB     6233 KiB (STALLED)   +45 MiB
 ```
+
+Round 885 used `ws-raw-*`, a raw websocket client (handshake by hand, masked
+frames): it stalls visibly when the server stops reading. `ws-raw-reads` is no
+control for the queue: it reads all along, and stalls on the server's CPU
+under the 3 s write timeout.
