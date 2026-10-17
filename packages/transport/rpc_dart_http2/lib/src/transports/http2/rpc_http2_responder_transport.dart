@@ -8,6 +8,7 @@ import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
 
 import 'http2_header_block_guard.dart';
+import 'http2_write_backlog.dart';
 import 'rpc_http2_common.dart';
 
 part 'rpc_http2_responder_transport_flow.dart';
@@ -111,13 +112,18 @@ class RpcHttp2ResponderTransport
 
   final RpcSecurityPolicy _policy;
 
+  /// Unsent bytes past which [RpcHttp2ResponderTransport.overStreams] stops
+  /// reading the peer.
+  static const int _maxWriteBacklogBytes = 1024 * 1024;
+
   /// Wraps a connection you built yourself.
   ///
   /// This constructor cannot enforce the parts of [policy] that live BELOW
-  /// package:http2 — the header-block bound and the advertised
-  /// MAX_CONCURRENT_STREAMS are properties of how the connection was built, and
-  /// by here it already is. Prefer [RpcHttp2ResponderTransport.overStreams],
-  /// which applies both; see its note for what this one leaves off.
+  /// package:http2 — the header-block bound, the write backlog bound and the
+  /// advertised MAX_CONCURRENT_STREAMS are properties of how the connection was
+  /// built, and by here it already is. Prefer
+  /// [RpcHttp2ResponderTransport.overStreams], which applies all three; see its
+  /// note for what this one leaves off.
   RpcHttp2ResponderTransport({
     required http2.ServerTransportConnection connection,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
@@ -131,8 +137,11 @@ class RpcHttp2ResponderTransport
   /// Builds the connection from a socket's streams AND applies the parts of
   /// [policy] that package:http2 cannot be told after the fact.
   ///
-  /// Two of them, and both are invisible once the connection exists:
+  /// Three of them, all invisible once the connection exists:
   ///
+  /// * the **write backlog bound**. package:http2 reads on whatever it cannot
+  ///   write, so past 1 MiB unsent this stops reading the peer until half of
+  ///   it has gone out.
   /// * the **header-block bound**. package:http2 concatenates a HEADERS frame
   ///   and its CONTINUATION frames with no limit and an O(N^2) recopy, below
   ///   every rpc_dart limit because no stream is created until END_HEADERS.
@@ -156,8 +165,14 @@ class RpcHttp2ResponderTransport
     void Function(int observedBytes)? onHeaderBlockViolation,
     void Function()? onPrefaceComplete,
   }) {
+    // Without it a peer that reads nothing and keeps opening calls answered by
+    // a trailer alone grows the server's write queue without end.
+    final backlog = Http2WriteBacklog(
+      outgoing,
+      maxUnsentBytes: _maxWriteBacklogBytes,
+    );
     final guarded = guardHttp2HeaderBlock(
-      incoming,
+      backlog.reads(incoming),
       maxHeaderBlockBytes: policy.maxMetadataBytes,
       onViolation: (observedBytes) {
         logger?.warning(
@@ -173,7 +188,7 @@ class RpcHttp2ResponderTransport
     return RpcHttp2ResponderTransport(
       connection: http2.ServerTransportConnection.viaStreams(
         guarded,
-        outgoing,
+        backlog.writes,
         // CLAMPED. SETTINGS_MAX_CONCURRENT_STREAMS is a uint32 and
         // RpcSecurityPolicy asserts nothing, so the field holds whatever an
         // operator typed — and unclamped both ends of the range go on the wire

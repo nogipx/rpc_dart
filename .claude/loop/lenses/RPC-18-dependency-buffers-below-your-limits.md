@@ -3,8 +3,8 @@ refines: —
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_socket/lib/**, packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart_log/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**]
 applies: a dependency parses or reassembles the wire before this code sees a message
 breaks: DoS.
-applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837, 881]
-status: confirmed (round 881)
+applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837, 881, 884]
+status: confirmed (round 884)
 rank: 8
 ---
 
@@ -159,3 +159,14 @@ every whole oversized response into a dropped connection, 5 tests of 5.
   the peer's writes stall at 2452 KiB, 6318 KiB waiting. The websocket server
   has the same shape and web_socket_channel 3.x hides the dart:io backpressure
   (B-300). `../rounds/881-a-deaf-reader-grows-the-server-write-queue.md`.
+- **Round 884** — the same outbound queue inside package:http2, which never
+  pauses its frame reader. A raw h2 peer (P-339) that never read and opened
+  calls answered trailers-only, past MAX_CONCURRENT_STREAMS because each ends
+  at once: 26171 KiB waiting for 200000 calls, 52343 KiB for 400000, against
+  the 8192 KiB kernel ceiling. The lever was the one this lens names: get
+  between the socket and the dependency. `overStreams` now hands package:http2
+  a counted sink and a pausable byte stream; past 1 MiB unsent it stops
+  reading. After: the peer stalls at 5277 KiB, 5238 KiB waiting. Not pausing
+  package:http2's own writer was load-bearing: resumed after its connection
+  closed, it wrote into its closed sink ("Cannot add event after closing").
+  `../rounds/884-a-deaf-http2-peer-and-the-server-write-queue.md`.

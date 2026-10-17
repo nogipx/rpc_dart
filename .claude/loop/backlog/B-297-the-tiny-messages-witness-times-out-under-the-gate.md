@@ -5,7 +5,7 @@ commit: 911fe219
 paths: [packages/transport/rpc_dart_http2/test/tiny_messages_are_weighed_test.dart]
 probe: none — the full gate, `melos run test:unit --no-select`
 reason: bench — intermittent: timed out once in the full gate, passes alone in 7 s
-rank: 5
+rank: 4
 ---
 
 # B-297 — the tiny-messages witness times out under the gate
@@ -55,6 +55,19 @@ load was made with spinning processes, and at 24 of them on 8 cores a
 working peer's 300 ms unary call failed status 4 in 3 of 60 calls. Both
 working-peer rows in i1 now use a 10 s deadline. The other six tests
 above are still open.
+
+Round 884's gate runs named two more, all green when run alone, at a 5-minute
+load average of 10 to 49:
+
+```
+http2        graceful_drain_on_stop_test  a restart during a drain: 'status 14'
+conformance  i9 online again after the server restarts: websocket
+             (still RpcClientConnecting after 5 s)
+```
+
+The first passed 3 of 3 runs under 12 spinning processes
+(`packages/transport/rpc_dart_http2/.dart_tool/probe/r884_under_load.dart`,
+P-335's load for any package's test file).
 
 ## Next step
 

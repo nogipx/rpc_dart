@@ -40,7 +40,7 @@ import 'package:test/test.dart';
 import 'support/matrix.dart';
 
 const _knownFailing = <String, String>{
-  'websocket | 100000 unary calls answered with a status, peer reads nothing':
+  'websocket | 100000 unary calls answered at once, peer reads nothing':
       'B-300: the websocket channel reads on while its writes queue',
 };
 
@@ -253,6 +253,8 @@ void main() {
     // hold back: a DATA answer would park in the send window instead, under
     // the many-streams bound. 100k trailers are ~30 MiB; what the server may
     // take on is its write backlog limit plus the kernel's buffers both ways.
+    // The HTTP/2 peer opens its windows and asks for 1 KiB answers instead:
+    // its trailers are ~130 bytes, and the kernel alone holds 60k of them.
     const calls = 100000;
     const bound = 60000;
     const answer = 32 * 1024;
@@ -260,14 +262,12 @@ void main() {
     for (final member in members) {
       cell(
         member,
-        '$calls unary calls answered with a status, peer reads nothing',
+        '$calls unary calls answered at once, peer reads nothing',
         skip: switch (member) {
-          SocketMember() || WebSocketMember() => null,
+          SocketMember() || WebSocketMember() || Http2Member() => null,
           HttpMember() =>
             'one request per connection at a time: the next is not read '
                 'while an answer is unsent (C-76)',
-          Http2Member() =>
-            'B-301: needs a raw HTTP/2 peer past MAX_CONCURRENT_STREAMS',
           _ => 'no network peer: the other end is code in this process',
         },
         knownFailing: _knownFailing,
@@ -331,7 +331,7 @@ void main() {
 
 const _batch = 500;
 
-/// Starts [calls] unary calls on [rig]'s server that fail at once, from a peer
+/// Starts [calls] unary calls on [rig]'s server answered at once, from a peer
 /// that does not read its socket until `hear` is called. Returns once every
 /// call is written or the server has stopped taking them, with how many were
 /// written whole.
@@ -366,55 +366,67 @@ Future<({int written, void Function() hear})> _deafPeer(
     return out.takeBytes();
   }
 
+  // HTTP/2: HEADERS, then DATA ending the stream. The header block is HPACK
+  // literals without indexing, which every decoder takes. Each call asks for
+  // a 1 KiB answer, which the windows opened in the preface do not hold.
+  final h2Headers = _hpackLiterals({
+    ':method': 'POST',
+    ':scheme': 'http',
+    ':path': '/$conformanceService/unary',
+    ':authority': '127.0.0.1',
+    'content-type': 'application/grpc',
+    'te': 'trailers',
+  });
+  Uint8List h2Batch(int first) {
+    final out = BytesBuilder(copy: false);
+    for (var i = first; i < first + _batch && i < calls; i++) {
+      final streamId = 2 * i + 1;
+      final request = Blob.request(id: nextCallId(), responseSize: 1024);
+      out
+        ..add(_h2Frame(1, 0x4, streamId, h2Headers))
+        ..add(
+          _h2Frame(
+            0,
+            0x1,
+            streamId,
+            RpcMessageFrame.encode(blobCodec.serialize(request)),
+          ),
+        );
+    }
+    return out.takeBytes();
+  }
+
   switch (rig.member) {
     case SocketMember():
-      // Read events off: nothing in this process reads the socket.
-      final raw = await RawSocket.connect(
-        InternetAddress.loopbackIPv4,
-        rig.serverPort,
+      return _rawDeafPeer(
+        rig,
+        calls: calls,
+        preface: RpcSocketChannel.preface,
+        batch: batch,
       );
-      raw.readEventsEnabled = false;
-      addTearDown(raw.close);
-      final writable = StreamController<void>.broadcast();
-      var reading = false;
-      raw.listen((e) {
-        if (e == RawSocketEvent.write) writable.add(null);
-        if (e == RawSocketEvent.read && reading) raw.read();
-      }, onError: (Object _) {});
-      // False once the kernel has taken nothing for a second: the server
-      // stopped reading.
-      Future<bool> write(Uint8List bytes) async {
-        var offset = 0;
-        while (offset < bytes.length) {
-          offset += raw.write(bytes, offset);
-          if (offset == bytes.length) break;
-          raw.writeEventsEnabled = true;
-          var moved = true;
-          await writable.stream.first.timeout(
-            const Duration(seconds: 1),
-            onTimeout: () => moved = false,
-          );
-          if (!moved) return false;
-        }
-        return true;
-      }
-
-      void hear() {
-        reading = true;
-        raw.readEventsEnabled = true;
-      }
-
-      var written = 0;
-      if (!await write(RpcSocketChannel.preface)) {
-        return (written: 0, hear: hear);
-      }
-      for (var i = 0; i < calls; i += _batch) {
-        if (!await write(batch(i))) break;
-        written = i + _batch < calls ? i + _batch : calls;
-        // The server runs in this isolate: give it the event loop.
-        await Future<void>.delayed(Duration.zero);
-      }
-      return (written: written, hear: hear);
+    case Http2Member():
+      return _rawDeafPeer(
+        rig,
+        calls: calls,
+        // SETTINGS_INITIAL_WINDOW_SIZE and the connection window, both to
+        // 2^31 - 1.
+        preface: Uint8List.fromList([
+          ...'PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n'.codeUnits,
+          ..._h2Frame(
+            4,
+            0,
+            0,
+            Uint8List.fromList([0, 4, 0x7f, 0xff, 0xff, 0xff]),
+          ),
+          ..._h2Frame(
+            8,
+            0,
+            0,
+            Uint8List(4)..buffer.asByteData().setUint32(0, 0x7fffffff - 65535),
+          ),
+        ]),
+        batch: h2Batch,
+      );
     case WebSocketMember():
       final ws = await WebSocket.connect('ws://127.0.0.1:${rig.serverPort}');
       addTearDown(ws.close);
@@ -428,6 +440,87 @@ Future<({int written, void Function() hear})> _deafPeer(
     default:
       throw UnsupportedError('${rig.member.runtimeType}');
   }
+}
+
+/// Writes [preface] and then [calls] calls in batches from [batch] over a
+/// socket whose read events are off, so nothing in this process reads it.
+Future<({int written, void Function() hear})> _rawDeafPeer(
+  NetworkRig rig, {
+  required int calls,
+  required Uint8List preface,
+  required Uint8List Function(int first) batch,
+}) async {
+  final raw = await RawSocket.connect(
+    InternetAddress.loopbackIPv4,
+    rig.serverPort,
+  );
+  raw.readEventsEnabled = false;
+  addTearDown(raw.close);
+  final writable = StreamController<void>.broadcast();
+  var reading = false;
+  raw.listen((e) {
+    if (e == RawSocketEvent.write) writable.add(null);
+    if (e == RawSocketEvent.read && reading) raw.read();
+  }, onError: (Object _) {});
+  // False once the kernel has taken nothing for a second: the server
+  // stopped reading.
+  Future<bool> write(Uint8List bytes) async {
+    var offset = 0;
+    while (offset < bytes.length) {
+      offset += raw.write(bytes, offset);
+      if (offset == bytes.length) break;
+      raw.writeEventsEnabled = true;
+      var moved = true;
+      await writable.stream.first.timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => moved = false,
+      );
+      if (!moved) return false;
+    }
+    return true;
+  }
+
+  void hear() {
+    reading = true;
+    raw.readEventsEnabled = true;
+  }
+
+  var written = 0;
+  if (!await write(preface)) return (written: 0, hear: hear);
+  for (var i = 0; i < calls; i += _batch) {
+    if (!await write(batch(i))) break;
+    written = i + _batch < calls ? i + _batch : calls;
+    // The server runs in this isolate: give it the event loop.
+    await Future<void>.delayed(Duration.zero);
+  }
+  return (written: written, hear: hear);
+}
+
+/// One HTTP/2 frame: [type], [flags], [streamId], [payload].
+Uint8List _h2Frame(int type, int flags, int streamId, Uint8List payload) {
+  final frame = Uint8List(9 + payload.length);
+  ByteData.sublistView(frame)
+    ..setUint32(0, payload.length << 8)
+    ..setUint8(3, type)
+    ..setUint8(4, flags)
+    ..setUint32(5, streamId);
+  frame.setRange(9, frame.length, payload);
+  return frame;
+}
+
+/// An HPACK header block of literals without indexing; every name and value
+/// is shorter than 127 bytes.
+Uint8List _hpackLiterals(Map<String, String> headers) {
+  final out = BytesBuilder();
+  headers.forEach((name, value) {
+    out
+      ..addByte(0)
+      ..addByte(name.length)
+      ..add(name.codeUnits)
+      ..addByte(value.length)
+      ..add(value.codeUnits);
+  });
+  return out.takeBytes();
 }
 
 /// Sends the first [count] bytes of the gRPC-framed request [message] to
