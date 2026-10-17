@@ -1,5 +1,5 @@
 ---
-status: open
+status: closed (round 883)
 round: 882
 commit: 84189f6b
 paths: [pubspec.yaml]
@@ -24,6 +24,9 @@ bare `exit` returns `tail`'s status. The config's claim "same exit status" as
 Next step: run the quiet script over a package with a deliberately failing
 test and read the exit code (the control); then escape the dollars (`\$?`,
 `\$s`) or move the body into a script file, and run the control again.
+
+Closed by round 883: confirmed (planted failure, exit 0 -> 1) and fixed by
+escaping; bench P-338.
 
 ## Owner decision
 

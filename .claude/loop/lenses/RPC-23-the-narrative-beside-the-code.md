@@ -3,8 +3,8 @@ refines: U-22
 paths: [packages/core/rpc_dart/lib/**, packages/transport/*/lib/**]
 applies: a doc comment carries the search that produced the code
 breaks: "wrong result: the comment is read as current when it records one moment, and the thing a caller needs is buried in it."
-applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516, 521, 526, 528, 529, 538, 586, 619, 633, 655, 677, 771, 824, 834]
-status: confirmed (round 586)
+applied: [293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 333, 337, 364, 375, 381, 401, 404, 432, 435, 436, 437, 438, 439, 440, 441, 442, 490, 515, 516, 521, 526, 528, 529, 538, 586, 619, 633, 655, 677, 771, 824, 834, 883]
+status: confirmed (round 883)
 rank: 17
 ---
 
@@ -230,3 +230,8 @@ eight instances by round 305, in five packages, on every kind of declaration.
   **measure where the thing STOPS** — `_createContextFromMessage` filters `te` and
   must stay for `rpc_dart_http2`. `../probes/P-206-what-te-trailers-reaches.md`,
   `../rounds/586-the-header-core-had-to-filter.md`, B-149
+- **Round 883** — the gate's quiet command, documented "same exit status" as
+  `test:unit`, exited 0 over a planted failure (`test:unit` exit 1); after
+  escaping its `$`, exit 1. **A gate whose failure path was never observed is
+  prose about a gate.** `../probes/P-338-the-gate-over-a-planted-failure.md`,
+  `../rounds/883-the-quiet-gate-cannot-fail.md`, B-302

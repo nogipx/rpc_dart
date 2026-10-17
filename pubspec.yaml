@@ -161,14 +161,16 @@ melos:
     # Tests print, and failures-only still passes print() through, so one
     # test:unit run is ~30 KB of text; this prints a package's failures and
     # its last line only. Same packages, same exit status.
+    # `$` is escaped because melos first expands an exec body in an outer shell:
+    # a bare `exit $s` becomes `exit` and the script exits 0 over failures.
     test:unit:quiet:
       description: test:unit, printing only failures and each package's result.
       run: >-
         fvm dart test --reporter failures-only > .dart_tool/test_out.txt 2>&1;
-        s=$?;
+        s=\$?;
         grep -A4 '\[E\]' .dart_tool/test_out.txt | head -n 60;
         tail -n 1 .dart_tool/test_out.txt;
-        exit $s
+        exit \$s
       exec:
         concurrency: 4
       packageFilters:
@@ -187,6 +189,8 @@ melos:
     #   all:      melos run coverage --no-select
     # Needs the `coverage` CLI (`fvm dart pub global activate coverage`) and
     # `genhtml` (`brew install lcov`).
+    # Package path escaped, root path not: `melos run` substitutes only the root,
+    # so a bare package path expands to "" and an escaped root keeps its `\`.
     coverage:
       description: Coverage for the package(s) you pick; opens the HTML report.
       run: >
@@ -194,7 +198,7 @@ melos:
         fvm dart test --coverage=coverage &&
         fvm dart pub global run coverage:format_coverage
         --lcov --in=coverage --out=coverage/lcov.info
-        --report-on=lib --base-directory="$MELOS_PACKAGE_PATH"
+        --report-on=lib --base-directory="\$MELOS_PACKAGE_PATH"
         --packages="$MELOS_ROOT_PATH/.dart_tool/package_config.json" &&
         genhtml coverage/lcov.info -o coverage/html --quiet --ignore-errors range &&
         open coverage/html/index.html
