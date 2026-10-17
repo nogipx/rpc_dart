@@ -25,16 +25,18 @@ import 'rpc_socket_connect.dart';
 /// await server.start();
 /// ```
 ///
-/// **A stale Unix socket file is replaced.** A process that exits without
-/// closing its server leaves the file behind, and binding over it fails. On
-/// that failure [start] tries to connect to the file: a refused connection
-/// means nobody is listening, so the file is deleted and the bind retried. A
-/// live server answering on it, or a path that is not a socket at all, is left
-/// alone and [start] throws. Two servers starting on one path at the same
-/// moment can still race past each other; use one path per process.
+/// **A stale Unix socket file is replaced.** A running server holds an
+/// exclusive lock on a file beside its socket, `<path>.lock`. [start] takes
+/// that lock first, and throws a [SocketException] if a running server holds
+/// it or the lock file cannot be created. Holding the lock, it may find a
+/// socket file a crashed server left behind: if a connect to it is refused,
+/// the file is deleted and the bind retried. A path that is not a socket is
+/// left alone and [start] throws.
 ///
-/// Closing the listener removes the socket file, so a clean [stop] leaves
-/// nothing behind.
+/// The lock belongs to the process, so two isolates of one process serving
+/// one path are not told apart; use one path per process.
+///
+/// A clean [stop] removes both the socket file and the lock file.
 class RpcSocketServer implements IRpcServer {
   /// Creates a server for [address]. Nothing is bound until [start].
   ///
@@ -193,17 +195,107 @@ class RpcSocketServer implements IRpcServer {
   }
 
   Future<ServerSocket> _bind() async {
+    final address = _address;
+    if (address is! RpcUnixSocketAddress || _isAbstract(address.path)) {
+      return ServerSocket.bind(address.host, address.port);
+    }
+    await _claimPath(address);
     try {
-      return await ServerSocket.bind(_address.host, _address.port);
-    } on SocketException {
-      final address = _address;
-      if (address is! RpcUnixSocketAddress) rethrow;
-      if (!await _removeStaleSocket(address.path)) rethrow;
-      return ServerSocket.bind(_address.host, _address.port);
+      try {
+        return await ServerSocket.bind(address.host, address.port);
+      } on SocketException {
+        if (!await _removeStaleSocket(address.path)) rethrow;
+        return await ServerSocket.bind(address.host, address.port);
+      }
+    } catch (_) {
+      _releasePath();
+      rethrow;
     }
   }
 
-  /// Deletes the socket file at [path] if nobody is listening on it.
+  /// Lock files of the socket paths servers in this isolate hold. The lock is
+  /// per process: without this a second server here is granted the lock its
+  /// neighbour holds, and closing its file on failure drops that lock.
+  static final Set<String> _claimedPaths = {};
+
+  /// The lock file [_claimPath] holds while this server owns its path.
+  RandomAccessFile? _pathLock;
+  String? _pathLockFile;
+
+  /// A Linux abstract address has no file, so nothing can go stale.
+  static bool _isAbstract(String path) =>
+      path.startsWith('@') && (Platform.isLinux || Platform.isAndroid);
+
+  /// Takes the exclusive lock on `<path>.lock`, held until [_releasePath].
+  ///
+  /// The lock, not a probe connect, is what tells a live server from a dead
+  /// one: a live server whose accept queue is full refuses connects exactly
+  /// like a dead one, and then its file would be deleted under it.
+  Future<void> _claimPath(RpcUnixSocketAddress address) async {
+    final path = address.path;
+    final lockFile = '${_canonicalPath(path)}.lock';
+    if (!_claimedPaths.add(lockFile)) {
+      throw SocketException(
+        '$path is held by another server in this process',
+        address: address.host,
+      );
+    }
+    RandomAccessFile? lock;
+    try {
+      lock = await File(lockFile).open(mode: FileMode.append);
+      await lock.lock(FileLock.exclusive);
+    } on FileSystemException catch (e) {
+      _claimedPaths.remove(lockFile);
+      await lock?.close();
+      throw SocketException(
+        lock == null
+            ? 'Cannot open the lock file $lockFile: ${e.message}'
+            : '$path is held by a running server',
+        osError: e.osError,
+        address: address.host,
+      );
+    }
+    _pathLock = lock;
+    _pathLockFile = lockFile;
+  }
+
+  /// Deletes the lock file, then unlocks it. Deleting first means a server
+  /// that starts after this creates a fresh file instead of locking the one
+  /// being removed.
+  void _releasePath() {
+    final lock = _pathLock;
+    final lockFile = _pathLockFile;
+    if (lock == null || lockFile == null) return;
+    _pathLock = null;
+    _pathLockFile = null;
+    try {
+      File(lockFile).deleteSync();
+    } on FileSystemException catch (e) {
+      _log.warning('Cannot remove the lock file $lockFile: $e');
+    }
+    try {
+      lock.closeSync();
+    } on FileSystemException catch (e) {
+      _log.warning('Cannot close the lock file $lockFile: $e');
+    }
+    _claimedPaths.remove(lockFile);
+  }
+
+  /// [path] with its directory's symlinks resolved, so two spellings of one
+  /// path claim one entry in [_claimedPaths].
+  static String _canonicalPath(String path) {
+    final file = File(path);
+    try {
+      return '${file.parent.resolveSymbolicLinksSync()}'
+          '${Platform.pathSeparator}${file.uri.pathSegments.last}';
+    } on FileSystemException {
+      return file.absolute.path;
+    }
+  }
+
+  /// Deletes the socket file at [path] if nobody is listening on it. Called
+  /// only with the path's lock held, so no server of this library owns it;
+  /// the probe connect still spares a live server that takes no lock.
   ///
   /// True when the file was removed and the bind is worth retrying. A path
   /// that is not a socket is never touched: it is somebody's file.
@@ -273,6 +365,7 @@ class RpcSocketServer implements IRpcServer {
       _log.warning('Error closing the listening socket: $e');
     }
     _listener = null;
+    _releasePath();
 
     for (final channel in List.of(_handshaking)) {
       unawaited(channel.close());

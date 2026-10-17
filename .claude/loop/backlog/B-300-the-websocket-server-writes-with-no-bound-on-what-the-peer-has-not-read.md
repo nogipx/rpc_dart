@@ -5,7 +5,7 @@ commit: ed6f6293
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
 probe: packages/transport/rpc_dart_socket/.dart_tool/probe/r881_deaf_peer_write_backlog.dart (P-336, arm ws-deaf)
 reason: cost — the fix needs the dart:io WebSocket under the channel, which the server's public connection type hides
-rank: 1
+rank: 2
 ---
 
 # B-300 — the websocket server writes with no bound on what the peer has not read

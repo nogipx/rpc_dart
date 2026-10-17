@@ -5,7 +5,7 @@ commit: ed6f6293
 paths: [packages/transport/rpc_dart_http2/lib/**]
 probe: —
 reason: bench — needs a raw HTTP/2 peer; a package:http2 client cannot open streams past MAX_CONCURRENT_STREAMS while it reads nothing
-rank: 3
+rank: 4
 ---
 
 # B-301 — the http2 server may read on while its writes queue

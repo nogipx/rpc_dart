@@ -3,8 +3,8 @@ refines: U-15
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
 applies: something with a lifecycle — an object with start/stop/close/reconnect, or a STREAM opened by a frame — and a suite that drives each step once
 breaks: a connection leak; or a running call detached from everything that can stop it.
-applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732, 752, 761, 777, 822, 823, 843, 871]
-status: confirmed (round 752)
+applied: [241, 401, 487, 503, 562, 573, 576, 599, 627, 644, 648, 656, 695, 705, 721, 722, 731, 732, 752, 761, 777, 822, 823, 843, 871, 882]
+status: confirmed (round 882)
 rank: 11
 ---
 
@@ -108,3 +108,10 @@ U-15 had no lens.
   reconnect, not only its first connect.**
   `../rounds/761-the-bounded-open-reconnects-twice.md`,
   `../probes/P-263-reconnect-through-a-failure-twice.md`.
+- **Round 882** — a second `RpcSocketServer.start()` on the Unix path of a
+  live server whose isolate was stalled (accept queue full, 128 queued, the
+  next connect refused) took the path in 3 ms, 2 of 2 on macOS; the live
+  server was unreachable by its path afterwards. A refused connect does not
+  tell a busy owner from a dead one: ask the owner, by a lock it holds.
+  `../rounds/882-a-live-socket-file-taken-for-stale.md`,
+  `../probes/P-337-a-stalled-server-loses-its-socket-path.md`, B-299.

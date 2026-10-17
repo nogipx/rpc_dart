@@ -69,12 +69,14 @@ lets running calls finish within the budget, then closes.
 | `onEndpointCreated` / `onPeerEndpointCreated` | none | Registers contracts per connection; the second for peer mode. Pass one, not both. |
 | `onConnectionOpened` / `onConnectionClosed` | none | Observability. Every opened connection is reported closed once. |
 
-**A stale socket file is replaced.** A process that exits without closing its
-server leaves the socket file behind, and binding over it fails. `start()` then
-tries to connect to the file: a refused connection means nobody listens, so
-the file is deleted and the bind retried. A live server on the path, or a path
-that is not a socket at all, is left alone and `start()` throws. A clean
-`stop()` removes the file.
+**A stale socket file is replaced.** A running server holds an exclusive lock
+on `<path>.lock` beside its socket. `start()` takes that lock first and throws
+a `SocketException` if a running server holds it, or if the lock file cannot be
+created. With the lock taken, a socket file left by a server that crashed is
+deleted when a connect to it is refused, and the bind is retried. A path that
+is not a socket is left alone and `start()` throws. The lock belongs to the
+process, so use one path per process. A clean `stop()` removes the socket file
+and the lock file.
 
 ## Client
 
