@@ -25,6 +25,18 @@ import 'protocol.dart';
 /// Flags:
 /// - bit 0: endOfStream
 /// - bit 1: metadata frame (payload = encoded headers)
+///
+/// A metadata payload, every length an unsigned LEB128 varint of at most 5
+/// bytes, every string UTF-8:
+/// ```
+/// [varint] methodPath length + 1   (0: no methodPath)
+/// [bytes]  methodPath
+/// [varint] header count
+/// per header:
+///   [varint] name length,  [bytes] name
+///   [varint] value length, [bytes] value
+/// ```
+/// Nothing may follow the last header.
 abstract final class RpcChannelFrame {
   /// Total header size in bytes (4 streamId + 1 flags + 4 length).
   static const int headerSize = 9;
@@ -58,8 +70,51 @@ abstract final class RpcChannelFrame {
   }) {
     int flags = flagMetadata;
     if (endOfStream) flags |= _flagEndOfStream;
-    final payload = _encodeMetadataPayload(metadata);
-    return _encode(streamId, flags, payload);
+
+    // Two passes over the strings, one buffer: sizes first, then the bytes
+    // straight into the frame. A string outside ASCII is encoded once, in the
+    // first pass, and kept for the second.
+    final path = metadata.methodPath;
+    final headers = metadata.headers;
+    final strings = <String>[?path];
+    for (final h in headers) {
+      strings
+        ..add(h.name)
+        ..add(h.value);
+    }
+    final encoded = List<Uint8List?>.filled(strings.length, null);
+    var payloadLen = 0;
+    for (var i = 0; i < strings.length; i++) {
+      final s = strings[i];
+      var len = s.length;
+      if (!_isAscii(s)) {
+        final bytes = utf8.encode(s);
+        encoded[i] = bytes;
+        len = bytes.length;
+      }
+      payloadLen += len + _varintSize(len);
+    }
+    if (path == null) payloadLen += 1;
+    payloadLen += _varintSize(headers.length);
+
+    final frame = Uint8List(headerSize + payloadLen);
+    final view = ByteData.sublistView(frame);
+    view.setUint32(0, streamId);
+    view.setUint8(4, flags);
+    view.setUint32(5, payloadLen);
+
+    var o = headerSize;
+    var i = 0;
+    if (path == null) {
+      frame[o++] = 0;
+    } else {
+      o = _writeString(frame, o, path, encoded[i++], plusOne: true);
+    }
+    o = _writeVarint(frame, o, headers.length);
+    for (; i < strings.length; i++) {
+      o = _writeString(frame, o, strings[i], encoded[i]);
+    }
+    return frame;
   }
 
   /// Encode an end-of-stream marker (no payload).
@@ -75,9 +130,9 @@ abstract final class RpcChannelFrame {
   /// throws [RpcFrameException] instead of allocating, guarding against a peer
   /// claiming a huge frame to force unbounded buffering.
   ///
-  /// Malformed metadata (bad JSON, wrong shape, invalid UTF-8, non-string
-  /// header values) throws [RpcFrameException] rather than letting a raw
-  /// [TypeError]/[FormatException] escape into the receive loop.
+  /// Malformed metadata (a length past the end, bytes after the last header,
+  /// invalid UTF-8) throws [RpcFrameException] rather than letting a raw
+  /// [RangeError]/[FormatException] escape into the receive loop.
   static RpcDecodedFrame? decode(Uint8List data, {int? maxPayloadLen}) {
     if (data.length < headerSize) return null;
     return _decodeAt(
@@ -256,75 +311,136 @@ abstract final class RpcChannelFrame {
     return frame;
   }
 
-  static Uint8List _encodeMetadataPayload(RpcMetadata metadata) {
-    // Simple JSON encoding: {"p": methodPath, "h": [[name, value], ...]}
-    final map = <String, Object?>{};
-    if (metadata.methodPath != null) {
-      map['p'] = metadata.methodPath;
+  static bool _isAscii(String s) {
+    for (var i = 0; i < s.length; i++) {
+      if (s.codeUnitAt(i) > 0x7F) return false;
     }
-    if (metadata.headers.isNotEmpty) {
-      map['h'] = [
-        for (final h in metadata.headers) [h.name, h.value],
-      ];
+    return true;
+  }
+
+  static int _varintSize(int value) {
+    var size = 1;
+    while (value >= 0x80) {
+      value >>= 7;
+      size++;
     }
-    return utf8.encode(json.encode(map));
+    return size;
+  }
+
+  static int _writeVarint(Uint8List out, int o, int value) {
+    while (value >= 0x80) {
+      out[o++] = (value & 0x7F) | 0x80;
+      value >>= 7;
+    }
+    out[o++] = value;
+    return o;
+  }
+
+  /// Writes [s] with its length in front; [encoded] is its UTF-8 when it is
+  /// not ASCII. [plusOne] writes length + 1, the methodPath form.
+  static int _writeString(
+    Uint8List out,
+    int o,
+    String s,
+    Uint8List? encoded, {
+    bool plusOne = false,
+  }) {
+    final len = encoded?.length ?? s.length;
+    o = _writeVarint(out, o, plusOne ? len + 1 : len);
+    if (encoded != null) {
+      out.setRange(o, o + len, encoded);
+    } else {
+      for (var i = 0; i < len; i++) {
+        out[o + i] = s.codeUnitAt(i);
+      }
+    }
+    return o + len;
   }
 
   static (RpcMetadata, String?) _decodeMetadataPayload(Uint8List payload) {
-    // Defensive decode: a peer-supplied metadata payload is fully untrusted.
-    // Validate UTF-8, JSON shape, and every cast so malformed input yields a
-    // typed RpcFrameException (handled by the caller) instead of letting a raw
-    // TypeError/FormatException escape into the receive loop.
-    final String text;
-    try {
-      text = utf8.decode(payload);
-    } on FormatException catch (e) {
-      throw RpcFrameException('Invalid UTF-8 in metadata frame: ${e.message}');
-    }
-
-    final Object? decoded;
-    try {
-      decoded = json.decode(text);
-    } on FormatException catch (e) {
-      throw RpcFrameException('Malformed JSON in metadata frame: ${e.message}');
-    }
-
-    if (decoded is! Map) {
+    // A peer-supplied metadata payload is fully untrusted: every length is
+    // checked against what is left, so malformed input yields a typed
+    // RpcFrameException (handled by the caller) instead of a RangeError or a
+    // FormatException escaping into the receive loop.
+    final reader = _MetadataReader(payload);
+    final pathLen = reader.varint();
+    final methodPath = pathLen == 0 ? null : reader.string(pathLen - 1);
+    final count = reader.varint();
+    // Each header takes at least two bytes, so a count beyond that is a lie
+    // and must not size anything.
+    if (count > reader.remaining ~/ 2) {
       throw RpcFrameException(
-        'Metadata frame is not a JSON object: ${decoded.runtimeType}',
+        'Metadata frame claims $count headers in ${reader.remaining} bytes',
       );
     }
-
-    final rawPath = decoded['p'];
-    if (rawPath != null && rawPath is! String) {
-      throw RpcFrameException(
-        'Metadata frame methodPath is not a string: ${rawPath.runtimeType}',
-      );
-    }
-    final methodPath = rawPath as String?;
-
-    final rawHeaders = decoded['h'];
     final headers = <RpcHeader>[];
-    if (rawHeaders != null) {
-      if (rawHeaders is! List) {
-        throw RpcFrameException(
-          'Metadata frame headers is not a list: ${rawHeaders.runtimeType}',
-        );
+    for (var i = 0; i < count; i++) {
+      final name = reader.string(reader.varint());
+      final value = reader.string(reader.varint());
+      headers.add(RpcHeader(name, value));
+    }
+    if (reader.remaining != 0) {
+      throw RpcFrameException(
+        'Metadata frame has ${reader.remaining} bytes after its last header',
+      );
+    }
+    return (RpcMetadata(headers, methodPath: methodPath), methodPath);
+  }
+}
+
+/// Reads the fields of a metadata payload, each checked against the bytes
+/// that are left.
+final class _MetadataReader {
+  _MetadataReader(this._bytes);
+
+  final Uint8List _bytes;
+  int _o = 0;
+
+  int get remaining => _bytes.length - _o;
+
+  /// An unsigned LEB128 varint of at most 5 bytes, below 2^32.
+  int varint() {
+    var value = 0;
+    var shift = 0;
+    for (var i = 0; i < 5; i++) {
+      if (_o >= _bytes.length) {
+        throw RpcFrameException('Metadata frame ends inside a length');
       }
-      for (final entry in rawHeaders) {
-        if (entry is! List ||
-            entry.length != 2 ||
-            entry[0] is! String ||
-            entry[1] is! String) {
+      final b = _bytes[_o++];
+      // Multiplication, not a shift: dart2js shifts are 32-bit.
+      value += (b & 0x7F) * _pow2[shift ~/ 7];
+      if (b < 0x80) {
+        if (value > 0xFFFFFFFF) break;
+        return value;
+      }
+      shift += 7;
+    }
+    throw RpcFrameException('Metadata frame has an invalid length');
+  }
+
+  static const List<int> _pow2 = [1, 128, 16384, 2097152, 268435456];
+
+  String string(int len) {
+    if (len > remaining) {
+      throw RpcFrameException(
+        'Metadata frame string of $len bytes overruns the frame',
+      );
+    }
+    final start = _o;
+    final end = _o + len;
+    _o = end;
+    for (var i = start; i < end; i++) {
+      if (_bytes[i] > 0x7F) {
+        try {
+          return const Utf8Decoder().convert(_bytes, start, end);
+        } on FormatException catch (e) {
           throw RpcFrameException(
-            'Malformed metadata header entry: expected [name, value] strings',
+            'Invalid UTF-8 in metadata frame: ${e.message}',
           );
         }
-        headers.add(RpcHeader(entry[0] as String, entry[1] as String));
       }
     }
-
-    return (RpcMetadata(headers, methodPath: methodPath), methodPath);
+    return String.fromCharCodes(_bytes, start, end);
   }
 }
 
@@ -342,7 +458,7 @@ abstract final class RpcChannelFrame {
 /// makes in `_answerFramingViolation` and the one the channel transport already
 /// sends as a trailer for a policy violation.
 class RpcFrameException extends RpcStatusException {
-  /// Malformed framing — bad UTF-8, bad JSON, the wrong shape.
+  /// Malformed framing — bad UTF-8, a length past the end, trailing bytes.
   ///
   /// INTERNAL, matching `_answerFramingViolation`'s "anything else reaching
   /// here is malformed framing, which is INTERNAL". The default, so the six

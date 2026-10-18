@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 // The policy counts metadata TEXT; a frame channel's receiver bounds the
-// JSON-ENCODED frame by the same number, and a server closes the connection
-// over it. A value full of quotes doubles when encoded, so metadata the
-// sender's own check passed used to close the server connection and take every
-// other call on it along. The sender now refuses that frame itself.
+// ENCODED frame by the same number, and a server closes the connection over
+// it. Every header costs its two lengths on top of its text, so metadata the
+// sender's own text check passes can still be over the receiver's bound, and
+// sending it would close the connection and every other call on it. The
+// sender refuses that frame itself.
 
 import 'dart:async';
 
@@ -15,10 +16,16 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-/// Five headers of [fill], about 34 KB of text against the 64 KiB default --
-/// twice that once JSON escapes a quote.
-Map<String, String> _headers(String fill) => {
-  for (var i = 0; i < 5; i++) 'x-h$i': fill * 6800,
+/// 120 headers, 65520 bytes of text against the 64 KiB default: under it as
+/// text, over it once each header's lengths are added.
+List<RpcHeader> _framingHeavy() => [
+  for (var i = 0; i < 120; i++)
+    RpcHeader('x-h${i.toString().padLeft(3, '0')}', 'v' * 540),
+];
+
+/// Five headers, about 34 KB of text and of frame: under the bound either way.
+Map<String, String> _light() => {
+  for (var i = 0; i < 5; i++) 'x-h$i': 'v' * 6800,
 };
 
 final class _Svc extends RpcResponderContract {
@@ -69,12 +76,33 @@ void main() {
       )
       .then((r) => r.value, onError: (Object e) => e.runtimeType.toString());
 
-  test('WITNESS metadata that expands when encoded fails the call, not the '
+  test('the premise: the text is under the bound, the frame over it', () {
+    final metadata = RpcMetadata(_framingHeavy(), methodPath: '/S/m');
+    final limit = const RpcSecurityPolicy().maxMetadataBytes;
+    expect(
+      () => const RpcSecurityPolicy().validateMetadata(metadata),
+      returnsNormally,
+    );
+    final frame = RpcChannelFrame.encodeMetadata(
+      streamId: 1,
+      metadata: metadata,
+    );
+    expect(frame.length - RpcChannelFrame.headerSize, greaterThan(limit));
+  });
+
+  test('WITNESS metadata over the bound once encoded fails the call, not the '
       'connection', () async {
     final other = call('300');
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
-    final big = await call('x', RpcContext.withHeaders(_headers('"')));
+    final sid = client.createStream();
+    await expectLater(
+      client.sendMetadata(
+        sid,
+        RpcMetadata(_framingHeavy(), methodPath: '/S/echo'),
+      ),
+      throwsA(isA<RpcMetadataViolation>()),
+    );
 
     expect(
       await other,
@@ -82,12 +110,14 @@ void main() {
       reason: 'the call already open on the connection must survive',
     );
     expect(server.isClosed, isFalse);
-    expect(big, 'RpcMetadataViolation');
   });
 
-  test('GUARD the same text without escapes reaches the handler', () async {
-    expect(await call('x', RpcContext.withHeaders(_headers('v'))), 'x');
-  });
+  test(
+    'GUARD metadata under the bound once encoded reaches the handler',
+    () async {
+      expect(await call('x', RpcContext.withHeaders(_light())), 'x');
+    },
+  );
 
   test('WITNESS a server trailer over the bound once encoded is refused by '
       'the server', () async {
@@ -96,7 +126,7 @@ void main() {
 
     final trailer = RpcMetadata([
       const RpcHeader('grpc-status', '5'),
-      for (final e in _headers('"').entries) RpcHeader(e.key, e.value),
+      ..._framingHeavy(),
     ]);
 
     await expectLater(

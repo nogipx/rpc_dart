@@ -19,7 +19,6 @@
 // and keeps the connection, which is also what gRPC specifies.
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
@@ -78,24 +77,11 @@ final class _FeedChannel implements IRpcChannel {
 }
 
 /// A metadata frame carrying one header whose value is [valueBytes] long.
-Uint8List _metadataFrame(int streamId, int valueBytes) {
-  final payload = Uint8List.fromList(
-    utf8.encode(
-      json.encode({
-        'h': [
-          ['x-big', 'v' * valueBytes],
-        ],
-      }),
-    ),
-  );
-  final frame = Uint8List(RpcChannelFrame.headerSize + payload.length);
-  final view = ByteData.sublistView(frame);
-  view.setUint32(0, streamId);
-  view.setUint8(4, RpcChannelFrame.flagMetadata);
-  view.setUint32(5, payload.length);
-  frame.setRange(RpcChannelFrame.headerSize, frame.length, payload);
-  return frame;
-}
+Uint8List _metadataFrame(int streamId, int valueBytes) =>
+    RpcChannelFrame.encodeMetadata(
+      streamId: streamId,
+      metadata: RpcMetadata([RpcHeader('x-big', 'v' * valueBytes)]),
+    );
 
 typedef _Rig = ({
   _FeedChannel feed,

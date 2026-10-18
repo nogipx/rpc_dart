@@ -134,10 +134,10 @@ final class RpcSecurityPolicy {
   /// [maxHeaderValueBytes]: their defaults together allow 1 MiB.
   ///
   /// **It counts header name and value TEXT, not a transport's encoded form.**
-  /// Every wire frames that text — the frame channel as JSON, HTTP as
-  /// `name: value\r\n` — so the encoded block is always somewhat larger than the
-  /// number this bounds, and how much larger depends on the wire and, for JSON,
-  /// on the characters in the value. Both directions of that are covered: this
+  /// Every wire frames that text — the frame channel with two lengths per
+  /// header, HTTP as `name: value\r\n` — so the encoded block is always
+  /// somewhat larger than the number this bounds, by an amount that depends on
+  /// the wire and the header count. Both directions of that are covered: this
   /// count can only refuse LATER than the wire would, and each transport bounds
   /// its own encoded form against this same field.
   ///

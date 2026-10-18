@@ -21,10 +21,10 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart' show RpcChannelFrame;
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
@@ -65,19 +65,16 @@ Uint8List _frame(int streamId, int flags, List<int> payload) {
   return f;
 }
 
-/// Valid framing, valid JSON, refused by the security policy.
-Uint8List _policyViolatingFrame() => _frame(
-  1,
-  0x02,
-  utf8.encode(
-    json.encode({
-      'p': '/Svc/echo',
-      'h': [
-        ['x-bad', '${_controlChar}value'],
-      ],
-    }),
-  ),
-);
+/// A well-formed metadata frame with one header.
+Uint8List _metadataFrame(String name, String value) =>
+    RpcChannelFrame.encodeMetadata(
+      streamId: 1,
+      metadata: RpcMetadata([RpcHeader(name, value)], methodPath: '/Svc/echo'),
+    );
+
+/// Valid framing, refused by the security policy.
+Uint8List _policyViolatingFrame() =>
+    _metadataFrame('x-bad', '${_controlChar}value');
 
 Future<int> _startServer(StreamController<WebSocketChannel> connCtl) async {
   final http = await HttpServer.bind('127.0.0.1', 0);
@@ -147,9 +144,9 @@ void main() {
       // The path this one was aligned WITH must not move.
       final port = await _startServer(StreamController<WebSocketChannel>());
 
-      // Metadata that is not JSON. Not an oversized length: that is a size,
-      // and closes with its own code.
-      final malformed = _frame(3, 0x02, utf8.encode('{'));
+      // Metadata whose path length runs past the frame. Not an oversized
+      // frame length: that is a size, and closes with its own code.
+      final malformed = _frame(3, 0x02, [10, 0x2F]);
 
       expect(await _closeCodeFor(port, malformed), 4400);
     },
@@ -192,18 +189,7 @@ void main() {
       // written around a mistyped fixture would pass while proving nothing.
       final port = await _startServer(StreamController<WebSocketChannel>());
 
-      final valid = _frame(
-        1,
-        0x02,
-        utf8.encode(
-          json.encode({
-            'p': '/Svc/echo',
-            'h': [
-              ['x-ok', 'printable-ascii'],
-            ],
-          }),
-        ),
-      );
+      final valid = _metadataFrame('x-ok', 'printable-ascii');
 
       final ws = await WebSocket.connect('ws://127.0.0.1:$port');
       final closed = Completer<void>();

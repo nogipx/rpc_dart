@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
@@ -177,64 +176,35 @@ void main() {
     () {
       const flagMetadata = 1 << 1;
 
-      Uint8List metaFrame(List<int> jsonBytes) => _frameHeader(
+      Uint8List metaFrame(List<int> body) => _frameHeader(
         streamId: 1,
         flags: flagMetadata,
-        payloadLen: jsonBytes.length,
-        body: Uint8List.fromList(jsonBytes),
+        payloadLen: body.length,
+        body: Uint8List.fromList(body),
       );
 
-      test('top-level JSON array is rejected', () {
-        final body = utf8.encode('[1,2,3]');
-        expect(
-          () => RpcChannelFrame.decodeAll(metaFrame(body)),
-          throwsA(isA<RpcFrameException>()),
-        );
-      });
+      // One well-formed payload: path '/a', one header k: v.
+      const wellFormed = [3, 0x2F, 0x61, 1, 1, 0x6B, 1, 0x76];
 
-      test('malformed JSON is rejected', () {
-        final body = utf8.encode('{not valid json');
-        expect(
-          () => RpcChannelFrame.decodeAll(metaFrame(body)),
-          throwsA(isA<RpcFrameException>()),
-        );
-      });
-
-      test('invalid UTF-8 is rejected', () {
-        final body = <int>[0xFF, 0xFE, 0xFD];
-        expect(
-          () => RpcChannelFrame.decodeAll(metaFrame(body)),
-          throwsA(isA<RpcFrameException>()),
-        );
-      });
-
-      test('non-string header value is rejected', () {
-        final body = utf8.encode(
-          json.encode({
-            'h': [
-              ['x', 1],
-            ],
-          }),
-        );
-        expect(
-          () => RpcChannelFrame.decodeAll(metaFrame(body)),
-          throwsA(isA<RpcFrameException>()),
-        );
-      });
-
-      test('header entry with wrong arity is rejected', () {
-        final body = utf8.encode(
-          json.encode({
-            'h': [
-              ['only-one'],
-            ],
-          }),
-        );
-        expect(
-          () => RpcChannelFrame.decodeAll(metaFrame(body)),
-          throwsA(isA<RpcFrameException>()),
-        );
-      });
+      final malformed = <String, List<int>>{
+        'an empty payload': [],
+        'a length cut off inside its varint': [0x80],
+        'a varint longer than five bytes': [0x80, 0x80, 0x80, 0x80, 0x80, 0],
+        'a varint of 2^32 or more': [0x80, 0x80, 0x80, 0x80, 0x10],
+        'a path longer than the frame': [10, 0x2F],
+        'a header count past the bytes left': [0, 100, 1, 0x6B],
+        'a header value longer than the frame': [0, 1, 1, 0x6B, 9, 0x76],
+        'bytes after the last header': [...wellFormed, 0],
+        'invalid UTF-8 in a value': [0, 1, 1, 0x6B, 2, 0xFF, 0xFE],
+      };
+      for (final MapEntry(key: what, value: body) in malformed.entries) {
+        test('$what is rejected', () {
+          expect(
+            () => RpcChannelFrame.decodeAll(metaFrame(body)),
+            throwsA(isA<RpcFrameException>()),
+          );
+        });
+      }
 
       test(
         'malformed metadata over the channel surfaces a clean typed error',
@@ -252,7 +222,7 @@ void main() {
             },
           );
 
-          channel.feed(metaFrame(utf8.encode('[1,2,3]')));
+          channel.feed(metaFrame([10, 0x2F]));
 
           await done.future.timeout(const Duration(seconds: 2));
           expect(errors.single, isA<RpcFrameException>());
@@ -261,18 +231,31 @@ void main() {
       );
 
       test('well-formed metadata still decodes', () {
-        final body = utf8.encode(
-          json.encode({
-            'p': '/svc/Method',
-            'h': [
-              ['k', 'v'],
-            ],
-          }),
-        );
-        final (frames, _) = RpcChannelFrame.decodeAll(metaFrame(body));
+        final (frames, _) = RpcChannelFrame.decodeAll(metaFrame(wellFormed));
         expect(frames, hasLength(1));
-        expect(frames.single.metadata, isNotNull);
-        expect(frames.single.methodPath, equals('/svc/Method'));
+        expect(frames.single.methodPath, equals('/a'));
+        final headers = frames.single.metadata!.headers;
+        expect(headers.single.name, 'k');
+        expect(headers.single.value, 'v');
+      });
+
+      test('what the encoder writes decodes back unchanged', () {
+        final metadata = RpcMetadata([
+          const RpcHeader('x-plain', 'value'),
+          RpcHeader('x-long', 'Ж' * 200),
+          const RpcHeader('x-empty', ''),
+        ], methodPath: '/Сервис/Метод');
+        final (frames, consumed) = RpcChannelFrame.decodeAll(
+          RpcChannelFrame.encodeMetadata(streamId: 7, metadata: metadata),
+        );
+        final decoded = frames.single;
+        expect(consumed, greaterThan(RpcChannelFrame.headerSize));
+        expect(decoded.streamId, 7);
+        expect(decoded.methodPath, '/Сервис/Метод');
+        expect(
+          [for (final h in decoded.metadata!.headers) '${h.name}=${h.value}'],
+          ['x-plain=value', 'x-long=${'Ж' * 200}', 'x-empty='],
+        );
       });
     },
   );

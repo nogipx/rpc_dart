@@ -313,10 +313,15 @@ Unary-specific:
 | serialized scalability/20 | 1.57 ms | 0.88 ms |
 | serialized serverStream/5, clientStream/10, bidi/5 | 131/143/161 us | 83/93/109 us |
 
-The largest remaining item on a framed transport is the JSON metadata of
-`RpcChannelFrame` (about 15% of a caller's CPU). Encoding straight to bytes
-with `JsonUtf8Encoder` did not measure faster; a cheaper encoding is a wire
-change and is not part of this step.
+**`RpcChannelFrame` metadata is binary** (owner, 2026-10-19: the wire may
+change in this release). JSON was about 15% of a caller's CPU on every framed
+transport (websocket, socket, wasm, isolate on the web). The payload is now
+LEB128 lengths and UTF-8 strings, documented on `RpcChannelFrame`; a profiled
+unary call went from 34.6 to 23.9 us on the caller and from 44.3 to 30.5 us
+on the responder. It is rpc_dart's own format, as the JSON was: gRPC
+interoperability is `rpc_dart_http2` and `rpc_dart_http`. A new peer does not
+talk to an old one over these transports, which also retires the
+flow-control fallbacks for peers that predate grants.
 
 ## 5. Contracts, context, registration
 
