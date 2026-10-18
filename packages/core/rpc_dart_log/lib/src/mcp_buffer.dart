@@ -155,7 +155,9 @@ class LogCollectorMcpBuffer {
     } else {
       buf.writeln('Devices (${sessions.length}):');
       for (final s in sessions) {
-        buf.writeln('  ${s.label} [${s.app}] since ${_fmtTime(s.connectedAt)}');
+        buf.writeln(
+          '  ${_e(s.label)} [${_e(s.app)}] since ${_fmtTime(s.connectedAt)}',
+        );
       }
     }
 
@@ -183,7 +185,7 @@ class LogCollectorMcpBuffer {
       ..sort((a, b) => b.value.total.compareTo(a.value.total));
     buf.writeln('Scopes:');
     for (final entry in sortedScopes.take(maxScopes)) {
-      buf.writeln('  ${entry.key}: ${entry.value}');
+      buf.writeln('  ${_e(entry.key)}: ${entry.value}');
     }
     if (sortedScopes.length > maxScopes) {
       buf.writeln('  ... +${sortedScopes.length - maxScopes} more scopes');
@@ -203,7 +205,7 @@ class LogCollectorMcpBuffer {
       final shown = _traceIdOrder.take(maxTrace).toList();
       final parts = shown
           .map((tid) {
-            final prefix = tid.length > 8 ? tid.substring(0, 8) : tid;
+            final prefix = _e(tid.length > 8 ? tid.substring(0, 8) : tid);
             final errs = _traceErrorCounts[tid]!;
             return errs > 0 ? '$prefix ($errs err)' : prefix;
           })
@@ -480,8 +482,12 @@ class LogCollectorMcpBuffer {
   // Formatting
   // ---------------------------------------------------------------------------
 
+  /// Every field of a record came from a remote device; each passes through
+  /// this, so one record stays one line of the tool's output.
+  static String _e(Object? value) => ConsoleOutput.escapeLine('$value');
+
   String _formatTaggedRecord(TaggedRecord tagged, {bool noData = false}) {
-    final device = tagged.deviceLabel;
+    final device = _e(tagged.deviceLabel);
     return switch (tagged.record) {
       LogSpanStart() => '',
       final LogEvent event => _formatEvent(device, event, noData: noData),
@@ -492,13 +498,13 @@ class LogCollectorMcpBuffer {
   String _formatEvent(String device, LogEvent event, {bool noData = false}) {
     final sb = StringBuffer(
       '${_fmtTime(event.timestamp)} [$device] ${event.level.name.toUpperCase().padRight(5)} '
-      '${event.scope}  ${event.message}',
+      '${_e(event.scope)}  ${_e(event.message)}',
     );
-    if (event.error != null) sb.write('  err=${event.error}');
-    if (event.traceId != null) sb.write('  trace=${event.traceId}');
+    if (event.error != null) sb.write('  err=${_e(event.error)}');
+    if (event.traceId != null) sb.write('  trace=${_e(event.traceId)}');
     if (!noData && event.data != null && event.data!.isNotEmpty) {
       final dataStr = event.data!.entries
-          .map((e) => '${e.key}=${e.value}')
+          .map((e) => '${_e(e.key)}=${_e(e.value)}')
           .join(' ');
       final truncated = dataStr.length > 120
           ? '${dataStr.substring(0, 120)}...'
@@ -510,11 +516,11 @@ class LogCollectorMcpBuffer {
 
   String _formatSpan(String device, LogSpan span) {
     final sb = StringBuffer(
-      '${_fmtTime(span.endTime)} [$device] SPAN  ${span.scope}  ${span.name} '
-      '${span.duration.inMilliseconds}ms ${span.status.name}',
+      '${_fmtTime(span.endTime)} [$device] SPAN  ${_e(span.scope)}  '
+      '${_e(span.name)} ${span.duration.inMilliseconds}ms ${span.status.name}',
     );
-    if (span.error != null) sb.write('  err=${span.error}');
-    if (span.traceId != null) sb.write('  trace=${span.traceId}');
+    if (span.error != null) sb.write('  err=${_e(span.error)}');
+    if (span.traceId != null) sb.write('  trace=${_e(span.traceId)}');
     return sb.toString();
   }
 

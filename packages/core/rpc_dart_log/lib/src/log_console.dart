@@ -20,6 +20,10 @@ const _magenta = '\x1B[35m';
 const _cyan = '\x1B[36m';
 const _white = '\x1B[37m';
 
+/// Every field printed here came from a remote device, so each one passes
+/// through this before it reaches the terminal.
+String _e(Object? value) => ConsoleOutput.escapeLine('$value');
+
 /// Terminal renderer for logCollector. Prints tagged log records with device
 /// labels and ANSI colors.
 class LogCollectorConsole {
@@ -37,24 +41,26 @@ class LogCollectorConsole {
     final now = _formatTime(DateTime.now());
     switch (event) {
       case final DeviceConnected e:
-        final s = e.session;
+        final name = _e(e.session.deviceName);
+        final app = _e(e.session.app);
         if (colored) {
           _sink.writeln(
             '$_dim$now$_reset $_green+$_reset '
-            '$_bold${s.deviceName}$_reset '
-            '$_dim(${s.app})$_reset',
+            '$_bold$name$_reset '
+            '$_dim($app)$_reset',
           );
         } else {
-          _sink.writeln('$now + ${s.deviceName} (${s.app})');
+          _sink.writeln('$now + $name ($app)');
         }
       case final DeviceDisconnected e:
+        final name = _e(e.session.deviceName);
         if (colored) {
           _sink.writeln(
             '$_dim$now$_reset $_red-$_reset '
-            '$_dim${e.session.deviceName} disconnected$_reset',
+            '$_dim$name disconnected$_reset',
           );
         } else {
-          _sink.writeln('$now - ${e.session.deviceName} disconnected');
+          _sink.writeln('$now - $name disconnected');
         }
     }
   }
@@ -62,7 +68,7 @@ class LogCollectorConsole {
   /// Print a tagged log record.
   void printRecord(TaggedRecord tagged) {
     final record = tagged.record;
-    final label = _padLabel(tagged.deviceLabel);
+    final label = _padLabel(_e(tagged.deviceLabel));
 
     switch (record) {
       case LogSpanStart():
@@ -77,8 +83,9 @@ class LogCollectorConsole {
   void _printEvent(String label, LogEvent event) {
     final time = _formatTime(event.timestamp);
     final level = _formatLevel(event.level);
-    final scope = event.scope;
-    final msg = event.message;
+    final scope = _e(event.scope);
+    final msg = _e(event.message);
+    final traceId = event.traceId;
 
     final buf = StringBuffer();
     if (colored) {
@@ -88,30 +95,30 @@ class LogCollectorConsole {
       buf.write('$_dim$scope$_reset ');
       buf.write(msg);
 
-      if (event.traceId != null) {
+      if (traceId != null) {
         buf.write(
-          ' $_dim${event.traceId!.substring(0, 8.clamp(0, event.traceId!.length))}$_reset',
+          ' $_dim${_e(traceId.substring(0, 8.clamp(0, traceId.length)))}$_reset',
         );
       }
       if (event.data != null && event.data!.isNotEmpty) {
         for (final entry in event.data!.entries) {
-          buf.write(' $_dim${entry.key}=$_reset${entry.value}');
+          buf.write(' $_dim${_e(entry.key)}=$_reset${_e(entry.value)}');
         }
       }
       if (event.error != null) {
-        buf.write(' ${_red}err=$_reset${event.error}');
+        buf.write(' ${_red}err=$_reset${_e(event.error)}');
       }
     } else {
       buf.write(
         '$time $label ${event.level.name.toUpperCase().padRight(3)} $scope $msg',
       );
-      if (event.traceId != null) buf.write(' trace=${event.traceId}');
+      if (traceId != null) buf.write(' trace=${_e(traceId)}');
       if (event.data != null) {
         for (final entry in event.data!.entries) {
-          buf.write(' ${entry.key}=${entry.value}');
+          buf.write(' ${_e(entry.key)}=${_e(entry.value)}');
         }
       }
-      if (event.error != null) buf.write(' err=${event.error}');
+      if (event.error != null) buf.write(' err=${_e(event.error)}');
     }
 
     _sink.writeln(buf);
@@ -121,6 +128,9 @@ class LogCollectorConsole {
     final time = _formatTime(span.endTime);
     final ms = span.duration.inMilliseconds;
     final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
+    final scope = _e(span.scope);
+    final name = _e(span.name);
+    final error = span.error;
 
     if (colored) {
       final statusColor = span.status == SpanStatus.ok ? _green : _red;
@@ -128,16 +138,16 @@ class LogCollectorConsole {
         '$_dim$time$_reset '
         '$_cyan$label$_reset '
         '${_magenta}SPN$_reset '
-        '$_dim${span.scope}$_reset '
-        '${span.name} '
+        '$_dim$scope$_reset '
+        '$name '
         '$_dim${ms}ms$_reset '
         '$statusColor$status$_reset'
-        '${span.error != null ? ' ${_red}err=$_reset${span.error}' : ''}',
+        '${error != null ? ' ${_red}err=$_reset${_e(error)}' : ''}',
       );
     } else {
       _sink.writeln(
-        '$time $label SPN ${span.scope} ${span.name} ${ms}ms $status'
-        '${span.error != null ? ' err=${span.error}' : ''}',
+        '$time $label SPN $scope $name ${ms}ms $status'
+        '${error != null ? ' err=${_e(error)}' : ''}',
       );
     }
   }
