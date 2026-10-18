@@ -39,6 +39,9 @@ export 'src/_index.dart'
         IRpcFlowCredit,
         IRpcConnectionBuffer,
         // Errors on the wire
+        RpcTrailers,
+        requestEndedMidMessage,
+        responseEndedMidMessage,
         RpcNoConnectionException,
         grpcStatusFromHttpStatus,
         wireStatusFor,

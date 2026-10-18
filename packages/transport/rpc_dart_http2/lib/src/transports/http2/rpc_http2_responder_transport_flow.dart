@@ -87,13 +87,7 @@ extension _Http2ResponderFlow on RpcHttp2ResponderTransport {
     _emit(
       RpcTransportMessage.withMetadata(
         streamId: streamId,
-        metadata: RpcMetadata([
-          RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-          RpcHeader(
-            RpcHeaders.xCancellationReason,
-            'un-consumed request window exceeded',
-          ),
-        ]),
+        metadata: RpcTrailers.cancelled('un-consumed request window exceeded'),
       ),
     );
   }

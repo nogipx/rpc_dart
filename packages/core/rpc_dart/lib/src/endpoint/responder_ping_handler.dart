@@ -75,15 +75,15 @@ final class RpcResponderPingHandler {
       );
 
       try {
+        // Through wireStatusFor: the error's own text stays here, logged
+        // above, and the peer gets only what the gate lets out.
+        final wire = wireStatusFor(error);
         await transport.sendMetadata(
           streamId,
-          // Through forTrailer, so the message is trimmed to the cap that will
-          // judge it. `$error` is arbitrary length, and a trailer that fails
-          // validation is not sent -- the catch below would then log while the
-          // peer waited out its own deadline.
           RpcMetadata.forTrailer(
-            RpcStatus.internal,
-            message: 'Ping handling error: $error',
+            wire.status,
+            message: wire.message,
+            statusDetailsBin: wire.detailsBin,
             maxMessageLength: _trailerMessageCap(transport),
           ),
           endStream: true,

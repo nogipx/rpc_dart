@@ -103,13 +103,9 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
       _emit(
         RpcTransportMessage.withMetadata(
           streamId: streamId,
-          metadata: RpcMetadata([
-            RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-            RpcHeader(
-              RpcHeaders.xCancellationReason,
-              'peer sent RST_STREAM (errorCode: $errorCode)',
-            ),
-          ]),
+          metadata: RpcTrailers.cancelled(
+            'peer sent RST_STREAM (errorCode: $errorCode)',
+          ),
         ),
       );
     };
@@ -124,11 +120,18 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         _handleIncomingData(streamId, message);
       }
     } catch (e, stackTrace) {
-      _logger?.error(
-        'Error handling a message on stream $streamId',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      // A refusal of the peer's request (a :method other than POST) is the
+      // peer's doing and is answered with its status; logged as an error it
+      // would let a peer write one line per request.
+      if (RpcStatus.isFaultError(e)) {
+        _logger?.error(
+          'Error handling a message on stream $streamId',
+          error: e,
+          stackTrace: stackTrace,
+        );
+      } else if (_logger?.isInternal ?? false) {
+        _logger?.internal('Refused stream $streamId: $e');
+      }
 
       _emitStreamError(streamId, e, stackTrace: stackTrace);
       _answerRejectedStream(streamId, e);
@@ -358,15 +361,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     if (!(_streamParsers[streamId]?.holdsPartialFrame ?? false)) return false;
     _streamParsers.remove(streamId);
     // The status and text core answers for the same request on every other
-    // transport (`_endRequests`); a different one is a different failure to
-    // the caller.
-    _answerFramingViolation(
-      streamId,
-      RpcStatusException(
-        RpcStatus.internal,
-        'Request stream closed mid-message: the last gRPC frame is incomplete',
-      ),
-    );
+    // transport; a different one is a different failure to the caller.
+    _answerFramingViolation(streamId, requestEndedMidMessage());
     return true;
   }
 
@@ -392,24 +388,10 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   /// will call [releaseStreamId]. Whether the peer half-closed is the peer's
   /// choice, and that is not a choice the server's bookkeeping may depend on.
   void _answerFramingViolation(int streamId, Object error) {
-    // The status comes from the ERROR, because the error knows.
-    //
-    // This used to read `error is RpcException ? resourceExhausted : internal`
-    // and enumerate the parser's four limits by hand. The intent was right and
-    // the discriminator could not express it: `RpcException` is the BASE of the
-    // hierarchy, so `RpcMessageFrame.parseHeader`'s MALFORMED-framing throws —
-    // raised on this very path — matched it too. Measured, one prefix apart:
-    //
-    //   limit      grpc-status 8  "payload is too large: 33554432 (max: ...)"
-    //   malformed  grpc-status 8  "Invalid compression flag in gRPC message: 2"
-    //
-    // and RESOURCE_EXHAUSTED is retryable, so a corrupt frame was answered
-    // "try again". The parser now carries its own status, so asking
-    // wireStatusFor is both correct and shorter.
-    //
-    // It also closes a leak the old code had: the message below was `'$error'`
-    // UNCONDITIONALLY, so a foreign error's text went to the peer. wireStatusFor
-    // is default-deny and redacts anything that is not ours.
+    // The status comes from the ERROR, because the error knows: the parser's
+    // limits carry RESOURCE_EXHAUSTED and its malformed-framing errors do not,
+    // and only the first is retryable. wireStatusFor is default-deny, so a
+    // foreign error's text stays on this side.
     final wire = wireStatusFor(error);
     final status = wire.status;
     _requestRefused.add(streamId);
@@ -421,9 +403,10 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         // `maxHeaderValueBytes` easily -- and the catch below would then swallow
         // the answer entirely, leaving the peer with nothing for a failure it
         // could have corrected. Trimmed rather than risked.
-        final trailers = RpcMetadata.forTrailer(
+        final trailers = RpcTrailers.status(
           status,
           message: wire.message,
+          statusDetailsBin: wire.detailsBin,
           maxMessageLength: _policy.maxHeaderValueBytes,
         );
         await sendMetadata(streamId, trailers, endStream: true);
@@ -438,10 +421,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         _emit(
           RpcTransportMessage.withMetadata(
             streamId: streamId,
-            metadata: RpcMetadata([
-              RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-              RpcHeader(RpcHeaders.xCancellationReason, 'frame refused'),
-            ]),
+            metadata: RpcTrailers.cancelled('frame refused'),
           ),
         );
         releaseStreamId(streamId);

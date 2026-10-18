@@ -5,11 +5,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/transport.dart';
+import 'package:rpc_dart/transport_io.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
-import 'peer_watch.dart';
+import 'peer_gone_key.dart';
 import 'rpc_http_cors_policy.dart';
 import 'rpc_http_responder_transport.dart';
 
@@ -75,7 +75,7 @@ class RpcHttpServer implements IRpcServer {
 
   /// The listening socket under [_httpServer]. `HttpServer.listenOn` does not
   /// close it, so [stop] does.
-  PeerWatchingServerSocket? _sockets;
+  RpcHeaderBoundedServerSocket? _sockets;
   bool _isRunning = false;
 
   /// Claimed by [afterModulesStart] before its first await, so a concurrent
@@ -298,20 +298,11 @@ class RpcHttpServer implements IRpcServer {
       // Bound here rather than by shelf_io.serve, so a connection's close
       // reaches the transport and a caller's cancel its handler
       // (kRpcHttpPeerGoneKey).
-      final policy = _securityPolicy;
-      final sockets = PeerWatchingServerSocket(
+      final sockets = RpcHeaderBoundedServerSocket(
         await ServerSocket.bind(_host, _port),
-        // Four times what the policy admits as one request's head (method
-        // path, metadata text, the `: ` and CRLF around each header, the
-        // request line): a block a little over the policy still reaches the
-        // transport and is answered 400 with the reason; a block far over it
-        // is cut here, before dart:io holds it (up to ~3 MiB per connection).
-        maxHeaderBytes:
-            4 *
-            (policy.maxMethodPathLength +
-                policy.maxMetadataBytes +
-                4 * policy.maxHeaders +
-                1024),
+        maxHeaderBytes: RpcHeaderBoundedServerSocket.defaultMaxHeaderBytes(
+          _securityPolicy,
+        ),
         headerTimeout: _headerTimeout,
         maxConnections: _maxConnections,
       );

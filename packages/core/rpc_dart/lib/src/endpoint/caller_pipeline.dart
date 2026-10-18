@@ -923,7 +923,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         throw RpcCallerTrailer.noPayload();
       }
 
-      throw RpcCallerTrailer.closedWithoutStatus(null);
+      throw RpcCallerTrailer.closedWithoutStatus(context);
     } finally {
       await processor.close();
     }

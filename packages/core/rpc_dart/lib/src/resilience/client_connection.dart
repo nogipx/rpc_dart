@@ -182,11 +182,7 @@ final class _ReconnectingTransportProxy
       _msgCtl.add(
         RpcTransportMessage(
           streamId: streamId,
-          metadata: RpcMetadata([
-            RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-            RpcHeader(RpcHeaders.xCancellationReason, 'connection lost'),
-            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
-          ]),
+          metadata: RpcTrailers.cancelled('connection lost'),
           isEndOfStream: true,
         ),
       );

@@ -8,7 +8,7 @@ import 'package:rpc_dart/transport.dart';
 import 'package:shelf/shelf.dart';
 
 import 'body_accumulator.dart';
-import 'peer_watch.dart' show kRpcHttpPeerGoneKey;
+import 'peer_gone_key.dart';
 import 'rpc_http_cors_policy.dart';
 
 /// A request body over [RpcSecurityPolicy.maxMessageLengthBytes].
@@ -379,10 +379,17 @@ class RpcHttpResponderTransport extends IRpcTransport {
         );
         _pending.remove(streamId);
         _idManager.releaseId(streamId);
-        // The reason travels: the caller now repeats a bounded, single-line
-        // prefix of this body in `grpc-message`, so a peer learns WHICH limit
-        // it hit instead of only "HTTP 400 from /Svc/echo".
-        return _reject(400, request, body: 'Metadata violation: ${e.message}');
+        // The reason travels: the caller repeats a bounded, single-line prefix
+        // of this body in `grpc-message`, so a peer learns WHICH limit it hit
+        // instead of only "HTTP 400 from /Svc/echo". Only the policy's own
+        // diagnostic does; any other ArgumentError's text stays here.
+        return _reject(
+          400,
+          request,
+          body: e is RpcMetadataViolation
+              ? 'Metadata violation: ${e.message}'
+              : 'Metadata violation',
+        );
       }
 
       // Read request body.
@@ -519,13 +526,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
     _emit(
       RpcTransportMessage.withMetadata(
         streamId: streamId,
-        metadata: RpcMetadata([
-          RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-          RpcHeader(
-            RpcHeaders.xCancellationReason,
-            'the client closed the connection',
-          ),
-        ]),
+        metadata: RpcTrailers.cancelled('the client closed the connection'),
       ),
     );
   }
@@ -562,13 +563,12 @@ class RpcHttpResponderTransport extends IRpcTransport {
         'Stream $streamId was released before it answered; closing the HTTP '
         'request with CANCELLED.',
       );
-      pending.responseHeaders.addAll([
-        RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.cancelled}'),
-        RpcHeader(
-          RpcHeaders.grpcMessage,
-          'The call was torn down before the handler answered',
-        ),
-      ]);
+      pending.responseHeaders.addAll(
+        RpcTrailers.status(
+          RpcStatus.cancelled,
+          message: 'The call was torn down before the handler answered',
+        ).headers,
+      );
       // CANCELLED, not DEADLINE_EXCEEDED: this method cannot know why the
       // stream was released, and the peer that set a deadline has already
       // reported one locally.
@@ -651,14 +651,14 @@ class RpcHttpResponderTransport extends IRpcTransport {
       '${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes} bytes and was ended early. '
       'HTTP/1.1 buffers a whole server stream before sending it.',
     );
-    pending.responseHeaders.addAll([
-      RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.resourceExhausted}'),
-      RpcHeader(
-        RpcHeaders.grpcMessage,
-        'Response exceeds the ${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes}-byte '
-        'limit; HTTP/1.1 cannot stream it',
-      ),
-    ]);
+    pending.responseHeaders.addAll(
+      RpcTrailers.status(
+        RpcStatus.resourceExhausted,
+        message:
+            'Response exceeds the ${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes}-byte '
+            'limit; HTTP/1.1 cannot stream it',
+      ).headers,
+    );
     _completeResponse(streamId, pending);
     // The caller has its answer, but the handler does not know: every later
     // send returns normally and is dropped, so a stream that runs until
@@ -669,13 +669,9 @@ class RpcHttpResponderTransport extends IRpcTransport {
     _emit(
       RpcTransportMessage(
         streamId: streamId,
-        metadata: RpcMetadata([
-          RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-          RpcHeader(
-            RpcHeaders.xCancellationReason,
-            'The response exceeded the buffered-bytes limit',
-          ),
-        ]),
+        metadata: RpcTrailers.cancelled(
+          'The response exceeded the buffered-bytes limit',
+        ),
       ),
     );
   }

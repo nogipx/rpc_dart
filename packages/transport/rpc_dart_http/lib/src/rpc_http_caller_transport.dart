@@ -246,18 +246,10 @@ class RpcHttpCallerTransport extends IRpcTransport {
       );
       if (!isTrailer) return const RpcMetadata([]);
       return _policy.statusOnly(metadata) ??
-          RpcMetadata([
-            RpcHeader(
-              RpcHeaders.grpcStatus,
-              RpcStatus.invalidArgument.toString(),
-            ),
-            RpcHeader(
-              RpcHeaders.grpcMessage,
-              RpcMetadata.encodeGrpcMessage(
-                'Response metadata violates the security policy',
-              ),
-            ),
-          ]);
+          RpcTrailers.status(
+            RpcStatus.invalidArgument,
+            message: 'Response metadata violates the security policy',
+          );
     }
   }
 
@@ -515,28 +507,20 @@ class RpcHttpCallerTransport extends IRpcTransport {
       if (streamedResponse.statusCode != 200) {
         // At most `_maxReasonBytes`, for the reason text; the rest is not read.
         final errorBody = await _readErrorBody(streamedResponse);
-        // Core's table, shared with HTTP/2. This transport used to keep its
-        // own, and the two disagreed on six rows -- including 504, where one
-        // was retryable and the other final.
-        final grpcCode = grpcStatusFromHttpStatus(streamedResponse.statusCode);
-        // The reason travels. Discard the body and the responder's own
-        // rejections -- "Request body exceeds limit of N bytes", a metadata
-        // violation -- collapse into "HTTP 400 from /Svc/echo", which does not
-        // say WHICH limit, or even that a limit was involved.
+        // The reason travels: without the body the responder's own rejections
+        // ("Request body exceeds limit of N bytes", a metadata violation)
+        // collapse into "HTTP 400 from /Svc/echo", which does not say WHICH
+        // limit, or even that a limit was involved.
         final reason = _shortReason(errorBody);
         _emit(
           RpcTransportMessage(
             streamId: streamId,
-            metadata: RpcMetadata([
-              RpcHeader(RpcHeaders.grpcStatus, '$grpcCode'),
-              RpcHeader(
-                RpcHeaders.grpcMessage,
-                Uri.encodeComponent(
-                  'HTTP ${streamedResponse.statusCode} from ${call.methodPath}'
+            metadata: RpcTrailers.fromHttpStatus(
+              streamedResponse.statusCode,
+              detail:
+                  'from ${call.methodPath}'
                   '${reason == null ? '' : ': $reason'}',
-                ),
-              ),
-            ]),
+            ),
             isEndOfStream: true,
           ),
         );
@@ -566,15 +550,7 @@ class RpcHttpCallerTransport extends IRpcTransport {
         _emit(
           RpcTransportMessage(
             streamId: streamId,
-            metadata: RpcMetadata([
-              RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.internal}'),
-              RpcHeader(
-                RpcHeaders.grpcMessage,
-                Uri.encodeComponent(
-                  'Invalid content-type for gRPC: "$responseContentType"',
-                ),
-              ),
-            ]),
+            metadata: RpcTrailers.unexpectedContentType(responseContentType),
             isEndOfStream: true,
           ),
         );

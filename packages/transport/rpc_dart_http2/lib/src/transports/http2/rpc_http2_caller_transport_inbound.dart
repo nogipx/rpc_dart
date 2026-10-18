@@ -152,19 +152,14 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
           _emit(
             RpcTransportMessage(
               streamId: streamId,
-              metadata: RpcMetadata([
-                RpcHeader(RpcHeaders.grpcStatus, status.toString()),
-                RpcHeader(
-                  RpcHeaders.grpcMessage,
-                  RpcMetadata.encodeGrpcMessage(
-                    dying
-                        ? 'Response ended without a gRPC status (connection lost '
-                              'or stream reset before trailers)'
-                        : 'Response ended without a gRPC status (the peer closed '
-                              'the stream before sending trailers)',
-                  ),
-                ),
-              ]),
+              metadata: RpcTrailers.status(
+                status,
+                message: dying
+                    ? 'Response ended without a gRPC status (connection lost '
+                          'or stream reset before trailers)'
+                    : 'Response ended without a gRPC status (the peer closed '
+                          'the stream before sending trailers)',
+              ),
               isEndOfStream: true,
               methodPath: methodPath,
             ),
@@ -289,26 +284,16 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     if (httpStatus != null && httpStatus >= 100 && httpStatus < 200) return;
 
     if (httpStatus != null && httpStatus != 200) {
-      // Non-200 HTTP status — map through the gRPC status table.
-      //
-      // The mapping is not cosmetic: it decides whether the call is retryable.
-      // Everything used to collapse to INTERNAL, which RetryInterceptor does
-      // not retry, so a proxy answering 502/503/504 — or 429 while rate
-      // limiting — produced a permanent failure where every other gRPC client
+      // Non-200 HTTP status, mapped through the gRPC status table. The mapping
+      // decides whether the call is retryable: a proxy answering 502/503/504,
+      // or 429 while rate limiting, is UNAVAILABLE, which every gRPC client
       // backs off and retries. See [grpcStatusFromHttpStatus].
-      final grpcStatus = grpcStatusFromHttpStatus(httpStatus);
+      final errorMetadata = RpcTrailers.fromHttpStatus(httpStatus);
       _statusReceived.add(streamId);
       _logger?.warning(
         'Non-200 HTTP status $httpStatus for stream $streamId '
-        '-> gRPC status $grpcStatus',
+        '-> gRPC status ${errorMetadata.getHeaderValue(RpcHeaders.grpcStatus)}',
       );
-      final errorMetadata = RpcMetadata([
-        RpcHeader(RpcHeaders.grpcStatus, grpcStatus.toString()),
-        RpcHeader(
-          RpcHeaders.grpcMessage,
-          RpcMetadata.encodeGrpcMessage('HTTP status $httpStatus'),
-        ),
-      ]);
       _emit(
         RpcTransportMessage(
           streamId: streamId,
@@ -399,15 +384,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         _emit(
           RpcTransportMessage(
             streamId: streamId,
-            metadata: RpcMetadata([
-              RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
-              RpcHeader(
-                RpcHeaders.grpcMessage,
-                RpcMetadata.encodeGrpcMessage(
-                  'Invalid content-type for gRPC: "$contentType"',
-                ),
-              ),
-            ]),
+            metadata: RpcTrailers.unexpectedContentType(contentType),
             isEndOfStream: true,
             methodPath: methodPath,
           ),
@@ -555,16 +532,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     _emit(
       RpcTransportMessage(
         streamId: streamId,
-        metadata: RpcMetadata([
-          RpcHeader(RpcHeaders.grpcStatus, RpcStatus.internal.toString()),
-          RpcHeader(
-            RpcHeaders.grpcMessage,
-            RpcMetadata.encodeGrpcMessage(
-              'Response stream ended mid-message: the last gRPC frame is '
-              'incomplete',
-            ),
-          ),
-        ]),
+        metadata: RpcTrailers.of(responseEndedMidMessage()),
         isEndOfStream: true,
         methodPath: methodPath,
       ),

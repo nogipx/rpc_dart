@@ -492,12 +492,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     // stays on the server; it is already logged at the failure site.
     final failure = _responseSendFailure;
     if (failure != null) {
-      final wire = wireStatusFor(failure);
-      await sendError(
-        wire.status,
-        wire.message,
-        statusDetailsBin: wire.detailsBin,
-      );
+      await sendWireError(failure, sendError);
       return;
     }
 

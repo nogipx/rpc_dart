@@ -230,6 +230,32 @@ final class RpcPeerMode extends RpcServerMode {
   `_answerRejectedStream` в http2 (D2); отказ по `:method` выбрасывает
   `RpcStatusException(invalidArgument)`, чтобы сохранить свой статус.
 
+Как сделано:
+
+- В `RpcTrailers` есть `status`, `of(RpcStatusException)`, `cancelled`,
+  `fromHttpStatus` и `unexpectedContentType`. Ошибки обрыва посреди сообщения
+  остаются функциями `requestEndedMidMessage()` / `responseEndedMidMessage()`,
+  теперь экспортированными из `transport.dart`; транспорт, которому они нужны
+  трейлером, пишет `RpcTrailers.of(responseEndedMidMessage())`. Сообщение
+  http2 для не-200 — `HTTP 503`, как в http.
+- Уведомление об отмене везде одной формы, вместе с CANCELLED; ответчик статус
+  не читает.
+- Два события «без статуса» остаются разными: живой пир, закрывший поток без
+  статуса, — INTERNAL без повтора (канальный транспорт, http2); поток, который
+  кончился вообще без кадра конца, — `closedWithoutStatus`, UNAVAILABLE, если
+  не истёк дедлайн. CallProcessor, unary на процессорах и ping теперь берут
+  `closedWithoutStatus` с учётом дедлайна.
+- Ping разбирает `grpc-status` через `statusOf`, поэтому код вне 0..16 —
+  UNKNOWN. Собственный трейлер ошибки ping проходит через `wireStatusFor`: он
+  отправлял пиру текст пойманного исключения.
+- Общий сборщик одиночного ответа переезжает в раздел 4: `UnaryCaller` и
+  `UnaryResponder` уходят там (C1), и слить их сборщик сейчас значило бы
+  написать его дважды. Их собственные литералы трейлеров уходят вместе с ними.
+- `transport_io.dart` (T6) содержит `RpcHeaderBoundedServerSocket`: версию
+  http-сервера (ограничен каждый keep-alive-запрос, `peerGone`) и освобождение
+  слота по `socket.done` из версии websocket. websocket ограничивает только
+  первый блок, потому что никогда не вызывает `responseWritten`.
+
 ## 4. Формы вызова: одна реализация на каждую, одно правило режима передачи
 
 Закрывает C1, C2, C3, C4, C5, C6, D5, частично C15.

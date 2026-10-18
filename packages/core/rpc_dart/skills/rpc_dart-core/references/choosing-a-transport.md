@@ -58,8 +58,11 @@ Notes:
 `policy` is an `RpcSecurityPolicy` (see `security-and-flow-control.md`).
 
 `IRpcChannel` and the other transport-authoring types (frames, the message
-parser, the flow-control interfaces) are not in `rpc_dart.dart`. Import
-`package:rpc_dart/transport.dart`, which re-exports `rpc_dart.dart`.
+parser, the flow-control interfaces, `RpcTrailers`, `RpcConnectionHost`,
+`RpcWriteBacklog`) are not in `rpc_dart.dart`. Import
+`package:rpc_dart/transport.dart`, which re-exports `rpc_dart.dart`. The
+`dart:io`-only `RpcHeaderBoundedServerSocket` is in
+`package:rpc_dart/transport_io.dart`.
 
 ```dart
 import 'package:rpc_dart/transport.dart';

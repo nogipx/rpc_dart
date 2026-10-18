@@ -7,49 +7,59 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// `Request.context` key under which [RpcHttpServer] gives each request a
-/// `Future<void>` that completes when the client's connection has ended.
-///
-/// Absent when the responder transport is mounted on any other shelf server;
-/// there a caller's cancel does not reach the handler.
-const String kRpcHttpPeerGoneKey = 'rpc_dart_http.peer_gone';
+import '../core/_index.dart';
 
-/// A [ServerSocket] that watches every connection it accepts for the
-/// [HttpServer] it feeds.
+/// A [ServerSocket] for an [HttpServer] that bounds what a connection may
+/// send before its request header block ends, and how many connections are
+/// open.
 ///
-/// - It reports when a connection ends ([peerGone]). HTTP/1.1 has no cancel
-///   frame: a caller cancels by closing its connection, and neither dart:io
-///   nor shelf tells the handler.
-/// - It bounds a request's header block in bytes ([maxHeaderBytes]) and in
-///   time ([headerTimeout]), and the number of open connections
-///   ([maxConnections]). dart:io holds an unfinished header block below every
-///   rpc_dart limit, up to about 3 MiB per connection, for as long as the
-///   client keeps it open.
-final class PeerWatchingServerSocket extends Stream<Socket>
+/// dart:io holds an unfinished request header block below every rpc_dart
+/// limit, for as long as the client keeps the connection open. Through
+/// `HttpServer.listenOn(socket)`, a connection whose header block passes
+/// [maxHeaderBytes] or takes longer than [headerTimeout] is closed, and one
+/// accepted past [maxConnections] is closed at once.
+///
+/// [headerTimeout] runs from the accept for the first request. A server that
+/// keeps connections alive calls [responseWritten] once a response is out:
+/// the next request's block is then bounded again, due from its first byte. A
+/// server that upgrades the connection never calls it, so only the first block
+/// is bounded and the bytes after it belong to the upgraded protocol.
+///
+/// [peerGone] tells a handler that its client hung up: HTTP/1.1 has no cancel
+/// frame, and neither dart:io nor shelf reports a closed connection.
+final class RpcHeaderBoundedServerSocket extends Stream<Socket>
     implements ServerSocket {
-  PeerWatchingServerSocket(
+  /// Bounds the connections [server] accepts. Each bound is off when null.
+  RpcHeaderBoundedServerSocket(
     this._server, {
     this.maxHeaderBytes,
     this.headerTimeout,
     this.maxConnections,
   });
 
+  /// Four times what [policy] admits as one request's head: the method path,
+  /// the metadata text, the `: ` and CRLF around each header, and the request
+  /// line. A block a little over the policy still reaches the server and is
+  /// refused with its reason; one far over it is cut before dart:io holds it.
+  static int defaultMaxHeaderBytes(RpcSecurityPolicy policy) =>
+      4 *
+      (policy.maxMethodPathLength +
+          policy.maxMetadataBytes +
+          4 * policy.maxHeaders +
+          1024);
+
   final ServerSocket _server;
 
-  /// Bytes a request may send before its header block ends; past it the
-  /// connection is closed. Null for no bound.
+  /// Bytes a request may send before its header block ends, or null.
   final int? maxHeaderBytes;
 
-  /// How long a request's header block may take, from the connection's
-  /// accept or the first byte of a later request; past it the connection is
-  /// closed. Null for no bound.
+  /// How long a request's header block may take, or null.
   final Duration? headerTimeout;
 
-  /// Open connections at most; one more is closed as it is accepted. Null for
-  /// no bound.
+  /// Open connections at most, or null.
   final int? maxConnections;
 
-  final Map<String, _WatchedSocket> _open = {};
+  final Map<String, _HeaderBoundedSocket> _open = {};
 
   /// Completes when the connection [info] describes has ended; null for one
   /// this socket did not accept.
@@ -71,14 +81,14 @@ final class PeerWatchingServerSocket extends Stream<Socket>
       return const [];
     }
     final key = _key(socket.remoteAddress, socket.remotePort);
-    final watched = _WatchedSocket(
+    final bounded = _HeaderBoundedSocket(
       socket,
       maxHeaderBytes: maxHeaderBytes,
       headerTimeout: headerTimeout,
       onEnded: () => _open.remove(key),
     );
-    _open[key] = watched;
-    return [watched];
+    _open[key] = bounded;
+    return [bounded];
   }
 
   @override
@@ -110,8 +120,8 @@ final class PeerWatchingServerSocket extends Stream<Socket>
 }
 
 /// A [Socket] that reports its end and bounds each request's header block.
-final class _WatchedSocket extends Stream<Uint8List> implements Socket {
-  _WatchedSocket(
+final class _HeaderBoundedSocket extends Stream<Uint8List> implements Socket {
+  _HeaderBoundedSocket(
     this._socket, {
     required int? maxHeaderBytes,
     required Duration? headerTimeout,
@@ -121,6 +131,9 @@ final class _WatchedSocket extends Stream<Uint8List> implements Socket {
        _onEnded = onEnded {
     // The first request is due from the accept on.
     _armDeadline();
+    // An upgrade replaces the handlers [listen] installed; without this an
+    // upgraded connection keeps its slot after it ends.
+    _socket.done.then((_) => _ended(), onError: (Object _) => _ended());
   }
 
   final Socket _socket;
@@ -140,9 +153,10 @@ final class _WatchedSocket extends Stream<Uint8List> implements Socket {
   Future<void> get gone => _gone.future;
 
   void _ended() {
+    if (_gone.isCompleted) return;
     _deadline?.cancel();
     _onEnded();
-    if (!_gone.isCompleted) _gone.complete();
+    _gone.complete();
   }
 
   void _armDeadline() {

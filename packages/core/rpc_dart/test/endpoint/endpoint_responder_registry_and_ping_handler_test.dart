@@ -130,53 +130,57 @@ void main() {
       expect(debugLabel, equals(['srv']));
     });
 
-    test('on transport error sends INTERNAL trailers when possible', () async {
-      final (client, serverInner) = RpcChannelTransport.memoryPair();
+    test(
+      'on a transport error sends INTERNAL without the error text',
+      () async {
+        final (client, serverInner) = RpcChannelTransport.memoryPair();
 
-      final server = _ThrowOnceOnSendMetadata(serverInner)
-        ..errorToThrow = StateError('fail once');
+        final server = _ThrowOnceOnSendMetadata(serverInner)
+          ..errorToThrow = StateError('fail once');
 
-      addTearDown(() async {
-        await client.close();
-        await serverInner.close();
-      });
+        addTearDown(() async {
+          await client.close();
+          await serverInner.close();
+        });
 
-      final streamId = client.createStream();
-      final handler = RpcResponderPingHandler(
-        transport: server,
-        logger: LogScope.noop,
-        debugLabel: null,
-      );
+        final streamId = client.createStream();
+        final handler = RpcResponderPingHandler(
+          transport: server,
+          logger: LogScope.noop,
+          debugLabel: null,
+        );
 
-      final trailers = Completer<RpcMetadata>();
-      final sub = client.getMessagesForStream(streamId).listen((message) {
-        final metadata = message.metadata;
-        if (metadata == null) return;
-        final status = metadata.getHeaderValue(RpcHeaders.grpcStatus);
-        if (status != null && !trailers.isCompleted) {
-          trailers.complete(metadata);
-        }
-      });
-      addTearDown(sub.cancel);
+        final trailers = Completer<RpcMetadata>();
+        final sub = client.getMessagesForStream(streamId).listen((message) {
+          final metadata = message.metadata;
+          if (metadata == null) return;
+          final status = metadata.getHeaderValue(RpcHeaders.grpcStatus);
+          if (status != null && !trailers.isCompleted) {
+            trailers.complete(metadata);
+          }
+        });
+        addTearDown(sub.cancel);
 
-      await handler.respond(
-        streamId: streamId,
-        context: RpcContext.empty(),
-        onComplete: () async {},
-      );
+        await handler.respond(
+          streamId: streamId,
+          context: RpcContext.empty(),
+          onComplete: () async {},
+        );
 
-      final trailer = await trailers.future.timeout(const Duration(seconds: 2));
-      expect(
-        trailer.getHeaderValue(RpcHeaders.grpcStatus),
-        equals(RpcStatus.internal.toString()),
-      );
-      expect(
-        RpcMetadata.decodeGrpcMessage(
+        final trailer = await trailers.future.timeout(
+          const Duration(seconds: 2),
+        );
+        expect(
+          trailer.getHeaderValue(RpcHeaders.grpcStatus),
+          equals(RpcStatus.internal.toString()),
+        );
+        final message = RpcMetadata.decodeGrpcMessage(
           trailer.getHeaderValue(RpcHeaders.grpcMessage) ?? '',
-        ),
-        contains('Ping handling error'),
-      );
-    });
+        );
+        expect(message, equals(kInternalErrorWireMessage));
+        expect(message, isNot(contains('fail once')));
+      },
+    );
 
     test('still completes onComplete when transport fails', () async {
       final (client, serverInner) = RpcChannelTransport.memoryPair();

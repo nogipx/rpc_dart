@@ -133,6 +133,53 @@ void main() {
       );
     });
 
+    test('a status outside 0..16 is UNKNOWN', () async {
+      final (client, server) = RpcChannelTransport.memoryPair();
+      addTearDown(() async {
+        await client.close();
+        await server.close();
+      });
+
+      final streamId = client.createStream();
+
+      unawaited(
+        server.getMessagesForStream(streamId).first.then((_) async {
+          await server.sendMetadata(
+            streamId,
+            RpcMetadata.forServerInitialResponse(),
+          );
+          await server.sendMetadata(
+            streamId,
+            RpcMetadata([const RpcHeader(RpcHeaders.grpcStatus, '99')]),
+            endStream: true,
+          );
+        }),
+      );
+
+      final exchange = RpcEndpointPingExchange(
+        transport: client,
+        logger: LogScope.noop,
+        streamId: streamId,
+        sentAt: DateTime.now().toUtc(),
+      );
+
+      await expectLater(
+        () => exchange.execute(
+          metadata: RpcMetadata.forClientRequest(
+            RpcEndpointPingProtocol.serviceName,
+            RpcEndpointPingProtocol.methodName,
+          ),
+        ),
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.unknown,
+          ),
+        ),
+      );
+    });
+
     test('propagates send errors and cancels subscription', () async {
       final (client, server) = RpcChannelTransport.memoryPair();
       final throwingClient = ThrowingTransport(client)

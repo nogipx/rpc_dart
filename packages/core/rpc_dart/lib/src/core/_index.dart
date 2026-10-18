@@ -21,4 +21,5 @@ export 'security_policy.dart';
 export 'sink_pump.dart';
 export 'stream_bridge.dart';
 export 'stream_router.dart';
+export 'trailers.dart';
 export 'transport.dart';

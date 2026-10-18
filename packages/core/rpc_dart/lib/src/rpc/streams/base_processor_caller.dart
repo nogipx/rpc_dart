@@ -53,11 +53,7 @@ Future<void> _notifyPeerOfCancellation(
   }
 
   try {
-    final cancellationMetadata = RpcMetadata([
-      RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-      RpcHeader(RpcHeaders.xCancellationReason, reason),
-      RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
-    ]);
+    final cancellationMetadata = RpcTrailers.cancelled(reason);
 
     if (logger.isInternal) {
       logger.internal(
@@ -243,34 +239,15 @@ extension _CallProcessorInternals<
           );
         }
         if (!_responseController.isClosed) {
-          // Our own deadline is authoritative over a bare close: the peer ends
-          // its stream on the same deadline, closing this one at almost the
-          // same instant, and a bare close is indistinguishable from the server
-          // having finished. Which of the two the consumer saw was a race.
-          //
-          // Tested with remainingTime, NOT isExpired. isExpired is
-          // `clock().isAfter(deadline)` -- strict -- so it is false at the
-          // instant the deadline lands, while remainingTime is already zero,
-          // and that boundary is exactly where the peer's close arrives.
-          final deadline = _context?.deadline;
-          if (deadline != null && _context?.remainingTime == Duration.zero) {
-            _responseController.addError(
-              RpcDeadlineExceededException(deadline, Duration.zero),
-            );
-          } else {
-            // Still OPEN here means the stream ended with no end-of-stream
-            // message: a normal finish, an error trailer, a cancellation and a
-            // deadline all close it before now. So the transport went away
-            // mid-call, and gRPC calls a stream that ends without a trailer
-            // UNAVAILABLE. Closing silently instead let a server-stream or bidi
-            // consumer read a truncated result as a complete one.
-            _responseController.addError(
-              RpcStatusException(
-                RpcStatus.unavailable,
-                'Stream closed before the server completed the call',
-              ),
-            );
-          }
+          // Still OPEN here means the stream ended with no end-of-stream
+          // message: a normal finish, an error trailer, a cancellation and a
+          // deadline all close it before now. Closing silently would let a
+          // server-stream or bidi consumer read a truncated result as a
+          // complete one. The shared rule decides between our own deadline
+          // and UNAVAILABLE.
+          _responseController.addError(
+            RpcCallerTrailer.closedWithoutStatus(_context),
+          );
           _responseController.close();
         }
       },

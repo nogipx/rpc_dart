@@ -265,7 +265,12 @@ IRpcTransport            — full transport with stream IDs and health
 An application imports `package:rpc_dart/rpc_dart.dart`. A transport author
 imports `package:rpc_dart/transport.dart` instead: it re-exports the
 application library and adds channels, frames, the message parser and router,
-the transport capability interfaces and the server drain helpers.
+the transport capability interfaces, the status trailers a transport builds
+(`RpcTrailers`), and the server's shared parts: `RpcConnectionHost` for one
+endpoint per connection, `RpcWriteBacklog` to stop reading a peer that reads
+nothing, and the drain helpers. A server on a `dart:io` socket also imports
+`package:rpc_dart/transport_io.dart`, whose `RpcHeaderBoundedServerSocket`
+bounds an HTTP request's header block in bytes and time.
 
 Factories on `RpcChannelTransport`:
 

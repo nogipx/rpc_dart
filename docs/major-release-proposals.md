@@ -215,6 +215,32 @@ In `transport.dart` (and re-exported where applications need them):
   `_answerRejectedStream` included (D2); the `:method` refusal throws an
   `RpcStatusException(invalidArgument)` so it keeps its status.
 
+As landed:
+
+- `RpcTrailers` has `status`, `of(RpcStatusException)`, `cancelled`,
+  `fromHttpStatus` and `unexpectedContentType`. The mid-message errors stay the
+  functions `requestEndedMidMessage()` / `responseEndedMidMessage()`, now
+  exported from `transport.dart`; a transport that needs them as a trailer
+  writes `RpcTrailers.of(responseEndedMidMessage())`. The http2 non-200
+  message is `HTTP 503`, as on http.
+- The cancellation notice has one shape everywhere, CANCELLED included; a
+  responder ignores the status.
+- Two "no status" events stay apart: a live peer that ended a stream without
+  one is INTERNAL and not retried (the channel transport, http2), a stream
+  that ended with no end-of-stream frame at all is `closedWithoutStatus`,
+  UNAVAILABLE unless the deadline passed. CallProcessor, the processor-path
+  unary and ping now use `closedWithoutStatus` with the deadline mapping.
+- Ping parses `grpc-status` through `statusOf`, so a code outside 0..16 is
+  UNKNOWN. Ping's own failure trailer passes `wireStatusFor`: it carried the
+  caught error's text to the peer.
+- The shared single-response collector moves to section 4: `UnaryCaller` and
+  `UnaryResponder` go there (C1), and merging their collector first would
+  write it twice. Their own trailer literals go with them.
+- `transport_io.dart` (T6) holds `RpcHeaderBoundedServerSocket`, the http
+  server's version (every keep-alive request bounded, `peerGone`) plus the
+  websocket one's slot release on `socket.done`. websocket bounds only the
+  first block because it never calls `responseWritten`.
+
 ## 4. Call shapes: one implementation each, one transfer-mode rule
 
 Closes C1, C2, C3, C4, C5, C6, D5, C15 partly.

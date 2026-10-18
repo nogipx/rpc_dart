@@ -125,12 +125,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
               error: error,
               stackTrace: stackTrace,
             );
-            final wire = wireStatusFor(error);
-            await processor.sendError(
-              wire.status,
-              wire.message,
-              statusDetailsBin: wire.detailsBin,
-            );
+            await sendWireError(error, processor.sendError);
             await _cleanupStream(streamId, only: state);
           }
         },
@@ -149,12 +144,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
             error: error,
             stackTrace: stackTrace,
           );
-          final wire = wireStatusFor(error);
-          await processor.sendError(
-            wire.status,
-            wire.message,
-            statusDetailsBin: wire.detailsBin,
-          );
+          await sendWireError(error, processor.sendError);
           await _cleanupStream(streamId, only: state);
         },
       );
@@ -501,12 +491,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
             error: error,
             stackTrace: stackTrace,
           );
-          final wire = wireStatusFor(error);
-          await responder.sendError(
-            wire.status,
-            wire.message,
-            statusDetailsBin: wire.detailsBin,
-          );
+          await sendWireError(error, responder.sendError);
         }
       }());
       return;
@@ -560,13 +545,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
             stackTrace: stackTrace,
           );
         }
-        final wire = wireStatusFor(error);
-        await responder.sendError(
-          wire.status,
-          wire.message,
-          statusDetailsBin: wire.detailsBin,
-          fault: RpcStatus.isFaultError(error),
-        );
+        await sendWireError(error, responder.sendError);
       }
     }());
   }

@@ -139,15 +139,11 @@ final class RpcEndpointPingExchange {
             }
 
             final headersMap = metadataToMap(message.metadata!);
+            final statusCode = RpcCallerTrailer.statusOf(message.metadata!);
 
-            if (!headersMap.containsKey(RpcHeaders.grpcStatus)) {
+            if (statusCode == null) {
               if (message.isEndOfStream) {
-                completeError(
-                  RpcStatusException(
-                    RpcStatus.unavailable,
-                    'Ping stream ended without trailers [streamId: $streamId]',
-                  ),
-                );
+                completeError(RpcCallerTrailer.closedWithoutStatus(null));
                 return;
               }
 
@@ -158,10 +154,6 @@ final class RpcEndpointPingExchange {
               }
               return;
             }
-
-            final statusCode =
-                int.tryParse(headersMap[RpcHeaders.grpcStatus] ?? '') ??
-                RpcStatus.unknown;
 
             final receivedAt = DateTime.now().toUtc();
 
@@ -222,12 +214,7 @@ final class RpcEndpointPingExchange {
           },
           onDone: () {
             if (!completer.isCompleted) {
-              completeError(
-                RpcStatusException(
-                  RpcStatus.unavailable,
-                  'Ping stream ended without trailers [streamId: $streamId]',
-                ),
-              );
+              completeError(RpcCallerTrailer.closedWithoutStatus(null));
             }
           },
         );
