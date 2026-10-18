@@ -354,7 +354,7 @@ Non-breaking items can land before the major and shrink it.
 
 | Phase | Content | Breaking |
 |---|---|---|
-| 0 | D1, D2, D3, D6, D7, D9 fixes; X6 logging fields; X7 comments; C18 private dead code; http2 internals (7) | no |
+| 0 | D1, D2, D3, D6, D9, D11 fixes (D7 is not a defect); X6 logging fields; X7 comments; C18 private dead code; http2 internals (7) | no |
 | 1 | `RpcWriteBacklog`, `RpcConnectionHost`, `RpcTrailers` added; transports switch to them (3) | no (additions) |
 | 2 | Library split and `show` barrels (1) | yes |
 | 3 | Capabilities as members (2); wrapper classes removed | yes |
