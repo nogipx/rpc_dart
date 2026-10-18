@@ -105,11 +105,11 @@ typedef _Rig = ({
   List<({int streamId, int bytes})> discarded,
 });
 
-_Rig _rig() {
+_Rig _rig({RpcSecurityPolicy policy = _policy}) {
   final feed = _FeedChannel();
   final channel = RpcFrameMultiplexedChannel(
     channel: feed,
-    policy: _policy,
+    policy: policy,
     // The client side. A server keeps closing -- see the guard at the bottom.
     closeOnOversizedFrame: false,
   );
@@ -247,29 +247,36 @@ void main() {
     expect(rig.channel.isClosed, isFalse);
   });
 
-  test('GUARD: a chunk still over the cap past its first frame closes', () async {
-    // What the cap still bounds after a chunk is split at its first frame: the
-    // REST meets it as any chunk does, so one chunk can never make the channel
-    // hold more than the cap. Here the rest is a whole accepted frame plus
-    // 10 KiB more, past the cap in one piece.
-    final rig = _rig();
+  test(
+    'GUARD: what a split chunk leaves to buffer still meets the cap',
+    () async {
+      // A chunk over the cap is split frame by frame, and the complete frames
+      // are delivered. The incomplete frame at its end is what the channel
+      // would buffer, and the cap still bounds that: here a buffer of 8 KiB
+      // and 10 KiB of a 60 KiB frame, which fits the message limit.
+      final rig = _rig(
+        policy: const RpcSecurityPolicy(
+          maxMessageLengthBytes: 64 * 1024,
+          maxBufferedBytes: 8 * 1024,
+        ),
+      );
 
-    rig.feed.feed(_concat([_header(11, 60 * 1024), Uint8List(10 * 1024)]));
-    await _settle();
-    rig.feed.feed(
-      _concat([
-        Uint8List(50 * 1024),
-        _header(13, 60 * 1024),
-        Uint8List(70 * 1024),
-      ]),
-    );
-    await _settle();
+      rig.feed.feed(
+        _concat([
+          RpcChannelFrame.encodeData(streamId: 11, payload: Uint8List(16)),
+          RpcChannelFrame.encodeData(streamId: 13, payload: Uint8List(16)),
+          _header(15, 60 * 1024),
+          Uint8List(10 * 1024),
+        ]),
+      );
+      await _settle();
 
-    expect(rig.messages.first.streamId, 11);
-    expect(rig.errors, isNotEmpty);
-    expect(rig.errors.first, isA<RpcFrameException>());
-    expect(rig.channel.isClosed, isTrue);
-  });
+      expect([for (final m in rig.messages) m.streamId], [11, 13]);
+      expect(rig.errors, isNotEmpty);
+      expect(rig.errors.first, isA<RpcFrameException>());
+      expect(rig.channel.isClosed, isTrue);
+    },
+  );
 
   test('GUARD: a frame at the ceiling is delivered, not refused', () async {
     // Pairs with the witnesses: a fixture one byte off would make them pass

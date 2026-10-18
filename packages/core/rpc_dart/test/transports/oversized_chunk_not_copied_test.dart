@@ -57,7 +57,7 @@ void main() {
     final mux = RpcFrameMultiplexedChannel(
       channel: channel,
       policy: const RpcSecurityPolicy(
-        maxMessageLengthBytes: capBytes,
+        maxMessageLengthBytes: 128 * 1024 * 1024,
         maxBufferedBytes: capBytes,
       ),
     );
@@ -72,7 +72,14 @@ void main() {
       },
     );
 
-    channel.feed(Uint8List(chunkBytes));
+    // One frame the message limit admits and the buffer cannot hold, its
+    // first 64 MiB in one chunk. Zeros alone would not do: they are valid
+    // empty frames, decoded straight out of the chunk.
+    final chunk = Uint8List(chunkBytes);
+    ByteData.sublistView(chunk)
+      ..setUint32(0, 1)
+      ..setUint32(5, 100 * 1024 * 1024);
+    channel.feed(chunk);
     await done.future.timeout(const Duration(seconds: 10));
 
     expect(errors.single, isA<RpcFrameException>());

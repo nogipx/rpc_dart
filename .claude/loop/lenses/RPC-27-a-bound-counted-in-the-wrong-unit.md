@@ -3,8 +3,8 @@ refines: —
 paths: [packages/core/*/lib/**, packages/transport/*/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**, packages/blob/*/lib/**]
 applies: a container is capped by how many items it holds, and what one item weighs is set by someone else — a peer, a caller, a logged payload
 breaks: memory exhaustion: the cap holds and the process still runs out.
-applied: [764, 765, 783, 785, 803, 836, 840, 841]
-status: confirmed (round 841)
+applied: [764, 765, 783, 785, 803, 836, 840, 841, 886]
+status: confirmed (round 886)
 rank: 5
 ---
 
@@ -76,3 +76,11 @@ that owns the container; RSS only as a cross-check, it also carries garbage.
   trusted" is a lead, not a decision.**
   `../rounds/841-a-queued-response-does-not-pin-its-chunk.md`,
   `../probes/P-312-a-queued-response-pins-its-chunk.md`.
+- **Round 886** — the inverse case again, and it refused honest peers: the
+  frame channel's reassembly cap was checked against a socket CHUNK, a size
+  the kernel picks, after splitting off only its first frame. On Linux a
+  call's first frames and its message at a 64 KiB limit arrive as one
+  65809-byte chunk: closed with "buffer overflow: 65753 bytes (max: 65550)".
+  The cap now bounds what is buffered, the incomplete frame at the end.
+  **A cap on bytes buffered must not be read off a unit the sender cannot
+  see.** `../rounds/886-a-chunk-split-at-every-frame.md`.

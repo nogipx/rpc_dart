@@ -445,20 +445,21 @@ class RpcFrameMultiplexedChannel
     // 16777266 bytes (max: 16777230)' for a message exactly at the limit,
     // with the connection and every call on it torn down.
     //
-    // Split such a chunk ONCE, where the first frame ends: that frame is
-    // decoded on its own, and the rest meets the cap by itself, as any chunk
-    // does. Only a chunk over the cap is split, so one within it takes the
-    // path it always took. Once and not in a loop, because the cap is also
-    // the defence against one huge chunk: refused on its length, never copied
-    // (see `oversized_chunk_not_copied_test`), and a loop would instead walk
-    // a hostile chunk frame by frame. A frame that is itself over the limit
-    // was refused from its header above and never gets here.
-    if (_bufLen + data.length > _maxBufferedFrameBytes) {
+    // Split such a chunk where its first frame ends and decode that frame on
+    // its own, for as long as the rest is still over the cap: a call's small
+    // frames arrive in the same chunk as its maximal message, so splitting
+    // only the first one leaves the rest over the cap. Only a chunk over the
+    // cap is split, so one within it takes the ordinary path. A complete frame
+    // is decoded from a view of the chunk, never copied, so what the cap
+    // bounds is what is left to buffer: the incomplete frame at the end, which
+    // is refused on its length before it is copied (see
+    // `oversized_chunk_not_copied_test`). A frame that is itself over the
+    // limit was refused from its header above and never gets here.
+    while (_bufLen + data.length > _maxBufferedFrameBytes) {
       final end = _endOfFirstFrame(data);
-      if (end != null && end > 0 && end < data.length) {
-        if (!_decodeAndEmit(Uint8List.sublistView(data, 0, end))) return;
-        data = Uint8List.sublistView(data, end);
-      }
+      if (end == null || end <= 0 || end >= data.length) break;
+      if (!_decodeAndEmit(Uint8List.sublistView(data, 0, end))) return;
+      data = Uint8List.sublistView(data, end);
     }
 
     _decodeAndEmit(data);

@@ -112,6 +112,21 @@ void main() {
     expect([for (final m in r.got) m.streamId], [1, 3]);
   });
 
+  test('WITNESS: a maximal frame behind two small frames in one chunk '
+      'is delivered', () async {
+    // The shape a Linux socket read produces when a call's first frames and
+    // its message at the limit arrive together.
+    Uint8List small(int streamId) => RpcChannelFrame.encodeData(
+      streamId: streamId,
+      payload: RpcMessageFrame.encode(Uint8List(16)),
+    );
+    final r = await _deliver([
+      [...small(1), ...small(3), ..._maximalFrame(5)],
+    ], 3);
+    expect(r.errors, isEmpty);
+    expect([for (final m in r.got) m.streamId], [1, 3, 5]);
+  });
+
   test('GUARD: a frame over the limit is still refused', () async {
     final over = RpcChannelFrame.encodeData(
       streamId: 1,
