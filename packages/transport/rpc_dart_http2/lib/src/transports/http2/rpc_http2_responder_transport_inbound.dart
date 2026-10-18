@@ -18,14 +18,14 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   /// Wires up one new client-initiated stream.
   void _handleIncomingStream(http2.ServerTransportStream stream) {
     final streamId = stream.id;
-    _incomingStreams[streamId] = stream;
+    final call = _calls[streamId] = _ResponderStream(stream, _parsers);
     if (_logger?.isInternal ?? false) {
       _logger?.internal(
-        'New incoming stream $streamId (active: ${_incomingStreams.length})',
+        'New incoming stream $streamId (active: ${_calls.length})',
       );
     }
 
-    final subscription = stream.incomingMessages.listen(
+    call.subscription = stream.incomingMessages.listen(
       (http2.StreamMessage message) {
         _handleIncomingMessage(streamId, message);
       },
@@ -68,18 +68,21 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         // end ahead of it handed an upload handler its partial input as
         // complete.
         if (!_refuseIfEndedMidMessage(streamId) &&
-            !_requestRefused.contains(streamId)) {
+            !(_calls[streamId]?.requestRefused ?? false)) {
           _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
         }
 
-        // NOT removed from _incomingStreams here: the response still has to go
-        // out on it. releaseStreamId or close() reclaims it.
-        _streamSubscriptions.remove(streamId);
-        _streamParsers.remove(streamId);
+        // The record stays: the response still has to go out on its stream.
+        // releaseStreamId or close() reclaims it. The subscription is done, so
+        // it is dropped rather than cancelled.
+        final ended = _calls[streamId];
+        if (ended != null) {
+          ended
+            ..subscription = null
+            ..parser = null;
+        }
       },
     );
-
-    _streamSubscriptions[streamId] = subscription;
 
     // RST_STREAM after the request side has finished has NOWHERE else to land.
     //
@@ -143,7 +146,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   /// A header frame that fails [RpcSecurityPolicy.validateMetadata] throws out
   /// of [_handleIncomingHeaders] BEFORE [_emit], so the responder pipeline gets
   /// no state for the stream and never replies. Without this the peer waits
-  /// forever and the HTTP/2 stream stays in [_incomingStreams] — and since the
+  /// forever and the HTTP/2 stream stays in [_calls] — and since the
   /// peer chooses the `:path`, that is an unauthenticated way to pin
   /// `maxActiveStreams` worth of slots with requests that can never complete.
   ///
@@ -155,7 +158,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   /// callback where a throw would reach the root zone.
   void _answerRejectedStream(int streamId, Object error) {
     if (_isClosed) return;
-    if (!_incomingStreams.containsKey(streamId)) return;
+    if (!_calls.containsKey(streamId)) return;
 
     // Default deny, as for every error a peer is told: the policy's refusals
     // are `RpcStatusException`s and keep their status and text; anything else
@@ -288,28 +291,27 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
 
   /// Parses a request's DATA frame into gRPC messages and emits them.
   void _handleIncomingData(int streamId, http2.DataStreamMessage message) {
+    // A live subscription keeps its record until releaseStreamId or close().
+    final call = _calls[streamId];
+    if (call == null) return;
     try {
-      if (_streamParsers.length >= _policy.maxActiveStreams &&
-          !_streamParsers.containsKey(streamId)) {
+      if (call.parser == null && _parsers.count >= _policy.maxActiveStreams) {
         // RESOURCE_EXHAUSTED: a limit that frees up. It reaches the peer
-        // through _answerFramingViolation, which now takes the status from the
+        // through _answerFramingViolation, which takes the status from the
         // error rather than guessing from the base class.
         throw RpcStatusException(
           RpcStatus.resourceExhausted,
-          'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
+          'Too many active streams: ${_parsers.count} (max: ${_policy.maxActiveStreams})',
         );
       }
-      final parser = _streamParsers.putIfAbsent(
-        streamId,
-        () => RpcMessageParser(
-          logger: _logger?.child('Parser-$streamId'),
-          maxMessageLength: _policy.maxMessageLengthBytes,
-          maxBufferedBytes: _policy.maxBufferedBytes,
-          // Frames upward, so the parser makes them. See the caller transport and
-          // `RpcMessageParser.emitFramed`.
-          emitFramed: true,
-          maxMessagesPerChunk: _policy.maxMessagesPerChunk,
-        ),
+      final parser = call.parser ??= RpcMessageParser(
+        logger: _logger?.child('Parser-$streamId'),
+        maxMessageLength: _policy.maxMessageLengthBytes,
+        maxBufferedBytes: _policy.maxBufferedBytes,
+        // Frames upward, so the parser makes them. See the caller transport and
+        // `RpcMessageParser.emitFramed`.
+        emitFramed: true,
+        maxMessagesPerChunk: _policy.maxMessagesPerChunk,
       );
 
       final bytes = message.bytes is Uint8List
@@ -358,8 +360,11 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   /// parser goes with the refusal, so a later end of the same stream does not
   /// refuse it twice.
   bool _refuseIfEndedMidMessage(int streamId) {
-    if (!(_streamParsers[streamId]?.holdsPartialFrame ?? false)) return false;
-    _streamParsers.remove(streamId);
+    final call = _calls[streamId];
+    if (call == null || !(call.parser?.holdsPartialFrame ?? false)) {
+      return false;
+    }
+    call.parser = null;
     // The status and text core answers for the same request on every other
     // transport; a different one is a different failure to the caller.
     _answerFramingViolation(streamId, requestEndedMidMessage());
@@ -394,7 +399,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     // foreign error's text stays on this side.
     final wire = wireStatusFor(error);
     final status = wire.status;
-    _requestRefused.add(streamId);
+    _calls[streamId]?.requestRefused = true;
 
     unawaited(() async {
       try {
@@ -455,10 +460,11 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     // Charge before delivering: the pipeline may consume synchronously and
     // report the credit back, and crediting a charge that has not happened yet
     // would leave the counter permanently negative-then-clamped at zero.
-    _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
+    _fc.charge(message.streamId, message.payload?.length ?? 0);
     // A refused call has been cancelled; its payload, the overrunning one
     // included, must not reach the handler behind the cancellation.
-    if (message.payload != null && _fcRefused.contains(message.streamId)) {
+    if (message.payload != null &&
+        (_calls[message.streamId]?.flow.refused ?? false)) {
       return;
     }
     if (!_messageController.isClosed) _messageController.add(message);

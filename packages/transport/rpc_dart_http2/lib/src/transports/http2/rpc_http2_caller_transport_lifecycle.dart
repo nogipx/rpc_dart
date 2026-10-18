@@ -77,21 +77,19 @@ extension _Http2CallerLifecycle on RpcHttp2CallerTransport {
   Map<String, Object?> _buildHealthDetails() => {
     'isClosed': _isClosed,
     'connectionOpen': _connection.isOpen,
-    'activeStreams': _activeStreams.length,
-    'pendingSubscriptions': _streamSubscriptions.length,
-    'pendingParsers': _streamParsers.length,
-    // Reported for the same reason as its siblings: growth here is the
-    // observable symptom of a per-stream entry that was added and never removed.
-    // It is the one whose add in `sendMessage` happens AFTER an await, so a
-    // release landing in that window leaves an entry nothing removes again.
-    'halfClosedLocal': _halfClosedLocal.length,
-    // Per-stream state that only a TEARDOWN clears, exposed because the
-    // teardown paths clear different subsets and no instrument could see the
-    // difference. An outgoing pump left behind is the expensive one: a caller
-    // parked on the server's window never unwinds once its stream is gone,
-    // which is why `releaseStreamId` disposes it first.
-    'fcOutstanding': _fcOutstanding.length,
-    'outgoingPumps': _outgoingPumps.length,
+    // Each counts the calls holding that part of their record, so growth in
+    // one is the observable symptom of a part a teardown left behind.
+    'activeStreams': _activeCount,
+    'pendingSubscriptions': _count((call) => call.subscription != null),
+    'pendingParsers': _count((call) => call.parser != null),
+    // The one set in `sendMessage` AFTER an await, so a release landing in
+    // that window is the way to leave it behind.
+    'halfClosedLocal': _count((call) => call.halfClosedLocal),
+    'fcOutstanding': _count((call) => call.flow.outstanding > 0),
+    // An outgoing pump left behind is the expensive one: a caller parked on
+    // the server's window never unwinds once its stream is gone, which is why
+    // `releaseStreamId` disposes it first.
+    'outgoingPumps': _count((call) => call.pump != null),
     'streamControllers': _streams.length,
     'host': _host,
     'port': _port,

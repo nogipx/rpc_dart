@@ -12,10 +12,11 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
   /// Subscribes to one stream's incoming messages.
   void _setupStreamListener(
     int streamId,
+    _CallerStream call,
     http2.ClientTransportStream stream,
     String methodPath,
   ) {
-    final subscription = stream.incomingMessages.listen(
+    call.subscription = stream.incomingMessages.listen(
       (http2.StreamMessage message) {
         _handleIncomingMessage(streamId, message, methodPath);
       },
@@ -112,9 +113,10 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
           _logger?.internal('Stream $streamId ended');
         }
 
-        if (_statusReceived.contains(streamId)) {
+        final call = _calls[streamId];
+        if (call?.statusReceived ?? false) {
           // An empty END_STREAM DATA frame arrives as this, not as a message.
-          if (_streamParsers[streamId]?.holdsPartialFrame ?? false) {
+          if (call?.parser?.holdsPartialFrame ?? false) {
             _failEndedMidMessage(streamId, methodPath);
           } else {
             _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
@@ -169,16 +171,20 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         // OUR half may still be open: the server answered and ended first, so
         // nothing else will ever close it -- `releaseStreamId`'s RST branch needs
         // the entry this line removes, and `finishSending` returns early without
-        // it. Measured against a server answering before the client half-closed:
-        // 3 of 3 streams left half-open at the peer, each holding a
-        // MAX_CONCURRENT_STREAMS slot, with every map on this side reading 0.
+        // it: a stream left half-open at the peer holds a MAX_CONCURRENT_STREAMS
+        // slot there.
         //
         // RST_STREAM, not an empty END_STREAM, for the reason `releaseStreamId`
         // gives: a stream we have NOT half-closed is one the request side never
         // finished, and RST is the legal way to drop it.
-        final ending = _activeStreams.remove(streamId);
-        if (ending != null) _peerEnded.add(streamId);
-        if (ending != null && !_halfClosedLocal.contains(streamId)) {
+        //
+        // Looked up again: the emits above can reach a consumer that tears the
+        // call down.
+        final ended = _calls[streamId];
+        if (ended == null) return;
+        final ending = ended.h2;
+        if (ending != null) ended.peerEnded = true;
+        if (ending != null && !ended.halfClosedLocal) {
           try {
             ending.terminate();
           } catch (e) {
@@ -189,23 +195,17 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
             }
           }
         }
-        _streamSubscriptions.remove(streamId);
-        _streamParsers.remove(streamId);
-        _initialHeadersReceived.remove(streamId);
-        _halfClosedLocal.remove(streamId);
-        _reservedStreams.remove(streamId);
-        _statusReceived.remove(streamId);
-        // The one map this block used to leave behind, measured against the other
-        // six: `releaseStreamId` was the only path that disposed a pump, so a
-        // stream ending here kept one until its id was released -- which a direct
-        // transport user need never do. Disposal also wakes anything parked on the
-        // peer's window, which then fails rather than reporting a send that
-        // cannot go anywhere.
-        _outgoingPumps.remove(streamId)?.dispose();
+        // The subscription is done, so it is dropped rather than cancelled.
+        // Disposing the pump also wakes anything parked on the peer's window,
+        // which then fails rather than reporting a send that cannot go
+        // anywhere. The id stays held, peer-ended, until it is released, but no
+        // longer counts as a reservation.
+        ended
+          ..subscription = null
+          ..dispose();
+        _dropIfSpent(streamId, ended);
       },
     );
-
-    _streamSubscriptions[streamId] = subscription;
   }
 
   /// Dispatches one incoming frame to the headers or data handler.
@@ -214,11 +214,14 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     http2.StreamMessage message,
     String methodPath,
   ) {
+    // A live subscription keeps its record, see [_CallerStream.isSpent].
+    final call = _calls[streamId];
+    if (call == null) return;
     try {
       if (message is http2.HeadersStreamMessage) {
-        _handleHeadersMessage(streamId, message, methodPath);
+        _handleHeadersMessage(streamId, call, message, methodPath);
       } else if (message is http2.DataStreamMessage) {
-        _handleDataMessage(streamId, message, methodPath);
+        _handleDataMessage(streamId, call, message, methodPath);
       }
     } catch (e, stackTrace) {
       _logger?.error(
@@ -273,6 +276,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
   /// Handles an incoming HEADERS frame (initial response or trailers).
   void _handleHeadersMessage(
     int streamId,
+    _CallerStream call,
     http2.HeadersStreamMessage message,
     String methodPath,
   ) {
@@ -289,7 +293,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // or 429 while rate limiting, is UNAVAILABLE, which every gRPC client
       // backs off and retries. See [grpcStatusFromHttpStatus].
       final errorMetadata = RpcTrailers.fromHttpStatus(httpStatus);
-      _statusReceived.add(streamId);
+      call.statusReceived = true;
       _logger?.warning(
         'Non-200 HTTP status $httpStatus for stream $streamId '
         '-> gRPC status ${errorMetadata.getHeaderValue(RpcHeaders.grpcStatus)}',
@@ -307,10 +311,8 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     }
 
     // Track initial vs trailer headers.
-    final isInitialHeaders = !_initialHeadersReceived.contains(streamId);
-    if (isInitialHeaders) {
-      _initialHeadersReceived.add(streamId);
-    }
+    final isInitialHeaders = !call.initialHeadersReceived;
+    call.initialHeadersReceived = true;
 
     // Pseudo-headers are filtered out by the converter.
     // A client is exposed to the same flood from the server it dialled.
@@ -341,7 +343,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         );
         unawaited(close());
       }
-      _statusReceived.add(streamId);
+      call.statusReceived = true;
       _emit(
         RpcTransportMessage(
           streamId: streamId,
@@ -356,7 +358,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     // Trailers-Only responses carry the status on the FIRST headers frame, so
     // key on the header rather than on the frame's position.
     if (metadata.getHeaderValue(RpcHeaders.grpcStatus) != null) {
-      _statusReceived.add(streamId);
+      call.statusReceived = true;
     }
 
     // A 200 whose content-type is not gRPC is not a gRPC response, and its body
@@ -380,7 +382,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         _logger?.warning(
           'Non-gRPC content-type "$contentType" for stream $streamId',
         );
-        _statusReceived.add(streamId);
+        call.statusReceived = true;
         _emit(
           RpcTransportMessage(
             streamId: streamId,
@@ -401,14 +403,14 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     // `CLEAN END after 2 item(s)` with the status arriving one message too late.
     //
     // A Trailers-Only response is unaffected: its status is on this very frame,
-    // so `_statusReceived` is already set above.
-    final statusKnown = _statusReceived.contains(streamId);
+    // so `statusReceived` is already set above.
+    final statusKnown = call.statusReceived;
 
     // The parser hands up whole frames only, so a response cut inside one
     // would otherwise end OK with its last message silently gone.
     if (message.endStream &&
         statusKnown &&
-        (_streamParsers[streamId]?.holdsPartialFrame ?? false)) {
+        (call.parser?.holdsPartialFrame ?? false)) {
       _failEndedMidMessage(streamId, methodPath);
       return;
     }
@@ -426,31 +428,28 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
   /// Parses an incoming DATA frame into gRPC messages and emits them.
   void _handleDataMessage(
     int streamId,
+    _CallerStream call,
     http2.DataStreamMessage message,
     String methodPath,
   ) {
     try {
       // One parser per stream, created on first data.
-      if (_streamParsers.length >= _policy.maxActiveStreams &&
-          !_streamParsers.containsKey(streamId)) {
+      if (call.parser == null && _tally.parsers >= _policy.maxActiveStreams) {
         // RESOURCE_EXHAUSTED: a limit that frees up as streams finish.
         throw RpcStatusException.atCapacity(
-          'Too many active streams: ${_streamParsers.length} (max: ${_policy.maxActiveStreams})',
+          'Too many active streams: ${_tally.parsers} (max: ${_policy.maxActiveStreams})',
         );
       }
-      final parser = _streamParsers.putIfAbsent(
-        streamId,
-        () => RpcMessageParser(
-          logger: _logger?.child('Parser-$streamId'),
-          maxMessageLength: _policy.maxMessageLengthBytes,
-          maxBufferedBytes: _policy.maxBufferedBytes,
-          maxMessagesPerChunk: _policy.maxMessagesPerChunk,
-          // This transport hands FRAMES upward, so let the parser produce them.
-          // It used to emit a body for an uncompressed message and a frame for a
-          // compressed one, and the caller had to guess which -- from the bytes,
-          // which the peer chooses. See `RpcMessageParser.emitFramed`.
-          emitFramed: true,
-        ),
+      final parser = call.parser ??= RpcMessageParser(
+        logger: _logger?.child('Parser-$streamId'),
+        maxMessageLength: _policy.maxMessageLengthBytes,
+        maxBufferedBytes: _policy.maxBufferedBytes,
+        maxMessagesPerChunk: _policy.maxMessagesPerChunk,
+        // This transport hands FRAMES upward, so let the parser produce them.
+        // It used to emit a body for an uncompressed message and a frame for a
+        // compressed one, and the caller had to guess which -- from the bytes,
+        // which the peer chooses. See `RpcMessageParser.emitFramed`.
+        emitFramed: true,
       );
 
       // Decode the gRPC frame(s) in this chunk.
@@ -481,9 +480,9 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       //
       // which is silent data loss: a client paging results believes it has them
       // all. This is the same failure 1a38a156 fixed for a connection that
-      // DIES; `_statusReceived` was added then, but the end-of-stream flag on
+      // DIES; `statusReceived` was added then, but the end-of-stream flag on
       // the data path still short-circuited it for a peer that half-closes.
-      final statusKnown = _statusReceived.contains(streamId);
+      final statusKnown = call.statusReceived;
       // A status already in, and this DATA ends the stream inside a frame: the
       // trailer path's rule, or the cut message is dropped and the call ends OK.
       final endsMidMessage =
@@ -545,14 +544,14 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     // Charge before delivering: a consumer that takes it synchronously
     // discharges immediately afterwards, and crediting a charge that has not
     // happened yet would clamp the counter at zero.
-    _fcOnDelivered(message.streamId, message.payload?.length ?? 0);
+    _fc.charge(message.streamId, message.payload?.length ?? 0);
     // A reset stream has had its last word: the overrun refusal above, or a
     // reset whose subscription cancel has not landed. Delivering this would
     // put data behind the error that ended the call.
     if (_resetStreams.contains(message.streamId)) return;
     if (!_messageController.isClosed) _messageController.add(message);
     _streams.add(message);
-    if (message.isEndOfStream) _fcForget(message.streamId);
+    if (message.isEndOfStream) _fc.forget(message.streamId);
   }
 
   /// Routes a stream-scoped error: raw on the dedicated controller, enveloped

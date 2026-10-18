@@ -51,7 +51,7 @@ extension _Http2ResponderLifecycle on RpcHttp2ResponderTransport {
   /// empty stream table is just an idle connection.
   void _closeIfDrained() {
     if (_acceptingStreams || _isClosed) return;
-    if (_incomingStreams.isNotEmpty) return;
+    if (_calls.isNotEmpty) return;
     _logger?.internal('HTTP/2: last stream drained, closing transport');
     close();
   }
@@ -68,14 +68,12 @@ extension _Http2ResponderLifecycle on RpcHttp2ResponderTransport {
 
   Map<String, Object?> _buildHealthDetails() => {
     'isClosed': _isClosed,
-    'incomingStreams': _incomingStreams.length,
-    'streamSubscriptions': _streamSubscriptions.length,
-    'streamParsers': _streamParsers.length,
-    // The per-stream collection that had no observable. It holds a writer
-    // parked on the peer's window, so it is the one whose growth costs most,
-    // and its pruning could only be argued from sharing a line with
-    // `_incomingStreams` in releaseStreamId.
-    'outgoingPumps': _outgoingPumps.length,
+    'incomingStreams': _calls.length,
+    'streamSubscriptions': _count((call) => call.subscription != null),
+    'streamParsers': _count((call) => call.parser != null),
+    // A pump holds a writer parked on the peer's window, so it is the part
+    // whose growth costs most.
+    'outgoingPumps': _count((call) => call.pump != null),
     'messageControllerClosed': _messageController.isClosed,
   };
 }

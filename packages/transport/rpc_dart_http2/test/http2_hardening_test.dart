@@ -2,95 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:async';
 import 'dart:io';
 
 import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
-import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_common.dart';
 import 'package:test/test.dart';
 
 void main() {
-  // BUG B: per-stream error routing. A single broadcast controller backs
-  // `incomingMessages`; `getMessagesForStream` must deliver a stream-scoped
-  // error ONLY to the owning stream, while other streams keep working.
-  group('BUG B: per-stream error isolation (filterStreamEvents)', () {
-    test('error_on_stream_A_does_not_reach_stream_B', () async {
-      final controller = StreamController<RpcTransportMessage>.broadcast();
-
-      final streamA = filterStreamEvents(controller.stream, 3);
-      final streamB = filterStreamEvents(controller.stream, 5);
-
-      Object? errorA;
-      Object? errorB;
-      final dataB = <RpcTransportMessage>[];
-
-      final subA = streamA.listen((_) {}, onError: (Object e) => errorA = e);
-      final subB = streamB.listen(dataB.add, onError: (Object e) => errorB = e);
-
-      // Inject a stream-scoped error for stream 3.
-      controller.addError(
-        RpcHttp2StreamError(3, StateError('parse error on 3')),
-      );
-      // Stream 5 keeps receiving data normally.
-      controller.add(RpcTransportMessage(streamId: 5, isEndOfStream: true));
-
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(errorA, isA<StateError>());
-      expect(errorB, isNull, reason: 'stream B must not see stream A error');
-      expect(dataB, hasLength(1));
-      expect(dataB.single.streamId, 5);
-
-      await subA.cancel();
-      await subB.cancel();
-      await controller.close();
-    });
-
-    test('connection_level_error_fans_out_to_all_streams', () async {
-      final controller = StreamController<RpcTransportMessage>.broadcast();
-
-      final streamA = filterStreamEvents(controller.stream, 3);
-      final streamB = filterStreamEvents(controller.stream, 5);
-
-      Object? errorA;
-      Object? errorB;
-      final subA = streamA.listen((_) {}, onError: (Object e) => errorA = e);
-      final subB = streamB.listen((_) {}, onError: (Object e) => errorB = e);
-
-      // A plain (non-enveloped) error is connection-level and must fan out.
-      controller.addError(StateError('connection died'));
-
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(errorA, isA<StateError>());
-      expect(errorB, isA<StateError>());
-
-      await subA.cancel();
-      await subB.cancel();
-      await controller.close();
-    });
-
-    test('data_is_filtered_by_stream_id', () async {
-      final controller = StreamController<RpcTransportMessage>.broadcast();
-      final streamA = filterStreamEvents(controller.stream, 3);
-
-      final received = <int>[];
-      final sub = streamA.listen((m) => received.add(m.streamId));
-
-      controller.add(RpcTransportMessage(streamId: 3));
-      controller.add(RpcTransportMessage(streamId: 5));
-      controller.add(RpcTransportMessage(streamId: 3, isEndOfStream: true));
-
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-
-      expect(received, [3, 3]);
-
-      await sub.cancel();
-      await controller.close();
-    });
-  });
-
   // BUG A: RpcHttp2Server must forward a RpcSecurityPolicy to every responder
   // transport so the per-stream message-size limit is actually enforced.
   group('BUG A: server forwards security policy', () {

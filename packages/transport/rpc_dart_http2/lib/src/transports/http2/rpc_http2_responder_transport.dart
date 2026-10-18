@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/transport.dart';
 
+import 'http2_flow_ledger.dart';
 import 'http2_header_block_guard.dart';
 import 'http2_write_backlog.dart';
 import 'rpc_http2_common.dart';
@@ -14,6 +15,7 @@ import 'rpc_http2_common.dart';
 part 'rpc_http2_responder_transport_flow.dart';
 part 'rpc_http2_responder_transport_inbound.dart';
 part 'rpc_http2_responder_transport_lifecycle.dart';
+part 'rpc_http2_responder_transport_stream.dart';
 
 /// Server-side HTTP/2 transport: one [IRpcTransport] over one connection,
 /// multiplexing incoming RPC calls on the gRPC-compatible wire format.
@@ -66,13 +68,31 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   /// Next outgoing stream id. The server side of HTTP/2 uses EVEN ids.
   int _nextStreamId = 2;
 
-  /// Live client-initiated streams.
-  final Map<int, http2.ServerTransportStream> _incomingStreams = {};
+  /// Live client-initiated streams; see [_ResponderStream].
+  final Map<int, _ResponderStream> _calls = {};
 
-  /// Backpressured writers, one per outgoing stream. See [_OutgoingPump].
-  final Map<int, _OutgoingPump> _outgoingPumps = {};
+  final _ParserTally _parsers = _ParserTally();
 
-  /// Streams whose inbound crediting the responder pipeline has taken over.
+  /// How many calls [test] holds for.
+  int _count(bool Function(_ResponderStream call) test) =>
+      _calls.values.where(test).length;
+
+  /// The un-consumed REQUEST bound; see [_Http2ResponderFlow].
+  ///
+  /// Charged only for a stream whose consumer reports back: the pipeline,
+  /// once it has deferred the stream's credit, or a [getMessagesForStream]
+  /// view, which discharges through [Http2FlowLedger.metered]. Charging
+  /// anything else would never discharge, and a single unary request larger
+  /// than the window would refuse itself.
+  late final Http2FlowLedger _fc = Http2FlowLedger(
+    policy: _policy,
+    accountOf: (streamId) => _calls[streamId]?.flow,
+    isMetered: (streamId, account) =>
+        account.deferred || _streams.contains(streamId),
+    onOverrun: _fcRefuseOverrun,
+  );
+
+  /// The pipeline takes over this stream's inbound crediting.
   ///
   /// [flowCredit] is how the pipeline says "I will report consumption
   /// myself". Without it here, the `deferFlowCredit` /
@@ -86,34 +106,12 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   /// `_pipelineFedRequestStream` from the BROADCAST, not from that per-stream
   /// view. The pipeline's explicit credit calls are the only demand signal on
   /// this path.
-  final Set<int> _fcDeferred = {};
-
-  /// Bytes handed to a consumer but not yet reported consumed, per stream.
-  final Map<int, int> _fcOutstanding = {};
-
-  /// Streams already refused for overrunning [_fcWindow], so it is sent once.
-  final Set<int> _fcRefused = {};
-
   @override
-  void deferFlowCredit(int streamId) => _fcDeferred.add(streamId);
+  void deferFlowCredit(int streamId) => _calls[streamId]?.flow.deferred = true;
 
   @override
   void returnFlowCredit(int streamId, int bytes) =>
-      _fcDischarge(streamId, bytes);
-
-  final Map<int, StreamSubscription<void>> _streamSubscriptions = {};
-
-  /// Per-stream frame parsers, which carry the state for a fragmented message.
-  final Map<int, RpcMessageParser> _streamParsers = {};
-
-  /// Streams whose initial response headers have gone out, which is what
-  /// distinguishes trailers (no `:status`) from Trailers-Only (`:status` plus
-  /// `grpc-status`).
-  final Set<int> _initialHeadersSent = {};
-
-  /// Streams whose request this transport refused, whose end must not reach
-  /// the handler as a clean one before the refusal's cancel does.
-  final Set<int> _requestRefused = {};
+      _fc.discharge(streamId, bytes);
 
   bool _isClosed = false;
 
@@ -237,18 +235,18 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   /// first use. Every outgoing frame for a stream MUST go through the same
   /// pump: mixing `sendHeaders`/`sendData` with the pump would reorder headers
   /// against data, which is a protocol error.
-  _OutgoingPump _pumpFor(int streamId, http2.TransportStream stream) =>
-      _outgoingPumps[streamId] ??= _OutgoingPump(stream);
+  _OutgoingPump _pumpFor(_ResponderStream call) =>
+      call.pump ??= _OutgoingPump(call.incoming);
 
-  /// Resolves the http2 stream that a server-side send must target.
+  /// Resolves the client-initiated stream that a server-side send must target.
   ///
   /// Responder sends always reply on the client-initiated stream id (which is
-  /// in [_incomingStreams]). An unknown id means either a server-initiated
-  /// stream from [createStream] (unsupported) or a stale/released id — both are
+  /// in [_calls]). An unknown id means either a server-initiated stream from
+  /// [createStream] (unsupported) or a stale/released id — both are
   /// programming errors that must fail loudly instead of dropping data.
-  http2.ServerTransportStream _requireIncomingStream(int streamId, String op) {
-    final incomingStream = _incomingStreams[streamId];
-    if (incomingStream == null) {
+  _ResponderStream _requireIncomingStream(int streamId, String op) {
+    final call = _calls[streamId];
+    if (call == null) {
       throw RpcStatusException(
         RpcStatus.unimplemented,
         'Cannot $op on stream $streamId: not a known incoming stream. '
@@ -257,7 +255,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         'client-initiated stream id.',
       );
     }
-    return incomingStream;
+    return call;
   }
 
   @override
@@ -268,9 +266,10 @@ class RpcHttp2ResponderTransport extends IRpcTransport
       _logger?.internal('Releasing stream $streamId');
     }
 
-    final incomingStream = _incomingStreams.remove(streamId);
-    final pump = _outgoingPumps.remove(streamId);
-    if (incomingStream != null) {
+    final call = _calls.remove(streamId);
+    if (call != null) {
+      final pump = call.pump;
+      call.pump = null;
       try {
         // Through the pump when there is one: its addStream owns the sink, so
         // a direct sendData here would throw "cannot add while adding a
@@ -278,7 +277,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         if (pump != null) {
           pump.endStreamNow();
         } else {
-          incomingStream.sendData(Uint8List(0), endStream: true);
+          call.incoming.sendData(Uint8List(0), endStream: true);
         }
         if (_logger?.isInternal ?? false) {
           _logger?.internal('Sent END_STREAM releasing stream $streamId');
@@ -290,19 +289,11 @@ class RpcHttp2ResponderTransport extends IRpcTransport
           );
         }
         pump?.dispose();
-        incomingStream.terminate();
+        call.incoming.terminate();
       }
-    } else {
-      pump?.dispose();
+      // The response state and the flow-control charge go with the record.
+      call.dispose();
     }
-
-    final subscription = _streamSubscriptions.remove(streamId);
-    subscription?.cancel();
-
-    _streamParsers.remove(streamId);
-    _initialHeadersSent.remove(streamId);
-    _requestRefused.remove(streamId);
-    _fcForget(streamId);
 
     // If the peer has already said it will send nothing further, this may have
     // been the last call we owed it.
@@ -328,7 +319,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
 
     // A response goes out on the client-initiated stream; an unknown id
     // (server-push) must fail loudly rather than silently drop the metadata.
-    final incomingStream = _requireIncomingStream(streamId, 'send metadata');
+    final call = _requireIncomingStream(streamId, 'send metadata');
 
     try {
       final List<http2.Header> headers;
@@ -336,19 +327,19 @@ class RpcHttp2ResponderTransport extends IRpcTransport
       // would log as plain trailers.
       final kind = !endStream
           ? 'initial headers'
-          : _initialHeadersSent.contains(streamId)
+          : call.initialHeadersSent
           ? 'trailers'
           : 'trailers-only';
 
       if (!endStream) {
         // Initial response headers — includes :status: 200
         headers = rpcMetadataToHttp2ResponseHeaders(metadata);
-        _initialHeadersSent.add(streamId);
-      } else if (!_initialHeadersSent.contains(streamId)) {
+        call.initialHeadersSent = true;
+      } else if (!call.initialHeadersSent) {
         // Trailers-Only — first and last HEADERS frame.
         // Must include :status: 200 and content-type per gRPC spec.
         headers = rpcMetadataToHttp2TrailersOnly(metadata);
-        _initialHeadersSent.add(streamId);
+        call.initialHeadersSent = true;
       } else {
         // Trailers after initial headers + data.
         // MUST NOT include :status per HTTP/2 spec (RFC 7540 Section 8.1.2.1).
@@ -356,8 +347,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
       }
 
       await _pumpFor(
-        streamId,
-        incomingStream,
+        call,
       ).add(http2.HeadersStreamMessage(headers, endStream: endStream));
 
       if (_logger?.isInternal ?? false) {
@@ -377,7 +367,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   }) async {
     if (_isClosed) throw RpcClosedException('Transport');
 
-    final incomingStream = _requireIncomingStream(streamId, 'send message');
+    final call = _requireIncomingStream(streamId, 'send message');
 
     try {
       assert(
@@ -388,8 +378,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
       // Through the pump, so a peer that stops reading stops the handler --
       // `sendData` would enqueue regardless. See [_OutgoingPump].
       await _pumpFor(
-        streamId,
-        incomingStream,
+        call,
       ).add(http2.DataStreamMessage(data, endStream: endStream));
 
       if (_logger?.isInternal ?? false) {
@@ -407,8 +396,8 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   Future<void> finishSending(int streamId) async {
     if (_isClosed) return;
 
-    final incomingStream = _incomingStreams[streamId];
-    if (incomingStream == null) {
+    final call = _calls[streamId];
+    if (call == null) {
       if (_logger?.isInternal ?? false) {
         _logger?.internal(
           'Incoming stream $streamId not found, skipping finish sending',
@@ -420,8 +409,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
     try {
       // An empty DATA frame carrying END_STREAM.
       await _pumpFor(
-        streamId,
-        incomingStream,
+        call,
       ).add(http2.DataStreamMessage(Uint8List(0), endStream: true));
 
       if (_logger?.isInternal ?? false) {
@@ -437,7 +425,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
 
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      _fcMetered(streamId, _streams[streamId]);
+      _fc.metered(streamId, _streams[streamId]);
 
   @override
   Future<RpcHealthStatus> health() async {
@@ -474,7 +462,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
     _isClosed = true;
 
     // A short grace period for streams still finishing.
-    final totalStreams = _incomingStreams.length;
+    final totalStreams = _calls.length;
     if (totalStreams > 0) {
       if (_logger?.isInternal ?? false) {
         _logger?.internal('Waiting on $totalStreams active stream(s)');
@@ -482,12 +470,14 @@ class RpcHttp2ResponderTransport extends IRpcTransport
       await Future<void>.delayed(Duration(milliseconds: 50));
     }
 
-    for (final stream in _incomingStreams.values) {
+    final calls = _calls.values.toList();
+    for (final call in calls) {
+      final stream = call.incoming;
       try {
         // Soft close, via the pump where one exists: it owns the sink, and it
         // also releases any handler parked on the peer's window so teardown
         // does not wait on a dead reader.
-        final pump = _outgoingPumps[stream.id];
+        final pump = call.pump;
         if (pump != null) {
           pump.endStreamNow();
         } else {
@@ -509,25 +499,18 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         }
       }
     }
-    _incomingStreams.clear();
 
     // Release anything still parked on a peer window, after the soft close
     // above has had its chance to flush.
-    for (final pump in _outgoingPumps.values) {
-      pump.dispose();
+    for (final call in calls) {
+      call.pump?.dispose();
+      call.pump = null;
     }
-    _outgoingPumps.clear();
 
-    for (final subscription in _streamSubscriptions.values) {
-      await subscription.cancel();
+    for (final call in calls) {
+      await call.dispose();
     }
-    _streamSubscriptions.clear();
-
-    _streamParsers.clear();
-    _initialHeadersSent.clear();
-    _requestRefused.clear();
-    _fcDeferred.clear();
-    _fcOutstanding.clear();
+    _calls.clear();
 
     _streams.closeAll();
 

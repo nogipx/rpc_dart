@@ -344,6 +344,22 @@ Closes T1, T2, T5, D6-like teardown drift. No public API.
 - **Dead code goes:** `filterStreamEvents`, the unreachable ASCII check,
   `kGrpcUserAgent`'s fixed version.
 
+As landed:
+
+- `_CallerStream` and `_ResponderStream` are part files, one map of them per
+  side; a small tally keeps the reservation and parser ceilings O(1). The
+  `health().details` keys keep their names and meaning.
+- `Http2FlowLedger` / `Http2FlowAccount` (`http2_flow_ledger.dart`) carry the
+  shared logic; what differs between the sides is two callbacks: who is
+  metered and what an overrun does.
+- The caller's `close()` now forgets the flow-control charge too; before, a
+  closed caller could report a non-zero `fcOutstanding`. The responder's
+  `close()` cancels subscriptions over a snapshot.
+- The ASCII check in the header converters stays: on the transport path core's
+  `validateMetadata` makes it unreachable, but the converters are public and
+  called directly, and two tests pin the throw.
+- `kGrpcUserAgent` is `rpc-dart`, with no version to drift.
+
 ## 8. Logging, errors, small types
 
 - **Logging (X6).**

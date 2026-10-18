@@ -10,7 +10,10 @@ import 'package:rpc_dart/transport.dart';
 import 'package:universal_io/io.dart';
 
 /// gRPC User-Agent header value.
-const String kGrpcUserAgent = 'rpc-dart/1.0.0';
+///
+/// No version: one written here by hand drifts from the package's own, and a
+/// server that branches on it would branch on a wrong number.
+const String kGrpcUserAgent = 'rpc-dart';
 
 /// How long a graceful HTTP/2 shutdown may run before it is forced.
 ///
@@ -296,31 +299,17 @@ int unconsumedWindowFor(RpcSecurityPolicy policy) =>
     // the transport claim a floor the policy alone decides.
     const RpcSecurityPolicy().flowControlWindowBytes!;
 
-/// Wraps a stream-scoped error so it can travel through the shared broadcast
-/// [incomingMessages] controller without leaking onto unrelated streams.
+/// An error that belongs to one stream, carrying its [streamId].
 ///
-/// HTTP/2 multiplexes many RPC calls over a single connection. The transports
-/// expose all incoming messages on one broadcast `StreamController`, and
-/// `getMessagesForStream(id)` filters that broadcast by `streamId`. A plain
-/// `addError` on a broadcast stream is delivered to EVERY subscriber regardless
-/// of which stream the error belongs to, so a parse error on stream 3 would
-/// surface as an error on stream 5.
+/// HTTP/2 multiplexes many calls over one connection. The transports deliver
+/// it to that stream's subscriber only, so a parse error on stream 3 does not
+/// fail stream 5; a connection-level error travels without an envelope and
+/// reaches every stream.
 ///
-/// To keep errors scoped, per-stream errors are added as
-/// [RpcHttp2StreamError] envelopes. [filterStreamEvents] then re-throws the
-/// inner error only on the matching stream's subscriber. Connection-level fatal
-/// errors are added without an envelope and fan out to all subscribers, which
-/// is the correct behavior.
-///
-/// **It carries the inner error's wire status, and that is not decoration.**
-/// The envelope used to be a plain class, so `wireStatusFor` — which is DEFAULT
-/// DENY — took its deny branch and told the peer INTERNAL "Internal server
-/// error" whatever [error] actually was. Every status the inner type had just
-/// been given was thrown away one layer out.
-///
-/// Deriving the status through [wireStatusFor] rather than copying it keeps the
-/// deny intact: a FOREIGN inner error is still redacted, because that function
-/// is the single place that decides what may leave this process.
+/// **It carries the inner error's wire status**, derived through
+/// [wireStatusFor] rather than copied: the gate is default deny, so a FOREIGN
+/// inner error is still redacted, and one of rpc_dart's own keeps its status
+/// one layer out.
 class RpcHttp2StreamError extends RpcStatusException {
   /// The stream the error belongs to.
   final int streamId;
@@ -351,39 +340,6 @@ class RpcHttp2StreamError extends RpcStatusException {
 class RpcHttp2OneStreamError extends RpcHttp2StreamError
     implements IRpcAdvisoryChannelError {
   RpcHttp2OneStreamError(super.streamId, super.error, [super.stackTrace]);
-}
-
-/// Filters a broadcast transport stream down to a single [streamId].
-///
-/// - Data messages are passed through only when their `streamId` matches.
-/// - [RpcHttp2StreamError] envelopes are unwrapped and re-thrown only on the
-///   matching stream; envelopes for other streams are dropped.
-/// - Any other (connection-level) error is re-thrown to every subscriber.
-Stream<RpcTransportMessage> filterStreamEvents(
-  Stream<RpcTransportMessage> source,
-  int streamId,
-) {
-  return source.transform(
-    StreamTransformer<RpcTransportMessage, RpcTransportMessage>.fromHandlers(
-      handleData: (message, sink) {
-        if (message.streamId == streamId) {
-          sink.add(message);
-        }
-      },
-      handleError: (error, stackTrace, sink) {
-        if (error is RpcHttp2StreamError) {
-          // Stream-scoped error — deliver only to the owning stream.
-          if (error.streamId == streamId) {
-            sink.addError(error.error, error.stackTrace ?? stackTrace);
-          }
-          // Otherwise drop: it belongs to a different stream.
-        } else {
-          // Connection-level error — fan out to all subscribers.
-          sink.addError(error, stackTrace);
-        }
-      },
-    ),
-  );
 }
 
 /// Converts [RpcMetadata] to HTTP/2 request headers (caller → responder).

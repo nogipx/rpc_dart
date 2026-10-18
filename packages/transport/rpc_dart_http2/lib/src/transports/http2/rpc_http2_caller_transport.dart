@@ -8,6 +8,7 @@ import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/transport.dart';
 import 'package:universal_io/io.dart';
 
+import 'http2_flow_ledger.dart';
 import 'http2_header_block_guard.dart';
 import 'raw_socket_pipe.dart';
 import 'rpc_http2_common.dart';
@@ -16,6 +17,7 @@ part 'rpc_http2_caller_transport_dial.dart';
 part 'rpc_http2_caller_transport_flow.dart';
 part 'rpc_http2_caller_transport_inbound.dart';
 part 'rpc_http2_caller_transport_lifecycle.dart';
+part 'rpc_http2_caller_transport_stream.dart';
 
 /// Whether the peer has told us the connection is going away, and whether its
 /// socket has ended.
@@ -86,62 +88,33 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   /// Next outgoing stream id. The client side of HTTP/2 uses ODD ids.
   int _nextStreamId = 1;
 
-  /// Live HTTP/2 streams.
-  final Map<int, http2.ClientTransportStream> _activeStreams = {};
+  /// Every stream id this side holds state for; see [_CallerStream].
+  final Map<int, _CallerStream> _calls = {};
 
-  /// Backpressured writers, one per request stream.
-  ///
-  /// `sendData` enqueues regardless of the server's window, so without a pump a
-  /// server whose handler stops consuming does not slow this client down at
-  /// all: the whole request is pulled into package:http2's outgoing queue, in
-  /// this process's memory, while a fraction of it is on the wire.
-  ///
-  /// Unlike the responder there is no header/data ordering to preserve here:
-  /// HEADERS go out with `makeRequest`, so this sink only ever carries DATA.
-  final Map<int, RpcHttp2OutgoingPump> _outgoingPumps = {};
+  final _CallerTally _tally = _CallerTally();
 
-  RpcHttp2OutgoingPump _pumpFor(int streamId, http2.TransportStream stream) =>
-      _outgoingPumps[streamId] ??= RpcHttp2OutgoingPump(stream);
+  /// The record for [streamId], created unreserved if there is none.
+  _CallerStream _callFor(int streamId) =>
+      _calls[streamId] ??= _CallerStream(_tally);
 
-  final Map<int, StreamSubscription<void>> _streamSubscriptions = {};
+  /// Drops [call]'s record once nothing is left in it.
+  void _dropIfSpent(int streamId, _CallerStream call) {
+    if (call.isSpent && identical(_calls[streamId], call)) {
+      _calls.remove(streamId);
+    }
+  }
 
-  /// Per-stream frame parsers, which carry the state for a fragmented message.
-  final Map<int, RpcMessageParser> _streamParsers = {};
+  /// How many calls [test] holds for.
+  int _count(bool Function(_CallerStream call) test) =>
+      _calls.values.where(test).length;
 
-  /// Streams this side has already half-closed by sending END_STREAM.
-  ///
-  /// HTTP/2 forbids a DATA frame on a stream that is half-closed (local), and
-  /// package:http2 answers that violation by tearing down the whole CONNECTION
-  /// -- not just the stream. Every path that ends the request direction records
-  /// the id here so no later path sends a second one.
-  final Set<int> _halfClosedLocal = {};
+  /// HTTP/2 streams opened and not yet ended or reset.
+  int get _activeCount => _count((call) => call.h2 != null);
 
-  /// Streams the peer ended while their id is still held: a send on one is
-  /// dropped, not refused. Cleared by [releaseStreamId].
-  final Set<int> _peerEnded = {};
-
-  /// Streams whose response carried a gRPC status (trailers, or a
-  /// Trailers-Only response).
-  ///
-  /// package:http2 completes a stream's `incomingMessages` NORMALLY when the
-  /// connection goes away mid-response, so `onDone` alone cannot tell a
-  /// finished call from a truncated one. Without this a server stream cut off
-  /// by a dead peer reaches the consumer as a clean end — partial data reported
-  /// as complete, with no error anywhere.
-  final Set<int> _statusReceived = {};
-
-  /// Ids handed out by [createStream] that have not been retired yet.
-  ///
-  /// [_activeStreams] only gains an id once [sendMetadata] opens the HTTP/2
-  /// stream, so counting it cannot bound stream CREATION: a burst of
-  /// createStream() calls all pass before the first reaches sendMetadata. This
-  /// is what [createStream] counts, and every path that retires an id drops it
-  /// here too.
-  final Set<int> _reservedStreams = {};
-
-  /// Tracks streams where initial response headers have been received.
-  /// Used to distinguish trailers from initial response headers on incoming.
-  final Set<int> _initialHeadersReceived = {};
+  RpcHttp2OutgoingPump _pumpFor(
+    _CallerStream call,
+    http2.TransportStream stream,
+  ) => call.pump ??= RpcHttp2OutgoingPump(stream);
 
   /// Streams we aborted ourselves via [resetStream].
   ///
@@ -265,66 +238,18 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     Duration? connectTimeout = _connectTimeout,
     Duration? pingInterval,
     Duration? pingTimeout,
-  }) async {
-    if (logger?.isInternal ?? false) {
-      logger?.internal('Opening a secure HTTP/2 connection to $host:$port');
-    }
-
-    final drainSignal = _DrainSignal();
-
-    Future<http2.ClientTransportConnection> open() async {
-      if (proxyUri != null) {
-        return _connectH2ViaProxy(
-          proxyUri: proxyUri,
-          targetHost: host,
-          targetPort: port,
-          secure: true,
-          handshakeTimeout: proxyHandshakeTimeout,
-          connectTimeout: connectTimeout,
-          policy: policy,
-          logger: logger,
-          drainSignal: drainSignal,
-        );
-      }
-      // See the h2c path: `timeout:` releases the attempt, an outer wrapper does
-      // not. This one also covers the TLS handshake.
-      final socket = await SecureSocket.connect(
-        host,
-        port,
-        supportedProtocols: ['h2'],
-        timeout: connectTimeout,
-      );
-      // The proxy path below has always done this; the direct path had not, so
-      // the same class produced differently configured sockets. See
-      // disableNagle.
-      disableNagle(socket, logger: logger, what: 'h2 socket to $host:$port');
-      _requireH2(socket, '$host:$port');
-      return _guardedConnection(
-        incoming: socket,
-        outgoing: socket,
-        destroy: socket.destroy,
-        policy: policy,
-        settingsTimeout: connectTimeout,
-        logger: logger,
-        drainSignal: drainSignal,
-      );
-    }
-
-    final connection = await _asStatus(open);
-    logger?.internal('HTTP/2 connection established');
-
-    return RpcHttp2CallerTransport._(
-      connection: connection,
-      host: host,
-      port: port,
-      scheme: 'https',
-      policy: policy,
-      logger: logger,
-      pingInterval: pingInterval,
-      pingTimeout: pingTimeout,
-      drainSignal: drainSignal,
-    );
-  }
+  }) => _dial(
+    secure: true,
+    host: host,
+    port: port,
+    proxyUri: proxyUri,
+    logger: logger,
+    policy: policy,
+    proxyHandshakeTimeout: proxyHandshakeTimeout,
+    connectTimeout: connectTimeout,
+    pingInterval: pingInterval,
+    pingTimeout: pingTimeout,
+  );
 
   /// Wraps an ALREADY-ESTABLISHED socket.
   ///
@@ -381,9 +306,38 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     Duration? connectTimeout = _connectTimeout,
     Duration? pingInterval,
     Duration? pingTimeout,
+  }) => _dial(
+    secure: false,
+    host: host,
+    port: port,
+    proxyUri: proxyUri,
+    logger: logger,
+    policy: policy,
+    proxyHandshakeTimeout: proxyHandshakeTimeout,
+    connectTimeout: connectTimeout,
+    pingInterval: pingInterval,
+    pingTimeout: pingTimeout,
+  );
+
+  /// Opens the connection for [connect] (h2c) and [secureConnect] (h2 over
+  /// TLS, ALPN `h2` required), directly or through [proxyUri].
+  static Future<RpcHttp2CallerTransport> _dial({
+    required bool secure,
+    required String host,
+    required int port,
+    required Uri? proxyUri,
+    required LogScope? logger,
+    required RpcSecurityPolicy policy,
+    required Duration proxyHandshakeTimeout,
+    required Duration? connectTimeout,
+    required Duration? pingInterval,
+    required Duration? pingTimeout,
   }) async {
     if (logger?.isInternal ?? false) {
-      logger?.internal('Opening an HTTP/2 connection to $host:$port');
+      logger?.internal(
+        'Opening ${secure ? 'a secure' : 'an'} HTTP/2 connection to '
+        '$host:$port',
+      );
     }
 
     final drainSignal = _DrainSignal();
@@ -394,7 +348,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
           proxyUri: proxyUri,
           targetHost: host,
           targetPort: port,
-          secure: false,
+          secure: secure,
           handshakeTimeout: proxyHandshakeTimeout,
           connectTimeout: connectTimeout,
           policy: policy,
@@ -405,9 +359,22 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       // `timeout:` rather than an outer `.timeout()`: dart:io abandons the
       // attempt and releases the socket, where wrapping the future would leave
       // the connect running with nobody to close what it eventually produces.
-      final socket = await Socket.connect(host, port, timeout: connectTimeout);
-      // See disableNagle: same reason as the h2c/TLS and proxy paths.
-      disableNagle(socket, logger: logger, what: 'h2c socket to $host:$port');
+      // Under TLS it covers the handshake too.
+      final Socket socket = secure
+          ? await SecureSocket.connect(
+              host,
+              port,
+              supportedProtocols: ['h2'],
+              timeout: connectTimeout,
+            )
+          : await Socket.connect(host, port, timeout: connectTimeout);
+      // See disableNagle: the proxy path does the same.
+      disableNagle(
+        socket,
+        logger: logger,
+        what: '${secure ? 'h2' : 'h2c'} socket to $host:$port',
+      );
+      if (socket is SecureSocket) _requireH2(socket, '$host:$port');
       return _guardedConnection(
         incoming: socket,
         outgoing: socket,
@@ -426,7 +393,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       connection: connection,
       host: host,
       port: port,
-      scheme: 'http',
+      scheme: secure ? 'https' : 'http',
       policy: policy,
       logger: logger,
       pingInterval: pingInterval,
@@ -444,15 +411,11 @@ class RpcHttp2CallerTransport extends IRpcTransport {
 
   /// How long the SOCKET may take to come up, TLS handshake included.
   ///
-  /// The sibling above bounds a proxy's CONNECT response and nothing else, so an
-  /// address whose SYN is DROPPED rather than refused left `connect()` pending
-  /// with no bound of ours at all — the OS default, which is around 75 s and can
-  /// be longer. Measured: a refused port fails in 10 ms, a black-holed one was
-  /// still pending at 12 s.
-  ///
-  /// This is the bound the proxy field's own doc describes and did not provide:
-  /// `connect()` is what an application awaits at startup. Pass null for the old
-  /// behaviour of waiting on the OS.
+  /// The sibling above bounds a proxy's CONNECT response and nothing else. An
+  /// address whose SYN is DROPPED rather than refused would otherwise leave
+  /// `connect()` pending for the OS default, which is around 75 s and can be
+  /// longer, and `connect()` is what an application awaits at startup. Pass
+  /// null to wait on the OS.
   ///
   /// It also bounds the wait for the peer's first SETTINGS, after `connect()`
   /// has returned; see `_guardedConnection`.
@@ -489,18 +452,18 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     //
     // HTTP/2's own SETTINGS_MAX_CONCURRENT_STREAMS does not cover for it
     // either, because RpcHttp2Server never derives that from the policy.
-    if (_reservedStreams.length >= _policy.maxActiveStreams) {
+    if (_tally.reserved >= _policy.maxActiveStreams) {
       // RESOURCE_EXHAUSTED, matching the channel transport: a transient limit
       // the caller can back off from, not a mistake it made.
       throw RpcStatusException.atCapacity(
-        'Too many active streams: ${_reservedStreams.length} '
+        'Too many active streams: ${_tally.reserved} '
         '(max: ${_policy.maxActiveStreams})',
       );
     }
 
     final streamId = _nextStreamId;
     _nextStreamId += 2; // Client ids are odd: 1, 3, 5, ...
-    _reservedStreams.add(streamId);
+    _callFor(streamId).reserved = true;
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal('Created stream $streamId');
@@ -526,8 +489,10 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     //
     // A stream that has NOT been half-closed is one the caller abandoned
     // mid-request; RST_STREAM is the legal way to drop that.
-    final stream = _activeStreams.remove(streamId);
-    if (stream != null && !_halfClosedLocal.contains(streamId)) {
+    final call = _calls.remove(streamId);
+    if (call == null) return true;
+    final stream = call.h2;
+    if (stream != null && !call.halfClosedLocal) {
       try {
         stream.terminate();
         if (_logger?.isInternal ?? false) {
@@ -540,20 +505,10 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       }
     }
 
-    // Release anything parked on the server's window first, or a caller
-    // awaiting sendMessage never unwinds once its stream is gone.
-    _outgoingPumps.remove(streamId)?.dispose();
-
-    final subscription = _streamSubscriptions.remove(streamId);
-    subscription?.cancel();
-
-    _peerEnded.remove(streamId);
-    _streamParsers.remove(streamId);
-    _initialHeadersReceived.remove(streamId);
-    _halfClosedLocal.remove(streamId);
-    _reservedStreams.remove(streamId);
-    _statusReceived.remove(streamId);
-    _fcForget(streamId);
+    // Releases anything parked on the server's window before the subscription
+    // goes, or a caller awaiting sendMessage never unwinds once its stream is
+    // gone. The peer-ended mark and the flow-control charge go with the record.
+    call.dispose();
 
     return true;
   }
@@ -590,10 +545,10 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       return;
     }
 
-    // An id with a stream already has its opening frame. Overwriting
-    // `_activeStreams[streamId]` stranded the first stream and its subscription
-    // with nothing tracking either.
-    if (_activeStreams.containsKey(streamId)) {
+    // An id with a stream already has its opening frame. Overwriting it would
+    // strand the first stream and its subscription with nothing tracking
+    // either.
+    if (_calls[streamId]?.h2 != null) {
       throw RpcStatusException(
         RpcStatus.failedPrecondition,
         'HTTP/2 stream $streamId is already open; a second opening frame would '
@@ -652,10 +607,11 @@ class RpcHttp2CallerTransport extends IRpcTransport {
           'GOAWAY); reconnect rather than retrying on this connection',
         );
       }
-      if (_activeStreams.isNotEmpty) {
+      final active = _activeCount;
+      if (active > 0) {
         throw RpcStatusException.atCapacity(
           'HTTP/2 connection to $_host:$_port is at the server\'s '
-          'MAX_CONCURRENT_STREAMS limit (${_activeStreams.length} in flight); '
+          'MAX_CONCURRENT_STREAMS limit ($active in flight); '
           'the connection is healthy, so retry when one completes rather than '
           'reconnecting',
         );
@@ -676,16 +632,16 @@ class RpcHttp2CallerTransport extends IRpcTransport {
         '${error.message}',
       );
     }
-    _activeStreams[streamId] = stream;
-    if (endStream) _halfClosedLocal.add(streamId);
+    final call = _callFor(streamId)..h2 = stream;
+    if (endStream) call.halfClosedLocal = true;
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal(
-        'HTTP/2 stream $streamId opened (active: ${_activeStreams.length})',
+        'HTTP/2 stream $streamId opened (active: $_activeCount)',
       );
     }
 
-    _setupStreamListener(streamId, stream, methodPath);
+    _setupStreamListener(streamId, call, stream, methodPath);
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal('Metadata sent for stream $streamId');
@@ -694,8 +650,12 @@ class RpcHttp2CallerTransport extends IRpcTransport {
 
   @override
   Future<bool> resetStream(int streamId, {String? reason}) async {
-    final stream = _activeStreams.remove(streamId);
-    if (stream == null) return false;
+    // An id with no open stream (reserved and never opened, or ended by the
+    // peer) keeps its record as it is until release.
+    final call = _calls[streamId];
+    final stream = call?.h2;
+    if (call == null || stream == null) return false;
+    call.h2 = null;
 
     // RST_STREAM is the only legal way to abort a stream we have already
     // half-closed, which is exactly when cancellation arrives. Sending the
@@ -718,22 +678,21 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     }
 
     // Read BEFORE the cleanup below drops it.
-    final halfClosed = _halfClosedLocal.contains(streamId);
+    final halfClosed = call.halfClosedLocal;
 
-    // Same two steps `releaseStreamId` takes, and for its stated reason: release
+    // Same steps `releaseStreamId` takes, and for its stated reason: release
     // anything parked on the server's window BEFORE the subscription goes, and
-    // forget the flow-control charge. This path had neither, so cancelling a
-    // call left its outgoing pump behind -- measured `pumps 1 -> 1` here against
-    // `1 -> 0` for `releaseStreamId` on the same stream.
-    _outgoingPumps.remove(streamId)?.dispose();
-    _fcForget(streamId);
+    // forget the flow-control charge. The exchange is forgotten once the cancel
+    // has landed; the peer-ended mark is untouched.
+    call.pump?.dispose();
+    call.pump = null;
+    _fc.forget(streamId);
 
-    await _streamSubscriptions.remove(streamId)?.cancel();
-    _streamParsers.remove(streamId);
-    _initialHeadersReceived.remove(streamId);
-    _halfClosedLocal.remove(streamId);
-    _reservedStreams.remove(streamId);
-    _statusReceived.remove(streamId);
+    final subscription = call.subscription;
+    call.subscription = null;
+    await subscription?.cancel();
+    call.endExchange();
+    _dropIfSpent(streamId, call);
     final controller = _streams.remove(streamId);
     if (controller != null && !controller.isClosed) {
       unawaited(controller.close());
@@ -764,12 +723,13 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   }) async {
     _ensureUsable();
 
-    final stream = _activeStreams[streamId];
-    if (stream == null) {
+    final call = _calls[streamId];
+    final stream = call?.h2;
+    if (call == null || stream == null) {
       // The peer has ended this stream, and its status is the call's outcome:
       // a request sent after it is dropped, as on the other transports. An
       // error here reached a paused caller ahead of that status and replaced it.
-      if (_peerEnded.contains(streamId)) {
+      if (call?.peerEnded ?? false) {
         if (_logger?.isInternal ?? false) {
           _logger?.internal(
             'Dropped a send on stream $streamId the peer ended',
@@ -788,7 +748,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       'IRpcTransport.sendMessage expects a gRPC frame with a 5-byte prefix',
     );
 
-    if (_halfClosedLocal.contains(streamId)) {
+    if (call.halfClosedLocal) {
       // Already half-closed: another DATA frame is a connection error.
       _logger?.warning('Dropped a send on finished stream $streamId');
       return;
@@ -796,18 +756,17 @@ class RpcHttp2CallerTransport extends IRpcTransport {
 
     // Through the pump: `sendData` does not wait for the server's window, so
     // the whole request would settle in package:http2's outgoing queue. See
-    // [_outgoingPumps].
+    // [_CallerStream.pump].
     await _pumpFor(
-      streamId,
+      call,
       stream,
     ).add(http2.DataStreamMessage(data, endStream: endStream));
-    // `containsKey`, because this add is the only one of three that sits behind
-    // an await: a peer RST_STREAM arriving while the send was parked clears every
-    // per-stream map and wakes the pump, so without the check the id goes back
-    // into a set nothing will remove again.
-    if (endStream && _activeStreams.containsKey(streamId)) {
-      _halfClosedLocal.add(streamId);
-    }
+    // Looked up again, because this add is the only one of three that sits
+    // behind an await: a peer RST_STREAM arriving while the send was parked
+    // tears the stream down and wakes the pump, and a half-close recorded
+    // after that would keep a record nothing removes again.
+    final after = _calls[streamId];
+    if (endStream && after?.h2 != null) after!.halfClosedLocal = true;
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal(
@@ -821,14 +780,15 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   Future<void> finishSending(int streamId) async {
     if (_isClosed) return;
 
-    final stream = _activeStreams[streamId];
-    if (stream == null) return;
+    final call = _calls[streamId];
+    final stream = call?.h2;
+    if (call == null || stream == null) return;
 
     // Idempotent, like RpcChannelTransport.finishSending: a caller that
     // already passed `endStream: true` to sendMessage/sendMetadata has closed
     // the request direction, and a second END_STREAM would be a DATA frame on
     // a half-closed stream -- a CONNECTION error in HTTP/2.
-    if (_halfClosedLocal.contains(streamId)) {
+    if (call.halfClosedLocal) {
       if (_logger?.isInternal ?? false) {
         _logger?.internal(
           'Stream $streamId is already finished; nothing to do',
@@ -839,13 +799,13 @@ class RpcHttp2CallerTransport extends IRpcTransport {
 
     // END_STREAM WITHOUT waiting on the peer's window: a half-close is a
     // signal, not payload, and it must not hang on a dead peer.
-    final pump = _outgoingPumps[streamId];
+    final pump = call.pump;
     if (pump != null) {
       pump.endStreamNow();
     } else {
       stream.sendData(Uint8List(0), endStream: true);
     }
-    _halfClosedLocal.add(streamId);
+    call.halfClosedLocal = true;
 
     if (_logger?.isInternal ?? false) {
       _logger?.internal('Finished sending for stream $streamId');
@@ -861,18 +821,23 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   ///
   /// Wrapping only the freshly-created controller and handing an existing one
   /// back raw is the shape to avoid: the second consumer of a stream then never
-  /// discharges its budget, so [_fcOutstanding] only climbs and the call is
-  /// refused at the window for bytes it did in fact consume. The responder
-  /// sibling meters both paths.
+  /// discharges its budget, so its charge only climbs and the call is refused
+  /// at the window for bytes it did in fact consume. The responder sibling
+  /// meters both paths.
   @override
   Stream<RpcTransportMessage> getMessagesForStream(int streamId) =>
-      _fcMetered(streamId, _streams[streamId]);
+      _fc.metered(streamId, _streams[streamId]);
 
-  /// Bytes delivered to this call's consumer but not yet taken, per stream.
-  final Map<int, int> _fcOutstanding = {};
-
-  /// Streams already failed for overrunning [_fcWindow].
-  final Set<int> _fcRefused = {};
+  /// The un-consumed RESPONSE bound; see [_Http2CallerFlow].
+  ///
+  /// Charged only for a stream with a per-stream consumer, the one that
+  /// discharges it.
+  late final Http2FlowLedger _fc = Http2FlowLedger(
+    policy: _policy,
+    accountOf: (streamId) => _calls[streamId]?.flow,
+    isMetered: (streamId, _) => _streams.contains(streamId),
+    onOverrun: _fcFailOverrun,
+  );
 
   @override
   Future<RpcHealthStatus> health() async {
@@ -919,20 +884,21 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       // not-open with no active streams is a finishing/terminated connection.
       // See the same split in sendMetadata().
       // Draining is not capacity. See the same split in sendMetadata().
+      final active = _activeCount;
       if (_drainSignal.goawayReceived) {
         return RpcHealthStatus.degraded(
           component: runtimeType.toString(),
           message:
               'HTTP/2 connection is draining (peer sent GOAWAY); '
-              '${_activeStreams.length} call(s) still finishing.',
+              '$active call(s) still finishing.',
           details: details,
         );
       }
-      if (_activeStreams.isNotEmpty) {
+      if (active > 0) {
         return RpcHealthStatus.healthy(
           component: runtimeType.toString(),
           message:
-              'HTTP/2 transport at capacity: ${_activeStreams.length} streams '
+              'HTTP/2 transport at capacity: $active streams '
               'in flight (server MAX_CONCURRENT_STREAMS reached)',
           details: details,
         );
@@ -978,8 +944,11 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     // RST_STREAM is legal on a half-closed stream, and is the only legal way to
     // abort after END_STREAM. The rule that suggests otherwise is about DATA,
     // not RST: never send DATA on a stream whose request direction is finished.
-    final streamsToClose = _activeStreams.values.toList();
-    for (final stream in streamsToClose) {
+    final calls = _calls.values.toList();
+    for (final call in calls) {
+      final stream = call.h2;
+      if (stream == null) continue;
+      call.h2 = null;
       try {
         stream.terminate();
         if (_logger?.isInternal ?? false) {
@@ -989,11 +958,13 @@ class RpcHttp2CallerTransport extends IRpcTransport {
         _logger?.warning('Error closing stream ${stream.id}: $e');
       }
     }
-    _activeStreams.clear();
 
-    final subscriptionsToCancel = List<StreamSubscription<void>>.from(
-      _streamSubscriptions.values,
-    );
+    final subscriptionsToCancel = <StreamSubscription<void>>[];
+    for (final call in calls) {
+      final subscription = call.subscription;
+      call.subscription = null;
+      if (subscription != null) subscriptionsToCancel.add(subscription);
+    }
     for (final subscription in subscriptionsToCancel) {
       try {
         await subscription.cancel();
@@ -1001,19 +972,14 @@ class RpcHttp2CallerTransport extends IRpcTransport {
         _logger?.warning('Error cancelling a subscription: $e');
       }
     }
-    _streamSubscriptions.clear();
     // Release every producer parked on a server window before the streams go.
-    for (final pump in _outgoingPumps.values) {
-      pump.dispose();
+    // Every subscription is already cancelled. Nothing outlives a closed
+    // transport, the flow-control charge included.
+    for (final call in _calls.values) {
+      unawaited(call.dispose());
+      call.flow.forget();
     }
-    _outgoingPumps.clear();
-
-    _streamParsers.clear();
-    _initialHeadersReceived.clear();
-    _halfClosedLocal.clear();
-    _peerEnded.clear();
-    _reservedStreams.clear();
-    _statusReceived.clear();
+    _calls.clear();
 
     _streams.closeAll();
 
