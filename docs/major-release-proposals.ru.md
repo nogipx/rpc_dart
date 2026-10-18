@@ -34,7 +34,7 @@ X — сквозная проблема, C — rpc_dart, T — транспор�
 
 | Библиотека | Для кого | Содержит |
 | --- | --- | --- |
-| `package:rpc_dart/rpc_dart.dart` | приложения | контракты и аннотации, эндпоинты, `RpcContext`, ошибки, кодеки, `RpcSecurityPolicy`, отказоустойчивость, логирование, `RpcClientConnection`, транспорт в памяти |
+| `package:rpc_dart/rpc_dart.dart` | приложения | контракты и аннотации, эндпоинты, `RpcContext`, ошибки, кодеки, `RpcSecurityPolicy`, отказоустойчивость, логирование, `RpcClientConnection` |
 | `package:rpc_dart/transport.dart` | авторы транспортов | `IRpcTransport`, `IRpcChannel`, `RpcChannelTransport`, кодеки кадров и сообщений, `RpcMessageParser`, `RpcStreamRouter`, `BufferedBroadcastController`, `RpcWriteBacklog`, `RpcConnectionHost`, помощники для drain, фабрики статусов и трейлеров |
 | `package:rpc_dart/transport_io.dart` | авторы io-транспортов | помощники только для `dart:io`: серверный сокет с ограничением заголовков (T6) |
 
@@ -45,8 +45,6 @@ X — сквозная проблема, C — rpc_dart, T — транспор�
 - `rpc_dart.dart` по-прежнему реэкспортирует `dart:typed_data`: полезная
   нагрузка — `Uint8List`, а сгенерированные `part`-файлы не могут
   импортировать его сами.
-- `IRpcReconnectableTransport` остаётся в `rpc_dart.dart`, пока раздел 2 его не
-  удалит: тип фабрики `RpcClientConnection` ссылается на него.
 - `transport_io.dart` появится вместе с сокетом с ограничением заголовков (T6,
   фаза 1).
 - Скрыты из всех barrel-файлов: классы форм вызова (`UnaryCaller`,
@@ -87,12 +85,13 @@ abstract class IRpcTransport {
   Future<bool> resetStream(int streamId, {String? reason}) async => false;
 
   // flow control: null when the transport does no flow control
-  RpcFlowCredit? get flowCredit => null;          // defer / return credit
-  bool get grantsMessageCredit => true;            // was IRpcNoMessageCredit
-  RpcConnectionBuffer? get connectionBuffer => null; // charge / release
+  IRpcFlowCredit? get flowCredit => null;           // defer / return credit
+  bool get grantsMessageCredit => true;             // was IRpcNoMessageCredit
+  IRpcConnectionBuffer? get connectionBuffer => null; // charge / release
 
-  int? get lastIssuedStreamId => null;              // was IRpcStreamIdSequence
-  void resumeStreamIdsAfter(int streamId) {}
+  // required: every transport mints stream ids
+  int get lastIssuedStreamId;                       // was IRpcStreamIdSequence
+  void resumeStreamIdsAfter(int streamId);
 }
 ```
 
@@ -101,18 +100,26 @@ abstract class IRpcTransport {
 - Группировка управления потоком и общего объёма буфера в небольшие nullable
   объекты сохраняет `IRpcTransport` читаемым и позволяет декоратору пробросить
   целую группу одной строкой.
+- У членов для id потоков нет значения по умолчанию. Id выдаёт каждый
+  транспорт, а `RpcClientConnection` нужна водяная отметка, чтобы id не
+  повторялись между соединениями. Значение по умолчанию пустило бы в прокси
+  транспорт без неё.
 - `IRpcReconnectableTransport` исчезает вместе с переподключением на месте
   (раздел 6).
 
 Последствия:
 
-- `RpcWebSocketResponderTransport` и `RpcSocketCallerTransport` теряют причину
-  существовать. `RpcChannelTransport` пробрасывает `ready` из своего канала, и
-  оба становятся однострочными фабриками поверх
-  `RpcChannelTransport.fromChannel`.
-- `_CapabilityPreservingTransport` в http2 (130 строк) становится обычным
-  декоратором, который проверяет компилятор.
+- `RpcWebSocketResponderTransport`, `RpcWebSocketCallerTransport` и
+  `RpcSocketCallerTransport` становятся тонкими подклассами
+  `RpcChannelTransport`. `RpcChannelTransport` принимает `ready:` и до его
+  завершения сообщает degraded в health. Имена классов остаются, поэтому
+  пользовательский код, который их называет, компилируется.
+- `_CapabilityPreservingTransport` в http2 удаляется. Сервер берёт результат
+  `transportWrapper` как есть; обёртка, которая `implements IRpcTransport`,
+  пробрасывает каждый член, и это проверяет компилятор.
 - `RpcWasmBridge` реализует `IRpcChannel`, а `_RpcWasmChannel` удаляется (T7).
+- `RpcInMemoryTransport` удаляется; его заменяет
+  `RpcChannelTransport.memoryPair()`.
 
 **Рассмотренная альтернатива:** `T? capability<T>()` с телом по умолчанию.
 Пробросить нужно один метод, но пропущенный проброс всё так же молчалив, а это
@@ -281,6 +288,16 @@ sealed class RpcServerMode {
   `IRpcTransport`, а вместе с ним `IRpcConnectionLossReporting` и
   `reconnectFactory` в websocket.
 - Интерцептор повторов спрашивает соединение, а не транспорт.
+- Вызов на транспорте, который закрылся из-за потери соединения, падает с
+  UNAVAILABLE, как и вызов, оборванный на лету; FAILED_PRECONDITION остаётся
+  для транспорта, который закрыла эта сторона.
+- Защита от устаревших id живёт в прокси, в обе стороны. Опоздавший кадр для
+  потока, который прокси открыл на прошлом соединении, отбрасывается, а поток,
+  открытый пиром, отменяется локально, когда уходит его соединение.
+- Прокси отдаёт `connectionBuffer` как null: общий объём буфера принадлежит
+  одному соединению, а следующее начинает с нуля.
+- `RpcEndpointBase.reconnect()` удаляется; `health()` теряет
+  `transportOverride`.
 - Это убирает примерно половину `websocket_caller_transport.dart` и механику
   переподключения в http2.
 - Цена: пользователь websocket, который полагался на `reconnectFactory`,
@@ -320,9 +337,10 @@ sealed class RpcServerMode {
   - Маркер `IRpcPeerFault` удаляется; проверять `is RpcPeerFaultException`.
   - Тогда `wireStatusFor` видит и исключения контекста.
 - **Политика по умолчанию (T4).** `RpcHttpResponderTransport` и
-  `RpcHttpServer` принимают `RpcSecurityPolicy policy = const
-  RpcSecurityPolicy()`, как все остальные транспорты. Политика null больше не
-  отключает их проверки. Внутренние помощники, принимающие
+  `RpcHttpServer` принимают не-null `securityPolicy` со значением по умолчанию
+  `const RpcSecurityPolicy()`, как все остальные транспорты. Политика null
+  больше не отключает их проверки. Это сделано вместе с разделом 2, потому что
+  там `securityPolicy` стал членом `IRpcTransport`. Внутренние помощники, принимающие
   `RpcSecurityPolicy?` (общий код http2, io-соединения websocket, web-изолят),
   получают то же значение по умолчанию.
 - **Примитивы (C22).** Одна политика обработки сбоев: выбрасывать
@@ -410,7 +428,10 @@ sealed class RpcServerMode {
 | `UnaryCaller`, `*StreamCaller`, `*StreamResponder`, собранные вручную | вызовы эндпоинта (`unaryRequest`, ...) или сгенерированные вызывающие стороны |
 | `is IRpcSecurityPolicyAware` и т. п. | `transport.securityPolicy` и т. п. |
 | `implements IRpcTransport` в собственном транспорте | добавить члены возможностей или `extends IRpcTransport` |
-| `RpcWebSocketResponderTransport(ws)` | `RpcChannelTransport.fromChannel(channel: RpcWebSocketChannel(ws), isClient: false)` (или фабрика) |
+| `RpcInMemoryTransport.pair()` | `RpcChannelTransport.memoryPair()` |
+| `connectionLost` у транспорта | `incomingMessages` завершается: транспорт закрывается |
+| `headersProvider:` у вызывающей стороны websocket | `headers:`, собранные внутри фабрики `RpcClientConnection`, которая выполняется для каждого соединения |
+| `endpoint.reconnect()` | `RpcClientConnection.forceReconnect()` |
 | `onEndpointCreated:` / `onPeerEndpointCreated:` | `mode: RpcServerMode.responder(...)` / `.peer(...)` |
 | `reconnectFactory:` у вызывающей стороны websocket | `RpcClientConnection` вокруг транспорта |
 | `transport.reconnect()` | переподключается `RpcClientConnection`; транспорт закрывается |

@@ -31,7 +31,7 @@ Closes X7 partly, C17, enables C1, X2, X3, T6.
 
 | Library | For | Contains |
 |---|---|---|
-| `package:rpc_dart/rpc_dart.dart` | applications | contracts and annotations, endpoints, `RpcContext`, errors, codecs, `RpcSecurityPolicy`, resilience, logging, `RpcClientConnection`, the in-memory transport |
+| `package:rpc_dart/rpc_dart.dart` | applications | contracts and annotations, endpoints, `RpcContext`, errors, codecs, `RpcSecurityPolicy`, resilience, logging, `RpcClientConnection` |
 | `package:rpc_dart/transport.dart` | transport authors | `IRpcTransport`, `IRpcChannel`, `RpcChannelTransport`, frame and message codecs, `RpcMessageParser`, `RpcStreamRouter`, `BufferedBroadcastController`, `RpcWriteBacklog`, `RpcConnectionHost`, drain helpers, status/trailer factories |
 | `package:rpc_dart/transport_io.dart` | io transport authors | `dart:io`-only helpers: the header-bounded server socket (T6) |
 
@@ -40,8 +40,6 @@ Closes X7 partly, C17, enables C1, X2, X3, T6.
 - `transport.dart` re-exports `rpc_dart.dart`; a transport imports one library.
 - `rpc_dart.dart` keeps re-exporting `dart:typed_data`: payloads are
   `Uint8List`, and generated `part` files cannot import it themselves.
-- `IRpcReconnectableTransport` stays in `rpc_dart.dart` until section 2 removes
-  it: `RpcClientConnection`'s factory type names it.
 - `transport_io.dart` arrives with the header-bounded socket (T6, phase 1).
 - Hidden from all barrels: the call-shape classes (`UnaryCaller`,
   `UnaryResponder`, `ServerStreamCaller`, `ClientStreamCaller`,
@@ -80,12 +78,13 @@ abstract class IRpcTransport {
   Future<bool> resetStream(int streamId, {String? reason}) async => false;
 
   // flow control: null when the transport does no flow control
-  RpcFlowCredit? get flowCredit => null;          // defer / return credit
-  bool get grantsMessageCredit => true;            // was IRpcNoMessageCredit
-  RpcConnectionBuffer? get connectionBuffer => null; // charge / release
+  IRpcFlowCredit? get flowCredit => null;           // defer / return credit
+  bool get grantsMessageCredit => true;             // was IRpcNoMessageCredit
+  IRpcConnectionBuffer? get connectionBuffer => null; // charge / release
 
-  int? get lastIssuedStreamId => null;              // was IRpcStreamIdSequence
-  void resumeStreamIdsAfter(int streamId) {}
+  // required: every transport mints stream ids
+  int get lastIssuedStreamId;                       // was IRpcStreamIdSequence
+  void resumeStreamIdsAfter(int streamId);
 }
 ```
 
@@ -94,16 +93,22 @@ abstract class IRpcTransport {
 - Grouping flow control and the buffer total into small nullable objects keeps
   `IRpcTransport` readable and lets a decorator forward a whole group with one
   line.
+- The stream-id members have no default. Every transport mints ids, and
+  `RpcClientConnection` needs the watermark to keep ids unique across
+  connections; a default would let a transport without one into the proxy.
 - `IRpcReconnectableTransport` disappears with in-place reconnect (section 6).
 
 Consequences:
 
-- `RpcWebSocketResponderTransport` and `RpcSocketCallerTransport` lose their
-  reason to exist. `RpcChannelTransport` forwards `ready` from its channel, and
-  both become one-line factories over `RpcChannelTransport.fromChannel`.
-- http2's `_CapabilityPreservingTransport` (130 lines) becomes an ordinary
-  decorator the compiler checks.
+- `RpcWebSocketResponderTransport`, `RpcWebSocketCallerTransport` and
+  `RpcSocketCallerTransport` become thin subclasses of `RpcChannelTransport`.
+  `RpcChannelTransport` takes `ready:` and reports degraded health until it
+  completes. The class names stay, so user code that names them still compiles.
+- http2's `_CapabilityPreservingTransport` goes. The server uses the
+  `transportWrapper` result as is; a wrapper that `implements IRpcTransport`
+  forwards every member, and the compiler checks it.
 - `RpcWasmBridge` implements `IRpcChannel` and `_RpcWasmChannel` goes (T7).
+- `RpcInMemoryTransport` goes; `RpcChannelTransport.memoryPair()` replaces it.
 
 **Alternative considered:** `T? capability<T>()` with a default body. It is one
 method to forward, but a missed forward is still silent, which is the defect
@@ -263,6 +268,15 @@ Today three mechanisms solve stale ids after a reconnect:
   `IRpcTransport`, and with it `IRpcConnectionLossReporting` and websocket's
   `reconnectFactory`.
 - The retry interceptor asks the connection, not the transport.
+- A call on a transport that closed because its connection was lost fails with
+  UNAVAILABLE, like a call cut mid-flight; FAILED_PRECONDITION stays for a
+  transport this side closed.
+- The proxy owns the stale-id guard in both directions. A late frame for a
+  stream it opened on an earlier connection is dropped, and a stream the peer
+  opened is cancelled locally when its connection goes.
+- The proxy reports `connectionBuffer` as null: a buffer total belongs to one
+  connection, and the next one starts empty.
+- `RpcEndpointBase.reconnect()` goes; `health()` loses `transportOverride`.
 - This removes about half of `websocket_caller_transport.dart` and the http2
   reconnect machinery.
 - Cost: a websocket user who relied on `reconnectFactory` wraps the transport in
@@ -301,10 +315,12 @@ Closes T1, T2, T5, D6-like teardown drift. No public API.
   - The `IRpcPeerFault` marker goes; check `is RpcPeerFaultException`.
   - `wireStatusFor` then sees the context exceptions too.
 - **Policy defaults (T4).** `RpcHttpResponderTransport` and `RpcHttpServer`
-  take `RpcSecurityPolicy policy = const RpcSecurityPolicy()`, like every other
-  transport. A null policy no longer turns their checks off. The internal
-  helpers that take `RpcSecurityPolicy?` (http2 common, websocket io
-  connections, the web isolate) get the same default.
+  take a non-null `securityPolicy` defaulting to `const RpcSecurityPolicy()`,
+  like every other transport. A null policy no longer turns their checks off.
+  This lands with section 2, because `securityPolicy` became an
+  `IRpcTransport` member there. The internal helpers that take
+  `RpcSecurityPolicy?` (http2 common, websocket io connections, the web
+  isolate) get the same default.
 - **Primitives (C22).** One failure policy, throw `FormatException`:
   - `RpcBool` and `RpcString` stop returning defaults on bad input;
   - `RpcNum` parses ints first.
@@ -386,7 +402,10 @@ Breaking changes are allowed throughout: this is a major release.
 | `UnaryCaller`, `*StreamCaller`, `*StreamResponder` built by hand | endpoint calls (`unaryRequest`, ...) or generated callers |
 | `is IRpcSecurityPolicyAware` etc. | `transport.securityPolicy` etc. |
 | `implements IRpcTransport` in a custom transport | add the capability members, or `extends IRpcTransport` |
-| `RpcWebSocketResponderTransport(ws)` | `RpcChannelTransport.fromChannel(channel: RpcWebSocketChannel(ws), isClient: false)` (or a factory) |
+| `RpcInMemoryTransport.pair()` | `RpcChannelTransport.memoryPair()` |
+| `connectionLost` on a transport | `incomingMessages` ends: the transport closes |
+| `headersProvider:` on the websocket caller | `headers:` built inside the `RpcClientConnection` factory, which runs for every connection |
+| `endpoint.reconnect()` | `RpcClientConnection.forceReconnect()` |
 | `onEndpointCreated:` / `onPeerEndpointCreated:` | `mode: RpcServerMode.responder(...)` / `.peer(...)` |
 | `reconnectFactory:` on the websocket caller | `RpcClientConnection` around the transport |
 | `transport.reconnect()` | `RpcClientConnection` reconnects; the transport closes |
