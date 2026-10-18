@@ -130,8 +130,9 @@ class RpcSocketChannel implements IRpcChannel {
     protocolVersion,
   ]);
 
-  /// The wire revision this channel speaks.
-  static const int protocolVersion = 1;
+  /// The wire revision this channel speaks; raised with every change to the
+  /// `RpcChannelFrame` format.
+  static const int protocolVersion = 2;
 
   /// Unsent bytes past which this side stops reading the peer, or null.
   final int? maxWriteBacklogBytes;
