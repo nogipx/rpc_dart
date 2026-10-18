@@ -183,6 +183,10 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
 /// whole message past the server's limit should still reach the multiplexer,
 /// which closes with 4413 and says why; the guard can only destroy the socket,
 /// which the peer reads as a retryable dropped connection.
+///
+/// A policy given to the connections is taken as is, with no floor: it is how
+/// an operator bounds what an unfinished message may buffer, and a floor would
+/// put that bound back at the default.
 final class _MessageCeiling {
   _MessageCeiling(RpcSecurityPolicy? own)
     : _own = own != null,
