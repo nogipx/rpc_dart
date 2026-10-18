@@ -66,6 +66,7 @@ extension _ChannelTransportInbound on RpcChannelTransport {
     if (!_forgottenStreams.contains(message.streamId)) {
       _fc.advertiseStream(message.streamId);
     }
+    if (message.isEndOfStream) _fc.peerFinished(message.streamId);
 
     // A response that ends with no grpc-status is TRUNCATED, and the end flag
     // must not reach the consumer: it would close the stream cleanly and the

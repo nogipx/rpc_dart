@@ -581,6 +581,11 @@ final class RpcFlowController {
     }
     _pendingGrant[streamId] = 0;
     _pendingMessageGrant[streamId] = 0;
+    // The peer takes its first grant as the whole window, so the initial one
+    // still due must go first, or this increment would be read as it.
+    if (_grantsDue.remove(streamId)) {
+      unawaited(_sendStreamGrant(streamId, window, messageWindow));
+    }
     unawaited(_sendStreamGrant(streamId, pending, pendingMessages));
   }
 
@@ -609,6 +614,11 @@ final class RpcFlowController {
   /// Advertises the initial window the first time a stream is seen. This is
   /// what tells the peer we participate.
   ///
+  /// Sent at the end of the turn, and only if the peer is still sending on the
+  /// stream by then (see [peerFinished]). A unary request arrives as headers
+  /// and a half-closing payload in one read, and a window for a stream the
+  /// peer has already finished is a frame nobody uses.
+  ///
   /// A ghost id can fill this set permanently — [forget] prunes it on a
   /// TERMINAL frame, which such an id never sends — and that is harmless: a
   /// sender receiving no grant is still bounded by its own
@@ -618,7 +628,26 @@ final class RpcFlowController {
     if (window == null) return;
     if (_advertised.length >= _trackCap) return;
     if (!_advertised.add(streamId)) return;
-    unawaited(_sendStreamGrant(streamId, window, _messageWindow!));
+    _grantsDue.add(streamId);
+    _grantsTimer ??= Timer(Duration.zero, _sendDueGrants);
+  }
+
+  /// The peer has finished sending on [streamId], so the window still due for
+  /// it is not sent.
+  void peerFinished(int streamId) => _grantsDue.remove(streamId);
+
+  /// Streams whose initial window goes out at the end of this turn.
+  final Set<int> _grantsDue = {};
+  Timer? _grantsTimer;
+
+  void _sendDueGrants() {
+    _grantsTimer = null;
+    final window = _policy.advertisedWindowBytes;
+    if (_closed || window == null) return;
+    for (final streamId in _grantsDue) {
+      unawaited(_sendStreamGrant(streamId, window, _messageWindow!));
+    }
+    _grantsDue.clear();
   }
 
   Future<void> _sendStreamGrant(int streamId, int bytes, int messages) async {
@@ -763,6 +792,7 @@ final class RpcFlowController {
     _pendingGrant.remove(streamId);
     _pendingMessageGrant.remove(streamId);
     _advertised.remove(streamId);
+    _grantsDue.remove(streamId);
     _deferred.remove(streamId);
     _wake(streamId);
   }
@@ -777,6 +807,9 @@ final class RpcFlowController {
     _closed = true;
     _graceTimer?.cancel();
     _graceTimer = null;
+    _grantsTimer?.cancel();
+    _grantsTimer = null;
+    _grantsDue.clear();
     wakeAll();
     _sendCredit.clear();
     _messageCredit.clear();

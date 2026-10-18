@@ -341,10 +341,20 @@ The sequential unix-socket call pays the timer turn; the owner accepted that
 (B-39) now throws for a close between a send and the next turn, rather than
 in the same turn.
 
-Next: the per-stream window grants. Each side sends one on first sight of a
-stream, 2 of the 7 messages, and a unary stream ends before either is used.
-An initial per-stream window announced once per connection, as HTTP/2's
-SETTINGS does, removes them; the legacy-peer grace and seeding go with it.
+**A stream's window goes out at the end of the turn it is first seen, and
+not if the peer has finished sending by then** (`RpcFlowController.
+advertiseStream`, `peerFinished`). Each side sent one on first sight of a
+stream, 2 of the 7 frames of a unary call, and the stream ended before
+either was used. A unary call is now 4 frames in 2 writes:
+
+| Transport | Sequential | 20 concurrent |
+|---|---|---|
+| websocket | 484 -> 425 us | 1.66 -> 1.2 ms |
+| TCP socket | 320 -> 266 us | 1.2 -> 0.9 ms |
+| unix socket | 90 -> 80 us | 0.74 -> 0.61 ms |
+
+Left for later: an initial per-stream window announced once per connection,
+as HTTP/2's SETTINGS does, would retire the legacy-peer grace and seeding.
 
 ## 5. Contracts, context, registration
 

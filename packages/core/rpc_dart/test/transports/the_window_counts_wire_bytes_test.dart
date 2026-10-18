@@ -137,12 +137,16 @@ Future<_Run> _run({
   final (client, server) = RpcChannelTransport.pair(
     policy: RpcSecurityPolicy(
       flowControlWindowBytes: window,
-      // Both off, so a single field is under test. The connection pool would
-      // bound the same traffic at its own number, and the initial send window
-      // bounds a sender until the peer's first grant — set to the window under
-      // test it would pass every arm below whether or not the window works.
+      // So a single field is under test. The connection pool would bound the
+      // same traffic at its own number: off. The initial send window bounds a
+      // sender until the peer's first grant, which goes out at the end of the
+      // turn the stream is first seen: off, the sender runs free until that
+      // grant lands; set to the window under test, every arm below would pass
+      // whether or not the window works. Half of the smallest window bounds the
+      // gap, is replaced by the grant long before it is spent, and would stop
+      // the sender at half the window if the grant did not apply.
       flowControlConnectionWindowBytes: null,
-      initialSendWindowBytes: null,
+      initialSendWindowBytes: 32 * _kib,
       // Lifted: round 550's depth ceiling would bind first and this test would
       // measure that field instead.
       maxBufferedMessagesPerStream: 1 << 30,
