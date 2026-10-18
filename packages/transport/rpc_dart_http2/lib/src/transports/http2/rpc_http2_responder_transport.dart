@@ -5,7 +5,7 @@
 import 'dart:async';
 
 import 'package:http2/http2.dart' as http2;
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 import 'http2_header_block_guard.dart';
 import 'http2_write_backlog.dart';

@@ -17,7 +17,7 @@
 
 import 'dart:convert';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// Appends a base-128 varint.

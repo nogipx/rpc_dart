@@ -6,7 +6,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:test/test.dart';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_notify/src/transport_router.dart';
 
 void main() {

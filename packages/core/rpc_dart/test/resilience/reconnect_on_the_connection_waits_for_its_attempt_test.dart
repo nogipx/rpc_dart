@@ -12,7 +12,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final class _T implements IRpcReconnectableTransport {

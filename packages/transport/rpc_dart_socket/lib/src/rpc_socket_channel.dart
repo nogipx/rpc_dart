@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 /// [IRpcChannel] over a `dart:io` [Socket]: the socket's byte stream as a raw
 /// pipe, opened by a preface in each direction.

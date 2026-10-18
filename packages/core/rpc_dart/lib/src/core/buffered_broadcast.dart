@@ -5,7 +5,8 @@
 import 'dart:async';
 import 'dart:collection';
 
-import '../../rpc_dart.dart';
+import 'errors.dart';
+import 'protocol.dart';
 
 /// A broadcast stream controller that **retains events while it has no
 /// listener** and replays them, in arrival order, to the first subscriber.

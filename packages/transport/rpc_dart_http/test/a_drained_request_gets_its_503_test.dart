@@ -25,7 +25,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:test/test.dart';
 

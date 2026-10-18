@@ -19,7 +19,7 @@
 // These tests pin the three behaviours the shared implementation now gives all
 // of them.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Records the controller emits, in order.

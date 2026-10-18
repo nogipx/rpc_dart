@@ -22,7 +22,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A client transport with a frame already sitting in its inbound buffer.

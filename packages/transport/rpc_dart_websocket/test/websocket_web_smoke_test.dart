@@ -13,7 +13,7 @@ library;
 import 'dart:async';
 
 import 'package:async/async.dart';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';

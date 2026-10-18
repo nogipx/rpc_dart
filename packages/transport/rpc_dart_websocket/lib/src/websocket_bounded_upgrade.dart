@@ -8,7 +8,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 const String _webSocketGuid = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 

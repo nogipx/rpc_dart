@@ -58,7 +58,13 @@ Notes:
 `RpcInMemoryTransport` is deprecated; use `RpcChannelTransport.memoryPair()`.
 `policy` is an `RpcSecurityPolicy` (see `security-and-flow-control.md`).
 
+`IRpcChannel` and the other transport-authoring types (frames, the message
+parser, the capability interfaces) are not in `rpc_dart.dart`. Import
+`package:rpc_dart/transport.dart`, which re-exports `rpc_dart.dart`.
+
 ```dart
+import 'package:rpc_dart/transport.dart';
+
 Future<void> inProcess() async {
   final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   final server = RpcResponderEndpoint(transport: serverTransport)..start();

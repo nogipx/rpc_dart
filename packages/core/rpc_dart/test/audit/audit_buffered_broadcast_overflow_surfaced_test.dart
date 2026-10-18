@@ -11,7 +11,7 @@
 // draining. DATA_LOSS is what the event IS -- the retained prefix is followed
 // by a hole -- and a StateError could not say it.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 void main() {

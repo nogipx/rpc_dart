@@ -20,7 +20,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A payload the transport carries by reference.

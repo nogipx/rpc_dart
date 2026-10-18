@@ -8,7 +8,7 @@
 // library. It also admitted a dot in the METHOD name, which the responder's
 // grammar refuses because its binding key splits on the last dot.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

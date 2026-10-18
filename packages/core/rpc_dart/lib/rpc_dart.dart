@@ -3,43 +3,136 @@
 //
 // SPDX-License-Identifier: MIT
 
+/// The application API: contracts, endpoints, context, errors, codecs,
+/// resilience, logging and the in-memory transports.
+///
+/// A transport author also imports `package:rpc_dart/transport.dart`, which
+/// re-exports this library.
+///
+/// Every name is listed on purpose. A type missing from both lists is internal
+/// to the package, whatever its spelling.
+///
+/// `dart:typed_data` is re-exported whole: payloads are `Uint8List`, and the
+/// generator emits `part` files, which cannot import it themselves.
 library;
 
-export 'logger.dart';
+export 'dart:typed_data';
 
-/// The public surface.
-///
-/// `src/_index.dart` re-exports nine subdirectory barrels wholesale, so without
-/// this `hide` "public" means "declared without an underscore".
-///
-/// What is hidden is machinery nothing outside this package uses — measured,
-/// not guessed. `RpcMessageParser`, `RpcMessageHeader` and
-/// `BufferedBroadcastController` are deliberately NOT hidden: all four
-/// transports build on them, which makes them the transport-authoring API.
-///
-/// Narrowing this was only possible once `lib/` stopped importing it; the
-/// implementation uses `src/_internal.dart`, and so do the tests that reach
-/// these types.
-/// The three ping symbols were hidden until round 479. A transport whose
-/// platform cannot detect a half-open path has to probe for itself, and the
-/// probe has to be the library's OWN ping — a new frame type would be new wire
-/// vocabulary for a problem the protocol already solves. `rpc_dart_websocket`
-/// is the first such caller; see its `_startAppLevelHeartbeat`.
+export 'logger.dart';
 export 'src/_index.dart'
-    hide
-        CallProcessor,
-        IRpcPeerFault,
-        RpcCallerPipelineMixin,
-        RpcPeerFaultException,
-        RpcLongTimer,
-        RpcResponderMethodBinding,
-        RpcResponderMethodRegistry,
-        RpcResponderPingHandler,
-        RpcResponderPipelineMixin,
-        RpcResponderBufferBudget,
-        RpcResponderStreamState,
-        RpcResponderStreamStore,
-        SinkPump,
-        StreamBridge,
-        StreamProcessor,
-        tooManyMessages;
+    show
+        // Contracts and annotations
+        IRpcContract,
+        RpcCallerContract,
+        RpcResponderContract,
+        RpcPeerContract,
+        RpcMethod,
+        RpcMethodKind,
+        RpcMethodType,
+        RpcService,
+        RpcServiceKind,
+        RpcRemoved,
+        RpcDataTransferMode,
+        // Context and cancellation
+        RpcContext,
+        RpcContextBuilder,
+        RpcContextExtensions,
+        RpcContextUtils,
+        RpcCallScope,
+        RpcCancellationToken,
+        RpcCancelledException,
+        RpcDeadlineExceededException,
+        // Codecs
+        IRpcSerializable,
+        IRpcCodec,
+        RpcCodec,
+        RpcBinaryCodec,
+        CborCodec,
+        // Primitive messages
+        RpcPrimitiveMessage,
+        RpcString,
+        RpcStringX,
+        RpcInt,
+        RpcIntX,
+        RpcDouble,
+        RpcDoubleX,
+        RpcNum,
+        RpcNumX,
+        RpcBool,
+        RpcBoolX,
+        RpcNull,
+        RpcNullX,
+        RpcList,
+        // Endpoints, interceptors and middleware
+        RpcEndpointBase,
+        RpcCallerEndpoint,
+        RpcResponderEndpoint,
+        RpcPeerEndpoint,
+        RpcEndpointHealth,
+        RpcEndpointPingResult,
+        IRpcInterceptor,
+        IRpcMiddleware,
+        IRpcCallCheck,
+        RpcMiddlewareContext,
+        RpcCallDirection,
+        RpcUnaryNext,
+        RpcServerStreamNext,
+        RpcClientStreamNext,
+        RpcBidirectionalStreamNext,
+        // Errors and status
+        RpcException,
+        RpcStatusException,
+        RpcClosedException,
+        RpcStatus,
+        RpcErrorDetail,
+        RpcErrorInfo,
+        RpcBadRequest,
+        RpcFieldViolation,
+        RpcDebugInfo,
+        RpcRetryInfo,
+        RpcRawErrorDetail,
+        // Metadata
+        RpcMetadata,
+        RpcHeader,
+        RpcHeaders,
+        // Limits
+        RpcSecurityPolicy,
+        RpcContentTypeValidation,
+        // Health
+        RpcHealthStatus,
+        RpcHealthLevel,
+        RpcHealthLevelSeverity,
+        GrpcHealthCheckContract,
+        GrpcHealthCheckRequest,
+        GrpcHealthCheckResponse,
+        GrpcHealthServiceStatus,
+        GrpcServingStatus,
+        // Compression
+        RpcCompressionCodec,
+        RpcGrpcCompression,
+        // Resilience
+        BackoffPolicy,
+        ExponentialBackoff,
+        FixedBackoff,
+        RpcCircuitBreakerInterceptor,
+        CircuitBreakerOpenException,
+        CircuitBreakerState,
+        RpcClientConnection,
+        RpcClientConnectionState,
+        RpcClientConnecting,
+        RpcClientDisconnected,
+        RpcClientIdle,
+        RpcClientOffline,
+        RpcClientOnline,
+        RpcConnectionLogger,
+        RpcRateLimiter,
+        RateLimit,
+        RpcRateLimitException,
+        RpcRetryInterceptor,
+        RpcRetryPredicate,
+        // Transports and servers
+        IRpcTransport,
+        IRpcReconnectableTransport,
+        IRpcServer,
+        RpcChannelTransport,
+        RpcInMemoryTransport;

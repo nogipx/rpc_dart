@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 import 'rpc_socket_address.dart';
 import 'rpc_socket_channel.dart';

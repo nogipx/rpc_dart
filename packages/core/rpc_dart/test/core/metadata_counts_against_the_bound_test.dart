@@ -14,7 +14,7 @@
 //   payload    256 admitted    16.0 MiB    stopped by the byte bound
 //   metadata  4096 admitted   256.0 MiB    stopped by the EVENT count
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 const _perFrame = 64 * 1024;

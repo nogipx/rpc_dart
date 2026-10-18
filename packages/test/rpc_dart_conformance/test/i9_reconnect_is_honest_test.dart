@@ -23,7 +23,7 @@ library;
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 import 'support/isolate_worker.dart';

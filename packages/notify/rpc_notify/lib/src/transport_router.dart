@@ -5,7 +5,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 /// Predicate used to decide whether a routing rule applies.
 typedef RpcRoutingCondition =

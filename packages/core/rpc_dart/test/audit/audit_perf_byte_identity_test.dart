@@ -5,7 +5,7 @@
 // ignore: unnecessary_import
 import 'dart:typed_data';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Guards the byte-identical output of the allocation/perf optimizations:

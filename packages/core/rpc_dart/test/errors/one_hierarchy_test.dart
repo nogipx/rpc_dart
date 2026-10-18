@@ -24,7 +24,7 @@
 // The fix is at the TYPE, not at the mapper: these extend RpcStatusException,
 // so wireStatusFor needed no change and the deny stayed exactly as strict.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -6,7 +6,7 @@
 // into the chunk. Only what a chunk leaves incomplete is buffered, and a body
 // assembled from the buffer is a copy, because the buffer is reused.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 Uint8List _framed(List<int> body) =>

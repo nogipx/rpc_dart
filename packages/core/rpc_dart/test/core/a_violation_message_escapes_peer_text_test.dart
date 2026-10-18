@@ -6,7 +6,7 @@
 // receiver logs that message. Raw, a CR/LF in a method path or a header name
 // forged a line in the receiver's log, and its length was the peer's.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 String _violation(RpcMetadata metadata) {

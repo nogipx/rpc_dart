@@ -21,7 +21,7 @@
 // The two rules now live side by side in `metadata.dart`, which is the point:
 // an inverse pair that cannot be read together is an inverse pair that drifts.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// Parse, then format. Both halves are the REAL ones.

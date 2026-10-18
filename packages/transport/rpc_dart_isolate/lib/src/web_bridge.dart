@@ -18,7 +18,7 @@ library;
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 // -- Bridge message format (Map-based, for structured-clone transfer) ---------
 

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 typedef RpcIsolateEntrypoint =
     void Function(IRpcTransport transport, Map<String, dynamic> customParams);

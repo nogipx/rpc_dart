@@ -5,7 +5,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'rpc_websocket_channel.dart';

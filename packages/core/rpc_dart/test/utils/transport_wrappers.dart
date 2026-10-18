@@ -5,7 +5,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 /// Delegates everything, except that an end-of-stream metadata send never
 /// completes -- the shape a cancellation notice takes.

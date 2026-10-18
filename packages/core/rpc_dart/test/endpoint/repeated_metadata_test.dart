@@ -16,7 +16,7 @@
 // The two views of one call also disagreed: RpcMetadata keeps both headers and
 // its getHeaderValue returns the FIRST, while the context returned the last.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

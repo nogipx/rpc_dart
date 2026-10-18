@@ -20,7 +20,7 @@
 // absent case is a parameter each site states -- with `contentTypeValidation`
 // supplying it for the sites that have no reason of their own.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 import '../utils/transport_wrappers.dart';

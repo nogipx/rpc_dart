@@ -21,7 +21,7 @@
 // This file pins BOTH halves, because either alone is satisfiable by a wrong
 // implementation.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 class Msg implements IRpcSerializable {

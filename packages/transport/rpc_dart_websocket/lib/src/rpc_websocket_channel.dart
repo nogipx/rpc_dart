@@ -5,7 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// gRPC status for the WebSocket close code the peer hung up with.

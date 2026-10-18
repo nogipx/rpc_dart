@@ -21,7 +21,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:http2/http2.dart' as h2;
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 
 import 'calls.dart';

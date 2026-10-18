@@ -23,7 +23,7 @@ library;
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Roughly 8 KiB of headers, the shape round 282 used.

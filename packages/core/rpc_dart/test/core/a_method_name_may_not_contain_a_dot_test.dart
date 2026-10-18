@@ -19,7 +19,7 @@
 //
 // The measurements are in `.claude/loop/rounds/504`.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

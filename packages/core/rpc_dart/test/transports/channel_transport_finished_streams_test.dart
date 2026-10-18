@@ -9,7 +9,7 @@
 // long-lived connection the set grew once per abandoned call and never shrank.
 // Explicit teardown via releaseStreamId() now prunes it.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 Future<int> _finishedStreams(RpcChannelTransport transport) async {

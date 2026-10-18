@@ -19,7 +19,7 @@
 //   appBytes=65536 -> TimeoutException  channelTornDown=true
 //                     'Incoming frame buffer overflow: 65558 bytes (max: 65541)'
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 const int _limit = 64 * 1024;

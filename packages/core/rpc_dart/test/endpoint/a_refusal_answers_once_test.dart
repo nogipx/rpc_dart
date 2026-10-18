@@ -17,7 +17,7 @@
 // `[14]` and `[14, 14]` read the same to a `contains` matcher, which is why every
 // assertion here counts.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

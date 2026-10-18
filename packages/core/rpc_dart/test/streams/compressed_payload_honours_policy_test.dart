@@ -32,7 +32,7 @@
 // gzip is dart:io-only, and the defect is platform-independent, so a codec that
 // works on dart2js as well keeps the regression on the web target too.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 const _encoding = 'rle-test';

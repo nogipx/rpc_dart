@@ -11,9 +11,10 @@ void main() {
   runIsolateExample();
 }
 
+final _codec = RpcCodec(RpcString.fromJson);
+
 /// Running an isolate with a custom entrypoint function.
 Future<void> runIsolateExample() async {
-  // logging configured via LogController
   print('\n=== Custom entrypoint example ===\n');
 
   // Spawn the isolate with our own entrypoint.
@@ -27,58 +28,37 @@ Future<void> runIsolateExample() async {
     debugName: 'EchoServer Isolate',
   );
 
-  final killIsolate = result.kill;
-
   print('Isolate up, wiring the client');
+  final caller = RpcCallerEndpoint(transport: result.transport);
 
-  // A bidirectional stream client.
-  final client = BidirectionalStreamCaller<RpcString, RpcString>(
-    transport: result.transport,
+  // The request side of a bidirectional stream.
+  final requests = StreamController<RpcString>();
+  final responses = caller.bidirectionalStream<RpcString, RpcString>(
     serviceName: 'EchoService',
     methodName: 'Echo',
-    logger: LogScope.noop,
+    requests: requests.stream,
+    requestCodec: _codec,
+    responseCodec: _codec,
   );
 
-  // Subscribe to the responses.
-  final subscription = client.responses.listen(
-    (message) {
-      print('CLIENT: response: "${message.payload}"');
-    },
-    onError: (Object error) {
-      print('CLIENT: error: $error');
-    },
-  );
+  final done = responses
+      .forEach((message) => print('CLIENT: response: "${message.value}"'))
+      .catchError((Object error) => print('CLIENT: error: $error'));
 
-  // Send the requests.
-  print('\nSending: "Hello, server!"');
-  unawaited(client.send('Hello, server!'.rpc));
+  for (final text in ['Hello, server!', 'How are you?', 'Echo check']) {
+    print('\nSending: "$text"');
+    requests.add(text.rpc);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+  }
 
-  await Future<void>.delayed(Duration(milliseconds: 500));
-
-  print('\nSending: "How are you?"');
-  unawaited(client.send('How are you?'.rpc));
-
-  await Future<void>.delayed(Duration(milliseconds: 500));
-
-  print('\nSending: "Echo check"');
-  unawaited(client.send('Echo check'.rpc));
-
-  // Let the messages be handled.
-  await Future<void>.delayed(Duration(seconds: 1));
-
-  // Half-close the request side.
+  // Half-close the request side; the server ends the stream in turn.
   print('\nFinishing the request side');
-  unawaited(client.finishSending());
+  await requests.close();
+  await done;
 
-  // Stop reading the responses.
-  await subscription.cancel();
-
-  // Tear the transport down.
-  print('\nClosing the transport');
-  await client.close();
-
-  // Kill the isolate.
-  killIsolate();
+  print('\nClosing the endpoint');
+  await caller.close();
+  result.kill();
 
   print('\n=== Example finished ===');
 }
@@ -90,38 +70,27 @@ void customEchoServer(
   Map<String, dynamic> customParams,
 ) {
   print('customParams: $customParams');
+  final prefix = customParams['messagePrefix'] as String? ?? '';
+
+  RpcResponderEndpoint(transport: transport)
+    ..registerServiceContract(_EchoService(prefix))
+    ..start();
   print('SERVER: echo server started');
-  final logger = LogScope.noop;
+}
 
-  // logging configured via LogController
+final class _EchoService extends RpcResponderContract {
+  _EchoService(this.prefix) : super('EchoService');
 
-  // A bidirectional stream responder.
-  final server = BidirectionalStreamResponder<RpcString, RpcString>(
-    id: 1,
-    transport: transport,
-    serviceName: 'EchoService',
-    methodName: 'Echo',
-    logger: logger,
-  );
+  final String prefix;
 
-  // REQUIRED: bind the responder to the message stream for streamId 1.
-  server.bindToMessageStream(
-    transport.incomingMessages.where((msg) => msg.streamId == 1),
-  );
-
-  // The prefix every response carries.
-  const messagePrefix = '[ECHO]: ';
-
-  // Listen for incoming requests.
-  server.requests.listen((request) {
-    final requestStr = request.toString();
-    logger.debug('SERVER: request: "$requestStr"');
-
-    // Handle it and echo it back.
-    final response = '$messagePrefix$requestStr';
-    logger.debug('SERVER: response: "$response"');
-    server.send(response.rpc);
-  });
-
-  logger.debug('SERVER: echo server ready');
+  @override
+  void setup() {
+    addBidirectionalMethod<RpcString, RpcString>(
+      methodName: 'Echo',
+      handler: (requests, {RpcContext? context}) =>
+          requests.map((request) => '$prefix${request.value}'.rpc),
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+  }
 }

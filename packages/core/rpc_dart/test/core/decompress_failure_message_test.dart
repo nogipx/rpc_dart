@@ -19,7 +19,7 @@
 // broken, which cannot help. Stating the fact and leaving both causes open is
 // honest; naming one is not.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 List<int> _be32(int v) => [

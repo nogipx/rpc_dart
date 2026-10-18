@@ -25,7 +25,7 @@ library;
 
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Stands in for a third-party library's exception -- the case an allow-list

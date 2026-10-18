@@ -16,7 +16,7 @@
 //
 // The measurements are in `.claude/loop/rounds/544`.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// What `validateMetadata` totals.

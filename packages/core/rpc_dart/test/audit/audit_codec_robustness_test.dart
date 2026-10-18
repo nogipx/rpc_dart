@@ -18,7 +18,7 @@
 //    whose top byte has the high bit set wrapped negative. (VM ints are 64-bit,
 //    so this regression only fails under dart2js / `melos run test:web`.)
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 void main() {

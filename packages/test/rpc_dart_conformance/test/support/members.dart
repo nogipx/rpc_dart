@@ -14,7 +14,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:rpc_dart_isolate/rpc_dart_isolate.dart';

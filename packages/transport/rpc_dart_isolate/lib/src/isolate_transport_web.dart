@@ -10,7 +10,7 @@ import 'dart:js_interop';
 
 import 'package:isolate_manager/src/base/contactor/isolate_contactor_controller/web_platform/isolate_contactor_controller_web_worker.dart';
 import 'package:isolate_manager/src/isolate_manager_controller/web.dart';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:web/web.dart';
 
 import 'web_bridge.dart';

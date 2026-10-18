@@ -9,7 +9,7 @@ import 'dart:io'
         Socket; // HttpServer for raw handler tests; Socket for raw TCP tests
 
 import 'package:http/http.dart' as http;
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:shelf/shelf.dart' show Response;
 import 'package:shelf/shelf_io.dart' as shelf_io;

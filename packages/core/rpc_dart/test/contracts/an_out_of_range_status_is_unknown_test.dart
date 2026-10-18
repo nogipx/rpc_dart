@@ -6,7 +6,7 @@
 // RpcStatusException(99), RpcStatusException(-1), while a non-numeric status
 // already read as UNKNOWN. A caller branching on the code matched nothing.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 int? _status(String raw) => RpcCallerTrailer.statusOf(

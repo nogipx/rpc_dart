@@ -15,7 +15,7 @@
 // still drops is structural -- a key that is empty, pseudo-header, off-pattern
 // or carrying CR/LF/NUL is not a header at any size.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Counts the `x-h*` headers the handler was given.

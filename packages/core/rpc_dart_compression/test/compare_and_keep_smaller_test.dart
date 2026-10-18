@@ -10,7 +10,7 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_compression/rpc_dart_compression.dart';
 import 'package:test/test.dart';
 

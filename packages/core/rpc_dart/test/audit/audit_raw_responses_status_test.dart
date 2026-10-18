@@ -13,7 +13,7 @@
 //
 // fvm dart test test/audit/audit_raw_responses_status_test.dart
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 void main() {

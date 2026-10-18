@@ -14,8 +14,8 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart/src/rpc/transports/flow_controller.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Records the grant frames the controller emits, standing in for the channel.

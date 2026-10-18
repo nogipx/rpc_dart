@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A bidi caller whose request sink ERRORS, over a real isolate. Its channel is
+// A bidi call whose request stream ERRORS, over a real isolate. Its channel is
 // SendPort/ReceivePort and its frames are _IsolateMessages, so the notice takes
 // a different route again.
 //
@@ -86,16 +86,16 @@ void main() {
     spawned.kill();
   });
 
-  BidirectionalStreamCaller<RpcString, RpcString> open() {
-    final c = BidirectionalStreamCaller<RpcString, RpcString>(
-      transport: spawned.transport,
-      serviceName: 'Svc',
-      methodName: 'echo',
-      requestCodec: _codec,
-      responseCodec: _codec,
-    );
-    c.responses.listen((_) {}, onError: (Object _) {});
-    return c;
+  void open(Stream<RpcString> requests) {
+    caller
+        .bidirectionalStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          requests: requests,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .listen((_) {}, onError: (Object _) {});
   }
 
   Future<String> live() async {
@@ -127,8 +127,7 @@ void main() {
 
   test('WITNESS: an erroring request sink stops the handler', () async {
     for (var i = 0; i < calls; i++) {
-      final c = open();
-      await c.requestSink.addStream(_twoThenError()).catchError((Object _) {});
+      open(_twoThenError());
       await Future<void>.delayed(const Duration(milliseconds: 30));
     }
     await expectNoneLive();
@@ -136,10 +135,11 @@ void main() {
 
   test('GUARD: the healthy half-close is unchanged', () async {
     for (var i = 0; i < calls; i++) {
-      final c = open();
-      c.requestSink.add('a'.rpc);
+      final requests = StreamController<RpcString>();
+      open(requests.stream);
+      requests.add('a'.rpc);
       await Future<void>.delayed(const Duration(milliseconds: 30));
-      await c.requestSink.close();
+      await requests.close();
       await Future<void>.delayed(const Duration(milliseconds: 30));
     }
     await expectNoneLive();

@@ -6,7 +6,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 // -- Internal message format --------------------------------------------------
 

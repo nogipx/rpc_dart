@@ -26,7 +26,7 @@
 // between two timed arms is a flake under parallel load, which this test proved
 // by being one. See the comment on the witness.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 const _chunk = 16 * 1024;

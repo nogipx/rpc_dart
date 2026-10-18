@@ -263,9 +263,16 @@ IRpcMultiplexedChannel   — multiplexed framed messages
 IRpcTransport            — full transport with stream IDs and health
 ```
 
+An application imports `package:rpc_dart/rpc_dart.dart`. A transport author
+imports `package:rpc_dart/transport.dart` instead: it re-exports the
+application library and adds channels, frames, the message parser and router,
+the transport capability interfaces and the server drain helpers.
+
 Factories on `RpcChannelTransport`:
 
 ```dart
+import 'package:rpc_dart/transport.dart';
+
 void transports(IRpcChannel myChannel) {
   // Zero-copy in-memory pair (tests, in-process):
   final (client, server) = RpcChannelTransport.memoryPair();

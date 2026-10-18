@@ -12,7 +12,7 @@
 // was truncated": a security control reporting the wrong thing, and no longer naming
 // the limit it enforced.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A complete gRPC frame of [n] body bytes.

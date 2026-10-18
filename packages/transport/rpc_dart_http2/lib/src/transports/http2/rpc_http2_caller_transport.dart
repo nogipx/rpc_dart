@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http2/http2.dart' as http2;
 import 'package:meta/meta.dart';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:universal_io/io.dart';
 
 import 'http2_header_block_guard.dart';

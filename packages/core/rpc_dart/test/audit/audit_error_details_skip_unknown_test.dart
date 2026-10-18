@@ -13,7 +13,7 @@
 // Fix: _skipField advances past unknown varint/64-bit/length-delimited/32-bit
 // fields so subsequent known fields are still decoded.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 void main() {

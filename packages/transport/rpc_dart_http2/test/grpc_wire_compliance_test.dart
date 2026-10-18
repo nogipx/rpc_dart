@@ -5,7 +5,7 @@
 import 'dart:convert';
 
 import 'package:http2/http2.dart' as http2;
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_http2/src/transports/http2/rpc_http2_common.dart';
 import 'package:test/test.dart';
 

@@ -23,7 +23,7 @@
 // demands this: "must leave parity intact". The constructor is reachable
 // through `RpcChannelTransport.fromChannel(resumeStreamIdsAfter:)`.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 List<int> _firstThree(RpcStreamIdManager m) => [

@@ -15,7 +15,7 @@
 // in-memory pair, the endpoint layer's share of a round trip went 165us -> 138us
 // once the responder stopped minting an id it was about to have handed to it.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

@@ -21,7 +21,7 @@
 // interceptor asks the transport first; a fake here has to answer that
 // question honestly or it is not the situation being measured.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Counts reconnects and reports whether the "connection" is up.

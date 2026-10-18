@@ -7,7 +7,7 @@
 // message is not copied again. Once only: a frame sent twice must not have its
 // first header overwritten.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 void main() {

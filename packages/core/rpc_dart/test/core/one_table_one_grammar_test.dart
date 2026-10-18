@@ -16,7 +16,7 @@
 //    raising the knob past 512 changed nothing because the responder refused
 //    afterwards. A setting that silently ignored half its range.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 void main() {

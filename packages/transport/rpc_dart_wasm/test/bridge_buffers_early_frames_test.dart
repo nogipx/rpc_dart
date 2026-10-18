@@ -31,7 +31,7 @@
 // the CLIENT sending showed no difference at all.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 import 'support/fake_wasm_bridge.dart';

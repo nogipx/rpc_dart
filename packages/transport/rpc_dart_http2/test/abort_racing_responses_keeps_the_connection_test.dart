@@ -131,24 +131,27 @@ void main() {
     required bool abort,
     required bool settle,
   }) async {
+    // The caller sends one request at a time and pulls the next only once the
+    // send completed, so the error below follows both sends, as an abort right
+    // after them. An erroring request stream is what aborts the call.
+    Stream<RpcString> requests() async* {
+      yield 'a'.rpc;
+      yield 'b'.rpc;
+      if (settle) await Future<void>.delayed(const Duration(milliseconds: 30));
+      if (abort) throw StateError('test');
+    }
+
     final pings = <String>[];
     for (var i = 0; i < calls; i++) {
-      final c = BidirectionalStreamCaller<RpcString, RpcString>(
-        transport: client,
-        serviceName: 'Svc',
-        methodName: method,
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
-      c.responses.listen((_) {}, onError: (Object _) {});
-      await c.send('a'.rpc);
-      await c.send('b'.rpc);
-      if (settle) await Future<void>.delayed(const Duration(milliseconds: 30));
-      if (abort) {
-        await c.abort('test');
-      } else {
-        await c.finishSending();
-      }
+      caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: method,
+            requests: requests(),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .listen((_) {}, onError: (Object _) {});
       await Future<void>.delayed(const Duration(milliseconds: 30));
       pings.add(await ping());
     }

@@ -24,7 +24,7 @@
 // all, because the caller's own `x-request-id` does not fit either. A cap that
 // blocks ordinary traffic is a configuration error, not this behaviour.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

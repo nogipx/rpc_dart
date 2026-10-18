@@ -3,5 +3,6 @@
 //
 // SPDX-License-Identifier: MIT
 
+export 'drain.dart';
 export 'grpc_health.dart';
 export 'rpc_server_interface.dart';
