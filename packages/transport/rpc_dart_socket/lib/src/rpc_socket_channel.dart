@@ -238,15 +238,20 @@ class RpcSocketChannel implements IRpcChannel {
     unawaited(close());
   }
 
+  /// Frames of one event-loop turn go out as one write, see
+  /// [RpcWriteCoalescer].
+  late final RpcWriteCoalescer _writes = RpcWriteCoalescer(_out.add);
+
   @override
   Future<void> send(Uint8List data) async {
     if (_closed) return;
-    _out.add(data);
+    _writes.add(data);
   }
 
   @override
   Future<void> close() async {
     if (_closed) return;
+    _writes.flush();
     _closed = true;
     _prefaceTimer?.cancel();
     if (!_ready.isCompleted) {

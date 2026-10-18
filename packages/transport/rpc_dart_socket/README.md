@@ -152,5 +152,6 @@ same address, would look exactly like an idle server.
   of stream. A TCP path through a NAT or a load balancer can, and then a call on
   it hangs until its deadline. Give calls deadlines.
 - **No TLS.** Use TCP only on a network you trust, or put the link inside one.
-- **TCP_NODELAY is on** for TCP sockets: rpc_dart writes one frame per send, and
-  Nagle's algorithm would hold a small request back for a round trip.
+- **TCP_NODELAY is on** for TCP sockets: rpc_dart writes the frames of one
+  event-loop turn together and then at once, and Nagle's algorithm would hold
+  a small request back for a round trip.
