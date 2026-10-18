@@ -333,24 +333,12 @@ class RpcApp {
     }
 
     final endpointHealth = <Map<String, Object?>>[];
+    var level = appLevelOf(moduleHealth);
     for (final endpoint
         in _server?.endpoints ?? const <RpcResponderEndpoint>[]) {
       endpointHealth.add(endpoint.collectEndpointMetrics());
-    }
-
-    var level = appLevelOf(moduleHealth);
-
-    // Factor endpoint health into the overall level. A closed/inactive endpoint
-    // means the app cannot serve through it, so it degrades to unhealthy.
-    if (level != RpcAppHealthLevel.unhealthy) {
-      for (final metrics in endpointHealth) {
-        final isActive = metrics['isActive'] == true;
-        final transportClosed = metrics['transportClosed'] == true;
-        if (!isActive || transportClosed) {
-          level = RpcAppHealthLevel.unhealthy;
-          break;
-        }
-      }
+      final endpointLevel = appLevelOfEndpoint(await endpoint.health());
+      if (endpointLevel.index > level.index) level = endpointLevel;
     }
 
     return RpcAppHealth(

@@ -32,6 +32,24 @@ RpcAppHealthLevel appLevelOf(Map<String, Map<String, Object?>> moduleHealth) {
   return level;
 }
 
+/// The app level one endpoint's [report] stands for.
+///
+/// Read from the typed report, so a reconnecting or degraded transport
+/// degrades the app. An endpoint whose transport is closed cannot serve, so it
+/// counts as unhealthy, although the endpoint itself reports degraded.
+RpcAppHealthLevel appLevelOfEndpoint(RpcEndpointHealth report) {
+  if (report.transportStatus?.level == RpcHealthLevel.closed) {
+    return RpcAppHealthLevel.unhealthy;
+  }
+  return switch (report.endpointStatus.level) {
+    RpcHealthLevel.healthy => RpcAppHealthLevel.healthy,
+    RpcHealthLevel.degraded ||
+    RpcHealthLevel.reconnecting => RpcAppHealthLevel.degraded,
+    RpcHealthLevel.unhealthy ||
+    RpcHealthLevel.closed => RpcAppHealthLevel.unhealthy,
+  };
+}
+
 /// Topological sort of [modules] by [RpcModule.dependencies] (Kahn's algorithm).
 ///
 /// Throws [StateError] on circular dependencies or missing dependency types.

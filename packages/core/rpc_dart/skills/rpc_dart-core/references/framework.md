@@ -211,9 +211,11 @@ is rethrown. `onCall` gets an `RpcCallEvent` (`serviceName`, `methodName`,
 `callType`, `duration`, `success`, `error`, `context`) after each call.
 
 `await app.health()` returns `RpcAppHealth`. The level is the worst over the
-modules, where a module's `closed` counts as `unhealthy` and `reconnecting` as
-`degraded`, and `unhealthy` when any server endpoint is inactive or its
-transport closed. Serve `toJson()` from a health check.
+modules and the server endpoints. A `closed` module or endpoint counts as
+`unhealthy` and a `reconnecting` one as `degraded`; each endpoint reads its
+`endpoint.health()`, so a degraded or reconnecting transport degrades the app,
+and a closed transport makes it `unhealthy`. Serve `toJson()` from a health
+check.
 
 ## Isolate modules
 
