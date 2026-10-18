@@ -24,9 +24,8 @@ final class RpcContext {
 
   /// Unique request ID.
   ///
-  /// EAGER on purpose. Lazy looks like free savings — a token costs three
-  /// `Random.secure()` draws — but a lazy field copies as UNSET, so every `withX`
-  /// copy would generate an id of its own and the caller's context would disagree
+  /// EAGER on purpose. A lazy field copies as UNSET, so every `withX` copy
+  /// would generate an id of its own and the caller's context would disagree
   /// with what it sent. The cheap version is passing the id in at construction,
   /// which [RpcContext.withHeaders] allows.
   final String requestId;
@@ -63,9 +62,7 @@ final class RpcContext {
   /// Creates a context with headers.
   ///
   /// [requestId] lets a responder adopt the id the caller sent WITHOUT minting
-  /// one first: a token is three `Random.secure()` draws (~38us measured), and
-  /// building one only to overwrite it was a third of the tokens a unary call
-  /// spent.
+  /// one first.
   factory RpcContext.withHeaders(
     Map<String, String> headers, {
     String? requestId,
@@ -319,10 +316,12 @@ final class RpcContext {
   static int _idCounter = 0;
 
   /// The strong generator, created ONCE, so the `try` stays off the hot path.
+  /// It seeds the token generator, see [_tokenRng]; tokens never come from it
+  /// directly.
   ///
   /// **Null on any node runtime**, not just the test runner: `Random.secure()`
   /// throws `UnknownJsTypeError` there, while the VM and Chrome both provide it.
-  /// Every token on node therefore comes from a NON-CRYPTOGRAPHIC generator.
+  /// Every token on node therefore comes from an unseeded default [Random].
   ///
   /// That is acceptable for what these ids are — correlation in logs and on the
   /// wire, never secrets or capability tokens — and recorded so nobody builds
@@ -339,6 +338,33 @@ final class RpcContext {
 
   static final Random _fallbackRng = Random();
 
+  /// The generator tokens are drawn from: a fast [Random] that [_strongRng]
+  /// reseeds every [_tokensPerSeed] tokens.
+  ///
+  /// `Random.secure().nextInt()` reaches the system entropy source on every
+  /// call, and every call spends at least one token, so drawing tokens from it
+  /// directly was most of an RPC's CPU time. These ids are correlation, not
+  /// secrets (see [_strongRng]); the strong seed keeps them unguessable to a
+  /// peer that sees only the ids.
+  static Random _tokenRng() {
+    final strong = _strongRng;
+    if (strong == null) return _fallbackRng;
+    var rng = _seededRng;
+    if (rng == null || ++_tokensSinceSeed >= _tokensPerSeed) {
+      _tokensSinceSeed = 0;
+      // 53 bits: a larger seed is not exact on the web.
+      final seed =
+          (strong.nextInt(1 << 21) * _randomWordMax) +
+          strong.nextInt(_randomWordMax);
+      rng = _seededRng = Random(seed);
+    }
+    return rng;
+  }
+
+  static Random? _seededRng;
+  static int _tokensSinceSeed = 0;
+  static const int _tokensPerSeed = 1024;
+
   /// `1 << 32`, written as a literal ON PURPOSE: dart2js shifts are 32-bit, so
   /// `1 << 32` evaluates to 0 there and `nextInt(0)` throws.
   static const int _randomWordMax = 4294967296;
@@ -346,18 +372,14 @@ final class RpcContext {
   /// A 16-byte url-safe token, unique even where [Random.secure] is missing and
   /// a default [Random] may repeat within one millisecond.
   ///
-  /// The first 12 bytes are random — unpredictable where a strong RNG exists,
-  /// see [_strongRng] — and the last 4 carry a process-wide monotonic counter,
-  /// so two tokens never collide whatever the generator.
+  /// The first 12 bytes are random, from [_tokenRng], and the last 4 carry a
+  /// process-wide monotonic counter, so two tokens never collide whatever the
+  /// generator.
   static String _uniqueToken() {
     final bytes = Uint8List(16);
     final view = ByteData.view(bytes.buffer);
-    final rng = _strongRng ?? _fallbackRng;
+    final rng = _tokenRng();
 
-    // THREE draws of 32 bits, not twelve of 8: the same 96 bits from the same
-    // generator, in a quarter of the time. `Random.secure().nextInt()` reaches
-    // the system entropy source on EVERY call, and a unary call spends three
-    // tokens, so the per-byte form cost the majority of an RPC's total time.
     view.setUint32(0, rng.nextInt(_randomWordMax));
     view.setUint32(4, rng.nextInt(_randomWordMax));
     view.setUint32(8, rng.nextInt(_randomWordMax));
@@ -552,11 +574,9 @@ abstract final class RpcContextUtils {
 
   /// Generates a new, unique trace ID.
   ///
-  /// Uses cryptographically strong randomness (with a seeded fallback for
-  /// platforms where [Random.secure] is unavailable) so that ids generated
-  /// within the same millisecond are still unique. The previous deterministic
-  /// `timestamp * 31 + 17` derivation produced identical ids under concurrency,
-  /// corrupting distributed-trace correlation.
+  /// Random bits from a strongly seeded generator plus a process-wide counter,
+  /// so ids generated within the same millisecond, or concurrently, are still
+  /// unique. See [_uniqueToken].
   static String generateTraceId() => 'trace_${RpcContext._uniqueToken()}';
 
   /// Merges several contexts (the right one takes precedence).

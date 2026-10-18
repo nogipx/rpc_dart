@@ -196,5 +196,6 @@ incoming one (use `forward`). It contains:
 - A misspelled header name with a space or other invalid character disappears without an error.
   Check `ctx.headers` if a header seems to be missing.
 - `withValue` data never reaches the peer. To send a value, put it in a header.
-- `requestId` comes from a non-cryptographic generator on Node. Never use it
+- `requestId` comes from a non-cryptographic generator: seeded from
+  `Random.secure()` on the VM and in browsers, unseeded on Node. Never use it
   as a secret.
