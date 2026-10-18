@@ -309,6 +309,12 @@ melos:
         # compile/load failure. Force IPv4 so the guard is deterministic.
         export NODE_OPTIONS=--dns-result-order=ipv4first
         web() { (cd "$1" && fvm dart test -p node ${2:-}); }
+        # A whole suite runs as four aggregate entry points, not file by
+        # file: dart2js recompiles the library for every entry point.
+        web_all() {
+          fvm dart run tool/web_aggregate.dart "$1" 4
+          (cd "$1" && fvm dart test -p node -j 4 .dart_tool/web_aggregate)
+        }
         # The dart2js COMPILE runs FIRST, before any suite. It is deterministic,
         # takes ~2 s, needs no network or browser, and it is the only step here
         # that checks LIBRARY code against the JS interop rules -- everything
@@ -322,9 +328,9 @@ melos:
         # compile at all.
         (cd packages/transport/rpc_dart_isolate \
           && fvm dart compile js test/web_worker/echo_worker.dart -o test/web_worker/echo_worker.dart.js)
-        web packages/core/rpc_dart
-        web packages/core/rpc_dart_compression
-        web packages/core/rpc_dart_grpc_reflection
+        web_all packages/core/rpc_dart
+        web_all packages/core/rpc_dart_compression
+        web_all packages/core/rpc_dart_grpc_reflection
         web packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
         web packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
         web packages/transport/rpc_dart_http test/web_smoke_test.dart

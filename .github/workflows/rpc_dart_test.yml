@@ -95,9 +95,17 @@ jobs:
             (cd "$1" && fvm dart test -p node ${2:-})
             echo "::endgroup::"
           }
-          web_test packages/core/rpc_dart
-          web_test packages/core/rpc_dart_compression
-          web_test packages/core/rpc_dart_grpc_reflection
+          # A whole suite runs as four aggregate entry points, not file by
+          # file: dart2js recompiles the library for every entry point.
+          web_all() {
+            echo "::group::node: $1 (aggregated)"
+            fvm dart run tool/web_aggregate.dart "$1" 4
+            (cd "$1" && fvm dart test -p node -j 4 .dart_tool/web_aggregate)
+            echo "::endgroup::"
+          }
+          web_all packages/core/rpc_dart
+          web_all packages/core/rpc_dart_compression
+          web_all packages/core/rpc_dart_grpc_reflection
           web_test packages/core/rpc_dart_opentelemetry test/web_smoke_test.dart
           web_test packages/transport/rpc_dart_websocket test/websocket_web_smoke_test.dart
           web_test packages/transport/rpc_dart_http test/web_smoke_test.dart
