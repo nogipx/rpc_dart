@@ -68,7 +68,12 @@ Future<_Rig> _rig({int? maxAttempts}) async {
   final http = await HttpServer.bind('127.0.0.1', 0);
   http.transform(WebSocketTransformer()).listen((ws) {
     sockets.add(ws);
-    if (!connCtl.isClosed) connCtl.add(IOWebSocketChannel(ws));
+    // Built in a guarded zone: dropSockets closes these behind their
+    // channels, and a write the channel had queued is then refused in the
+    // zone the socket was built in (see RpcWebSocketChannel).
+    runZonedGuarded(() {
+      if (!connCtl.isClosed) connCtl.add(IOWebSocketChannel(ws));
+    }, (_, _) {});
   });
   final server = RpcWebSocketServer.createWithContracts(
     connections: connCtl.stream,

@@ -2,24 +2,22 @@
 //
 // SPDX-License-Identifier: MIT
 
-// CHARACTERISATION, not a fix. `RpcWebSocketChannel.send` guards on `_closed`,
-// which is OUR flag; in the one event-loop turn between the raw socket closing
-// and `onDone` being delivered, the guard reads false and `_ws.sink.add` goes
-// to a sink that refuses it.
+// CHARACTERISATION, not a fix. `RpcWebSocketChannel.send` queues a frame for
+// a write on the next event-loop turn. If the raw socket is closed behind the
+// channel before that write, `_ws.sink.add` goes to a sink that refuses it.
 //
-// The refusal is NOT on the caller's stack. WebSocketSink.add hands the bytes
-// to a StreamController and the real sendBytes runs a microtask later, inside
-// the zone that controller was BUILT in:
+// The refusal is NOT on the writer's stack. WebSocketSink.add hands the bytes
+// to a listener that runs inside the zone the socket was BUILT in:
 //
 //   _StreamSinkImpl.add            <- throws Bad state: StreamSink is closed
 //   IOWebSocket.sendBytes
 //   AdapterWebSocketChannel...
 //   _RootZone.runUnaryGuarded      <- the root zone, if built there
 //   ...
-//   RpcWebSocketChannel.send
+//   RpcWriteCoalescer.flush
 //
-// So a try/catch around `sink.add` catches nothing -- measured, it does not
-// change the outcome -- and in the root zone the throw is fatal to the isolate.
+// So a try/catch around `sink.add` catches nothing, and in the root zone the
+// throw is fatal to the isolate.
 //
 // What these tests pin is the one thing a fix could rest on: the CONSTRUCTION
 // zone decides where that throw lands. See B-39 for the decision this needs.
@@ -66,8 +64,8 @@ Future<_Rig> _rig({void Function(Object)? onZoneError}) async {
 }
 
 void main() {
-  // The defect, contained. Closing the raw socket behind the channel and
-  // sending in the SAME turn makes the sink refuse the bytes; the refusal
+  // The defect, contained. Closing the raw socket behind the channel after a
+  // send and before its write makes the sink refuse the bytes; the refusal
   // arrives in the zone the WebSocketChannel was constructed in.
   //
   // Unzoned, this same sequence is an unhandled root-zone error, which ends the
@@ -79,9 +77,9 @@ void main() {
       final zoneErrors = <Object>[];
       final rig = await _rig(onZoneError: zoneErrors.add);
 
-      await rig.ours.close();
-      // No await between the close and the send: the whole window is one turn.
       await rig.channel.send(Uint8List.fromList([1, 2, 3]));
+      // In the same turn as the send, before the write goes out.
+      unawaited(rig.ours.close());
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
       expect(

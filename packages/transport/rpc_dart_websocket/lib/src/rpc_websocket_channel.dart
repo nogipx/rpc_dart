@@ -79,25 +79,17 @@ class RpcWebSocketNonBinaryFrame extends RpcException
 /// ```
 ///
 /// **Do not close the socket you passed in while calls are in flight — closing
-/// it out from under this channel can end the isolate.** `WebSocketSink.add`
-/// queues into a `StreamController` and the real send runs a microtask later,
-/// in the zone the socket was CONSTRUCTED in. Close the raw socket in the same
-/// turn as a send and that send throws `Bad state: StreamSink is closed` there,
-/// where no caller can catch it: an unhandled async error, which in the root
-/// zone takes the process with it.
+/// it out from under this channel can end the isolate.** Frames go out on a
+/// zero-duration timer, joined (see [RpcWriteCoalescer]), and
+/// `WebSocketSink.add` hands them to a listener that runs in the zone the
+/// socket was CONSTRUCTED in. Close the raw socket after a send and before
+/// that timer, and the write throws `Bad state: StreamSink is closed` there,
+/// where nothing here can catch it: an unhandled async error, which in the
+/// root zone takes the process with it. A peer close, or this channel's own
+/// [close], does not do this.
 ///
-/// Measured, one variable per row — only the last reaches it:
-///
-/// ```
-/// peer closed, same turn / +1 turn / +50ms      send returned
-/// our close() first                             send returned
-/// the raw socket, closed behind this channel    send returned
-/// the raw socket, closed in the SAME turn       ROOT-ZONE CRASH
-/// ```
-///
-/// Neither `isClosed` nor `closeCode` can see it: within that one turn nothing
-/// observable has changed. So this cannot be guarded here, and a `try`/`catch`
-/// around the send does not help — the throw is not on the caller's stack.
+/// Neither `isClosed` nor `closeCode` can see it in that window, so this
+/// cannot be guarded here.
 ///
 /// Two ways to be safe. Call [close] and let it close the socket, which sets the
 /// flag first and is why every library teardown path is unaffected. Or, if you
@@ -203,6 +195,8 @@ class RpcWebSocketChannel
             ),
           );
         }
+        // The socket is gone: what is still queued has nowhere to go.
+        _writes.discard();
         if (!_closed) close();
       },
     );
@@ -230,15 +224,25 @@ class RpcWebSocketChannel
   @override
   Stream<Uint8List> get incoming => _incoming.stream;
 
+  /// Frames of one event-loop turn go out as one WebSocket message. Each
+  /// message costs a write and, from a client, a masking key drawn from the
+  /// system entropy source; the frame decoder takes several frames a message.
+  late final RpcWriteCoalescer _writes = RpcWriteCoalescer(_ws.sink.add);
+
   @override
   Future<void> send(Uint8List data) async {
     if (_closed) return;
-    // NOT batched, though the wire format allows it: a microtask buffer merges
-    // nothing, because the sender awaits between frames and the microtask
-    // drains before the next one arrives. A timer WOULD merge them, at the
-    // price of delaying every lone frame a full event-loop turn -- the wrong
-    // trade on a latency-sensitive unary path.
-    _ws.sink.add(data);
+    _writes.add(data);
+  }
+
+  /// Writes what is queued before a close. A sink someone else closed
+  /// refuses synchronously, and there is nothing left to deliver then.
+  void _flushBeforeClose() {
+    try {
+      _writes.flush();
+    } on StateError {
+      _writes.discard();
+    }
   }
 
   /// Close code for a framing violation by the peer.
@@ -289,6 +293,7 @@ class RpcWebSocketChannel
 
   Future<void> _closeWithCode(int code, String reason) async {
     if (_closed) return;
+    _flushBeforeClose();
     _closed = true;
     await _sub.cancel();
     await _closeSink(() async {
@@ -326,6 +331,7 @@ class RpcWebSocketChannel
   @override
   Future<void> close() async {
     if (_closed) return;
+    _flushBeforeClose();
     _closed = true;
     await _sub.cancel();
     await _closeSink(() async => _ws.sink.close());
