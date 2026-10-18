@@ -8,3 +8,4 @@ export 'drain.dart';
 export 'grpc_health.dart';
 export 'rpc_server_interface.dart';
 export 'write_backlog.dart';
+export 'write_coalescer.dart';

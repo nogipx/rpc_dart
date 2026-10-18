@@ -268,7 +268,8 @@ application library and adds channels, frames, the message parser and router,
 the transport capability interfaces, the status trailers a transport builds
 (`RpcTrailers`), and the server's shared parts: `RpcConnectionHost` for one
 endpoint per connection, `RpcWriteBacklog` to stop reading a peer that reads
-nothing, and the drain helpers. A server on a `dart:io` socket also imports
+nothing, `RpcWriteCoalescer` to join the frames of one event-loop turn into
+one write, and the drain helpers. A server on a `dart:io` socket also imports
 `package:rpc_dart/transport_io.dart`, whose `RpcHeaderBoundedServerSocket`
 bounds an HTTP request's header block in bytes and time.
 

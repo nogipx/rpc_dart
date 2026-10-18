@@ -49,9 +49,10 @@ export 'src/_index.dart'
         // Ping, for a transport that probes a half-open path itself
         RpcEndpointPingExchange,
         RpcEndpointPingProtocol,
-        // Server connections, write backlog and drain
+        // Server connections, writes and drain
         RpcConnectionHost,
         RpcWriteBacklog,
+        RpcWriteCoalescer,
         drainUntilIdle,
         inFlightResponderCalls,
         notifyWithoutDying;

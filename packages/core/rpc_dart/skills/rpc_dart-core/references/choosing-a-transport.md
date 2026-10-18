@@ -59,7 +59,7 @@ Notes:
 
 `IRpcChannel` and the other transport-authoring types (frames, the message
 parser, the flow-control interfaces, `RpcTrailers`, `RpcConnectionHost`,
-`RpcWriteBacklog`) are not in `rpc_dart.dart`. Import
+`RpcWriteBacklog`, `RpcWriteCoalescer`) are not in `rpc_dart.dart`. Import
 `package:rpc_dart/transport.dart`, which re-exports `rpc_dart.dart`. The
 `dart:io`-only `RpcHeaderBoundedServerSocket` is in
 `package:rpc_dart/transport_io.dart`.

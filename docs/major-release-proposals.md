@@ -321,7 +321,30 @@ unary call went from 34.6 to 23.9 us on the caller and from 44.3 to 30.5 us
 on the responder. It is rpc_dart's own format, as the JSON was: gRPC
 interoperability is `rpc_dart_http2` and `rpc_dart_http`. A new peer does not
 talk to an old one over these transports, which also retires the
-flow-control fallbacks for peers that predate grants.
+flow-control fallbacks for peers that predate grants. The socket preface
+version is 2.
+
+**Frames of one event-loop turn are one write** (`RpcWriteCoalescer`, in
+`transport.dart`; websocket and socket channels). A unary call wrote 7
+WebSocket messages, each a write and, from a client, a masking key from the
+system entropy source. Flushed on a zero-duration timer, since a sender
+awaits between its frames. Median per call over loopback:
+
+| Transport | Sequential | 20 concurrent |
+|---|---|---|
+| websocket | 690 -> 484 us | 9.6 -> 1.66 ms |
+| TCP socket | 470 -> 320 us | 4.1 -> 1.2 ms |
+| unix socket | 73 -> 90 us | 1.0 -> 0.74 ms |
+
+The sequential unix-socket call pays the timer turn; the owner accepted that
+(2026-10-19). Writing to a raw socket closed behind its WebSocket channel
+(B-39) now throws for a close between a send and the next turn, rather than
+in the same turn.
+
+Next: the per-stream window grants. Each side sends one on first sight of a
+stream, 2 of the 7 messages, and a unary stream ends before either is used.
+An initial per-stream window announced once per connection, as HTTP/2's
+SETTINGS does, removes them; the legacy-peer grace and seeding go with it.
 
 ## 5. Contracts, context, registration
 
