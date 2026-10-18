@@ -52,7 +52,9 @@ void main() {
       host: '127.0.0.1',
       port: 0,
       logger: controller.scope('test.server'),
-      onEndpointCreated: (endpoint) => endpoint.registerServiceContract(_Svc()),
+      mode: RpcResponderMode(
+        (endpoint) => endpoint.registerServiceContract(_Svc()),
+      ),
     );
     await server.start();
     addTearDown(server.stop);
@@ -116,7 +118,9 @@ void main() {
       host: '127.0.0.1',
       port: 0,
       logger: controller.scope('test.server', tag: 'verbose'),
-      onEndpointCreated: (endpoint) => endpoint.registerServiceContract(_Svc()),
+      mode: RpcResponderMode(
+        (endpoint) => endpoint.registerServiceContract(_Svc()),
+      ),
     );
     await server.start();
     addTearDown(server.stop);

@@ -75,7 +75,7 @@ Future<_Rig> _serve({required int maxMessageBytes}) async {
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(http),
     policy: RpcSecurityPolicy(maxMessageLengthBytes: maxMessageBytes),
-    onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
   );
   await server.start();
   addTearDown(() async {

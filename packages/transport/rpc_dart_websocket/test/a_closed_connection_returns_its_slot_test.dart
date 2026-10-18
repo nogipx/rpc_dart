@@ -44,7 +44,7 @@ Future<int> _serve({required int maxConnections}) async {
       io,
       pingInterval: const Duration(milliseconds: 200),
     ),
-    onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
   );
   await server.start();
   addTearDown(() async {

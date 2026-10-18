@@ -80,7 +80,7 @@ void main() {
               ? CompressionOptions.compressionDefault
               : CompressionOptions.compressionOff,
         ),
-        onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
       );
       await server.start();
       addTearDown(() async {

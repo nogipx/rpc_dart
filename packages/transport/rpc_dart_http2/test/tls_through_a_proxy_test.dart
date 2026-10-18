@@ -122,7 +122,7 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         securityContext: serverContext,
-        onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
       );
       await server.start();
       final proxy = await _proxy(server.port);

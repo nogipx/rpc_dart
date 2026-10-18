@@ -96,7 +96,7 @@ Future<_Rig> _connect({RpcSecurityPolicy policy = _clientPolicy}) async {
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(http),
     policy: _serverPolicy,
-    onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
   );
   await server.start();
 

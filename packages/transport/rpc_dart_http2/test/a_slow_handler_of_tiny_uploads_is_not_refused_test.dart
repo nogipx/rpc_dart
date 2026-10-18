@@ -61,7 +61,7 @@ void main() {
         // 20000 messages of 2 payload bytes are 40 KB by payload, inside this
         // bound, and 2.6 MB with a 128-byte charge each, far past it.
         securityPolicy: const RpcSecurityPolicy(maxBufferedBytes: 256 * 1024),
-        onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
       );
       await server.start();
       final caller = RpcCallerEndpoint(

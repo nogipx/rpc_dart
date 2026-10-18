@@ -68,8 +68,9 @@ Future<String> _requestInFlightThenStop({
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: port,
-    onEndpointCreated: (e) =>
-        e.registerServiceContract(_SlowContract(handlerTakes)),
+    mode: RpcResponderMode(
+      (e) => e.registerServiceContract(_SlowContract(handlerTakes)),
+    ),
   );
   await server.start();
   await server.afterModulesStart();

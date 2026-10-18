@@ -121,7 +121,7 @@ void main() {
     http = await HttpServer.bind('127.0.0.1', 0);
     server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onEndpointCreated: (e) => e.registerServiceContract(_Deaf()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Deaf())),
     );
     await server.start();
   });

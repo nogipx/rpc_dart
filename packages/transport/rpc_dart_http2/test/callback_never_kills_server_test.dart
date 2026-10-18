@@ -24,7 +24,7 @@
 // on close throws `OS Error 22` on its own, because the peer is already gone --
 // which is how this was found.
 //
-// The guard is NOT applied to onEndpointCreated: that registers the contracts,
+// The guard is NOT applied to the mode's register: that registers the contracts,
 // so if it fails the connection is useless, and the existing try/catch reports
 // it and destroys the socket. Swallowing there would start an endpoint serving
 // nothing. The last test pins that distinction.
@@ -107,7 +107,7 @@ void main() {
           host: '127.0.0.1',
           port: 0,
           onConnectionOpened: (_) => throw StateError('callback failed'),
-          onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+          mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
         );
         await server.start();
         await exchange(server);
@@ -130,7 +130,7 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         onConnectionOpened: (_) => throw StateError('callback failed'),
-        onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
       );
       await server.start();
 
@@ -150,7 +150,7 @@ void main() {
             // ignore: unused_local_variable
             final port = socket.remotePort;
           },
-          onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+          mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
         );
         await server.start();
         await exchange(server);
@@ -163,33 +163,30 @@ void main() {
   });
 
   group('endpoint setup is deliberately not guarded', () {
-    // GUARD: a failing onEndpointCreated must still fail the CONNECTION --
+    // GUARD: a failing register must still fail the CONNECTION --
     // swallowing it would serve an endpoint with no contracts registered.
-    test(
-      'a throwing onEndpointCreated fails the call, not the process',
-      () async {
-        late RpcHttp2Server server;
-        String? result;
-        final escaped = await escapedErrors(() async {
-          server = RpcHttp2Server(
-            host: '127.0.0.1',
-            port: 0,
-            onEndpointCreated: (_) => throw StateError('setup failed'),
-          );
-          await server.start();
-          result = await exchange(server);
-        });
-        await server.stop();
-
-        expect(escaped, 0, reason: 'it must not reach the zone either');
-        expect(
-          result,
-          isNull,
-          reason:
-              'the call should fail: the endpoint never registered a contract, '
-              'so serving it would be worse than refusing',
+    test('a throwing register fails the call, not the process', () async {
+      late RpcHttp2Server server;
+      String? result;
+      final escaped = await escapedErrors(() async {
+        server = RpcHttp2Server(
+          host: '127.0.0.1',
+          port: 0,
+          mode: RpcResponderMode((_) => throw StateError('setup failed')),
         );
-      },
-    );
+        await server.start();
+        result = await exchange(server);
+      });
+      await server.stop();
+
+      expect(escaped, 0, reason: 'it must not reach the zone either');
+      expect(
+        result,
+        isNull,
+        reason:
+            'the call should fail: the endpoint never registered a contract, '
+            'so serving it would be worse than refusing',
+      );
+    });
   });
 }

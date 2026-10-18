@@ -11,8 +11,8 @@
 // orphaned, since _respIncomingSub only remembers the second.
 //
 // Not hypothetical. RpcHttp2Server calls endpoint.start() itself right after
-// onEndpointCreated, and both shipped rpc_dart_grpc_reflection examples call
-// start() inside that callback, so the framework's own documented wiring
+// the mode's register, and both shipped rpc_dart_grpc_reflection examples call
+// start() inside that register, so the framework's own documented wiring
 // produced the double subscribe.
 //
 // Found with grpcurl -- a real gRPC client -- against an HTTP/2 server serving

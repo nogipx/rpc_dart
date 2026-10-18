@@ -300,12 +300,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     bool Function(RpcTransportMessage)? messageFilter,
   }) async {
     if (_respIsListening) {
-      // Starting twice is ORDINARY, not a mistake: `RpcWebSocketServer` calls
-      // `onEndpointCreated` and then `start()`, and the framework's callback
-      // registers the contracts and starts it too — so every connection took
-      // this branch. Measured on a consumer's two replicas: 704 and 698 of
-      // these warnings in 24 h, against 6 and 34 lines of real error, which is
-      // the ratio that makes a log unreadable during an incident.
+      // Starting twice is ORDINARY, not a mistake: a server runs the mode's
+      // register and then `start()`, and the framework's register starts the
+      // endpoint too, so every connection takes this branch. A warning here
+      // would fire once per connection.
       //
       // What IS a mistake is a second call asking for a DIFFERENT filter: the
       // first one stays, so the caller silently does not get the filtering it

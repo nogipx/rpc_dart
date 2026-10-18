@@ -42,7 +42,9 @@ Future<String> _send({RpcSecurityPolicy? connectionsPolicy}) async {
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(http, policy: connectionsPolicy),
     policy: _raised,
-    onEndpointCreated: (endpoint) => endpoint.registerServiceContract(_Echo()),
+    mode: RpcResponderMode(
+      (endpoint) => endpoint.registerServiceContract(_Echo()),
+    ),
   );
   await server.start();
   addTearDown(() async {

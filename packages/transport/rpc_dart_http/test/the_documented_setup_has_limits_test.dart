@@ -125,10 +125,10 @@ void main() {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (endpoint) {
+      mode: RpcResponderMode((endpoint) {
         endpoint.registerServiceContract(_Echo());
         endpoint.start();
-      },
+      }),
     );
     await server.start();
     await server.afterModulesStart();

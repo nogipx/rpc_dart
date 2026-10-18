@@ -12,6 +12,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 import 'package:test/test.dart';
 
@@ -104,7 +105,10 @@ void main() {
     final address = RpcSocketAddress.unix(tempSocketPath());
     await serveEcho(address);
 
-    final intruder = RpcSocketServer(address: address);
+    final intruder = RpcSocketServer(
+      address: address,
+      mode: RpcResponderMode((_) {}),
+    );
     await expectLater(intruder.start(), throwsA(isA<SocketException>()));
     expect(intruder.isRunning, isFalse);
 
@@ -132,7 +136,7 @@ void main() {
     final address = RpcSocketAddress.unix(path);
     await serveEcho(address);
     await expectLater(
-      RpcSocketServer(address: address).start(),
+      RpcSocketServer(address: address, mode: RpcResponderMode((_) {})).start(),
       throwsA(isA<SocketException>()),
     );
 
@@ -146,7 +150,10 @@ void main() {
     final path = tempSocketPath();
     File(path).writeAsStringSync('somebody else');
 
-    final server = RpcSocketServer(address: RpcSocketAddress.unix(path));
+    final server = RpcSocketServer(
+      address: RpcSocketAddress.unix(path),
+      mode: RpcResponderMode((_) {}),
+    );
     await expectLater(server.start(), throwsA(isA<SocketException>()));
     expect(File(path).readAsStringSync(), 'somebody else');
 
@@ -161,7 +168,10 @@ void main() {
     final path = tempSocketPath();
     final obstacle = Directory('$path.lock')..createSync();
 
-    final server = RpcSocketServer(address: RpcSocketAddress.unix(path));
+    final server = RpcSocketServer(
+      address: RpcSocketAddress.unix(path),
+      mode: RpcResponderMode((_) {}),
+    );
     await expectLater(server.start(), throwsA(isA<SocketException>()));
     expect(server.isRunning, isFalse);
     expect(_isSocket(path), isFalse);

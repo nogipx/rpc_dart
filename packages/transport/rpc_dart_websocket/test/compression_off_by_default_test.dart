@@ -94,7 +94,7 @@ void main() {
       http = await HttpServer.bind('127.0.0.1', 0);
       server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (e) {},
+        mode: RpcResponderMode((e) {}),
       );
       await server.start();
 
@@ -132,7 +132,7 @@ void main() {
           http,
           compression: CompressionOptions.compressionDefault,
         ),
-        onEndpointCreated: (e) {},
+        mode: RpcResponderMode((e) {}),
       );
       await server.start();
 
@@ -153,7 +153,9 @@ void main() {
       http = await HttpServer.bind('127.0.0.1', 0);
       server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (e) => e.registerServiceContract(_EchoContract()),
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_EchoContract()),
+        ),
       );
       await server.start();
 

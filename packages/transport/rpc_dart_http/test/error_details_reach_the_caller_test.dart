@@ -58,10 +58,10 @@ Future<({RpcStatusException error, int calls})> _call(String method) async {
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
-    onEndpointCreated: (e) {
+    mode: RpcResponderMode((e) {
       e.registerServiceContract(_Svc(() => calls++));
       e.start();
-    },
+    }),
   );
   await server.start();
   await server.afterModulesStart();

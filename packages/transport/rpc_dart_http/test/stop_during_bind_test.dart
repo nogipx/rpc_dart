@@ -12,6 +12,7 @@ library;
 
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:test/test.dart';
 
@@ -38,7 +39,7 @@ void main() {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: port,
-      onEndpointCreated: (_) {},
+      mode: RpcResponderMode((_) {}),
     );
     addTearDown(server.stop);
     await server.start();

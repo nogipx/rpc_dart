@@ -177,7 +177,7 @@ Future<_Run> _run(
       final built = <RpcPeerEndpoint>[];
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onPeerEndpointCreated: built.add,
+        mode: RpcPeerMode(built.add),
       );
       await server.start();
 

@@ -47,7 +47,7 @@ Future<HttpServer> _serve({
   );
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(io),
-    onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
   );
   await server.start();
   addTearDown(() async {

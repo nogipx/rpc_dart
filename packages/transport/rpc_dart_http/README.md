@@ -112,8 +112,8 @@ created itself. Close your own client when you are done with it.
 
 `RpcHttpServer` starts in two phases, so that a DI container can be filled
 between them. `start()` creates the transport. `afterModulesStart()` creates
-the endpoint, calls `onEndpointCreated`, and binds the port. Without the second
-call nothing listens.
+the endpoint, runs the `mode`'s register, and binds the port. Without the
+second call nothing listens.
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
@@ -123,9 +123,7 @@ Future<RpcHttpServer> serve() async {
   final server = RpcHttpServer(
     host: '0.0.0.0',
     port: 8080,
-    onEndpointCreated: (endpoint) {
-      endpoint.registerServiceContract(GreeterResponder());
-    },
+    mode: RpcResponderMode.contracts([GreeterResponder()]),
   );
   await server.start();
   await server.afterModulesStart();

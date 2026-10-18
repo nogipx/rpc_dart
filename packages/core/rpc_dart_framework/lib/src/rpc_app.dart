@@ -28,9 +28,7 @@ import 'rpc_server_module.dart';
 /// ```dart
 /// await RpcApp.server(
 ///   modules: [DatabaseModule(), UserModule(), OrderModule()],
-///   server: (onEndpoint) => RpcHttp2Server(
-///     host: '0.0.0.0', port: 50051, onEndpointCreated: onEndpoint,
-///   ),
+///   server: (mode) => RpcHttp2Server(host: '0.0.0.0', port: 50051, mode: mode),
 ///   config: RpcAppConfig(onError: (e, st, svc, method) => logger.error(e)),
 /// ).run();
 /// ```
@@ -38,8 +36,7 @@ class RpcApp {
   final List<RpcModule> _modulesRaw;
   final List<IRpcInterceptor> _interceptors;
   final List<IRpcMiddleware> _middlewares;
-  final IRpcServer Function(void Function(RpcResponderEndpoint))?
-  _serverBuilder;
+  final IRpcServer Function(RpcResponderMode mode)? _serverBuilder;
   final Future<void> Function(RpcContainer container)? _afterModulesStartHook;
   final RpcAppConfig _config;
 
@@ -55,7 +52,7 @@ class RpcApp {
 
   RpcApp._({
     required List<RpcModule> modules,
-    IRpcServer Function(void Function(RpcResponderEndpoint))? serverBuilder,
+    IRpcServer Function(RpcResponderMode mode)? serverBuilder,
     required List<IRpcInterceptor> interceptors,
     required List<IRpcMiddleware> middlewares,
     Future<void> Function(RpcContainer container)? afterModulesStart,
@@ -80,7 +77,7 @@ class RpcApp {
   /// the HTTP port only after all services are registered.
   factory RpcApp.server({
     required List<RpcModule> modules,
-    required IRpcServer Function(void Function(RpcResponderEndpoint)) server,
+    required IRpcServer Function(RpcResponderMode mode) server,
     List<IRpcInterceptor> interceptors = const [],
     List<IRpcMiddleware> middlewares = const [],
     Future<void> Function(RpcContainer container)? afterModulesStart,
@@ -370,7 +367,7 @@ class RpcApp {
   }
 
   Future<void> _startServer() async {
-    _server = _serverBuilder!(_setupEndpoint);
+    _server = _serverBuilder!(RpcResponderMode(_setupEndpoint));
     _log?.info('Starting transport server');
     await _server!.start();
     _log?.info('Transport server started');

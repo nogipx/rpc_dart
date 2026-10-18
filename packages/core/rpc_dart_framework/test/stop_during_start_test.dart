@@ -56,8 +56,8 @@ class _HungModule extends RpcServerModule {
 }
 
 class _Server implements IRpcServer {
-  _Server(this._onEndpoint);
-  final void Function(RpcResponderEndpoint) _onEndpoint;
+  _Server(this._mode);
+  final RpcResponderMode _mode;
   var running = false;
 
   @override
@@ -70,7 +70,7 @@ class _Server implements IRpcServer {
   Future<void> start() async {
     running = true;
     final (_, server) = RpcChannelTransport.memoryPair();
-    _onEndpoint(RpcResponderEndpoint(transport: server));
+    _mode.register(RpcResponderEndpoint(transport: server));
   }
 
   @override

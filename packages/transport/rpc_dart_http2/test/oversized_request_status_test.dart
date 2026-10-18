@@ -62,9 +62,9 @@ void main() {
       host: '127.0.0.1',
       port: 0,
       securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: _limit),
-      onEndpointCreated: (endpoint) {
+      mode: RpcResponderMode((endpoint) {
         endpoint.registerServiceContract(_Svc());
-      },
+      }),
     );
     await server.start();
 

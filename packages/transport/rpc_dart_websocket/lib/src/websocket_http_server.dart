@@ -25,7 +25,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// final http = await bindRpcWebSocketHttpServer(InternetAddress.anyIPv4, 8080);
 /// final server = RpcWebSocketServer(
 ///   connections: rpcWebSocketConnections(http),
-///   onEndpointCreated: ...,
+///   mode: RpcResponderMode.contracts([...]),
 /// );
 /// ```
 Future<HttpServer> bindRpcWebSocketHttpServer(

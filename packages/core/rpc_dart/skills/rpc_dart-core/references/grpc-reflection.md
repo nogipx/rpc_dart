@@ -46,8 +46,8 @@ dependencies:
   messages. With `RpcCodec` (CBOR) the service can be listed and described, but
   a call from `grpcurl` fails with `INTERNAL`.
 - Build the registry once and share it. `RpcHttp2Server` creates one endpoint
-  per connection, so call `registry.attachTo(endpoint)` inside
-  `onEndpointCreated`. The server starts the endpoint after the callback.
+  per connection, so call `registry.attachTo(endpoint)` inside the
+  `RpcResponderMode` register. The server starts the endpoint after it.
 - `attachTo` registers both `grpc.reflection.v1.ServerReflection` and
   `grpc.reflection.v1alpha.ServerReflection`. Call it once per endpoint.
 - A descriptor that imports other proto files needs those files registered
@@ -137,10 +137,10 @@ Future<RpcHttp2Server> serveWithReflection(
   final server = RpcHttp2Server(
     host: '0.0.0.0',
     port: 50051,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       endpoint.registerServiceContract(createEcho());
       registry.attachTo(endpoint);
-    },
+    }),
   );
   await server.start();
   return server;

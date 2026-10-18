@@ -49,40 +49,33 @@ class RpcSocketServer implements IRpcServer {
   /// so a peer that connects and stays silent costs a socket for this long
   /// and no more. Null waits for ever.
   ///
-  /// [onEndpointCreated] registers contracts on each connection's responder
-  /// endpoint. Pass [onPeerEndpointCreated] instead for peer mode, where both
-  /// sides may start calls; not both.
+  /// [mode] says what each connection gets: [RpcResponderMode] for a
+  /// responder endpoint, [RpcPeerMode] for a peer one, where both sides may
+  /// start calls.
   RpcSocketServer({
     required RpcSocketAddress address,
+    required RpcServerMode mode,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? maxConnections,
     Duration? prefaceTimeout = const Duration(seconds: 10),
     LogScope? logger,
     LogController? logController,
-    void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
-    void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(RpcSocketChannel channel)? onConnectionOpened,
     void Function(RpcSocketChannel channel)? onConnectionClosed,
   }) : _address = address,
        _policy = policy,
-       _maxConnections = maxConnections,
        _prefaceTimeout = prefaceTimeout,
        _log = logger?.child('SocketServer') ?? LogScope.noop,
-       _logController = logController,
-       _onEndpointCreated = onEndpointCreated,
-       _onPeerEndpointCreated = onPeerEndpointCreated,
+       _host = RpcConnectionHost(
+         mode: mode,
+         maxConnections: maxConnections,
+         logger: logger?.child('SocketServer'),
+         endpointLogger: logController,
+       ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
-       _onConnectionClosed = onConnectionClosed {
-    // The endpoint is a peer or a responder, never both, so only one callback
-    // could run and the other's contracts would silently never register.
-    if (onEndpointCreated != null && onPeerEndpointCreated != null) {
-      throw ArgumentError(
-        'Pass onEndpointCreated or onPeerEndpointCreated, not both',
-      );
-    }
-  }
+       _onConnectionClosed = onConnectionClosed;
 
   /// A server that registers [contracts] on every connection.
   factory RpcSocketServer.createWithContracts({
@@ -90,35 +83,26 @@ class RpcSocketServer implements IRpcServer {
     required List<RpcResponderContract> contracts,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? maxConnections,
+    Duration? prefaceTimeout = const Duration(seconds: 10),
     LogScope? logger,
     LogController? logController,
   }) {
     return RpcSocketServer(
       address: address,
+      mode: RpcResponderMode.contracts(contracts),
       policy: policy,
       maxConnections: maxConnections,
+      prefaceTimeout: prefaceTimeout,
       logger: logger,
       logController: logController,
-      onEndpointCreated: (endpoint) {
-        for (final contract in contracts) {
-          endpoint.registerServiceContract(contract);
-        }
-      },
     );
   }
 
-  /// Without it a peer that never reads, starting calls, grows this server's
-  /// write queue by every answer. See [RpcSocketChannel.maxWriteBacklogBytes].
-  static const int _maxWriteBacklogBytes = 1024 * 1024;
-
   final RpcSocketAddress _address;
   final RpcSecurityPolicy _policy;
-  final int? _maxConnections;
   final Duration? _prefaceTimeout;
   final LogScope _log;
-  final LogController? _logController;
-  final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
-  final void Function(RpcPeerEndpoint endpoint)? _onPeerEndpointCreated;
+  final RpcConnectionHost _host;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(RpcSocketChannel channel)? _onConnectionOpened;
   final void Function(RpcSocketChannel channel)? _onConnectionClosed;
@@ -126,13 +110,7 @@ class RpcSocketServer implements IRpcServer {
   ServerSocket? _listener;
   StreamSubscription<Socket>? _accepting;
   bool _isRunning = false;
-  bool _warnedAtCap = false;
   int _connCounter = 0;
-
-  /// Every endpoint this server created, peer-mode included. Typed
-  /// [RpcEndpointBase] because a peer endpoint is not a responder one, and
-  /// [stop] must close both.
-  final List<RpcEndpointBase> _endpoints = [];
 
   /// Accepted sockets whose preface has not arrived yet. They hold no
   /// endpoint, but they do hold a socket, so they count against the cap and
@@ -149,8 +127,7 @@ class RpcSocketServer implements IRpcServer {
   /// Responder endpoints only, so empty in peer mode. See
   /// [IRpcServer.endpoints].
   @override
-  List<RpcResponderEndpoint> get endpoints =>
-      List.unmodifiable(_endpoints.whereType<RpcResponderEndpoint>());
+  List<RpcResponderEndpoint> get endpoints => _host.responders;
 
   @override
   bool get isRunning => _isRunning;
@@ -372,29 +349,7 @@ class RpcSocketServer implements IRpcServer {
     }
     _handshaking.clear();
 
-    if (drainTimeout != null) {
-      for (final endpoint in _endpoints) {
-        // markDraining, not drain(): the latter cancels every active context,
-        // the opposite of letting in-flight calls finish.
-        endpoint.markDraining();
-      }
-      await drainUntilIdle(
-        pending: () => inFlightResponderCalls(_endpoints),
-        budget: drainTimeout,
-        logger: _log,
-      );
-    }
-
-    // Concurrently: each close may wait on its own peer, and one dead
-    // connection must not delay the rest. Caught per endpoint, because
-    // Future.wait abandons the remaining futures on the first error.
-    await Future.wait([
-      for (final endpoint in List.of(_endpoints))
-        endpoint.close().catchError((Object e) {
-          _log.warning('Error closing an endpoint: $e');
-        }),
-    ]);
-    _endpoints.clear();
+    await _host.stop(drainTimeout: drainTimeout);
     _log.info('Stopped listening on $_address');
   }
 
@@ -403,14 +358,7 @@ class RpcSocketServer implements IRpcServer {
       socket.destroy();
       return;
     }
-    final cap = _maxConnections;
-    if (cap != null && _endpoints.length + _handshaking.length >= cap) {
-      // Once per stretch at the limit: a client retrying in a loop would
-      // otherwise log every attempt.
-      if (!_warnedAtCap) {
-        _warnedAtCap = true;
-        _log.warning('Refusing connections: at the connection limit ($cap)');
-      }
+    if (!_host.admit(pending: _handshaking.length)) {
       socket.destroy();
       return;
     }
@@ -419,7 +367,7 @@ class RpcSocketServer implements IRpcServer {
     final channel = RpcSocketChannel(
       socket,
       prefaceTimeout: _prefaceTimeout,
-      maxWriteBacklogBytes: _maxWriteBacklogBytes,
+      maxWriteBacklogBytes: RpcWriteBacklog.defaultServerMax,
     );
     _handshaking.add(channel);
     channel.ready.then(
@@ -433,7 +381,6 @@ class RpcSocketServer implements IRpcServer {
       },
       onError: (Object e) {
         _handshaking.remove(channel);
-        _warnedAtCap = false;
         if (_log.isDebug) {
           _log.debug('Dropping ${channel.peer} before its preface: $e');
         }
@@ -446,44 +393,19 @@ class RpcSocketServer implements IRpcServer {
     final label = 'peer-${++_connCounter}';
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
 
-    // Remembered so the catch can release it: the endpoint is registered
-    // before the user callback that can throw, and the release wiring only
-    // after it.
-    RpcEndpointBase? created;
     try {
-      final transport = RpcChannelTransport.fromChannel(
-        channel: channel,
-        isClient: false,
-        policy: _policy,
+      _host.serve(
+        RpcChannelTransport.fromChannel(
+          channel: channel,
+          isClient: false,
+          policy: _policy,
+        ),
+        // The channel closes on every path -- peer hang-up, read error, local
+        // close -- so this is the one place a connection is released.
+        done: channel.done,
+        debugLabel: 'SocketEndpoint-$label',
+        onRelease: () => _onConnectionClosed?.call(channel),
       );
-      final debugLabel = 'SocketEndpoint-$label';
-      final onPeer = _onPeerEndpointCreated;
-      final RpcEndpointBase endpoint;
-      if (onPeer != null) {
-        final peer = RpcPeerEndpoint(
-          transport: transport,
-          debugLabel: debugLabel,
-          logger: _logController,
-        );
-        _endpoints.add(peer);
-        created = peer;
-        onPeer(peer);
-        endpoint = peer;
-      } else {
-        final responder = RpcResponderEndpoint(
-          transport: transport,
-          debugLabel: debugLabel,
-          logger: _logController,
-        );
-        _endpoints.add(responder);
-        created = responder;
-        _onEndpointCreated?.call(responder);
-        endpoint = responder;
-      }
-      endpoint.start();
-      // The channel closes on every path -- peer hang-up, read error, local
-      // close -- so this is the one place a connection is released.
-      unawaited(channel.done.then((_) => _release(endpoint, channel)));
     } catch (e, st) {
       _log.error(
         'Failed to set up connection $label',
@@ -491,23 +413,8 @@ class RpcSocketServer implements IRpcServer {
         stackTrace: st,
       );
       _notify('onConnectionError', () => _onConnectionError?.call(e, st));
-      final orphan = created;
-      if (orphan != null) _release(orphan, channel);
       unawaited(channel.close());
     }
-  }
-
-  /// Drops a finished connection's endpoint and closes it, which is what
-  /// disposes its contracts. Idempotent.
-  void _release(RpcEndpointBase endpoint, RpcSocketChannel channel) {
-    if (!_endpoints.remove(endpoint)) return;
-    _warnedAtCap = false;
-    unawaited(
-      endpoint.close().catchError((Object e) {
-        _log.warning('Error closing an endpoint on disconnect: $e');
-      }),
-    );
-    _notify('onConnectionClosed', () => _onConnectionClosed?.call(channel));
   }
 
   /// Runs an observability callback without letting it take the server down.

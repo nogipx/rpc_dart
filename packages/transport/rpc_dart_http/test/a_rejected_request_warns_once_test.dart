@@ -49,7 +49,7 @@ Future<_Rig> _serve() async {
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
-    onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
     logController: controller,
     logger: controller.scope('http'),
   );

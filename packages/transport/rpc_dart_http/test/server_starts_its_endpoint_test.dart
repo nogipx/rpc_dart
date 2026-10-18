@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 // RpcHttpServer.afterModulesStart() created the RpcResponderEndpoint and called
-// onEndpointCreated, but never called endpoint.start().
+// the RpcResponderMode register callback, but never called endpoint.start().
 //
 // Both sibling servers do it themselves -- RpcHttp2Server._handleConnection and
 // RpcWebSocketServer._handleConnection each call endpoint.start() right after
-// their own onEndpointCreated -- so an application written by analogy
+// their own register callback -- so an application written by analogy
 // registered its contracts and got a server that accepted connections and
 // answered nothing:
 //
@@ -48,10 +48,10 @@ Future<String> _callThrough({required bool appCallsStart}) async {
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       endpoint.registerServiceContract(_Contract());
       if (appCallsStart) endpoint.start();
-    },
+    }),
   );
   await server.start();
   await server.afterModulesStart();
@@ -90,8 +90,8 @@ void main() {
       await _callThrough(appCallsStart: false),
       'echo-ok',
       reason:
-          'the endpoint was created and handed to onEndpointCreated but never '
-          'started, so the responder pipeline never subscribed and every call '
+          'the endpoint was created and handed to the register callback but '
+          'never started, so the responder pipeline never subscribed and every call '
           'hung with no error on either side',
     );
   });
@@ -114,10 +114,10 @@ void main() {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (endpoint) {
+      mode: RpcResponderMode((endpoint) {
         endpoint.registerServiceContract(contract);
         endpoint.start();
-      },
+      }),
     );
     await server.start();
     await server.afterModulesStart();

@@ -20,9 +20,8 @@ class RpcHttp2Server implements IRpcServer {
   final int _port;
   final RpcSecurityPolicy _securityPolicy;
   final SecurityContext? _securityContext;
-  final LogScope? _logger;
-  final LogController? _logController;
-  final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
+  final LogScope _log;
+  final RpcConnectionHost _connectionHost;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(Socket socket)? _onConnectionOpened;
   final void Function(Socket socket)? _onConnectionClosed;
@@ -46,23 +45,20 @@ class RpcHttp2Server implements IRpcServer {
   /// Whether the server is serving over TLS (`true`) or plaintext h2c (`false`).
   bool get isSecure => _securityContext != null;
   final List<StreamSubscription<void>> _subscriptions = [];
-  final List<RpcResponderEndpoint> _endpoints = [];
 
   /// The HTTP/2 connection behind each endpoint.
   ///
   /// Kept only so a graceful [stop] can send GOAWAY: the endpoint abstraction
   /// has no notion of "stop accepting new streams on this connection", and that
   /// signal is the difference between a drain that converges and one that runs
-  /// out its budget. Entries are removed in [_releaseEndpoint], so this tracks
-  /// [_endpoints] exactly and cannot outlive it.
-  final Map<RpcResponderEndpoint, http2.ServerTransportConnection>
-  _connections = {};
+  /// out its budget. A connection leaves when its endpoint is released.
+  final Set<http2.ServerTransportConnection> _connections = {};
 
   /// Creates an HTTP/2 RPC server.
   ///
-  /// [onEndpointCreated] fires for each new connection's endpoint, which is
-  /// where an application registers its contracts. [onConnectionError],
-  /// [onConnectionOpened] and [onConnectionClosed] are observability hooks.
+  /// [mode] registers the application's contracts on each new connection's
+  /// endpoint. [onConnectionError], [onConnectionOpened] and
+  /// [onConnectionClosed] are observability hooks.
   ///
   /// [securityPolicy] bounds per-stream message size, buffered bytes, and the
   /// number of concurrent active streams per connection. Forwarded to every
@@ -81,11 +77,11 @@ class RpcHttp2Server implements IRpcServer {
   RpcHttp2Server({
     String host = 'localhost',
     required int port,
+    required RpcResponderMode mode,
     RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
     SecurityContext? securityContext,
     LogScope? logger,
     LogController? logController,
-    void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(Socket socket)? onConnectionOpened,
     void Function(Socket socket)? onConnectionClosed,
@@ -102,9 +98,12 @@ class RpcHttp2Server implements IRpcServer {
        _port = port,
        _securityPolicy = securityPolicy,
        _securityContext = securityContext,
-       _logger = logger?.child('Http2Server'),
-       _logController = logController,
-       _onEndpointCreated = onEndpointCreated,
+       _log = logger?.child('Http2Server') ?? LogScope.noop,
+       _connectionHost = RpcConnectionHost(
+         mode: mode,
+         logger: logger?.child('Http2Server'),
+         endpointLogger: logController,
+       ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
        _onConnectionClosed = onConnectionClosed,
@@ -117,7 +116,7 @@ class RpcHttp2Server implements IRpcServer {
   /// preface before it is dropped. Null disables the deadline.
   ///
   /// [_handleConnection] is wired to the accept stream, so everything it builds
-  /// — the transport, the endpoint, and [_onEndpointCreated], where the
+  /// — the transport, the endpoint, and the mode's register, where the
   /// application registers its contracts — is built before the peer has sent a
   /// byte. Every other limit this server has is PER CONNECTION, so
   /// `maxActiveStreams`, `maxConcurrentHandlers`, `halfOpenStreamTimeout` and
@@ -189,32 +188,13 @@ class RpcHttp2Server implements IRpcServer {
     return RpcHttp2Server(
       host: host,
       port: port,
+      mode: RpcResponderMode.contracts(contracts),
       securityPolicy: securityPolicy,
       securityContext: securityContext,
       logger: logger,
       pingInterval: pingInterval,
       pingTimeout: pingTimeout,
       prefaceTimeout: prefaceTimeout,
-      onEndpointCreated: (endpoint) {
-        if (logger?.isDebug ?? false) {
-          logger?.debug(
-            'Registering ${contracts.length} contract(s) on a new endpoint',
-          );
-        }
-        for (final contract in contracts) {
-          endpoint.registerServiceContract(contract);
-          if (logger?.isDebug ?? false) {
-            logger?.debug('Registered contract: ${contract.serviceName}');
-          }
-        }
-      },
-      onConnectionError: (error, stackTrace) {
-        logger?.error(
-          'HTTP/2 connection error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
     );
   }
 
@@ -229,59 +209,36 @@ class RpcHttp2Server implements IRpcServer {
 
   /// The live endpoints, one per connection.
   @override
-  List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_endpoints);
+  List<RpcResponderEndpoint> get endpoints => _connectionHost.responders;
 
-  /// Waits, up to [budget], for in-flight calls to finish.
+  /// Sends GOAWAY on every live connection, the start of a drain.
   ///
   /// Accepting has already stopped by the time this runs, but an EXISTING
-  /// connection can still open new streams — so the drain begins by sending
-  /// GOAWAY on every live connection. That is the HTTP/2 signal for "no new
-  /// streams here", and it is what makes a gRPC graceful shutdown CONVERGE
-  /// rather than merely expire: without it a call issued after shutdown began
-  /// is still accepted and served, extending shutdown by work that arrived
-  /// after it started.
+  /// connection can still open new streams. GOAWAY is the HTTP/2 signal for
+  /// "no new streams here", and it is what makes a gRPC graceful shutdown
+  /// CONVERGE rather than merely expire. It does not cut the calls already
+  /// running: it carries the last stream id the peer may assume was processed,
+  /// so streams below it finish normally.
   ///
-  /// GOAWAY does NOT cut the calls already running: it carries the last stream
-  /// id the peer may assume was processed, so streams below it finish normally.
-  /// That is exactly the drain semantics wanted here.
-  ///
-  /// The budget still applies. A peer can ignore GOAWAY, and a handler can
-  /// simply run long, so shutdown stays bounded either way.
-  ///
-  /// `activeResponders` counts live responder streams. A handler that outlives
-  /// its stream is not counted — the same caveat gRPC's own drain carries, and
-  /// the reason [maxActiveStreams] bounds stream state rather than handler
-  /// execution.
-  Future<void> _drain(Duration budget) async {
-    // Send GOAWAY first, even if nothing is in flight: a peer that is about to
-    // call deserves the signal, and finish() is what delivers it.
-    //
+  /// The drain budget still applies. A peer can ignore GOAWAY, and a handler
+  /// can simply run long, so shutdown stays bounded either way.
+  void _sendGoaway() {
     // Fired, not awaited, and individually guarded. `finish()` completes only
-    // once the peer's streams drain, so awaiting it here would reproduce the
-    // very hang the caller's close() was fixed for -- a dead peer never
-    // finishes. The poll below is what bounds this, and the forceful close
-    // after it is what releases anything still held.
-    for (final connection in List.of(_connections.values)) {
+    // once the peer's streams drain, and a dead peer never finishes. The drain
+    // budget bounds this, and the forceful close after it releases anything
+    // still held.
+    for (final connection in List.of(_connections)) {
       unawaited(
         Future<void>.sync(connection.finish).catchError((Object error) {
-          if (_logger?.isInternal ?? false) {
-            _logger?.internal(
+          if (_log.isInternal) {
+            _log.internal(
               'GOAWAY on a connection that was already gone: $error',
             );
           }
         }),
       );
     }
-
-    return drainUntilIdle(
-      pending: _inFlightCalls,
-      budget: budget,
-      logger: _logger,
-    );
   }
-
-  /// Live responder streams across every endpoint this server owns.
-  int _inFlightCalls() => inFlightResponderCalls(_endpoints);
 
   /// Starts PING keepalive for one connection, or returns null when disabled.
   ///
@@ -310,7 +267,7 @@ class RpcHttp2Server implements IRpcServer {
       // probing until that fired.
       isDead: () => !_isRunning,
       onDead: (error) {
-        _logger?.warning(
+        _log.warning(
           'HTTP/2 keepalive failed for $clientAddress ($error); '
           'closing a connection whose peer stopped answering',
         );
@@ -332,55 +289,18 @@ class RpcHttp2Server implements IRpcServer {
     );
   }
 
-  /// Drops a disconnected connection's endpoint and CLOSES it.
-  ///
-  /// Removing it from [_endpoints] is not enough. An endpoint dropped without
-  /// close() never cancels its transport subscription, never tears down its
-  /// still-open responder streams, and never calls `dispose()` on its registered
-  /// contracts — so whatever a contract holds (database handles, files,
-  /// subscriptions) stays held for the life of the process: one leak per client
-  /// disconnect.
-  void _releaseEndpoint(RpcResponderEndpoint endpoint, Socket socket) {
-    // ONCE per connection. Two paths reach this for the same one: the preface
-    // deadline releases the endpoint and then destroys the socket, whose `done`
-    // releases it again — so `onConnectionClosed` fired TWICE for a connection
-    // reclaimed that way and once for an ordinary close. A user's callback
-    // double-counting connections is the visible half; whatever it releases
-    // being released twice is the other.
-    //
-    // `_endpoints.remove` answers it: the list is the registry of live
-    // connections and the second call finds nothing to remove.
-    if (!_endpoints.remove(endpoint)) return;
-    _connections.remove(endpoint);
-    unawaited(
-      endpoint.close().catchError((Object error) {
-        _logger?.warning('Error closing an endpoint on disconnect: $error');
-      }),
-    );
-    _notify('onConnectionClosed', () => _onConnectionClosed?.call(socket));
-  }
-
   /// Invokes an observability callback without letting it take the process out.
   ///
-  /// These callbacks run on DETACHED paths -- [_handleConnection] off the
-  /// server socket's listen, [_releaseEndpoint] off `socket.done`'s
-  /// then/catchError -- so a throw has no handler above it and reaches the root
-  /// zone, where an unhandled async error kills the isolate.
+  /// These callbacks run on DETACHED paths, [_handleConnection] off the server
+  /// socket's listen and the keepalive off a timer, so a throw has no handler
+  /// above it and reaches the root zone, where an unhandled async error kills
+  /// the isolate.
   ///
-  /// `onConnectionOpened` is unconditionally fatal without this, sitting outside
-  /// the try below. `onConnectionClosed` is conditionally so: a throw on the
-  /// graceful `.then` path is absorbed by the `.catchError` after it, but a
-  /// throw on the `.catchError` path has nothing after it and escapes.
-  ///
-  /// Reaching this needs no misuse. A callback that reads `socket.remotePort` on
-  /// close throws `OS Error 22` by itself, because the peer is already gone.
-  ///
-  /// Deliberately NOT applied to [_onEndpointCreated]: that one registers the
-  /// contracts, so if it fails the connection is useless. The surrounding
-  /// try/catch already reports it and destroys the socket, which is the right
-  /// outcome -- swallowing it would start an endpoint that serves nothing.
+  /// Not applied to the mode's register: it registers the contracts, so if it
+  /// fails the connection is useless. The surrounding try/catch reports it and
+  /// destroys the socket.
   void _notify(String what, void Function() body) =>
-      notifyWithoutDying(what, body, logger: _logger);
+      notifyWithoutDying(what, body, logger: _log);
 
   @override
   bool get isRunning => _isRunning;
@@ -395,16 +315,14 @@ class RpcHttp2Server implements IRpcServer {
     final stopping = _stopping;
     if (stopping != null) await stopping;
     // `_isRunning` alone cannot hold this: it is assigned AFTER the bind's await,
-    // so two concurrent callers both passed the guard and both bound. The loser's
-    // catch then set it FALSE over the winner's true — measured: the socket is
-    // bound and serving calls while `isRunning` reports false, and `stop()` gives
-    // up on exactly that flag, so the listener is unreachable for the life of the
-    // process.
+    // so two concurrent callers would both pass the guard and both bind, and
+    // the loser's catch would set it false over the winner's true, leaving a
+    // bound listener that `stop()` gives up on.
     //
     // The slot is therefore claimed SYNCHRONOUSLY, before anything suspends, and
     // released in the catch so a retry after "address in use" still works.
     if (_isRunning || _starting) {
-      _logger?.warning(
+      _log.warning(
         'HTTP/2 server is already ${_isRunning ? 'running' : 'starting'}',
       );
       return;
@@ -414,7 +332,7 @@ class RpcHttp2Server implements IRpcServer {
     _bind = bound.future;
 
     final scheme = isSecure ? 'h2 (TLS)' : 'h2c (plaintext)';
-    _logger?.info('Starting HTTP/2 server ($scheme) on $_host:$_port');
+    _log.info('Starting HTTP/2 server ($scheme) on $_host:$_port');
 
     try {
       final Stream<Socket> connections;
@@ -433,12 +351,12 @@ class RpcHttp2Server implements IRpcServer {
       connections = _serverSocket!;
       _isRunning = true;
 
-      _logger?.info('HTTP/2 server listening ($scheme) on $_host:$port');
+      _log.info('HTTP/2 server listening ($scheme) on $_host:$port');
 
       final subscription = connections.listen(
         _securityContext == null ? _handleConnection : _acceptTls,
         onError: (Object error, StackTrace stackTrace) {
-          _logger?.error(
+          _log.error(
             'Server socket error',
             error: error,
             stackTrace: stackTrace,
@@ -452,7 +370,7 @@ class RpcHttp2Server implements IRpcServer {
 
       _subscriptions.add(subscription);
     } catch (e, stackTrace) {
-      _logger?.error(
+      _log.error(
         'Failed to start the HTTP/2 server',
         error: e,
         stackTrace: stackTrace,
@@ -485,7 +403,7 @@ class RpcHttp2Server implements IRpcServer {
     if (!_isRunning && _starting && bind != null) await bind;
     if (!_isRunning) return;
 
-    _logger?.info('Stopping the HTTP/2 server');
+    _log.info('Stopping the HTTP/2 server');
     _isRunning = false;
     // Or a server stopped and started again is refused by its own claim.
     _starting = false;
@@ -497,25 +415,11 @@ class RpcHttp2Server implements IRpcServer {
     }
     _subscriptions.clear();
 
-    if (drainTimeout != null) await _drain(drainTimeout);
-
-    // Iterate over a SNAPSHOT: closing an endpoint can trigger socket.done,
-    // whose handler removes the endpoint from _endpoints, mutating the list
-    // mid-iteration ("Concurrent modification during iteration").
-    final endpointsToClose = List.of(_endpoints);
-    _endpoints.clear();
-    // Cleared alongside _endpoints: this map is only ever a view onto them, and
-    // leaving entries here would pin dead connections for the server's lifetime.
+    // GOAWAY first, even if nothing is in flight: a peer that is about to call
+    // deserves the signal.
+    if (drainTimeout != null) _sendGoaway();
+    await _connectionHost.stop(drainTimeout: drainTimeout);
     _connections.clear();
-    // Together, not one after another: each close can take its own bounded
-    // wait, and N connections paid N of them in sequence.
-    await Future.wait(
-      endpointsToClose.map(
-        (endpoint) => endpoint.close().catchError((Object e) {
-          _logger?.warning('Error closing an endpoint: $e');
-        }),
-      ),
-    );
 
     for (final socket in _handshaking) {
       socket.destroy();
@@ -524,7 +428,7 @@ class RpcHttp2Server implements IRpcServer {
     await _serverSocket?.close();
     _serverSocket = null;
 
-    _logger?.info('HTTP/2 server stopped');
+    _log.info('HTTP/2 server stopped');
   }
 
   /// Waits for the client's first bytes under the preface deadline, then runs
@@ -552,8 +456,8 @@ class RpcHttp2Server implements IRpcServer {
       _handshaking.remove(raw);
       unawaited(first.cancel());
       raw.destroy();
-      if (_logger?.isDebug ?? false) {
-        _logger?.debug('Dropping $peer before TLS: $why');
+      if (_log.isDebug) {
+        _log.debug('Dropping $peer before TLS: $why');
       }
     }
 
@@ -579,8 +483,8 @@ class RpcHttp2Server implements IRpcServer {
           onError: (Object error) {
             _handshaking.remove(raw);
             raw.destroy();
-            if (_logger?.isDebug ?? false) {
-              _logger?.debug('TLS handshake with $peer failed: $error');
+            if (_log.isDebug) {
+              _log.debug('TLS handshake with $peer failed: $error');
             }
           },
         );
@@ -598,30 +502,22 @@ class RpcHttp2Server implements IRpcServer {
   /// Builds the transport, endpoint and lifecycle wiring for one connection.
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
-    if (_logger?.isDebug ?? false) {
-      _logger?.debug('New HTTP/2 connection from $clientAddress');
+    if (_log.isDebug) {
+      _log.debug('New HTTP/2 connection from $clientAddress');
     }
 
     // See disableNagle: an RPC's write pattern is the one Nagle penalises, and
     // every socket this server accepted had it enabled.
-    disableNagle(
-      socket,
-      logger: _logger,
-      what: 'connection from $clientAddress',
-    );
+    disableNagle(socket, logger: _log, what: 'connection from $clientAddress');
 
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(socket));
 
-    // See the assignment below: without it a throwing user callback leaves one
-    // permanent leak per failed connection, holding the application's
-    // contracts. A throwing onEndpointCreated is ordinary rather than exotic,
-    // because that callback is where those contracts get registered.
-    RpcResponderEndpoint? created;
-    // Armed before anything is built, cancelled by the preface below and by the
-    // release wiring. See [_prefaceTimeout]: without it a TCP SYN buys an
-    // endpoint and a run of the application's callback, held for as long as the
-    // peer keeps the socket open.
+    // Cancelled by the preface and by the release. See [_prefaceTimeout]:
+    // without it a TCP SYN buys an endpoint and a run of the application's
+    // register, held for as long as the peer keeps the socket open.
     Timer? prefaceDeadline;
+    Timer? keepalive;
+    var released = false;
 
     try {
       // ONE construction path, shared with anyone running their own accept
@@ -634,7 +530,7 @@ class RpcHttp2Server implements IRpcServer {
         outgoing: socket,
         destroy: socket.destroy,
         policy: _securityPolicy,
-        logger: _logger,
+        logger: _log,
         onHeaderBlockViolation: (observedBytes) {
           _notify(
             'onConnectionError',
@@ -662,7 +558,7 @@ class RpcHttp2Server implements IRpcServer {
         try {
           transport = _transportWrapper(inner, socket);
         } catch (error, stackTrace) {
-          _logger?.error(
+          _log.error(
             'The transport wrapper threw',
             error: error,
             stackTrace: stackTrace,
@@ -682,65 +578,57 @@ class RpcHttp2Server implements IRpcServer {
         }
       }
 
-      final endpoint = RpcResponderEndpoint(
-        transport: transport,
+      final endpoint = _connectionHost.serve(
+        transport,
+        done: socket.done.then(
+          (_) {
+            if (_log.isDebug) {
+              _log.debug('HTTP/2 connection $clientAddress closed');
+            }
+          },
+          onError: (Object error) {
+            _log.warning('Error closing connection $clientAddress: $error');
+          },
+        ),
         debugLabel: 'Http2Endpoint-$clientAddress',
-        logger: _logController,
+        onRelease: () {
+          released = true;
+          _connections.remove(connection);
+          keepalive?.cancel();
+          prefaceDeadline?.cancel();
+          _onConnectionClosed?.call(socket);
+        },
       );
+      // Added after serve: when the register throws, serve releases the
+      // endpoint and rethrows, so a failed connection never lands here.
+      _connections.add(connection);
 
-      _endpoints.add(endpoint);
-      _connections[endpoint] = connection;
-      // Remembered so the catch below can release it if the user callback
-      // throws: the endpoint is registered here, BEFORE that callback, and the
-      // `socket.done` release wiring is only installed after it.
-      created = endpoint;
-
-      // Armed here rather than at the top of the method so it can name the
-      // endpoint it releases; the preface cannot have arrived yet, because
-      // nothing has subscribed to the guarded stream until endpoint.start().
+      // Armed synchronously after the endpoint started: the preface arrives
+      // as a socket event, so it cannot have been read yet.
       final deadline = _prefaceTimeout;
       if (deadline != null) {
         prefaceDeadline = Timer(deadline, () {
           prefaceDeadline = null;
-          _logger?.warning(
+          _log.warning(
             'Dropping $clientAddress: no HTTP/2 connection preface within '
             '${deadline.inSeconds}s',
           );
-          _releaseEndpoint(endpoint, socket);
+          _connectionHost.release(endpoint);
           socket.destroy();
         });
       }
 
-      _onEndpointCreated?.call(endpoint);
-      endpoint.start();
-
-      if (_logger?.isDebug ?? false) {
-        _logger?.debug('RPC endpoint created for $clientAddress');
+      if (_log.isDebug) {
+        _log.debug('RPC endpoint created for $clientAddress');
       }
 
       // Keepalive: the only thing that reclaims a HALF-OPEN connection. See
-      // [_pingInterval]. Started only when configured, and always cancelled by
-      // the release wiring below, so a closed connection stops pinging.
-      final keepalive = _startKeepalive(connection, socket, clientAddress);
-
-      socket.done
-          .then((_) {
-            if (_logger?.isDebug ?? false) {
-              _logger?.debug('HTTP/2 connection $clientAddress closed');
-            }
-            keepalive?.cancel();
-            prefaceDeadline?.cancel();
-            _releaseEndpoint(endpoint, socket);
-          })
-          .catchError((Object error) {
-            _logger?.warning('Error closing connection $clientAddress: $error');
-            keepalive?.cancel();
-            prefaceDeadline?.cancel();
-            _releaseEndpoint(endpoint, socket);
-          });
+      // [_pingInterval]. Started only when configured, and cancelled by the
+      // release, so a closed connection stops pinging.
+      keepalive = _startKeepalive(connection, socket, clientAddress);
     } catch (e, stackTrace) {
       prefaceDeadline?.cancel();
-      _logger?.error(
+      _log.error(
         'Failed to create an HTTP/2 RPC connection',
         error: e,
         stackTrace: stackTrace,
@@ -749,14 +637,9 @@ class RpcHttp2Server implements IRpcServer {
         'onConnectionError',
         () => _onConnectionError?.call(e, stackTrace),
       );
-      // Release what was already registered. _releaseEndpoint removes it,
-      // closes it -- which is what disposes the contracts -- and fires
-      // onConnectionClosed, balancing the onConnectionOpened above for a
-      // connection now being torn down.
-      final orphan = created;
-      if (orphan != null) {
-        _releaseEndpoint(orphan, socket);
-      } else {
+      // Balances the onConnectionOpened above, unless releasing the endpoint
+      // already did.
+      if (!released) {
         _notify('onConnectionClosed', () => _onConnectionClosed?.call(socket));
       }
       socket.destroy();

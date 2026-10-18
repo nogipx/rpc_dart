@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Starting a responder twice is ORDINARY: `RpcWebSocketServer` calls
-// `onEndpointCreated` and then `endpoint.start()`, while the framework's
-// callback registers the contracts and starts it too. Both run per connection,
+// Starting a responder twice is ORDINARY: `RpcWebSocketServer` runs the mode's
+// register and then `endpoint.start()`, while the framework's register adds
+// the contracts and starts it too. Both run per connection,
 // so the second call warned every time — 704 and 698 warnings in 24 h on a
 // consumer's two replicas, against 6 and 34 lines of real error.
 //

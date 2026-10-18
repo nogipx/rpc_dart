@@ -70,10 +70,11 @@ Future<String> _twoCalls({required bool peer}) async {
   final built = <RpcPeerEndpoint>[];
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(http),
-    onEndpointCreated: peer
-        ? null
-        : (e) => e.registerServiceContract(_Chat(started, gates)),
-    onPeerEndpointCreated: peer ? built.add : null,
+    mode: peer
+        ? RpcPeerMode(built.add)
+        : RpcResponderMode(
+            (e) => e.registerServiceContract(_Chat(started, gates)),
+          ),
   );
   await server.start();
   final transport = await RpcWebSocketCallerTransport.connect(

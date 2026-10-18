@@ -67,8 +67,9 @@ void main() {
         securityPolicy: const RpcSecurityPolicy(
           flowControlConnectionWindowBytes: 4 * 1024 * 1024,
         ),
-        onEndpointCreated: (e) =>
-            e.registerServiceContract(_Svc(release.future)),
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_Svc(release.future)),
+        ),
       );
       await server.start();
       final caller = RpcCallerEndpoint(

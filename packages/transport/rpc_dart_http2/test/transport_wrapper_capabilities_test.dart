@@ -204,7 +204,9 @@ Future<int> _upload(IRpcTransport Function(IRpcTransport inner)? wrap) async {
     host: '127.0.0.1',
     port: 0,
     transportWrapper: wrap == null ? null : (inner, _) => wrap(inner),
-    onEndpointCreated: (e) => e.registerServiceContract(_UploadContract(state)),
+    mode: RpcResponderMode(
+      (e) => e.registerServiceContract(_UploadContract(state)),
+    ),
   );
   await server.start();
   final relay = _Relay();
@@ -305,10 +307,10 @@ Future<({int open, IRpcTransport transport, _CountingTransport? wrapper})> _run(
             if (w is _CountingTransport) built = w;
             return w;
           },
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       serverEndpoint = endpoint;
       endpoint.registerServiceContract(_Contract());
-    },
+    }),
   );
   await server.start();
 

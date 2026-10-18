@@ -70,7 +70,7 @@ import 'websocket_server_policy.dart';
 ///     http,
 ///     allowedOrigins: {'https://app.example.com'},
 ///   ),
-///   onEndpointCreated: ...,
+///   mode: RpcResponderMode.contracts([...]),
 /// );
 /// ```
 Stream<WebSocketChannel> rpcWebSocketConnections(

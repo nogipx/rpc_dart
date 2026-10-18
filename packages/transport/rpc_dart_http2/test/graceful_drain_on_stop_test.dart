@@ -59,7 +59,7 @@ void main() {
     server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (e) => e.registerServiceContract(_SlowContract()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_SlowContract())),
     );
     await server.start();
 
@@ -179,7 +179,9 @@ void main() {
       server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) => e.registerServiceContract(_ForeverContract()),
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_ForeverContract()),
+        ),
       );
       await server.start();
 
@@ -221,7 +223,9 @@ void main() {
       server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) => e.registerServiceContract(_SlowContract()),
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_SlowContract()),
+        ),
       );
       await server.start();
 

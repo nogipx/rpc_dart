@@ -79,7 +79,7 @@ SIGTERM or SIGINT, then `stop()`.
 
 | Type | Purpose |
 | --- | --- |
-| `RpcApp.server(modules:, server:, interceptors:, middlewares:, afterModulesStart:, config:)` | The app. `server` is `IRpcServer Function(void Function(RpcResponderEndpoint) onEndpoint)`. Members: `start()`, `stop()`, `run()`, `health()` |
+| `RpcApp.server(modules:, server:, interceptors:, middlewares:, afterModulesStart:, config:)` | The app. `server` is `IRpcServer Function(RpcResponderMode mode)`. Members: `start()`, `stop()`, `run()`, `health()` |
 | `RpcModule` | `name`, `dependencies`, `configure`, `configureWithEnv`, `onStart`, `onStop`, `checkHealth` (returns `RpcHealthStatus?`; `null` skips the module) |
 | `RpcServerModule` | adds `buildContracts(RpcContainer)` |
 | `RpcIsolateModule` | `workerEntrypoint`, `isolateParams`, `buildProxyContracts(RpcCallerEndpoint)` |
@@ -185,11 +185,8 @@ import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 Future<void> serve() async {
   final app = RpcApp.server(
     modules: [GreeterModule(), StoreModule()], // order does not matter
-    server: (onEndpoint) => RpcHttp2Server(
-      host: '0.0.0.0',
-      port: 50051,
-      onEndpointCreated: onEndpoint,
-    ),
+    server: (mode) =>
+        RpcHttp2Server(host: '0.0.0.0', port: 50051, mode: mode),
     config: RpcAppConfig(
       drainTimeout: const Duration(seconds: 5),
       onError: (error, stackTrace, service, method) =>
@@ -202,9 +199,10 @@ Future<void> serve() async {
 }
 ```
 
-Pass the `onEndpoint` callback to the server's endpoint-created hook. If you
-do not, no contracts are registered and the app serves nothing. Servers that create their endpoint late (`RpcHttpServer`) are finished
-in `afterModulesStart`; see that transport's README.
+Pass the `mode` to the server's `mode:` parameter. If you do not, no
+contracts are registered and the app serves nothing. Servers that create
+their endpoint late (`RpcHttpServer`) are finished in `afterModulesStart`; see
+that transport's README.
 
 `onError` runs for every exception that escapes a handler, then the exception
 is rethrown. `onCall` gets an `RpcCallEvent` (`serviceName`, `methodName`,

@@ -94,7 +94,7 @@ void main() {
   RpcWebSocketServer serverOver(Stream<WebSocketChannel> connections) =>
       RpcWebSocketServer(
         connections: connections,
-        onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
       );
 
   // INVERTED with B-59: a restart over a SINGLE-subscription stream now works.

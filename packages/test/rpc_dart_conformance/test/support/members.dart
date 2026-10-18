@@ -378,7 +378,7 @@ final class _Http2Rig extends NetworkRig {
       host: '127.0.0.1',
       port: 0,
       securityPolicy: serverPolicy,
-      onEndpointCreated: registerOn,
+      mode: RpcResponderMode(registerOn),
     );
     await server.start();
     _server = server;
@@ -426,7 +426,7 @@ final class _HttpRig extends NetworkRig {
       host: '127.0.0.1',
       port: 0,
       securityPolicy: serverPolicy,
-      onEndpointCreated: registerOn,
+      mode: RpcResponderMode(registerOn),
     );
     await server.start();
     await server.afterModulesStart();
@@ -490,7 +490,7 @@ final class _WebSocketRig extends NetworkRig {
     final server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
       policy: serverPolicy,
-      onEndpointCreated: registerOn,
+      mode: RpcResponderMode(registerOn),
     );
     await server.start();
     _http = http;
@@ -548,7 +548,7 @@ final class _SocketRig extends NetworkRig {
     final server = RpcSocketServer(
       address: RpcSocketAddress.tcp(InternetAddress.loopbackIPv4, 0),
       policy: serverPolicy,
-      onEndpointCreated: registerOn,
+      mode: RpcResponderMode(registerOn),
     );
     await server.start();
     _server = server;

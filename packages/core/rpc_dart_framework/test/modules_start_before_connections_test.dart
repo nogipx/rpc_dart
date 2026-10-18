@@ -40,9 +40,9 @@ class _ResourceModule extends RpcServerModule {
 /// Records when the app starts it, and builds one endpoint as a connection
 /// would.
 class _RecordingServer implements IRpcServer {
-  _RecordingServer(this._onEndpoint);
+  _RecordingServer(this._mode);
 
-  final void Function(RpcResponderEndpoint) _onEndpoint;
+  final RpcResponderMode _mode;
   final List<RpcResponderEndpoint> _endpoints = [];
 
   @override
@@ -56,7 +56,7 @@ class _RecordingServer implements IRpcServer {
     _events.add('server.start');
     final (_, server) = RpcChannelTransport.memoryPair();
     final endpoint = RpcResponderEndpoint(transport: server);
-    _onEndpoint(endpoint);
+    _mode.register(endpoint);
     _endpoints.add(endpoint);
   }
 

@@ -909,9 +909,9 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 10),
-        onEndpointCreated: (endpoint) {
+        mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoService());
-        },
+        }),
       );
       await server.start();
       await server.afterModulesStart();
@@ -937,10 +937,10 @@ void main() {
         final server = RpcHttpServer(
           host: '127.0.0.1',
           port: 0,
-          onEndpointCreated: (endpoint) {
+          mode: RpcResponderMode((endpoint) {
             endpoint.registerServiceContract(_EchoService());
             endpoint.start();
-          },
+          }),
         );
         await server.start();
         await server.afterModulesStart();

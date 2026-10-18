@@ -4,11 +4,11 @@
 
 // The mirror of `graceful_drain_on_stop_test.dart`, which covers responder mode
 // only. `_inFlightCalls()` polls `activeResponders`, and that metric was
-// published by RpcResponderEndpoint alone -- so with `onPeerEndpointCreated`
-// the drain read null for every endpoint, saw 0 in flight and shut the server
-// down on top of live calls.
+// published by RpcResponderEndpoint alone -- so with `RpcPeerMode` the drain
+// read null for every endpoint, saw 0 in flight and shut the server down on
+// top of live calls.
 //
-// One variable, which callback the server was given:
+// One variable, which mode the server was given:
 //
 //   arm         activeResponders  stop waited  the in-flight call
 //   responder   1                 1746ms       returned "finished"
@@ -60,10 +60,10 @@ void main() {
     final built = Completer<RpcPeerEndpoint>();
     server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onPeerEndpointCreated: (e) {
+      mode: RpcPeerMode((e) {
         if (!built.isCompleted) built.complete(e);
         e.registerServiceContract(_SlowContract());
-      },
+      }),
     );
     await server.start();
 
@@ -151,8 +151,7 @@ void main() {
       http = await HttpServer.bind('127.0.0.1', 0);
       server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onPeerEndpointCreated: (e) =>
-            e.registerServiceContract(_SlowContract()),
+        mode: RpcPeerMode((e) => e.registerServiceContract(_SlowContract())),
       );
       await server.start();
 

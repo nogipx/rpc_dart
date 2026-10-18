@@ -50,7 +50,7 @@ final class _Contract extends RpcResponderContract {
 RpcWebSocketServer _serverOver(Stream<WebSocketChannel> connections) =>
     RpcWebSocketServer(
       connections: connections,
-      onEndpointCreated: (e) => e.registerServiceContract(_Contract()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
     );
 
 void main() {

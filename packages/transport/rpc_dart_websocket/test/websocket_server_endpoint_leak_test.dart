@@ -58,8 +58,7 @@ Future<({RpcWebSocketServer server, HttpServer http, Uri url})> _start({
 
   final server = RpcWebSocketServer(
     connections: channels.stream,
-    onEndpointCreated: peerMode ? null : register,
-    onPeerEndpointCreated: peerMode ? register : null,
+    mode: peerMode ? RpcPeerMode(register) : RpcResponderMode(register),
   );
   await server.start();
 

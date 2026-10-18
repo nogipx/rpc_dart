@@ -53,6 +53,7 @@ class RpcSocketChannel implements IRpcChannel {
     this.maxWriteBacklogBytes,
   }) : _socket = socket,
        _closeTimeout = closeTimeout,
+       _backlog = RpcWriteBacklog(maxUnsentBytes: maxWriteBacklogBytes),
        peer = _describe(socket) {
     // Marked handled here, or a failed handshake nobody awaited is an
     // unhandled async error. Whoever does await [ready] still sees it fail.
@@ -79,6 +80,7 @@ class RpcSocketChannel implements IRpcChannel {
         unawaited(close());
       },
     );
+    _backlog.attachReader(_sub);
 
     // Read backpressure: a paused consumer pauses the socket, so chunks wait
     // in the kernel rather than in `_incoming`. See [IRpcChannel.incoming].
@@ -98,10 +100,10 @@ class RpcSocketChannel implements IRpcChannel {
     );
     unawaited(_socket.done.then((_) {}, onError: failed));
     // `addStream` and not `add`: dart:io pauses the stream it writes from
-    // while the kernel is full, so what is still queued sits in `_out`, where
-    // [_unsent] counts it.
-    _writing = _socket
-        .addStream(_out.stream.map(_taken))
+    // while the kernel is full, so what is still queued sits where the
+    // backlog counts it.
+    _writing = _backlog
+        .pipe(_out.stream, _socket)
         .then((_) {}, onError: failed);
 
     if (prefaceTimeout != null) {
@@ -116,7 +118,7 @@ class RpcSocketChannel implements IRpcChannel {
       );
     }
 
-    _write(preface);
+    _out.add(preface);
   }
 
   /// The first bytes each side writes: `rpcsock` and a protocol version.
@@ -136,6 +138,7 @@ class RpcSocketChannel implements IRpcChannel {
 
   final Socket _socket;
   final Duration _closeTimeout;
+  final RpcWriteBacklog _backlog;
   late final StreamSubscription<Uint8List> _sub;
   Timer? _prefaceTimer;
 
@@ -144,8 +147,6 @@ class RpcSocketChannel implements IRpcChannel {
     sync: true,
   );
   late final Future<void> _writing;
-  int _unsent = 0;
-  bool _readPausedForWrites = false;
 
   /// Single-subscription, so frames that arrive before the frame channel
   /// subscribes are buffered rather than dropped.
@@ -239,27 +240,7 @@ class RpcSocketChannel implements IRpcChannel {
   @override
   Future<void> send(Uint8List data) async {
     if (_closed) return;
-    _write(data);
-  }
-
-  void _write(List<int> data) {
-    _unsent += data.length;
     _out.add(data);
-    final max = maxWriteBacklogBytes;
-    if (max != null && !_readPausedForWrites && _unsent > max) {
-      _readPausedForWrites = true;
-      _sub.pause();
-    }
-  }
-
-  /// dart:io has taken [data] from `_out`.
-  List<int> _taken(List<int> data) {
-    _unsent -= data.length;
-    if (_readPausedForWrites && _unsent <= maxWriteBacklogBytes! ~/ 2) {
-      _readPausedForWrites = false;
-      _sub.resume();
-    }
-    return data;
   }
 
   @override

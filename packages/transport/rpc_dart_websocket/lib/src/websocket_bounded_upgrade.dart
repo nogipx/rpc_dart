@@ -12,10 +12,6 @@ import 'package:rpc_dart/transport.dart';
 
 const String _webSocketGuid = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
-/// Unsent bytes past which a server stops reading its peer; without it a peer
-/// that reads nothing and keeps sending calls is answered into memory.
-const int _maxWriteBacklogBytes = 1024 * 1024;
-
 /// Upgrades [request] to a server-side [WebSocket] whose inbound messages may
 /// not exceed [maxMessageBytes].
 ///
@@ -24,8 +20,9 @@ const int _maxWriteBacklogBytes = 1024 * 1024;
 /// buffered for as long as it writes. The ceiling is applied to the raw socket
 /// from each frame's header, before dart:io sees the payload.
 ///
-/// The socket is not read while more than 1 MiB of what was written to it is
-/// unsent, so a peer that reads nothing is not answered into memory.
+/// The socket is not read while more than [RpcWriteBacklog.defaultServerMax]
+/// of what was written to it is unsent, so a peer that reads nothing is not
+/// answered into memory.
 ///
 /// No `permessage-deflate`: the caller takes the dart:io path when compression
 /// is on.
@@ -83,7 +80,7 @@ Future<WebSocket> upgradeBounded(
     _BoundedSocket(
       socket,
       maxMessageBytes,
-      backlog: _WriteBacklog(_maxWriteBacklogBytes),
+      maxUnsentBytes: RpcWriteBacklog.defaultServerMax,
     ),
     protocol: protocol,
     serverSide: true,
@@ -170,22 +167,28 @@ Future<WebSocket> connectBounded(
 }
 
 /// A [Socket] whose inbound bytes pass through a [WebSocketFrameGuard], and
-/// with a [backlog], whose reads stop while too much is unsent.
+/// with [maxUnsentBytes], whose reads stop while that much is unsent.
 ///
 /// Past the ceiling the socket is destroyed: dart:io writes to it through
 /// `addStream`, so a close frame of our own cannot be interleaved safely.
 final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
-  _BoundedSocket(this._socket, int maxMessageBytes, {_WriteBacklog? backlog})
-    : _backlog = backlog,
-      super(_guarded(_socket, maxMessageBytes, backlog));
+  _BoundedSocket(Socket socket, int maxMessageBytes, {int? maxUnsentBytes})
+    : this._(
+        socket,
+        maxMessageBytes,
+        RpcWriteBacklog(maxUnsentBytes: maxUnsentBytes),
+      );
+
+  _BoundedSocket._(this._socket, int maxMessageBytes, this._backlog)
+    : super(_guarded(_socket, maxMessageBytes, _backlog));
 
   final Socket _socket;
-  final _WriteBacklog? _backlog;
+  final RpcWriteBacklog _backlog;
 
   static Stream<Uint8List> _guarded(
     Socket socket,
     int maxMessageBytes,
-    _WriteBacklog? backlog,
+    RpcWriteBacklog backlog,
   ) {
     final guard = WebSocketFrameGuard(maxMessageBytes);
     StreamSubscription<Uint8List>? source;
@@ -209,7 +212,7 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
           onError: out.addError,
           onDone: out.close,
         );
-        backlog?._attach(reader);
+        backlog.attachReader(reader);
       },
       onPause: () => source?.pause(),
       onResume: () => source?.resume(),
@@ -258,12 +261,8 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
       _socket.addError(error, stackTrace);
 
   @override
-  Future<void> addStream(Stream<List<int>> stream) {
-    final backlog = _backlog;
-    return backlog == null
-        ? _socket.addStream(stream)
-        : backlog._addStream(_socket, stream);
-  }
+  Future<void> addStream(Stream<List<int>> stream) =>
+      _backlog.pipe(stream, _socket);
 
   @override
   Future<void> close() => _socket.close();
@@ -286,74 +285,6 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
 
   @override
   void writeln([Object? object = '']) => _socket.writeln(object);
-}
-
-/// Stops reading a server's peer while too much of what dart:io wrote to it
-/// is unsent.
-///
-/// dart:io never pauses its reader while its writes queue, so a peer that
-/// reads nothing and keeps sending calls is answered into memory without end.
-/// Past [maxUnsentBytes] unsent, reading stops until half has gone out.
-///
-/// For a server only: if both ends paused, each would wait for the other to
-/// read.
-final class _WriteBacklog {
-  _WriteBacklog(this.maxUnsentBytes);
-
-  /// Unsent bytes past which reading stops.
-  final int maxUnsentBytes;
-
-  int _unsent = 0;
-  bool _over = false;
-  StreamSubscription<Uint8List>? _reader;
-
-  void _attach(StreamSubscription<Uint8List> reader) {
-    _reader = reader;
-    if (_over) reader.pause();
-  }
-
-  /// Writes [stream] to [socket], counting what the socket has not taken.
-  ///
-  /// [stream] is never paused: what dart:io holds above a paused stream is
-  /// uncounted, so everything it writes has to land in `out`, which is.
-  Future<void> _addStream(Socket socket, Stream<List<int>> stream) {
-    // Synchronous, so a write the kernel can take now is not held a microtask.
-    final out = StreamController<List<int>>(sync: true);
-    late final StreamSubscription<List<int>> source;
-    final writing = socket.addStream(out.stream.map(_taken)).whenComplete(() {
-      // A reader left paused holds back the done event of a socket that
-      // failed or was destroyed, and the connection never ends.
-      unawaited(source.cancel());
-      _release();
-    });
-    source = stream.listen(
-      (data) {
-        _unsent += data.length;
-        out.add(data);
-        if (!_over && _unsent > maxUnsentBytes) {
-          _over = true;
-          _reader?.pause();
-        }
-      },
-      onError: out.addError,
-      onDone: out.close,
-      cancelOnError: true,
-    );
-    return writing;
-  }
-
-  /// The socket has taken [data].
-  List<int> _taken(List<int> data) {
-    _unsent -= data.length;
-    if (_unsent <= maxUnsentBytes ~/ 2) _release();
-    return data;
-  }
-
-  void _release() {
-    if (!_over) return;
-    _over = false;
-    _reader?.resume();
-  }
 }
 
 /// Reads WebSocket frame headers off a byte stream and refuses a message whose

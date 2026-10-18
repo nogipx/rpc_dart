@@ -47,8 +47,9 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (endpoint) =>
-            endpoint.registerServiceContract(_StreamingContract()),
+        mode: RpcResponderMode(
+          (endpoint) => endpoint.registerServiceContract(_StreamingContract()),
+        ),
       );
       await server.start();
 

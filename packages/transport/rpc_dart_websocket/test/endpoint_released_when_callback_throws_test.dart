@@ -2,13 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A throwing onEndpointCreated leaked the endpoint permanently.
+// A throwing RpcResponderMode register callback leaked the endpoint
+// permanently.
 //
 // _handleConnection registers the endpoint BEFORE calling the user callback,
 // and installs the `sink.done` release wiring only AFTER it:
 //
 //   _endpoints.add(endpoint);
-//   _onEndpointCreated?.call(endpoint);   // <-- user code, can throw
+//   register(endpoint);                   // <-- user code, can throw
 //   endpoint.start();
 //   channel.sink.done.then(_releaseEndpoint)
 //
@@ -26,7 +27,7 @@
 // were invisible to that getter -- the disposed count is what exposed them,
 // which is why this test asserts on disposal and not only on the list.
 //
-// A throwing onEndpointCreated is ordinary rather than exotic: that callback is
+// A throwing register callback is ordinary rather than exotic: that callback is
 // where the application registers its contracts, so a DI failure, a duplicate
 // registration or a bad config lands exactly there.
 @TestOn('vm')
@@ -88,15 +89,15 @@ void main() {
   }
 
   test(
-    'a throwing onEndpointCreated releases the endpoint',
+    'a throwing responder register callback releases the endpoint',
     () async {
       http = await HttpServer.bind('127.0.0.1', 0);
       server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (e) {
+        mode: RpcResponderMode((e) {
           e.registerServiceContract(_Contract());
           throw StateError('DI failed while registering contracts');
-        },
+        }),
       );
       await server.start();
       uri = Uri.parse('ws://127.0.0.1:${http.port}');
@@ -126,10 +127,10 @@ void main() {
     http = await HttpServer.bind('127.0.0.1', 0);
     server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onPeerEndpointCreated: (e) {
+      mode: RpcPeerMode((e) {
         e.registerServiceContract(_Contract());
         throw StateError('DI failed while registering contracts');
-      },
+      }),
     );
     await server.start();
     uri = Uri.parse('ws://127.0.0.1:${http.port}');
@@ -147,10 +148,10 @@ void main() {
       http = await HttpServer.bind('127.0.0.1', 0);
       server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (e) {
+        mode: RpcResponderMode((e) {
           e.registerServiceContract(_Contract());
           if (fail) throw StateError('transient DI failure');
-        },
+        }),
       );
       await server.start();
       uri = Uri.parse('ws://127.0.0.1:${http.port}');
@@ -185,7 +186,7 @@ void main() {
       http = await HttpServer.bind('127.0.0.1', 0);
       server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (e) => e.registerServiceContract(_Contract()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
       );
       await server.start();
       uri = Uri.parse('ws://127.0.0.1:${http.port}');

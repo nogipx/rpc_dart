@@ -80,7 +80,7 @@ void main() {
       port: 0,
       securityContext: serverContext,
       prefaceTimeout: _prefaceTimeout,
-      onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
     );
     await server.start();
     addTearDown(server.stop);

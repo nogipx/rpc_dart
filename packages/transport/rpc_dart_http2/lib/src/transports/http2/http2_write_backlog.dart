@@ -4,34 +4,27 @@
 
 import 'dart:async';
 
-/// Stops reading a peer while too much of what was written to it is unsent.
+import 'package:rpc_dart/transport.dart';
+
+/// [RpcWriteBacklog] between package:http2 and a socket's two streams.
 ///
 /// package:http2 never pauses its frame reader, and an answer that is HEADERS
 /// alone is outside flow control, so a peer that reads nothing and keeps
 /// opening calls is answered into a queue without end. [reads] wraps the
-/// socket's incoming bytes and [writes] its outgoing ones: past
-/// [maxUnsentBytes] unsent, reading stops until the backlog has halved.
-///
-/// For a server only: if both ends paused, each would wait for the other to
-/// read.
+/// socket's incoming bytes and [writes] its outgoing ones.
 final class Http2WriteBacklog {
   /// Wraps [outgoing], which this then writes to through `addStream`.
-  Http2WriteBacklog(this._outgoing, {required this.maxUnsentBytes});
-
-  /// Unsent bytes past which reading stops.
-  final int maxUnsentBytes;
+  Http2WriteBacklog(this._outgoing, {required int maxUnsentBytes})
+    : _backlog = RpcWriteBacklog(maxUnsentBytes: maxUnsentBytes);
 
   final StreamSink<List<int>> _outgoing;
+  final RpcWriteBacklog _backlog;
 
   /// Synchronous, so a write the kernel can take now is not held a microtask.
-  /// dart:io pauses the stream it writes from while the kernel is full, so
-  /// what is still queued sits here, where [_unsent] counts it.
   final StreamController<List<int>> _out = StreamController<List<int>>(
     sync: true,
   );
   Future<void>? _writing;
-  int _unsent = 0;
-  bool _over = false;
   StreamSubscription<List<int>>? _reader;
 
   /// [incoming], paused while the backlog is over the limit.
@@ -40,13 +33,12 @@ final class Http2WriteBacklog {
     controller = StreamController<List<int>>(
       sync: true,
       onListen: () {
-        final reader = incoming.listen(
+        final reader = _reader = incoming.listen(
           controller.add,
           onError: controller.addError,
           onDone: controller.close,
         );
-        _reader = reader;
-        if (_over) reader.pause();
+        _backlog.attachReader(reader);
       },
       onPause: () => _reader?.pause(),
       onResume: () => _reader?.resume(),
@@ -61,27 +53,10 @@ final class Http2WriteBacklog {
   /// connection closed writes into a closed sink and throws.
   late final StreamSink<List<int>> writes = _BacklogSink(this);
 
-  Future<void> _start() =>
-      _writing ??= _outgoing.addStream(_out.stream.map(_taken));
+  Future<void> _start() => _writing ??= _backlog.pipe(_out.stream, _outgoing);
 
   void _write(List<int> data) {
-    if (_out.isClosed) return;
-    _unsent += data.length;
-    _out.add(data);
-    if (!_over && _unsent > maxUnsentBytes) {
-      _over = true;
-      _reader?.pause();
-    }
-  }
-
-  /// [_outgoing] has taken [data].
-  List<int> _taken(List<int> data) {
-    _unsent -= data.length;
-    if (_over && _unsent <= maxUnsentBytes ~/ 2) {
-      _over = false;
-      _reader?.resume();
-    }
-    return data;
+    if (!_out.isClosed) _out.add(data);
   }
 }
 

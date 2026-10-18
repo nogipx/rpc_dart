@@ -159,7 +159,7 @@ void main() {
     addTearDown(() => http.close(force: true));
     final server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onEndpointCreated: (_) {},
+      mode: RpcResponderMode((_) {}),
     );
     unawaited(Future<void>.sync(server.start));
 
@@ -198,7 +198,7 @@ void main() {
     addTearDown(() => http.close(force: true));
     final server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onEndpointCreated: (_) {},
+      mode: RpcResponderMode((_) {}),
     );
     unawaited(Future<void>.sync(server.start));
 

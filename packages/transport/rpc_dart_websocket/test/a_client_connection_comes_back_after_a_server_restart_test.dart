@@ -46,7 +46,7 @@ final class _Server {
     final http = await HttpServer.bind('127.0.0.1', port);
     final server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
     );
     await server.start();
     return _Server._(http, server);

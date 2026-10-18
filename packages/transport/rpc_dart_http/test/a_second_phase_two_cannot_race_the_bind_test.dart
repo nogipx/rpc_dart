@@ -55,10 +55,10 @@ Future<_Run> _start({required int phaseTwo}) async {
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: port,
-    onEndpointCreated: (e) {
+    mode: RpcResponderMode((e) {
       e.registerServiceContract(_Echo());
       e.start();
-    },
+    }),
   );
   addTearDown(() => server.stop().catchError((Object _) {}));
 
@@ -110,7 +110,7 @@ void main() {
       final server = RpcHttpServer(
         host: '127.0.0.1',
         port: await _freePort(),
-        onEndpointCreated: (e) {},
+        mode: RpcResponderMode((e) {}),
       );
 
       await expectLater(

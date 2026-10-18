@@ -41,7 +41,7 @@ Future<_Run> _probeServer({
   var connErrors = 0;
   final server = RpcWebSocketServer(
     connections: rpcWebSocketConnections(http, allowedOrigins: allowedOrigins),
-    onEndpointCreated: (_) {},
+    mode: RpcResponderMode((_) {}),
     onConnectionError: (_, _) => connErrors++,
     logger: LogScope(counter, 'test'),
   );

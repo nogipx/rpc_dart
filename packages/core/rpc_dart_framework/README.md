@@ -71,11 +71,7 @@ await RpcApp.server(
     PostgresModule(),
     UserModule(),   // depends on PostgresModule
   ],
-  server: (onEndpoint) => RpcHttp2Server(
-    host: '0.0.0.0',
-    port: 50051,
-    onEndpointCreated: onEndpoint,
-  ),
+  server: (mode) => RpcHttp2Server(host: '0.0.0.0', port: 50051, mode: mode),
   interceptors: [authInterceptor, rateLimiter],
   config: RpcAppConfig(
     env: Platform.environment,
@@ -87,7 +83,7 @@ await RpcApp.server(
 ).run(); // blocks until SIGTERM / SIGINT, then stops cleanly
 ```
 
-`server` receives an `onEndpoint` callback. Pass it to the server's endpoint-created hook. If you do not, no contracts are registered and the app serves nothing. `RpcApp.server` also takes `middlewares` and `afterModulesStart`.
+`server` receives an `RpcResponderMode`. Pass it to the server's `mode:` parameter. If you do not, no contracts are registered and the app serves nothing. `RpcApp.server` also takes `middlewares` and `afterModulesStart`.
 
 `run()` handles OS signals. Use `start()` / `stop()` for manual control (e.g. in tests).
 

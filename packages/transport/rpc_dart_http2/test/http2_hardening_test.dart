@@ -102,9 +102,9 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
-        onEndpointCreated: (endpoint) {
+        mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoContract());
-        },
+        }),
       );
       await server.start();
       addTearDown(server.stop);
@@ -138,9 +138,9 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
-        onEndpointCreated: (endpoint) {
+        mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoContract());
-        },
+        }),
       );
       await server.start();
       addTearDown(server.stop);
@@ -210,9 +210,9 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         securityContext: serverContext,
-        onEndpointCreated: (endpoint) {
+        mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoContract());
-        },
+        }),
       );
       await server.start();
       addTearDown(server.stop);
@@ -226,9 +226,9 @@ void main() {
         host: '127.0.0.1',
         port: 0,
         securityContext: serverContext,
-        onEndpointCreated: (endpoint) {
+        mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoContract());
-        },
+        }),
       );
       await server.start();
       addTearDown(server.stop);

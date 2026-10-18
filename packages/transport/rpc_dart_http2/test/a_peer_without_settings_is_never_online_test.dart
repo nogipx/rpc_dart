@@ -62,7 +62,7 @@ void main() {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (_) {},
+      mode: RpcResponderMode((_) {}),
     );
     await server.start();
     addTearDown(server.stop);

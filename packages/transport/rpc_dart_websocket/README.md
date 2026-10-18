@@ -170,7 +170,7 @@ Future<RpcWebSocketServer> serve(RpcResponderContract service) async {
       allowedOrigins: {'https://app.example.com'},
     ),
     maxConnections: 1000,
-    onEndpointCreated: (endpoint) => endpoint.registerServiceContract(service),
+    mode: RpcResponderMode.contracts([service]),
   );
   await server.start();
   return server;
@@ -262,9 +262,9 @@ RpcWebSocketServer buildServer(
     connections: connections,
     policy: const RpcSecurityPolicy(),
     maxConnections: 1000,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       endpoint.registerServiceContract(createService());
-    },
+    }),
     onConnectionOpened: (channel) => print('connected'),
     onConnectionClosed: (channel) => print('disconnected'),
     onConnectionError: (error, stackTrace) => print('connection error: $error'),
@@ -277,9 +277,8 @@ RpcWebSocketServer buildServer(
 | `connections` | Required. Upgraded sockets. The server listens to it once, on the first `start()`. |
 | `policy` | Limits for every connection. Also handed to `rpcWebSocketConnections`. |
 | `maxConnections` | Default `null` (no limit). At the limit a new socket is closed immediately. |
-| `onEndpointCreated` | Called with each `RpcResponderEndpoint`; register contracts here. |
-| `onPeerEndpointCreated` | Use instead of `onEndpointCreated` to get an `RpcPeerEndpoint` per connection, which can both serve and call the client. Passing both throws `ArgumentError`. |
-| `onConnectionOpened` / `onConnectionClosed` / `onConnectionError` | Notifications. An exception thrown in one is logged and does not stop the server. |
+| `mode` | Required. `RpcResponderMode(register)` gives each connection an `RpcResponderEndpoint`; `RpcPeerMode(register)` gives it an `RpcPeerEndpoint`, which can both serve and call the client. The register adds the contracts. |
+| `onConnectionOpened` / `onConnectionClosed` / `onConnectionError` | Notifications. An exception thrown in one is logged and does not stop the server. Every opened connection is reported closed once. |
 | `logger` / `logController` | Logging, see `rpc_dart_log`. |
 
 `server.endpoints` lists responder endpoints only; it is empty in peer mode.

@@ -147,17 +147,18 @@ import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 final server = RpcHttp2Server(
   host: '0.0.0.0',
   port: 8080,
-  onEndpointCreated: (endpoint) {
+  mode: RpcResponderMode((endpoint) {
     endpoint.registerServiceContract(GreeterResponder());
-  },
+  }),
   onConnectionOpened: (socket) => print('open ${socket.remoteAddress}'),
   onConnectionClosed: (socket) => print('closed ${socket.remoteAddress}'),
   onConnectionError: (error, stackTrace) => print('error $error'),
 );
 ```
 
-An exception thrown from an observability hook is logged. One thrown from
-`onEndpointCreated` drops that connection. Neither stops the server.
+An exception thrown from an observability hook is logged. One thrown from the
+mode's register drops that connection. Neither stops the server. Every opened
+connection is reported closed once, including those `stop()` closes.
 
 `host` defaults to `'localhost'`, which is reachable only from the same
 machine. Bind `'0.0.0.0'` to accept remote clients. Pass `port: 0` to bind any
@@ -172,9 +173,7 @@ import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 final wrapped = RpcHttp2Server(
   port: 8080,
   transportWrapper: (inner, socket) => EncryptedTransport(inner),
-  onEndpointCreated: (endpoint) {
-    endpoint.registerServiceContract(GreeterResponder());
-  },
+  mode: RpcResponderMode.contracts([GreeterResponder()]),
 );
 ```
 
@@ -213,9 +212,7 @@ Future<RpcHttp2Server> serveTls() async {
     host: '0.0.0.0',
     port: 8443,
     securityContext: context,
-    onEndpointCreated: (endpoint) {
-      endpoint.registerServiceContract(GreeterResponder());
-    },
+    mode: RpcResponderMode.contracts([GreeterResponder()]),
   );
   await server.start();
   return server;
@@ -271,7 +268,7 @@ This path has no preface timeout and no keepalive; `RpcHttp2Server` adds both.
 | `pingInterval` | 30 s | PING on idle connections. The only bound on a peer that went silent after the handshake. `null` disables it. |
 | `pingTimeout` | `pingInterval` | Wait for the PING ACK before the socket is destroyed. |
 | `prefaceTimeout` | 30 s | Drops a socket that sends no HTTP/2 preface in time: port scanners, HTTP/1.1 clients. `null` disables it; do so if a load balancer opens connections long before it uses them. |
-| `onEndpointCreated` | `null` | Register contracts on each connection's endpoint. |
+| `mode` | required | `RpcResponderMode(register)`: registers contracts on each connection's endpoint. |
 | `onConnectionOpened`, `onConnectionClosed`, `onConnectionError` | `null` | Observability hooks. |
 | `transportWrapper` | `null` | Wraps each connection's transport. |
 | `logger` | `null` | A `LogScope` for the server and its transports. |
@@ -345,8 +342,8 @@ What this means for real gRPC peers:
   load balancer a dead connection is otherwise noticed only when a call times
   out.
 - `createWithContracts` shares one instance of each contract across all
-  connections. Keep per-connection state out of those contracts, or use
-  `onEndpointCreated` to build new ones.
+  connections. Keep per-connection state out of those contracts, or build
+  new ones in an `RpcResponderMode` register.
 - Without `drainTimeout`, `stop()` cuts calls in flight.
 
 [`rpc_dart`]: https://pub.dev/packages/rpc_dart

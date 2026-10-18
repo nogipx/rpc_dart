@@ -46,7 +46,7 @@ Future<_Counts> _oneConnection({required bool speaks}) async {
     host: '127.0.0.1',
     port: 0,
     prefaceTimeout: const Duration(milliseconds: 100),
-    onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
     onConnectionOpened: (_) => opened++,
     onConnectionClosed: (_) => closed++,
   );

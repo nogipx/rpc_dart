@@ -48,7 +48,7 @@ void main() {
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
         policy: _policy,
-        onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
       );
       await server.start();
       final client = await RpcWebSocketCallerTransport.connect(

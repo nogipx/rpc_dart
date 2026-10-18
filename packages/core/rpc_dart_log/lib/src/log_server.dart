@@ -107,7 +107,7 @@ class LogCollectorServer {
     _httpServer = await HttpServer.bind(host, port);
     _rpcServer = RpcWebSocketServer(
       connections: rpcWebSocketConnections(_httpServer!),
-      onEndpointCreated: _onEndpointCreated,
+      mode: RpcResponderMode(_onEndpointCreated),
     );
     await _rpcServer!.start();
   }

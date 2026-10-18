@@ -55,7 +55,7 @@ void main() {
       host: '127.0.0.1',
       port: 0,
       securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
-      onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
     );
     await server.start();
     final transport = await RpcHttp2CallerTransport.connect(

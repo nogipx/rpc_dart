@@ -80,10 +80,10 @@ Future<_Rig> _serve({required int limit}) async {
     host: '127.0.0.1',
     port: 0,
     securityPolicy: RpcSecurityPolicy(maxMessageLengthBytes: limit),
-    onEndpointCreated: (e) {
+    mode: RpcResponderMode((e) {
       e.registerServiceContract(_Svc(seen));
       e.start();
-    },
+    }),
   );
   await server.start();
   await server.afterModulesStart();

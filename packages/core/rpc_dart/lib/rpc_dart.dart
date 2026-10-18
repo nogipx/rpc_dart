@@ -133,4 +133,7 @@ export 'src/_index.dart'
         // Transports and servers
         IRpcTransport,
         IRpcServer,
+        RpcServerMode,
+        RpcResponderMode,
+        RpcPeerMode,
         RpcChannelTransport;

@@ -5,7 +5,7 @@
 // A TCP SYN used to buy an endpoint and a run of the application's callback.
 //
 // RpcHttp2Server._handleConnection is wired to the accept stream, so the
-// transport, the endpoint and onEndpointCreated -- where contracts are
+// transport, the endpoint and the mode's register -- where contracts are
 // registered -- were all built before the peer sent a byte. Every limit this
 // server has is PER CONNECTION, so maxActiveStreams, maxConcurrentHandlers,
 // halfOpenStreamTimeout and the pre-method budget are all downstream of a peer
@@ -62,7 +62,7 @@ Future<RpcHttp2Server> _serve({
     port: 0,
     prefaceTimeout: prefaceTimeout,
     pingInterval: pingInterval,
-    onEndpointCreated: (e) => e.registerServiceContract(_Svc()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
   );
   await server.start();
   addTearDown(server.stop);

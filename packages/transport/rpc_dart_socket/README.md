@@ -66,7 +66,7 @@ lets running calls finish within the budget, then closes.
 | `policy` | `RpcSecurityPolicy()` | Limits applied to every connection. |
 | `maxConnections` | none | Cap on concurrent connections, those still in their handshake included. A connection past it is closed at once. |
 | `prefaceTimeout` | 10 s | How long an accepted socket may take to send its preface. No endpoint exists before it arrives. |
-| `onEndpointCreated` / `onPeerEndpointCreated` | none | Registers contracts per connection; the second for peer mode. Pass one, not both. |
+| `mode` | required | What each connection gets: `RpcResponderMode(register)` or `RpcPeerMode(register)` for peer mode, where both sides may start calls. The register adds the contracts. |
 | `onConnectionOpened` / `onConnectionClosed` | none | Observability. Every opened connection is reported closed once. |
 
 **A stale socket file is replaced.** A running server holds an exclusive lock

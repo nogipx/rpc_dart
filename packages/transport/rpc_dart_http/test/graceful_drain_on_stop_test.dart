@@ -56,10 +56,10 @@ void main() {
     server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (e) {
+      mode: RpcResponderMode((e) {
         e.registerServiceContract(_SlowContract());
         e.start();
-      },
+      }),
     );
     await server.start();
     await server.afterModulesStart();
@@ -176,10 +176,10 @@ void main() {
       server = RpcHttpServer(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) {
+        mode: RpcResponderMode((e) {
           e.registerServiceContract(_SlowContract());
           e.start();
-        },
+        }),
       );
       await server.start();
       await server.afterModulesStart();

@@ -29,7 +29,7 @@ void main() {
         // end up on a stack the server never bound.
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (endpoint) {
+        mode: RpcResponderMode((endpoint) {
           endpoint.transport.incomingMessages.listen((message) {
             if (!message.isMetadataOnly && message.payload != null) {
               serverRequestPayloads.add(Uint8List.fromList(message.payload!));
@@ -37,7 +37,7 @@ void main() {
           });
 
           endpoint.registerServiceContract(TestServiceContract());
-        },
+        }),
       );
       await testServer.start();
 

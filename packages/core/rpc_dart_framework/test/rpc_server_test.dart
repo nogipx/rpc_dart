@@ -1197,7 +1197,7 @@ void main() {
       () async {
         final app = RpcApp.server(
           modules: [_InfraModule(), EchoModule()],
-          server: (onEndpoint) => _NullServer(onEndpoint),
+          server: (mode) => _NullServer(mode),
         );
         await app.start();
         await app.stop();
@@ -1208,7 +1208,7 @@ void main() {
       // topo sort still works with plain modules
       final app = RpcApp.server(
         modules: [EchoModule(), _InfraModule()],
-        server: (onEndpoint) => _NullServer(onEndpoint),
+        server: (mode) => _NullServer(mode),
       );
       await app.start();
       await app.stop();
@@ -1302,9 +1302,9 @@ class _InfraModule extends RpcModule {
   String get name => 'InfraModule';
 }
 
-/// Minimal IRpcServer that ignores the endpoint callback and does nothing.
+/// Minimal IRpcServer that ignores the mode and does nothing.
 class _NullServer implements IRpcServer {
-  _NullServer(void Function(RpcResponderEndpoint) _);
+  _NullServer(RpcResponderMode _);
 
   @override
   Future<void> start() async {}

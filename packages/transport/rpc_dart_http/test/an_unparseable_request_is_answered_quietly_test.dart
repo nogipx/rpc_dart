@@ -14,6 +14,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:test/test.dart';
 
@@ -58,7 +59,7 @@ void main() {
       final server = RpcHttpServer(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (_) {},
+        mode: RpcResponderMode((_) {}),
       );
       await server.start();
       await server.afterModulesStart();
@@ -82,7 +83,7 @@ void main() {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (_) {},
+      mode: RpcResponderMode((_) {}),
     );
     await server.start();
     await server.afterModulesStart();

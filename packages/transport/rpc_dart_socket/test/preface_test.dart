@@ -106,7 +106,7 @@ void main() {
       address: address,
       maxConnections: 1,
       prefaceTimeout: const Duration(milliseconds: 200),
-      onEndpointCreated: (e) => e.registerServiceContract(EchoResponder()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(EchoResponder())),
     );
     await server.start();
     addTearDown(server.stop);

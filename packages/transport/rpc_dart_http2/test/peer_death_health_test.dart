@@ -56,7 +56,7 @@ void main() {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (e) => e.registerServiceContract(_Contract()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
     );
     await server.start();
     final client = await RpcHttp2CallerTransport.connect(
@@ -97,7 +97,7 @@ void main() {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (e) => e.registerServiceContract(_Contract()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
     );
     await server.start();
     addTearDown(server.stop);
@@ -123,7 +123,7 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) => e.registerServiceContract(_Contract()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
       );
       await server.start();
       addTearDown(server.stop);

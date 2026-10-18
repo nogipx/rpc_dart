@@ -113,7 +113,7 @@ Future<RpcSocketServer> serveEcho(
   final server = RpcSocketServer(
     address: address,
     maxConnections: maxConnections,
-    onEndpointCreated: (e) => e.registerServiceContract(EchoResponder()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(EchoResponder())),
     onConnectionOpened: onConnectionOpened,
     onConnectionClosed: onConnectionClosed,
   );

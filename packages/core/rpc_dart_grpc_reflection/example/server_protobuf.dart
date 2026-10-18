@@ -90,11 +90,11 @@ void main() async {
   final server = RpcHttp2Server(
     host: '0.0.0.0',
     port: 50051,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       registry.attachTo(endpoint);
       endpoint.registerServiceContract(EchoResponderContract());
       // RpcHttp2Server starts the endpoint after this callback returns.
-    },
+    }),
   );
 
   await server.start();

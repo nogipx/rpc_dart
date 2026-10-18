@@ -60,10 +60,10 @@ Future<RpcCallerEndpoint> _serve(
     host: '127.0.0.1',
     port: 0,
     securityPolicy: policy,
-    onEndpointCreated: (e) {
+    mode: RpcResponderMode((e) {
       e.registerServiceContract(_Svc());
       e.start();
-    },
+    }),
   );
   await server.start();
   await server.afterModulesStart();

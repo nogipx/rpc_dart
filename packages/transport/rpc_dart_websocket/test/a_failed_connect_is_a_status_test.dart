@@ -65,7 +65,7 @@ void main() {
       final io = await HttpServer.bind('127.0.0.1', 0);
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(io, allowUpgrade: (_) => false),
-        onEndpointCreated: (_) {},
+        mode: RpcResponderMode((_) {}),
       );
       await server.start();
       addTearDown(() async {

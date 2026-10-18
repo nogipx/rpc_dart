@@ -60,10 +60,10 @@ Future<_Rig> _serve({
       allowedOrigins: allowedOrigins,
       allowUpgrade: allowUpgrade,
     ),
-    onEndpointCreated: (e) {
+    mode: RpcResponderMode((e) {
       opened.add(1);
       e.registerServiceContract(_Svc());
-    },
+    }),
   );
   await server.start();
   return (http: http, server: server, opened: opened);

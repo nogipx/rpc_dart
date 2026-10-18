@@ -53,10 +53,10 @@ void main() {
       host: '127.0.0.1',
       port: 0,
       securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 3),
-      onEndpointCreated: (endpoint) {
+      mode: RpcResponderMode((endpoint) {
         serverEndpoint = endpoint;
         endpoint.registerServiceContract(_Contract());
-      },
+      }),
     );
     await server.start();
 
@@ -135,10 +135,10 @@ void main() {
         maxActiveStreams: 1000,
         maxConcurrentHandlers: 3,
       ),
-      onEndpointCreated: (endpoint) {
+      mode: RpcResponderMode((endpoint) {
         serverEndpoint = endpoint;
         endpoint.registerServiceContract(_Contract());
-      },
+      }),
     );
     await server.start();
 

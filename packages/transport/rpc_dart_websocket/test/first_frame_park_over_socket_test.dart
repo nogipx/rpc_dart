@@ -111,10 +111,10 @@ Future<void> _probe({
   final server = RpcWebSocketServer(
     connections: connections.stream,
     policy: policy,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       endpoint.registerServiceContract(service);
       endpoint.start();
-    },
+    }),
   );
   await server.start();
 

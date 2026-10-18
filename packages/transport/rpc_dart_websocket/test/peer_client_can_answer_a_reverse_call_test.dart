@@ -87,9 +87,9 @@ void main() {
     final built = Completer<RpcPeerEndpoint>();
     server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onPeerEndpointCreated: (endpoint) {
+      mode: RpcPeerMode((endpoint) {
         if (!built.isCompleted) built.complete(endpoint);
-      },
+      }),
     );
     await server.start();
 

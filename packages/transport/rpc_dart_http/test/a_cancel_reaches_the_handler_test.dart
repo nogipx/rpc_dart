@@ -66,8 +66,9 @@ _serve({LogScope? logger}) async {
     host: '127.0.0.1',
     port: 0,
     logger: logger,
-    onEndpointCreated: (e) =>
-        e.registerServiceContract(_Hanging(entered, cancelled)),
+    mode: RpcResponderMode(
+      (e) => e.registerServiceContract(_Hanging(entered, cancelled)),
+    ),
   );
   await server.start();
   await server.afterModulesStart();

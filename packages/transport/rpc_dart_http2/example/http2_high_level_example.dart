@@ -16,10 +16,10 @@ Future<void> main() async {
   // === The server ===
   final server = RpcHttp2Server(
     port: port,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       // Register the service on every new connection.
       endpoint.registerServiceContract(EchoService());
-    },
+    }),
   );
 
   try {

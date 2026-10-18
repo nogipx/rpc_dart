@@ -17,66 +17,49 @@ import 'websocket_server_policy.dart';
 /// Each incoming [WebSocketChannel] is wrapped via
 /// [RpcWebSocketResponderTransport] (3-layer architecture under the hood).
 class RpcWebSocketServer implements IRpcServer {
-  final LogScope? _logger;
-  final LogController? _logController;
+  final LogScope _log;
   final Stream<WebSocketChannel> _connections;
   final RpcSecurityPolicy _policy;
+  final RpcConnectionHost _host;
 
-  /// Ceiling on concurrent connections, or null for none. Counted on
-  /// [_endpoints], which a closed connection leaves on its `sink.done`.
-  final int? _maxConnections;
-  bool _warnedAtCap = false;
-
-  final void Function(RpcResponderEndpoint endpoint)? _onEndpointCreated;
-  final void Function(RpcPeerEndpoint endpoint)? _onPeerEndpointCreated;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
   final void Function(WebSocketChannel channel)? _onConnectionOpened;
   final void Function(WebSocketChannel channel)? _onConnectionClosed;
 
   StreamSubscription<WebSocketChannel>? _connectionsSub;
   bool _isRunning = false;
-
-  /// Every endpoint this server created, peer-mode included.
-  ///
-  /// Typed [RpcEndpointBase] and not `RpcResponderEndpoint`, which a
-  /// [RpcPeerEndpoint] structurally cannot join — they are sibling subclasses.
-  /// Narrowing it drops peer endpoints out of [stop], which closes what it
-  /// finds here: their transports stay open and their contracts never have
-  /// `dispose()` called, so whatever a contract holds is never released.
-  final List<RpcEndpointBase> _endpoints = [];
   int _connCounter = 0;
 
+  /// A server over [connections].
+  ///
+  /// [mode] says what each connection gets: [RpcResponderMode] for a
+  /// responder endpoint, [RpcPeerMode] for a peer one, where both sides may
+  /// start calls. [maxConnections] caps concurrent connections; one past it
+  /// is closed with code 1000, or null for no cap.
   RpcWebSocketServer({
     required Stream<WebSocketChannel> connections,
+    required RpcServerMode mode,
     LogScope? logger,
     LogController? logController,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? maxConnections,
-    void Function(RpcResponderEndpoint endpoint)? onEndpointCreated,
-    void Function(RpcPeerEndpoint endpoint)? onPeerEndpointCreated,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(WebSocketChannel channel)? onConnectionOpened,
     void Function(WebSocketChannel channel)? onConnectionClosed,
   }) : _connections = connections,
-       _logger = logger?.child('WebSocketServer'),
-       _logController = logController,
+       _log = logger?.child('WebSocketServer') ?? LogScope.noop,
        _policy = policy,
-       _maxConnections = maxConnections,
-       _onEndpointCreated = onEndpointCreated,
-       _onPeerEndpointCreated = onPeerEndpointCreated,
+       _host = RpcConnectionHost(
+         mode: mode,
+         maxConnections: maxConnections,
+         logger: logger?.child('WebSocketServer'),
+         endpointLogger: logController,
+       ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
-       _onConnectionClosed = onConnectionClosed {
-    // The endpoint is either a peer or a responder, and the two are siblings,
-    // so only one callback could ever run: the other was silently skipped and
-    // its contracts never registered.
-    if (onEndpointCreated != null && onPeerEndpointCreated != null) {
-      throw ArgumentError(
-        'Pass onEndpointCreated or onPeerEndpointCreated, not both',
-      );
-    }
-  }
+       _onConnectionClosed = onConnectionClosed;
 
+  /// A server that registers [contracts] on every connection.
   factory RpcWebSocketServer.createWithContracts({
     required Stream<WebSocketChannel> connections,
     required List<RpcResponderContract> contracts,
@@ -87,32 +70,18 @@ class RpcWebSocketServer implements IRpcServer {
   }) {
     return RpcWebSocketServer(
       connections: connections,
+      mode: RpcResponderMode.contracts(contracts),
       logger: logger,
       logController: logController,
       policy: policy,
       maxConnections: maxConnections,
-      onEndpointCreated: (endpoint) {
-        for (final contract in contracts) {
-          endpoint.registerServiceContract(contract);
-        }
-      },
-      onConnectionError: (error, stackTrace) {
-        logger?.error(
-          'WebSocket connection error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
     );
   }
 
-  /// Responder endpoints only — **empty in peer mode**, where every connection
-  /// is an [RpcPeerEndpoint]. See [IRpcServer.endpoints]. The internal list
-  /// holds both kinds, which is what `stop()` and the drain walk; this getter
-  /// is the narrow public view of it.
+  /// Responder endpoints only, so empty in peer mode. See
+  /// [IRpcServer.endpoints].
   @override
-  List<RpcResponderEndpoint> get endpoints =>
-      List.unmodifiable(_endpoints.whereType<RpcResponderEndpoint>());
+  List<RpcResponderEndpoint> get endpoints => _host.responders;
 
   @override
   bool get isRunning => _isRunning;
@@ -170,11 +139,7 @@ class RpcWebSocketServer implements IRpcServer {
           _handleConnection(channel, label);
         },
         onError: (Object error, StackTrace st) {
-          _logger?.error(
-            'Connection stream error',
-            error: error,
-            stackTrace: st,
-          );
+          _log.error('Connection stream error', error: error, stackTrace: st);
           _notify(
             'onConnectionError',
             () => _onConnectionError?.call(error, st),
@@ -251,24 +216,10 @@ class RpcWebSocketServer implements IRpcServer {
     // Keeping it is also what makes a restart possible over a
     // single-subscription stream, which cancelling permanently prevented. The
     // subscription is released by [dispose], the final teardown.
-    if (drainTimeout != null) await _drain(drainTimeout);
-
-    // CONCURRENTLY, because each close waits on its own peer. A socket close is
-    // a handshake, and a peer that does not answer costs dart:io its whole close
-    // timeout — so closing one at a time makes shutdown the SUM of those waits,
-    // where nothing about them is sequential. One dead connection delayed every
-    // connection behind it.
     //
-    // Each failure is caught per endpoint rather than by the group: `Future.wait`
-    // abandons the remaining futures on the first error, which would leave
-    // endpoints open with nothing left to close them.
-    await Future.wait([
-      for (final endpoint in List.of(_endpoints))
-        endpoint.close().catchError((Object e) {
-          _logger?.warning('Error closing endpoint: $e');
-        }),
-    ]);
-    _endpoints.clear();
+    // WebSocket has no GOAWAY, so an existing connection can still open new
+    // streams during a drain; the host tells the endpoints directly.
+    await _host.stop(drainTimeout: drainTimeout);
   }
 
   /// Stops the server and RELEASES its subscription to `connections`.
@@ -282,197 +233,69 @@ class RpcWebSocketServer implements IRpcServer {
     try {
       await _connectionsSub?.cancel();
     } catch (e) {
-      _logger?.warning('Error cancelling connection subscription: $e');
+      _log.warning('Error cancelling connection subscription: $e');
     } finally {
       _connectionsSub = null;
     }
   }
 
-  /// Waits, up to [budget], for in-flight calls to finish.
-  ///
-  /// The polling loop is [drainUntilIdle]; what is server-specific is the
-  /// COUNT. `activeResponders` counts live responder streams, so a handler that
-  /// outlives its stream is not counted — the same caveat gRPC's own drain
-  /// carries.
-  ///
-  /// STOP ADMITTING FIRST, which is what makes this a drain rather than a wait.
-  /// Accepting has already stopped by the time this runs, but an existing
-  /// CONNECTION can still open new streams, and WebSocket has no GOAWAY to
-  /// forbid it with — so the endpoints are told directly. Measured against
-  /// http2, which does send GOAWAY, both spending their whole budget:
-  ///
-  ///     websocket  1347 calls admitted after shutdown began
-  ///     http2         4
-  ///
-  /// The damage is not the waiting. Endpoints close when the budget expires, so
-  /// a call admitted at 2.9 s of a 3 s drain is killed at 3.0 — the calls most
-  /// likely to be cut are the ones accepted after the decision to shut down.
-  ///
-  /// [RpcEndpointBase.markDraining] and not `drain()`: the latter also cancels
-  /// every active context, which is the opposite of what this promises.
-  Future<void> _drain(Duration budget) {
-    for (final endpoint in _endpoints) {
-      endpoint.markDraining();
-    }
-    return drainUntilIdle(
-      pending: _inFlightCalls,
-      budget: budget,
-      logger: _logger,
-    );
-  }
-
-  /// Live responder streams across every endpoint this server owns.
-  int _inFlightCalls() => inFlightResponderCalls(_endpoints);
-
-  /// Drops a disconnected connection's endpoint and closes it.
-  ///
-  /// Removing it from the list is not enough. An endpoint dropped without
-  /// [RpcEndpointBase.close] never cancels its transport subscription, never
-  /// tears down its still-open responder streams, and — the part no garbage
-  /// collector makes up for — never calls `dispose()` on its contracts, so
-  /// whatever they hold stays held for the life of the process: one leak per
-  /// client disconnect.
-  void _releaseEndpoint(RpcEndpointBase endpoint, WebSocketChannel channel) {
-    _endpoints.remove(endpoint);
-    _warnedAtCap = false;
-    unawaited(
-      endpoint.close().catchError((Object error) {
-        _logger?.warning('Error closing endpoint on disconnect: $error');
-      }),
-    );
-    _notify('onConnectionClosed', () => _onConnectionClosed?.call(channel));
-  }
-
   /// Invokes an observability callback without letting it take the process out.
   ///
-  /// Deliberately NOT applied to [_onEndpointCreated] / [_onPeerEndpointCreated]:
-  /// those register the contracts, so if one fails the connection is useless.
-  /// The surrounding try/catch reports it and closes the socket, which is the
-  /// right outcome — swallowing it would start an endpoint that serves nothing.
+  /// Not applied to the mode's register: it registers the contracts, so if it
+  /// fails the connection is useless. The surrounding try/catch reports it and
+  /// closes the socket.
   void _notify(String what, void Function() body) =>
-      notifyWithoutDying(what, body, logger: _logger);
+      notifyWithoutDying(what, body, logger: _log);
+
+  /// Closes [channel] with code 1000 and [reason].
+  ///
+  /// 1000, not 1001 "going away": package:web_socket refuses to SEND any code
+  /// outside 1000 and 3000-4999, because the reserved ones are the endpoint's
+  /// own to generate. The reason string carries the meaning.
+  void _refuse(WebSocketChannel channel, String clientLabel, String reason) {
+    unawaited(
+      Future<void>.sync(() => channel.sink.close(1000, reason)).catchError((
+        Object e,
+      ) {
+        _log.warning('Error refusing connection $clientLabel: $e');
+      }),
+    );
+  }
 
   void _handleConnection(WebSocketChannel channel, String clientLabel) {
-    // REFUSED, not dropped. The HttpServer underneath is not this server's to
-    // close, so it keeps accepting and `rpcWebSocketConnections` keeps
-    // upgrading -- and `stop()` used to cancel this subscription, which on the
-    // broadcast stream the class recommends for restartability meant the event
-    // was simply DROPPED. The peer completed its handshake, believed it had a
-    // connection, and held a socket nobody owned:
-    //
-    //     handshake in the gap   accepted
-    //     closed 3 s later       NOTHING
-    //     an RPC over it         HUNG
-    //
-    // Reachable by an ordinary rolling restart. Closing here answers the peer
-    // AND covers the leak the cancel was there for, because the connection
-    // never reaches `_endpoints` at all -- which is the third state the two
-    // halves could not be had without.
+    // Refused, not dropped. The HttpServer underneath is not this server's to
+    // close, so it keeps accepting and upgrading while this one is stopped; a
+    // peer that completed its handshake is told, rather than left holding a
+    // socket nobody owns.
     if (!_isRunning) {
-      _logger?.warning(
-        'Refusing connection $clientLabel: the server is stopped',
-      );
-      // 1000, not 1001 "going away": package:web_socket refuses to SEND any
-      // code outside 1000 and 3000-4999, because the reserved ones are the
-      // endpoint's own to generate. The reason string carries the meaning.
-      unawaited(
-        Future<void>.sync(
-          () => channel.sink.close(1000, 'server is not accepting'),
-        ).catchError((Object e) {
-          _logger?.warning('Error refusing connection $clientLabel: $e');
-        }),
-      );
+      _log.warning('Refusing connection $clientLabel: the server is stopped');
+      _refuse(channel, clientLabel, 'server is not accepting');
       return;
     }
-
-    final cap = _maxConnections;
-    if (cap != null && _endpoints.length >= cap) {
-      // Once per stretch at the limit: a client retrying in a loop would
-      // otherwise log every attempt.
-      if (!_warnedAtCap) {
-        _warnedAtCap = true;
-        _logger?.warning(
-          'Refusing connections: at the connection limit ($cap)',
-        );
-      }
-      unawaited(
-        Future<void>.sync(
-          () => channel.sink.close(1000, 'too many connections'),
-        ).catchError((Object e) {
-          _logger?.warning('Error refusing connection $clientLabel: $e');
-        }),
-      );
+    if (!_host.admit()) {
+      _refuse(channel, clientLabel, 'too many connections');
       return;
     }
 
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
 
-    // Remembered so the catch below can release it. The endpoint is registered
-    // in `_endpoints` BEFORE the user callback that can throw, and the
-    // `sink.done` release wiring only AFTER it -- so without this a throwing
-    // callback leaves the endpoint registered, never started, and unreclaimable:
-    // one permanent leak per failed connection, holding the application's
-    // contracts. Closing the socket cannot help, because the hook that reacts
-    // to it has not been attached yet.
-    //
-    // A throwing onEndpointCreated is ordinary rather than exotic: it is where
-    // the application registers its contracts, so a DI failure, a duplicate
-    // registration or a bad config lands exactly there.
-    RpcEndpointBase? created;
     try {
-      final transport = RpcWebSocketResponderTransport(
-        channel,
-        policy: _policy,
+      _host.serve(
+        RpcWebSocketResponderTransport(channel, policy: _policy),
+        done: channel.sink.done,
+        debugLabel: 'WebSocketEndpoint-$clientLabel',
+        onRelease: () => _onConnectionClosed?.call(channel),
       );
-
-      final label = 'WebSocketEndpoint-$clientLabel';
-      final onPeer = _onPeerEndpointCreated;
-      final RpcEndpointBase endpoint;
-      if (onPeer != null) {
-        final peer = RpcPeerEndpoint(
-          transport: transport,
-          debugLabel: label,
-          logger: _logController,
-        );
-        _endpoints.add(peer);
-        created = peer;
-        onPeer(peer);
-        endpoint = peer;
-      } else {
-        final responder = RpcResponderEndpoint(
-          transport: transport,
-          debugLabel: label,
-          logger: _logController,
-        );
-        _endpoints.add(responder);
-        created = responder;
-        _onEndpointCreated?.call(responder);
-        endpoint = responder;
-      }
-      endpoint.start();
-
-      channel.sink.done
-          .then((_) => _releaseEndpoint(endpoint, channel))
-          .catchError((Object _) => _releaseEndpoint(endpoint, channel));
     } catch (e, st) {
-      _logger?.error(
+      _log.error(
         'Failed to create WebSocket RPC connection',
         error: e,
         stackTrace: st,
       );
       _notify('onConnectionError', () => _onConnectionError?.call(e, st));
-      // Release what was already registered: _releaseEndpoint closes it --
-      // which is what disposes the contracts -- and fires onConnectionClosed,
-      // balancing the onConnectionOpened at the top of this method.
-      final orphan = created;
-      if (orphan != null) _releaseEndpoint(orphan, channel);
-      // GUARDED, because this method runs in the accept loop's event handler --
-      // the ROOT ZONE, where an unhandled async error kills the isolate. A bare
-      // `channel.sink.close()` here answered a failed setup by taking the whole
-      // server down with it whenever the close itself rejected, which is exactly
-      // the state a failed setup leaves a socket in. `Future.sync` covers a
-      // SYNCHRONOUS throw from `close` too; the refusal path above is the same
-      // shape.
+      // Guarded: this runs in the accept loop's event handler, the root zone,
+      // where an unhandled async error kills the isolate. `Future.sync` covers
+      // a synchronous throw from `close` too.
       unawaited(
         Future<void>.sync(channel.sink.close).catchError((Object _) {}),
       );

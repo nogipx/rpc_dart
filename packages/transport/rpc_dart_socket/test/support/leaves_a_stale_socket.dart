@@ -15,6 +15,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 
 Future<void> main(List<String> argv) async {
@@ -24,7 +25,10 @@ Future<void> main(List<String> argv) async {
     case 'raw':
       await ServerSocket.bind(address.host, 0);
     case 'server':
-      await RpcSocketServer(address: address).start();
+      await RpcSocketServer(
+        address: address,
+        mode: RpcResponderMode((_) {}),
+      ).start();
     case 'intrude':
       print('ready');
       await stdin.transform(utf8.decoder).transform(const LineSplitter()).first;
@@ -43,7 +47,10 @@ Future<void> main(List<String> argv) async {
         // The queue is full.
       }
       print('queued ${held.length}');
-      final intruder = RpcSocketServer(address: address);
+      final intruder = RpcSocketServer(
+        address: address,
+        mode: RpcResponderMode((_) {}),
+      );
       try {
         await intruder.start();
         print('taken');

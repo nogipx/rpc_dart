@@ -94,7 +94,7 @@ void main() {
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http, policy: policy),
         policy: policy,
-        onEndpointCreated: (_) {},
+        mode: RpcResponderMode((_) {}),
       );
       await server.start();
       addTearDown(() async {
@@ -127,7 +127,7 @@ void main() {
       final http = await HttpServer.bind('127.0.0.1', 0);
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (_) {},
+        mode: RpcResponderMode((_) {}),
       );
       await server.start();
       addTearDown(() async {

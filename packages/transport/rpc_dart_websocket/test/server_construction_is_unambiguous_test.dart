@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Two construction gaps on RpcWebSocketServer. Passing both endpoint callbacks
-// ran only the peer one, so the responder registration an application wrote
-// never happened and its connections served nothing. And `createWithContracts`
-// had no way to take a LogController, so its endpoints logged nowhere.
+// Construction of RpcWebSocketServer: both an RpcResponderMode and an
+// RpcPeerMode server construct, and `createWithContracts` hands the
+// LogController it is given to the endpoints it builds.
 
 import 'dart:async';
 import 'dart:io';
@@ -32,29 +31,18 @@ final class _Echo extends RpcResponderContract {
 }
 
 void main() {
-  test('both endpoint callbacks are refused at construction', () {
+  test('either mode is accepted', () {
     expect(
       () => RpcWebSocketServer(
         connections: const Stream<Never>.empty(),
-        onEndpointCreated: (_) {},
-        onPeerEndpointCreated: (_) {},
-      ),
-      throwsArgumentError,
-    );
-  });
-
-  test('either callback alone is accepted', () {
-    expect(
-      () => RpcWebSocketServer(
-        connections: const Stream<Never>.empty(),
-        onEndpointCreated: (_) {},
+        mode: RpcResponderMode((_) {}),
       ),
       returnsNormally,
     );
     expect(
       () => RpcWebSocketServer(
         connections: const Stream<Never>.empty(),
-        onPeerEndpointCreated: (_) {},
+        mode: RpcPeerMode((_) {}),
       ),
       returnsNormally,
     );

@@ -53,7 +53,7 @@ Future<_Run> _start({required int starts}) async {
   final server = RpcHttp2Server(
     host: '127.0.0.1',
     port: port,
-    onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+    mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
   );
 
   await Future.wait(

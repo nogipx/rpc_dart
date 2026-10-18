@@ -23,7 +23,7 @@ void main() {
       host: '127.0.0.1',
       port: 0,
       securityPolicy: const RpcSecurityPolicy(closeOnProtocolError: true),
-      onEndpointCreated: endpoints.add,
+      mode: RpcResponderMode(endpoints.add),
     );
     await server.start();
     addTearDown(server.stop);

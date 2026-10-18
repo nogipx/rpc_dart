@@ -26,8 +26,8 @@ class _Module extends RpcServerModule {
 }
 
 class _Server implements IRpcServer {
-  _Server(this._onEndpoint);
-  final void Function(RpcResponderEndpoint) _onEndpoint;
+  _Server(this._mode);
+  final RpcResponderMode _mode;
 
   @override
   bool get isRunning => true;
@@ -38,7 +38,7 @@ class _Server implements IRpcServer {
   @override
   Future<void> start() async {
     final (_, server) = RpcChannelTransport.memoryPair();
-    _onEndpoint(RpcResponderEndpoint(transport: server));
+    _mode.register(RpcResponderEndpoint(transport: server));
   }
 
   @override

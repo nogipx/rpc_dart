@@ -16,6 +16,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_http/rpc_dart_http.dart';
 import 'package:test/test.dart';
 
@@ -26,7 +27,7 @@ Future<RpcHttpServer> _serve({
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
-    onEndpointCreated: (_) {},
+    mode: RpcResponderMode((_) {}),
     headerTimeout: headerTimeout,
     maxConnections: maxConnections,
   );

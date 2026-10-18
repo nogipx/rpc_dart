@@ -24,25 +24,21 @@ import 'rpc_http_responder_transport.dart';
 /// [RpcHttpServer] solves this by splitting setup into two phases:
 ///
 /// - [start]: creates the [RpcHttpResponderTransport] but does NOT bind the
-///   port and does NOT call [onEndpointCreated]. No requests are accepted yet.
+///   port and does NOT run the mode's register. No requests are accepted yet.
 ///
 /// - [afterModulesStart]: call this inside [RpcApp.server]'s `afterModulesStart`
 ///   callback, after all module [onStart] hooks have run. At that point the DI
-///   container is fully populated. Creates the endpoint, calls
-///   [onEndpointCreated] (interceptors + [buildContracts] are applied), then
-///   binds the shelf HTTP server.
+///   container is fully populated. Creates the endpoint, runs the mode's
+///   register (interceptors + [buildContracts] are applied), then binds the
+///   shelf HTTP server.
 ///
 /// ```dart
 /// RpcHttpServer? httpServer;
 ///
 /// await RpcApp.server(
 ///   modules: [DatabaseModule(), UserModule()],
-///   server: (onEndpoint) {
-///     httpServer = RpcHttpServer(
-///       host: '0.0.0.0',
-///       port: 8080,
-///       onEndpointCreated: onEndpoint,
-///     );
+///   server: (mode) {
+///     httpServer = RpcHttpServer(host: '0.0.0.0', port: 8080, mode: mode);
 ///     return httpServer!;
 ///   },
 ///   afterModulesStart: (_) async => httpServer!.afterModulesStart(),
@@ -69,7 +65,7 @@ class RpcHttpServer implements IRpcServer {
   final Duration? _bodyIdleTimeout;
   final Duration? _headerTimeout;
   final int? _maxConnections;
-  final void Function(RpcResponderEndpoint) _onEndpointCreated;
+  final RpcResponderMode _mode;
   final LogScope? _logger;
   final LogController? _logController;
 
@@ -143,7 +139,7 @@ class RpcHttpServer implements IRpcServer {
   RpcHttpServer({
     required String host,
     required int port,
-    required void Function(RpcResponderEndpoint) onEndpointCreated,
+    required RpcResponderMode mode,
     RpcHttpCorsPolicy? corsPolicy,
     RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
     Duration? bodyReadTimeout,
@@ -160,7 +156,7 @@ class RpcHttpServer implements IRpcServer {
        _bodyIdleTimeout = bodyIdleTimeout,
        _headerTimeout = headerTimeout,
        _maxConnections = maxConnections,
-       _onEndpointCreated = onEndpointCreated,
+       _mode = mode,
        _logController = logController,
        _logger = logger?.child('HttpServer');
 
@@ -211,7 +207,7 @@ class RpcHttpServer implements IRpcServer {
 
   /// Call this inside [RpcApp.server]'s `afterModulesStart` callback.
   ///
-  /// Creates the [RpcResponderEndpoint], calls [onEndpointCreated] so the
+  /// Creates the [RpcResponderEndpoint], runs the mode's register so the
   /// framework registers interceptors and contracts (DI is ready at this
   /// point), then binds the shelf server on [host]:[port].
   ///
@@ -278,10 +274,10 @@ class RpcHttpServer implements IRpcServer {
       logger: _logController,
     );
     _endpoint = endpoint;
-    _onEndpointCreated(endpoint);
+    _mode.register(endpoint);
 
-    // Started HERE, as both sibling servers do right after their own
-    // onEndpointCreated. Leave it to the application and one written by analogy
+    // Started HERE, as the sibling servers do right after their own
+    // register. Leave it to the application and one written by analogy
     // with those two registers its contracts and gets a server that accepts
     // connections and answers nothing at all -- a silent hang, no error on
     // either side.
@@ -346,7 +342,7 @@ class RpcHttpServer implements IRpcServer {
     } catch (_) {
       // The bind is the one fallible step here, and it fails for the most
       // ordinary reason there is: the port is taken. By now the endpoint has
-      // been created, handed to onEndpointCreated (so it holds the
+      // been created, handed to the mode's register (so it holds the
       // application's contracts) and started -- and nothing else can release
       // it, because stop() gives up on `!_isRunning` and _isRunning is set on
       // the line after the bind. Without this the contracts keep everything

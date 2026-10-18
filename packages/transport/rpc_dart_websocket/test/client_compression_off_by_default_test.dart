@@ -108,7 +108,9 @@ void main() {
       http = await HttpServer.bind('127.0.0.1', 0);
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
-        onEndpointCreated: (e) => e.registerServiceContract(_EchoContract()),
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_EchoContract()),
+        ),
       );
       await server.start();
       addTearDown(() => server.stop().catchError((Object _) {}));

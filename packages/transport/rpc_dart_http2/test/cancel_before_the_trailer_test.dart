@@ -141,7 +141,7 @@ void main() {
     server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      onEndpointCreated: (e) => e.registerServiceContract(svc),
+      mode: RpcResponderMode((e) => e.registerServiceContract(svc)),
     );
     await server.start();
     latentPort = await _relay(

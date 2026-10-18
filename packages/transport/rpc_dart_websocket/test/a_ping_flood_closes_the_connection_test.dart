@@ -12,8 +12,8 @@ library;
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/io.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
@@ -52,6 +52,7 @@ void main() {
       final closed = Completer<void>();
       final server = RpcWebSocketServer(
         connections: rpcWebSocketConnections(http),
+        mode: RpcResponderMode((_) {}),
         onConnectionClosed: (_) {
           if (!closed.isCompleted) closed.complete();
         },

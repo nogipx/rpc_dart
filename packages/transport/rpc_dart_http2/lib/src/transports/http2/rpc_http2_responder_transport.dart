@@ -121,10 +121,6 @@ class RpcHttp2ResponderTransport extends IRpcTransport
 
   final RpcSecurityPolicy _policy;
 
-  /// Unsent bytes past which [RpcHttp2ResponderTransport.overStreams] stops
-  /// reading the peer.
-  static const int _maxWriteBacklogBytes = 1024 * 1024;
-
   /// Wraps a connection you built yourself.
   ///
   /// This constructor cannot enforce the parts of [policy] that live BELOW
@@ -149,14 +145,11 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   /// Three of them, all invisible once the connection exists:
   ///
   /// * the **write backlog bound**. package:http2 reads on whatever it cannot
-  ///   write, so past 1 MiB unsent this stops reading the peer until half of
-  ///   it has gone out.
+  ///   write, so past [RpcWriteBacklog.defaultServerMax] unsent this stops
+  ///   reading the peer until half of it has gone out.
   /// * the **header-block bound**. package:http2 concatenates a HEADERS frame
   ///   and its CONTINUATION frames with no limit and an O(N^2) recopy, below
   ///   every rpc_dart limit because no stream is created until END_HEADERS.
-  ///   Measured against a connection built without it: 4096 of 4096 flood
-  ///   frames accepted and +178 MiB of RSS, against 129 frames and no growth
-  ///   with it.
   /// * the **advertised MAX_CONCURRENT_STREAMS**. Without it every connection
   ///   announces package:http2's default of 1000 whatever the policy says, so
   ///   `maxActiveStreams` below that refuses streams a conforming client was
@@ -178,7 +171,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
     // a trailer alone grows the server's write queue without end.
     final backlog = Http2WriteBacklog(
       outgoing,
-      maxUnsentBytes: _maxWriteBacklogBytes,
+      maxUnsentBytes: RpcWriteBacklog.defaultServerMax,
     );
     final guarded = guardHttp2HeaderBlock(
       backlog.reads(incoming),

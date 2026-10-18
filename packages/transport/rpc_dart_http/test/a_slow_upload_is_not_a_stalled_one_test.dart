@@ -43,10 +43,10 @@ Future<int> _server({Duration? total, Duration? idle}) async {
     port: 0,
     bodyReadTimeout: total,
     bodyIdleTimeout: idle,
-    onEndpointCreated: (e) {
+    mode: RpcResponderMode((e) {
       e.registerServiceContract(_Svc());
       e.start();
-    },
+    }),
   );
   await server.start();
   await server.afterModulesStart();

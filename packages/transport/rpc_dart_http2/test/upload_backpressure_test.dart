@@ -151,8 +151,9 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) =>
-            e.registerServiceContract(_Contract(run, 'deaf')),
+        mode: RpcResponderMode(
+          (e) => e.registerServiceContract(_Contract(run, 'deaf')),
+        ),
       );
       await server.start();
       final relay = _Relay();
@@ -219,8 +220,9 @@ void main() {
         final server = RpcHttp2Server(
           host: '127.0.0.1',
           port: 0,
-          onEndpointCreated: (e) =>
-              e.registerServiceContract(_Contract(run, 'deaf')),
+          mode: RpcResponderMode(
+            (e) => e.registerServiceContract(_Contract(run, 'deaf')),
+          ),
         );
         await server.start();
         final relay = _Relay();
@@ -296,8 +298,9 @@ void main() {
         final server = RpcHttp2Server(
           host: '127.0.0.1',
           port: 0,
-          onEndpointCreated: (e) =>
-              e.registerServiceContract(_Contract(run, 'hungry')),
+          mode: RpcResponderMode(
+            (e) => e.registerServiceContract(_Contract(run, 'hungry')),
+          ),
         );
         await server.start();
         final transport = await RpcHttp2CallerTransport.connect(

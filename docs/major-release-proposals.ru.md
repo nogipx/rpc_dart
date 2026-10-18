@@ -142,13 +142,17 @@ final class RpcWriteBacklog {
   RpcWriteBacklog({required int? maxUnsentBytes}); // null: never pauses
   static const int defaultServerMax = 1024 * 1024;
 
-  /// Wraps the stream the socket writes from; counts what the sink took.
-  Stream<List<int>> outgoing(Stream<List<int>> source);
+  /// Writes source to sink through addStream; counts what the sink took.
+  Future<void> pipe(Stream<List<int>> source, StreamConsumer<List<int>> sink);
   /// The reader to pause past the max and resume at half.
   void attachReader(StreamSubscription<Object?> reader);
 }
 ```
 
+- `pipe`, а не обёрнутый поток `outgoing`: dart:io может закончить запись, не
+  отменив поток, из которого читает (ошибка raw-сокета завершает `addStream` и
+  оставляет подписку на паузе), поэтому о конце записи говорит только future
+  от `addStream`.
 - Поведение, сохранённое из websocket: чтение возобновляется, когда запись
   заканчивается, поэтому неудачная запись не может оставить пира на паузе
   навсегда. http2 это получает.
@@ -168,27 +172,45 @@ final class RpcWriteBacklog {
 final class RpcConnectionHost {
   RpcConnectionHost({
     required RpcServerMode mode,
-    required RpcSecurityPolicy policy,
     int? maxConnections,
     LogScope? logger,
+    LogController? endpointLogger,
   });
-  bool get atCapacity;          // counts pending handshakes the server reports
-  RpcEndpointBase serve(IRpcTransport transport, {required Future<void> done});
+  bool admit({int pending = 0});   // pending: handshakes the server holds
+  RpcEndpointBase serve(IRpcTransport transport,
+      {required Future<void> done, String? debugLabel, void Function()? onRelease});
+  void release(RpcEndpointBase endpoint);  // idempotent
+  List<RpcResponderEndpoint> get responders;
   Future<void> stop({Duration? drainTimeout});
 }
 
-sealed class RpcServerMode {
-  const factory RpcServerMode.responder(void Function(RpcResponderEndpoint) register);
-  const factory RpcServerMode.peer(void Function(RpcPeerEndpoint) register);
+sealed class RpcServerMode {}
+final class RpcResponderMode extends RpcServerMode {
+  const RpcResponderMode(void Function(RpcResponderEndpoint) register);
+  RpcResponderMode.contracts(List<RpcResponderContract> contracts);
+}
+final class RpcPeerMode extends RpcServerMode {
+  const RpcPeerMode(void Function(RpcPeerEndpoint) register);
 }
 ```
 
 - `RpcServerMode` заменяет пару `onEndpointCreated` / `onPeerEndpointCreated` и
   её проверку «не оба сразу» во время выполнения.
+- Режимы — публичные классы, а не фабрики, поэтому сервер только для
+  responder говорит об этом типом: `RpcHttp2Server` и `RpcHttpServer` принимают
+  `RpcResponderMode`, socket и websocket — `RpcServerMode`. Peer-режим для
+  http2 — ошибка компиляции.
+- Политика остаётся у сервера: хост никогда не строит транспорт.
+- Построитель в `RpcApp.server` получает `RpcResponderMode` вместо callback:
+  `server: (mode) => RpcHttp2Server(port: 50051, mode: mode)`.
 - За серверами остаётся только их собственное: приём, рукопожатие и то, как
   отказанному соединению об этом сообщают (сырой сокет уничтожается, websocket
   отправляет код закрытия).
-- Освобождение идемпотентно (побеждает версия из socket).
+- Освобождение идемпотентно (побеждает версия из socket), и
+  `onConnectionClosed` срабатывает один раз для каждого соединения, включая
+  закрытые `stop()` (http2 их пропускал).
+- Однократное предупреждение на лимите сбрасывается, когда следующее
+  соединение принято.
 
 ### 3c. Одно место для правил статусов и трейлеров
 
@@ -432,7 +454,8 @@ sealed class RpcServerMode {
 | `connectionLost` у транспорта | `incomingMessages` завершается: транспорт закрывается |
 | `headersProvider:` у вызывающей стороны websocket | `headers:`, собранные внутри фабрики `RpcClientConnection`, которая выполняется для каждого соединения |
 | `endpoint.reconnect()` | `RpcClientConnection.forceReconnect()` |
-| `onEndpointCreated:` / `onPeerEndpointCreated:` | `mode: RpcServerMode.responder(...)` / `.peer(...)` |
+| `onEndpointCreated:` / `onPeerEndpointCreated:` | `mode: RpcResponderMode(...)` / `RpcPeerMode(...)`; только контракты: `RpcResponderMode.contracts([...])` |
+| `RpcApp.server(server: (onEndpoint) => ... onEndpointCreated: onEndpoint)` | `server: (mode) => ... mode: mode` |
 | `reconnectFactory:` у вызывающей стороны websocket | `RpcClientConnection` вокруг транспорта |
 | `transport.reconnect()` | переподключается `RpcClientConnection`; транспорт закрывается |
 | `policy: null` у http-сервера или responder (проверки выключены) | политика по умолчанию; чтобы изменить лимиты, передать явную `RpcSecurityPolicy` |

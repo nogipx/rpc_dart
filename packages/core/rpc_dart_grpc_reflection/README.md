@@ -40,8 +40,8 @@ responderEndpoint.registerServiceContract(myResponderContract);
 registry.attachTo(responderEndpoint);
 ```
 
-With `RpcHttp2Server`, build the registry once and call `attachTo` inside
-`onEndpointCreated`; the server creates one endpoint per connection.
+With `RpcHttp2Server`, build the registry once and call `attachTo` inside the
+`RpcResponderMode` register; the server creates one endpoint per connection.
 Runnable servers are in `example/server.dart` (hand-built descriptor) and
 `example/server_protobuf.dart` (`protoc` descriptors and protobuf codecs).
 

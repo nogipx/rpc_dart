@@ -22,6 +22,7 @@ library;
 
 import 'dart:async';
 
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
@@ -35,7 +36,7 @@ Future<_Run> _stop({required int peers, Duration closeDelay = _delay}) async {
   final conns = StreamController<WebSocketChannel>();
   final server = RpcWebSocketServer(
     connections: conns.stream,
-    onEndpointCreated: (_) {},
+    mode: RpcResponderMode((_) {}),
   );
   addTearDown(() async {
     await server.dispose().catchError((Object _) {});

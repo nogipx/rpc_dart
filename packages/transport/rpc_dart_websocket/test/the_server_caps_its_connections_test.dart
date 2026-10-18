@@ -60,10 +60,10 @@ void main() {
     final server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
       maxConnections: 2,
-      onEndpointCreated: (e) {
+      mode: RpcResponderMode((e) {
         opened++;
         e.registerServiceContract(_Echo());
-      },
+      }),
     );
     await server.start();
     final url = Uri.parse('ws://127.0.0.1:${http.port}');
@@ -119,7 +119,7 @@ void main() {
       connections: rpcWebSocketConnections(http),
       logger: LogScope(logs, 'Test'),
       maxConnections: 1,
-      onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
     );
     await server.start();
     final url = Uri.parse('ws://127.0.0.1:${http.port}');
@@ -141,7 +141,7 @@ void main() {
     final http = await HttpServer.bind('127.0.0.1', 0);
     final server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
-      onEndpointCreated: (e) => e.registerServiceContract(_Echo()),
+      mode: RpcResponderMode((e) => e.registerServiceContract(_Echo())),
     );
     await server.start();
     final url = Uri.parse('ws://127.0.0.1:${http.port}');

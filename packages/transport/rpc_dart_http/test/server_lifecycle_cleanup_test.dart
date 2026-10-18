@@ -65,11 +65,11 @@ RpcHttpServer _build(int port, List<String> created, List<String> disposed) {
   return RpcHttpServer(
     host: '127.0.0.1',
     port: port,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       final tag = '#${created.length}';
       created.add(tag);
       endpoint.registerServiceContract(_Contract(tag, disposed));
-    },
+    }),
   );
 }
 

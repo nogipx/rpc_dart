@@ -39,8 +39,8 @@ class FailingContractsModule extends RpcServerModule {
 // callback always completed; the fix makes it rethrow, so it does NOT complete
 // and endpoint.start() is never reached.
 class _FakeServer implements IRpcServer {
-  _FakeServer(this._onEndpoint);
-  final void Function(RpcResponderEndpoint) _onEndpoint;
+  _FakeServer(this._mode);
+  final RpcResponderMode _mode;
 
   bool _running = false;
   bool setupCompleted = false;
@@ -59,7 +59,8 @@ class _FakeServer implements IRpcServer {
     final (_, serverTransport) = RpcChannelTransport.memoryPair();
     final ep = RpcResponderEndpoint(transport: serverTransport);
     endpoint = ep;
-    _onEndpoint(ep); // throws if buildContracts fails -> setup never completes
+    // Throws if buildContracts fails -> setup never completes.
+    _mode.register(ep);
     setupCompleted = true;
   }
 
@@ -75,7 +76,7 @@ void main() {
     late _FakeServer captured;
     final app = RpcApp.server(
       modules: [FailingContractsModule()],
-      server: (onEndpoint) => captured = _FakeServer(onEndpoint),
+      server: (mode) => captured = _FakeServer(mode),
     );
 
     await expectLater(app.start(), throwsA(isA<_ContractError>()));

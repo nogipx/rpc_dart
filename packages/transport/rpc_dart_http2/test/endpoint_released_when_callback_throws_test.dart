@@ -2,26 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The sibling of the websocket leak, found by checking whether this server had
-// the same ordering. It did:
+// A mode's register that throws must not leave its endpoint held: the endpoint
+// is registered before the register runs and its release is wired after, so
+// the failure path has to release it itself, which disposes its contracts.
 //
-//   _endpoints.add(endpoint);
-//   _onEndpointCreated?.call(endpoint);   // <-- user code, can throw
-//   endpoint.start();
-//   socket.done.then(_releaseEndpoint)    // release wiring
-//
-// A throw left the endpoint registered, never started, with nothing able to
-// reclaim it -- the catch destroyed the socket, but the hook that reacts to
-// that had not been attached yet.
-//
-// Measured with a callback that throws on every connection, three connections:
-//
-//   endpoints held      : 3   (want 0)
-//   contracts disposed  : 0   (want 3)
-//
-// A throwing onEndpointCreated is ordinary: it is where the application
-// registers its contracts, so a DI failure, a duplicate registration or a bad
-// config lands exactly there.
+// A throwing register is ordinary: it is where the application registers its
+// contracts, so a DI failure, a duplicate registration or a bad config lands
+// exactly there.
 
 import 'dart:async';
 import 'dart:io';
@@ -71,15 +58,15 @@ void main() {
   }
 
   test(
-    'a throwing onEndpointCreated releases the endpoint',
+    'a throwing register releases the endpoint',
     () async {
       server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) {
+        mode: RpcResponderMode((e) {
           e.registerServiceContract(_Contract());
           throw StateError('DI failed while registering contracts');
-        },
+        }),
       );
       await server.start();
 
@@ -109,10 +96,10 @@ void main() {
       server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) {
+        mode: RpcResponderMode((e) {
           e.registerServiceContract(_Contract());
           if (fail) throw StateError('transient DI failure');
-        },
+        }),
       );
       await server.start();
 
@@ -149,7 +136,7 @@ void main() {
       server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        onEndpointCreated: (e) => e.registerServiceContract(_Contract()),
+        mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
       );
       await server.start();
 

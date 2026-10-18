@@ -44,11 +44,11 @@ void main() async {
   final server = RpcHttp2Server(
     host: '0.0.0.0',
     port: 50051,
-    onEndpointCreated: (endpoint) {
+    mode: RpcResponderMode((endpoint) {
       endpoint.registerServiceContract(CalculatorResponder());
       registry.attachTo(endpoint);
       endpoint.start();
-    },
+    }),
   );
 
   await server.start();
