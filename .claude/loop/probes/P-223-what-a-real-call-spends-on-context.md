@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b120_what_a_real_call_spends_on_co
 round: 621
 commit: a8af9626
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid (round 621)
+status: stale (526c8d52) (round 621)
 ---
 
 # P-223 — what a real call spends on context

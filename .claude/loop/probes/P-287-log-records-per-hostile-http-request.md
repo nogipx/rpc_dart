@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/log_records_per_hostile_
 round: 794
 commit: 7ac43f19
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-287 — log records per hostile http request

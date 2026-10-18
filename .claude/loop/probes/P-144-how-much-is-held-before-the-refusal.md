@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b115_oversized_metadata_buffered.d
 round: 506
 commit: acefa601
 paths: [packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-144 — how much is held before the refusal?

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/bidi_subscription_everywhere.dart
 round: 376
 commit: 34aeff10
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/peer_endpoint.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-66 — does a bidi subscription reach every wiring?

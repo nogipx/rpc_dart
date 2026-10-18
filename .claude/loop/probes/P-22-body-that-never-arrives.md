@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/half_open_after_body_fai
 round: 271
 commit: 33090229
 paths: [packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-22 — what a body that never arrives costs the HTTP/1.1 server

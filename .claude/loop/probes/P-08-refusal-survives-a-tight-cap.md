@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/refusal_survives_a_tigh
 round: 216 — the validating round
 commit: 10ba2a93
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-08 — does a refusal survive the policy it just enforced?

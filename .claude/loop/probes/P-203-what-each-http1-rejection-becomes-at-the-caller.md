@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b147_what_each_rejection
 round: 583
 commit: 680cb188
 paths: [packages/core/rpc_dart/lib/src/core/protocol.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-203 — what each HTTP/1.1 rejection becomes at the caller

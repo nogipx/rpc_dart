@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b132_reset_status.d
 round: 528
 commit: f53f3c46
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-162 — what status does a caller get for each way a WebSocket can end?

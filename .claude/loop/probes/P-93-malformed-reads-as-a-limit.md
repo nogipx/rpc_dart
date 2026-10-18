@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/malformed_reads_as_a_li
 round: 412
 commit: fdff6e57
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/protocol.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-93 — does malformed framing read as a resource limit?

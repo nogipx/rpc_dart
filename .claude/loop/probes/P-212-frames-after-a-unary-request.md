@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b138_frames_after_a_unary_request.
 round: 594
 commit: 017f4c88
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart]
-status: valid (round 594)
+status: stale (526c8d52) (round 594)
 ---
 
 # P-212 — frames after a unary request

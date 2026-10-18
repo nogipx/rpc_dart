@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/warnings_per_cancel.dart
 round: 791
 commit: 1273c1b9
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/client/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-285 — log records per cancelled call

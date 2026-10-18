@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r768_pause_resume_window.dart
 round: 768
 commit: c58eb55b
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-268 — what a message larger than the window does

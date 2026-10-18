@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/outbound_metadata_unval
 round: 340 — the validating round
 commit: d5fe8441
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-38 — does a transport refuse outbound metadata its own policy forbids

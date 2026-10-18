@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b207_what_a_refused_bomb_leaves_be
 round: 591
 commit: 30ed998b
 paths: [packages/core/rpc_dart/lib/src/core/compression_gzip_io.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-209 — what a refused bomb leaves behind

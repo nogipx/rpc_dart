@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/autobahn_echo_serve
 round: 788
 commit: 6bf688cd
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-282 — autobahn on both websocket paths

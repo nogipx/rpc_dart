@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_grpc_reflection/.dart_tool/probe/hostile_reflection
 round: 284
 commit: e7cd2d9b
 paths: [packages/core/rpc_dart_grpc_reflection/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-33 — seventeen hostile reflection requests

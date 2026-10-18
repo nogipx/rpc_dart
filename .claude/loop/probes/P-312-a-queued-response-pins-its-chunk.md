@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r841_caller_pinned_chunks.dart
 round: 841
 commit: 9f66ad37
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport_inbound.dart, packages/core/rpc_dart/lib/src/core/stream_router.dart, packages/core/rpc_dart/lib/src/core/owned_payload.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/transports/a_queued_response_does_not_pin_its_chunk_test.dart
 ---
 

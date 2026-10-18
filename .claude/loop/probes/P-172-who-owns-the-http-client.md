@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b143_injected_client.dar
 round: 539
 commit: 11baa648
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-172 — who owns the `http.Client` the caller transport uses?

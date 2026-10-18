@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r862_response_cannot_serialize.dar
 round: 862
 commit: 3714c700
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline_responders.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/streams/a_response_that_cannot_be_sent_ends_the_stream_test.dart
 ---
 

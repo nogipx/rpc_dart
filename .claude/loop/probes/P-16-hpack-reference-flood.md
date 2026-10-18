@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/hpack_expansion.dart
 round: 237 — the validating round
 commit: cb4312fe
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-16 — what does a header block cost once it is decoded?

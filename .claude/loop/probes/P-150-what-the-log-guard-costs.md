@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b121_guard_cost.dart
 round: 512
 commit: e30dc4f7
 paths: [packages/core/rpc_dart/lib/src/logger/log_controller.dart, packages/core/rpc_dart/lib/src/logger/log_scope.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-150 — what does `if (_log.isInternal)` cost?

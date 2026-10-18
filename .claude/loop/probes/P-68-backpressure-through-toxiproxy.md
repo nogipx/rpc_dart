@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/backpressure_under_
 round: 378
 commit: c6e5b662
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-68 — back-pressure through toxiproxy

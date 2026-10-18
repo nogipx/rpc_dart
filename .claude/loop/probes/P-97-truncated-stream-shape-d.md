@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/truncated_stream_shape_d.dart
 round: 429
 commit: f1cf6a0a
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**, packages/core/rpc_dart/lib/src/rpc/streams/**, packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-97 — how a server stream ENDS when the peer vanishes mid-stream

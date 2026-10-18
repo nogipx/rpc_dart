@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_isolate/.dart_tool/probe/what_a_dead_worker_lo
 round: 407
 commit: 566ad1cb
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-91 — what a caller is told when its isolate worker is gone

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/abort_kills_the_connect
 round: 398
 commit: 69d24a76
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-73 — does aborting a bidi call kill the HTTP/2 connection?

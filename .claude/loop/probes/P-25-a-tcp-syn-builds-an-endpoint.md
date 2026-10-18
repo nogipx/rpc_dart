@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/a_tcp_syn_builds_an_end
 round: 274
 commit: 508fba09
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-25 — what a connection that never speaks costs a server

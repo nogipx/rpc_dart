@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b122_compression_threshold.dart
 round: 513
 commit: 3be26273
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-151 — does compression make a message bigger?

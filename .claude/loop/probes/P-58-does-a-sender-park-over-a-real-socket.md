@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/test/first_frame_park_over_socket_te
 round: 366
 commit: b17af71c
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-58 — does a sender park over a real socket?

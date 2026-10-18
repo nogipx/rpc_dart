@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/compression_enabled_on_web.dart
 round: 543
 commit: b566bcb8
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/core/compression.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-175 — does `compressionEnabled: true` need a codec to be registered?

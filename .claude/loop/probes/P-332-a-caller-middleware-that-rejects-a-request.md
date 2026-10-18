@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r865_caller_request_middleware_thr
 round: 865
 commit: 01ec5654
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — a CLEAN measurement
 ---
 

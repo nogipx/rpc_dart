@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r852_credit_after_cut_responses.da
 round: 852
 commit: 4209b1ba
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport_inbound.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_caller.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — a CLEAN measurement
 ---
 

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/drain_refusal_ordering.dart
 round: 454
 commit: ea802346
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-106 — what a late frame on a closed stream is told

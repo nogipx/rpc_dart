@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/example/integration_test/guest_timer_lag_
 round: 365
 commit: 760511a5
 paths: [packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/ios/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-56 — how late is a guest `Timer`

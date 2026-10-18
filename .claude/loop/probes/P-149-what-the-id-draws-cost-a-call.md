@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b120_token_and_context_cost.dart
 round: 511
 commit: 231f986c
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-149 — what do the per-call id draws cost a call?

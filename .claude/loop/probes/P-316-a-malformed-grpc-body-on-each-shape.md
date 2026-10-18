@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r847_http_body_oracle.da
 round: 847
 commit: 42f23cce
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/streams/a_unary_request_with_trailing_bytes_is_refused_test.dart
 ---
 

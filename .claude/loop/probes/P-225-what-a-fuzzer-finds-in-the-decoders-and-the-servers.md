@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/fuzz_decoders.dart
 round: 639
 commit: 2c540e05
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/core/error_details.dart, packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/core/rpc_dart/lib/src/endpoint/peer_endpoint.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-status: valid (round 639)
+status: stale (526c8d52) (round 639)
 ---
 
 # P-225 — what a fuzzer finds in the decoders and the servers

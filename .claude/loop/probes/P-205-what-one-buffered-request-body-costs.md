@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b148_what_a_buffered_req
 round: 585
 commit: 76b07afd
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-205 — what one buffered request body costs

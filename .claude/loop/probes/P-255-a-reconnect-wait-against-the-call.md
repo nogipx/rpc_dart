@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r751_conn_test.dart
 round: 751
 commit: 4c32a82b
 paths: [packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-255 — a reconnect wait against the call's deadline and cancel

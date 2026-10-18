@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r738_dropped_requests_hold_the_poo
 round: 738
 commit: a94aca2c
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-244 — do requests a handler stopped reading starve the connection pool?

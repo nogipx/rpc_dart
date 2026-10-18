@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b109_token_listeners.dart
 round: 500
 commit: 5d226412
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/contracts/call_scope.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-138 — does a cancelled asStream subscription detach?

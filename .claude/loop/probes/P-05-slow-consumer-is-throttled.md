@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/slow_consumer_is_thrott
 round: 213 — the validating round
 commit: d2b3726b
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid — it documents ACCEPTED behaviour, see checked/C-19; not a failing test
+status: stale (526c8d52) — it documents ACCEPTED behaviour, see checked/C-19; not a failing test
 ---
 
 # P-05 — is a slow consumer throttled, or failed?

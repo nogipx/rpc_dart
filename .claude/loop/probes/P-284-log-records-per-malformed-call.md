@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/warnings_per_peer_call.dart
 round: 790
 commit: 713ca944
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-284 — log records per malformed call

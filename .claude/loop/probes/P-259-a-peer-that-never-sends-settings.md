@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r754_online_before_sett
 round: 754
 commit: 2daf1310
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-259 — a peer that never sends SETTINGS

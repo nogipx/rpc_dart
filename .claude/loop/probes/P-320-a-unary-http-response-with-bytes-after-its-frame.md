@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r853_unary_trailing_byte
 round: 853
 commit: e01302e8
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_http/test/a_unary_response_with_trailing_bytes_is_an_error_test.dart
 ---
 

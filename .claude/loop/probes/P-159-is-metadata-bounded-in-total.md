@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b129_14_total_metadata_bound.dart
 round: 523
 commit: 7cdaabf6
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-159 — is metadata bounded in total, or only per header?

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b213_what_the_limiter_costs_per_me
 round: 618
 commit: 3cd9c2d1
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
-status: valid (round 618)
+status: stale (526c8d52) (round 618)
 ---
 
 # P-220 — what the limiter costs a message

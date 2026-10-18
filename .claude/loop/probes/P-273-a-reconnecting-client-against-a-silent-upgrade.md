@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r773_documented_fac
 round: 773
 commit: 6bd85a09
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-273 — a reconnecting client against a silent upgrade

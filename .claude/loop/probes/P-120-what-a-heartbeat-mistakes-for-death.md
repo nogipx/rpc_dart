@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/what_a_heartbeat_mi
 round: 479
 commit: 5592f268
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-120 — what does a heartbeat mistake for a dead peer?

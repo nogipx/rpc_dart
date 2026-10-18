@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/responder_deadline_is_bounded.dart
 round: 451
 commit: c60943e2
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-104 — is a responder-side deadline bounded, and by WHAT?

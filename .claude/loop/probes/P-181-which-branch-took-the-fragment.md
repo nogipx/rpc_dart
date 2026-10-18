@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b126_where_the_fragment_goes.dart
 round: 553
 commit: 67db727b
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-181 — which branch took the fragment?

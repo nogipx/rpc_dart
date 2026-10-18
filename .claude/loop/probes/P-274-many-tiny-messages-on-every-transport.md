@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r776_many_tiny_mess
 round: 776
 commit: 8d804d9f
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-274 — many tiny messages on every transport

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_log/.dart_tool/probe/r763_unfinished_message.dart
 round: 763
 commit: bdb14fd3
 paths: [packages/core/rpc_dart_log/lib/src/log_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-264 — an unfinished message to the log collector

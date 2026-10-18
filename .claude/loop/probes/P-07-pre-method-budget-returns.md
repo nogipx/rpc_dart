@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/pre_method_budget_returns.dart
 round: 215 — the validating round
 commit: d0612f96
 paths: [packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-07 — does the pre-method byte budget come back?

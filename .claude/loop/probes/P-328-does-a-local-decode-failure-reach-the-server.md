@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r861_decode_failure_reaches_server
 round: 861
 commit: ef063cb9
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/caller.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/endpoint/a_server_stream_that_fails_locally_tells_the_server_test.dart
 ---
 

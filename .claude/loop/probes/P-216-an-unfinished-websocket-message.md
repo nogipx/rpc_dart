@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/test/an_unfinished_message_is_bounde
 round: 611
 commit: 2d00c669
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
-status: valid (round 611)
+status: stale (526c8d52) (round 611)
 ---
 
 # P-216 — an unfinished WebSocket message

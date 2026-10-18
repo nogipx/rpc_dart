@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/read_after_the_408.dart
 round: 273
 commit: f91dd5d9
 paths: [packages/transport/rpc_dart_http/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-24 — does the server keep reading after it has answered?

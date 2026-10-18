@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/header_hold_attacke
 round: 782
 commit: 5db1dd59
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-277 — held request header blocks

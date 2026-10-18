@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/per_stream_state_is_rec
 round: 343 — the validating round
 commit: 4527416a
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-41 — does per-stream state come back to zero

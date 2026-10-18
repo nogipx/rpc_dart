@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/example/integration_test/frame_cost_test.
 round: 364
 commit: 8b1b055c
 paths: [packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-55 — what one call over the wasm bridge costs

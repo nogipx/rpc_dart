@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/connect_headers_and
 round: 361
 commit: cfecf7ec
 paths: [packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-52 — what `connect()` can and cannot express

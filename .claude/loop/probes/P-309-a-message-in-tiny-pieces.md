@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r836_fragments.dart
 round: 836
 commit: f8cc8234
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_websocket/test/websocket_frame_guard_test.dart
 ---
 

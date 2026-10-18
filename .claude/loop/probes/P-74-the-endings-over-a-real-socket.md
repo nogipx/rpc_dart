@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/bidi_endings_over_s
 round: 384
 commit: 69d24a76
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-74 — C-41's seven endings, over a real socket and over a round trip

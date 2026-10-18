@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b143_what_an_orderly_clo
 round: 587
 commit: 08d2f17c
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-207 — what an orderly close logs, per in-flight call

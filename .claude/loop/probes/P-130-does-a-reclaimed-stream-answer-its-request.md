@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b100_release_hangs.dart
 round: 491
 commit: 00e27930
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-130 — does a reclaimed stream answer its request?

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_framework/.dart_tool/probe/create_a_new_app_to_rest
 round: 404
 commit: 246c5e74
 paths: [packages/core/rpc_dart_framework/lib/src/rpc_app.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-89 — do what the error message says, and nothing else

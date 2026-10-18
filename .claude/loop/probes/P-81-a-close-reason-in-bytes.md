@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/test/protocol_close_reason_is_bytes_
 round: 392
 commit: a82bcf4c
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-81 — does a protocol close survive a non-ASCII reason?

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/example/integration_test/unstripped_modul
 round: 363
 commit: b1053a84
 paths: [packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/ios/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-54 — what a caller is told when the glue uses unstripped module syntax

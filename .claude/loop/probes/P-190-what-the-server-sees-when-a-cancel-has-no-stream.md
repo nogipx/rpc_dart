@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/b175_phantom_stream.dar
 round: 569
 commit: 2aaf73d5
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-190 — what does the server see when a cancel has no stream to cancel?

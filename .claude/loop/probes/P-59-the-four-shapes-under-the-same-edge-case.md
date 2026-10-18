@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/shape_edge_matrix.dart
 round: 368
 commit: e897128e
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/**, packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-59 — the four shapes under the same edge case

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r840_pinned_body.dart
 round: 840
 commit: 5598db22
 paths: [packages/transport/rpc_dart_http/lib/src/body_accumulator.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_http/test/a_body_chunk_cannot_pin_its_read_buffer_test.dart
 ---
 

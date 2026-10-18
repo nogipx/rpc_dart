@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b203_what_the_wrapp
 round: 596
 commit: e3c9e358
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid (round 596)
+status: stale (526c8d52) (round 596)
 ---
 
 # P-213 — what the websocket wrapper rebroadcasts

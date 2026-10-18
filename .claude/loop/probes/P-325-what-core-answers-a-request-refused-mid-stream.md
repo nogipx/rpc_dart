@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r857_refused_upload_core.dart
 round: 857
 commit: 98ba93a5
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — the reference column for P-323; the http2 half is promoted there
 ---
 

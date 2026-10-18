@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b116_parser_and_send_copies.dart
 round: 614
 commit: e080cd83
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart, packages/core/rpc_dart/lib/src/core/protocol.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/core/rpc_dart/lib/src/core/frame_headroom.dart]
-status: valid (round 614)
+status: stale (526c8d52) (round 614)
 ---
 
 # P-218 — the parser and send copies

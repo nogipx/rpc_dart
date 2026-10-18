@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r804_client_abort.dart
 round: 804
 commit: 4b9a575d
 paths: [packages/transport/rpc_dart_http/lib/**]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_http/test/a_cancel_reaches_the_handler_test.dart
 ---
 

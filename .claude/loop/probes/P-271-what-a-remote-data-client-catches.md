@@ -3,7 +3,7 @@ file: packages/data/rpc_data/.dart_tool/probe/r771_error_status.dart
 round: 771
 commit: fa6399e6
 paths: [packages/data/rpc_data/lib/src/rpc/data_responder.dart, packages/data/rpc_data/lib/src/rpc/data_error.dart, packages/data/rpc_data/lib/src/client/data_service_client.dart, packages/core/rpc_dart/lib/src/core/protocol.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-271 — what a remote data client catches

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/terminate_rejects_into_
 round: 347 — the validating round
 commit: e78bd8e2
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-42 — which http2 connection state puts an error in the zone

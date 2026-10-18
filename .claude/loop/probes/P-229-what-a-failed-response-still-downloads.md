@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/b188_failed_response.da
 round: 664
 commit: 32974d54
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-229 — what a failed response still downloads

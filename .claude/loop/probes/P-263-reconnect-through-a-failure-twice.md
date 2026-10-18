@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r761_reconnect_twic
 round: 761
 commit: 639e93c9
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-263 — reconnect through a failure, twice

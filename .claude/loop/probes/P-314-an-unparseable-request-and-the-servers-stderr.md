@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r845_shelf_stderr.dart
 round: 845
 commit: ffebbc80
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_http/test/an_unparseable_request_is_answered_quietly_test.dart
 ---
 

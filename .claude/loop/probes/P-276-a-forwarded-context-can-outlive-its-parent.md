@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/deadline_extension.dart
 round: 781
 commit: 2f469332
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-276 — a forwarded context can outlive its parent

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b126_fragmented_frames.dart
 round: 518
 commit: 9c69500d
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-155 — does unary survive a fragmented frame?

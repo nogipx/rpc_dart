@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b112_partial_registration.dart
 round: 503
 commit: e82f586b
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_registry.dart, packages/core/rpc_dart/lib/src/contracts/contract.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-141 — what does a failed registration leave behind?

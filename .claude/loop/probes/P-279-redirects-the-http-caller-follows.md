@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/redirect_follow.dart
 round: 784
 commit: e1ae2a36
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-279 — redirects the http caller follows

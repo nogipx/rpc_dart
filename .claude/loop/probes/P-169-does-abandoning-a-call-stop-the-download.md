@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b140_abandoned_keeps_rea
 round: 536
 commit: 4ccf1eb1
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-169 — does abandoning an HTTP/1.1 call stop the download?

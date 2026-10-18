@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r839_connection_slo
 round: 839
 commit: af781a0c
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_http_server.dart, packages/transport/rpc_dart_http/lib/src/peer_watch.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_websocket/test/a_closed_connection_returns_its_slot_test.dart
 ---
 

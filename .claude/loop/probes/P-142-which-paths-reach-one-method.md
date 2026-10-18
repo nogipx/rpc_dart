@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b113_dotted_key_collision.dart
 round: 504
 commit: 54382ce7
 paths: [packages/core/rpc_dart/lib/src/core/metadata.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-142 — which paths reach one method?

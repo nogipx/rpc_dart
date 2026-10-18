@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_grpc_reflection/.dart_tool/probe/r740_grpcurl.dart
 round: 740
 commit: a94aca2c
 paths: [packages/core/rpc_dart_grpc_reflection/lib/**, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-245 — does a real gRPC client work against rpc_dart?

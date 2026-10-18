@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/policy_violations_have_
 round: 342 — the validating round
 commit: 13fc66c3
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-40 — what bounds a peer that only sends frames the policy refuses

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/.dart_tool/probe/what_the_two_shims_actua
 round: 482
 commit: 8fd479ea
 paths: [packages/transport/rpc_dart_wasm/ios/Classes/RpcDartWasmPlugin.swift, packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-123 — what the two JS shims actually share

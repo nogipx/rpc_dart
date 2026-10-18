@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r753_online_before_
 round: 753
 commit: 36a2241a
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-258 — online before the handshake

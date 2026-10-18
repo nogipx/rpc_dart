@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b217_who_holds_the_connection_queu
 round: 600
 commit: 48ce6026
 paths: [packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid (round 600)
+status: stale (526c8d52) (round 600)
 ---
 
 # P-214 — who holds the connection-wide queue

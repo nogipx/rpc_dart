@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/fuzz_control_frames.dart
 round: 789
 commit: 272098cf
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-283 — the widened hostile-peer fuzz

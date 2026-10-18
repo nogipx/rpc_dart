@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r772_over_the_limit
 round: 772
 commit: ca0e7cfe
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_isolate/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-272 — a message just over the limit on every transport

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b131_peer_id_reuse.
 round: 527
 commit: c47683d3
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-161 — does an operation for a stale stream id reach the new socket?

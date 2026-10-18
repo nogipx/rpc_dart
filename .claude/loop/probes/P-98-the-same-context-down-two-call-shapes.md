@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/ping_reserved_headers.dart
 round: 444
 commit: 67303ea6
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/core/rpc_headers.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-98 — one RpcContext sent down two call shapes

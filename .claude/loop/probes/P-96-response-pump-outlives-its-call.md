@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/response_pump_outlives_its_call.da
 round: 426
 commit: 2eec94f2
 paths: [packages/core/rpc_dart/lib/src/core/sink_pump.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-96 — does a producer stop when its call ends, and on which endings

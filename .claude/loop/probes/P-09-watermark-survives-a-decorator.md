@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/watermark_survives_a_decorator.dar
 round: 217 — the validating round
 commit: 576f1815
 paths: [packages/core/rpc_dart/lib/src/resilience/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-09 — does the stream-id watermark survive a user's decorator?

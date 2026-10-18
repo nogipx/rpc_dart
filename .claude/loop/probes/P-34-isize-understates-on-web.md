@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_compression/test/audit/isize_understates_on_web_tes
 round: 286
 commit: ae723c08
 paths: [packages/core/rpc_dart_compression/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-34 — the same gzip bomb on both runtimes

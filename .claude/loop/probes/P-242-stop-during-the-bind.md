@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r731_stop_during_bind.d
 round: 731
 commit: 41718b8a
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/core/rpc_dart_log/lib/src/log_server.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-242 — does a server stopped during its bind end up listening?

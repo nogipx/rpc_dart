@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b127_timers_per_call.dart
 round: 519
 commit: eb42e917
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/contracts/call_scope.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-156 — how many timers does one call arm?

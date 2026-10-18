@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r863_response_sink_send_failure.da
 round: 863
 commit: 911fe219
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart, packages/core/rpc_dart/lib/src/core/sink_pump.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/streams/a_response_sink_send_failure_ends_the_call_test.dart
 ---
 

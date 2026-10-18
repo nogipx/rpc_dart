@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/framed_body_survives_un
 round: 455
 commit: 3087c6ba
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-107 — does a body that looks framed survive unchanged?

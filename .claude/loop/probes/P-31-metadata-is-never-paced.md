@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/metadata_is_never_paced.dart
 round: 282
 commit: 736a9b8d
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-31 — is metadata paced by the send window?

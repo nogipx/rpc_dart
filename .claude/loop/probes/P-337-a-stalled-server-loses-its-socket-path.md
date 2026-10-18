@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_socket/.dart_tool/probe/r882_busy_server.dart
 round: 882
 commit: 84189f6b
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_server.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_socket/test/stale_socket_file_test.dart
 ---
 

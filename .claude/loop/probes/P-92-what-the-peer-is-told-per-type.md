@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/what_the_peer_is_told_per_type.dar
 round: 408
 commit: 566ad1cb
 paths: [packages/core/rpc_dart/lib/src/core/protocol.dart, packages/core/rpc_dart/lib/src/core/errors.dart, packages/core/rpc_dart/lib/src/contracts/context.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-92 — what a handler's error TYPE costs the peer

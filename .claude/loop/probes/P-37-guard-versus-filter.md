@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/guard_vs_filter.dart
 round: 338 — the validating round
 commit: 8b25cc98c006a39e3d054a89f33faa7b2e6a30c6
 paths: [packages/core/rpc_dart/lib/src/logger/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-37 — does the level guard predict the filter it stands in for

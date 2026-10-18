@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b99_stream_caps.dart
 round: 490
 commit: a12a4209
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/core/rpc_dart/lib/src/core/parser.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-129 — which ceiling stops a finite HTTP/1.1 stream

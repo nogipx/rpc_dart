@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r867_server_fails_mid_upload.dart
 round: 867
 commit: b18da1bb
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — a CLEAN measurement
 ---
 

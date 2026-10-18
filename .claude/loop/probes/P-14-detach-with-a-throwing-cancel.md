@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/detach_cancel_throws.dart
 round: 235 — the validating round
 commit: ec94fd7a
 paths: [packages/core/rpc_dart/lib/src/resilience/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-14 — does a throwing onCancel abandon the transport?

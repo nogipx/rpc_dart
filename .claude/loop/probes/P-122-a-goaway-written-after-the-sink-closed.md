@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/upstream_finish_repro.d
 round: 480
 commit: 20afaba8
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-122 — a GOAWAY written after the sink closed

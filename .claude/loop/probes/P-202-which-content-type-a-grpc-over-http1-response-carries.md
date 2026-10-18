@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b146_two_content_types.d
 round: 582
 commit: a4c0297c
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart, packages/core/rpc_dart/lib/src/core/metadata.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-202 — which content-type a gRPC-over-HTTP/1.1 response carries

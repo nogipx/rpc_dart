@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r814_connect_failur
 round: 814
 commit: 9e0e3d85
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_websocket/test/a_failed_connect_is_a_status_test.dart
 ---
 

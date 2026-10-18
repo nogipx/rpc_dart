@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b119_frames_per_unary_call.dart
 round: 510
 commit: 49d79ed8
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-148 — how many frames is a unary call, and what are they?

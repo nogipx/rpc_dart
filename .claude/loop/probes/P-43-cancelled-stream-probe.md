@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/cancelled_stream_probe_wedges.dart
 round: 351
 commit: 2fca444c
 paths: [packages/core/rpc_dart/lib/src/resilience/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-43 — what a circuit breaker admits after a half-open STREAM probe

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/discarded_log_strings_all_shapes.d
 round: 337 — the validating round
 commit: 5caec3baac876bc8b7ab2896d73d3c85542b279c
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/**, packages/core/rpc_dart/lib/src/endpoint/**, packages/core/rpc_dart/lib/src/logger/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-36 — log strings built for a level that discards them, on all four shapes

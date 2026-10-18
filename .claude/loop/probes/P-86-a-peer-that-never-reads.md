@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/peer_that_never_reads.d
 round: 400
 commit: c157760f
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-86 — a peer that refuses to read its own refusals

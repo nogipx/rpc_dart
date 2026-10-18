@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r749_inflight.dart
 round: 749
 commit: bdbfc742
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-253 — calls in flight when the server stops

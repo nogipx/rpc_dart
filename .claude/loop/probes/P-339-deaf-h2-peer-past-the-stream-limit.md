@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r884_deaf_h2_peer.dart
 round: 884
 commit: fea0d0c3
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (526c8d52)
 promoted: packages/test/rpc_dart_conformance/test/i3_memory_per_peer_test.dart
 ---
 

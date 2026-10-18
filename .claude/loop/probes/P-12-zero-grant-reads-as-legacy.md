@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/zero_grant_reads_as_legacy.dart
 round: 229 — the validating round
 commit: e6d5cd79
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-12 — is a zero grant read as a peer that does not participate?

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/reconnect_orphan_rate.d
 round: 241
 commit: aaa5806d
 paths: [packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-19 — how often does a SEQUENTIAL reconnect orphan a connection?

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/lim_ids.dart
 round: 661
 commit: 018fa1bb
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-228 — stream ids across the wrap

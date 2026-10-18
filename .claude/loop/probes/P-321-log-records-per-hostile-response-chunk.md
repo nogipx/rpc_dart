@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r854_undecodable_log_volume.dart
 round: 854
 commit: 51ef9138
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/streams/a_hostile_response_is_logged_once_test.dart
 ---
 

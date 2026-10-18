@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/chaos_core.dart
 round: 640
 commit: d887a27d
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart, packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart, packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
-status: valid (round 640)
+status: stale (526c8d52) (round 640)
 ---
 
 # P-226 — a chaos run of the core

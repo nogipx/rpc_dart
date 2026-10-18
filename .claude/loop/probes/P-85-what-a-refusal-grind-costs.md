@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/refusal_grind_cost.dart
 round: 399
 commit: daf55af4
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-85 — what a refusal grind costs, against what being served costs

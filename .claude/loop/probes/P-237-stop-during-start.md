@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_framework/.dart_tool/probe/r721_stop_during_start.d
 round: 721
 commit: ace32ff6
 paths: [packages/core/rpc_dart_framework/lib/src/rpc_app.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-237 — does RpcApp.stop() during start() leave a server running?

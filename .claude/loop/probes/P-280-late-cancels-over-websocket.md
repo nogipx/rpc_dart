@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/rapid_cancel_ws.dar
 round: 786
 commit: a7f919ce
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-280 — late cancels over websocket

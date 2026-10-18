@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/bidi_duplex_semantics.dart
 round: 373
 commit: 21f3525c
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-64 — are the two directions of a bidi call independent?

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r719_tiny_messages_past
 round: 719
 commit: 21f0560b
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-235 — what a queue of tiny h2 request messages retains

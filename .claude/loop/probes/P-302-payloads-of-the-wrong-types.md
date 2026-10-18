@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r817_wrong_types.dart
 round: 817
 commit: 0b53e9ea
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/core/rpc_dart/lib/src/codec/codec.dart]
-status: valid
+status: stale (526c8d52)
 promoted: — (a CLEAN measurement)
 ---
 

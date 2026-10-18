@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b135_start_during_s
 round: 531
 commit: cbfaa66a
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-164 — what happens to a connection accepted mid-shutdown?

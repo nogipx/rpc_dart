@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/test/streams/response_sink_error_reaches_the_client
 round: 389
 commit: be9c9222
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-80 — what the client is told when a bidi handler's source fails

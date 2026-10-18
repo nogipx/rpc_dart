@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b95_advisory_retire
 round: 486
 commit: 931d8a0f
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-125 — what one bad frame costs a reconnecting client

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r822_two_stops.dart
 round: 822
 commit: 6bf5b187
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_http/test/graceful_drain_on_stop_test.dart
 ---
 

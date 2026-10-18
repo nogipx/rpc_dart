@@ -3,7 +3,7 @@ file: packages/notify/rpc_notify/.dart_tool/probe/r766_stalled_subscriber_ws.dar
 round: 766
 commit: 5cf99515
 paths: [packages/notify/rpc_notify/lib/src/server/notify_service_server.dart, packages/notify/rpc_notify/lib/src/stream_distributor.dart, packages/notify/rpc_notify/lib/src/repository/in_memory_notify_repository.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-266 — what the notify server holds for a paused subscriber

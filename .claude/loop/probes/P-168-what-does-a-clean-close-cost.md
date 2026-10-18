@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b139_1_close_order.
 round: 535
 commit: 5e2af858
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-168 — what does a clean websocket close cost?

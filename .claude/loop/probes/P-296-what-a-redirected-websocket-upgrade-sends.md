@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r807_upgrade_redire
 round: 807
 commit: b51c7ba7
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_websocket/test/a_redirected_upgrade_is_not_followed_test.dart
 ---
 

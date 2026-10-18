@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/bridge_cancel_paths.dart
 round: 425
 commit: 6b59f2d6
 paths: [packages/core/rpc_dart/lib/src/core/stream_bridge.dart, packages/core/rpc_dart/lib/src/contracts/call_scope.dart, packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-95 — how long a consumer's cancel() takes on a bridge over a parked source

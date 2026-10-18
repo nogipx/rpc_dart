@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b117_broadcast_per_message.dart
 round: 509
 commit: 7b3bae0e
 paths: [packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-147 — what does an empty middleware wrapper cost?

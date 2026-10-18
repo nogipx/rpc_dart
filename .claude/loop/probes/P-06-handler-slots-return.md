@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/handler_slots_return.dart
 round: 214 — the validating round
 commit: 359c79ad
 paths: [packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-06 — does a handler slot come back on every teardown path?

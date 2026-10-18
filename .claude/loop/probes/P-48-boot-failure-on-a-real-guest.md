@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/example/wasm_guest/main.dart
 round: 356
 commit: 6c769c66
 paths: [packages/transport/rpc_dart_wasm/lib/src/wasm/**, packages/transport/rpc_dart_wasm/example/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-48 — what a failed boot hands back, inside a real dart2wasm guest

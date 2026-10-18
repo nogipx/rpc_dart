@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b173_direct_channel_drops.dart
 round: 574
 commit: 3fadccbc
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-195 — does the direct channel keep what arrives before a listener?

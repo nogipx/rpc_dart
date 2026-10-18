@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/does_the_drain_conv
 round: 403
 commit: bcc4745e
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_server.dart]
-status: valid — repaired in round 403; the broken version and why it was broken are kept below
+status: stale (526c8d52) — repaired in round 403; the broken version and why it was broken are kept below
 ---
 
 # P-88 — does a graceful drain converge, or merely expire?

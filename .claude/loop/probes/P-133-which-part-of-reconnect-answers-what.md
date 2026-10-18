@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b104_reconnect_wind
 round: 495
 commit: 027ca636
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-133 — which part of reconnect() answers what

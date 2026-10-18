@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/metadata_escapes_the_byte_bound.da
 round: 245
 commit: 8d4d1e33
 paths: [packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-21 — which dimension of a frame does the queue's byte bound see?

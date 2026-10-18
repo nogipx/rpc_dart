@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/unary_broadcast_fanout.dart
 round: 393
 commit: 74e5e117
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-82 — what N live unary handlers cost every other frame

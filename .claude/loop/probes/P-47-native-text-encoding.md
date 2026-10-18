@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/.dart_tool/probe/utf8_from_native_test.da
 round: 355
 commit: 60281abc
 paths: [packages/transport/rpc_dart_wasm/lib/**, packages/transport/rpc_dart_wasm/ios/**, packages/transport/rpc_dart_wasm/android/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-47 — what reaches Dart when native sends non-ASCII text

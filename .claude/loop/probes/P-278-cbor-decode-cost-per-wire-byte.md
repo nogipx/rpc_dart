@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/cbor_amplification_e2e.dart
 round: 783
 commit: 8471b02c
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart, packages/core/rpc_dart/lib/src/codec/codec.dart, packages/core/rpc_dart/lib/src/endpoint/middleware.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-278 — cbor decode cost per wire byte

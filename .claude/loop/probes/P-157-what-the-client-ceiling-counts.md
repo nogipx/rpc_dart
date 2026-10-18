@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b128_client_ceiling_after_half_clo
 round: 520
 commit: 7cdaabf6
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-157 — what does the client's maxActiveStreams count?

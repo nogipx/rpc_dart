@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r720_tiny_responses_to_
 round: 720
 commit: 9097035e
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-236 — how many tiny responses a paused h2 caller accepts

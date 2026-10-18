@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r747_unconnected.da
 round: 747
 commit: d4e8de6c
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-251 — a channel that never connects, given to the constructor

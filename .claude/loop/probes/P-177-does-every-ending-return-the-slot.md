@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b128_every_ending_returns_the_slot
 round: 546
 commit: bd8ed066
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-177 — does every way a call can end return its slot?

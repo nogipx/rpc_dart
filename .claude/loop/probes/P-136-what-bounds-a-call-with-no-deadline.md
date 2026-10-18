@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b107_hidden_timeouts.dart
 round: 498
 commit: 3391d5ed
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-136 — what bounds a call with no deadline, and is the server told?

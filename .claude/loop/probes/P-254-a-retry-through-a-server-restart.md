@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r750_retry_through_
 round: 750
 commit: ef95cff2
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-254 — a retry through a server restart

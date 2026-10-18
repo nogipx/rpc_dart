@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b220_responder_mints.dart
 round: 566
 commit: 4541c0c1
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/contracts/context.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-188 — what does the responder mint for a peer that sends no correlation headers?

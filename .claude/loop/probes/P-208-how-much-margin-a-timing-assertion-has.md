@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b224_how_much_margin_the_park_has.
 round: 588
 commit: 878c443b
 paths: [packages/core/rpc_dart/test/transports/the_window_counts_wire_bytes_test.dart, packages/core/rpc_dart/test/streams/response_sink_stops_at_the_ending_test.dart, packages/core/rpc_dart/test/audit/audit_frame_reassembly_linear_test.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-208 — how much margin a timing assertion has

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/bidi_endings_over_http2
 round: 385
 commit: 8315658d
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-77 — C-41's endings over real HTTP/2, direct and over a round trip

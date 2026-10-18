@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b111_rate_limiter_admission.dart
 round: 502, extended 542
 commit: d799f43d
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-140 — what does RpcRateLimiter actually admit?

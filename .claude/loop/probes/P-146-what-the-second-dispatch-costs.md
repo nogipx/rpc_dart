@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b117_unlistened_buffer.dart
 round: 508
 commit: 5fa2b280
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-146 — what does the second dispatch cost?

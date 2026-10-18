@@ -3,7 +3,7 @@ file: packages/test/rpc_dart_conformance/.dart_tool/probe/r880_normal_row_under_
 round: 880
 commit: ecaab2ae
 paths: [packages/test/rpc_dart_conformance/test/i1_every_call_ends_test.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — load cannot be a test fixture; the row it times was changed instead
 ---
 

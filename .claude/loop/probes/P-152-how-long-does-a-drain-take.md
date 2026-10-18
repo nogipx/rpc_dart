@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b123_drain_latency.dart
 round: 514
 commit: d64caa1a
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/core/drain.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-152 — how long does a drain take when its work is already done?

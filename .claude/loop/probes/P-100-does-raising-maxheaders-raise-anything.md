@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/context_limits_vs_policy.dart
 round: 446
 commit: 732dc208
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-100 — does raising `maxHeaders` raise anything?

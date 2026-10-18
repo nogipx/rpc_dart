@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/initial_window_what
 round: 380
 commit: 4bc160ca
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-69 — what the initial send window buys

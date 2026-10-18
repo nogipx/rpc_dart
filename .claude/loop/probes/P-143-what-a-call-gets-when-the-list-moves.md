@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b114_middleware_list_mutated.dart
 round: 505
 commit: 0e5d6c1b
 paths: [packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-143 — what does a call get when the middleware list moves under it?

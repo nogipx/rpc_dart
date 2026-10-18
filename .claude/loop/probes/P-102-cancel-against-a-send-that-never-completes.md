@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/cancel_with_a_hanging_notice.dart
 round: 448
 commit: ade982bc
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-102 — cancel against a send that never completes

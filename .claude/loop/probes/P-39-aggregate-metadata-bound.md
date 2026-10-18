@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/aggregate_metadata_bound
 round: 341 — the validating round
 commit: 8a28f1bf
 paths: [packages/transport/rpc_dart_http/lib/**, packages/core/rpc_dart/lib/src/core/security_policy.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-39 — is the aggregate metadata bound enforced

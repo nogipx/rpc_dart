@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r759_grant_after_up
 round: 759
 commit: 58bd82df
 paths: [packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-262 — a grant after the bounded upgrade

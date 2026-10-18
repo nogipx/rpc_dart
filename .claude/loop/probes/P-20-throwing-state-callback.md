@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/state_callback_kills_the_zone.dart
 round: 242
 commit: d1723a5e
 paths: [packages/core/rpc_dart/lib/src/resilience/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-20 — what a throwing user callback costs on the reconnect path

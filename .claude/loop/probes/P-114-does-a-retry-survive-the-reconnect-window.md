@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/does_a_retry_surviv
 round: 464
 commit: 3630c877
 paths: [packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-114 — does a retry survive the reconnect window?

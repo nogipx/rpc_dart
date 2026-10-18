@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b105_parser_quadratic.dart
 round: 496
 commit: 3d7979df
 paths: [packages/core/rpc_dart/lib/src/core/parser.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-134 — what reassembling one large message costs

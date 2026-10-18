@@ -3,7 +3,7 @@ file: packages/test/rpc_dart_conformance/test/i5_resources_return_test.dart
 round: 802
 commit: e1899b97
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (526c8d52)
 promoted: packages/test/rpc_dart_conformance/test/lifecycle_model_test.dart
 ---
 

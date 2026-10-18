@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r855_status_then_cut_da
 round: 855
 commit: f8523835
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport_inbound.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/transport/rpc_dart_http2/test/a_response_cut_mid_message_is_an_error_test.dart
 ---
 

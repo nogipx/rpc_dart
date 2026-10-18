@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b195_what_the_window_bounds.dart
 round: 552
 commit: 144a7f0e
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/security_policy.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-180 — what does `flowControlWindowBytes` actually charge, and when does it charge at all?

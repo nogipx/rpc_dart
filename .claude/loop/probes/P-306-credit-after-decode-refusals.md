@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r825_refused_decode_credit.dart
 round: 825
 commit: dd400a08
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_caller.dart]
-status: valid
+status: stale (526c8d52)
 promoted: — (a CLEAN measurement)
 ---
 

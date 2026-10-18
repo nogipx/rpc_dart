@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/encoding_case_matters.d
 round: 456
 commit: b5b5980f
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-108 — what the case of `grpc-encoding` changes

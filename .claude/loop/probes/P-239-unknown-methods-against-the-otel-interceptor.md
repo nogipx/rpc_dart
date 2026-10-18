@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_opentelemetry/.dart_tool/probe/r725_unknown_methods
 round: 725
 commit: 472dd6af
 paths: [packages/core/rpc_dart_opentelemetry/lib/src/interceptor/**, packages/core/rpc_dart_opentelemetry/lib/src/metrics/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-239 — do calls to unregistered methods reach the OTel interceptor?

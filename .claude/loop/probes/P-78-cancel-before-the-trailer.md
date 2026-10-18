@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/cancel_before_the_trail
 round: 385
 commit: 8315658d
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-78 — cancelling one beat before the trailer, on HTTP/2

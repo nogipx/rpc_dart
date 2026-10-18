@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b125_three_header_builders.dart
 round: 517
 commit: 739756f5
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/endpoint/ping.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-154 — do the three request-header builders agree?

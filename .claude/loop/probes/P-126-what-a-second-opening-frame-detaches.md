@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b96_second_headers.dart
 round: 487
 commit: 7764b081
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-126 — what a second opening frame detaches

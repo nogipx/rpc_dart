@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/capabilities_through_the_proxy.dar
 round: 352
 commit: 7d0881ad
 paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-44 — what the layers above lose to a transport wrapper

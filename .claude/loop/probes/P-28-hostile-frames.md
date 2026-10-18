@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/hostile_frames.dart
 round: 278
 commit: 7f89eacb
 paths: [packages/core/rpc_dart/lib/src/core/channel_frame.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-28 — seventeen hostile frames through the real decoder

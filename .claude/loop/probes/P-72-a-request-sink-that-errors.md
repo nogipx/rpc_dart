@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/bidi_request_sink_errors.dart
 round: 384
 commit: 69d24a76
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-72 — what the server keeps when a bidi request sink errors

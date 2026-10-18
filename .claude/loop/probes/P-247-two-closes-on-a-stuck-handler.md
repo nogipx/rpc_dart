@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r743_two_closes_on_a_stuck_handler
 round: 743
 commit: a94aca2c
 paths: [packages/core/rpc_dart/lib/src/endpoint/base_endpoint.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/contracts/call_scope.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-247 — do two concurrent responder close() calls finish while handlers hang?

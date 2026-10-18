@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/example/integration_test/guest_to_host_or
 round: 365
 commit: 760511a5
 paths: [packages/transport/rpc_dart_wasm/android/**, packages/transport/rpc_dart_wasm/ios/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-57 — do 10k guest frames arrive in order

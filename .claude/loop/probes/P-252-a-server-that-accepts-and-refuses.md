@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r748_flap.dart
 round: 748
 commit: 3fc2fa74
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-252 — RpcClientConnection against a server that accepts and refuses

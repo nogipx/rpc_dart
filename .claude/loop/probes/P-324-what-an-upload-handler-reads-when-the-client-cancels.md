@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r856_cancelled_upload_handler.dart
 round: 856
 commit: 703eb810
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — a CLEAN arm; the http2 half is promoted through P-323
 ---
 

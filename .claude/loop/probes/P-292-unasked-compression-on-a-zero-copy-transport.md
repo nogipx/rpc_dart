@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_isolate/.dart_tool/probe/r801_paused_caller_pr
 round: 801
 commit: 3400b5f3
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/**, packages/transport/rpc_dart_isolate/lib/**]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/endpoint/a_zero_copy_transport_offers_no_unasked_compression_test.dart
 ---
 

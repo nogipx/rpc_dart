@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b218_what_a_window_becomes.dart
 round: 619
 commit: 3cd9c2d1
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid (round 619)
+status: stale (526c8d52) (round 619)
 ---
 
 # P-221 — what a window becomes

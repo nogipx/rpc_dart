@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_framework/.dart_tool/probe/r752_dead_worker.dart
 round: 752
 commit: f031102c
 paths: [packages/core/rpc_dart_framework/lib/src/rpc_isolate_module.dart, packages/core/rpc_dart_framework/lib/src/rpc_app.dart, packages/core/rpc_dart_framework/lib/src/rpc_test_app.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-257 — a dead worker and what health says

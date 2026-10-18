@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b144_repeated_headers.da
 round: 540
 commit: 7fe7351c
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-173 — do repeated metadata values survive a request, and what does the response split?

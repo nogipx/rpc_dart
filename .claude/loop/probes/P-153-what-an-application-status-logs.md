@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b124b_application_error_logging.da
 round: 516
 commit: 25093e53
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/core/protocol.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-153 — what does an application status log?

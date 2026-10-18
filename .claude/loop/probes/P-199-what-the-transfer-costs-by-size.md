@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_isolate/.dart_tool/probe/b156_ttd_vs_uint8list
 round: 578
 commit: 1508ed40
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-199 — what does TransferableTypedData cost, by size?

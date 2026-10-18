@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b141_reject_drain.dart
 round: 537
 commit: 6268a40a
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-170 — does the rejection drain run at all, and does the body read really stop?

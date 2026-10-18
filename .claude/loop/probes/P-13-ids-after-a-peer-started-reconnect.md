@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/ids_after_a_peer_st
 round: 234 — the validating round
 commit: c327a2ce
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/core/rpc_dart/lib/src/resilience/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-13 — does the id sequence survive a reconnect the PEER started?

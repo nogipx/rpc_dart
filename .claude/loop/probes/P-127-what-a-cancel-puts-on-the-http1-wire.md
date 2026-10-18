@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b97_phantom_post.dart
 round: 488
 commit: d3363ea4
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-127 — what a cancel puts on the HTTP/1.1 wire

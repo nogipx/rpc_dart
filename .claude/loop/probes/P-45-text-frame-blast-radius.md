@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/text_frame_blast_ra
 round: 353
 commit: 8d81b9e7
 paths: [packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-45 — what one stray frame costs the calls already in flight

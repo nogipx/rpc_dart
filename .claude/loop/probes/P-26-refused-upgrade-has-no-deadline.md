@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/refused_upgrade_has
 round: 276
 commit: 84515602
 paths: [packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-26 — is the refused-upgrade path bounded by anything?

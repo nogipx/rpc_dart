@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b174_close_asymmetry.dart
 round: 576
 commit: b9a491c4
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/core/multiplexed_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-197 — what does a channel close keep, and what does a send on a closed one do?

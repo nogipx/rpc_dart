@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_compression/.dart_tool/probe/gate_control_test.dart
 round: 883
 commit: 73fe8093
 paths: [pubspec.yaml]
-status: valid
+status: stale (526c8d52)
 promoted: no — a test that fails on purpose cannot live in the suite; every gate run would be red
 ---
 

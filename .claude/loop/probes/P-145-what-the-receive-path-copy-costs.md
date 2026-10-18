@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b116_copies_per_message.dart
 round: 507
 commit: cc218edc
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/core/channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-145 — what does the receive-path copy cost?

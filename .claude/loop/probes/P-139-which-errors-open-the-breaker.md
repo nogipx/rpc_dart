@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b110_breaker_counts_app_errors.dar
 round: 501
 commit: 70372049
 paths: [packages/core/rpc_dart/lib/src/resilience/circuit_breaker_interceptor.dart, packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-139 — which errors open the circuit breaker, and what does an open one block?

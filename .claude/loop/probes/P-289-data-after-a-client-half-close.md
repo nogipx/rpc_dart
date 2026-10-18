@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/data_after_half_close.dart
 round: 798
 commit: b204ccd6
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-289 — data after a client half-close

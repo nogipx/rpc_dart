@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b138_a_flood_into_a_stalled_handle
 round: 594
 commit: 017f4c88
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid (round 595)
+status: stale (526c8d52) (round 595)
 ---
 
 # P-211 — a flood into a stalled handler

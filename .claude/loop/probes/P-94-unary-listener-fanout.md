@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/unary_listener_fanout.dart
 round: 423
 commit: 3f41ab67
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-94 — listeners on the connection, per parked unary handler

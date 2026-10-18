@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b129_retry_backoff_cancel.dart
 round: 521
 commit: 7cdaabf6
 paths: [packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-158 — does a cancel cut the retry backoff?

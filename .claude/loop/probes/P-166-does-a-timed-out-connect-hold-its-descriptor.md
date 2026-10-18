@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b137_connect_timeou
 round: 533
 commit: 53cc91a7
 paths: [packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-166 — does a connect that timed out still hold its descriptor?

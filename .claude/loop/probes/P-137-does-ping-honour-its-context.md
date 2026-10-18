@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b108_ping_ignores_context.dart
 round: 499
 commit: d5cfdf8a
 paths: [packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/ping.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-137 — does ping() honour its context?

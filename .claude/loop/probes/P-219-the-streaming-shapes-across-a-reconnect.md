@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/test/a_reused_peer_id_streaming_shap
 round: 615
 commit: e3c2e4b1
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid (round 615)
+status: stale (526c8d52) (round 615)
 ---
 
 # P-219 — the streaming shapes across a reconnect

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r803_decode_cost.dart
 round: 803
 commit: f979f886
 paths: [packages/core/rpc_dart/lib/src/codec/special_cbor.dart]
-status: valid
+status: stale (526c8d52)
 promoted: — (a speed measurement; nothing to pin in a test)
 ---
 

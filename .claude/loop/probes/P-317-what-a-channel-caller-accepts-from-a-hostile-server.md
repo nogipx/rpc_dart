@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r848_channel_response_oracle.dart
 round: 848
 commit: bdb31b14
 paths: [packages/core/rpc_dart/lib/src/contracts/caller_trailer.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_caller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport_inbound.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/contracts/an_out_of_range_status_is_unknown_test.dart
 ---
 

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r849_clock_jump.dart
 round: 849
 commit: 362a89a8
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/resilience/retry_interceptor.dart, packages/core/rpc_dart/lib/src/rpc/streams/**]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/resilience/a_reconnect_waits_no_longer_than_the_call_test.dart
 ---
 

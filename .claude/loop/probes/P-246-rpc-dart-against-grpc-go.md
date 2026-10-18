@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r742_against_grpc_go.da
 round: 742
 commit: a94aca2c
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-246 — does rpc_dart's h2 caller work against a real gRPC server?

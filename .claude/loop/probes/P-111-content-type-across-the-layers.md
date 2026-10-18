@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/content_type_across_three_layers.d
 round: 462
 commit: a4314d4c
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/transport/rpc_dart_http/lib/**, packages/transport/rpc_dart_http2/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-111 — content-type across the layers

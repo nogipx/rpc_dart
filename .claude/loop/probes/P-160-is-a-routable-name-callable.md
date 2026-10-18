@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b129_15_token_cap.dart
 round: 525
 commit: 6659c0ee
 paths: [packages/core/rpc_dart/lib/src/core/metadata.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-160 — is a routable service name callable?

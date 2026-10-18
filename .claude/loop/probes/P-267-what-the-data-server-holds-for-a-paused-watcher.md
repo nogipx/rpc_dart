@@ -3,7 +3,7 @@ file: packages/data/rpc_data/.dart_tool/probe/r767_stalled_watcher_ws.dart
 round: 767
 commit: 089d9446
 paths: [packages/data/rpc_data/lib/src/repository/base_data_repository.dart, packages/data/rpc_data/lib/src/rpc/data_responder.dart, packages/data/rpc_data/lib/src/client/data_service_client.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-267 — what the data server holds for a paused watcher

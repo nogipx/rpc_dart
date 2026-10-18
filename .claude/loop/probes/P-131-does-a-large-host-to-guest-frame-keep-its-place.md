@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/example/integration_test/host_to_guest_or
 round: 492
 commit: e8acaadb
 paths: [packages/transport/rpc_dart_wasm/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt, packages/transport/rpc_dart_wasm/lib/src/rpc_flutter_wasm_bridge.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-131 — does a large host-to-guest frame keep its place?

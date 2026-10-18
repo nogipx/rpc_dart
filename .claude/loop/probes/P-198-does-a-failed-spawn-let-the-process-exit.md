@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_isolate/.dart_tool/probe/b155_spawn_failure_le
 round: 577
 commit: e5f7ad8a
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-198 — does a process whose spawn failed still exit?

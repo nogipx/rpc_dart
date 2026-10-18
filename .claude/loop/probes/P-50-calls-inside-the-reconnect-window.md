@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/calls_inside_the_re
 round: 359
 commit: 164bb41b
 paths: [packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-50 — what each transport method does mid-reconnect

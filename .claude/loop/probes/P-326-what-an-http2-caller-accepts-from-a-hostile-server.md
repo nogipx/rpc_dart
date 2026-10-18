@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r858_http2_response_ora
 round: 858
 commit: 6c31366f
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport_inbound.dart, packages/core/rpc_dart/lib/src/contracts/caller_trailer.dart]
-status: valid
+status: stale (526c8d52)
 promoted: no — a CLEAN comparison against P-317
 ---
 

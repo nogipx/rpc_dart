@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b106_minting_vs_holding.dart
 round: 549
 commit: 2b9ffffa
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-178 — does queuing a direct object cost a pointer, or its payload?

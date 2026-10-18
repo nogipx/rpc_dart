@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/client_stream_short_read.dart
 round: 369
 commit: 5a22ff67
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/**, packages/core/rpc_dart/lib/src/rpc/streams/server/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-60 — what the caller is told when the other side stops reading

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r833_console_output.dart
 round: 833
 commit: 54bf6160
 paths: [packages/core/rpc_dart/lib/src/logger/outputs/console_output.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/logger/a_record_stays_one_line_test.dart
 ---
 

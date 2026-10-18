@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/b151_drain_then_force.da
 round: 573
 commit: fb7770cd
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_server.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-194 — reset or 503, at the end of a drain?

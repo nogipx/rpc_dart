@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/conn_window_leak.dart
 round: 228 — the validating round for the new arm
 commit: af64eeac
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-11 — does the connection pool come back from a consumer that stops?

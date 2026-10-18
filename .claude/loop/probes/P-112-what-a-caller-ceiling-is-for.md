@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/what_a_caller_ceiling_is_for.dart
 round: 463
 commit: fbbf627f
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-112 — what a caller-side ceiling is for

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/lim_meta_edge.dart
 round: 660
 commit: feaf34de
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-227 — metadata at the policy edge over a channel pair

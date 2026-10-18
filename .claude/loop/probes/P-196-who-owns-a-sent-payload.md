@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b174_payload_aliasing.dart
 round: 575
 commit: e2d84db1
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-196 — who owns a sent payload?

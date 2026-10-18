@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/three_core_diagnostics.dart
 round: 360
 commit: 7a3c66d5
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/endpoint/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-51 — three places the library answers wrongly rather than failing

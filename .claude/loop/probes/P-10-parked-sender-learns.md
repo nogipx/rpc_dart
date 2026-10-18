@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/parked_sender_learns.dart
 round: 221 — the validating round
 commit: 7d06201c
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-10 — does a parked sender learn its call is over?

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/b184_halfclosedlocal_le
 round: 565
 commit: 4acd6833
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-187 — does a release landing during a parked send leak its stream id?

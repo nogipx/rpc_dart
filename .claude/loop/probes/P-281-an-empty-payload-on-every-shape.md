@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/empty_payload_all_shapes.dart
 round: 787
 commit: 60d03e59
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/responder.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-281 — an empty payload on every shape

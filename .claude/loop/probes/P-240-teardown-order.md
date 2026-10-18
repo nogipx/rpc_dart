@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_framework/.dart_tool/probe/r727_rollback_order.dart
 round: 727
 commit: 472dd6af
 paths: [packages/core/rpc_dart_framework/lib/src/rpc_app.dart, packages/core/rpc_dart_framework/lib/src/rpc_test_app.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-240 — in what order does each RpcApp teardown stop server and modules?

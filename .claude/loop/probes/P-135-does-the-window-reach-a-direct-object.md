@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b106_zero_copy_backpressure.dart
 round: 497
 commit: 60e4d3f8
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/direct_multiplexed_channel.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-135 — does the flow-control window reach a direct object?

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/rpc20_proxy_window.dart
 round: 240
 commit: c84ff1cf
 paths: [packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart/lib/src/rpc/transports/**, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-18 — do frames that arrived before the app subscribed survive a hop?

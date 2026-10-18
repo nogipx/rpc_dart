@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/metadata_weighs_characters.dart
 round: 279
 commit: 1ac04a24
 paths: [packages/core/rpc_dart/lib/src/core/transport.dart, packages/core/rpc_dart/lib/src/core/buffered_broadcast.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-29 — what a queued header actually costs

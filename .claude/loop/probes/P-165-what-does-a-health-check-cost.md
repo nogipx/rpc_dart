@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b136_health_check_n
 round: 532
 commit: a016a327
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_io_connections.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-165 — what does a plain HTTP request to the websocket port cost?

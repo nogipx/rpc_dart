@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b138_pause_propagat
 round: 534
 commit: cbca6a2b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-167 — does pausing a channel's `incoming` stop the source being read?

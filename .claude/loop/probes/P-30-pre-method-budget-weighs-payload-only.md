@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/pre_method_weighs_payload_only.dar
 round: 280
 commit: a9cb0846
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_streams.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-30 — what the pre-method budget actually charges

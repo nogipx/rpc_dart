@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_socket/.dart_tool/probe/r881_deaf_peer_write_b
 round: 881
 commit: ed6f6293
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_channel.dart, packages/transport/rpc_dart_socket/lib/src/rpc_socket_server.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_bounded_upgrade.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/test/rpc_dart_conformance/test/i3_memory_per_peer_test.dart
 ---
 

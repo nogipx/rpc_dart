@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/b134_serial_stop.da
 round: 530
 commit: e4ba8c6b
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-163 — is the websocket server's shutdown linear in its connections?

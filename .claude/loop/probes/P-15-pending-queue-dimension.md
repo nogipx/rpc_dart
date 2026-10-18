@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/pending_queue_counts_events.dart
 round: 236 — the validating round
 commit: 6840be09
 paths: [packages/core/rpc_dart/lib/src/core/**, packages/core/rpc_dart/lib/src/rpc/transports/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-15 — which dimension does the pending queue bound?

@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/data_after_client_cancel.dart
 round: 799
 commit: b7ee3dc2
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-290 — data after a client cancel

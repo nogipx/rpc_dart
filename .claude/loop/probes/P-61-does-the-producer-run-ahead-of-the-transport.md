@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/request_sink_backpressure.dart
 round: 370
 commit: 9428d654
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/caller.dart, packages/core/rpc_dart/lib/src/rpc/streams/client/caller.dart, packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-61 — does the producer run ahead of the transport?

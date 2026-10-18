@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/caller_records_per_hostile_answer.
 round: 797
 commit: a8c7e4e6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-288 — caller records per hostile answer

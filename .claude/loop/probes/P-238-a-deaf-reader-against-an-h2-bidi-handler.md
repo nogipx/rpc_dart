@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r723_deaf_reader_bidi.d
 round: 723
 commit: 472dd6af
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_common.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_responder_transport.dart, packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-238 — does an h2 bidi handler run ahead of a deaf reader?

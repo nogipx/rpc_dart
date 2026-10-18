@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/sink_close_during_add_stream.dart
 round: 386
 commit: 2a5514ad
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/**, packages/core/rpc_dart/lib/src/rpc/streams/base_processor.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-79 — close() while an addStream is running, and the producer after the end

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_isolate/.dart_tool/probe/b157_startup_budget.d
 round: 579
 commit: 513dfc6e
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-200 — is the startup budget really doubled?

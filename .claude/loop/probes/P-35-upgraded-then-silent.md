@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/upgraded_then_silen
 round: 288
 commit: eda32fc7
 paths: [packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-35 — the peer that upgrades and then goes silent

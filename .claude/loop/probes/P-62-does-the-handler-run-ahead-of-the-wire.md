@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/response_sink_backpressure.dart
 round: 371
 commit: 3edb3535
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/bidirectional/responder.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-62 — does the handler run ahead of the wire?

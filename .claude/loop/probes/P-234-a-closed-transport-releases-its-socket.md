@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/r718_closed_transport_l
 round: 718
 commit: e8341816
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/raw_socket_pipe.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-234 — does a closed http2 caller release its socket?

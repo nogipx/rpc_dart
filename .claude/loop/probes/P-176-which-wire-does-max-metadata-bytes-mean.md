@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b209_which_wire.dart
 round: 544
 commit: d0b960db
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/core/channel_frame.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-176 — which wire does `maxMetadataBytes` mean?

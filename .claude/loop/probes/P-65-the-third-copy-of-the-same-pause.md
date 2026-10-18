@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/bidi_pump_backpressure.dart
 round: 374
 commit: 9df8e772
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart, packages/core/rpc_dart/lib/src/rpc/streams/server/responder.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-65 — the third copy of the same pause

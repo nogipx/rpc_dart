@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b120_draws_per_call.dart
 round: 551
 commit: 12669b0f
 paths: [packages/core/rpc_dart/lib/src/contracts/context.dart, packages/core/rpc_dart/lib/src/endpoint/caller_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-179 — how many tokens does one unary call mint, and where does each land?

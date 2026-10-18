@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/send_into_a_dead_so
 round: 358
 commit: a0355bfc
 paths: [packages/transport/rpc_dart_websocket/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-49 — does a websocket send throw when the socket is already gone

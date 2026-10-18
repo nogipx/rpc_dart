@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/r717_upload_into_a_deaf_
 round: 717
 commit: b005e0d2
 paths: [packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart, packages/core/rpc_dart/lib/src/rpc/streams/unary/caller.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-233 — does a deadline stop an upload the server stopped reading?

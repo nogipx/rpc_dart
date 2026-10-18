@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b206_what_a_discarded_compress_cos
 round: 620
 commit: 1e8bf772
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/core/compression_gzip_io.dart]
-status: valid (round 620)
+status: stale (526c8d52) (round 620)
 ---
 
 # P-222 — what a discarded compress costs

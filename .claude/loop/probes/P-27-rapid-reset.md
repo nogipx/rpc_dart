@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/rapid_reset.dart
 round: 277
 commit: dcf9d587
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-27 — HTTP/2 Rapid Reset, and a raw h2 peer to reuse

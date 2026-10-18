@@ -3,7 +3,7 @@ file: packages/core/rpc_dart_framework/.dart_tool/probe/r728_test_app_start_roll
 round: 728
 commit: 6dce1742
 paths: [packages/core/rpc_dart_framework/lib/src/rpc_test_app.dart, packages/core/rpc_dart_framework/lib/src/rpc_app.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-241 — does a failed start stop the modules it already started?

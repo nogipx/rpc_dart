@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r755_silent_peer.da
 round: 755
 commit: 32dfde70
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-260 — a silent peer and the websocket defaults

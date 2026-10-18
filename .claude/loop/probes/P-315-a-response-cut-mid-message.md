@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r846_truncated_response.dart
 round: 846
 commit: 513ef2a6
 paths: [packages/core/rpc_dart/lib/src/rpc/streams/base_processor_caller.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport_inbound.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_caller_transport.dart]
-status: valid
+status: stale (526c8d52)
 promoted: packages/core/rpc_dart/test/streams/a_response_cut_mid_message_is_an_error_test.dart
 ---
 

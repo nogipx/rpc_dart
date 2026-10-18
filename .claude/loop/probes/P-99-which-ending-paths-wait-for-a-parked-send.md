@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/ending_paths_overtake.dart
 round: 445
 commit: 0f3adf45
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/channel_transport.dart, packages/core/rpc_dart/lib/src/rpc/transports/flow_controller.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-99 — which ending paths wait for a credit-parked send?

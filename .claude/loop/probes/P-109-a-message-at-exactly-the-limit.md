@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http/.dart_tool/probe/a_message_at_exactly_the
 round: 458
 commit: 720439a0
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/transport/rpc_dart_http/lib/**]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-109 — a message at exactly the limit, per transport

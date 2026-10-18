@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r746_driver.dart
 round: 746
 commit: f1b119b1
 paths: [packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-249 — does the process exit once everything is closed?

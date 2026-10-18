@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_http2/.dart_tool/probe/where_the_parity_rules_
 round: 468
 commit: 9e9fcd67
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/core/rpc_dart/lib/src/core/transport.dart]
-status: valid
+status: stale (526c8d52)
 ---
 
 # P-117 — where the parity rules meet
