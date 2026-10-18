@@ -4,10 +4,12 @@ class: process
 cost: one round's gate section stated a cause that was wrong by 8x — "load average 11.37" against a control that reads clean at 84.76 — and the lead it filed sent the next round after the wrong variable. The real cause took one probe and three `--concurrency` runs
 paths: [packages/core/rpc_dart/test/transports/the_window_counts_wire_bytes_test.dart, .claude/loop/rounds/587-eight-calls-eight-errors.md]
 commit: 878c443b
-status: active
+status: obsolete (round 886)
 ---
 
 # L-19 — "it is a flake" is a hypothesis, and it names a variable
+
+Merged into L-14 in the curate pass after round 886.
 
 ## The rule
 

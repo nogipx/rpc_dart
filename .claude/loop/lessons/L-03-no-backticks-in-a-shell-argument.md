@@ -4,7 +4,7 @@ class: toolchain
 cost: 1 mangled commit body (three words silently deleted) plus 1 amend, and 2 interruptions from the owner asking for no permission prompts
 paths: []
 commit: beed83e5
-status: active
+status: promoted to skill (SKILL.md Rule zero; methods/reporting.md)
 ---
 
 # L-03 — never put a backtick in a shell argument, not even inside quotes

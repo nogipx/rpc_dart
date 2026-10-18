@@ -23,8 +23,7 @@ Round 790 ran `melos run analyze` (green), then `dart format` on a new test
 (1 file changed), then `format:check` (green), and committed. The formatter
 had split `if (r is LogEvent && r.level == RpcLogLevel.error) errors.add(...)`
 across two lines; round 791's analyze reported it, and the round commit had
-to be rebuilt. CLAUDE.md records the same lint once shipping in a published
-`rpc_dart`.
+to be rebuilt.
 
 ## How to apply
 

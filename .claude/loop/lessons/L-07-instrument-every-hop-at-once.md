@@ -4,7 +4,7 @@ class: bench
 cost: 3 of 4 attempts at per-stream flow control lost to diagnosing by argument, each redesigning around a cause that was never verified; 2 further repeats in the same feature
 paths: [packages/core/rpc_dart/lib/src/**, packages/transport/*/lib/**]
 commit: d9b96a67
-status: active
+status: promoted to skill (items/measure-async.md A2; methods/measurement.md item 6)
 ---
 
 # L-07 — Instrument every hop at once; do not reason about which one is wrong

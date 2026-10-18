@@ -5,7 +5,7 @@ applies: a dependency parses or reassembles the wire before this code sees a mes
 breaks: DoS.
 applied: [237, 387, 611, 713, 723, 756, 763, 766, 767, 782, 784, 788, 806, 807, 808, 811, 815, 837, 881, 884, 885]
 status: confirmed (round 885)
-rank: 8
+rank: 1
 ---
 
 # RPC-18 — The dependency buffers below every limit you own

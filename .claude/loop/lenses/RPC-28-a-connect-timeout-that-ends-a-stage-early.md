@@ -5,7 +5,7 @@ applies: opening a connection takes several stages (TCP, TLS, an upgrade, a prot
 breaks: a hang that never ends: connect() or reconnect() waits forever on a peer that answered the first stage only.
 applied: [754, 755, 773, 800, 826]
 status: confirmed (round 800)
-rank: 7
+rank: 9
 ---
 
 # RPC-28 — A connect timeout that ends a stage early
