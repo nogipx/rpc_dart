@@ -97,13 +97,10 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// the revived entry has no method, so it buffers the frame and sits there,
   /// one per call, driven by any peer that calls an unregistered method.
   ///
-  /// Insertion-ordered, so evicting `first` drops the oldest; bounded so this
-  /// guard cannot become a leak of its own.
-  final Set<int> _respClosedStreams = <int>{};
-
-  /// How many torn-down stream ids to remember. Late frames arrive right after
-  /// the teardown, so a modest window covers the race.
-  static const int _maxRememberedClosedStreams = 1024;
+  /// Bounded, oldest first, so this guard cannot become a leak of its own.
+  /// Late frames arrive right after the teardown, so a modest window covers
+  /// the race.
+  final RpcRecentIds _respClosedStreams = RpcRecentIds(1024);
 
   /// Cached concurrent-stream ceiling for streams the PEER opens.
   ///
@@ -233,12 +230,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     return _respHalfOpenCache = transport.securityPolicy.halfOpenStreamTimeout;
   }
 
-  void _rememberClosedStream(int streamId) {
-    if (!_respClosedStreams.add(streamId)) return;
-    if (_respClosedStreams.length > _maxRememberedClosedStreams) {
-      _respClosedStreams.remove(_respClosedStreams.first);
-    }
-  }
+  void _rememberClosedStream(int streamId) => _respClosedStreams.add(streamId);
 
   /// Whether the responder pipeline is currently listening.
   bool get responderIsListening => _respIsListening;

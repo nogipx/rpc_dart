@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import '../../core/_index.dart';
 import '../../core/owned_payload.dart';
+import '../../core/recent_ids.dart';
 import '../../logger/_index.dart';
 import 'direct_multiplexed_channel.dart';
 import 'flow_controller.dart';
@@ -45,15 +46,18 @@ class RpcChannelTransport extends IRpcTransport
   final Set<int> _activeStreams = {};
 
   /// Ids whose terminal frame has been sent, so [finishSending] stays
-  /// idempotent. Bounded — see [_rememberFinished]. Insertion-ordered, so
-  /// `first` is the oldest entry.
-  final Set<int> _finishedStreams = {};
+  /// idempotent. Bounded — see [_rememberFinished].
+  final RpcRecentIds _finishedStreams = RpcRecentIds(
+    _maxRememberedFinishedStreams,
+  );
 
   /// Ids whose flow-control state has been dropped. A late frame for one must
   /// not advertise its window again: that made it live, and its grants then
   /// rebuilt the credit, one entry per call that ended by deadline or failure.
-  /// Bounded like [_finishedStreams]; insertion-ordered.
-  final Set<int> _forgottenStreams = {};
+  /// Bounded like [_finishedStreams].
+  final RpcRecentIds _forgottenStreams = RpcRecentIds(
+    _maxRememberedFinishedStreams,
+  );
 
   /// A send on this stream that is PARKED for flow-control credit.
   ///
@@ -68,7 +72,7 @@ class RpcChannelTransport extends IRpcTransport
   final Map<int, Completer<void>> _parkedSends = {};
 
   /// Upper bound on [_finishedStreams]. Matches the responder pipeline's
-  /// `_maxRememberedClosedStreams`.
+  /// `_respClosedStreams`.
   ///
   /// **Not headroom over `maxActiveStreams`** — 1024 is a quarter of its
   /// default. What makes it safe is what an entry is FOR: added when the
@@ -739,10 +743,5 @@ class RpcChannelTransport extends IRpcTransport
   /// shadow a REUSED id, where it would make `finishSending` a silent no-op.
   ///
   /// Same shape as `_rememberClosedStream` in the responder pipeline.
-  void _rememberFinished(int streamId) {
-    if (!_finishedStreams.add(streamId)) return;
-    if (_finishedStreams.length > _maxRememberedFinishedStreams) {
-      _finishedStreams.remove(_finishedStreams.first);
-    }
-  }
+  void _rememberFinished(int streamId) => _finishedStreams.add(streamId);
 }
