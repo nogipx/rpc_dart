@@ -76,13 +76,13 @@ class ConsoleOutput extends LogOutput {
     if (event.spanId != null) buf.write(' ${_shortId(event.spanId!)}');
     if (event.scope.isNotEmpty) buf.write(' ${event.scope}');
     if (event.tag != null) buf.write(' [${event.tag}]');
-    buf.write('  ${_oneLine(event.message)}');
+    buf.write('  ${escapeLine(event.message)}');
 
     // Structured fields: trace, request, data — logfmt style
     if (event.traceId != null) buf.write('  trace=${event.traceId}');
     _writeData(buf, event.data);
 
-    if (event.error != null) buf.write('  err=${_oneLine('${event.error}')}');
+    if (event.error != null) buf.write('  err=${escapeLine('${event.error}')}');
 
     final line = buf.toString();
     if (colored) {
@@ -107,7 +107,7 @@ class ConsoleOutput extends LogOutput {
     if (span.traceId != null) buf.write('  trace=${span.traceId}');
     _writeData(buf, span.data);
 
-    if (span.error != null) buf.write('  err=${_oneLine('${span.error}')}');
+    if (span.error != null) buf.write('  err=${escapeLine('${span.error}')}');
 
     final line = buf.toString();
     if (colored) {
@@ -123,7 +123,7 @@ class ConsoleOutput extends LogOutput {
   void _writeData(StringBuffer buf, Map<String, Object>? data) {
     if (data == null || data.isEmpty) return;
     for (final entry in data.entries) {
-      final value = _oneLine('${entry.value}');
+      final value = escapeLine('${entry.value}');
       if (entry.value is String && value.contains(' ')) {
         buf.write(' ${entry.key}="$value"');
       } else {
@@ -137,7 +137,10 @@ class ConsoleOutput extends LogOutput {
   /// A message often quotes a peer: a status message, a close reason, a path.
   /// Printed raw, a CR/LF in it starts a forged record of the peer's choosing,
   /// and an ESC sequence acts on the terminal.
-  static String _oneLine(String text) {
+  ///
+  /// Public for any renderer of records that came from elsewhere, such as a
+  /// remote log collector.
+  static String escapeLine(String text) {
     if (!text.codeUnits.any(_isControl)) return text;
     final out = StringBuffer();
     for (final unit in text.codeUnits) {
@@ -175,7 +178,7 @@ class ConsoleOutput extends LogOutput {
       case final LogEvent event:
         final time = _formatTime(event.timestamp);
         final level = event.level.name.toUpperCase().substring(0, 3);
-        print('$time $level ${event.scope}: ${_oneLine(event.message)}');
+        print('$time $level ${event.scope}: ${escapeLine(event.message)}');
       case final LogSpan span:
         final time = _formatTime(span.endTime);
         final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';

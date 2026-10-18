@@ -327,7 +327,6 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
           streamId: state.id,
           status: RpcStatus.unimplemented,
           message: 'Method $methodKey is not registered',
-          context: context,
         ),
         'grpc error cleanup',
       );
@@ -491,7 +490,6 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
           streamId: state.id,
           status: refusal.statusCode,
           message: refusal.message,
-          context: state.cachedContext,
         ),
         'grpc error cleanup',
       );
@@ -592,7 +590,6 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
           streamId: state.id,
           status: RpcStatus.unimplemented,
           message: 'Method $methodKey is not registered',
-          context: state.cachedContext,
         ),
         'grpc error cleanup',
       );
@@ -643,7 +640,6 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
           streamId: state.id,
           status: RpcStatus.invalidArgument,
           message: 'Request stream closed without payload for $methodKey',
-          context: state.cachedContext,
         ),
         'grpc error cleanup',
       );

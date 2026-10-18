@@ -218,10 +218,11 @@ abstract final class RpcGrpcCompression {
   ///
   /// [acceptEncoding] is the raw `grpc-accept-encoding` header value
   /// (comma-separated list, e.g. `"gzip, identity"`).
-  /// Returns the first supported non-identity encoding, or `null` for identity.
+  /// Returns the first supported non-identity encoding, normalised as
+  /// [_normalize] does, or `null` for identity.
   static String? selectResponseEncoding(String? acceptEncoding) {
     if (acceptEncoding == null) return null;
-    for (final enc in acceptEncoding.split(',').map((e) => e.trim())) {
+    for (final enc in acceptEncoding.split(',').map(_normalize)) {
       if (enc != identity && isSupported(enc)) {
         return enc;
       }

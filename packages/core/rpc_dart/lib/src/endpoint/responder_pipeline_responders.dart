@@ -44,7 +44,6 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
           status: RpcStatus.resourceExhausted,
           message: 'Too many concurrent handlers (max: $maxHandlers)',
           atCapacity: true,
-          context: state.cachedContext,
         );
         return;
       }

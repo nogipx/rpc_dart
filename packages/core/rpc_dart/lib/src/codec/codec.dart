@@ -54,8 +54,3 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
     return fromJson(decoded);
   }
 }
-
-/// Converts a [LinkedMap] with dynamic keys to a [Map<String, dynamic>].
-Map<String, dynamic> convertMap(Map<dynamic, dynamic> map) {
-  return map.map((key, value) => MapEntry(key.toString(), value));
-}

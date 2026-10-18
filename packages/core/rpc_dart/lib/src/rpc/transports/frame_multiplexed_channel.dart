@@ -166,16 +166,22 @@ class RpcFrameMultiplexedChannel
 
     await _channelSub?.cancel();
     _channelSub = null;
-    _buf = Uint8List(0);
-    _bufLen = 0;
 
     try {
       await _channel.close();
     } catch (_) {}
 
-    if (!_incomingCtl.isClosed) {
-      await _incomingCtl.close();
-    }
+    await _releaseAfterChannelClose();
+  }
+
+  /// What every close does once the byte channel is closed: stop reading, drop
+  /// the reassembly buffer, end [incoming].
+  Future<void> _releaseAfterChannelClose() async {
+    await _channelSub?.cancel();
+    _channelSub = null;
+    _buf = Uint8List(0);
+    _bufLen = 0;
+    if (!_incomingCtl.isClosed) await _incomingCtl.close();
   }
 
   // -- Internal ---------------------------------------------------------------
@@ -693,9 +699,7 @@ class RpcFrameMultiplexedChannel
     if (_closed) return;
     _closed = true;
     await (channel as IRpcChannelOversizeClose).closeForOversize(reason);
-    await _channelSub?.cancel();
-    _channelSub = null;
-    if (!_incomingCtl.isClosed) await _incomingCtl.close();
+    await _releaseAfterChannelClose();
   }
 
   /// Forwarded so layers ABOVE this channel can report a peer fault too.
@@ -716,9 +720,7 @@ class RpcFrameMultiplexedChannel
     // while the byte channel is closing.
     _closed = true;
     await (channel as IRpcChannelProtocolClose).closeForProtocolError(reason);
-    await _channelSub?.cancel();
-    _channelSub = null;
-    if (!_incomingCtl.isClosed) await _incomingCtl.close();
+    await _releaseAfterChannelClose();
   }
 
   /// Creates a paired client/server frame channel over in-memory byte streams.

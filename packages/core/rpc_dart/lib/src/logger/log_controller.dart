@@ -361,7 +361,7 @@ class LogController {
         error: redactError(record.error),
         stackTrace: record.stackTrace,
         data: redacted,
-        events: record.events,
+        events: [for (final e in record.events) _redact(e) as LogEvent],
       );
     }
     return record;

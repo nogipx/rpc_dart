@@ -98,7 +98,6 @@ extension _ResponderPipelineAdmission on RpcResponderPipelineMixin {
           message:
               'Stream was half-open for ${timeout.inMilliseconds}ms without '
               'a request message',
-          context: state.cachedContext,
         ),
         'grpc error cleanup',
       );

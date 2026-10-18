@@ -70,7 +70,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
             streamId: state.id,
             status: RpcStatus.internal,
             message: 'Responder dispatch failed',
-            context: state.cachedContext,
           ),
           'dispatch failure report',
         );
@@ -517,7 +516,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     required int streamId,
     required int status,
     required String message,
-    RpcContext? context,
     List<RpcHeader> extraHeaders = const [],
     bool atCapacity = false,
   }) async {
@@ -632,7 +630,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         streamId: state.id,
         status: RpcStatus.deadlineExceeded,
         message: 'Deadline exceeded',
-        context: state.cachedContext,
       ),
       'grpc error cleanup',
     );
