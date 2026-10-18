@@ -75,83 +75,42 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     final context = _ensureResponderContext(state);
     final contextLogger = context.log;
     final streamId = state.id;
-    final methodKey = binding.methodKey;
 
     if (binding.isZeroCopy) {
       if (!transport.supportsZeroCopy) {
-        await _handleUnsupportedZeroCopy(state, context, methodKey);
+        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
         return;
       }
 
-      final processor = StreamProcessor<Object, Object>(
+      final responder = UnaryResponder<Object, Object>(
+        id: streamId,
         transport: transport,
-        streamId: streamId,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
+        handler: (request) => _withHandlerSlot(
+          streamId,
+          () => handleUnary<Object, Object>(
+            direction: RpcCallDirection.incoming,
+            serviceName: binding.serviceName,
+            methodName: binding.methodName,
+            context: context,
+            request: request,
+            handler: (ctx, req) =>
+                binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+          ),
+        ),
         context: context,
         logger: contextLogger,
       );
 
-      final responder = _RpcZeroCopyUnaryResponder(
-        id: streamId,
-        processor: processor,
-      );
       state.responder = responder;
-
-      var handled = false;
-      processor.requests.listen(
-        (request) async {
-          if (handled) return;
-          handled = true;
-          try {
-            final response = await _withHandlerSlot(
-              streamId,
-              () => handleUnary<Object, Object>(
-                direction: RpcCallDirection.incoming,
-                serviceName: binding.serviceName,
-                methodName: binding.methodName,
-                context: context,
-                request: request,
-                handler: (ctx, req) =>
-                    binding.zeroCopyMethod.callUnaryHandler(ctx, req),
-              ),
-            );
-            await processor.send(response);
-            await processor.finishSending();
-            await _cleanupStream(streamId, only: state);
-          } catch (error, stackTrace) {
-            contextLogger.error(
-              'Error in zero-copy unary handler',
-              error: error,
-              stackTrace: stackTrace,
-            );
-            await sendWireError(error, processor.sendError);
-            await _cleanupStream(streamId, only: state);
-          }
-        },
-        onError: (Object error, StackTrace stackTrace) async {
-          // The request stream can fail before a request exists -- a peer whose
-          // payload SHAPE does not match this method's mode reports it here. With
-          // no handler the error was a dropped future and the caller got
-          // UNAVAILABLE "Stream closed without receiving response", which says
-          // nothing about the cause. It also has to be answered: the three
-          // streaming shapes already route their request-stream errors, and this
-          // one did not.
-          if (handled) return;
-          handled = true;
-          contextLogger.error(
-            'Error on zero-copy unary request stream',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          await sendWireError(error, processor.sendError);
-          await _cleanupStream(streamId, only: state);
-        },
+      _detached(
+        responder.done.whenComplete(
+          () => _cleanupStream(streamId, only: state),
+        ),
+        'responder completion',
       );
-
-      responder.bindToMessageStream(
-        _stateBoundStream(state, streamId, consumePreBindBuffer: true),
-      );
+      responder.bindToMessageStream(_pipelineFedPreBound(state));
       return;
     }
 
@@ -179,84 +138,14 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       ),
       context: context,
       logger: contextLogger,
-      // The pipeline feeds this responder directly, four lines below, and
-      // answers transport errors for every stream at once in [_answerActiveStreams].
-      // Its own subscription would be a listener on the connection-wide
-      // broadcast per LIVE HANDLER, invoked for every inbound frame only to
-      // discard what is not its own.
-      listensToTransport: false,
     );
 
     state.responder = responder;
-
-    // EVERY buffered message, not just the first. One frame can arrive split
-    // across several of them, and the responder's parser reassembles across
-    // calls — handing over `.first` and dropping the rest is what made a
-    // fragmented request fail on unary alone.
-    final preBindMessages = state.takePreBindBufferedMessages();
-    var batch = preBindMessages.isNotEmpty
-        ? preBindMessages
-        : <RpcTransportMessage>[?state.takeLastPayload()];
-    var incomplete = false;
-    // DRAINED rather than taken once, and this part is UNWITNESSED — no arm here
-    // makes it fire, and disabling it changes no test. Kept on judgement: this
-    // runs detached from `_onMessage`, so a fragment arriving while the lines
-    // below await is appended to the pre-bind buffer by a path that cannot route
-    // it either, because the flag it keys on is not set until this returns. The
-    // window is three lines wide and its failure mode is a hang.
-    while (batch.isNotEmpty) {
-      for (final message in batch) {
-        if (message.isDirect && message.directPayload != null) {
-          await responder.handleDirectMessage(message);
-          incomplete = false;
-          break;
-        }
-        if (!message.isMetadataOnly && message.payload != null) {
-          incomplete = await responder.handleMessage(message);
-        }
-      }
-      if (!incomplete) break;
-      batch = state.takePreBindBufferedMessages();
-    }
-
-    // Still waiting for the rest of a frame, or for the half-close after a
-    // whole request: the stream stays alive so the next data frame can be
-    // routed here, and `_handleEndOfStream` ends the request when the peer
-    // half-closes. Tearing down now is what turned round 518's partial fix
-    // into a hang.
-    if (incomplete) {
-      state.unaryAwaitingRequest = true;
-      // The peer may already have half-closed — the frames and the EOS can all
-      // be buffered before the method is known — in which case nothing further
-      // will arrive and nobody else will look.
-      if (state.clientEnded) {
-        await responder.finishRequest(streamId);
-        await _cleanupStream(streamId, only: state);
-      }
-      return;
-    }
-
-    await _cleanupStream(streamId, only: state);
-  }
-
-  /// Hands a later fragment of an incomplete unary request to its responder.
-  ///
-  /// Reached only while [RpcResponderStreamState.unaryAwaitingRequest] holds, so
-  /// an ordinary unary call never takes this path.
-  Future<void> _feedUnaryFragment(
-    RpcResponderStreamState state,
-    UnaryResponder<IRpcSerializable, IRpcSerializable> responder,
-    RpcTransportMessage message,
-  ) async {
-    final incomplete = await responder.handleMessage(message);
-    // Still waiting: nothing to do. A half-close is answered by exactly one site
-    // per ordering — `_handleEndOfStream` when it arrives after dispatch, and the
-    // dispatch itself when it arrived before. Answering here as well would be a
-    // third, reached only by whichever won a race, and it masked the second well
-    // enough that disabling it changed no test.
-    if (incomplete) return;
-    state.unaryAwaitingRequest = false;
-    await _cleanupStream(state.id, only: state);
+    _detached(
+      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
+      'responder completion',
+    );
+    responder.bindToMessageStream(_pipelineFedPreBound(state));
   }
 
   Future<void> _ensureClientStreamResponder(
@@ -624,32 +513,4 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       await _cleanupStream(state.id, only: state);
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Internal responder for zero-copy unary calls
-// ---------------------------------------------------------------------------
-
-final class _RpcZeroCopyUnaryResponder implements IRpcResponder {
-  _RpcZeroCopyUnaryResponder({required this.id, required this.processor});
-
-  @override
-  final int id;
-  final StreamProcessor<Object, Object> processor;
-
-  Stream<Object> get requests => processor.requests;
-
-  Future<void> send(Object response) => processor.send(response);
-
-  Future<void> finish() => processor.finishSending();
-
-  Future<void> sendError(int statusCode, String message) =>
-      processor.sendError(statusCode, message);
-
-  void bindToMessageStream(Stream<RpcTransportMessage> stream) {
-    processor.bindToMessageStream(stream);
-  }
-
-  @override
-  Future<void> close() => processor.close();
 }

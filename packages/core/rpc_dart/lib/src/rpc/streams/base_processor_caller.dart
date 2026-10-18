@@ -100,7 +100,7 @@ extension _CallProcessorInternals<
 
         try {
           await _sendSequence;
-          if (_requestSendFailed) return;
+          if (_requestSendFailed || _endedWithRequest) return;
           await _transport.finishSending(_streamId);
           if (_logger.isInternal) {
             _logger.internal(
@@ -133,7 +133,8 @@ extension _CallProcessorInternals<
   /// Called synchronously from [send] so that a subsequent [finishSending]
   /// (which closes the request controller; its `onDone` awaits [_sendSequence])
   /// always observes the queued write and never drops the last request.
-  void _transmitRequest(TRequest request) {
+  /// [endStream] half-closes with the request, see [sendOnly].
+  void _transmitRequest(TRequest request, {bool endStream = false}) {
     _sendSequence = _sendSequence.then((_) async {
       if (!_isActive) return;
 
@@ -151,7 +152,11 @@ extension _CallProcessorInternals<
 
         if (_isZeroCopy) {
           // One record after the send, not one on each side of it.
-          await _transport.sendDirectObject(_streamId, request);
+          await _transport.sendDirectObject(
+            _streamId,
+            request,
+            endStream: endStream,
+          );
           if (_logger.isInternal) {
             _logger.internal(
               'Zero-copy request sent for $_methodPath [streamId: $_streamId]',
@@ -185,6 +190,7 @@ extension _CallProcessorInternals<
             _streamId,
             serialized,
             requestEncoding,
+            endStream: endStream,
           );
 
           if (_logger.isInternal) {
@@ -238,6 +244,10 @@ extension _CallProcessorInternals<
             'Response stream completed for $_methodPath [streamId: $_streamId]',
           );
         }
+        // Cut inside a gRPC frame: INTERNAL, not a retryable "closed". The
+        // peer was sending a response when the stream ended, so the work may
+        // have run.
+        if (_failIfEndedMidMessage()) return;
         if (!_responseController.isClosed) {
           // Still OPEN here means the stream ended with no end-of-stream
           // message: a normal finish, an error trailer, a cancellation and a
@@ -357,6 +367,8 @@ extension _CallProcessorInternals<
     _scope.onDispose(() {
       if (!_isActive) return;
       if (context!.isCancelled) return;
+      // The server already ended the call.
+      if (_responseController.isClosed) return;
 
       if (_logger.isInternal) {
         _logger.internal('Deadline exceeded [streamId: $_streamId]');
@@ -364,8 +376,12 @@ extension _CallProcessorInternals<
       final error = RpcDeadlineExceededException(deadline, Duration.zero);
       // Single-subscription controllers buffer the error for a late
       // subscriber, so do not gate on hasListener.
-      if (!_responseController.isClosed) _responseController.addError(error);
+      _responseController.addError(error);
       if (!_requestController.isClosed) _requestController.addError(error);
+      // Tell the server too: it may not have the deadline (a transport
+      // without grpc-timeout) or may read it later than this side. The id is
+      // held until the notice settles.
+      unawaited(_sendCancellationToServer('deadline exceeded'));
     });
   }
 
@@ -442,8 +458,9 @@ extension _CallProcessorInternals<
     );
   }
 
-  /// Sends a cancellation notice to the server.
-  Future<void> _sendCancellationToServer(String reason) =>
+  /// Sends a cancellation notice to the server, once; the stream id is held
+  /// until it settles (see [_pendingNotice]).
+  Future<void> _sendCancellationToServer(String reason) => _pendingNotice ??=
       _notifyPeerOfCancellation(_transport, _streamId, reason, _logger);
 
   /// Refuses a call whose context is already cancelled or expired.

@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `UnaryResponder` listens to the CONNECTION-WIDE broadcast, and its `onError`
-// answered every unhandled stream with a trailer. An ADVISORY error says one
-// frame was discarded over a connection that still works — a proxy's app-level
-// keepalive arriving as a text frame is the real case — so answering it fails
-// calls for nothing.
+// `RpcResponderEndpoint` listens to the CONNECTION-WIDE broadcast, and a
+// transport error there is answered with a trailer on every unanswered
+// stream. An ADVISORY error says one frame was discarded over a connection
+// that still works — a proxy's app-level keepalive arriving as a text frame is
+// the real case — so answering it would fail calls for nothing.
 //
-// `RpcChannelTransport` already withholds advisory errors from its per-stream
-// controllers (`channel_transport.dart:182`). This listener is on the broadcast,
-// where they still arrive.
+// `RpcChannelTransport` withholds advisory errors from its per-stream
+// controllers. The endpoint's listener is on the broadcast, where they still
+// arrive.
 
 import 'dart:async';
 
@@ -109,23 +109,35 @@ final class _InjectingTransport implements IRpcTransport {
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
-/// A responder with a live stream state that has NOT been answered — the only
-/// state `onError` acts on. Reached by delivering the call's metadata frame and
-/// nothing else, which is the gap between a peer's HEADERS and its DATA.
-Future<(_InjectingTransport, UnaryResponder<RpcString, RpcString>)>
-_armed() async {
+/// Service `S`, unary `M`: echoes its request.
+final class _Echo extends RpcResponderContract {
+  _Echo() : super('S');
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'M',
+      handler: (r, {RpcContext? context}) async => r,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+  }
+}
+
+/// An endpoint with a live stream that has NOT been answered — the only state
+/// a transport error is answered on. Reached by delivering the call's metadata
+/// frame and nothing else, which is the gap between a peer's HEADERS and its
+/// DATA.
+Future<(_InjectingTransport, RpcResponderEndpoint)> _armed() async {
   final (rawClient, rawServer) = RpcChannelTransport.pair();
   final transport = _InjectingTransport(rawServer);
 
-  final responder = UnaryResponder<RpcString, RpcString>(
-    id: 1,
-    transport: transport,
-    serviceName: 'S',
-    methodName: 'M',
-    requestCodec: _codec,
-    responseCodec: _codec,
-    handler: (r) async => r,
-  );
+  final responder = RpcResponderEndpoint(transport: transport);
+  responder.registerServiceContract(_Echo());
+  responder.start();
+  // The endpoint subscribes to the broadcast asynchronously; a frame
+  // delivered before that is dropped.
+  await Future<void>.delayed(const Duration(milliseconds: 10));
 
   transport.deliver(
     RpcTransportMessage(

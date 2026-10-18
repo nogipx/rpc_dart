@@ -13,6 +13,7 @@ import '../_internal.dart'
         IRpcCodec,
         IRpcSerializable,
         RpcCallerEndpoint,
+        RpcCallerPipelineMixin,
         RpcPeerEndpoint,
         RpcHeaders,
         RpcMetadata,

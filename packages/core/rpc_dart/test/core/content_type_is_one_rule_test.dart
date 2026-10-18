@@ -78,7 +78,6 @@ Future<String> _call(String? contentType, RpcContentTypeValidation mode) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      transferMode: RpcDataTransferMode.codec,
     );
     return 'ok';
   } on RpcStatusException catch (e) {

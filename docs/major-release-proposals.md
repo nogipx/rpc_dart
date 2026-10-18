@@ -279,6 +279,45 @@ Behaviour changes (all deliberate):
   the other shapes do.
 - A caller built without a context sends `x-request-id` on every shape.
 
+### Per-call speed (owner, 2026-10-19: make the shared path cheaper)
+
+Unary on the processors first measured 7-11% slower than HEAD 43d2d3a8 in
+serialized mode. A CPU profile of each side then showed that half of every
+call, on HEAD too, went to two shared costs, both removed:
+
+- **Request-id and trace tokens** drew three `Random.secure()` words each,
+  and each word reached the system entropy source. `RpcContext._tokenRng` is
+  now a fast `Random` that the strong generator reseeds every 1024 tokens.
+  The ids are correlation, not secrets; the counter still makes them unique.
+- **Recently-closed stream-id sets** (responder pipeline, channel transport
+  finished and forgotten streams) evicted with `remove(first)` on a
+  `LinkedHashSet`, which walks the slots earlier evictions left. They are
+  `RpcRecentIds` now: a hash map plus an order queue. The rate limiter's LRU
+  has the same shape: lead B-308.
+
+Unary-specific:
+
+- The request rides the half-close frame (`CallProcessor.sendOnly`), pinned
+  by `test/streams/a_unary_request_is_one_frame_test.dart`.
+- The request send is not awaited before the response wait.
+- The unary responder sends the handler's future directly
+  (`ServerStreamResponder._single`), with no stream relay.
+
+`benchmark/benchmark.dart --runs=3`, median per call:
+
+| Scenario | HEAD | Now |
+|---|---|---|
+| zero-copy unary/simple | 70 us | 29 us |
+| serialized unary/simple | 75 us | 41 us |
+| serialized unary/complex | 105 us | 73 us |
+| serialized scalability/20 | 1.57 ms | 0.88 ms |
+| serialized serverStream/5, clientStream/10, bidi/5 | 131/143/161 us | 83/93/109 us |
+
+The largest remaining item on a framed transport is the JSON metadata of
+`RpcChannelFrame` (about 15% of a caller's CPU). Encoding straight to bytes
+with `JsonUtf8Encoder` did not measure faster; a cheaper encoding is a wire
+change and is not part of this step.
+
 ## 5. Contracts, context, registration
 
 Closes C7, C8, C9, P12.

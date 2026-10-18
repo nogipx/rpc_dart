@@ -38,6 +38,8 @@ extension _StreamProcessorInternals<
   /// [sendError]/[finishSending] awaiting [_sendSequence] always observes the
   /// queued write and never drops the last message.
   void _transmitResponse(TResponse response) {
+    _responseQueued = true;
+    final direct = _answerDirect;
     _sendSequence = _sendSequence.then((_) async {
       if (!_isActive) return;
 
@@ -47,7 +49,7 @@ extension _StreamProcessorInternals<
         );
       }
       try {
-        if (_isZeroCopy) {
+        if (direct) {
           // One record after the send, not one on each side of it.
           await _transport.sendDirectObject(_streamId, response);
           if (_logger.isInternal) {
@@ -224,6 +226,8 @@ extension _StreamProcessorInternals<
 
   /// Zero-copy: processes a direct object without serialization.
   void _processDirectMessage(Object directPayload) {
+    // See [_answerDirect]: the caller chose objects, so the answer is too.
+    if (!_responseQueued && _transport.supportsZeroCopy) _answerDirect = true;
     try {
       final request = directPayload as TRequest;
 
@@ -352,6 +356,7 @@ extension _StreamProcessorInternals<
 
         final reason =
             _context.cancellationToken!.reason ?? 'Operation was cancelled';
+        _cancelReason = reason;
         final cancelledException = RpcCancelledException(reason);
 
         // Both are single-subscription controllers, so addError buffers for a

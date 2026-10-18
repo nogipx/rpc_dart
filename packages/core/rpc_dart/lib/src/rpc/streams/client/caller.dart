@@ -165,11 +165,7 @@ final class ClientStreamCaller<
         }
       },
       onError: (Object error, StackTrace stackTrace) {
-        _logger.error(
-          'Error in response stream',
-          error: error,
-          stackTrace: stackTrace,
-        );
+        // Logged once, by the processor that raised it.
         if (!_responseCompleter.isCompleted) {
           _responseCompleter.completeError(error, stackTrace);
         }
@@ -205,7 +201,7 @@ final class ClientStreamCaller<
     }
 
     if (_logger.isInternal) {
-      _logger.internal('Sending request to client stream: $request');
+      _logger.internal('Sending a request to the client stream');
     }
     _started = true;
     await _processor.send(request);
@@ -239,10 +235,31 @@ final class ClientStreamCaller<
 
     _sendingFinished = true;
     _started = true;
+    return _awaitResponse(_processor.finishSending);
+  }
 
+  /// Sends [request] as the whole request stream, in the frame that
+  /// half-closes, and returns the response; [UnaryCaller]'s path. The stream
+  /// is released before this completes.
+  Future<TResponse> _callOne(TRequest request) async {
+    _sendingFinished = true;
+    _started = true;
     try {
-      // Finish sending requests.
-      await _processor.finishSending();
+      return await _awaitResponse(() async => _processor.sendOnly(request));
+    } catch (e) {
+      if (RpcStatus.isFaultError(e)) {
+        _logger.error('Unary call failed', error: e);
+      }
+      rethrow;
+    } finally {
+      await close();
+    }
+  }
+
+  /// Runs [send], then waits for the response within the deadline.
+  Future<TResponse> _awaitResponse(Future<void> Function() send) async {
+    try {
+      await send();
       _logger.internal('Send complete, waiting for response');
 
       // Computed here, not at construction: requests may have taken a while to
@@ -335,9 +352,6 @@ final class ClientStreamCaller<
     requestSub = requests.listen(
       (request) {
         if (_sendingFinished) return;
-        if (_logger.isInternal) {
-          _logger.internal('Sending request: $request');
-        }
         requestSub.pause();
         unawaited(
           send(request)

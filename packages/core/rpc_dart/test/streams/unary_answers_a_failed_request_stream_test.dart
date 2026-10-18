@@ -5,27 +5,11 @@
 // A unary call whose request stream FAILS must be answered, like every other
 // shape answers.
 //
-// The four responder shapes disagreed, and the serialized unary one — the
-// default for every codec-based unary method — was the odd one out:
-//
-//   three streaming shapes   StreamProcessor.bindToMessageStream's onError
-//                            forwards into _requestController, the handler sees
-//                            it, the machinery answers
-//   zero-copy unary          explicit onError -> processor.sendError(...), added
-//                            by an earlier round whose comment records that the
-//                            streaming shapes "already route their
-//                            request-stream errors, and this one did not"
-//   SERIALIZED unary         logged it, and nothing else
-//
-// Measured, driving each shape with a request stream that errors before any
-// request arrives:
-//
-//   ServerStreamResponder    status 13 sent to the peer
-//   UnaryResponder           NONE
-//
-// The caller then waits for a response that never comes and eventually reports
-// UNAVAILABLE "Stream closed without receiving response", which says nothing
-// about the cause.
+// Driven with a request stream that errors before any request arrives, the
+// serialized unary responder must put a status on the wire, and the same one
+// the server-stream responder puts there. Unanswered, the caller waits for a
+// response that never comes and eventually reports UNAVAILABLE "Stream closed
+// without receiving response", which says nothing about the cause.
 @TestOn('vm')
 library;
 
@@ -40,8 +24,6 @@ final _codec = RpcCodec(RpcString.fromJson);
 class _RecordingTransport extends IRpcTransport {
   final List<String> statuses = [];
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
-
-  void failIncoming(Object error) => _incoming.addError(error);
 
   @override
   Future<void> sendMetadata(
@@ -108,30 +90,53 @@ class _RecordingTransport extends IRpcTransport {
 
 void main() {
   test('a failed request stream is reported to the peer', () async {
-    // WITNESS. Pre-fix this recorded nothing: onError logged and returned.
-    final transport = _RecordingTransport();
-    UnaryResponder<RpcString, RpcString>(
+    // WITNESS: a status reaches the peer, and it is the one the streaming
+    // shape sends for the same failure.
+    final unaryTransport = _RecordingTransport();
+    final unary = UnaryResponder<RpcString, RpcString>(
       id: 1,
-      transport: transport,
+      transport: unaryTransport,
       serviceName: 'Svc',
       methodName: 'echo',
       requestCodec: _codec,
       responseCodec: _codec,
       handler: (r) async => r,
     );
+    final unaryMessages = StreamController<RpcTransportMessage>();
+    unary.bindToMessageStream(unaryMessages.stream);
 
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    transport.failIncoming(StateError('request stream failed'));
+    final streamTransport = _RecordingTransport();
+    final stream = ServerStreamResponder<RpcString, RpcString>(
+      id: 1,
+      transport: streamTransport,
+      serviceName: 'Svc',
+      methodName: 'watch',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (r) => Stream<RpcString>.value('x'.rpc),
+    );
+    final streamMessages = StreamController<RpcTransportMessage>();
+    stream.bindToMessageStream(streamMessages.stream);
+
+    unaryMessages.addError(StateError('request stream failed'));
+    streamMessages.addError(StateError('request stream failed'));
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
     expect(
-      transport.statuses,
+      unaryTransport.statuses,
       isNotEmpty,
       reason:
           'the caller is left waiting for a response that never comes, and '
           'reports UNAVAILABLE instead of the real cause',
     );
-    await transport.close();
+    expect(unaryTransport.statuses, streamTransport.statuses);
+
+    await unaryMessages.close();
+    await streamMessages.close();
+    await unary.close();
+    await stream.close();
+    await unaryTransport.close();
+    await streamTransport.close();
   });
 
   test(

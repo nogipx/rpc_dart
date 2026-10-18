@@ -21,14 +21,15 @@ Future<void> _frameAndSend(
   IRpcTransport transport,
   int streamId,
   Uint8List serialized,
-  String? encoding,
-) {
+  String? encoding, {
+  bool endStream = false,
+}) {
   final (payload, useCompression) = RpcGrpcCompression.compressIfSmaller(
     serialized,
     encoding: encoding,
   );
   final framed = RpcMessageFrame.encode(payload, compressed: useCompression);
-  return transport.sendMessage(streamId, framed);
+  return transport.sendMessage(streamId, framed, endStream: endStream);
 }
 
 /// The [RpcSecurityPolicy] [transport] was configured with, or the defaults.
@@ -139,6 +140,18 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   final bool _isZeroCopy;
 
+  /// Responses go out as objects, not bytes.
+  ///
+  /// Always in zero-copy mode. With codecs, answered the way the call came: a
+  /// request that arrived as an object, on a transport that carries objects,
+  /// is answered with objects, as long as nothing has been sent yet. The
+  /// caller decides how a call travels; this side keeps its codecs only to
+  /// read a caller that serializes.
+  bool _answerDirect;
+
+  /// A response has been queued, so the way responses travel is fixed.
+  bool _responseQueued = false;
+
   final StreamController<TRequest> _requestController =
       StreamController<TRequest>();
   final StreamController<TResponse> _responseController =
@@ -167,6 +180,20 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   bool _isActive = true;
   bool _initialMetadataSent = false;
 
+  /// Why the call's token was cancelled while it ran, or null.
+  ///
+  /// A drain, an endpoint closing or a peer's cancel stop every write. The
+  /// call is then still answered, CANCELLED with this reason, when the
+  /// handler finishes ([_answerCancelled]): dropping the answer without a
+  /// status left a caller waiting out its own deadline for a call the server
+  /// had finished with.
+  String? _cancelReason;
+
+  /// The pipeline has torn the call down, so this processor writes nothing at
+  /// all, not even the CANCELLED answer: over a reconnecting transport the
+  /// stream id may already belong to another call.
+  bool _closed = false;
+
   /// Encoding for responses, picked from the peer's grpc-accept-encoding; null
   /// means identity. Seeded from the server context, then overridden by the
   /// peer's initial metadata when it arrives.
@@ -193,6 +220,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
        _serviceName = serviceName,
        _methodName = methodName,
        _isZeroCopy = requestCodec == null && responseCodec == null,
+       _answerDirect = requestCodec == null && responseCodec == null,
        _requestCodec = requestCodec,
        _responseCodec = responseCodec,
        _context = context,
@@ -393,19 +421,17 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     bool fault = true,
   }) async {
     if (!_isActive) {
-      _logger.warning('Attempted to send error on inactive processor');
+      await _answerCancelled();
       return;
     }
 
-    // An application status is an answer, not an incident.
-    if (fault && RpcStatus.isFault(statusCode)) {
-      _logger.error(
-        'Sending error to client: $statusCode - $message [streamId: $_streamId]',
-      );
-    } else if (_logger.isDebug) {
+    // Debug for every status: a fault is recorded once, with its stack, by
+    // the site that caught it, and an application status is an answer, not
+    // an incident.
+    if (_logger.isDebug) {
       _logger.debug(
         'Sending status to client: $statusCode - $message '
-        '[streamId: $_streamId]',
+        '[streamId: $_streamId${fault ? '' : ', peer fault'}]',
       );
     }
 
@@ -466,7 +492,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
 
   /// Finishes sending responses.
   Future<void> finishSending() async {
-    if (!_isActive) return;
+    if (!_isActive) {
+      await _answerCancelled();
+      return;
+    }
 
     if (_logger.isInternal) {
       _logger.internal(
@@ -504,6 +533,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Delegates to [RpcCallScope.close] which runs all registered
   /// disposers (subscriptions, controllers) in reverse order.
   Future<void> close() async {
+    _closed = true;
     if (!_isActive) return;
 
     if (_logger.isInternal) {
@@ -514,6 +544,43 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     _isActive = false;
 
     await _scope.close();
+  }
+
+  /// Answers a call whose token was cancelled while it ran: CANCELLED with the
+  /// reason, once, instead of the handler's late answer. See [_cancelReason].
+  ///
+  /// Best-effort by construction: the reason the call ended is often that the
+  /// transport is going away, so this send failing is not news.
+  Future<void> _answerCancelled() async {
+    final reason = _cancelReason;
+    if (reason == null || _closed || _trailerSent) return;
+    // A passed deadline is answered DEADLINE_EXCEEDED by the endpoint, which
+    // cancels the token after it; a second trailer here would race it.
+    if (_context?.deadline != null &&
+        _context?.remainingTime == Duration.zero) {
+      return;
+    }
+    _trailerSent = true;
+    if (_logger.isInternal) {
+      _logger.internal(
+        'Handler finished after the call was cancelled; answering CANCELLED '
+        '[streamId: $_streamId, reason: $reason]',
+      );
+    }
+    try {
+      await _sendSequence;
+      await _transport.sendMetadata(
+        _streamId,
+        RpcMetadata.forTrailer(
+          RpcStatus.cancelled,
+          message: reason,
+          maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,
+        ),
+        endStream: true,
+      );
+    } catch (_) {
+      // Nothing to report to: see above.
+    }
   }
 }
 
@@ -560,6 +627,22 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// A request could not be sent, so the request stream must not end with a
   /// half-close: the peer would read the requests before it as the whole stream.
   bool _requestSendFailed = false;
+
+  /// The request side was half-closed by the request itself, see [sendOnly],
+  /// so there is no separate half-close to send.
+  bool _endedWithRequest = false;
+
+  /// The "this call is abandoned" notice in flight, if one was sent.
+  ///
+  /// The stream id is released only after it settles, so the frame goes out
+  /// on an id that is still this call's: released first, the number can be
+  /// handed to the next call and the notice lands on it. Bounded by
+  /// [_noticeBeforeReleaseBudget], so a wedged send cannot hold the id for
+  /// ever.
+  Future<void>? _pendingNotice;
+
+  /// How long the stream id is held for a notice still in flight.
+  static const Duration _noticeBeforeReleaseBudget = Duration(seconds: 5);
 
   /// `/Service/Method`.
   late final String _methodPath;
@@ -629,8 +712,19 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
       _scope.onDispose(() {
         // Free the stream id so an aborted call (cancellation, deadline, error)
         // releases its slot. The normal path releases it too; releaseStreamId
-        // is idempotent.
-        _transport.releaseStreamId(_streamId);
+        // is idempotent. After a notice it waits for the notice, see
+        // [_pendingNotice], chained rather than awaited: a send that never
+        // completes must not hold the call's own ending.
+        final notice = _pendingNotice;
+        if (notice == null) {
+          _transport.releaseStreamId(_streamId);
+        } else {
+          unawaited(
+            notice
+                .timeout(_noticeBeforeReleaseBudget, onTimeout: () {})
+                .whenComplete(() => _transport.releaseStreamId(_streamId)),
+          );
+        }
         if (!_requestController.isClosed) _requestController.close();
         if (!_responseController.isClosed) _responseController.close();
       });
@@ -722,6 +816,25 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
     }
   }
 
+  /// Sends [request] as the whole request stream: one frame that also
+  /// half-closes, where [send] then [finishSending] take two.
+  ///
+  /// Queued, not awaited. A peer that refuses the request stops reading it,
+  /// so the send can wait on flow control while the answer is already on the
+  /// stream; the caller has to be reading [responses] by then. A failed send
+  /// arrives on [responses].
+  void sendOnly(TRequest request) {
+    if (!_isActive || _requestController.isClosed) {
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'Request not sent: the call is no longer active',
+      );
+    }
+    _endedWithRequest = true;
+    _transmitRequest(request, endStream: true);
+    unawaited(_requestController.close());
+  }
+
   /// Finishes sending requests.
   Future<void> finishSending() async {
     if (!_isActive) return;
@@ -748,17 +861,19 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Closes the processor and releases resources.
   ///
   /// Delegates to [RpcCallScope.close] which runs all registered
-  /// disposers (subscriptions, controllers) in reverse order.
+  /// disposers (subscriptions, controllers, the stream id) in reverse order.
+  ///
+  /// Awaited even when a cancellation or deadline already started the close,
+  /// so a caller that awaits this knows the stream id is released.
   Future<void> close() async {
-    if (!_isActive) return;
-
-    if (_logger.isInternal) {
-      _logger.internal(
-        'Closing CallProcessor for $_methodPath [streamId: $_streamId]',
-      );
+    if (_isActive) {
+      if (_logger.isInternal) {
+        _logger.internal(
+          'Closing CallProcessor for $_methodPath [streamId: $_streamId]',
+        );
+      }
+      _isActive = false;
     }
-    _isActive = false;
-
     await _scope.close();
   }
 }

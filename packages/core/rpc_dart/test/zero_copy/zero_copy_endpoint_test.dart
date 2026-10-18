@@ -143,13 +143,12 @@ void main() {
         }
       });
 
-      // Make the call.
+      // Make the call. No codecs: at the endpoint level that is the object
+      // path, which this zero-copy transport carries.
       final response = await callerEndpoint
           .unaryRequest<TestRequest, TestResponse>(
             serviceName: 'TestService',
             methodName: 'processData',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
             request: request,
           );
 
@@ -179,20 +178,12 @@ void main() {
       expect(response.result, contains('Processed: Complex data processing'));
       expect(response.count, equals(5));
 
-      // `unaryRequest` defaults to RpcDataTransferMode.auto, and on a transport
-      // that can pass objects `auto` means exactly that -- codecs present or
-      // not. That is the fast path this file has always asserted.
-      //
-      // What changed underneath it: `UnaryCaller` used to branch on
-      // `transport.supportsZeroCopy` ALONE, so an explicit
-      // RpcDataTransferMode.codec was ignored too. Measured on isolate with
-      // codecs on both ends and maxMessageLengthBytes: 256 KiB, a 2 MiB response
-      // was DELIVERED and a field `toJson` omits ARRIVED. Now only `codec`
-      // forces serialization; see unary_transfer_mode_test.
+      // The method is registered with codecs, and the request still crosses
+      // as an object: a codec-declared responder accepts a direct object.
       expect(
         directMessages,
         greaterThan(0),
-        reason: 'auto on a zero-copy transport still passes the object',
+        reason: 'a call without codecs on a zero-copy transport passes objects',
       );
       expect(
         serializedMessages,
@@ -200,6 +191,33 @@ void main() {
         reason: 'nothing asked for serialization here',
       );
     });
+
+    test(
+      'a unary call with codecs serializes on a zero-copy transport',
+      () async {
+        final sentMessages = <RpcTransportMessage>[];
+        final sub = serverTransport.incomingMessages.listen(sentMessages.add);
+        addTearDown(sub.cancel);
+
+        final response = await callerEndpoint
+            .unaryRequest<TestRequest, TestResponse>(
+              serviceName: 'TestService',
+              methodName: 'processData',
+              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+              request: TestRequest('Serialized', ['a', 'b']),
+            );
+        await Future<void>.delayed(Duration(milliseconds: 1));
+
+        expect(response.count, equals(2));
+        expect(
+          sentMessages.where((m) => m.isSerialized),
+          isNotEmpty,
+          reason: 'codecs at the endpoint level mean the call serializes',
+        );
+        expect(sentMessages.where((m) => m.isDirect), isEmpty);
+      },
+    );
 
     test('the object crosses by reference, not by copy', () async {
       print('\nwhat zero-copy means in an endpoint:');

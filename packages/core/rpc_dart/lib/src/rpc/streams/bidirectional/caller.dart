@@ -84,7 +84,7 @@ final class BidirectionalStreamCaller<
   /// Sends a request to the server (can be called multiple times).
   Future<void> send(TRequest request) async {
     if (_logger.isInternal) {
-      _logger.internal('Sending request to bidirectional stream: $request');
+      _logger.internal('Sending a request to the bidirectional stream');
     }
     await _processor.send(request);
   }

@@ -83,7 +83,6 @@ Future<List<String>> _headersDelivered({
     request: 'x'.rpc,
     requestCodec: _codec,
     responseCodec: _codec,
-    transferMode: RpcDataTransferMode.codec,
     context: callerMetadata.isEmpty
         ? null
         : RpcContext.empty().withAdditionalHeaders(callerMetadata),

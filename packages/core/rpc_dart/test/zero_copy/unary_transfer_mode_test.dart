@@ -77,14 +77,7 @@ _Rig _rig() {
 }
 
 Future<Msg> _call(_Rig rig, RpcDataTransferMode mode) =>
-    rig.caller.unaryRequest<Msg, Msg>(
-      serviceName: _service,
-      methodName: 'echo',
-      request: const Msg('go', secret: 'hunter2'),
-      requestCodec: _codec,
-      responseCodec: _codec,
-      transferMode: mode,
-    );
+    _CallerContract(rig.caller, mode).echo(const Msg('go', secret: 'hunter2'));
 
 void main() {
   test('auto passes the object when the transport can', () async {
@@ -128,23 +121,11 @@ void main() {
     expect(response.text, 'got:hunter2');
     expect(rig.serverSaw.where((m) => m.isDirect), isNotEmpty);
   });
-
-  test('GUARD: a contract in codec mode gets codec behaviour', () async {
-    // The route a real caller takes: RpcCallerContract passes its own
-    // dataTransferMode down, which is the whole point of threading it.
-    final rig = _rig();
-    final contract = _CallerContract(rig.caller);
-
-    final response = await contract.echo(const Msg('go', secret: 'hunter2'));
-
-    expect(response.text, 'got:');
-    expect(rig.serverSaw.where((m) => m.isSerialized), isNotEmpty);
-  });
 }
 
 final class _CallerContract extends RpcCallerContract {
-  _CallerContract(RpcCallerEndpoint endpoint)
-    : super(_service, endpoint, dataTransferMode: RpcDataTransferMode.codec);
+  _CallerContract(RpcCallerEndpoint endpoint, RpcDataTransferMode mode)
+    : super(_service, endpoint, dataTransferMode: mode);
 
   Future<Msg> echo(Msg request) => callUnary<Msg, Msg>(
     methodName: 'echo',

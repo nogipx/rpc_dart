@@ -77,7 +77,6 @@ Future<({int status, int requests})> _call(int httpStatus) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      transferMode: RpcDataTransferMode.codec,
     );
     fail('a $httpStatus answer must not succeed');
   } on RpcStatusException catch (e) {

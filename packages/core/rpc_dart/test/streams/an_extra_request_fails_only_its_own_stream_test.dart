@@ -2,11 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A UnaryResponder built directly with the default `id == 0` serves every
-// stream on its transport. A second request on one stream fails THAT call
-// INTERNAL (gRPC's rule for a single-message side), and the flag recording it
-// lived on the responder: every later stream's answer was then failed too,
-// for a request it never received.
+// A second request on one unary stream fails THAT call INTERNAL (gRPC's rule
+// for a single-message side). The refusal belongs to that stream alone: the
+// next stream served by the same endpoint is answered OK.
 
 import 'dart:async';
 
@@ -15,22 +13,32 @@ import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
-void main() {
-  test('an extra request on one stream does not fail the next', () async {
-    final (client, server) = RpcChannelTransport.pair();
-    final responder = UnaryResponder<RpcString, RpcString>(
-      transport: server,
-      serviceName: 'S',
+/// Service `S`, unary `M`: echoes its request after a short delay.
+final class _Echo extends RpcResponderContract {
+  _Echo() : super('S');
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
       methodName: 'M',
-      requestCodec: _codec,
-      responseCodec: _codec,
-      handler: (request) async {
+      handler: (request, {RpcContext? context}) async {
         await Future<void>.delayed(const Duration(milliseconds: 30));
         return request;
       },
+      requestCodec: _codec,
+      responseCodec: _codec,
     );
+  }
+}
+
+void main() {
+  test('an extra request on one stream does not fail the next', () async {
+    final (client, server) = RpcChannelTransport.pair();
+    final endpoint = RpcResponderEndpoint(transport: server);
+    endpoint.registerServiceContract(_Echo());
+    endpoint.start();
     addTearDown(() async {
-      await responder.close();
+      await endpoint.close();
       await client.close();
       await server.close();
     });

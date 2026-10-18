@@ -68,7 +68,6 @@ Future<String> _call(HttpServer server) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      transferMode: RpcDataTransferMode.codec,
     );
     return 'ok ${response.value}';
   } on RpcStatusException catch (e) {

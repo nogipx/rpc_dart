@@ -11,6 +11,38 @@ import 'package:test/test.dart';
 (IRpcTransport, IRpcTransport) createTransportPair() =>
     RpcChannelTransport.memoryPair();
 
+/// One service whose unary methods are the handlers in [_methods].
+final class _UnaryContract extends RpcResponderContract {
+  _UnaryContract(super.serviceName, this._methods);
+
+  final Map<String, FutureOr<RpcString> Function(RpcString)> _methods;
+
+  @override
+  void setup() {
+    for (final MapEntry(key: name, value: handler) in _methods.entries) {
+      addUnaryMethod<RpcString, RpcString>(
+        methodName: name,
+        handler: (request, {RpcContext? context}) async => handler(request),
+        requestCodec: RpcString.codec,
+        responseCodec: RpcString.codec,
+      );
+    }
+  }
+}
+
+/// Serves [methods] of [serviceName] on [transport] through a started
+/// endpoint.
+RpcResponderEndpoint _serve(
+  IRpcTransport transport,
+  String serviceName,
+  Map<String, FutureOr<RpcString> Function(RpcString)> methods,
+) {
+  final endpoint = RpcResponderEndpoint(transport: transport);
+  endpoint.registerServiceContract(_UnaryContract(serviceName, methods));
+  endpoint.start();
+  return endpoint;
+}
+
 void main() {
   group('Unary RPC', () {
     final serializer = RpcCodec(RpcString.fromJson);
@@ -21,17 +53,12 @@ void main() {
         final (clientTransport, serverTransport) = createTransportPair();
         final receivedRequests = <RpcString>[];
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
+        final server = _serve(serverTransport, 'TestService', {
+          'TestMethod': (request) {
             receivedRequests.add(request);
             return 'Echo: $request'.rpc;
           },
-        );
+        });
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -59,16 +86,11 @@ void main() {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
+        final server = _serve(serverTransport, 'TestService', {
+          'TestMethod': (request) {
             throw Exception('Internal server error');
           },
-        );
+        });
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -94,18 +116,13 @@ void main() {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) async {
+        final server = _serve(serverTransport, 'TestService', {
+          'TestMethod': (request) async {
             // Longer than the timeout.
             await Future<void>.delayed(Duration(seconds: 1));
             return 'Delayed response'.rpc;
           },
-        );
+        });
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -117,11 +134,8 @@ void main() {
         );
 
         // Act & Assert
-        expect(
-          () => client.call(
-            'test request'.rpc,
-            timeout: Duration(milliseconds: 1),
-          ),
+        await expectLater(
+          client.call('test request'.rpc, timeout: Duration(milliseconds: 1)),
           throwsA(isA<TimeoutException>()),
         );
 
@@ -135,7 +149,7 @@ void main() {
         final (clientTransport, serverTransport) = createTransportPair();
         final receivedStreamIds = <int>[];
 
-        // Watch the incoming stream ids.
+        // Watch the stream ids the calls open with.
         serverTransport.incomingMessages.listen((message) {
           if (message.isMetadataOnly) {
             receivedStreamIds.add(message.streamId);
@@ -143,14 +157,9 @@ void main() {
         });
 
         // A plain server.
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) => 'Echo: $request'.rpc,
-        );
+        final server = _serve(serverTransport, 'TestService', {
+          'TestMethod': (request) => 'Echo: $request'.rpc,
+        });
 
         // Act: make several calls.
         final client = UnaryCaller<RpcString, RpcString>(
@@ -183,17 +192,12 @@ void main() {
 
         final receivedRequests = <RpcString>[];
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
+        final server = _serve(serverTransport, 'TestService', {
+          'TestMethod': (request) {
             receivedRequests.add(request);
             return 'Echo: $request'.rpc;
           },
-        );
+        });
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -220,16 +224,11 @@ void main() {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'TestMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
+        final server = _serve(serverTransport, 'TestService', {
+          'TestMethod': (request) {
             throw Exception('Handler error');
           },
-        );
+        });
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -250,38 +249,22 @@ void main() {
         await server.close();
       });
 
-      test('a server answers only its own method', () async {
+      test('a call reaches only the handler of its own method', () async {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
         var handlerCallCount = 0;
         final receivedRequests = <RpcString>[];
 
-        // A server bound to one method.
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'SpecificMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
+        // One service, two methods.
+        final server = _serve(serverTransport, 'TestService', {
+          'SpecificMethod': (request) {
             handlerCallCount++;
             receivedRequests.add(request);
             return 'response from SpecificMethod'.rpc;
           },
-        );
-
-        // A second server, on a different method.
-        final otherServer = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'TestService',
-          methodName: 'DifferentMethod',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
-            return 'response from DifferentMethod'.rpc;
-          },
-        );
+          'DifferentMethod': (request) => 'response from DifferentMethod'.rpc,
+        });
 
         // A client for each method.
         final correctClient = UnaryCaller<RpcString, RpcString>(
@@ -314,7 +297,6 @@ void main() {
         await correctClient.close();
         await otherClient.close();
         await server.close();
-        await otherServer.close();
       });
     });
 
@@ -323,14 +305,9 @@ void main() {
         // Arrange
         final (clientTransport, serverTransport) = createTransportPair();
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'EchoService',
-          methodName: 'Echo',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) => 'Echo: $request'.rpc,
-        );
+        final server = _serve(serverTransport, 'EchoService', {
+          'Echo': (request) => 'Echo: $request'.rpc,
+        });
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -359,17 +336,12 @@ void main() {
 
         var requestCount = 0;
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'CounterService',
-          methodName: 'Increment',
-          requestCodec: serializer,
-          responseCodec: serializer,
-          handler: (request) {
+        final server = _serve(serverTransport, 'CounterService', {
+          'Increment': (request) {
             requestCount++;
             return 'Count: $requestCount'.rpc;
           },
-        );
+        });
 
         // Act: several clients.
         final responses = <RpcString>[];

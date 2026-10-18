@@ -443,12 +443,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-
-    /// What the CONTRACT asked for. Only [RpcDataTransferMode.codec] forces
-    /// serialization; `auto` still takes the object path on a transport that
-    /// offers one. Defaulted rather than required so a direct caller of this
-    /// low-level API keeps the fast path it has always had.
-    RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
   }) {
     // Through the Future, as clientStream does: thrown here, it would bypass
     // `.catchError` and every other non-`try` handler of the call.
@@ -476,35 +470,15 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
           methodName: methodName,
           context: ctx,
           request: request,
-          handler: (c, req) async {
-            if (isZeroCopy) {
-              final processor = CallProcessor<TRequest, TResponse>(
-                transport: transport,
-                serviceName: serviceName,
-                methodName: methodName,
-                context: c,
-                logger: _log,
-              );
-              return _executeUnaryCall(
-                processor: processor,
-                request: req,
-                context: c,
-              );
-            }
-            return UnaryCaller<TRequest, TResponse>(
-              serviceName: serviceName,
-              methodName: methodName,
-              transport: transport,
-              requestCodec: requestCodec!,
-              responseCodec: responseCodec!,
-              context: c,
-              transferMode: transferMode,
-              // Without this the serialized path logs to LogScope.noop while
-              // the zero-copy branch above logs normally, so the DEFAULT unary
-              // call is the one with no caller-side diagnostics.
-              logger: _log,
-            ).call(req);
-          },
+          handler: (c, req) => UnaryCaller<TRequest, TResponse>(
+            serviceName: serviceName,
+            methodName: methodName,
+            transport: transport,
+            requestCodec: requestCodec,
+            responseCodec: responseCodec,
+            context: c,
+            logger: _log,
+          ).call(req),
         );
       } finally {
         _untrackCallerRequest(serviceName, methodName, ctx);
@@ -878,54 +852,5 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         },
       ),
     );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Internal helpers
-  // ---------------------------------------------------------------------------
-
-  Future<TResponse>
-  _executeUnaryCall<TRequest extends Object, TResponse extends Object>({
-    required CallProcessor<TRequest, TResponse> processor,
-    required TRequest request,
-    RpcContext? context,
-  }) async {
-    try {
-      await processor.send(request);
-      await processor.finishSending();
-
-      // Held, not returned: the STATUS completes the call, so a payload
-      // followed by an error trailer is an error. Returning on the payload made
-      // it a success here while the unary shape reported the error.
-      TResponse? pendingResponse;
-
-      await for (final response in processor.responses) {
-        if (response.payload != null) {
-          // ONE response, as on the codec path.
-          if (pendingResponse != null) throw tooManyMessages('response');
-          pendingResponse = response.payload;
-          continue;
-        }
-
-        // The status on the END_STREAM frame, as on the codec path.
-        if (response.metadata == null || !response.isEndOfStream) continue;
-        final status = RpcCallerTrailer.statusOf(response.metadata!);
-        if (status == null) continue;
-
-        if (status != RpcStatus.ok) {
-          throw RpcCallerTrailer.errorOf(
-            response.metadata!,
-            status,
-            context: context,
-          );
-        }
-        if (pendingResponse != null) return pendingResponse;
-        throw RpcCallerTrailer.noPayload();
-      }
-
-      throw RpcCallerTrailer.closedWithoutStatus(context);
-    } finally {
-      await processor.close();
-    }
   }
 }

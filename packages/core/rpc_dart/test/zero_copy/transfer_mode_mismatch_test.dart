@@ -106,10 +106,10 @@ RpcCallerEndpoint _rig() {
   return caller;
 }
 
+/// A call with codecs serializes; one without passes the object.
 Future<Msg> _call(
   RpcCallerEndpoint caller, {
   required String service,
-  required RpcDataTransferMode mode,
   required bool withCodecs,
 }) => caller.unaryRequest<Msg, Msg>(
   serviceName: service,
@@ -117,7 +117,6 @@ Future<Msg> _call(
   request: const Msg('hi'),
   requestCodec: withCodecs ? _codec : null,
   responseCodec: withCodecs ? _codec : null,
-  transferMode: mode,
 );
 
 final _mismatch = throwsA(
@@ -235,7 +234,6 @@ void main() {
         _call(
           caller,
           service: _zeroCopyService,
-          mode: RpcDataTransferMode.codec,
           withCodecs: true,
         ).timeout(const Duration(seconds: 15)),
         throwsA(
@@ -264,7 +262,6 @@ void main() {
       final response = await _call(
         caller,
         service: _zeroCopyService,
-        mode: RpcDataTransferMode.auto,
         withCodecs: false,
       ).timeout(const Duration(seconds: 15));
 
@@ -283,8 +280,7 @@ void main() {
       final response = await _call(
         caller,
         service: _codecService,
-        mode: RpcDataTransferMode.auto,
-        withCodecs: true,
+        withCodecs: false,
       ).timeout(const Duration(seconds: 15));
 
       expect(response.text, 'codec:hi');
@@ -300,7 +296,6 @@ void main() {
       final response = await _call(
         caller,
         service: _codecService,
-        mode: RpcDataTransferMode.codec,
         withCodecs: true,
       ).timeout(const Duration(seconds: 15));
 

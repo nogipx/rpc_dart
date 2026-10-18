@@ -122,17 +122,11 @@ void main() {
       // The responder's served-call record. Ablate its guard to `if (false)`
       // and this row disappears while the call still succeeds -- which is
       // exactly the failure this test exists to make loud.
-      //
-      // It used to check three rows here, because the method wrote EIGHT:
-      // deserializing, handling, handled, serializing, serialized, sending,
-      // sending trailer, sent. They are one record now, so there is one row to
-      // anchor on — and it carries the payload size, which none of the eight
-      // did.
       expectLine('Served /Svc/echo', 'unary/responder.dart');
 
-      // Round 334 guarded the caller and the frame parser too.
+      // The caller, the processor that serializes for it, and the parser.
       expectLine('Unary call /Svc/echo started', 'unary/caller.dart');
-      expectLine('Serializing request', 'unary/caller.dart');
+      expectLine('Request serialized', 'base_processor_caller.dart');
       expectLine('Chunk processed, messages extracted', 'core/parser.dart');
 
       // The endpoint layer, guarded in round 337.
@@ -181,7 +175,7 @@ void main() {
     expectLine('Request handler returned a stream', 'server/responder.dart');
     expectLine('Creating Serialized ServerStreamCaller', 'server/caller.dart');
     expectLine('Creating Serialized ClientStreamResponder', 'client/responder');
-    expectLine('Sending request to client stream', 'client/caller.dart');
+    expectLine('Sending a request to the client stream', 'client/caller.dart');
     expectLine('Creating Serialized BidirectionalStreamResponder', 'bidi/resp');
     expectLine('Creating Serialized BidirectionalStreamCaller', 'bidi/caller');
 

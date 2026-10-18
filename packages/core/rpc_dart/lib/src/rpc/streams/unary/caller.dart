@@ -5,708 +5,81 @@
 
 part of '../_index.dart';
 
-/// Unary client: sends one request, gets one response (per call stream ID).
-final class UnaryCaller<TRequest, TResponse> {
-  /// How long the stream id is held for a cancellation notice still in flight.
-  ///
-  /// Only a backstop. The notice normally settles at once, and on a dead
-  /// transport it settles when the transport refuses the send; this bounds the
-  /// case where neither happens, so a wedged send cannot hold an id against
-  /// `maxActiveStreams` for the life of the process.
-  static const Duration _noticeBeforeReleaseBudget = Duration(seconds: 5);
-
-  /// Transport.
-  final IRpcTransport _transport;
-
-  /// Service name.
-  final String _serviceName;
-
-  /// Method name.
-  final String _methodName;
-
-  /// Method path `/Service/Method`.
-  late final String _methodPath;
-
-  /// Request codec.
-  final IRpcCodec<TRequest> _requestSerializer;
-
-  /// Response codec.
-  final IRpcCodec<TResponse> _responseSerializer;
-
-  /// RPC context.
-  final RpcContext? _context;
-
-  /// How the CONTRACT asked for its payload to travel.
-  ///
-  /// Only [RpcDataTransferMode.codec] forces serialization. Under
-  /// [RpcDataTransferMode.auto] — the default, and what "decide for me" means —
-  /// a transport that can pass objects still does, which is the fast path on
-  /// isolate and in-memory: 514 us against 807 us per round trip.
-  ///
-  /// This exists because the two used to be conflated. `call()` branched on
-  /// `transport.supportsZeroCopy` alone, so a method that explicitly declared
-  /// `codec` still had its codecs skipped — measured on isolate, a field
-  /// `toJson` omits crossed the process boundary and `maxMessageLengthBytes`
-  /// never applied, since there were no bytes to measure. Removing the fast
-  /// path outright was the wrong correction: it also took `auto` with it.
-  final RpcDataTransferMode _transferMode;
-
-  /// Logger.
-  late final LogScope _logger;
-
-  /// Creates a unary client.
+/// Unary caller: codecs → serialized; no codecs → zero-copy (zero-copy
+/// transport only). Sends one request, receives one response.
+///
+/// A client stream of one request: [ClientStreamCaller] holds the response
+/// until the status, maps the deadline, and tells the server when the call is
+/// abandoned. The request goes out in the frame that half-closes. Each [call]
+/// is its own call on its own stream, so one caller can make many.
+final class UnaryCaller<TRequest extends Object, TResponse extends Object> {
+  /// Creates a unary caller for `/serviceName/methodName`.
   UnaryCaller({
     required IRpcTransport transport,
     required String serviceName,
     required String methodName,
-    required IRpcCodec<TRequest> requestCodec,
-    required IRpcCodec<TResponse> responseCodec,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
-    RpcDataTransferMode transferMode = RpcDataTransferMode.auto,
   }) : _transport = transport,
        _serviceName = serviceName,
        _methodName = methodName,
-       _requestSerializer = requestCodec,
-       _responseSerializer = responseCodec,
+       _requestCodec = requestCodec,
+       _responseCodec = responseCodec,
        _context = context,
-       _transferMode = transferMode {
-    _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
-    _methodPath = '/$_serviceName/$_methodName';
-    if (_logger.isInternal) {
-      _logger.internal(
-        'Created unary client for $_methodPath'
-        '${_context != null ? ' with context' : ''}',
-      );
-    }
-  }
+       _logger = logger?.child('UnaryCaller') ?? LogScope.noop;
 
-  /// Executes the unary call.
+  final IRpcTransport _transport;
+  final String _serviceName;
+  final String _methodName;
+  final IRpcCodec<TRequest>? _requestCodec;
+  final IRpcCodec<TResponse>? _responseCodec;
+  final RpcContext? _context;
+  final LogScope _logger;
+
+  /// Sends [request] and returns the response.
+  ///
+  /// The wait is bounded by the context's deadline, which fails the call with
+  /// [RpcDeadlineExceededException], and otherwise unbounded. [timeout] is a
+  /// local bound on top of it: past it the server is told the call is
+  /// abandoned and this fails with [TimeoutException].
+  ///
+  /// Every failure arrives through the returned future, the ones found before
+  /// a stream exists (a cancelled or expired context, a transport at its
+  /// stream limit) included. The stream is released before it completes.
   Future<TResponse> call(TRequest request, {Duration? timeout}) async {
-    // Check cancellation and deadline from context.
-    _checkContextBeforeCall();
-
-    // An explicit argument, then the context's deadline, and then NOTHING.
-    //
-    // There was a `?? const Duration(seconds: 60)` here. A hidden limit the server
-    // never hears about is worse than no limit: it turned a slow answer into a
-    // client-side error while the server still believed the call was live, no
-    // `grpc-timeout` was ever sent for it, and it applied unevenly — unary and
-    // client-stream carried it, server-stream and bidi never had it.
-    //
-    // No deadline now means no bound, which is what gRPC does and what the two
-    // streaming shapes already did.
-    final remainingTime = _context?.remainingTime;
-    final effectiveTimeout = timeout ?? remainingTime;
-
-    // The call's own deadline, when that is what bounds the wait — an explicit
-    // [timeout] argument takes precedence and is not a deadline. Used below to
-    // report expiry as [RpcDeadlineExceededException] rather than a bare
-    // [TimeoutException]: the other three call shapes all report a deadline
-    // that way, and so does this method's own pre-flight check, so the type a
-    // caller had to catch depended on whether the deadline passed just before
-    // the call or just after it.
-    final boundingDeadline = timeout == null ? _context?.deadline : null;
-
-    // Create a new stream for this call.
-    final streamId = _transport.createStream();
-
     if (_logger.isInternal) {
-      _logger.internal('Unary call $_methodPath started [streamId: $streamId]');
+      _logger.internal('Unary call /$_serviceName/$_methodName started');
     }
-
-    // Parser and peer encoding are per call, not per caller. RpcMessageParser
-    // keeps a reassembly buffer, so a shared instance would carry the leftover
-    // bytes of a truncated response — or of a concurrent call on the same
-    // caller — into the next call's frame and decode garbage. This object is
-    // reusable (call() takes no identity of its own), so the state that a call
-    // mutates has to live inside call().
-    String? peerGrpcEncoding;
-    final parser = _policyBoundParser(
+    final caller = ClientStreamCaller<TRequest, TResponse>(
       transport: _transport,
+      serviceName: _serviceName,
+      methodName: _methodName,
+      requestCodec: _requestCodec,
+      responseCodec: _responseCodec,
+      context: _context,
       logger: _logger,
-      decompressor: (payload, {int? maxOutputBytes}) {
-        final encoding = peerGrpcEncoding;
-        if (RpcGrpcCompression.isIdentity(encoding)) {
-          throw RpcPeerFaultException(
-            RpcStatus.internal,
-            'Compressed gRPC payload received without grpc-encoding',
-          );
-        }
-        return RpcGrpcCompression.decompress(
-          payload,
-          encoding: encoding!,
-          maxOutputBytes: maxOutputBytes,
-        );
+    );
+    final response = caller._callOne(request);
+    if (timeout == null) return response;
+    // RpcLongTimer.timeout, not Future.timeout: a bare Timer past the JS
+    // ceiling fires at once. See [RpcLongTimer].
+    return RpcLongTimer.timeout(
+      response,
+      timeout,
+      onTimeout: () async {
+        _logger.error('Unary call timed out after $timeout');
+        // The notice is not awaited: a send that never completes must not
+        // hold the timeout. The stream id waits for it on its own.
+        unawaited(caller._notifyAbort('Caller timed out after $timeout'));
+        await caller.close();
+        throw TimeoutException('Call timeout: $timeout', timeout);
       },
     );
-
-    final completer = Completer<TResponse>();
-    // Marked handled IMMEDIATELY, because the peer can answer before the
-    // request has finished going out and nothing awaits this future until then.
-    //
-    // `call()` sends and only then reaches `await completer.future`. A server
-    // that REFUSES a large request does exactly the wrong thing for that order:
-    // it stops reading, so the send parks on the peer's flow-control window,
-    // while its RESOURCE_EXHAUSTED trailer arrives on the same stream. The
-    // response subscription then calls `completeError` on a future with no
-    // listener, and an unhandled async error in the root zone kills the
-    // ISOLATE. Measured, http2 client against a server with
-    // maxMessageLengthBytes: 256 KiB, one 2 MiB unary request:
-    //
-    //   Unhandled exception:
-    //   RpcStatusException(8): RpcException: gRPC frame payload is too large:
-    //   2097160 bytes (max: 262144)
-    //
-    // -- and the process was gone. The status itself was correct; only nobody
-    // was listening yet. `ignore()` attaches a listener without consuming the
-    // result, so the `await` below still receives the error.
-    completer.future.ignore();
-    StreamSubscription<void>? subscription;
-    StreamSubscription<void>? cancellationSubscription;
-
-    /// In-flight "the caller is gone" notice, awaited before the stream id is
-    /// released so the frame goes out on a live id.
-    Future<void>? cancellationNotice;
-
-    try {
-      // Subscribe to cancellation token if present.
-      if (_context?.cancellationToken != null) {
-        cancellationSubscription = _context!.cancellationToken!.cancelled
-            .asStream()
-            .listen((_) {
-              if (!completer.isCompleted) {
-                _logger.warning(
-                  'Operation cancelled via cancellation token [streamId: $streamId]',
-                );
-                final reason =
-                    _context.cancellationToken!.reason ??
-                    'Operation was cancelled';
-                // Tell the server. Unary used to cancel purely locally: the
-                // future got RpcCancelledException, the subscription was
-                // dropped, the stream id released — and nothing was ever sent,
-                // so the handler ran to completion for a caller that was
-                // already gone (measured: a 3s job cancelled after 100ms spent
-                // 295 of its 300 work units post-cancellation). The streaming
-                // callers already did this; unary, the most common shape, did
-                // not, on every transport including HTTP/2.
-                cancellationNotice = _notifyPeerOfCancellation(
-                  _transport,
-                  streamId,
-                  reason,
-                  _logger,
-                );
-                completer.completeError(RpcCancelledException(reason));
-              }
-            });
-      }
-
-      // The decoded response, held until the call is known to have COMPLETED.
-      //
-      // gRPC requires every response to carry a grpc-status, in trailers or in
-      // a Trailers-Only response; a stream that ends on DATA is malformed. This
-      // used to complete the completer the instant a message was decoded, so a
-      // truncated response -- a proxy cutting the stream, a server dying
-      // mid-response -- was handed back as a successful value and the
-      // UNAVAILABLE that followed arrived after the call had already returned.
-      // Measured against a raw HTTP/2 server sending headers + one framed
-      // message + END_STREAM with no trailers:
-      //
-      //   before : RETURNED "answer"   -- indistinguishable from success
-      //   after  : UNAVAILABLE
-      //
-      // The streaming shapes were fixed for this in round 88; unary kept the
-      // early completion. Holding the value costs nothing on a conforming peer,
-      // where the trailers follow in the same flush, and `onDone` below still
-      // guarantees the call cannot hang if no status ever arrives.
-      TResponse? pendingResponse;
-      var hasPendingResponse = false;
-
-      // A second response fails the call; the trailer that follows finds the
-      // completer done and changes nothing.
-      void tooManyResponses() {
-        if (completer.isCompleted) return;
-        completer.completeError(tooManyMessages('response'));
-      }
-
-      // Subscribe to responses for this stream.
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Configuring response subscription [streamId: $streamId]',
-        );
-      }
-      subscription = _transport
-          .getMessagesForStream(streamId)
-          .listen(
-            (message) {
-              if (message.isDirect && message.directPayload != null) {
-                // Zero-copy: received object directly.
-                if (_logger.isInternal) {
-                  _logger.internal(
-                    'Zero-copy response received [streamId: $streamId]',
-                  );
-                }
-                try {
-                  final response = message.directPayload as TResponse;
-                  if (hasPendingResponse || completer.isCompleted) {
-                    tooManyResponses();
-                  } else {
-                    if (_logger.isInternal) {
-                      _logger.internal(
-                        'Zero-copy unary response held pending status '
-                        '[streamId: $streamId]',
-                      );
-                    }
-                    pendingResponse = response;
-                    hasPendingResponse = true;
-                  }
-                } catch (e, stackTrace) {
-                  if (!completer.isCompleted) {
-                    _logger.error(
-                      'Failed to process zero-copy response [streamId: $streamId]',
-                      error: e,
-                      stackTrace: stackTrace,
-                    );
-                    completer.completeError(_undecodableResponse(e));
-                  }
-                }
-              } else if (!message.isMetadataOnly && message.payload != null) {
-                // Received response data (serialized).
-                if (_logger.isInternal) {
-                  _logger.internal(
-                    'Received transport message of ${message.payload!.length} bytes [streamId: $streamId]',
-                  );
-                }
-                try {
-                  // Use parser to extract messages from framed payload.
-                  final messages = parser(message.payload!);
-                  if (_logger.isInternal) {
-                    _logger.internal(
-                      'Parser extracted ${messages.length} messages from frame [streamId: $streamId]',
-                    );
-                  }
-
-                  for (final msgBytes in messages) {
-                    // A unary call has ONE response; another, in this chunk or
-                    // a later one, fails it.
-                    if (hasPendingResponse || completer.isCompleted) {
-                      tooManyResponses();
-                      break;
-                    }
-                    if (_logger.isInternal) {
-                      _logger.internal(
-                        'Deserializing response of ${msgBytes.length} bytes [streamId: $streamId]',
-                      );
-                    }
-                    pendingResponse = _decodePeerMessage(
-                      _responseSerializer,
-                      msgBytes,
-                      _transport,
-                    );
-                    hasPendingResponse = true;
-                    if (_logger.isInternal) {
-                      _logger.internal(
-                        'Unary response held pending status '
-                        '[streamId: $streamId]',
-                      );
-                    }
-                  }
-                } catch (e, stackTrace) {
-                  if (!completer.isCompleted) {
-                    _logger.error(
-                      'Failed to process response [streamId: $streamId]',
-                      error: e,
-                      stackTrace: stackTrace,
-                    );
-                    completer.completeError(_undecodableResponse(e));
-                  }
-                }
-              } else if (message.isMetadataOnly && message.metadata != null) {
-                // Received metadata (possibly trailers).
-                if (_logger.isInternal) {
-                  _logger.internal('Metadata received [streamId: $streamId]');
-                }
-                final encoding = message.metadata!.getHeaderValue(
-                  RpcHeaders.grpcEncoding,
-                );
-                if (encoding != null) {
-                  peerGrpcEncoding = encoding;
-                }
-                // The status on the END_STREAM frame completes the call, as in
-                // grpc-go and on the streaming shapes; one on any earlier
-                // frame is not a status yet. A peer that sent two used to get
-                // the first here and the last on a stream.
-                final code = message.isEndOfStream
-                    ? RpcCallerTrailer.statusOf(message.metadata!)
-                    : null;
-
-                if (code != null && !completer.isCompleted) {
-                  if (_logger.isInternal) {
-                    _logger.internal(
-                      'Completion status received: $code [streamId: $streamId]',
-                    );
-                  }
-                  if (code != RpcStatus.ok) {
-                    final error = RpcCallerTrailer.errorOf(
-                      message.metadata!,
-                      code,
-                      context: _context,
-                    );
-                    // Debug for every status: a genuine fault is reported once,
-                    // by the call's own catch, which also has the method path
-                    // and the stack.
-                    if (_logger.isDebug) {
-                      _logger.debug(
-                        'Call answered $code - ${error.message} '
-                        '[streamId: $streamId]',
-                      );
-                    }
-                    completer.completeError(error);
-                  } else if (parser.holdsPartialFrame) {
-                    // Bytes after the one response: without this the call
-                    // returned it OK where the other three shapes fail.
-                    completer.completeError(responseEndedMidMessage());
-                  } else if (hasPendingResponse) {
-                    if (_logger.isInternal) {
-                      _logger.internal(
-                        'Unary call $_methodPath completed [streamId: $streamId]',
-                      );
-                    }
-                    completer.complete(pendingResponse as TResponse);
-                  } else {
-                    // OK and nothing sent. Answered here rather than left to
-                    // onDone, which reports UNAVAILABLE -- retryable, and this
-                    // peer is not going to do better on the next attempt.
-                    _logger.warning('Status OK but no response payload');
-                    completer.completeError(RpcCallerTrailer.noPayload());
-                  }
-                }
-              }
-            },
-            onError: (Object error, StackTrace stackTrace) {
-              _logger.error(
-                'Transport error [streamId: $streamId]',
-                error: error,
-                stackTrace: stackTrace,
-              );
-              if (!completer.isCompleted) {
-                completer.completeError(error);
-              }
-            },
-            onDone: () {
-              // The stream ended without a response. There was no handler here
-              // at all, so a transport or responder dying mid-call left the
-              // caller waiting on a completer nothing would ever complete --
-              // for as long as its deadline allowed, and with no deadline,
-              // forever. Measured by tearing each layer down under four
-              // in-flight calls: the other three shapes settled and unary hung
-              // every time. ClientStreamCaller has always had this handler;
-              // unary simply lacked it.
-              if (completer.isCompleted) return;
-              if (_logger.isInternal) {
-                _logger.internal(
-                  'Response stream closed without a response '
-                  '[streamId: $streamId]',
-                );
-              }
-              // Bytes of a frame were left: the response was cut, which the
-              // other three shapes answer INTERNAL, not a retryable "closed".
-              completer.completeError(
-                parser.holdsPartialFrame
-                    ? responseEndedMidMessage()
-                    : RpcCallerTrailer.closedWithoutStatus(_context),
-              );
-            },
-          );
-
-      // Send initial metadata with context headers.
-      if (_logger.isInternal) {
-        _logger.internal('Sending initial metadata [streamId: $streamId]');
-      }
-      final baseMetadata = RpcMetadata.forClientRequest(
-        _serviceName,
-        _methodName,
-      );
-
-      // Use a map so context headers naturally override base headers,
-      // preventing duplicates (e.g. grpc-accept-encoding).
-      final headerMap = <String, String>{
-        for (final h in baseMetadata.headers) h.name: h.value,
-      };
-
-      if (_context != null) {
-        // User metadata must not clobber protocol-reserved headers.
-        for (final entry in _context.headers.entries) {
-          if (RpcHeaders.isReserved(entry.key)) continue;
-          RpcHeaders.checkUserHeader(entry.key, entry.value);
-          headerMap[entry.key] = entry.value;
-        }
-
-        if (_context.traceId != null) {
-          headerMap[RpcHeaders.xTraceId] = _context.traceId!;
-        }
-        headerMap[RpcHeaders.xRequestId] = _context.requestId;
-
-        if (_context.deadline != null) {
-          final timeout = _context.remainingTime;
-          if (timeout != null) {
-            headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
-              timeout,
-            );
-          }
-        }
-
-        if (_logger.isInternal) {
-          _logger.internal(
-            'Context headers added: ${_context.headers.length} custom + system',
-          );
-        }
-      }
-
-      final metadata = RpcMetadata([
-        for (final e in headerMap.entries) RpcHeader(e.key, e.value),
-      ], methodPath: baseMetadata.methodPath);
-      await _transport.sendMetadata(streamId, metadata);
-
-      // The fast path, when the CONTRACT allows it and the transport offers it.
-      //
-      // This used to branch on `transport.supportsZeroCopy` alone, so a method
-      // that explicitly declared `RpcDataTransferMode.codec` had its codecs
-      // skipped anyway. Measured on isolate with codecs on both ends and
-      // maxMessageLengthBytes: 256 KiB:
-      //
-      //   a 2 MiB response       DELIVERED   (no bytes exist, so no limit does)
-      //   a field toJson OMITS   ARRIVED     (`secret=hunter2` crossed a process
-      //                                       boundary the codec exists to
-      //                                       control)
-      //
-      // `auto` keeps the object path, because that is what "decide for me"
-      // means and it is worth 514 us against 807 us per round trip. Only an
-      // explicit `codec` now forces serialization -- and it is the one thing a
-      // caller can write down to get the codec honoured.
-      if (_transferMode != RpcDataTransferMode.codec &&
-          _transport.supportsZeroCopy) {
-        if (_logger.isInternal) {
-          _logger.internal('Zero-copy request send [streamId: $streamId]');
-        }
-        final sendingDirect = _transport.sendDirectObject(
-          streamId,
-          request as Object,
-          endStream: true,
-        );
-        unawaited(
-          sendingDirect.catchError((Object error, StackTrace stack) {
-            if (!completer.isCompleted) completer.completeError(error, stack);
-          }),
-        );
-        // The zero-copy branch, unbounded for the same reason as the codec one.
-        if (effectiveTimeout == null) return await completer.future;
-        return await RpcLongTimer.timeout(
-          completer.future,
-          effectiveTimeout,
-          onTimeout: () {
-            if (boundingDeadline != null) {
-              throw RpcDeadlineExceededException(
-                boundingDeadline,
-                effectiveTimeout,
-              );
-            }
-            throw TimeoutException('Call timeout: $effectiveTimeout');
-          },
-        );
-      }
-
-      if (_logger.isInternal) {
-        _logger.internal('Serializing request [streamId: $streamId]');
-      }
-      final serializedRequest = _requestSerializer.serialize(request);
-      final requestEncoding = _context?.getHeader(RpcHeaders.grpcEncoding);
-      if (!RpcGrpcCompression.isIdentity(requestEncoding) &&
-          !RpcGrpcCompression.isSupported(requestEncoding!)) {
-        // UNIMPLEMENTED, matching base_processor's copy and the gRPC spec.
-        throw RpcStatusException(
-          RpcStatus.unimplemented,
-          'Unsupported grpc-encoding: $requestEncoding. '
-          'Supported: ${RpcGrpcCompression.supportedEncodings().join(', ')}. '
-          'On web/dart2js the built-in gzip is unavailable; register a '
-          'cross-platform codec (e.g. RpcGzipCodec.register() from '
-          'package:rpc_dart_compression).',
-        );
-      }
-      final (payload, useCompression) = RpcGrpcCompression.compressIfSmaller(
-        serializedRequest,
-        encoding: requestEncoding,
-      );
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Request serialized, size: ${serializedRequest.length} bytes '
-          '[streamId: $streamId]',
-        );
-      }
-      final framedRequest = RpcMessageFrame.encode(
-        payload,
-        compressed: useCompression,
-      );
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Sending request and closing request stream [streamId: $streamId]',
-        );
-      }
-      // NOT awaited before the wait below, and that ordering is the whole point.
-      //
-      // A peer that REFUSES this request stops reading it, so the send parks on
-      // the peer's flow-control window and never returns -- while the answer it
-      // already sent sits on the same stream, unread, because `call()` has not
-      // reached `await completer.future` yet. The call then ignores its own
-      // deadline: `RpcContext.withTimeout(5s)` is only consulted AFTER the send
-      // returns. Measured, http2 client against a server with
-      // maxMessageLengthBytes: 256 KiB, one 2 MiB unary request:
-      //
-      //   before : still running at 15 s, deadline never applied
-      //   after  : RpcStatusException(8) in 32 ms
-      //
-      // A send failure still fails the call -- it is routed into the completer
-      // instead of being awaited -- so nothing that used to surface is lost. The
-      // stream id is released while a stuck send may still hold it, which is
-      // safe: RpcStreamIdManager hands out monotonically increasing ids and
-      // recycles only at 2^31 exhaustion, so no live call can be handed this one.
-      final sending = _transport.sendMessage(
-        streamId,
-        framedRequest,
-        endStream: true,
-      );
-      unawaited(
-        sending.catchError((Object error, StackTrace stack) {
-          if (!completer.isCompleted) completer.completeError(error, stack);
-        }),
-      );
-
-      // Await response with timeout if provided.
-      if (_logger.isInternal) {
-        _logger.internal(
-          effectiveTimeout == null
-              ? 'No response timeout: no deadline was set [streamId: $streamId]'
-              : 'Response timeout set to $effectiveTimeout [streamId: $streamId]',
-        );
-      }
-      // Unbounded when nothing set a bound — see [effectiveTimeout] above.
-      if (effectiveTimeout == null) return await completer.future;
-      // RpcLongTimer.timeout, not Future.timeout: effectiveTimeout can come
-      // from a peer-set deadline, and a bare Timer past the JS ceiling fires
-      // immediately. See [RpcLongTimer].
-      return await RpcLongTimer.timeout(
-        completer.future,
-        effectiveTimeout,
-        onTimeout: () {
-          _logger.error(
-            'Response timeout: $effectiveTimeout [streamId: $streamId]',
-          );
-          // Tell the server, exactly as the cancellation-token path above does
-          // and for the same reason: abandoning the wait without a notice leaves
-          // the handler running for a caller that is already gone. The token
-          // path was given this after a 3 s job cancelled at 100 ms spent 295 of
-          // its 300 work units post-cancellation; a timeout abandons the call
-          // just as completely, and measured with no deadline set the handler
-          // saw `cancelled=0` after the caller gave up at 60 s.
-          //
-          // Assigned to the same variable, so the `finally` below applies the
-          // ordering round 448 built: notice first, release chained onto it,
-          // bounded so a wedged send cannot hold the id.
-          cancellationNotice = _notifyPeerOfCancellation(
-            _transport,
-            streamId,
-            'Caller timed out after $effectiveTimeout',
-            _logger,
-          );
-          // A deadline that expires mid-call is the same event as one that had
-          // already expired at _checkContextBeforeCall, so report it the same
-          // way. An explicit `timeout:` argument is not a deadline and keeps
-          // TimeoutException.
-          if (boundingDeadline != null) {
-            throw RpcDeadlineExceededException(
-              boundingDeadline,
-              effectiveTimeout,
-            );
-          }
-          throw TimeoutException(
-            'Call timeout: $effectiveTimeout',
-            effectiveTimeout,
-          );
-        },
-      );
-    } catch (e, stackTrace) {
-      // The trailer branch above already reported a status it received, so this
-      // logged the SAME failure a second time — two error records on the caller
-      // for one answer. Report here only what that branch cannot see: a failure
-      // with no status of its own, or a genuine fault.
-      final code = e is RpcStatusException ? e.statusCode : null;
-      if (code == null || RpcStatus.isFault(code)) {
-        _logger.error(
-          'Unary call $_methodPath failed [streamId: $streamId]',
-          error: e,
-          stackTrace: stackTrace,
-        );
-      }
-      rethrow;
-    } finally {
-      // Always cancel response stream subscription.
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Cancelling response subscription [streamId: $streamId]',
-        );
-      }
-      await subscription?.cancel();
-      await cancellationSubscription?.cancel();
-      // The notice must go out before the id is reclaimed, or the frame lands
-      // on whatever call now holds the number. That ordering is between the
-      // NOTICE and the RELEASE -- awaiting it here made it an ordering between
-      // the notice and THIS CALL'S RETURN, and `_notifyPeerOfCancellation`
-      // awaits a send. "Never throws" is true and not the risk: a transport
-      // whose send never completes left cancel NEVER SETTLED, while the
-      // streaming sibling, which sends the notice `unawaited`, returned.
-      //
-      // So the release is chained onto the notice instead of blocking on it,
-      // and bounded so a wedged send cannot hold the id for ever either --
-      // which is what the release exists to prevent. The unary path never calls
-      // finishSending(), so nothing else reclaims the id.
-      final notice = cancellationNotice;
-      if (notice == null) {
-        _transport.releaseStreamId(streamId);
-      } else {
-        unawaited(
-          notice
-              .timeout(_noticeBeforeReleaseBudget, onTimeout: () {})
-              .whenComplete(() => _transport.releaseStreamId(streamId)),
-        );
-      }
-    }
   }
 
-  /// Closes the client; transport remains open.
-  Future<void> close() async {
-    // Client does not own the transport, so do not close it.
-    if (_logger.isInternal) {
-      _logger.internal('Unary client $_methodPath closed');
-    }
-  }
-
-  /// Validates context before call.
-  void _checkContextBeforeCall() {
-    if (_context == null) return;
-
-    // Check cancellation.
-    _context.cancellationToken?.throwIfCancelled();
-
-    // Check deadline.
-    if (_context.isExpired) {
-      throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
-    }
-
-    if (_logger.isInternal) {
-      _logger.internal(
-        'Context verified: requestId=${_context.requestId}, '
-        'traceId=${_context.traceId}',
-      );
-    }
-  }
+  /// Closes the caller; the transport stays open, and each call has already
+  /// released its own stream.
+  Future<void> close() async {}
 }

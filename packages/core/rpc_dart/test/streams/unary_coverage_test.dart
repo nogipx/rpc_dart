@@ -9,25 +9,46 @@ import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 import '../utils/transport_wrappers.dart';
 
+/// Service `S` with one unary method `M` served by [_handler].
+final class _Contract extends RpcResponderContract {
+  _Contract(this._handler) : super('S');
+
+  final FutureOr<RpcString> Function(RpcString) _handler;
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'M',
+      handler: (request, {RpcContext? context}) async => _handler(request),
+      requestCodec: RpcString.codec,
+      responseCodec: RpcString.codec,
+    );
+  }
+}
+
+/// Serves [handler] as `/S/M` on [transport] through a started endpoint.
+RpcResponderEndpoint _serve(
+  IRpcTransport transport,
+  FutureOr<RpcString> Function(RpcString) handler,
+) {
+  final endpoint = RpcResponderEndpoint(transport: transport);
+  endpoint.registerServiceContract(_Contract(handler));
+  endpoint.start();
+  return endpoint;
+}
+
 void main() {
   group('Unary streams: serialized paths & responder branches', () {
     final codec = RpcCodec(RpcString.fromJson);
 
     test(
-      'UnaryCaller/UnaryResponder use serialized framing when zero-copy off',
+      'UnaryCaller and a served unary method use serialized framing when zero-copy is off',
       () async {
         final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final clientTransport = NoZeroCopyTransport(rawClient);
         final serverTransport = NoZeroCopyTransport(rawServer);
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'S',
-          methodName: 'M',
-          requestCodec: codec,
-          responseCodec: codec,
-          handler: (req) => 'Echo: $req'.rpc,
-        );
+        final server = _serve(serverTransport, (req) => 'Echo: $req'.rpc);
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -48,20 +69,13 @@ void main() {
     );
 
     test(
-      'UnaryResponder serialized path sends error trailer on handler throw',
+      'a served unary method sends an error trailer on handler throw (serialized)',
       () async {
         final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final clientTransport = NoZeroCopyTransport(rawClient);
         final serverTransport = NoZeroCopyTransport(rawServer);
 
-        final server = UnaryResponder<RpcString, RpcString>(
-          transport: serverTransport,
-          serviceName: 'S',
-          methodName: 'M',
-          requestCodec: codec,
-          responseCodec: codec,
-          handler: (_) => throw StateError('boom'),
-        );
+        final server = _serve(serverTransport, (_) => throw StateError('boom'));
 
         final client = UnaryCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -84,7 +98,7 @@ void main() {
     );
 
     test(
-      'UnaryResponder.handleDirectMessage falls back to serialization when zero-copy off',
+      'UnaryResponder answers a direct-object request serialized when zero-copy is off',
       () async {
         final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final serverTransport = NoZeroCopyTransport(rawServer);
@@ -104,7 +118,9 @@ void main() {
             .where((m) => m.streamId == 1)
             .listen(received.add);
 
-        await server.handleDirectMessage(
+        final feed = StreamController<RpcTransportMessage>();
+        server.bindToMessageStream(feed.stream);
+        feed.add(
           RpcTransportMessage.withDirectObject(
             directPayload: 'req'.rpc,
             streamId: 1,
@@ -112,12 +128,14 @@ void main() {
           ),
         );
 
+        await server.done.timeout(const Duration(seconds: 5));
         await Future<void>.delayed(const Duration(milliseconds: 10));
-        expect(
-          received.where((m) => m.isMetadataOnly).length,
-          greaterThanOrEqualTo(2),
-        );
 
+        expect(
+          received.where((m) => m.isDirect),
+          isEmpty,
+          reason: 'the transport has no zero-copy, so nothing may go direct',
+        );
         final payloadMsg = received.firstWhere(
           (m) => !m.isMetadataOnly && m.payload != null,
         );
@@ -126,6 +144,13 @@ void main() {
         expect(frames, isNotEmpty);
         expect(codec.deserialize(frames.first), 'ok:req'.rpc);
 
+        final trailer = received.lastWhere((m) => m.isMetadataOnly);
+        expect(
+          trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
+          '${RpcStatus.ok}',
+        );
+
+        await feed.close();
         await sub.cancel();
         await server.close();
         await rawClient.close();
@@ -138,6 +163,7 @@ void main() {
       final clientTransport = NoZeroCopyTransport(rawClient);
       final serverTransport = NoZeroCopyTransport(rawServer);
 
+      var handlerCalls = 0;
       final server = UnaryResponder<RpcString, RpcString>(
         id: 1,
         transport: serverTransport,
@@ -145,8 +171,12 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        handler: (req) => 'ok:$req'.rpc,
+        handler: (req) {
+          handlerCalls++;
+          return 'ok:$req'.rpc;
+        },
       );
+      server.bindToMessageStream(serverTransport.getMessagesForStream(1));
 
       final received = <RpcTransportMessage>[];
       final sub = rawClient.incomingMessages.listen(received.add);
@@ -164,6 +194,7 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(received.where((m) => m.streamId == 3), isEmpty);
+      expect(handlerCalls, 0);
 
       await sub.cancel();
       await server.close();
@@ -171,60 +202,80 @@ void main() {
       await rawServer.close();
     });
 
-    test('UnaryResponder.handleMessage early-exit branches', () async {
-      final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
-      final serverTransport = NoZeroCopyTransport(rawServer);
+    test(
+      'UnaryResponder: a cancelled call and a metadata-only message do not run the handler',
+      () async {
+        final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
+        final serverTransport = NoZeroCopyTransport(rawServer);
 
-      final cancelled = RpcCancellationToken.cancelled('stop');
-      final server = UnaryResponder<RpcString, RpcString>(
-        id: 1,
-        transport: serverTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-        context: RpcContext.withCancellation(cancelled),
-        handler: (req) => 'ok:$req'.rpc,
-      );
+        var handlerCalls = 0;
+        RpcString handler(RpcString req) {
+          handlerCalls++;
+          return 'ok:$req'.rpc;
+        }
 
-      final received = <RpcTransportMessage>[];
-      final sub = rawClient.incomingMessages.listen(received.add);
+        final received = <RpcTransportMessage>[];
+        final sub = rawClient.incomingMessages.listen(received.add);
 
-      // 1) Cancelled context => request is ignored.
-      await server.handleMessage(
-        RpcTransportMessage.withPayload(
-          payload: RpcMessageFrame.encode(codec.serialize('req'.rpc)),
-          streamId: 1,
-          isEndOfStream: true,
-        ),
-      );
+        // 1) Cancelled context => the request is not served.
+        final cancelled = RpcCancellationToken.cancelled('stop');
+        final cancelledServer = UnaryResponder<RpcString, RpcString>(
+          id: 1,
+          transport: serverTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+          context: RpcContext.withCancellation(cancelled),
+          handler: handler,
+        );
+        final cancelledFeed = StreamController<RpcTransportMessage>();
+        cancelledServer.bindToMessageStream(cancelledFeed.stream);
+        cancelledFeed.add(
+          RpcTransportMessage.withPayload(
+            payload: RpcMessageFrame.encode(codec.serialize('req'.rpc)),
+            streamId: 1,
+            isEndOfStream: true,
+          ),
+        );
 
-      // 2) Wrong stream id for this responder => ignored.
-      await server.handleMessage(
-        RpcTransportMessage.withPayload(
-          payload: RpcMessageFrame.encode(codec.serialize('req'.rpc)),
-          streamId: 3,
-          isEndOfStream: true,
-        ),
-      );
+        // 2) Metadata-only message => not a request.
+        final metadataServer = UnaryResponder<RpcString, RpcString>(
+          id: 5,
+          transport: serverTransport,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+          handler: handler,
+        );
+        final metadataFeed = StreamController<RpcTransportMessage>();
+        metadataServer.bindToMessageStream(metadataFeed.stream);
+        metadataFeed.add(
+          RpcTransportMessage.withMetadata(
+            metadata: RpcMetadata.forClientRequest('S', 'M'),
+            streamId: 5,
+            isEndOfStream: false,
+            methodPath: '/S/M',
+          ),
+        );
 
-      // 3) Metadata-only message => ignored.
-      await server.handleMessage(
-        RpcTransportMessage.withMetadata(
-          metadata: RpcMetadata.forClientRequest('S', 'M'),
-          streamId: 1,
-          isEndOfStream: false,
-          methodPath: '/S/M',
-        ),
-      );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(handlerCalls, 0);
+        expect(
+          received.where((m) => !m.isMetadataOnly),
+          isEmpty,
+          reason: 'no response payload may go out for either stream',
+        );
 
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(received, isEmpty);
-
-      await sub.cancel();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
-    });
+        await cancelledFeed.close();
+        await metadataFeed.close();
+        await sub.cancel();
+        await cancelledServer.close();
+        await metadataServer.close();
+        await rawClient.close();
+        await rawServer.close();
+      },
+    );
   });
 }

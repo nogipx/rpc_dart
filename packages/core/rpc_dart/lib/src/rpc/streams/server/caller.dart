@@ -84,7 +84,7 @@ final class ServerStreamCaller<
     }
 
     if (_logger.isInternal) {
-      _logger.internal('Sending single request to server stream: $request');
+      _logger.internal('Sending the single request of a server stream');
     }
 
     try {

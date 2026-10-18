@@ -448,10 +448,10 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     }
 
     // A message after the peer's OWN half-close is a protocol violation, not
-    // a request: dropped, and not counted. Counted, it read as data the
-    // pipeline lost -- an error per call, at a count the peer chose -- and
-    // the real loss this alarm exists for could hide among them.
-    if (binding.type == RpcMethodType.clientStream && state.clientEnded) {
+    // a request, on every shape: dropped, and not counted. Counted, it read
+    // as data the pipeline lost -- an error per call, at a count the peer
+    // chose -- and the real loss this alarm exists for could hide among them.
+    if (state.clientEnded) {
       if (_log.isInternal) {
         _log.internal(
           'Ignoring a request message after half-close [streamId: ${state.id}]',
@@ -465,35 +465,6 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     // never ours to deliver and must not read as lost.
     if (binding.type == RpcMethodType.clientStream) {
       state.acceptedRequests++;
-    }
-
-    // The rest of a unary frame that arrived split. `_ensureResponder` returns
-    // early once a responder exists, so without this the later fragment reaches
-    // nothing and the call waits out its deadline. Ahead of `storePayload`: a
-    // fragment fed here is consumed, and charging it to the pre-bind buffer as
-    // well would refuse a request split finely enough.
-    final pending = state.responder;
-    if (state.unaryAwaitingRequest &&
-        pending is UnaryResponder<IRpcSerializable, IRpcSerializable>) {
-      _detachedDispatch(_feedUnaryFragment(state, pending, message), state);
-      return;
-    }
-    // A second request on a unary call that already has its first fails the
-    // call at once, INTERNAL, as gRPC does: the teardown cancels the handler
-    // and drops its late answer. Not buffered -- it would wait for a bind that
-    // never comes to a unary call, charged all the while.
-    if (pending is UnaryResponder &&
-        (message.payload != null || message.isDirect)) {
-      final refusal = tooManyMessages('request');
-      _detached(
-        _sendGrpcErrorAndCleanup(
-          streamId: state.id,
-          status: refusal.statusCode,
-          message: refusal.message,
-        ),
-        'grpc error cleanup',
-      );
-      return;
     }
 
     final budget = _respBudget;
@@ -609,23 +580,6 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     if (binding.type == RpcMethodType.clientStream ||
         binding.type == RpcMethodType.bidirectionalStream) {
       _detachedDispatch(_ensureResponder(state, binding), state);
-      return;
-    }
-
-    // A unary request held for this half-close, or one that stopped
-    // MID-FRAME. Distinct from the case below — data did arrive — and the
-    // second must be answered rather than awaited: a request that is merely
-    // waited for is the hang that round 518's partial fix produced.
-    final awaiting = state.responder;
-    if (awaiting is UnaryResponder<IRpcSerializable, IRpcSerializable> &&
-        awaiting.isAwaitingRequest(state.id)) {
-      state.unaryAwaitingRequest = false;
-      _detached(
-        awaiting
-            .finishRequest(state.id)
-            .then((_) => _cleanupStream(state.id, only: state)),
-        'unary request at half-close',
-      );
       return;
     }
 

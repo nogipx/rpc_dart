@@ -69,6 +69,52 @@ final class ServerStreamResponder<
     RpcContext? context,
     LogScope? logger,
   }) {
+    _init(
+      transport: transport,
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      context: context,
+      logger: logger,
+    );
+    _setupRequestHandler((request) => _serve(request, handler));
+  }
+
+  /// A server stream of exactly one response, [UnaryResponder]'s: the
+  /// handler's future is answered directly, with no stream to relay.
+  ServerStreamResponder._single({
+    required this.id,
+    required IRpcTransport transport,
+    required String serviceName,
+    required String methodName,
+    required IRpcCodec<TRequest>? requestCodec,
+    required IRpcCodec<TResponse>? responseCodec,
+    required FutureOr<TResponse> Function(TRequest request) handler,
+    required RpcContext? context,
+    required LogScope? logger,
+  }) {
+    _init(
+      transport: transport,
+      serviceName: serviceName,
+      methodName: methodName,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+      context: context,
+      logger: logger,
+    );
+    _setupRequestHandler((request) => _serveOne(request, handler));
+  }
+
+  void _init({
+    required IRpcTransport transport,
+    required String serviceName,
+    required String methodName,
+    required IRpcCodec<TRequest>? requestCodec,
+    required IRpcCodec<TResponse>? responseCodec,
+    required RpcContext? context,
+    required LogScope? logger,
+  }) {
     final isZeroCopy = requestCodec == null && responseCodec == null;
 
     // Zero-copy requires transport support.
@@ -104,8 +150,6 @@ final class ServerStreamResponder<
       context: context,
       logger: _logger,
     );
-
-    _setupRequestHandler(handler);
   }
 
   /// Binds the responder to the endpoint message stream.
@@ -116,10 +160,9 @@ final class ServerStreamResponder<
     _processor.bindToMessageStream(messageStream);
   }
 
-  /// Configures the server-stream request handler.
-  void _setupRequestHandler(
-    Stream<TResponse> Function(TRequest request) handler,
-  ) {
+  /// Configures the server-stream request handler; [serve] answers the
+  /// request once the request stream has ended.
+  void _setupRequestHandler(Future<void> Function(TRequest request) serve) {
     if (_logger.isInternal) {
       _logger.internal(
         'Configuring request handler for server stream [id: $id]',
@@ -129,9 +172,7 @@ final class ServerStreamResponder<
     _subscription = _processor.requests.listen(
       (request) async {
         if (_logger.isInternal) {
-          _logger.internal(
-            'Received request for server stream: $request [id: $id]',
-          );
+          _logger.internal('Received a request [id: $id]');
         }
 
         if (!_requestHandled && _pendingRequest == null) {
@@ -204,7 +245,7 @@ final class ServerStreamResponder<
         final request = _pendingRequest;
         if (request != null) {
           _pendingRequest = null;
-          await _serve(request, handler);
+          await serve(request);
           return;
         }
         // A payload frame that decoded to no message (an empty one) bound this
@@ -232,6 +273,39 @@ final class ServerStreamResponder<
     );
   }
 
+  /// Runs [handler] on [request] and sends its one response.
+  Future<void> _serveOne(
+    TRequest request,
+    FutureOr<TResponse> Function(TRequest request) handler,
+  ) async {
+    try {
+      final response = await handler(request);
+      if (_isActive) {
+        try {
+          await _processor.send(response);
+        } catch (e, stackTrace) {
+          _logger.error(
+            'Failed to send the response to client [id: $id]',
+            error: e,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+      await _processor.finishSending();
+      _completeDone();
+    } catch (error, trace) {
+      if (RpcStatus.isFaultError(error)) {
+        _logger.error(
+          'Request handling failed [id: $id]',
+          error: error,
+          stackTrace: trace,
+        );
+      }
+      await sendWireError(error, _processor.sendError);
+      _completeDone();
+    }
+  }
+
   /// Runs [handler] on [request] and streams its responses.
   Future<void> _serve(
     TRequest request,
@@ -255,11 +329,6 @@ final class ServerStreamResponder<
       await for (var response in relay.stream) {
         if (!_isActive) break;
         responseCount++;
-        if (_logger.isInternal) {
-          _logger.internal(
-            'Received response #$responseCount from handler: $response [id: $id]',
-          );
-        }
 
         try {
           await _processor.send(response);

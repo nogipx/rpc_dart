@@ -156,7 +156,6 @@ void main() {
         requestCodec: _codec,
         responseCodec: _codec,
         context: forwarded,
-        transferMode: RpcDataTransferMode.codec,
       );
 
       expect(response, equals('acme'.rpc));

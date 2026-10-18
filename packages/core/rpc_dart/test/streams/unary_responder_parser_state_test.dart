@@ -2,20 +2,34 @@
 //
 // SPDX-License-Identifier: MIT
 
-// UnaryResponder keys every piece of per-call state by stream id
-// (_streamStates) and with the default `id == 0` it answers on any stream, so
-// one instance can serve several calls. Its RpcMessageParser was the one
-// exception: a single instance shared by every stream. Because the parser
-// keeps a reassembly buffer between invocations, a stream that ended with a
-// partial gRPC frame in the buffer — a truncated or hostile request — left
-// those bytes behind, and the next stream's request was parsed on top of them.
-// The victim call then failed with INTERNAL ("Failed to extract message from
-// payload") even though its own bytes were perfectly well-formed.
+// One endpoint serves many unary streams on a transport. A message parser
+// keeps a reassembly buffer between invocations, so a stream that ends with a
+// partial gRPC frame in the buffer — a truncated or hostile request — must
+// not leave those bytes behind for the next stream. If it did, the next
+// stream's well-formed request would be parsed on top of them and fail
+// INTERNAL.
 
 import 'dart:async';
 
 import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
+
+/// Service `S`, unary `M`: echoes its request.
+final class _Echo extends RpcResponderContract {
+  _Echo(this._codec) : super('S');
+
+  final IRpcCodec<RpcString> _codec;
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'M',
+      handler: (request, {RpcContext? context}) async => request,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    );
+  }
+}
 
 void main() {
   final codec = RpcCodec(RpcString.fromJson);
@@ -23,14 +37,9 @@ void main() {
   test('a truncated stream does not poison another stream', () async {
     final (client, server) = RpcChannelTransport.pair();
 
-    final responder = UnaryResponder<RpcString, RpcString>(
-      transport: server,
-      serviceName: 'S',
-      methodName: 'M',
-      requestCodec: codec,
-      responseCodec: codec,
-      handler: (request) async => request,
-    );
+    final responder = RpcResponderEndpoint(transport: server);
+    responder.registerServiceContract(_Echo(codec));
+    responder.start();
 
     final requestMetadata = RpcMetadata.forClientRequest('S', 'M');
 
@@ -50,11 +59,10 @@ void main() {
       endStream: true,
     );
 
-    // A fails on its own merits — that part is expected and not the bug. It is
-    // answered INTERNAL because the request was cut: the peer half-closed with
-    // a frame header promising bytes it never sent. The responder now waits for
-    // the rest of an incomplete frame, so a half-close is what decides there
-    // will be no rest.
+    // A fails on its own merits. It is answered INTERNAL because the request
+    // was cut: the peer half-closed with a frame header promising bytes it
+    // never sent. The responder waits for the rest of an incomplete frame, so
+    // a half-close is what decides there will be no rest.
     expect(
       await statusA.future.timeout(const Duration(seconds: 5)),
       RpcStatus.internal.toString(),
@@ -89,7 +97,7 @@ void main() {
       endStream: true,
     );
 
-    // With a shared parser B inherited A's leftovers and answered INTERNAL.
+    // A parser shared with A would hand B A's leftovers and answer INTERNAL.
     expect(
       await statusB.future.timeout(const Duration(seconds: 5)),
       RpcStatus.ok.toString(),

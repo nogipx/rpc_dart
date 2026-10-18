@@ -125,9 +125,7 @@ final class ClientStreamResponder<
             return;
           }
           if (_logger.isInternal) {
-            _logger.internal(
-              'Handler completed, sending response: $response [id: $id]',
-            );
+            _logger.internal('Handler completed, sending response [id: $id]');
           }
 
           try {
