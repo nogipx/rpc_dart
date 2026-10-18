@@ -154,12 +154,10 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     if (_isClosed) return;
     if (!_incomingStreams.containsKey(streamId)) return;
 
-    final status = error is ArgumentError
-        ? RpcStatus.invalidArgument
-        : RpcStatus.internal;
-    final message = error is ArgumentError
-        ? (error.message?.toString() ?? 'Invalid request metadata')
-        : 'Request rejected: $error';
+    // Default deny, as for every error a peer is told: the policy's refusals
+    // are `RpcStatusException`s and keep their status and text; anything else
+    // is INTERNAL with the generic message.
+    final (:status, :message, :detailsBin) = wireStatusFor(error);
 
     unawaited(() async {
       try {
@@ -172,6 +170,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
           RpcMetadata.forTrailer(
             status,
             message: message,
+            statusDetailsBin: detailsBin,
             maxMessageLength: _policy.maxHeaderValueBytes,
           ),
           endStream: true,
@@ -253,9 +252,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     // Exact: HTTP methods are case-sensitive (RFC 9110 §9.1), so `post` is
     // not POST.
     if (requestMethod != null && requestMethod != 'POST') {
-      throw ArgumentError.value(
-        requestMethod,
-        ':method',
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
         'gRPC requires POST; this request used a different HTTP method',
       );
     }
