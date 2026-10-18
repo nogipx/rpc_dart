@@ -64,7 +64,7 @@ class RpcHttpServer implements IRpcServer {
   final String _host;
   final int _port;
   final RpcHttpCorsPolicy? _corsPolicy;
-  final RpcSecurityPolicy? _securityPolicy;
+  final RpcSecurityPolicy _securityPolicy;
   final Duration? _bodyReadTimeout;
   final Duration? _bodyIdleTimeout;
   final Duration? _headerTimeout;
@@ -123,10 +123,8 @@ class RpcHttpServer implements IRpcServer {
   /// Creates an HTTP/1.1 RPC server.
   ///
   /// [securityPolicy] bounds request body size, header sizes, and concurrent
-  /// requests. It defaults to a non-null [RpcSecurityPolicy] so the built-in
-  /// limits (e.g. `maxMessageLengthBytes`) are enforced out of the box; pass
-  /// an explicit policy to tune them. Set to `null` only to disable all limits
-  /// (not recommended — this allows unbounded request bodies).
+  /// requests. The built-in limits (e.g. `maxMessageLengthBytes`) apply by
+  /// default; pass an explicit policy to tune them.
   ///
   /// [bodyIdleTimeout] refuses with `408` a request body that stops arriving
   /// for that long (slowloris mitigation), 30 seconds by default; a body that
@@ -147,7 +145,7 @@ class RpcHttpServer implements IRpcServer {
     required int port,
     required void Function(RpcResponderEndpoint) onEndpointCreated,
     RpcHttpCorsPolicy? corsPolicy,
-    RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
+    RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
     Duration? bodyReadTimeout,
     Duration? bodyIdleTimeout = const Duration(seconds: 30),
     Duration? headerTimeout = const Duration(seconds: 60),
@@ -312,13 +310,12 @@ class RpcHttpServer implements IRpcServer {
         // request line): a block a little over the policy still reaches the
         // transport and is answered 400 with the reason; a block far over it
         // is cut here, before dart:io holds it (up to ~3 MiB per connection).
-        maxHeaderBytes: policy == null
-            ? null
-            : 4 *
-                  (policy.maxMethodPathLength +
-                      policy.maxMetadataBytes +
-                      4 * policy.maxHeaders +
-                      1024),
+        maxHeaderBytes:
+            4 *
+            (policy.maxMethodPathLength +
+                policy.maxMetadataBytes +
+                4 * policy.maxHeaders +
+                1024),
         headerTimeout: _headerTimeout,
         maxConnections: _maxConnections,
       );

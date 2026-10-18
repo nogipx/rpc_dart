@@ -2,21 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Nothing in this transport runs when the PEER dies on its own -- there is no
-// callback to set a flag in -- so health() answered from its own bookkeeping
-// and reported the transport as ready with the server gone:
+// When the PEER dies on its own, health() must not report the transport as
+// ready. A supervisor decides whether to reconnect by polling health(), and a
+// "ready" over a dead connection means it never reconnects.
 //
-//   isClosed        : false
-//   health          : HTTP/2 transport ready      <-- the peer was gone
-//   call after death: caught StateError
-//
-// The call already failed honestly; only the report was wrong. That is the
-// half that matters for recovery, because a supervisor decides whether to
-// reconnect by polling health() -- and would never reconnect.
-//
-// health() now asks the connection (`ClientTransportConnection.isOpen`) instead
-// of assuming. Sibling defect to the websocket caller's, found by running the
-// same battery against both.
+// The transport closes itself when its connection is lost, so health() reports
+// it closed and says the connection was lost -- which tells a supervisor this
+// was not its own close().
 
 import 'dart:async';
 
@@ -86,7 +78,7 @@ void main() {
     final health = await client.health();
     expect(
       health.message,
-      contains('Reconnect is required'),
+      contains('was lost'),
       reason:
           'a supervisor polls health() to decide whether to reconnect, and was '
           'told the transport was ready while the server was gone',
@@ -94,8 +86,8 @@ void main() {
     expect(health.message, isNot(contains('ready')));
     expect(
       client.isClosed,
-      isFalse,
-      reason: 'the caller never closed it; this is recoverable',
+      isTrue,
+      reason: 'a transport closes when its connection is lost',
     );
   });
 
@@ -143,7 +135,13 @@ void main() {
       await client.close();
 
       expect(client.isClosed, isTrue);
-      expect((await client.health()).message, contains('closed'));
+      final message = (await client.health()).message;
+      expect(message, contains('closed'));
+      expect(
+        message,
+        isNot(contains('was lost')),
+        reason: 'this side closed it; nothing was lost',
+      );
     },
   );
 }

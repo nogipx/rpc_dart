@@ -14,7 +14,7 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-final class _Fake implements IRpcReconnectableTransport {
+final class _Fake extends IRpcTransport {
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
   bool _closed = false;
   int _lastId = -1;
@@ -80,9 +80,6 @@ final class _Fake implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus(level: RpcHealthLevel.healthy, component: 'fake');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async => health();
 
   @override
   Future<void> close() async {

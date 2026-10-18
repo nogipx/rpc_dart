@@ -26,7 +26,7 @@ import 'package:test/test.dart';
 
 /// A recording transport whose [sendMessage] is asynchronous, mirroring a real
 /// network write and exposing send/trailer ordering races.
-class _RecordingTransport implements IRpcTransport {
+class _RecordingTransport extends IRpcTransport {
   final List<String> events = <String>[];
   final StreamController<RpcTransportMessage> _incoming =
       StreamController<RpcTransportMessage>.broadcast();
@@ -98,8 +98,10 @@ class _RecordingTransport implements IRpcTransport {
       RpcHealthStatus.healthy(component: 'recording');
 
   @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.healthy(component: 'recording');
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 }
 
 IRpcCodec<int> _intCodec() => RpcBinaryCodec<int>(

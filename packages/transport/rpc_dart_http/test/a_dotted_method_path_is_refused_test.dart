@@ -2,9 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `/a.b/c` and `/a/b.c` once resolved to one method. A service name may carry a
-// dot and a method name may not, so only the first form reaches `a.b`/`c`; this
-// drives the second over HTTP/1.1, with and without a policy on the transport.
+// `/a.b/c` and `/a/b.c` must not resolve to one method. A service name may
+// carry a dot and a method name may not, so only the first form reaches
+// `a.b`/`c`; this drives the second over HTTP/1.1 with the transport's
+// default policy.
 
 @TestOn('vm')
 library;
@@ -61,41 +62,34 @@ Future<String> _call(int port, String path) async {
 }
 
 void main() {
-  for (final withPolicy in [true, false]) {
-    group(withPolicy ? 'with a policy' : 'without a policy', () {
-      late RpcHttpResponderTransport transport;
-      late RpcResponderEndpoint responder;
-      late HttpServer server;
+  late RpcHttpResponderTransport transport;
+  late RpcResponderEndpoint responder;
+  late HttpServer server;
 
-      setUp(() async {
-        _handlerRuns = 0;
-        transport = RpcHttpResponderTransport(
-          securityPolicy: withPolicy ? const RpcSecurityPolicy() : null,
-        );
-        responder = RpcResponderEndpoint(transport: transport)
-          ..registerServiceContract(_Contract())
-          ..start();
-        server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
-      });
+  setUp(() async {
+    _handlerRuns = 0;
+    transport = RpcHttpResponderTransport();
+    responder = RpcResponderEndpoint(transport: transport)
+      ..registerServiceContract(_Contract())
+      ..start();
+    server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
+  });
 
-      tearDown(() async {
-        await responder.close();
-        await transport.close();
-        await server.close(force: true);
-      });
+  tearDown(() async {
+    await responder.close();
+    await transport.close();
+    await server.close(force: true);
+  });
 
-      test('/a/b.c does not reach a.b/c', () async {
-        final answer = await _call(server.port, '/a/b.c');
-        // The transport refuses it when it holds a policy; without one the
-        // responder pipeline does, as INVALID_ARGUMENT.
-        expect(answer, withPolicy ? '400 -' : '200 3');
-        expect(_handlerRuns, 0, reason: answer);
-      });
+  test('/a/b.c does not reach a.b/c', () async {
+    final answer = await _call(server.port, '/a/b.c');
+    // The transport's policy refuses it before the responder sees it.
+    expect(answer, '400 -');
+    expect(_handlerRuns, 0, reason: answer);
+  });
 
-      test('CONTROL: /a.b/c is served', () async {
-        expect(await _call(server.port, '/a.b/c'), '200 0');
-        expect(_handlerRuns, 1);
-      });
-    });
-  }
+  test('CONTROL: /a.b/c is served', () async {
+    expect(await _call(server.port, '/a.b/c'), '200 0');
+    expect(_handlerRuns, 1);
+  });
 }

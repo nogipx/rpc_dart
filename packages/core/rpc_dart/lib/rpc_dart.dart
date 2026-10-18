@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT
 
 /// The application API: contracts, endpoints, context, errors, codecs,
-/// resilience, logging and the in-memory transports.
+/// resilience, logging and the channel transport with its in-memory pairs.
 ///
 /// A transport author also imports `package:rpc_dart/transport.dart`, which
 /// re-exports this library.
@@ -132,7 +132,5 @@ export 'src/_index.dart'
         RpcRetryPredicate,
         // Transports and servers
         IRpcTransport,
-        IRpcReconnectableTransport,
         IRpcServer,
-        RpcChannelTransport,
-        RpcInMemoryTransport;
+        RpcChannelTransport;

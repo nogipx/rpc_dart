@@ -2,22 +2,20 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `_reconnectOnce` closes `_inner` and THEN awaits the factory -- a handshake,
-// tens to hundreds of ms. `_disconnected` was set only in the catch (factory
-// failed), so for that whole window `_ensureUsable()` passed over a CLOSED
-// inner transport. Per method, what a caller got:
+// Calls made through RpcClientConnection while it has no websocket transport.
+// "No connection" is two states: a reconnect IN FLIGHT, which resolves itself,
+// and one that GAVE UP (RpcClientDisconnected), which needs connect() called.
 //
-//   method                 healthy     in-window (before)      disconnected
-//   createStream           id=3        id=3                    StateError
-//   sendMetadata           returned    returned                StateError
-//   sendMessage            returned    returned                StateError
-//   getMessagesForStream   -           RpcStatusException(14)  StateError
+// Both must REFUSE work rather than accept it and drop it, and both answer
+// UNAVAILABLE: transient from the caller's side, and the status
+// RpcRetryInterceptor retries -- it waits for the connection's next attempt
+// before trying again, so a call fired inside the window succeeds once the
+// reconnect lands. `RpcNoConnectionException.reconnecting` says which of the
+// two states the caller is in.
 //
-// So sends were ACCEPTED and dropped by the closed inner. The window is a
-// disconnected state and now says so, through `_ensureUsable` on every method.
-//
-// Round 464 changed WHAT it says. The window and a FAILED reconnect are two
-// states, and the answer that fits both is neither: see `_refusedRetryable`.
+// Teardown paths stay unguarded on purpose: `finishSending` and
+// `releaseStreamId` run from `finally` blocks, where a throw would mask the
+// error that got there.
 @TestOn('vm')
 library;
 
@@ -30,171 +28,234 @@ import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// What the reconnect window must answer with, asserted as a PAIR.
-///
-/// The type changed from `StateError` when the owner asked for one refusal
-/// shape across every transport: the same state came back as `StateError` here
-/// and `RpcStatusException` on http2, so no single `catch` covered both.
-///
-/// **The STATUS changed in round 464, and the sentence it used to rest on was
-/// measured and is false.** This matcher demanded FAILED_PRECONDITION because
-/// *"a synthetic UNAVAILABLE is RETRYABLE and invites the caller to repeat what
-/// cannot work"*. A retry is not a repeat: `RpcRetryInterceptor` backs off. One
-/// call fired 100 ms into an 800 ms window, through a retry interceptor whose
-/// first backoff is 250 ms:
-///
-///     FAILED_PRECONDITION   status=9 after 0ms     never retried
-///     UNAVAILABLE           OK pong after 711ms    retried, succeeded
-///
-/// So the window is exactly the state UNAVAILABLE is FOR: transient, the remedy
-/// already running, nothing the caller can do but wait. FAILED_PRECONDITION is
-/// kept for the state whose remedy IS the caller's — a reconnect that FAILED, or
-/// was never started — which `RpcNoConnectionException` now tells apart.
-///
-/// Asserting the type alone would let the code regress to a bare
-/// `RpcStatusException` from a discarded connection, which is what http2 did
-/// for the same state.
-final Matcher _refusedRetryable = throwsA(
+final _codec = RpcCodec(RpcString.fromJson);
+
+final class _Svc extends RpcResponderContract {
+  _Svc() : super('Svc');
+
+  @override
+  void setup() {
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'echo',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (req, {context}) async => 'echo-ok'.rpc,
+    );
+  }
+}
+
+/// The refusal a call without a connection must get, asserted as a PAIR with
+/// the state it names. The type alone would let a bare RpcStatusException from
+/// a discarded transport pass, which carries no `reconnecting` fact.
+Matcher _refused({required bool reconnecting}) => throwsA(
   isA<RpcNoConnectionException>()
       .having((e) => e.statusCode, 'statusCode', RpcStatus.unavailable)
-      .having((e) => e.reconnecting, 'reconnecting', isTrue),
+      .having((e) => e.reconnecting, 'reconnecting', reconnecting),
 );
 
 typedef _Rig = ({
-  RpcWebSocketCallerTransport transport,
+  RpcClientConnection connection,
+  IRpcTransport transport,
   int streamId,
-  void Function() slowDownFactory,
+  void Function(Duration) stall,
+  void Function() failNext,
+  Future<void> Function() dropSockets,
 });
 
-Future<_Rig> _rig() async {
-  final server = await HttpServer.bind('127.0.0.1', 0);
-  server.transform(WebSocketTransformer()).listen((ws) {
-    ws.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
+Future<_Rig> _rig({int? maxAttempts}) async {
+  final sockets = <WebSocket>[];
+  final connCtl = StreamController<WebSocketChannel>();
+  final http = await HttpServer.bind('127.0.0.1', 0);
+  http.transform(WebSocketTransformer()).listen((ws) {
+    sockets.add(ws);
+    if (!connCtl.isClosed) connCtl.add(IOWebSocketChannel(ws));
   });
-  addTearDown(() => server.close(force: true));
-  final uri = 'ws://${server.address.host}:${server.port}';
-
-  var slow = false;
-  Future<WebSocketChannel> factory() async {
-    if (slow) await Future<void>.delayed(const Duration(seconds: 2));
-    return IOWebSocketChannel(await WebSocket.connect(uri));
-  }
-
-  final transport = RpcWebSocketCallerTransport(
-    IOWebSocketChannel(await WebSocket.connect(uri)),
-    reconnectFactory: factory,
+  final server = RpcWebSocketServer.createWithContracts(
+    connections: connCtl.stream,
+    contracts: [_Svc()..setup()],
   );
-  addTearDown(() => transport.close().catchError((Object _) {}));
+  await server.start();
+  final uri = Uri.parse('ws://127.0.0.1:${http.port}');
+
+  var stall = Duration.zero;
+  var failNext = false;
+  final connection = RpcClientConnection(
+    transportFactory: () async {
+      if (stall > Duration.zero) await Future<void>.delayed(stall);
+      if (failNext) throw const SocketException('factory refused');
+      return RpcWebSocketCallerTransport.connect(uri);
+    },
+    backoff: const FixedBackoff(Duration(milliseconds: 50)),
+    maxAttempts: maxAttempts,
+  );
+  final online = connection.state
+      .firstWhere((s) => s is RpcClientOnline)
+      .timeout(const Duration(seconds: 10));
+  connection.connect();
+  await online;
+  addTearDown(() async {
+    await connection.dispose();
+    await server.stop();
+    await connCtl.close();
+    await http.close(force: true);
+  });
+  final transport = connection.transport;
   transport.incomingMessages.listen((_) {}, onError: (Object _) {});
 
-  // Minted while healthy, so `_idsOnThisConnection` holds it and the per-id
-  // guards cannot be what refuses the call.
+  // Minted while healthy, so the stale-id guards cannot be what decides.
   final streamId = transport.createStream();
   return (
+    connection: connection,
     transport: transport,
     streamId: streamId,
-    slowDownFactory: () => slow = true,
+    stall: (Duration d) => stall = d,
+    failNext: () => failNext = true,
+    dropSockets: () async {
+      for (final ws in List<WebSocket>.of(sockets)) {
+        await ws.close(1001).catchError((_) {});
+      }
+      sockets.clear();
+    },
   );
+}
+
+/// Starts a reconnect whose factory takes [stall], and returns once the call
+/// is inside it: the old transport is detached and the new one not built.
+Future<Future<void>> _insideReconnect(_Rig rig, Duration stall) async {
+  rig.stall(stall);
+  final online = rig.connection.state
+      .firstWhere((s) => s is RpcClientOnline)
+      .timeout(const Duration(seconds: 10));
+  rig.connection.forceReconnect();
+  await Future<void>.delayed(const Duration(milliseconds: 300));
+  return online;
+}
+
+Future<Object> _echo(RpcCallerEndpoint caller) async {
+  try {
+    final r = await caller
+        .unaryRequest<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          request: 'x'.rpc,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .timeout(const Duration(seconds: 8));
+    return r.value;
+  } on TimeoutException {
+    return 'HUNG';
+  } on RpcStatusException catch (e) {
+    return e.statusCode;
+  }
 }
 
 void main() {
   // WITNESS: the window must refuse work, not accept and drop it.
-  test('a send inside the reconnect window is refused', () async {
+  test('sends inside a reconnect are refused as retryable', () async {
     final rig = await _rig();
-    rig.slowDownFactory();
-    final reconnecting = rig.transport.reconnect();
-    // Inside the factory await: `_inner` is closed, and before the fix
-    // `_disconnected` was still false.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final online = await _insideReconnect(rig, const Duration(seconds: 2));
+    final refused = _refused(reconnecting: true);
 
     await expectLater(
       rig.transport.sendMessage(rig.streamId, Uint8List.fromList([1, 2, 3])),
-      _refusedRetryable,
+      refused,
       reason:
-          'the send returned normally and the closed inner dropped it, so the '
-          'call waited out a deadline for a frame that was never sent',
+          'a send that returns normally is dropped, and the call waits out a '
+          'deadline for a frame that was never sent',
     );
-    expect(() => rig.transport.createStream(), _refusedRetryable);
+    await expectLater(
+      rig.transport.sendMetadata(
+        rig.streamId,
+        RpcMetadata.forClientRequest('Svc', 'echo'),
+      ),
+      refused,
+    );
+    await expectLater(
+      rig.transport.sendDirectObject(rig.streamId, 'an object'),
+      refused,
+    );
+    expect(() => rig.transport.createStream(), refused);
 
-    await reconnecting.timeout(const Duration(seconds: 8));
+    await online;
   });
 
-  // WITNESS: a read inside the window used to answer a SYNTHETIC UNAVAILABLE
-  // from the closed inner transport, which carries no `reconnecting` fact and is
-  // indistinguishable from the peer being unreachable. Same status now, from the
-  // guard, as the type the caller can branch on.
-  test('a read inside the reconnect window is refused by the guard', () async {
+  test('a call inside a reconnect fails as UNAVAILABLE', () async {
     final rig = await _rig();
-    rig.slowDownFactory();
-    final reconnecting = rig.transport.reconnect();
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final caller = RpcCallerEndpoint(transport: rig.transport);
+    addTearDown(caller.close);
+    final online = await _insideReconnect(rig, const Duration(seconds: 2));
 
-    expect(
-      () => rig.transport.getMessagesForStream(rig.streamId),
-      _refusedRetryable,
-      reason:
-          'the status is right either way; what the closed inner could not '
-          'say is WHICH unavailability this is',
-    );
+    expect(await _echo(caller), RpcStatus.unavailable);
 
-    await reconnecting.timeout(const Duration(seconds: 8));
+    await online;
   });
 
-  // WITNESS for the second half: `sendDirectObject` was the one send method
-  // with no `_ensureUsable()`.
-  //
-  // NOT reachable through the library's API -- `supportsZeroCopy` is false, so
-  // the caller pipeline refuses a codec-free call before the transport is
-  // reached. Asserted at the transport level, where it IS observable: the guard
-  // changes the answer from the inner's `UnsupportedError` to the explicit
-  // `StateError`, which is what tells "this transport cannot do zero-copy" from
-  // "this transport has no socket right now".
+  // The point of answering UNAVAILABLE: the retry waits for the reconnect.
   test(
-    'sendDirectObject is refused inside the window, like its siblings',
+    'a call inside a reconnect succeeds through RpcRetryInterceptor',
     () async {
       final rig = await _rig();
-
-      // CONTROL: healthy, the inner refuses it for its own reason.
-      await expectLater(
-        rig.transport.sendDirectObject(rig.streamId, 'an object'),
-        throwsA(isA<UnsupportedError>()),
+      final caller = RpcCallerEndpoint(transport: rig.transport)
+        ..addInterceptor(RpcRetryInterceptor());
+      addTearDown(caller.close);
+      final online = await _insideReconnect(
+        rig,
+        const Duration(milliseconds: 800),
       );
 
-      rig.slowDownFactory();
-      final reconnecting = rig.transport.reconnect();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(await _echo(caller), 'echo-ok');
 
-      await expectLater(
-        rig.transport.sendDirectObject(rig.streamId, 'an object'),
-        _refusedRetryable,
-      );
-
-      await reconnecting.timeout(const Duration(seconds: 8));
+      await online;
     },
   );
 
-  // GUARD: the window ENDS. A transport that refused forever would pass both
+  // The other state, through the same guard: only `reconnecting` differs.
+  test(
+    'a connection that gave up is UNAVAILABLE and says no reconnect is running',
+    () async {
+      final rig = await _rig(maxAttempts: 2);
+      final caller = RpcCallerEndpoint(transport: rig.transport);
+      addTearDown(caller.close);
+      rig.failNext();
+      final gaveUp = rig.connection.state
+          .firstWhere((s) => s is RpcClientDisconnected)
+          .timeout(const Duration(seconds: 10));
+      await rig.dropSockets();
+      await gaveUp;
+
+      expect(() => rig.transport.createStream(), _refused(reconnecting: false));
+      expect(await _echo(caller), RpcStatus.unavailable);
+      // Reaching this line is the other half: the failure was the call's, not
+      // a raise into the root zone that ends the isolate.
+      expect(await _echo(caller), RpcStatus.unavailable);
+    },
+  );
+
+  // GUARD: the window ENDS. A connection that refused forever would pass the
   // witnesses and be far worse than the defect.
   test(
     'GUARD: the transport works again once the reconnect completes',
     () async {
       final rig = await _rig();
-      rig.slowDownFactory();
-
-      await rig.transport.reconnect().timeout(const Duration(seconds: 8));
+      final online = await _insideReconnect(
+        rig,
+        const Duration(milliseconds: 500),
+      );
+      await online;
 
       final id = rig.transport.createStream();
       expect(id, greaterThan(0));
       await rig.transport.sendMetadata(
         id,
-        RpcMetadata([const RpcHeader('x', 'y')], methodPath: '/S/M'),
+        RpcMetadata.forClientRequest('Svc', 'echo'),
       );
     },
   );
 
-  // GUARD: a healthy transport is untouched -- the control the matrix is read
-  // against.
-  test('GUARD: a healthy transport accepts work', () async {
+  // GUARD: a healthy connection is untouched -- the control the witnesses are
+  // read against.
+  test('GUARD: a healthy connection accepts work', () async {
     final rig = await _rig();
 
     await rig.transport.sendMessage(
@@ -204,18 +265,13 @@ void main() {
     expect(rig.transport.createStream(), greaterThan(0));
   });
 
-  // GUARD: teardown paths stay unguarded on purpose. `finishSending` and
-  // `releaseStreamId` run from `finally` blocks, where a throw would mask the
-  // error that got there.
-  test('GUARD: teardown paths do not throw inside the window', () async {
+  test('GUARD: teardown paths do not throw inside a reconnect', () async {
     final rig = await _rig();
-    rig.slowDownFactory();
-    final reconnecting = rig.transport.reconnect();
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final online = await _insideReconnect(rig, const Duration(seconds: 2));
 
     await rig.transport.finishSending(rig.streamId);
     expect(rig.transport.releaseStreamId(rig.streamId), isA<bool>());
 
-    await reconnecting.timeout(const Duration(seconds: 8));
+    await online;
   });
 }

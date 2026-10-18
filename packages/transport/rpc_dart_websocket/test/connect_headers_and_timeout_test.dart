@@ -2,20 +2,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `connect()` could not attach a request header and had no bound of its own.
-//
-//   a) via connect()                 authorization: ABSENT
-//      by hand, WebSocket.connect    authorization: [Bearer t0ken]
-//   b) no connectTimeout             10005ms  STILL HANGING at the probe bound
+// `connect()` attaches request headers to the upgrade and bounds the open.
 //
 // The upgrade REQUEST is the only place a websocket client can authenticate --
-// there is no second round trip to attach a token to -- so an authenticating
-// server could not be reached through this API at all. The workaround, building
-// the channel by hand, also means rebuilding the reconnect factory that carries
-// the keepalive and the compression choice.
+// there is no second round trip to attach a token to -- so without `headers`
+// an authenticating server could not be reached through this API at all.
 //
 // And a peer that accepts TCP and never completes the upgrade (a firewall that
-// DROPs, a balancer with no backend) held the caller until the OS gave up.
+// DROPs, a balancer with no backend) is bounded by nothing else: without
+// `connectTimeout` it would hold the caller until the OS gave up.
 //
 // The header assertions read the SERVER side: what crossed the wire, not what
 // the client believes it set.
@@ -75,66 +70,44 @@ void main() {
       expect(seen.first['authorization'], ['Bearer t0ken']);
     });
 
-    // WITNESS: and it must survive a reconnect. A reconnect that cannot
-    // authenticate is a transport that works exactly once, so carrying the
-    // headers into the factory is the half that makes the feature usable.
-    test('the header is sent again after a reconnect', () async {
-      final (uri, seen) = await _recordingServer();
+    // WITNESS: a token that expires must be refreshable across a reconnect.
+    // RpcClientConnection calls its factory once per attempt, so a factory
+    // that reads the token there presents a fresh one on every upgrade.
+    test(
+      'a token read in the connection factory is fresh after a reconnect',
+      () async {
+        final (uri, seen) = await _recordingServer();
+        var issued = 0;
 
-      final t = await RpcWebSocketCallerTransport.connect(
-        uri,
-        headers: {'authorization': 'Bearer t0ken'},
-      );
-      addTearDown(() => t.close().catchError((Object _) {}));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+        final connection = RpcClientConnection(
+          transportFactory: () => RpcWebSocketCallerTransport.connect(
+            uri,
+            headers: {'authorization': 'Bearer t${++issued}'},
+          ),
+        );
+        addTearDown(() => connection.dispose().catchError((Object _) {}));
+        Future<void> nextOnline() => connection.state
+            .firstWhere((s) => s is RpcClientOnline)
+            .timeout(const Duration(seconds: 10));
 
-      await t.reconnect();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+        final first = nextOnline();
+        connection.connect();
+        await first;
+        final second = nextOnline();
+        connection.forceReconnect();
+        await second;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
 
-      expect(seen, hasLength(greaterThanOrEqualTo(2)));
-      expect(
-        seen.last['authorization'],
-        ['Bearer t0ken'],
-        reason: 'the token went only on the first upgrade',
-      );
-    });
-
-    // WITNESS: a token that expires must be refreshable. Fixed headers are
-    // captured once, so a reconnect after expiry presents the stale token.
-    test('a headers provider is asked again on every reconnect', () async {
-      final (uri, seen) = await _recordingServer();
-      var issued = 0;
-
-      final t = await RpcWebSocketCallerTransport.connect(
-        uri,
-        headersProvider: () async => {'authorization': 'Bearer t${++issued}'},
-      );
-      addTearDown(() => t.close().catchError((Object _) {}));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-
-      await t.reconnect();
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-
-      expect(seen.first['authorization'], ['Bearer t1']);
-      expect(
-        seen.last['authorization'],
-        ['Bearer t2'],
-        reason:
-            'the reconnect presented the token minted for the first upgrade',
-      );
-    });
-
-    test('headers and a headers provider together are refused', () async {
-      final (uri, _) = await _recordingServer();
-      await expectLater(
-        RpcWebSocketCallerTransport.connect(
-          uri,
-          headers: {'authorization': 'Bearer a'},
-          headersProvider: () => {'authorization': 'Bearer b'},
-        ),
-        throwsArgumentError,
-      );
-    });
+        expect(seen, hasLength(2));
+        expect(seen.first['authorization'], ['Bearer t1']);
+        expect(
+          seen.last['authorization'],
+          ['Bearer t2'],
+          reason:
+              'the reconnect presented the token minted for the first upgrade',
+        );
+      },
+    );
 
     // GUARD: no headers must stay no headers -- the control the witnesses are
     // read against, and proof the assertion is not passing on some default.

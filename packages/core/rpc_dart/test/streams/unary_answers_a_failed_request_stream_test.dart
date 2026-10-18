@@ -37,7 +37,7 @@ import 'package:test/test.dart';
 final _codec = RpcCodec(RpcString.fromJson);
 
 /// Records the gRPC statuses a responder sends, and nothing else.
-class _RecordingTransport implements IRpcTransport {
+class _RecordingTransport extends IRpcTransport {
   final List<String> statuses = [];
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
 
@@ -100,8 +100,10 @@ class _RecordingTransport implements IRpcTransport {
       RpcHealthStatus.healthy(component: 'test');
 
   @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.healthy(component: 'test');
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 }
 
 void main() {

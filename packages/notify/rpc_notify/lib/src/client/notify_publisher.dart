@@ -18,15 +18,7 @@ class NotifyPublisher {
   final NotifyPublishContractCaller _caller;
 
   factory NotifyPublisher.endpoint(RpcCallerEndpoint endpoint) =>
-      NotifyPublisher(
-        endpoint,
-        NotifyPublishContractCaller(
-          endpoint,
-          dataTransferMode: endpoint.transport is RpcInMemoryTransport
-              ? RpcDataTransferMode.zeroCopy
-              : RpcDataTransferMode.auto,
-        ),
-      );
+      NotifyPublisher(endpoint, NotifyPublishContractCaller(endpoint));
 
   /// Broadcast [payload] to all subscribers of [topic].
   Future<void> publish({

@@ -11,17 +11,17 @@ import 'package:test/test.dart';
 // Helpers
 // ---------------------------------------------------------------------------
 
-(IRpcReconnectableTransport client, IRpcReconnectableTransport server)
-_pair() => RpcChannelTransport.memoryPair();
+(IRpcTransport client, IRpcTransport server) _pair() =>
+    RpcChannelTransport.memoryPair();
 
 class _TransportQueue {
   _TransportQueue(this._transports);
 
-  final List<IRpcReconnectableTransport> _transports;
+  final List<IRpcTransport> _transports;
   int _index = 0;
   int get callCount => _index;
 
-  Future<IRpcReconnectableTransport> next() async {
+  Future<IRpcTransport> next() async {
     if (_index >= _transports.length) throw StateError('no more transports');
     return _transports[_index++];
   }

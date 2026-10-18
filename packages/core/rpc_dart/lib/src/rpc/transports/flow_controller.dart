@@ -110,7 +110,7 @@ final class RpcFlowController {
   /// Streams this side has already advertised an initial window for.
   final Set<int> _advertised = {};
 
-  /// Streams whose credit a higher layer returns (see [IRpcFlowControlled]).
+  /// Streams whose credit a higher layer returns (see [IRpcFlowCredit]).
   final Set<int> _deferred = {};
 
   /// Bytes handed to a consumer that credits on CONSUMPTION, per stream, still
@@ -720,7 +720,7 @@ final class RpcFlowController {
     wakeAll();
   }
 
-  // ── Deferred metering (IRpcFlowControlled) ─────────────────────────────────
+  // ── Deferred metering (IRpcFlowCredit) ─────────────────────────────────────
 
   /// Hands metering of [streamId] to a higher layer.
   void defer(int streamId) {

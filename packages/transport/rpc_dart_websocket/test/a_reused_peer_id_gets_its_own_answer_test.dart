@@ -94,6 +94,12 @@ Future<void> _waitFor(bool Function() condition, String what) async {
   throw StateError('timed out waiting for $what');
 }
 
+/// The next time [connection] reports Online. Subscribed before the caller
+/// starts the connect, so the event cannot be missed.
+Future<void> _nextOnline(RpcClientConnection connection) => connection.state
+    .firstWhere((s) => s is RpcClientOnline)
+    .timeout(const Duration(seconds: 10));
+
 /// Collects the client pipeline's own warnings.
 ///
 /// The decisive one cannot be read from the caller's result: a new call IGNORED
@@ -124,7 +130,9 @@ typedef _Run = ({
 
 /// Runs one caller through a reconnect and reports what it got.
 ///
-/// [reconnect] drops the socket while the first answer is parked; without it both
+/// The client reaches the server through an [RpcClientConnection], the layer
+/// that reconnects. [reconnect] drops the socket with
+/// [RpcClientConnection.forceReconnect] while the first answer is parked; without it both
 /// calls run on one connection and the peer's ids cannot collide.
 /// [finishFirstEarly] lets the parked answer out BEFORE the id is reused, so no
 /// stale call is left to interfere.
@@ -147,12 +155,17 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
       );
       await server.start();
 
-      final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:${http.port}'),
+      final uri = Uri.parse('ws://127.0.0.1:${http.port}');
+      final connection = RpcClientConnection(
+        transportFactory: () => RpcWebSocketCallerTransport.connect(uri),
       );
+      final firstOnline = _nextOnline(connection);
+      connection.connect();
+      await firstOnline;
+
       final warnings = _Warnings();
       final clientPeer = RpcPeerEndpoint(
-        transport: transport,
+        transport: connection.transport,
         logger: warnings,
       );
       final answering = _Answering(clientPeer);
@@ -161,7 +174,7 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
 
       // The id the PEER chose, read where it is observable.
       final openedOn = <int>[];
-      final watcher = transport.incomingMessages.listen((m) {
+      final watcher = connection.transport.incomingMessages.listen((m) {
         if (m.methodPath != null) openedOn.add(m.streamId);
       });
 
@@ -188,7 +201,9 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
 
         final _Asking second;
         if (reconnect) {
-          await transport.reconnect();
+          final online = _nextOnline(connection);
+          connection.forceReconnect();
+          await online;
           await _waitFor(() => built.length > 1, 'the second server endpoint');
           second = _Asking(built[1]);
         } else {
@@ -223,7 +238,7 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await watcher.cancel();
         await clientPeer.close().catchError((Object _) {});
-        await transport.close().catchError((Object _) {});
+        await connection.dispose().catchError((Object _) {});
         await server.dispose().catchError((Object _) {});
         await http.close(force: true);
       }

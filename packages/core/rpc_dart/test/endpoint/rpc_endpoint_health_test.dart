@@ -40,25 +40,5 @@ void main() {
 
       await caller.close();
     });
-
-    test(
-      'reconnect reflects transport status when endpoint already closed',
-      () async {
-        final (clientTransport, serverTransport) =
-            RpcChannelTransport.memoryPair();
-        final caller = RpcCallerEndpoint(transport: clientTransport);
-        final responder = RpcResponderEndpoint(transport: serverTransport);
-
-        await caller.close();
-
-        final report = await caller.reconnect();
-
-        expect(report.endpointStatus.level, RpcHealthLevel.closed);
-        expect(report.transportStatus?.level, RpcHealthLevel.unhealthy);
-        expect(report.transportStatus?.details['supported'], isFalse);
-
-        await responder.close();
-      },
-    );
   });
 }

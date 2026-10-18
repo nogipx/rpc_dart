@@ -3,13 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 // RpcClientConnection learns of a drop from its transport's message stream
-// ending, or from IRpcConnectionLossReporting. RpcWebSocketCallerTransport
-// built by connect() keeps that stream open across a drop so its own
-// reconnect() can re-attach, so it reports the loss on `connectionLost`. NOT
-// as an error on the message stream: that stream is public, and a listener
-// without onError would take it as an uncaught error. These tests restart the
-// server on the same port, which is what the README's "automatic reconnect
-// with backoff" is for.
+// ending. RpcWebSocketCallerTransport closes itself when its socket is lost,
+// which ends that stream -- NOT with an error: that stream is public, and a
+// listener without onError would take it as an uncaught error. The first test
+// restarts the server on the same port, which is what the README's "automatic
+// reconnect with backoff" is for.
 
 @TestOn('vm')
 library;
@@ -121,12 +119,11 @@ void main() {
   );
 
   test(
-    'GUARD the bare transport still reconnects with reconnect()',
+    'GUARD the bare transport ends its message stream on a drop, no error',
     () async {
-      var server = await _Server.bind(0);
-      final port = server.http.port;
+      final server = await _Server.bind(0);
       final transport = await RpcWebSocketCallerTransport.connect(
-        Uri.parse('ws://127.0.0.1:$port'),
+        Uri.parse('ws://127.0.0.1:${server.http.port}'),
       );
       final caller = RpcCallerEndpoint(transport: transport);
       addTearDown(() async {
@@ -136,24 +133,18 @@ void main() {
       });
       expect((await _call(caller)).value, 'x');
 
-      // The loss is reported once on connectionLost; the message stream stays
-      // open and carries no error.
       final streamErrors = <Object>[];
+      final ended = Completer<void>();
       final sub = transport.incomingMessages.listen(
         (_) {},
         onError: streamErrors.add,
+        onDone: ended.complete,
       );
       addTearDown(sub.cancel);
-      final lost = transport.connectionLost.first;
       await server.stop();
-      await lost.timeout(const Duration(seconds: 5));
-      expect(transport.isClosed, isFalse);
+      await ended.future.timeout(const Duration(seconds: 5));
+      expect(transport.isClosed, isTrue);
       expect(streamErrors, isEmpty);
-
-      server = await _Server.bind(port);
-      final health = await transport.reconnect();
-      expect(health.isHealthy, isTrue, reason: health.message);
-      expect((await _call(caller)).value, 'x');
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );

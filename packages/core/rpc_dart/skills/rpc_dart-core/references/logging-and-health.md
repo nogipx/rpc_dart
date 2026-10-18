@@ -173,9 +173,8 @@ they plug into this `LogController`.
 - `RpcChannelTransport` health details: `activeStreams`, `streamControllers`,
   `finishedStreams`, `statusSeen`, `zeroCopy` (bool). Other transports report
   their own keys.
-- `endpoint.reconnect()` returns an updated `RpcEndpointHealth`. On
-  `RpcChannelTransport` it reports `degraded` with `details['supported'] ==
-  false`: create a new transport instead.
+- A transport built on a channel that is still connecting reports `degraded`
+  until its `ready` completes.
 
 ```dart
 Future<void> checkHealth(RpcCallerEndpoint caller, LogScope log) async {

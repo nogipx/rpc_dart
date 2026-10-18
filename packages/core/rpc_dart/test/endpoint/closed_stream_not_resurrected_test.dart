@@ -56,7 +56,7 @@ final class _Contract extends RpcResponderContract {
 /// A responder-side transport driven frame by frame, recording what the
 /// pipeline sends back. Models the HTTP/1.1 shape: metadata and payload arrive
 /// as two separate frames, and BOTH carry the method path.
-final class _ScriptedTransport implements IRpcTransport {
+final class _ScriptedTransport extends IRpcTransport {
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
   final sent = <String>[];
 
@@ -127,7 +127,10 @@ final class _ScriptedTransport implements IRpcTransport {
       RpcHealthStatus(level: RpcHealthLevel.healthy, component: 'scripted');
 
   @override
-  Future<RpcHealthStatus> reconnect() async => health();
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 
   @override
   Future<void> close() async {

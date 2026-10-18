@@ -33,28 +33,23 @@ Future<void> _notifyPeerOfCancellation(
   String reason,
   LogScope logger,
 ) async {
-  if (transport is IRpcStreamReset) {
-    try {
-      final reset = await (transport as IRpcStreamReset).resetStream(
-        streamId,
-        reason: reason,
-      );
-      if (reset) {
-        if (logger.isInternal) {
-          logger.internal(
-            'Cancellation delivered via stream reset [streamId: $streamId]',
-          );
-        }
-        return;
+  try {
+    final reset = await transport.resetStream(streamId, reason: reason);
+    if (reset) {
+      if (logger.isInternal) {
+        logger.internal(
+          'Cancellation delivered via stream reset [streamId: $streamId]',
+        );
       }
-    } catch (error, stackTrace) {
-      logger.warning(
-        'Stream reset failed, falling back to cancellation metadata '
-        '[streamId: $streamId]',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      return;
     }
+  } catch (error, stackTrace) {
+    logger.warning(
+      'Stream reset failed, falling back to cancellation metadata '
+      '[streamId: $streamId]',
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   try {

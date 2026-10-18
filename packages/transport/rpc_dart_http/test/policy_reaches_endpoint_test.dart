@@ -3,25 +3,14 @@
 // SPDX-License-Identifier: MIT
 
 // The responder pipeline reads maxConcurrentHandlers, halfOpenStreamTimeout and
-// the pre-method buffer budget through an `is IRpcSecurityPolicyAware` check on
-// the transport, falling back to `const RpcSecurityPolicy()` when it is absent.
+// the pre-method buffer budget from the transport's `securityPolicy`.
 //
-// RpcHttpResponderTransport took a securityPolicy, enforced maxActiveStreams,
-// the method path, metadata and the body size ITSELF -- and declared only
-// IRpcTransport, so everything the pipeline owns was silently inert. Measured
-// with maxConcurrentHandlers: 3 (and maxActiveStreams: 1000, so nothing is
-// refused for lack of a stream slot) against 30 concurrent calls into a handler
-// that parks:
-//
-//   transport is IRpcSecurityPolicyAware : false
-//   handlers entered                     : 30 of 30
-//
-//   after: 3, with 27 refused RESOURCE_EXHAUSTED
-//
-// The sibling asymmetry was inside this package: RpcHttpCallerTransport has
-// reported its policy this way all along, and RpcHttp2ResponderTransport had
-// this exact defect fixed in round 76. isolate and wasm are unaffected -- both
-// return a real RpcChannelTransport, which implements the capability.
+// RpcHttpResponderTransport also enforces maxActiveStreams, the method path,
+// metadata and the body size itself; the policy it was given must reach the
+// pipeline too, or everything the pipeline owns is inert. This drives
+// maxConcurrentHandlers: 3 (with maxActiveStreams: 1000, so nothing is refused
+// for lack of a stream slot) against 30 concurrent calls into a handler that
+// parks: at most 3 enter, the rest are refused RESOURCE_EXHAUSTED.
 
 @TestOn('vm')
 library;
@@ -68,7 +57,9 @@ typedef _Rig = ({
   _Svc svc,
 });
 
-Future<_Rig> _serve({RpcSecurityPolicy? policy}) async {
+Future<_Rig> _serve({
+  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+}) async {
   final gate = Completer<void>();
   final transport = RpcHttpResponderTransport(securityPolicy: policy);
   final responder = RpcResponderEndpoint(transport: transport);
@@ -137,19 +128,12 @@ void main() {
     const policy = RpcSecurityPolicy(maxConcurrentHandlers: 7);
     final rig = await _serve(policy: policy);
 
-    expect(rig.transport, isA<IRpcSecurityPolicyAware>());
-    expect(
-      (rig.transport as IRpcSecurityPolicyAware)
-          .securityPolicy
-          .maxConcurrentHandlers,
-      7,
-    );
+    final IRpcTransport asTransport = rig.transport;
+    expect(asTransport.securityPolicy.maxConcurrentHandlers, 7);
   });
 
   test('GUARD: no policy still serves, with the defaults', () async {
-    // The getter falls back to `const RpcSecurityPolicy()`, which is exactly
-    // what the pipeline used when the capability was absent -- so a server that
-    // passes nothing must see no change at all.
+    // A server that passes nothing gets `const RpcSecurityPolicy()`.
     final rig = await _serve();
 
     expect(rig.transport.securityPolicy.maxConcurrentHandlers, isNull);

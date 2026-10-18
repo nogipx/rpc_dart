@@ -106,7 +106,7 @@ extension _Http2ResponderFlow on RpcHttp2ResponderTransport {
 
   /// The OTHER half of the request-direction bound. Client-stream requests are
   /// fed by `_pipelineFedRequestStream`, which reports consumption through
-  /// [IRpcFlowControlled]; bidirectional and server-stream ones are fed by
+  /// [IRpcFlowCredit]; bidirectional and server-stream ones are fed by
   /// `_stateBoundStream`, which subscribes HERE and never calls
   /// deferFlowCredit. Without a report from this side the bidi upload direction
   /// is unbounded even while client-stream is already bounded.

@@ -69,43 +69,6 @@ void main() {
     );
 
     test(
-      'reconnect returns degraded when transport does not support reconnect',
-      () async {
-        final transport = _ConfigurableTransport(
-          isClient: true,
-          throwUnsupportedOnReconnect: true,
-        );
-
-        final endpoint = RpcCallerEndpoint(transport: transport);
-        addTearDown(() async => endpoint.close());
-
-        final report = await endpoint.reconnect();
-
-        expect(report.transportStatus?.level, RpcHealthLevel.degraded);
-        expect(report.transportStatus?.details['supported'], isFalse);
-        expect(report.endpointStatus.level, RpcHealthLevel.degraded);
-      },
-    );
-
-    test(
-      'reconnect returns unhealthy when transport.reconnect throws',
-      () async {
-        final transport = _ConfigurableTransport(
-          isClient: true,
-          throwOnReconnect: true,
-        );
-
-        final endpoint = RpcCallerEndpoint(transport: transport);
-        addTearDown(() async => endpoint.close());
-
-        final report = await endpoint.reconnect();
-
-        expect(report.transportStatus?.level, RpcHealthLevel.unhealthy);
-        expect(report.endpointStatus.level, RpcHealthLevel.unhealthy);
-      },
-    );
-
-    test(
       'close swallows transport.close error and deactivates endpoint',
       () async {
         final transport = _ConfigurableTransport(
@@ -124,34 +87,25 @@ void main() {
   });
 }
 
-final class _ConfigurableTransport implements IRpcTransport {
+final class _ConfigurableTransport extends IRpcTransport {
   final bool _isClient;
   bool _isClosed;
 
   bool throwOnHealth;
-  bool throwOnReconnect;
-  bool throwUnsupportedOnReconnect;
   bool throwOnClose;
 
   RpcHealthStatus healthResult;
-  RpcHealthStatus reconnectResult;
 
   _ConfigurableTransport({
     required bool isClient,
     bool isClosed = false,
     this.throwOnHealth = false,
-    this.throwOnReconnect = false,
-    this.throwUnsupportedOnReconnect = false,
     this.throwOnClose = false,
     RpcHealthStatus? healthResult,
-    RpcHealthStatus? reconnectResult,
   }) : _isClient = isClient,
        _isClosed = isClosed,
        healthResult =
            healthResult ??
-           RpcHealthStatus.healthy(component: '_ConfigurableTransport'),
-       reconnectResult =
-           reconnectResult ??
            RpcHealthStatus.healthy(component: '_ConfigurableTransport');
 
   @override
@@ -216,11 +170,8 @@ final class _ConfigurableTransport implements IRpcTransport {
   }
 
   @override
-  Future<RpcHealthStatus> reconnect() async {
-    if (throwUnsupportedOnReconnect) {
-      throw UnsupportedError('no reconnect');
-    }
-    if (throwOnReconnect) throw StateError('reconnect failed');
-    return reconnectResult;
-  }
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 }

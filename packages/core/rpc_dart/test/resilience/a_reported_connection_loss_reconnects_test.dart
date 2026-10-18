@@ -2,29 +2,26 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A transport that stays open for its own reconnect() neither ends nor errors
-// its message stream when the connection goes, so it reports the loss through
-// IRpcConnectionLossReporting, and RpcClientConnection treats that as the end.
-// A loss from a transport the connection has already replaced is ignored.
-// Round 746.
+// A transport reports a lost connection by closing itself: its message stream
+// ends, and RpcClientConnection takes that as the drop and builds a new one. A
+// transport the connection has already replaced closing is not a drop.
 
 import 'dart:async';
 
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A transport that keeps its message stream open and reports losses aside.
-final class _T
-    implements IRpcReconnectableTransport, IRpcConnectionLossReporting {
+/// A transport that closes itself when its connection is lost.
+final class _T extends IRpcTransport {
   bool _closed = false;
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
-  final _lost = StreamController<Object?>.broadcast();
   int _next = -1;
 
-  void loseConnection() => _lost.add(null);
-
-  @override
-  Stream<Object?> get connectionLost => _lost.stream;
+  /// The connection went away: the transport closes, ending its stream.
+  void loseConnection() {
+    _closed = true;
+    if (!_incoming.isClosed) _incoming.close();
+  }
 
   @override
   bool get isClient => true;
@@ -80,8 +77,6 @@ final class _T
   @override
   Future<void> finishSending(int streamId) async {}
 
-  /// Leaves [connectionLost] open on close, so a replaced transport can still
-  /// report a loss and the proxy has to be the one ignoring it.
   @override
   Future<void> close() async {
     _closed = true;
@@ -91,9 +86,6 @@ final class _T
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't', message: 'ok');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async => health();
 }
 
 void main() {
@@ -119,7 +111,7 @@ void main() {
   });
 
   test(
-    'WITNESS a reported loss takes the connection offline and back',
+    'WITNESS a transport that closes takes the connection offline and back',
     () async {
       built.single.loseConnection();
       await connection.state
@@ -132,18 +124,23 @@ void main() {
     },
   );
 
-  test('GUARD a loss from a transport already replaced is ignored', () async {
-    final first = built.single;
-    first.loseConnection();
-    await connection.state
-        .firstWhere((s) => s is RpcClientOnline)
-        .timeout(const Duration(seconds: 2));
-    final offlines = states.whereType<RpcClientOffline>().length;
+  test(
+    'GUARD a transport that closes after it was replaced is ignored',
+    () async {
+      final first = built.single;
+      // connect() while online builds a replacement and retires the first.
+      connection.connect();
+      await connection.state
+          .firstWhere((s) => s is RpcClientOnline)
+          .timeout(const Duration(seconds: 2));
+      expect(built, hasLength(2));
 
-    first.loseConnection();
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+      first.loseConnection();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
 
-    expect(states.whereType<RpcClientOffline>(), hasLength(offlines));
-    expect(built, hasLength(2));
-  });
+      expect(states.whereType<RpcClientOffline>(), isEmpty);
+      expect(built, hasLength(2));
+      expect(connection.currentState, isA<RpcClientOnline>());
+    },
+  );
 }

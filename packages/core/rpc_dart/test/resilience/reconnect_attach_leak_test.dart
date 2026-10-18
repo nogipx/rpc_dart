@@ -25,7 +25,7 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed, and can be dropped on cue.
-final class _TrackedTransport implements IRpcReconnectableTransport {
+final class _TrackedTransport extends IRpcTransport {
   _TrackedTransport(this.id);
 
   final int id;
@@ -52,8 +52,8 @@ final class _TrackedTransport implements IRpcReconnectableTransport {
   @override
   int createStream() => _next += 2;
 
-  // See reconnect_stopped_during_connect_test.dart: the connection refuses a
-  // transport that cannot report its id cursor.
+  // RpcClientConnection carries its stream-id watermark across a reconnect
+  // through these two members.
   @override
   int get lastIssuedStreamId => _next;
   @override
@@ -94,9 +94,6 @@ final class _TrackedTransport implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't$id', message: 'ok');
-  @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.degraded(component: 't$id', message: 'no');
 }
 
 ({RpcClientConnection connection, List<_TrackedTransport> made}) _build() {

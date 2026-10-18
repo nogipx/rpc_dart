@@ -131,7 +131,7 @@ extension _ChannelTransportInbound on RpcChannelTransport {
         );
       }
     } else if (_fc.isDeferred(message.streamId)) {
-      // A higher layer claimed the metering (IRpcFlowControlled), so the same
+      // A higher layer claimed the metering (IRpcFlowCredit), so the same
       // debt applies -- settled by returnFlowCredit as it consumes, repaid at
       // teardown for whatever it does not.
       _fc.oweConnection(message.streamId, message.payload?.length ?? 0);

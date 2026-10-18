@@ -174,24 +174,27 @@ void main() {
     await c.server.close();
   });
 
-  test('a transport without the capability gets the default ceiling', () async {
-    // Falling back to 0 would break every call; falling back to the documented
-    // default is what keeps a third-party transport working.
-    final transport = _PlainTransport();
-    final responder = RpcResponderEndpoint(transport: transport);
-    responder.registerServiceContract(_Contract());
-    responder.start();
+  test(
+    'a transport that keeps the default policy gets the default ceiling',
+    () async {
+      // Falling back to 0 would break every call; falling back to the documented
+      // default is what keeps a third-party transport working.
+      final transport = _PlainTransport();
+      final responder = RpcResponderEndpoint(transport: transport);
+      responder.registerServiceContract(_Contract());
+      responder.start();
 
-    expect(transport, isNot(isA<IRpcSecurityPolicyAware>()));
-    // 4096 is the documented default; the endpoint must not refuse stream 1.
-    expect(const RpcSecurityPolicy().maxActiveStreams, 4096);
+      expect(transport.securityPolicy.maxActiveStreams, 4096);
+      // 4096 is the documented default; the endpoint must not refuse stream 1.
+      expect(const RpcSecurityPolicy().maxActiveStreams, 4096);
 
-    await responder.close();
-  });
+      await responder.close();
+    },
+  );
 }
 
-/// A minimal transport that does NOT implement [IRpcSecurityPolicyAware].
-final class _PlainTransport implements IRpcTransport {
+/// A minimal transport that does NOT override [IRpcTransport.securityPolicy].
+final class _PlainTransport extends IRpcTransport {
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
   var _closed = false;
   var _next = 0;
@@ -253,6 +256,11 @@ final class _PlainTransport implements IRpcTransport {
       RpcHealthStatus.healthy(component: 'plain', message: 'ok');
 
   @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.degraded(component: 'plain', message: 'no');
+  int get lastIssuedStreamId => _next;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    final resumed = streamId.isEven ? streamId : streamId - 1;
+    if (resumed > _next) _next = resumed;
+  }
 }

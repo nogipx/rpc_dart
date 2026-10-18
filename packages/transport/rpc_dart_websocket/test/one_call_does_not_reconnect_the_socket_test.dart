@@ -3,18 +3,15 @@
 // SPDX-License-Identifier: MIT
 
 // UNAVAILABLE is not "the connection is gone". A handler throwing it, a
-// draining server, one truncated stream all say it -- and the retry
-// interceptor used to answer every one of them with transport.reconnect(),
-// which on a websocket closes the LIVE socket under every other call.
+// draining server, one truncated stream all say it. A retry that answered
+// each of them with a reconnect would close the LIVE socket under every other
+// call on it.
 //
-// Measured on this rig before the health check (one unary call's handler
-// throwing UNAVAILABLE, one long server stream running beside it):
-//
-//   application UNAVAILABLE : sockets=2  A errored after 4 messages
-//   RESOURCE_EXHAUSTED      : sockets=1  A alive, 30 messages
-//
-// The two arms differ in nothing but the status, so the second is the control:
-// the reconnect is what killed A, not the failing call.
+// The rig: one unary call's handler throws UNAVAILABLE while one long server
+// stream runs beside it, through RpcClientConnection and RpcRetryInterceptor.
+// The control arm differs in nothing but the status (RESOURCE_EXHAUSTED), so
+// a dead stream in the first arm and not the second would be the retry's
+// doing, not the failing call's.
 
 @TestOn('vm')
 library;
@@ -91,10 +88,17 @@ Future<_Rig> _rig(int boomStatus, {int maxAttempts = 2}) async {
   );
   await server.start();
 
-  final transport = await RpcWebSocketCallerTransport.connect(
-    Uri.parse('ws://127.0.0.1:${http.port}'),
+  final uri = Uri.parse('ws://127.0.0.1:${http.port}');
+  final connection = RpcClientConnection(
+    transportFactory: () => RpcWebSocketCallerTransport.connect(uri),
+    backoff: const FixedBackoff(Duration(milliseconds: 20)),
   );
-  final caller = RpcCallerEndpoint(transport: transport);
+  final online = connection.state
+      .firstWhere((s) => s is RpcClientOnline)
+      .timeout(const Duration(seconds: 10));
+  connection.connect();
+  await online;
+  final caller = RpcCallerEndpoint(transport: connection.transport);
   caller.addInterceptor(
     RpcRetryInterceptor(
       maxAttempts: maxAttempts,
@@ -104,6 +108,7 @@ Future<_Rig> _rig(int boomStatus, {int maxAttempts = 2}) async {
 
   addTearDown(() async {
     await caller.close();
+    await connection.dispose();
     await server.stop();
     await connCtl.close();
     await http.close(force: true);
@@ -203,7 +208,7 @@ void main() {
   );
 
   test(
-    'CONTROL: RESOURCE_EXHAUSTED behaves the same, and always did',
+    'CONTROL: RESOURCE_EXHAUSTED behaves the same',
     () async {
       final rig = await _rig(RpcStatus.resourceExhausted);
       final a = await _startLongCall(rig.caller);
@@ -219,9 +224,8 @@ void main() {
     timeout: const Timeout(Duration(seconds: 60)),
   );
 
-  // GUARD: the capability B-61 added. A path that really died is re-established
-  // by the retry, or no attempt can pass. With the reconnect removed this reads
-  // `sockets=1, RpcNoConnectionException`.
+  // GUARD: a path that really died is re-established by the connection, and
+  // the retry waits for that before trying again, or no attempt can pass.
   test(
     'GUARD: a call truncated by a dead path still reconnects and recovers',
     () async {

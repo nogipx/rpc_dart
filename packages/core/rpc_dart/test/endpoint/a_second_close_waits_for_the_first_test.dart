@@ -56,7 +56,22 @@ class _SlowClose implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => inner.reconnect();
+  int get lastIssuedStreamId => inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int id) => inner.resumeStreamIdsAfter(id);
+  @override
+  RpcSecurityPolicy get securityPolicy => inner.securityPolicy;
+  @override
+  Future<void> get ready => inner.ready;
+  @override
+  Future<bool> resetStream(int id, {String? reason}) =>
+      inner.resetStream(id, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
 }
 
 void main() {

@@ -122,7 +122,7 @@ abstract final class RpcHeaders {
   /// the caller got no status back at all: it hung until its own timeout.
   ///
   /// These two are rpc_dart's own control keys, not gRPC's. gRPC cancels with
-  /// HTTP/2 RST_STREAM (which this package uses via [IRpcStreamReset] wherever
+  /// HTTP/2 RST_STREAM (which this package uses via `resetStream` wherever
   /// the transport offers it); the metadata notice is only the fallback for
   /// transports with no reset primitive. Reserving them therefore sends FEWER
   /// non-standard headers on the wire, so gRPC interop can only improve.

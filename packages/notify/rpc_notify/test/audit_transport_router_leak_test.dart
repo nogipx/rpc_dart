@@ -29,7 +29,7 @@ import 'package:rpc_notify/src/transport_router.dart';
 import 'package:test/test.dart';
 
 /// Minimal client-side transport whose sendMetadata always throws.
-class _ThrowingTransport implements IRpcTransport {
+class _ThrowingTransport extends IRpcTransport {
   final _idManager = RpcStreamIdManager(isClient: true); // odd IDs
   final _controller = StreamController<RpcTransportMessage>.broadcast();
 
@@ -47,6 +47,12 @@ class _ThrowingTransport implements IRpcTransport {
 
   @override
   bool releaseStreamId(int streamId) => _idManager.releaseId(streamId);
+
+  @override
+  int get lastIssuedStreamId => _idManager.lastIssuedId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   @override
   Future<void> sendMetadata(
@@ -88,10 +94,6 @@ class _ThrowingTransport implements IRpcTransport {
 
   @override
   Future<RpcHealthStatus> health() async =>
-      RpcHealthStatus.healthy(component: 'throwing', message: 'ok');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async =>
       RpcHealthStatus.healthy(component: 'throwing', message: 'ok');
 }
 

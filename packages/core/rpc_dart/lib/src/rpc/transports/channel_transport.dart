@@ -36,12 +36,8 @@ final class _OneStreamViolation extends RpcFrameException
 /// // from a multiplexed one
 /// RpcChannelTransport(channel: myMuxChannel, isClient: true);
 /// ```
-class RpcChannelTransport
-    implements
-        IRpcReconnectableTransport,
-        IRpcSecurityPolicyAware,
-        IRpcFlowControlled,
-        IRpcConnectionBufferTotal {
+class RpcChannelTransport extends IRpcTransport
+    implements IRpcFlowCredit, IRpcConnectionBuffer {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;
@@ -147,18 +143,27 @@ class RpcChannelTransport
   StreamSubscription<RpcTransportMessage>? _channelSub;
   bool _closed = false;
 
+  /// See [ready].
+  final Future<void> _ready;
+  bool _isReady;
+
   /// Creates a transport that wraps a [IRpcMultiplexedChannel].
   ///
   /// [isClient] determines stream ID parity (odd for client, even for server).
   ///
   /// [resumeStreamIdsAfter] continues an earlier transport's id sequence rather
   /// than starting over — pass the previous instance's [lastIssuedStreamId].
-  /// A reconnecting wrapper MUST do this: see [lastIssuedStreamId].
+  ///
+  /// [ready] is the channel's own readiness, for a channel that is still
+  /// connecting when the transport is built (a WebSocket whose upgrade has not
+  /// answered). It becomes this transport's [ready], and [health] reads
+  /// degraded until it completes. Omit it for a channel usable at once.
   RpcChannelTransport({
     required IRpcMultiplexedChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? resumeStreamIdsAfter,
+    Future<void>? ready,
     LogScope? logger,
   }) : _channel = channel,
        _idManager = RpcStreamIdManager(
@@ -166,7 +171,15 @@ class RpcChannelTransport
          resumeAfter: resumeStreamIdsAfter,
        ),
        _policy = policy,
+       _ready = ready ?? Future<void>.value(),
+       _isReady = ready == null,
        _log = logger?.child('ChannelTransport') ?? LogScope.noop {
+    if (ready != null) {
+      // Observed here, so a channel that fails to connect is not an uncaught
+      // error when nobody awaits [ready]; the failure also reaches the channel
+      // stream, which is what closes the transport.
+      unawaited(ready.then((_) => _isReady = true, onError: (Object _) {}));
+    }
     _fc = RpcFlowController(
       policy: policy,
       send: (streamId, metadata) => _channel.send(
@@ -222,42 +235,40 @@ class RpcChannelTransport
 
   /// Creates a transport from a raw [IRpcChannel] by wrapping it in a
   /// [RpcFrameMultiplexedChannel] first.
-  factory RpcChannelTransport.fromChannel({
+  ///
+  /// Generative, so a transport package can extend this class over its own
+  /// byte channel instead of forwarding every member.
+  RpcChannelTransport.fromChannel({
     required IRpcChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? resumeStreamIdsAfter,
+    Future<void>? ready,
     LogScope? logger,
-  }) {
-    return RpcChannelTransport(
-      channel: RpcFrameMultiplexedChannel(
-        channel: channel,
-        policy: policy,
-        // A server closes on an oversized frame, a client refuses the call.
-        // See RpcFrameMultiplexedChannel.closeOnOversizedFrame: the peak is
-        // unavoidable on this transport, so closing is a server's only defence
-        // against a peer repeating it -- and it is exactly the wrong answer for
-        // a client, whose other in-flight calls die with the connection.
-        closeOnOversizedFrame: !isClient,
-      ),
-      isClient: isClient,
-      policy: policy,
-      resumeStreamIdsAfter: resumeStreamIdsAfter,
-      logger: logger,
-    );
-  }
+  }) : this(
+         channel: RpcFrameMultiplexedChannel(
+           channel: channel,
+           policy: policy,
+           // A server closes on an oversized frame, a client refuses the call.
+           // See RpcFrameMultiplexedChannel.closeOnOversizedFrame: the peak is
+           // unavoidable on this transport, so closing is a server's only
+           // defence against a peer repeating it -- and it is exactly the wrong
+           // answer for a client, whose other in-flight calls die with the
+           // connection.
+           closeOnOversizedFrame: !isClient,
+         ),
+         isClient: isClient,
+         policy: policy,
+         resumeStreamIdsAfter: resumeStreamIdsAfter,
+         ready: ready,
+         logger: logger,
+       );
 
-  /// The highest stream id this transport has handed out.
+  /// The stream id this transport handed out most recently.
   ///
-  /// Exists for RECONNECT: a replacement transport starts its ids at 1, so the
-  /// first call after a reconnect gets the id a dead call still holds — and
-  /// since the id is all a teardown presents, the dead call's release or
-  /// half-close lands on the live one. Pass this into the replacement's
-  /// [resumeStreamIdsAfter] and the two id spaces become disjoint.
-  ///
-  /// **Survives [close], and must.** The wrapper learns of a dropped connection
-  /// BY this transport closing itself, so "read the cursor first" is advice it
-  /// cannot follow on the path that matters.
+  /// **Survives [close], and must.** `RpcClientConnection` learns of a dropped
+  /// connection BY this transport closing itself, so "read the cursor first" is
+  /// advice it cannot follow on the path that matters.
   @override
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
@@ -298,6 +309,9 @@ class RpcChannelTransport
 
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
+
+  @override
+  Future<void> get ready => _ready;
 
   @override
   bool get isClient => _idManager.isClient;
@@ -508,7 +522,7 @@ class RpcChannelTransport
     // `sendMessage` future -- close() itself wakes and moves on either way.
     _fc.close();
     // Frees the ids WITHOUT rewinding the cursor -- see [lastIssuedStreamId].
-    // A full reset() erases the one value a reconnecting wrapper needs at the
+    // A full reset() erases the one value RpcClientConnection needs at the
     // exact moment it needs it: a peer-started drop is reported to the layer
     // above BY this close, so there is no earlier moment to read the cursor at.
     _idManager.releaseAll();
@@ -541,6 +555,21 @@ class RpcChannelTransport
         message: 'Underlying channel is closed',
       );
     }
+    if (!_isReady) {
+      // A [ready] that has already completed reports on a later microtask; let
+      // it, rather than calling a connected channel not ready.
+      try {
+        await _ready.timeout(Duration.zero);
+      } catch (_) {
+        // Still connecting, or failed: the channel stream reports a failure.
+      }
+    }
+    if (!_isReady) {
+      return RpcHealthStatus.degraded(
+        component: 'RpcChannelTransport',
+        message: 'Channel is still connecting',
+      );
+    }
     return RpcHealthStatus.healthy(
       component: 'RpcChannelTransport',
       message: 'Transport ready',
@@ -560,22 +589,6 @@ class RpcChannelTransport
         'statusSeen': _statusSeen.length,
         'zeroCopy': _channel.supportsZeroCopy,
       },
-    );
-  }
-
-  @override
-  Future<RpcHealthStatus> reconnect() async {
-    if (_closed) {
-      return RpcHealthStatus.unhealthy(
-        component: 'RpcChannelTransport',
-        message: 'Transport is closed and cannot be reconnected',
-        details: {'supported': false},
-      );
-    }
-    return RpcHealthStatus.degraded(
-      component: 'RpcChannelTransport',
-      message: 'Reconnect not supported; create a new channel',
-      details: {'supported': false},
     );
   }
 
@@ -693,6 +706,12 @@ class RpcChannelTransport
   //
   // The accounting lives in [RpcFlowController]; what stays here is the wiring
   // it cannot own — which stream ids are still live, and where a grant goes.
+
+  @override
+  IRpcFlowCredit get flowCredit => this;
+
+  @override
+  IRpcConnectionBuffer get connectionBuffer => this;
 
   @override
   void deferFlowCredit(int streamId) => _fc.defer(streamId);

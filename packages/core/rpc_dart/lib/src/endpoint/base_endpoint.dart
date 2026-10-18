@@ -142,49 +142,14 @@ abstract base class RpcEndpointBase {
   }
 
   /// Returns a health snapshot for the endpoint and its transport.
-  Future<RpcEndpointHealth> health({RpcHealthStatus? transportOverride}) async {
-    final transportStatus = transportOverride ?? await _safeTransportHealth();
+  Future<RpcEndpointHealth> health() async {
+    final transportStatus = await _safeTransportHealth();
     final endpointStatus = _createEndpointStatus(transportStatus);
 
     return RpcEndpointHealth(
       endpointStatus: endpointStatus,
       dependencies: {'transport': transportStatus},
     );
-  }
-
-  /// Attempts to reconnect the transport and returns an updated health report.
-  Future<RpcEndpointHealth> reconnect() async {
-    RpcHealthStatus transportStatus;
-
-    try {
-      transportStatus = await _transport.reconnect();
-    } on UnsupportedError catch (error) {
-      _log.warning(
-        'Transport does not support reconnect: ${error.message ?? error.toString()}',
-      );
-      transportStatus = RpcHealthStatus.degraded(
-        component: _transport.runtimeType.toString(),
-        message: 'Reconnect is not supported by this transport',
-        details: {
-          'supported': false,
-          'isClosed': _transport.isClosed,
-          'error': error.toString(),
-        },
-      );
-    } catch (error, stackTrace) {
-      _log.error(
-        'Transport reconnect failed: $error',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      transportStatus = RpcHealthStatus.unhealthy(
-        component: _transport.runtimeType.toString(),
-        message: 'Reconnect failed: $error',
-        details: {'isClosed': _transport.isClosed, 'error': error.toString()},
-      );
-    }
-
-    return health(transportOverride: transportStatus);
   }
 
   /// Adds [middleware] to the processing chain.

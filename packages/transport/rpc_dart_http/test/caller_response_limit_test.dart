@@ -118,21 +118,16 @@ void main() {
   );
 
   test('the transport reports the policy it was given', () {
-    // The endpoint layers read maxMessageLengthBytes through this interface;
-    // without it the parser falls back to its own defaults.
-    final transport = RpcHttpCallerTransport(
+    // The endpoint layers read maxMessageLengthBytes from the transport's
+    // securityPolicy; a transport that did not report it would leave the
+    // parser on the defaults.
+    final IRpcTransport transport = RpcHttpCallerTransport(
       baseUrl: 'http://127.0.0.1:1',
       policy: const RpcSecurityPolicy(maxMessageLengthBytes: 4321),
     );
     addTearDown(transport.close);
 
-    expect(transport, isA<IRpcSecurityPolicyAware>());
-    expect(
-      (transport as IRpcSecurityPolicyAware)
-          .securityPolicy
-          .maxMessageLengthBytes,
-      4321,
-    );
+    expect(transport.securityPolicy.maxMessageLengthBytes, 4321);
   });
 
   test('CONTROL: an ordinary response still round-trips', () async {

@@ -66,12 +66,8 @@ void main() {
       );
       addTearDown(transport.close);
 
-      for (final status in [
-        await transport.health(),
-        await transport.reconnect(),
-      ]) {
-        expect(status.details['baseUrl'], 'http://127.0.0.1:1/base');
-      }
+      final status = await transport.health();
+      expect(status.details['baseUrl'], 'http://127.0.0.1:1/base');
     },
   );
 }

@@ -894,7 +894,7 @@ void main() {
   });
 }
 
-class _ReusableIdTestTransport implements IRpcTransport {
+class _ReusableIdTestTransport extends IRpcTransport {
   final StreamController<RpcTransportMessage> _incomingController =
       StreamController<RpcTransportMessage>.broadcast();
 
@@ -961,6 +961,15 @@ class _ReusableIdTestTransport implements IRpcTransport {
   }
 
   @override
+  int get lastIssuedStreamId => _nextId - 2;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    if (streamId < _nextId) return;
+    _nextId = streamId.isOdd ? streamId + 2 : streamId + 1;
+  }
+
+  @override
   Future<void> sendMetadata(
     int streamId,
     RpcMetadata metadata, {
@@ -986,11 +995,6 @@ class _ReusableIdTestTransport implements IRpcTransport {
 
   @override
   Future<RpcHealthStatus> health() async {
-    return RpcHealthStatus.healthy(component: runtimeType.toString());
-  }
-
-  @override
-  Future<RpcHealthStatus> reconnect() async {
     return RpcHealthStatus.healthy(component: runtimeType.toString());
   }
 

@@ -5,7 +5,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http2/http2.dart' as http2;
-import 'package:meta/meta.dart';
 import 'package:rpc_dart/transport.dart';
 import 'package:universal_io/io.dart';
 
@@ -18,56 +17,43 @@ part 'rpc_http2_caller_transport_flow.dart';
 part 'rpc_http2_caller_transport_inbound.dart';
 part 'rpc_http2_caller_transport_lifecycle.dart';
 
-/// Whether the peer has told us this connection is going away, and which
-/// connection's socket has ended.
+/// Whether the peer has told us the connection is going away, and whether its
+/// socket has ended.
 ///
 /// A mutable holder rather than a field because the connection is built by a
-/// static factory closure BEFORE the transport instance exists, and the same
-/// closure is re-run by [RpcHttp2CallerTransport.reconnect]. One holder per
-/// transport, shared with every connection it builds, reset on attach.
+/// static factory closure BEFORE the transport instance exists.
 class _DrainSignal {
   bool goawayReceived = false;
 
-  /// How many connections the factory has built. The one just built is the
-  /// one being attached, so its number is this count.
+  /// How many connections the factory has built; the guard counts them.
   int built = 0;
 
   /// Called with a connection's number when its socket ends. Set by the
-  /// transport; a number lets it ignore a connection it has already replaced.
+  /// transport.
   void Function(int connection)? onSocketEnded;
 }
 
 /// Client-side HTTP/2 transport: one [IRpcTransport] over one connection,
 /// multiplexing outgoing RPC calls on the gRPC-compatible wire format.
 ///
-/// Declares [IRpcSecurityPolicyAware] because the endpoint layers find the
-/// policy with an `is` check: a transport that does not declare it silently
-/// gets `const RpcSecurityPolicy()` instead of the configured one.
-class RpcHttp2CallerTransport
-    implements
-        IRpcReconnectableTransport,
-        IRpcStreamReset,
-        IRpcSecurityPolicyAware,
-        IRpcConnectionLossReporting,
-        IRpcTransportReadiness {
+/// When the connection is lost the transport closes, failing what was in
+/// flight with UNAVAILABLE. For reconnects, give `RpcClientConnection` a
+/// factory that calls [connect] or [secureConnect].
+class RpcHttp2CallerTransport extends IRpcTransport {
   @override
   bool get isClient => true;
 
-  /// Completes when the peer's first SETTINGS frame has arrived on the current
-  /// connection, the point at which it is known to speak HTTP/2; fails if that
-  /// connection ends first. Until then [health] reads degraded, and
-  /// `RpcClientConnection` does not report Online.
+  /// Completes when the peer's first SETTINGS frame has arrived, the point at
+  /// which it is known to speak HTTP/2; fails if the connection ends first.
+  /// Until then [health] reads degraded, and `RpcClientConnection` does not
+  /// report Online.
   @override
   Future<void> get ready => _ready.future;
-  Completer<void> _ready = Completer<void>();
+  final Completer<void> _ready = Completer<void>();
 
-  /// See [IRpcStreamIdSequence]. `_nextStreamId` is the id the NEXT call will
-  /// get, so the last issued one is two behind it — and -1 before any call,
-  /// which is exactly "nothing issued yet".
-  ///
-  /// This transport fixes its own `reconnect()` by simply not resetting the
-  /// counter; the capability is for `RpcClientConnection`, which does not
-  /// reconnect a transport but builds a NEW one and so cannot rely on that.
+  /// See [IRpcTransport.lastIssuedStreamId]. `_nextStreamId` is the id the NEXT
+  /// call will get, so the last issued one is two behind it — and -1 before
+  /// any call, which is exactly "nothing issued yet".
   @override
   int get lastIssuedStreamId => _nextStreamId - 2;
 
@@ -82,17 +68,7 @@ class RpcHttp2CallerTransport
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
 
-  http2.ClientTransportConnection _connection;
-
-  /// Rebuilds the connection on [reconnect], or null when it cannot be rebuilt.
-  ///
-  /// **Null, not a closure that throws.** `viaSocket` used to pass
-  /// `() => throw ...('does not support reconnect')`, so the only way to learn
-  /// a fact fixed at CONSTRUCTION was to call it — and [reconnect] calls it
-  /// last, after cancelling every subscription, disposing every pump and
-  /// clearing six per-stream maps. A working connection was destroyed to
-  /// discover it could not be replaced.
-  final Future<http2.ClientTransportConnection> Function()? _connectionFactory;
+  final http2.ClientTransportConnection _connection;
 
   final BufferedBroadcastController<RpcTransportMessage> _messageController =
       BufferedBroadcastController<RpcTransportMessage>(
@@ -197,14 +173,9 @@ class RpcHttp2CallerTransport
   /// Set ONLY by [close]; permanent.
   bool _isClosed = false;
 
-  /// No live connection, but recovery is expected.
-  ///
-  /// Distinct from [_isClosed], which is terminal. Conflate them and a failed
-  /// [reconnect] becomes permanent: [health] reads the flag as "reconnect
-  /// required" and reports DEGRADED, while the send paths and [reconnect]'s own
-  /// post-factory re-check read it as "the caller closed us" — so the transport
-  /// tells you to reconnect and then refuses every attempt.
-  bool _disconnected = false;
+  /// The connection ended under this transport (its socket closed, or
+  /// keepalive found the path dead), so [close] must not write a GOAWAY to it.
+  bool _connectionGone = false;
 
   /// How often to PING an otherwise idle connection, and the ONLY way this
   /// transport detects a HALF-OPEN path.
@@ -225,30 +196,17 @@ class RpcHttp2CallerTransport
   /// Defaults to [_pingInterval].
   final Duration? _pingTimeout;
 
-  /// Keepalive timer for the CURRENT connection. Reconnect replaces the
-  /// connection, so it must also replace this.
+  /// Keepalive timer for the connection.
   Timer? _keepalive;
 
-  /// Refuses work the transport genuinely cannot do, naming which state it is
-  /// in, because the two are not recoverable in the same way.
+  /// Refuses work on a closed transport.
+  ///
+  /// UNAVAILABLE when the connection went away under it, as for every other
+  /// dead peer; FAILED_PRECONDITION only when this side closed it.
   void _ensureUsable() {
-    if (_isClosed) throw RpcClosedException('Transport');
-    if (_disconnected) {
-      // Same type as the websocket sibling, deliberately, and the type now
-      // carries the split both machines used to get wrong: UNAVAILABLE while a
-      // reconnect is IN FLIGHT, FAILED_PRECONDITION once it has failed. This
-      // transport answered 14 in the first case only by accident — it discards
-      // the connection before the await, so the send path threw before any
-      // guard ran — and 9 from here once the flag was set.
-      // Read off the SINGLE-FLIGHT future, not a second flag: that field is
-      // already "an attempt is in flight", it is cleared by one `whenComplete`
-      // rather than at each of reconnect()'s exits, and a second copy would be
-      // one more thing to leave set after a failure.
-      throw RpcNoConnectionException(
-        'Transport',
-        reconnecting: _reconnecting != null,
-      );
-    }
+    if (!_isClosed) return;
+    if (_connectionGone) throw RpcClosedException.byPeer('Transport');
+    throw RpcClosedException('Transport');
   }
 
   final LogScope? _logger;
@@ -257,8 +215,6 @@ class RpcHttp2CallerTransport
 
   RpcHttp2CallerTransport._({
     required http2.ClientTransportConnection connection,
-    required Future<http2.ClientTransportConnection> Function()?
-    connectionFactory,
     required String host,
     required int port,
     required String scheme,
@@ -268,7 +224,6 @@ class RpcHttp2CallerTransport
     Duration? pingTimeout,
     _DrainSignal? drainSignal,
   }) : _connection = connection,
-       _connectionFactory = connectionFactory,
        _host = host,
        _port = port,
        _scheme = scheme,
@@ -285,16 +240,6 @@ class RpcHttp2CallerTransport
 
   /// Which of the factory's connections [_connection] is; see [_DrainSignal].
   int _connectionNumber = 0;
-
-  /// The last connection whose loss was reported, so it is reported once.
-  int _lostConnection = -1;
-
-  /// One event per connection lost while this transport stays open for
-  /// [reconnect].
-  @override
-  Stream<Object?> get connectionLost => _lostCtl.stream;
-  final StreamController<Object?> _lostCtl =
-      StreamController<Object?>.broadcast();
 
   /// Set once the peer sends GOAWAY on the current connection.
   ///
@@ -365,15 +310,11 @@ class RpcHttp2CallerTransport
       );
     }
 
-    Future<http2.ClientTransportConnection> createConnection() =>
-        _asStatus(open);
-
-    final connection = await createConnection();
+    final connection = await _asStatus(open);
     logger?.internal('HTTP/2 connection established');
 
     return RpcHttp2CallerTransport._(
       connection: connection,
-      connectionFactory: createConnection,
       host: host,
       port: port,
       scheme: 'https',
@@ -390,15 +331,9 @@ class RpcHttp2CallerTransport
   /// Use this when you need full control over the underlying connection — for
   /// example a TLS [SecureSocket] with custom certificate validation /
   /// pinning, or a socket obtained through a custom tunnel. The caller owns the
-  /// socket lifecycle; [reconnect] is not supported (the factory cannot rebuild
-  /// the original socket), so a closed transport stays closed.
+  /// socket lifecycle.
   ///
   /// [scheme] should be `https` for TLS sockets and `http` otherwise.
-  ///
-  /// [connectionFactory] is for TESTS that need a reconnect attempt to FAIL
-  /// over a connection that stays healthy — the two are different events and
-  /// `reconnect` answers them differently. Production callers leave it null,
-  /// which is what makes the refusal free of side effects.
   factory RpcHttp2CallerTransport.viaSocket(
     Socket socket, {
     required String host,
@@ -408,8 +343,6 @@ class RpcHttp2CallerTransport
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration? pingInterval,
     Duration? pingTimeout,
-    @visibleForTesting
-    Future<http2.ClientTransportConnection> Function()? connectionFactory,
   }) {
     final drainSignal = _DrainSignal();
     final connection = _guardedConnection(
@@ -423,10 +356,6 @@ class RpcHttp2CallerTransport
     );
     return RpcHttp2CallerTransport._(
       connection: connection,
-      // NULL, not a throwing closure: the originating socket cannot be
-      // recreated, and that is known here rather than discovered by reconnect()
-      // after it has already torn the live connection down.
-      connectionFactory: connectionFactory,
       host: host,
       port: port,
       scheme: scheme,
@@ -490,15 +419,11 @@ class RpcHttp2CallerTransport
       );
     }
 
-    Future<http2.ClientTransportConnection> createConnection() =>
-        _asStatus(open);
-
-    final connection = await createConnection();
+    final connection = await _asStatus(open);
     logger?.internal('HTTP/2 connection established');
 
     return RpcHttp2CallerTransport._(
       connection: connection,
-      connectionFactory: createConnection,
       host: host,
       port: port,
       scheme: 'http',
@@ -533,8 +458,8 @@ class RpcHttp2CallerTransport
   /// has returned; see `_guardedConnection`.
   static const Duration _connectTimeout = Duration(seconds: 30);
 
-  /// Opens a connection for [connect], [secureConnect] and every reconnect,
-  /// failing with a status as the http and websocket callers do: an
+  /// Opens a connection for [connect] and [secureConnect], failing with a
+  /// status as the http and websocket callers do: an
   /// [RpcException] or an [Error] as it is, any other [Exception] as
   /// UNAVAILABLE, so a `shouldReconnect` has one type to branch on.
   static Future<http2.ClientTransportConnection> _asStatus(
@@ -699,8 +624,9 @@ class RpcHttp2CallerTransport
     // with a max-connection-age sends it on a schedule.
     //
     // This makes the failure CLASSIFIABLE; it does not by itself make a retry
-    // succeed on a dead connection -- that needs reconnect(). Both checks are
-    // here because isOpen can go false between the test and the call.
+    // succeed on a dead connection -- that needs a new transport, which
+    // RpcClientConnection builds. Both checks are here because isOpen can go
+    // false between the test and the call.
     if (!_connection.isOpen) {
       // `ClientTransportConnection.isOpen` is
       //   !isFinishing && !isTerminated && canOpenStream
@@ -952,20 +878,12 @@ class RpcHttp2CallerTransport
   Future<RpcHealthStatus> health() async {
     final details = _buildHealthDetails();
 
-    // close() is terminal; a failed reconnect is not, and is reported below as
-    // degraded, so a supervisor can act on it.
     if (_messageController.isClosed || _isClosed) {
       return RpcHealthStatus.closed(
         component: runtimeType.toString(),
-        message: 'HTTP/2 transport closed',
-        details: details,
-      );
-    }
-
-    if (_disconnected) {
-      return RpcHealthStatus.degraded(
-        component: runtimeType.toString(),
-        message: 'HTTP/2 connection is down. Reconnect is required.',
+        message: _connectionGone
+            ? 'HTTP/2 connection to $_host:$_port was lost; transport closed'
+            : 'HTTP/2 transport closed',
         details: details,
       );
     }
@@ -986,24 +904,13 @@ class RpcHttp2CallerTransport
       );
     }
 
-    // Ask the connection, do not assume. Nothing sets `_disconnected` when the
-    // PEER dies on its own -- that path runs no code here at all -- so health()
-    // reported "transport ready" with the server gone. A supervisor that polls
-    // health to decide whether to reconnect would never reconnect.
+    // Ask the connection, do not assume: a connection that is finishing or
+    // terminated without its socket ending yet reaches no code here.
     //
     // Note this is the REPORT, not a refusal: a dead or drained connection
-    // answers UNAVAILABLE from the send path and stays retryable, which two
-    // tests pin deliberately ("a drained connection is retried as the retry doc
-    // promises", "a dead connection is UNAVAILABLE (reconnect), not
-    // saturated"). `_ensureUsable` is NOT wired to this on purpose — routing it
-    // here turns both of those retries into a FAILED_PRECONDITION nobody
-    // retries.
-    //
-    // Measured: server stopped, then
-    //   isClosed        : false
-    //   health          : HTTP/2 transport ready   <-- the peer was gone
-    //   call after death: caught StateError
-    // The call already failed honestly; only the report was wrong.
+    // answers UNAVAILABLE from the send path and stays retryable.
+    // `_ensureUsable` is NOT wired to this on purpose -- routing it here turns
+    // those calls into a FAILED_PRECONDITION nobody retries.
     if (!_connection.isOpen) {
       // Not-open with streams in flight is SATURATION, not death: the
       // connection is at the peer's MAX_CONCURRENT_STREAMS and is actively
@@ -1016,8 +923,8 @@ class RpcHttp2CallerTransport
         return RpcHealthStatus.degraded(
           component: runtimeType.toString(),
           message:
-              'HTTP/2 connection is draining (peer sent GOAWAY). Reconnect is '
-              'required; ${_activeStreams.length} call(s) still finishing.',
+              'HTTP/2 connection is draining (peer sent GOAWAY); '
+              '${_activeStreams.length} call(s) still finishing.',
           details: details,
         );
       }
@@ -1032,7 +939,7 @@ class RpcHttp2CallerTransport
       }
       return RpcHealthStatus.degraded(
         component: runtimeType.toString(),
-        message: 'HTTP/2 connection is down. Reconnect is required.',
+        message: 'HTTP/2 connection is down',
         details: details,
       );
     }
@@ -1043,37 +950,6 @@ class RpcHttp2CallerTransport
       details: details,
     );
   }
-
-  @override
-  Future<RpcHealthStatus> reconnect() {
-    // SINGLE-FLIGHT, for the same reason as the websocket caller (473789b9).
-    // The check-after-await below handles close() landing mid-reconnect, but
-    // nothing stopped a SECOND reconnect interleaving: both discarded the
-    // connection, both awaited the factory, and both assigned `_connection`,
-    // so the second overwrote the first -- whose connection was live and no
-    // longer referenced by anything that could close it.
-    //
-    // Measured through the stalling CONNECT proxy (400ms), counting
-    // connections the server saw, after close():
-    //
-    //   one reconnect (control) : opened=2 closed=2 live=0
-    //   two concurrent          : opened=3 closed=2 live=1
-    //   three concurrent        : opened=4 closed=2 live=2
-    //
-    // One orphan per extra attempt, and on HTTP/2 each orphan is a whole
-    // connection with its own streams and subscriptions.
-    //
-    // Joining rather than refusing: every caller wants the same thing, so they
-    // all get the outcome of the attempt that ran.
-    final inFlight = _reconnecting;
-    if (inFlight != null) return inFlight;
-    final attempt = _reconnectOnce().whenComplete(() => _reconnecting = null);
-    _reconnecting = attempt;
-    return attempt;
-  }
-
-  /// The attempt currently in flight, so concurrent callers join it.
-  Future<RpcHealthStatus>? _reconnecting;
 
   @override
   Future<void> close() async {
@@ -1148,7 +1024,13 @@ class RpcHttp2CallerTransport
         _logger?.warning('Error closing the message controller: $e');
       }
     }
-    if (!_lostCtl.isClosed) await _lostCtl.close();
+
+    // A connection that is already gone was terminated by [_connectionLost];
+    // a GOAWAY written to it throws from package:http2 into the root zone.
+    if (_connectionGone) {
+      _logger?.info('HTTP/2 transport closed');
+      return;
+    }
 
     // BOUNDED, then forceful -- see [kGracefulCloseTimeout], which the
     // responder transport shares.

@@ -101,8 +101,10 @@ final class _ControllableTransport extends IRpcTransport {
       RpcHealthStatus.healthy(component: 'ControllableTransport');
 
   @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.healthy(component: 'ControllableTransport');
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 }
 
 void main() {

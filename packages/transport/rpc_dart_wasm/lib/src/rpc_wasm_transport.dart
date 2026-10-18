@@ -9,44 +9,22 @@ import 'rpc_wasm_bridge.dart';
 /// Full [IRpcTransport] over a generic byte-oriented WASM runtime bridge.
 ///
 /// The transport is runtime-agnostic. A Flutter plugin, JS host, or native
-/// WASM embedding implements [RpcWasmBridge]; this class adapts it to
-/// [IRpcChannel] and reuses rpc_dart's existing channel frame transport.
+/// WASM embedding implements [RpcWasmBridge], which is an [IRpcChannel]; this
+/// reuses rpc_dart's existing channel frame transport over it.
 abstract final class RpcWasmTransport {
   /// Creates a transport over [bridge].
   ///
   /// [isClient] follows the normal rpc_dart stream-ID convention: client
   /// transports use odd IDs, server transports use even IDs.
-  /// Returns [IRpcReconnectableTransport], not [IRpcTransport]: the object
-  /// carries a stream-id cursor, and narrowing the declared type would erase
-  /// that: `RpcClientConnection`'s factory would refuse this transport at
-  /// compile time while it works perfectly at run time.
-  static IRpcReconnectableTransport fromBridge({
+  static RpcChannelTransport fromBridge({
     required RpcWasmBridge bridge,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
     return RpcChannelTransport.fromChannel(
-      channel: _RpcWasmChannel(bridge),
+      channel: bridge,
       isClient: isClient,
       policy: policy,
     );
   }
-}
-
-class _RpcWasmChannel implements IRpcChannel {
-  final RpcWasmBridge _bridge;
-
-  _RpcWasmChannel(this._bridge);
-
-  @override
-  bool get isClosed => _bridge.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _bridge.incoming;
-
-  @override
-  Future<void> send(Uint8List data) => _bridge.send(data);
-
-  @override
-  Future<void> close() => _bridge.close();
 }

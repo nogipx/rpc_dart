@@ -15,8 +15,7 @@ typedef RpcIsolateEntrypoint =
 /// fails with [UnsupportedError] -- through its future, as the real
 /// implementations fail, so a `.catchError` sees it.
 abstract interface class RpcIsolateTransport {
-  static Future<({IRpcReconnectableTransport transport, void Function() kill})>
-  spawn({
+  static Future<({IRpcTransport transport, void Function() kill})> spawn({
     required RpcIsolateEntrypoint entrypoint,
     Map<String, dynamic>? customParams,
     String isolateId = 'default',

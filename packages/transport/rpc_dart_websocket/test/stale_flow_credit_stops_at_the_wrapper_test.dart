@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Every operation the reconnecting wrapper forwards takes a bare stream id and
-// resolves it on whatever inner transport is current, so an id from the previous
-// connection acts on the new one. The four send paths are guarded against that;
-// the flow-credit pair was not, and a consumer still draining the old
-// connection's buffers credits the new one — granting a window nothing consumed
-// and crediting a connection pool nothing drew from.
+// Every operation RpcClientConnection's transport forwards takes a bare stream
+// id and resolves it on whatever websocket transport is current, so an id from
+// the previous connection would act on the new one. The send paths and the
+// flow-credit pair are both guarded against that: otherwise a consumer still
+// draining the old connection's buffers credits the new one, granting a window
+// nothing consumed.
 //
-// Witnessed at the WIRE, by counting frames the wrapper writes to the new
+// Witnessed at the WIRE, by counting frames the connection writes to the new
 // socket: a returned credit above half the window is exactly one grant frame, so
 // "did the stale call reach the new connection" is a frame count rather than an
 // inference.
@@ -45,23 +45,46 @@ Future<void> _settle() async {
   await Future<void>.delayed(const Duration(milliseconds: 50));
 }
 
+/// The next time [connection] reports Online. Subscribed before the caller
+/// starts the connect, so the event cannot be missed.
+Future<void> _nextOnline(RpcClientConnection connection) => connection.state
+    .firstWhere((s) => s is RpcClientOnline)
+    .timeout(const Duration(seconds: 10));
+
+/// A connection whose attempts use [sockets] in order, already Online on the
+/// first one. Disposed at teardown.
+Future<RpcClientConnection> _connect(List<WebSocketChannel> sockets) async {
+  var attempt = 0;
+  final connection = RpcClientConnection(
+    transportFactory: () async =>
+        RpcWebSocketCallerTransport(sockets[attempt++], policy: _policy),
+  );
+  addTearDown(() => connection.dispose().catchError((Object _) {}));
+  final online = _nextOnline(connection);
+  connection.connect();
+  await online;
+  return connection;
+}
+
+Future<void> _reconnect(RpcClientConnection connection) async {
+  final online = _nextOnline(connection);
+  connection.forceReconnect();
+  await online;
+}
+
 void main() {
   test(
     'WITNESS: a credit returned for a stale id puts nothing on the new socket',
     () async {
       final one = _pair();
       final two = _pair();
-      final client = RpcWebSocketCallerTransport(
-        one.client,
-        policy: _policy,
-        reconnectFactory: () async => two.client,
-      );
+      final connection = await _connect([one.client, two.client]);
+      final client = connection.transport;
       final server1 = RpcWebSocketResponderTransport(
         one.server,
         policy: _policy,
       );
       addTearDown(() async {
-        await client.close().catchError((Object _) {});
         await server1.close().catchError((Object _) {});
       });
 
@@ -74,7 +97,7 @@ void main() {
       );
       await _settle();
 
-      await client.reconnect();
+      await _reconnect(connection);
       // A peer really is there on the new socket; it just has not reused the
       // number yet. Without one the counted sink has no reader and teardown
       // never finishes.
@@ -88,8 +111,8 @@ void main() {
       await _settle();
 
       final before = two.frames;
-      client.deferFlowCredit(staleId);
-      client.returnFlowCredit(staleId, _window);
+      client.flowCredit!.deferFlowCredit(staleId);
+      client.flowCredit!.returnFlowCredit(staleId, _window);
       await _settle();
 
       expect(
@@ -109,13 +132,13 @@ void main() {
     'CONTROL: a credit for a live id still grants',
     () async {
       final one = _pair();
-      final client = RpcWebSocketCallerTransport(one.client, policy: _policy);
+      final connection = await _connect([one.client]);
+      final client = connection.transport;
       final server = RpcWebSocketResponderTransport(
         one.server,
         policy: _policy,
       );
       addTearDown(() async {
-        await client.close().catchError((Object _) {});
         await server.close().catchError((Object _) {});
       });
 
@@ -127,7 +150,7 @@ void main() {
       await _settle();
 
       final before = one.frames;
-      client.returnFlowCredit(liveId, _window);
+      client.flowCredit!.returnFlowCredit(liveId, _window);
       await _settle();
 
       expect(
@@ -141,24 +164,20 @@ void main() {
     timeout: const Timeout(Duration(seconds: 30)),
   );
 
-  // GUARD: the four send paths must keep their own guard. It is the parity this
-  // fix restores, and a change that loosened it would not show up above.
+  // GUARD: the send paths must keep their own guard, and a change that loosened
+  // it would not show up above.
   test(
     'GUARD: a send for a stale id is still dropped',
     () async {
       final one = _pair();
       final two = _pair();
-      final client = RpcWebSocketCallerTransport(
-        one.client,
-        policy: _policy,
-        reconnectFactory: () async => two.client,
-      );
+      final connection = await _connect([one.client, two.client]);
+      final client = connection.transport;
       final server1 = RpcWebSocketResponderTransport(
         one.server,
         policy: _policy,
       );
       addTearDown(() async {
-        await client.close().catchError((Object _) {});
         await server1.close().catchError((Object _) {});
       });
 
@@ -169,7 +188,7 @@ void main() {
       );
       await _settle();
 
-      await client.reconnect();
+      await _reconnect(connection);
       final server2 = RpcWebSocketResponderTransport(
         two.server,
         policy: _policy,

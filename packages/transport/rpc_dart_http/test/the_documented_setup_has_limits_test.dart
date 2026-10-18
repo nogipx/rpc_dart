@@ -3,15 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 // `RpcHttpResponderTransport`'s own checks — the request body, the metadata
-// block, the method path, concurrent requests — all sit behind
-// `if (policy != null)`, and the class's example constructs it with no policy
-// before handing the handler to `shelf_io.serve`. So the documented setup is the
-// one with no limits, while `RpcHttpServer` three files over defaults the same
-// parameter to `const RpcSecurityPolicy()`.
-//
-// `securityPolicy: null` still means exactly that, and is pinned here too: an
-// opt-out that quietly stopped working would be the same defect in the other
-// direction.
+// block, the method path, concurrent requests — come from its
+// `securityPolicy`, which defaults to `const RpcSecurityPolicy()`. The class's
+// example constructs it with no policy before handing the handler to
+// `shelf_io.serve`, so the documented setup must already have those limits,
+// the same default `RpcHttpServer` uses.
 
 @TestOn('vm')
 library;
@@ -108,21 +104,8 @@ void main() {
     );
   });
 
-  test('GUARD securityPolicy: null is still a real opt-out', () async {
-    expect(
-      await _uploadThrough(
-        RpcHttpResponderTransport(securityPolicy: null),
-        payloadMib: 20,
-      ),
-      200,
-      reason:
-          'null disables this transport own limits; the pipeline still '
-          'refuses the message, which is why this is a 200',
-    );
-  });
-
-  test('the other checks came on with it', () async {
-    // The body is one of four things `if (policy != null)` guarded. The metadata
+  test('the other checks apply by default too', () async {
+    // The body is one of four checks the default policy turns on. The metadata
     // bound is the cheapest of the rest to drive: `maxMetadataBytes` is 64 KiB.
     final oversized = {for (var i = 0; i < 16; i++) 'x-pad-$i': 'p' * 6 * 1024};
 
@@ -133,15 +116,6 @@ void main() {
         extraHeaders: oversized,
       ),
       400,
-    );
-    expect(
-      await _uploadThrough(
-        RpcHttpResponderTransport(securityPolicy: null),
-        payloadMib: 1,
-        extraHeaders: oversized,
-      ),
-      200,
-      reason: 'the same block with the checks off',
     );
   });
 

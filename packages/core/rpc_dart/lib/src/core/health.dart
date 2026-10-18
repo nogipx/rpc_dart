@@ -27,7 +27,7 @@ enum RpcHealthLevel {
 
 /// Snapshot of a component's health.
 ///
-/// Used as the result of `health()` and `reconnect()`.
+/// Used as the result of `health()`.
 class RpcHealthStatus {
   /// Component name for which the status was produced.
   final String component;

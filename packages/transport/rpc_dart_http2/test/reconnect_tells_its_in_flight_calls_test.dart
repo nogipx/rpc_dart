@@ -2,21 +2,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `reconnect()` terminated the connection and then cancelled each stream's
-// subscription. `terminate()` delivers its per-stream errors ASYNCHRONOUSLY, so
-// the FIRST subscription was gone before its error arrived and its consumer waited
-// out its deadline with nothing. Measured with three in-flight server streams:
+// When the connection under RpcHttp2CallerTransport is lost, every call in
+// flight on it must be told UNAVAILABLE -- retryable, and at once -- rather
+// than wait out its deadline or end clean as if it had completed. The
+// transport then closes itself, which is how a reconnecting layer above learns
+// of the drop.
 //
-//     call 0  STILL WAITING
-//     call 1  error after 10ms: status 14
-//     call 2  error after 11ms: status 14
-//     maps after: 1 stream controller left behind
-//
-// And before any of that, the loop iterated the LIVE `_streamSubscriptions` map
-// across an `await`, while each ending removed its own entry -- so with two or
-// more streams in flight reconnect() threw
-// `Concurrent modification during iteration` and died half-torn-down, with every
-// map cleared and no new connection.
+// The calls are failed before the transport closes: close() cancels each
+// stream's subscription, and package:http2 delivers its per-stream errors
+// asynchronously, so a stream whose error had not arrived by then would end
+// clean. Three server streams are in flight, so an ordering that loses even
+// one error shows.
 @TestOn('vm')
 library;
 
@@ -31,10 +27,12 @@ import 'package:test/test.dart';
 final _codec = RpcCodec(RpcString.fromJson);
 
 /// Sends one item per stream and then holds it open forever, so every call is
-/// genuinely in flight when the teardown lands.
-Future<ServerSocket> _dripServer() async {
+/// genuinely in flight when the teardown lands. [accepted] collects the
+/// server side of every connection, so a test can drop it.
+Future<ServerSocket> _dripServer(List<Socket> accepted) async {
   final socket = await ServerSocket.bind('127.0.0.1', 0);
   socket.listen((client) {
+    accepted.add(client);
     final conn = http2.ServerTransportConnection.viaSocket(client);
     conn.incomingStreams.listen((stream) {
       stream.incomingMessages.listen((_) {}, onError: (Object _) {});
@@ -50,12 +48,15 @@ Future<ServerSocket> _dripServer() async {
   return socket;
 }
 
-/// Three in-flight server streams, then [tearDown]. Returns what each consumer was
-/// told, and the transport's leftover stream-controller count.
-Future<(List<String>, Object?, Object?)> _threeInFlightThen(
-  Future<void> Function(RpcHttp2CallerTransport t) tearDown,
+/// Three in-flight server streams, then [tearDown]. Returns what each consumer
+/// was told, what [tearDown] threw, the transport's leftover stream-controller
+/// count, and whether the transport ended up closed.
+Future<(List<String>, Object?, Object?, bool)> _threeInFlightThen(
+  Future<void> Function(RpcHttp2CallerTransport t, List<Socket> accepted)
+  tearDown,
 ) async {
-  final socket = await _dripServer();
+  final accepted = <Socket>[];
+  final socket = await _dripServer(accepted);
   final transport = await RpcHttp2CallerTransport.connect(
     host: '127.0.0.1',
     port: socket.port,
@@ -64,6 +65,9 @@ Future<(List<String>, Object?, Object?)> _threeInFlightThen(
   addTearDown(() async {
     await caller.close().catchError((Object _) {});
     await transport.close().catchError((Object _) {});
+    for (final s in accepted) {
+      s.destroy();
+    }
     await socket.close();
   });
 
@@ -96,7 +100,7 @@ Future<(List<String>, Object?, Object?)> _threeInFlightThen(
 
   Object? threw;
   try {
-    await tearDown(transport);
+    await tearDown(transport, accepted);
   } catch (e) {
     threw = e;
   }
@@ -108,48 +112,51 @@ Future<(List<String>, Object?, Object?)> _threeInFlightThen(
     [for (var i = 0; i < 3; i++) outcome[i]!],
     threw,
     (await transport.health()).details['streamControllers'],
+    transport.isClosed,
   );
 }
 
 void main() {
-  // WITNESS. Before: reconnect() THREW Concurrent modification, and once that was
-  // fixed, call 0 read STILL WAITING.
-  test('reconnect tells every in-flight call why it ended', () async {
-    final (outcomes, threw, controllers) = await _threeInFlightThen(
-      (t) => t.reconnect(),
-    );
+  test('a lost connection tells every in-flight call why it ended', () async {
+    final (outcomes, threw, controllers, closed) = await _threeInFlightThen((
+      _,
+      accepted,
+    ) async {
+      expect(accepted, isNotEmpty, reason: 'the client never connected');
+      for (final s in accepted) {
+        s.destroy();
+      }
+    });
 
-    expect(
-      threw,
-      isNull,
-      reason: 'the subscription loop iterated a map its own awaits mutate',
-    );
+    expect(threw, isNull);
     expect(
       outcomes,
       everyElement('status ${RpcStatus.unavailable}'),
       reason:
-          'a call in flight at a reconnect must fail fast and retryably, '
-          'not wait out its deadline for an error that can no longer arrive',
+          'a call in flight when its connection is lost must fail fast and '
+          'retryably, not wait out its deadline or end as if it completed',
     );
-    // The leftover entry is what `closeAll` is needed for whichever way the race
-    // above goes: one controller stayed behind per stranded call.
     expect(
       controllers,
       0,
       reason:
-          'a stream controller per reconnect is a leak over the life of the '
-          'transport, and the only side that can see it is this one',
+          'a stream controller left per lost connection is a leak, and the '
+          'only side that can see it is this one',
+    );
+    expect(
+      closed,
+      isTrue,
+      reason: 'a transport whose connection is lost closes itself',
     );
   });
 
-  // CONTROL. `close()` was measured and is NOT an instance: its in-flight calls
-  // already got errors from the connection teardown. It is here because round 571
-  // made that answer order-dependent -- status 14 for the first stream and 13 for
-  // the rest -- which `_isClosed` in the dying test settles.
   test('CONTROL: close() tells them all the same thing', () async {
-    final (outcomes, threw, _) = await _threeInFlightThen((t) => t.close());
+    final (outcomes, threw, _, closed) = await _threeInFlightThen(
+      (t, _) => t.close(),
+    );
 
     expect(threw, isNull);
+    expect(closed, isTrue);
     expect(
       outcomes,
       everyElement('status ${RpcStatus.unavailable}'),

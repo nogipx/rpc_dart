@@ -3,23 +3,16 @@
 // SPDX-License-Identifier: MIT
 
 // RpcHttp2Server.transportWrapper lets an application substitute the transport
-// the endpoint sees. The endpoint layers find optional capabilities with `is`
-// checks and fall back to a default when the check fails -- silently -- so the
-// obvious decorator (implement IRpcTransport, forward every method) removed
-// them, and the responder pipeline read `const RpcSecurityPolicy()` instead of
-// the policy the server was configured with.
+// the endpoint sees, and the server uses what it returns as is. The endpoint
+// layers read the security policy and the flow-control credit off that
+// transport, so a decorator keeps them only by forwarding them -- and a
+// decorator that `implements IRpcTransport` must, because every member is
+// abstract to it and a forgotten one does not compile.
 //
-// The same hole c511e3fc closed inside the library, reopened from outside, with
-// nothing to see: the wrapper compiles and every call works.
-//
-// Measured against `maxActiveStreams: 3`, a peer opening 60 concurrent streams:
-//
-//   no wrapper       3 / 60 admitted
-//   plain wrapper   60 / 60      ->   3 / 60
-//
-// A decorator that wants to CHANGE the policy declares IRpcSecurityPolicyAware
-// itself, which is the only way to express that intent -- so one that declares
-// nothing is an oversight, and restoring is what its author meant.
+// These cases run a forwarding decorator against a server capped at
+// `maxActiveStreams: 3`, with a peer opening 60 concurrent streams, and against
+// a deaf client-stream handler behind a 4 MiB window. A decorator that
+// overrides the policy instead of forwarding it gets its own.
 
 import 'dart:async';
 import 'dart:io';
@@ -48,8 +41,8 @@ final class _Contract extends RpcResponderContract {
   }
 }
 
-/// Forwards every [IRpcTransport] member and declares nothing else -- what a
-/// metrics or auth decorator looks like when written the obvious way.
+/// Forwards every [IRpcTransport] member -- what a metrics or auth decorator
+/// looks like when written the obvious way.
 class _CountingTransport implements IRpcTransport {
   _CountingTransport(this.inner);
   final IRpcTransport inner;
@@ -87,15 +80,30 @@ class _CountingTransport implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => inner.reconnect();
-  @override
   Future<void> close() => inner.close();
+  @override
+  int get lastIssuedStreamId => inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      inner.resumeStreamIdsAfter(streamId);
+  @override
+  RpcSecurityPolicy get securityPolicy => inner.securityPolicy;
+  @override
+  Future<void> get ready => inner.ready;
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      inner.resetStream(streamId, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
 }
 
-/// A decorator that deliberately declares its own, deliberately different,
-/// policy. This one must be left exactly as it is.
-class _OpinionatedTransport extends _CountingTransport
-    implements IRpcSecurityPolicyAware {
+/// A decorator that deliberately declares its own, different, policy. The
+/// server must use it as it is.
+class _OpinionatedTransport extends _CountingTransport {
   _OpinionatedTransport(super.inner);
 
   @override
@@ -103,32 +111,29 @@ class _OpinionatedTransport extends _CountingTransport
       const RpcSecurityPolicy(maxActiveStreams: 11);
 }
 
-/// Declares the flow-control capability and forwards it -- the well-behaved
-/// shape, and the one that would break if the DISCHARGE were doubled.
-class _ForwardingFlowTransport extends _CountingTransport
-    implements IRpcFlowControlled {
-  _ForwardingFlowTransport(super.inner);
+/// Forwards each flow-credit call to the inner transport's credit.
+final class _ForwardingFlowCredit implements IRpcFlowCredit {
+  _ForwardingFlowCredit(this.inner);
+  final IRpcFlowCredit inner;
 
   @override
-  void deferFlowCredit(int streamId) =>
-      (inner as IRpcFlowControlled).deferFlowCredit(streamId);
+  void deferFlowCredit(int streamId) => inner.deferFlowCredit(streamId);
 
   @override
   void returnFlowCredit(int streamId, int bytes) =>
-      (inner as IRpcFlowControlled).returnFlowCredit(streamId, bytes);
+      inner.returnFlowCredit(streamId, bytes);
 }
 
-/// Declares the capability and swallows it -- "I meter this myself", which the
-/// capability-preserving wrapper documents as a supported intent.
-class _SwallowingFlowTransport extends _CountingTransport
-    implements IRpcFlowControlled {
-  _SwallowingFlowTransport(super.inner);
+/// Hands out its own flow-credit object that forwards to the inner one -- a
+/// decorator that meters the credit on its way through.
+class _ForwardingFlowTransport extends _CountingTransport {
+  _ForwardingFlowTransport(super.inner);
 
   @override
-  void deferFlowCredit(int streamId) {}
-
-  @override
-  void returnFlowCredit(int streamId, int bytes) {}
+  IRpcFlowCredit? get flowCredit {
+    final credit = inner.flowCredit;
+    return credit == null ? null : _ForwardingFlowCredit(credit);
+  }
 }
 
 final class _UploadRun {
@@ -232,8 +237,8 @@ Future<int> _upload(IRpcTransport Function(IRpcTransport inner)? wrap) async {
 
   // A flat 8 s wait here cost this file 4 x ~8 s of every run. The budget is
   // still 8 s -- long enough that steady growth cannot be mistaken for a
-  // ceiling, which is what it was chosen for; unfixed, 'swallows' reached
-  // 157 MiB -- but two outcomes are decided before it expires and neither
+  // ceiling, which is what it was chosen for -- but two outcomes are decided
+  // before it expires and neither
   // weakens the assertion:
   //
   //   PLATEAU  the wire count stops moving => the bound engaged, and waiting
@@ -356,25 +361,26 @@ void main() {
   test('CONTROL: with no wrapper the ceiling holds', () async {
     final r = await _run(null);
     expect(r.open, lessThanOrEqualTo(3));
-    expect(r.transport, isA<IRpcSecurityPolicyAware>());
+    expect(r.transport.securityPolicy.maxActiveStreams, 3);
   });
 
-  test('a wrapper that declares nothing keeps the ceiling', () async {
+  test('a wrapper that forwards every member keeps the ceiling', () async {
     final r = await _run(_CountingTransport.new);
     expect(
       r.open,
       lessThanOrEqualTo(3),
       reason:
-          'the decorator dropped IRpcSecurityPolicyAware, so the pipeline fell '
-          'back to the default ceiling and admitted every stream',
+          'the decorator did not carry the policy through, so the pipeline '
+          'fell back to the default ceiling and admitted every stream',
     );
-    expect(r.transport, isA<IRpcSecurityPolicyAware>());
+    expect(r.transport, same(r.wrapper));
+    expect(r.transport.securityPolicy.maxActiveStreams, 3);
   });
 
-  test('the wrapper is still the one doing the work', () async {
-    // GUARD: restoring the capabilities must not route calls around the
-    // decorator -- it would still compile and still cap streams, while
-    // silently disabling whatever the wrapper was written to do.
+  test('the wrapper is the one doing the work', () async {
+    // GUARD: the endpoint must use the decorator itself, not route calls
+    // around it -- that would still cap streams, while silently disabling
+    // whatever the wrapper was written to do.
     final r = await _run(_CountingTransport.new);
     expect(r.wrapper, isNotNull);
     expect(
@@ -385,13 +391,10 @@ void main() {
   });
 
   test('a wrapper with its own policy is left alone', () async {
-    // GUARD: declaring IRpcSecurityPolicyAware is the only way to express
-    // "I mean a different policy", so it must win over the inner one.
+    // GUARD: overriding securityPolicy is how a decorator says "I mean a
+    // different policy", so it must win over the inner one.
     final r = await _run(_OpinionatedTransport.new);
-    expect(
-      (r.transport as IRpcSecurityPolicyAware).securityPolicy.maxActiveStreams,
-      11,
-    );
+    expect(r.transport.securityPolicy.maxActiveStreams, 11);
     expect(r.open, greaterThan(3));
   });
 
@@ -399,30 +402,19 @@ void main() {
     // The other capability, and the one with no ceiling behind it. The inner
     // transport is the only object that sees bytes ARRIVE, so it is the only
     // one that can charge them -- and it only charges a stream it has been told
-    // is pipeline-fed. Routing deferFlowCredit to a decorator that declares
-    // IRpcFlowControlled and then swallows it therefore left the inner
-    // accounting switched off, with nothing to see. Measured with a deaf
-    // client-stream handler against a 4 MiB window, bytes on the WIRE:
-    //
-    //   no wrapper                     4176 KiB
-    //   plain decorator                4177 KiB
-    //   declares and forwards it       4177 KiB
-    //   declares and SWALLOWS it     160900 KiB   <- 39x, and still climbing
-    //
-    // after:                           4187 KiB
-    for (final shape in const ['none', 'plain', 'forwards', 'swallows']) {
+    // is pipeline-fed, through the flowCredit the endpoint reads off the
+    // decorator. A deaf client-stream handler behind a 4 MiB window must
+    // therefore stay bounded on the WIRE whether the decorator forwards the
+    // inner credit object or hands out its own that forwards to it.
+    for (final shape in const ['none', 'plain', 'forwards']) {
       test(
         '$shape: a deaf handler still bounds the upload',
         () async {
           final r = await _upload(switch (shape) {
             'plain' => _CountingTransport.new,
             'forwards' => _ForwardingFlowTransport.new,
-            'swallows' => _SwallowingFlowTransport.new,
             _ => null,
           });
-          // WITNESS for 'swallows'; GUARD for the other three, which were already
-          // bounded and must stay that way -- doubling the DISCHARGE instead of
-          // the defer would have removed the bound for 'forwards'.
           expect(
             r,
             lessThan(_uploadCeilingBytes),

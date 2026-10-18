@@ -157,119 +157,7 @@ final class RpcTransportMessage {
   );
 }
 
-/// Capability for transports that can abort a single stream out-of-band.
-///
-/// The four `IRpc*` capabilities below are deliberately SEPARATE from
-/// [IRpcTransport]: a third-party transport that `implements IRpcTransport`
-/// must keep compiling when one is added. Callers probe with `is` and fall back
-/// to a safe default, so not implementing one is always allowed.
-///
-/// Implement this where a real abort primitive exists (HTTP/2 RST_STREAM). The
-/// fallback — a `grpc-status: CANCELLED` metadata frame — is only legal while
-/// this side is still open, and at cancellation time it usually is not: HTTP/2
-/// then throws "Open state expected (was: HalfClosedLocal)" asynchronously,
-/// where no caller can catch it, and the connection is corrupted.
-abstract interface class IRpcStreamReset {
-  /// Aborts [streamId], returning true when the reset was delivered.
-  ///
-  /// Returning false means "not resettable" (e.g. the stream is unknown) and
-  /// the caller should fall back to the metadata notice.
-  Future<bool> resetStream(int streamId, {String? reason});
-}
-
-/// Capability for transports that carry an [RpcSecurityPolicy].
-///
-/// Lets the layers above honour the limits the application already configured
-/// instead of adding a second knob for the same concept. Not implementing it
-/// means those layers use `const RpcSecurityPolicy()` — the defaults, not "no
-/// limits". See [IRpcStreamReset] for why this is a separate interface.
-abstract interface class IRpcSecurityPolicyAware {
-  /// The policy this transport was configured with.
-  RpcSecurityPolicy get securityPolicy;
-}
-
-/// Capability for transports that can exist before they can carry calls.
-///
-/// A transport built on a channel that is still connecting -- a WebSocket
-/// whose upgrade has not answered yet -- is returned at once, and nothing in
-/// [IRpcTransport] says it is not usable. `RpcClientConnection` awaits [ready]
-/// before it reports `RpcClientOnline`, within its `connectTimeout`; without
-/// it every failed attempt reports Online for the few milliseconds the
-/// channel takes to fail.
-abstract interface class IRpcTransportReadiness {
-  /// Completes when the transport can carry calls, and with an error when it
-  /// never will. Already complete for a transport that was usable when built.
-  Future<void> get ready;
-}
-
-/// Capability for transports whose stream-id sequence can be CONTINUED.
-///
-/// `RpcClientConnection` builds a WHOLE NEW transport on reconnect, and a fresh
-/// one starts its ids at 1 — so the first call afterwards gets the id a call
-/// from the old connection still holds. Since the id is all a release or a
-/// half-close presents, nothing downstream can tell them apart: measured, a
-/// dead call's late `finishSending` half-closed the live one and the server
-/// finished serving it.
-///
-/// **The cursor must survive [IRpcTransport.close].** A reconnect is usually
-/// started by the peer, and a transport learns that by closing itself, so a
-/// cursor destroyed at close is gone before anything above can read it — and
-/// there is no earlier moment to read it at.
-///
-/// See [IRpcStreamReset] for why this is a separate interface.
-abstract interface class IRpcStreamIdSequence {
-  /// The highest stream id handed out so far, or a value below the first
-  /// assignable id when none has been.
-  int get lastIssuedStreamId;
-
-  /// Continues the sequence after [streamId].
-  ///
-  /// Must only ever move the cursor FORWARD, and must leave parity intact:
-  /// a client transport still issues odd ids afterwards, a server even ones.
-  /// Safe to call with a value from a different transport instance; that is the
-  /// entire point.
-  void resumeStreamIdsAfter(int streamId);
-}
-
-/// What `RpcClientConnection` needs from the transports its factory builds.
-///
-/// The one place a capability is REQUIRED rather than probed for. Everywhere
-/// else a transport may decline [IRpcStreamIdSequence] and the caller falls
-/// back; a reconnecting connection has no fallback, because a fresh transport
-/// restarts its ids at 1 and hands the next call an id a call from the old
-/// connection still holds.
-///
-/// `RpcClientConnection` refuses such a transport at attach, so the failure was
-/// never silent. This makes it a COMPILE error at the factory instead of a
-/// disconnect on the first run, and it points at the members to forward — which
-/// is what a decorator author needs, since forwarding every [IRpcTransport]
-/// member and declaring nothing else erases the capability without a trace.
-abstract interface class IRpcReconnectableTransport
-    implements IRpcTransport, IRpcStreamIdSequence {}
-
-/// Capability: the transport outlives a lost connection and says when it
-/// loses one.
-///
-/// A transport that can re-attach a new connection with `reconnect()` keeps
-/// itself and its [IRpcTransport.incomingMessages] open across a drop, so that
-/// stream neither ends nor errors when the connection goes. A layer that
-/// supervises reconnects, such as `RpcClientConnection`, has nothing else to
-/// tell a dropped connection from a quiet one; without this it stays online
-/// over a dead connection.
-///
-/// A separate stream rather than an error on [IRpcTransport.incomingMessages]:
-/// that stream is public, and an error on it reaches every listener, including
-/// one that registered no `onError`, where it is an uncaught error.
-///
-/// A transport that closes itself when its connection goes does not need this:
-/// the end of [IRpcTransport.incomingMessages] already says it.
-abstract interface class IRpcConnectionLossReporting {
-  /// One event per lost connection, carrying the error that ended it, or null
-  /// when the peer closed it cleanly. Broadcast. Never carries a stream error.
-  Stream<Object?> get connectionLost;
-}
-
-/// Capability: a higher layer takes over flow-control metering for a stream.
+/// Flow-control metering a higher layer takes over for a stream.
 ///
 /// The transport meters what it hands out through `getMessagesForStream`,
 /// lazily, so a consumer that stops reading stops credit reaching the peer. A
@@ -279,9 +167,7 @@ abstract interface class IRpcConnectionLossReporting {
 ///
 /// Once [deferFlowCredit] is called, [returnFlowCredit] MUST be called as the
 /// application consumes, or the peer stalls when the window runs out.
-///
-/// See [IRpcStreamReset] for why this is a separate interface.
-abstract interface class IRpcFlowControlled {
+abstract interface class IRpcFlowCredit {
   /// Hands metering of [streamId] to the caller.
   void deferFlowCredit(int streamId);
 
@@ -294,30 +180,13 @@ abstract interface class IRpcFlowControlled {
   void returnFlowCredit(int streamId, int bytes);
 }
 
-/// Capability: the transport grants no message credit, so the responder bounds
-/// its request queues by bytes alone.
-///
-/// [RpcSecurityPolicy.maxBufferedMessagesPerStream] is safe to enforce only
-/// where the sender is told the depth: a channel transport grants it as
-/// message credit, and a sender doing flow control parks there. A transport
-/// that cannot -- HTTP/2, whose peers are paced by HTTP/2's own byte windows --
-/// declares this, and a client-stream or bidi call there is never failed for
-/// how MANY messages it has waiting, only for how many bytes. Against the
-/// connection total, each waiting message also counts a fixed overhead.
-///
-/// A marker, with this polarity on purpose: a transport, or a decorator, that
-/// says nothing keeps the depth bound.
-abstract interface class IRpcNoMessageCredit {}
-
-/// Capability: one connection-wide total of request bytes held un-consumed.
+/// One connection-wide total of request bytes held un-consumed.
 ///
 /// The transport buffers what it routes to per-stream consumers, and the
 /// responder pipeline buffers what it feeds a client-stream handler itself.
 /// Each bounded alone, a peer filling both holds the connection total once per
 /// layer; charging both against this one total bounds the sum.
-///
-/// See [IRpcStreamReset] for why this is a separate interface.
-abstract interface class IRpcConnectionBufferTotal {
+abstract interface class IRpcConnectionBuffer {
   /// Charges [bytes] against the connection total; false, and nothing
   /// charged, when they would cross it.
   bool chargeConnectionBuffer(int bytes);
@@ -330,6 +199,16 @@ abstract interface class IRpcConnectionBufferTotal {
 ///
 /// Contract for transports over different protocols (HTTP/2, WebSockets,
 /// isolates, etc.) that multiplex by Stream ID per gRPC spec.
+///
+/// **Optional behaviour is a member with a safe default**, not a separate
+/// interface found with `is`. A transport that `extends` this class inherits
+/// the defaults and overrides what it has. A decorator that `implements` it
+/// must write every member, so forgetting to forward one is a compile error
+/// rather than a silent fall back to the default.
+///
+/// A transport closes itself when its connection is lost: [incomingMessages]
+/// ends or errors, and that is how the layers above learn of it. Reconnecting
+/// is `RpcClientConnection`'s job, which builds a new transport each time.
 abstract class IRpcTransport {
   /// True for client transport (generates odd Stream IDs), false for server
   /// transport (even Stream IDs).
@@ -411,10 +290,78 @@ abstract class IRpcTransport {
   /// Checks transport health and returns diagnostics.
   Future<RpcHealthStatus> health();
 
-  /// Attempts to restore transport connectivity. If unsupported, return a
-  /// status with [RpcHealthLevel.degraded] or [RpcHealthLevel.unhealthy] and
-  /// `supported: false` in details.
-  Future<RpcHealthStatus> reconnect();
+  // Stream-id sequence. Required: see [lastIssuedStreamId].
+
+  /// The stream id handed out most recently, or a value below the first
+  /// assignable id when none has been.
+  ///
+  /// `RpcClientConnection` builds a WHOLE NEW transport on reconnect, and a
+  /// fresh one starts its ids at 1, so the first call afterwards would get the
+  /// id a call from the old connection still holds. The id is all a release or
+  /// a half-close presents, so nothing downstream could tell them apart. The
+  /// connection reads this cursor off the old transport and hands it to
+  /// [resumeStreamIdsAfter] on the new one.
+  ///
+  /// **The cursor must survive [close].** A drop is usually started by the
+  /// peer, and a transport reports it by closing itself, so a cursor destroyed
+  /// at close is gone before anything above can read it.
+  int get lastIssuedStreamId;
+
+  /// Continues the sequence after [streamId].
+  ///
+  /// Must only ever move the cursor FORWARD, and must leave parity intact: a
+  /// client transport still issues odd ids afterwards, a server even ones.
+  /// Safe to call with a value from a different transport instance; that is
+  /// the entire point.
+  void resumeStreamIdsAfter(int streamId);
+
+  // Optional behaviour, with safe defaults.
+
+  /// The limits this transport was configured with.
+  ///
+  /// The layers above honour them instead of adding a second knob for the same
+  /// concept. The default is `const RpcSecurityPolicy()`: the default limits,
+  /// not "no limits".
+  RpcSecurityPolicy get securityPolicy => const RpcSecurityPolicy();
+
+  /// Completes when the transport can carry calls, and with an error when it
+  /// never will.
+  ///
+  /// A transport built on a channel that is still connecting -- a WebSocket
+  /// whose upgrade has not answered yet -- is returned at once.
+  /// `RpcClientConnection` awaits this before it reports `RpcClientOnline`.
+  /// The default is already complete, for a transport usable when built.
+  Future<void> get ready => Future<void>.value();
+
+  /// Aborts [streamId] out of band, returning true when the reset was
+  /// delivered.
+  ///
+  /// Override where a real abort primitive exists (HTTP/2 RST_STREAM). The
+  /// default returns false, and the caller falls back to a `CANCELLED`
+  /// metadata frame. That fallback is only legal while this side is still
+  /// open: HTTP/2 throws "Open state expected (was: HalfClosedLocal)"
+  /// asynchronously otherwise, where no caller can catch it.
+  Future<bool> resetStream(int streamId, {String? reason}) async => false;
+
+  /// Flow-control metering a higher layer can take over, or null when this
+  /// transport does no flow control.
+  IRpcFlowCredit? get flowCredit => null;
+
+  /// Whether the transport grants message credit to its peer.
+  ///
+  /// [RpcSecurityPolicy.maxBufferedMessagesPerStream] is safe to enforce only
+  /// where the sender is told the depth: a channel transport grants it as
+  /// message credit, and a sender doing flow control parks there. A transport
+  /// that cannot -- HTTP/2, whose peers are paced by its own byte windows --
+  /// returns false, and a client-stream or bidi call there is failed for how
+  /// many bytes it has waiting, never for how many messages.
+  ///
+  /// The default, true, keeps the depth bound.
+  bool get grantsMessageCredit => true;
+
+  /// The connection-wide total of request bytes held un-consumed, or null when
+  /// the transport keeps none.
+  IRpcConnectionBuffer? get connectionBuffer => null;
 }
 
 /// Stream ID manager for HTTP/2 connections.

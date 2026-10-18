@@ -2,39 +2,42 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcRetryInterceptor retried UNAVAILABLE and never called reconnect(), so on a
-// bare transport every attempt went back to the SAME dead connection. The
-// budget burned and no attempt could pass — a retry that cannot succeed, which
-// spends the caller's deadline to arrive at the same failure.
+// Before retrying an UNAVAILABLE call, RpcRetryInterceptor waits for the
+// transport's next reconnect outcome, so the retry does not go back to the
+// SAME dead connection. Without that wait the budget burns and no attempt can
+// pass: a retry that cannot succeed spends the caller's deadline to arrive at
+// the same failure.
 //
-// That made two http2 contracts hollow rather than wrong: "a drained connection
-// is retried as the retry doc promises" and "a dead connection is UNAVAILABLE
-// (reconnect), not saturated" both say retrying is the remedy, and retrying was
-// not reaching the remedy.
+// The status alone does NOT say the connection is gone, so the interceptor
+// asks the transport's health first; a fake here has to answer that question
+// honestly or it is not the situation being measured.
 //
-// B-61's third option: teach the interceptor to reconnect. It overturns neither
-// transport's decision — websocket keeps refusing the reconnect WINDOW
-// non-retryably, http2 keeps answering UNAVAILABLE — and makes UNAVAILABLE mean
-// what it says.
-//
-// The status alone does NOT say the connection is gone (B-94), so the
-// interceptor asks the transport first; a fake here has to answer that
-// question honestly or it is not the situation being measured.
+// Only RpcClientConnection's proxy reconnects; the fake stands in for it by
+// implementing the same reconnect-outcome interface.
 
+// The reconnect outcome the retry interceptor waits on is off the public
+// barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// Counts reconnects and reports whether the "connection" is up.
-class _FlakyTransport implements IRpcTransport {
+/// Counts reconnect waits and reports whether the "connection" is up.
+class _FlakyTransport extends IRpcTransport implements IRpcReconnectOutcome {
   int reconnects = 0;
   bool up = false;
 
   @override
-  Future<RpcHealthStatus> reconnect() async {
+  Future<RpcHealthStatus> awaitReconnect() async {
     reconnects++;
     up = true;
     return RpcHealthStatus.healthy(component: 'flaky', message: 'reconnected');
   }
+
+  @override
+  int get lastIssuedStreamId => 1;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 
   @override
   bool get isClosed => false;

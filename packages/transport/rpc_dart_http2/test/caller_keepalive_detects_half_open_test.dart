@@ -194,7 +194,7 @@ void main() {
       final health = await transport.health();
       expect(
         health.message,
-        contains('down'),
+        contains('was lost'),
         reason:
             'health() reporting "ready" over a dead path is what stops a '
             'supervisor from ever reconnecting',

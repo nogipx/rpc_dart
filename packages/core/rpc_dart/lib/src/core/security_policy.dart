@@ -88,7 +88,8 @@ final class RpcSecurityPolicy {
   /// [flowControlWindowBytes] off and only [flowControlConnectionWindowBytes]
   /// on, the sender is not told the depth and a stream of small messages to a
   /// slow consumer can still reach it. A transport with no message credit at
-  /// all declares [IRpcNoMessageCredit] (HTTP/2 does), and its request queues
+  /// all says so with `IRpcTransport.grantsMessageCredit` (HTTP/2 does), and
+  /// its request queues
   /// are not bounded by depth: each message counts a fixed overhead against
   /// [flowControlConnectionWindowBytes] instead, and its bytes alone per stream.
   ///

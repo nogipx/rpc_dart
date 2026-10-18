@@ -78,8 +78,7 @@ Future<RpcHttp2CallerTransport> connectLocal() =>
 
 `RpcHttp2CallerTransport.viaSocket` wraps a socket you already opened, for
 example a `SecureSocket` with certificate pinning or a custom tunnel. You own
-the socket. `reconnect()` is not supported on such a transport: it reports
-`degraded` and leaves the live connection alone.
+the socket.
 
 ```dart
 import 'dart:io';
@@ -105,32 +104,19 @@ Future<RpcHttp2CallerTransport> pinnedTransport(SecurityContext context) async {
 
 ### Reconnecting
 
-The transport does not reconnect by itself. When the connection drops (the
-socket ends, or keepalive finds the path dead), calls fail with `UNAVAILABLE`,
-`health()` reports it, and `connectionLost` (`IRpcConnectionLossReporting`)
-emits once; `incomingMessages` stays open and carries no error. For automatic
-reconnect with backoff, give `RpcClientConnection` from `rpc_dart` a factory
-that calls `RpcHttp2CallerTransport.connect`; it reconnects on that event, and
-reports Online only once the peer has sent its SETTINGS (the transport's
-`ready`, `IRpcTransportReadiness`; until then `health()` reads degraded). Or
-call `reconnect()` to open a new connection on the same transport:
-
-```dart
-import 'package:rpc_dart_http2/rpc_dart_http2.dart';
-
-Future<void> recover(RpcHttp2CallerTransport transport) async {
-  final status = await transport.reconnect();
-  if (status.isHealthy) print('reconnected');
-}
-```
-
-Calls still in flight on the old connection fail with `UNAVAILABLE`. Stream ids
-continue across the reconnect; they are not reset, so a call from the old
-connection can never share an id with a new one. Concurrent `reconnect()` calls
-join the same attempt.
+One transport is one connection. When the connection drops (the socket ends,
+or keepalive finds the path dead), the calls in flight fail with `UNAVAILABLE`
+and the transport closes. For reconnects with backoff, give
+`RpcClientConnection` from `rpc_dart` a factory that calls
+`RpcHttp2CallerTransport.connect` and build endpoints once on
+`connection.transport`. It reports Online only once the peer has sent its
+SETTINGS (the transport's `ready`; until then `health()` reads degraded), and
+stream ids continue across the reconnect, so a call from the old connection
+can never share an id with a new one.
 
 A server that sends GOAWAY is draining. New calls on that connection fail with
-`UNAVAILABLE`, which a retry interceptor can act on after `reconnect()`.
+`UNAVAILABLE`, which a retry interceptor over `RpcClientConnection` retries on
+the next connection.
 
 ## Server
 
@@ -361,7 +347,6 @@ What this means for real gRPC peers:
 - `createWithContracts` shares one instance of each contract across all
   connections. Keep per-connection state out of those contracts, or use
   `onEndpointCreated` to build new ones.
-- A transport from `viaSocket` cannot reconnect. Build a new one.
 - Without `drainTimeout`, `stop()` cuts calls in flight.
 
 [`rpc_dart`]: https://pub.dev/packages/rpc_dart

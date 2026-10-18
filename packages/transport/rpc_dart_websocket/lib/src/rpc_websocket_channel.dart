@@ -176,7 +176,8 @@ class RpcWebSocketChannel
         // Only when the peer actually SAID something: 1005 "no status received"
         // and 1006 "abnormal closure" mean nothing was said, and 1000/1001 are
         // an orderly goodbye. All four MUST keep ending the stream normally --
-        // that is the path reconnect() re-attaches on.
+        // that is how the transport, and RpcClientConnection above it, learn
+        // the connection is gone.
         final code = _ws.closeCode;
         final saidNothing =
             code == null ||

@@ -70,9 +70,24 @@ final class _SwallowsPing implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => _inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
-  @override
   Future<void> close() => _inner.close();
+  @override
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int id) => _inner.resumeStreamIdsAfter(id);
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+  @override
+  Future<void> get ready => _inner.ready;
+  @override
+  Future<bool> resetStream(int id, {String? reason}) =>
+      _inner.resetStream(id, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
 typedef _Rig = ({RpcCallerEndpoint caller, RpcChannelTransport client});

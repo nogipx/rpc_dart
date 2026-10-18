@@ -3,11 +3,10 @@
 // SPDX-License-Identifier: MIT
 
 // RpcClientConnection learns of a drop from its transport's message stream
-// ending, or from IRpcConnectionLossReporting. RpcHttp2CallerTransport keeps
-// that stream open across a drop so its own reconnect() can re-attach, and
-// package:http2 reports no connection end at all, so the transport notices the
-// socket ending and reports it on `connectionLost`. These tests restart the
-// server on the same port.
+// ending. package:http2 reports no connection end at all, so
+// RpcHttp2CallerTransport notices the socket ending and closes itself, which
+// ends that stream. These tests stop the server, and restart it on the same
+// port.
 
 @TestOn('vm')
 library;
@@ -115,13 +114,12 @@ void main() {
   );
 
   test(
-    'GUARD the bare transport still reconnects with reconnect()',
+    'GUARD the bare transport closes when its connection is lost',
     () async {
-      var server = await _serve(0);
-      final port = server.port;
+      final server = await _serve(0);
       final transport = await RpcHttp2CallerTransport.connect(
         host: '127.0.0.1',
-        port: port,
+        port: server.port,
       );
       final caller = RpcCallerEndpoint(transport: transport);
       addTearDown(() async {
@@ -131,38 +129,24 @@ void main() {
       });
       expect((await _call(caller)).value, 'x');
 
-      // The loss is reported once on connectionLost; the message stream stays
-      // open and carries no error.
+      // The message stream ends, and carries no error: the end is the report.
       final streamErrors = <Object>[];
+      final ended = Completer<void>();
       final sub = transport.incomingMessages.listen(
         (_) {},
         onError: streamErrors.add,
+        onDone: ended.complete,
       );
       addTearDown(sub.cancel);
-      var losses = 0;
-      final lossSub = transport.connectionLost.listen((_) => losses++);
-      addTearDown(lossSub.cancel);
       await server.stop();
-      final deadline = DateTime.now().add(const Duration(seconds: 5));
-      while (losses == 0 && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-      expect(losses, 1);
-      expect(transport.isClosed, isFalse);
-      expect(streamErrors, isEmpty);
-
-      server = await _serve(port);
-      final health = await transport.reconnect();
-      expect(health.isHealthy, isTrue, reason: health.message);
-      expect((await _call(caller)).value, 'x');
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(
-        losses,
-        1,
-        reason:
-            'reconnect() retires the old connection itself; its end is not '
-            'a loss to report',
+      await ended.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => fail(
+          'the server stopped and the transport message stream is still open',
+        ),
       );
+      expect(transport.isClosed, isTrue);
+      expect(streamErrors, isEmpty);
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );

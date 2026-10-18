@@ -662,19 +662,6 @@ void main() {
       });
     });
 
-    group('reconnect', () {
-      test('returns degraded (not supported)', () async {
-        final (client, server) = RpcChannelTransport.pair();
-
-        final status = await client.reconnect();
-        expect(status.level, equals(RpcHealthLevel.degraded));
-        expect(status.details['supported'], isFalse);
-
-        await client.close();
-        await server.close();
-      });
-    });
-
     group('error propagation', () {
       test('channel errors are forwarded to incoming stream', () async {
         final c2s = StreamController<Uint8List>();

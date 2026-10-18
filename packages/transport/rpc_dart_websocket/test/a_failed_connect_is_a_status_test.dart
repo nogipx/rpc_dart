@@ -21,13 +21,11 @@ import 'package:test/test.dart';
 Future<String> _failureOf(
   int port, {
   Duration connectTimeout = const Duration(seconds: 5),
-  FutureOr<Map<String, Object>> Function()? headersProvider,
 }) async {
   try {
     final t = await RpcWebSocketCallerTransport.connect(
       Uri.parse('ws://127.0.0.1:$port/'),
       connectTimeout: connectTimeout,
-      headersProvider: headersProvider,
     );
     await t.close();
     return 'connected';
@@ -132,15 +130,5 @@ void main() {
     expect('$error', isNot(contains('pw-secret')));
     expect('$error', isNot(contains('q-secret')));
     expect('$error', contains('127.0.0.1'), reason: 'the address stays');
-  });
-
-  test('GUARD: an exception from headersProvider is not rewritten', () async {
-    expect(
-      await _failureOf(
-        await _answering(401),
-        headersProvider: () => throw const FormatException('token store'),
-      ),
-      'FormatException',
-    );
   });
 }

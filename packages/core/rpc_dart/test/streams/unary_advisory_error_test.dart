@@ -90,7 +90,23 @@ final class _InjectingTransport implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => _inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+  @override
+  Future<void> get ready => _inner.ready;
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      _inner.resetStream(streamId, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
 /// A responder with a live stream state that has NOT been answered — the only

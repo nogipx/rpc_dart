@@ -3,15 +3,14 @@
 // SPDX-License-Identifier: MIT
 
 // RpcClientConnection.transport is a wrapper, and every optional transport
-// capability is discovered by an `is` check that falls back SILENTLY. The proxy
-// declared IRpcTransport and IRpcStreamReset alone, so an endpoint built on it
-// lost all four of the others: the caller's parser fell back to
-// `const RpcSecurityPolicy()` (a 20 MiB response refused under a configured
-// 64 MiB), a codec-free call was refused outright, and the responder pipeline
-// could not defer flow-control metering, crediting on arrival instead of on
-// consumption.
+// member has a default on IRpcTransport. A proxy member that answers with the
+// default instead of the inner transport's value fails SILENTLY: the caller's
+// parser falls back to `const RpcSecurityPolicy()` (a 20 MiB response refused
+// under a configured 64 MiB), a codec-free call is refused outright, and the
+// responder pipeline cannot defer flow-control metering, crediting on arrival
+// instead of on consumption.
 //
-// One test per capability, so a canary on any one of them fails alone.
+// One test per member, so a canary on any one of them fails alone.
 
 import 'dart:async';
 
@@ -28,7 +27,7 @@ const _bodyBytes = 20 * _mib;
 final _codec = RpcCodec(RpcString.fromJson);
 
 /// Brings an [RpcClientConnection] online over [inner] and returns its proxy.
-Future<IRpcTransport> _proxyOver(IRpcReconnectableTransport inner) async {
+Future<IRpcTransport> _proxyOver(IRpcTransport inner) async {
   final conn = RpcClientConnection(transportFactory: () async => inner);
   addTearDown(conn.dispose);
   conn.connect();
@@ -220,7 +219,7 @@ void main() {
         under.flowControlStateSizes['deferred'],
         1,
         reason:
-            'without IRpcFlowControlled on the proxy the pipeline credits on '
+            'without a flowCredit on the proxy the pipeline credits on '
             'arrival, leaving the upload direction unbounded',
       );
     });
@@ -240,24 +239,19 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       final proxy = conn.transport;
-      expect(
-        proxy,
-        isA<IRpcStreamIdSequence>(),
-        reason: 'the proxy did not declare the capability at all',
-      );
 
       // Mint a few ids on the first connection.
       for (var i = 0; i < 3; i++) {
         proxy.createStream();
       }
-      final before = (proxy as IRpcStreamIdSequence).lastIssuedStreamId;
+      final before = proxy.lastIssuedStreamId;
       expect(before, greaterThan(0));
 
       conn.forceReconnect();
       await Future<void>.delayed(const Duration(milliseconds: 100));
 
       expect(
-        (proxy as IRpcStreamIdSequence).lastIssuedStreamId,
+        proxy.lastIssuedStreamId,
         greaterThanOrEqualTo(before),
         reason:
             'a fresh transport restarts its ids at 1, so a cursor read off '

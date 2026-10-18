@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 /// The transport-authoring API: channels and frames, the message parser and
-/// router, transport capabilities, and the helpers a server needs to drain.
+/// router, the flow-control interfaces, and the helpers a server needs to
+/// drain.
 ///
 /// Re-exports `package:rpc_dart/rpc_dart.dart`, so a transport imports this
 /// library alone.
@@ -34,15 +35,9 @@ export 'src/_index.dart'
         RpcStreamIdManager,
         RpcStreamRouter,
         RpcConstants,
-        // Transport capabilities
-        IRpcConnectionBufferTotal,
-        IRpcConnectionLossReporting,
-        IRpcFlowControlled,
-        IRpcNoMessageCredit,
-        IRpcSecurityPolicyAware,
-        IRpcStreamIdSequence,
-        IRpcStreamReset,
-        IRpcTransportReadiness,
+        // What IRpcTransport's optional members return
+        IRpcFlowCredit,
+        IRpcConnectionBuffer,
         // Errors on the wire
         RpcNoConnectionException,
         grpcStatusFromHttpStatus,

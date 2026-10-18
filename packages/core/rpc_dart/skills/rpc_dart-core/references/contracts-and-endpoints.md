@@ -127,7 +127,7 @@ final class GreeterCaller extends RpcCallerContract {
 | `RpcPeerEndpoint` | same as caller | union of both; needs `start()` |
 
 All endpoints: `addMiddleware`, `addInterceptor`, `close()`, `health()`,
-`reconnect()`, `isActive`, `transport`. There are no `interceptors:` /
+`isActive`, `transport`. There are no `interceptors:` /
 `middlewares:` constructor parameters.
 
 Endpoints also have an untyped call API (`unaryRequest`, `serverStream`,

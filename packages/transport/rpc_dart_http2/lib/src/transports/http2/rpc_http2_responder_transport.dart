@@ -18,22 +18,31 @@ part 'rpc_http2_responder_transport_lifecycle.dart';
 /// Server-side HTTP/2 transport: one [IRpcTransport] over one connection,
 /// multiplexing incoming RPC calls on the gRPC-compatible wire format.
 ///
-/// Declares [IRpcSecurityPolicyAware] because the endpoint layers find the
-/// policy with an `is` check: a transport that does not declare it silently
-/// gets `const RpcSecurityPolicy()` instead of the configured one, so
-/// `maxActiveStreams`, `halfOpenStreamTimeout` and the message-size limit all
-/// revert to defaults.
-class RpcHttp2ResponderTransport
-    implements
-        IRpcTransport,
-        IRpcSecurityPolicyAware,
-        IRpcFlowControlled,
-        IRpcNoMessageCredit {
+/// Grants no message credit: HTTP/2 paces a peer by its own byte windows, so
+/// the responder bounds request queues by bytes alone.
+class RpcHttp2ResponderTransport extends IRpcTransport
+    implements IRpcFlowCredit {
   @override
   bool get isClient => false;
 
   @override
   RpcSecurityPolicy get securityPolicy => _policy;
+
+  @override
+  bool get grantsMessageCredit => false;
+
+  @override
+  IRpcFlowCredit get flowCredit => this;
+
+  @override
+  int get lastIssuedStreamId => _nextStreamId - 2;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {
+    // Server ids are even; a wrong-parity value rounds UP. Forward only.
+    final aligned = streamId.isEven ? streamId : streamId + 1;
+    if (aligned + 2 > _nextStreamId) _nextStreamId = aligned + 2;
+  }
 
   final http2.ServerTransportConnection _connection;
 
@@ -65,8 +74,8 @@ class RpcHttp2ResponderTransport
 
   /// Streams whose inbound crediting the responder pipeline has taken over.
   ///
-  /// [IRpcFlowControlled] is how the pipeline says "I will report consumption
-  /// myself". Without it declared here, the `deferFlowCredit` /
+  /// [flowCredit] is how the pipeline says "I will report consumption
+  /// myself". Without it here, the `deferFlowCredit` /
   /// `returnFlowCredit` calls `_pipelineFedRequestStream` already makes are
   /// silent no-ops: the demand signal exists and never reaches HTTP/2, so an
   /// upload into a handler consuming nothing climbs without ever plateauing.
@@ -461,15 +470,6 @@ class RpcHttp2ResponderTransport
       component: runtimeType.toString(),
       message: 'HTTP/2 responder ready',
       details: details,
-    );
-  }
-
-  @override
-  Future<RpcHealthStatus> reconnect() async {
-    return RpcHealthStatus.degraded(
-      component: runtimeType.toString(),
-      message: 'Server-side HTTP/2 transport does not support manual reconnect',
-      details: {..._buildHealthDetails(), 'supported': false},
     );
   }
 

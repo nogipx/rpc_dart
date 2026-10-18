@@ -27,7 +27,7 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A transport that records whether it was closed.
-final class _Tracked implements IRpcReconnectableTransport {
+final class _Tracked extends IRpcTransport {
   _Tracked(this.id);
 
   final int id;
@@ -49,8 +49,8 @@ final class _Tracked implements IRpcReconnectableTransport {
   @override
   int createStream() => _next += 2;
 
-  // See reconnect_stopped_during_connect_test.dart: the connection refuses a
-  // transport that cannot report its id cursor.
+  // RpcClientConnection carries its stream-id watermark across a reconnect
+  // through these two members.
   @override
   int get lastIssuedStreamId => _next;
   @override
@@ -91,9 +91,6 @@ final class _Tracked implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't$id', message: 'ok');
-  @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.degraded(component: 't$id', message: 'no');
 }
 
 /// Each attempt gets its OWN gate, so the test can land a late connect for one
@@ -102,15 +99,15 @@ final class _Tracked implements IRpcReconnectableTransport {
 typedef _Harness = ({
   RpcClientConnection connection,
   List<_Tracked> made,
-  List<Completer<IRpcReconnectableTransport>> gates,
+  List<Completer<IRpcTransport>> gates,
 });
 
 _Harness _build({int? maxAttempts}) {
   final made = <_Tracked>[];
-  final gates = <Completer<IRpcReconnectableTransport>>[];
+  final gates = <Completer<IRpcTransport>>[];
   final connection = RpcClientConnection(
     transportFactory: () {
-      final gate = Completer<IRpcReconnectableTransport>();
+      final gate = Completer<IRpcTransport>();
       gates.add(gate);
       return gate.future;
     },

@@ -2,27 +2,20 @@
 //
 // SPDX-License-Identifier: MIT
 
-// When the PEER dies and a reconnect factory is configured, the wrapper stays
-// un-closed on purpose -- so `reconnect()` can re-attach and subscribers to the
-// stable incomingMessages survive. It stayed SILENT about it too, and that was
-// the bug: `_inner` had closed itself via onDone, and RpcChannelTransport
-// answers a closed transport QUIETLY -- sendMetadata is a no-op,
-// getMessagesForStream returns Stream.empty().
+// When the PEER dies, RpcWebSocketCallerTransport closes itself: reconnecting
+// is RpcClientConnection's job, and it learns of the drop from this transport's
+// message stream ending.
 //
-// A call made after the peer died therefore reached a closed inner transport,
-// and the pipeline raised RpcStatusException(14) from a detached subscription
-// into the ROOT zone:
-//
-//   before: Unhandled exception: RpcStatusException(14): Stream closed without
-//           receiving response   -- the process ended
-//           isClosed == false, while health() (delegating to the closed inner
-//           transport) said "Transport is closed"
-//   after : the call throws StateError naming the state, health() reports
-//           DEGRADED "Reconnect is required", and the process lives
-//
-// 3bfa7715 fixed exactly this fault on the FAILED-RECONNECT path. This is the
-// plain peer-death path, which needs no reconnect call at all -- any server
-// restart or dropped network reaches it.
+// A call made after that must fail as a status the caller can catch. The
+// failure this pins is the quiet one: a closed RpcChannelTransport answers
+// sendMetadata as a no-op and getMessagesForStream with Stream.empty(), and
+// the caller pipeline then raises RpcStatusException(14) from a detached
+// subscription into the ROOT zone, which ends the process. The call must
+// instead throw UNAVAILABLE -- the peer is gone, and a retry through a new
+// connection is the remedy -- and the state must read closed everywhere.
+
+@TestOn('vm')
+library;
 
 import 'dart:async';
 import 'dart:io';
@@ -55,9 +48,9 @@ class _Peer {
 
   int get port => _http.port;
 
-  static Future<_Peer> start([int port = 0]) async {
+  static Future<_Peer> start() async {
     final transports = <RpcWebSocketResponderTransport>[];
-    final http = await HttpServer.bind('127.0.0.1', port);
+    final http = await HttpServer.bind('127.0.0.1', 0);
     http.transform(WebSocketTransformer()).listen((ws) {
       final t = RpcWebSocketResponderTransport(IOWebSocketChannel(ws));
       transports.add(t);
@@ -79,7 +72,8 @@ class _Peer {
   }
 }
 
-Future<String> _echo(RpcCallerEndpoint caller) async {
+/// The reply, 'HUNG', or the status code the call failed with.
+Future<Object> _echo(RpcCallerEndpoint caller) async {
   try {
     final r = await caller
         .unaryRequest<RpcString, RpcString>(
@@ -93,114 +87,77 @@ Future<String> _echo(RpcCallerEndpoint caller) async {
     return r.value;
   } on TimeoutException {
     return 'HUNG';
+  } on RpcStatusException catch (e) {
+    return e.statusCode;
   } catch (e) {
     return 'caught: $e';
   }
 }
 
+Future<void> _untilClosed(IRpcTransport t) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!t.isClosed && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 void main() {
-  test('a call after the peer dies fails cleanly, not fatally', () async {
-    final peer = await _Peer.start();
-    final client = await RpcWebSocketCallerTransport.connect(
-      Uri.parse('ws://127.0.0.1:${peer.port}'),
-    );
-    final caller = RpcCallerEndpoint(transport: client);
-    addTearDown(() async {
-      await caller.close();
-      await client.close();
-    });
+  test(
+    'a call after the peer dies fails as UNAVAILABLE, not fatally',
+    () async {
+      final peer = await _Peer.start();
+      final client = await RpcWebSocketCallerTransport.connect(
+        Uri.parse('ws://127.0.0.1:${peer.port}'),
+      );
+      final caller = RpcCallerEndpoint(transport: client);
+      addTearDown(() async {
+        await caller.close();
+        await client.close();
+      });
 
-    expect(await _echo(caller), 'echo-ok');
+      expect(await _echo(caller), 'echo-ok');
 
-    await peer.die();
-    await Future<void>.delayed(const Duration(seconds: 1));
+      await peer.die();
+      await _untilClosed(client);
 
-    expect(
-      await _echo(caller),
-      contains('disconnected'),
-      reason:
-          'the call reached a CLOSED inner transport, whose empty per-stream '
-          'stream made the pipeline raise RpcStatusException(14) into the root '
-          'zone and end the process',
-    );
-    // Reaching this line is the other half of the assertion: before the fix the
-    // isolate was already gone.
-    expect(await _echo(caller), contains('disconnected'));
-  });
+      expect(
+        await _echo(caller),
+        RpcStatus.unavailable,
+        reason:
+            'a call on a closed channel transport must be refused as a status; '
+            'an empty per-stream stream makes the pipeline raise into the root '
+            'zone and end the process',
+      );
+      // Reaching this line is the other half of the assertion: a raise into the
+      // root zone would have ended the isolate already.
+      expect(await _echo(caller), RpcStatus.unavailable);
+    },
+  );
 
-  test('the state after peer death is coherent', () async {
+  test('the state after peer death reads closed everywhere', () async {
     final peer = await _Peer.start();
     final client = await RpcWebSocketCallerTransport.connect(
       Uri.parse('ws://127.0.0.1:${peer.port}'),
     );
     addTearDown(client.close);
 
-    await peer.die();
-    await Future<void>.delayed(const Duration(seconds: 1));
-
-    expect(
-      client.isClosed,
-      isFalse,
-      reason: 'a reconnect factory is configured, so this is recoverable',
+    final ended = Completer<void>();
+    client.incomingMessages.listen(
+      (_) {},
+      onError: (Object _) {},
+      onDone: ended.complete,
     );
-    final health = await client.health();
-    expect(health.message, contains('Reconnect is required'));
-    expect(
-      health.message,
-      isNot(contains('Transport is closed')),
-      reason:
-          'health delegated to the closed inner transport and contradicted '
-          'isClosed',
-    );
-  });
-
-  test('it recovers when the peer comes back', () async {
-    // The whole reason the wrapper stays un-closed: reconnect must work.
-    final reserve = await ServerSocket.bind('127.0.0.1', 0);
-    final port = reserve.port;
-    await reserve.close();
-
-    var peer = await _Peer.start(port);
-    final client = await RpcWebSocketCallerTransport.connect(
-      Uri.parse('ws://127.0.0.1:$port'),
-    );
-    final caller = RpcCallerEndpoint(transport: client);
-    addTearDown(() async {
-      await caller.close();
-      await client.close();
-    });
-
-    expect(await _echo(caller), 'echo-ok');
-    await peer.die();
-    await Future<void>.delayed(const Duration(seconds: 1));
-
-    peer = await _Peer.start(port);
-    addTearDown(peer.die);
-    expect((await client.reconnect()).message, contains('Reconnected'));
-    expect(await _echo(caller), 'echo-ok');
-    expect((await client.health()).message, contains('ready'));
-  });
-
-  test('GUARD: with no reconnect factory the transport closes fully', () async {
-    // Nothing to recover to, so peer death is terminal -- and must still be
-    // reported as CLOSED rather than as merely disconnected.
-    final peer = await _Peer.start();
-    final client = RpcWebSocketCallerTransport(
-      IOWebSocketChannel.connect(Uri.parse('ws://127.0.0.1:${peer.port}')),
-    );
-    final caller = RpcCallerEndpoint(transport: client);
-    addTearDown(() async {
-      await caller.close();
-      await client.close();
-    });
-
-    expect(await _echo(caller), 'echo-ok');
 
     await peer.die();
-    await Future<void>.delayed(const Duration(seconds: 1));
+    await ended.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => fail(
+        'incomingMessages did not end, so RpcClientConnection would never '
+        'learn of the drop',
+      ),
+    );
 
     expect(client.isClosed, isTrue);
     expect((await client.health()).message, contains('closed'));
-    expect(await _echo(caller), contains('closed'));
   });
 }

@@ -140,6 +140,12 @@ Future<void> _waitFor(bool Function() condition, String what) async {
   throw StateError('timed out waiting for $what');
 }
 
+/// The next time [connection] reports Online. Subscribed before the caller
+/// starts the connect, so the event cannot be missed.
+Future<void> _nextOnline(RpcClientConnection connection) => connection.state
+    .firstWhere((s) => s is RpcClientOnline)
+    .timeout(const Duration(seconds: 10));
+
 typedef _Run = ({
   String firstGot,
   List<String> started,
@@ -150,6 +156,9 @@ typedef _Run = ({
 });
 
 /// One caller through a reconnect with [shape]'s answer parked across it.
+///
+/// The client reaches the server through an [RpcClientConnection]; the
+/// reconnect is its [RpcClientConnection.forceReconnect].
 ///
 /// [frameFirst] removes the handshake from the window: the next socket is open
 /// before the reconnect starts, and the new caller's opening frame is already
@@ -179,21 +188,28 @@ Future<_Run> _run(
         return channel;
       }
 
+      // A socket opened ahead of time is used once, by the next attempt.
       WebSocketChannel? next;
-      final transport = frameFirst
-          ? RpcWebSocketCallerTransport(
-              await openReady(),
-              reconnectFactory: () async => next!,
-            )
-          : await RpcWebSocketCallerTransport.connect(uri);
-      final clientPeer = RpcPeerEndpoint(transport: transport);
+      final connection = RpcClientConnection(
+        transportFactory: () async {
+          final ready = next;
+          if (ready == null) return RpcWebSocketCallerTransport.connect(uri);
+          next = null;
+          return RpcWebSocketCallerTransport(ready);
+        },
+      );
+      final firstOnline = _nextOnline(connection);
+      connection.connect();
+      await firstOnline;
+
+      final clientPeer = RpcPeerEndpoint(transport: connection.transport);
       final answering = _Answering(clientPeer);
       clientPeer.registerServiceContract(answering);
       clientPeer.start();
 
       final openedOn = <int>[];
       final dataOn = <int>[];
-      final watcher = transport.incomingMessages.listen((m) {
+      final watcher = connection.transport.incomingMessages.listen((m) {
         if (m.methodPath != null) openedOn.add(m.streamId);
         if (m.payload != null) dataOn.add(m.streamId);
       });
@@ -218,9 +234,13 @@ Future<_Run> _run(
           secondCall = _Asking(built[1]).ask(shape, 'two');
           // Long enough for the opening frame to be sitting in the new socket.
           await Future<void>.delayed(const Duration(milliseconds: 100));
-          await transport.reconnect();
+          final online = _nextOnline(connection);
+          connection.forceReconnect();
+          await online;
         } else if (reconnect) {
-          await transport.reconnect();
+          final online = _nextOnline(connection);
+          connection.forceReconnect();
+          await online;
           await _waitFor(() => built.length > 1, 'the second server endpoint');
           secondCall = _Asking(built[1]).ask(shape, 'two');
         } else {
@@ -250,7 +270,7 @@ Future<_Run> _run(
         await Future<void>.delayed(const Duration(milliseconds: 100));
         await watcher.cancel();
         await clientPeer.close().catchError((Object _) {});
-        await transport.close().catchError((Object _) {});
+        await connection.dispose().catchError((Object _) {});
         await server.dispose().catchError((Object _) {});
         await http.close(force: true);
       }
@@ -292,10 +312,10 @@ void main() {
       test(
         'the same when the new call\'s opening frame is waiting in the socket',
         () async {
-          // The race B-212 left: the notice runs before the reconnect's awaits,
-          // and here nothing after them takes any time. If the opening frame
-          // ever reached the pipeline first, the notice would cancel the NEW
-          // call.
+          // The connection cancels the peer-opened streams of the lost socket
+          // before it attaches the next one, and here the next one delivers
+          // its frame at once. If the opening frame ever reached the pipeline
+          // first, that cancel would hit the NEW call.
           final r = await _run(shape, reconnect: true, frameFirst: true);
           expect(r.openedOn, [2, 2], reason: 'the premise: $r');
           expect(r.secondGot, 'answered two', reason: '$r');

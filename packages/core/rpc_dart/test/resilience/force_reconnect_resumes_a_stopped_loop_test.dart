@@ -13,7 +13,7 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-final class _T implements IRpcReconnectableTransport {
+final class _T extends IRpcTransport {
   bool _closed = false;
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
   int _next = -1;
@@ -81,9 +81,6 @@ final class _T implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't', message: 'ok');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async => health();
 }
 
 void main() {

@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Two answers the HTTP/1.1 caller gets wrong without them: reconnect() on a
-// closed transport reports it closed, not healthy; and a TLS handshake that
-// fails reaches the caller as UNAVAILABLE, a status retry and breakers can
-// classify, rather than a raw HandshakeException.
+// A TLS handshake that fails reaches the HTTP/1.1 caller as UNAVAILABLE, a
+// status retry and breakers can classify, rather than a raw
+// HandshakeException.
 
 @TestOn('vm')
 library;
@@ -19,12 +18,6 @@ import 'package:test/test.dart';
 final _codec = RpcCodec(RpcString.fromJson);
 
 void main() {
-  test('reconnect() after close() reports closed', () async {
-    final transport = RpcHttpCallerTransport(baseUrl: 'http://127.0.0.1:1');
-    await transport.close();
-    expect((await transport.reconnect()).level, RpcHealthLevel.closed);
-  });
-
   test('a failed TLS handshake is UNAVAILABLE', () async {
     // A plain-TCP peer answering the ClientHello with HTTP text.
     final plain = await ServerSocket.bind('127.0.0.1', 0);

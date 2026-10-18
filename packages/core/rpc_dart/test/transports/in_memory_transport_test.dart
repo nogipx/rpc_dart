@@ -454,7 +454,7 @@ void main() {
       await serverTransport.close();
     });
 
-    group('health & reconnect', () {
+    group('health', () {
       test('returns healthy when active', () async {
         final (clientTransport, _) = RpcChannelTransport.memoryPair();
 
@@ -471,15 +471,6 @@ void main() {
         final status = await clientTransport.health();
 
         expect(status.level, equals(RpcHealthLevel.closed));
-      });
-
-      test('reconnect returns degraded', () async {
-        final (clientTransport, _) = RpcChannelTransport.memoryPair();
-
-        final status = await clientTransport.reconnect();
-
-        expect(status.level, equals(RpcHealthLevel.degraded));
-        expect(status.details['supported'], isFalse);
       });
     });
   });

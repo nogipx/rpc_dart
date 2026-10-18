@@ -79,8 +79,7 @@ The transport has no timeout of its own. Bound calls with a deadline in the
 `RpcContext`; it travels as `grpc-timeout`. Cancelling a call aborts its HTTP
 request, which closes the connection; `RpcHttpServer` turns that close into a
 cancel of the handler's token, so it arrives as late as the platform reports
-the close. `reconnect()` is a no-op that reports healthy, because there is no
-connection to restore.
+the close.
 
 ### Custom HTTP client
 
@@ -234,7 +233,7 @@ too, so a page sees the real status instead of an opaque CORS error.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `securityPolicy` | `const RpcSecurityPolicy()` | Limits on requests; see below. `null` disables this transport's own checks and allows unbounded bodies. |
+| `securityPolicy` | `const RpcSecurityPolicy()` | Limits on requests; see below. Always applied; pass a policy to change the limits. |
 | `corsPolicy` | `null` | CORS for browser callers. |
 | `bodyIdleTimeout` | 30 s | Longest silence while the body arrives, reset by every chunk. A body that keeps arriving is never refused by it. `null` disables it. |
 | `bodyReadTimeout` | `null` | Ceiling on the whole body read. It refuses a slow honest upload as readily as a stalled one. |

@@ -2,20 +2,26 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcRetryInterceptor calls `transport.reconnect()` before retrying an
-// UNAVAILABLE call. Behind RpcClientConnection that transport is the
-// connection's proxy, whose reconnect is the connection's own loop: it answers
-// with the outcome of the loop's next attempt, so the retry lands after a real
-// connect rather than inside the backoff's gap. It starts no attempt itself:
-// every caller's retry would otherwise become a connect against a server that
-// is down. Round 750.
+// RpcRetryInterceptor asks the transport for the outcome of the next reconnect
+// attempt before retrying an UNAVAILABLE call. Behind RpcClientConnection that
+// transport is the connection's proxy, whose `awaitReconnect()` answers with
+// the outcome of the connection loop's next attempt, so the retry lands after a
+// real connect rather than inside the backoff's gap. It starts no attempt
+// itself: every caller's retry would otherwise become a connect against a
+// server that is down.
 
 import 'dart:async';
 
+// The reconnect outcome the retry interceptor waits on is off the public
+// barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-final class _T implements IRpcReconnectableTransport {
+Future<RpcHealthStatus> _awaitReconnect(RpcClientConnection connection) =>
+    (connection.transport as IRpcReconnectOutcome).awaitReconnect();
+
+final class _T extends IRpcTransport {
   bool _closed = false;
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
   int _next = -1;
@@ -87,9 +93,6 @@ final class _T implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't', message: 'ok');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async => health();
 }
 
 void main() {
@@ -114,25 +117,25 @@ void main() {
     await connection.state.firstWhere((s) => s is RpcClientOnline);
   });
 
-  test('WITNESS reconnect() answers with the next attempt', () async {
+  test('WITNESS awaitReconnect() answers with the next attempt', () async {
     down = true;
     built.single.drop();
     await connection.state.firstWhere((s) => s is RpcClientOffline);
 
-    final failed = await connection.transport.reconnect().timeout(
-      const Duration(seconds: 2),
-    );
+    final failed = await _awaitReconnect(
+      connection,
+    ).timeout(const Duration(seconds: 2));
     expect(failed.level, RpcHealthLevel.unhealthy, reason: failed.message);
 
     down = false;
-    final healthy = await connection.transport.reconnect().timeout(
-      const Duration(seconds: 2),
-    );
+    final healthy = await _awaitReconnect(
+      connection,
+    ).timeout(const Duration(seconds: 2));
     expect(healthy.isHealthy, isTrue, reason: healthy.message);
     expect(connection.currentState, isA<RpcClientOnline>());
   });
 
-  test('GUARD reconnect() starts no attempt of its own', () async {
+  test('GUARD awaitReconnect() starts no attempt of its own', () async {
     down = true;
     var attempts = 0;
     final sub = connection.state.listen((s) {
@@ -144,14 +147,14 @@ void main() {
 
     // Ten callers at once wait for one attempt; they do not make ten.
     await Future.wait([
-      for (var i = 0; i < 10; i++) connection.transport.reconnect(),
+      for (var i = 0; i < 10; i++) _awaitReconnect(connection),
     ]);
     expect(attempts, lessThanOrEqualTo(2));
   });
 
-  test('GUARD online, reconnect() answers at once', () async {
+  test('GUARD online, awaitReconnect() answers at once', () async {
     final sw = Stopwatch()..start();
-    final status = await connection.transport.reconnect();
+    final status = await _awaitReconnect(connection);
     expect(status.isHealthy, isTrue);
     expect(sw.elapsedMilliseconds, lessThan(100));
   });

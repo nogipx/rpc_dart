@@ -2,19 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `text_frame_does_not_fail_calls_test.dart` is round 353's: a TEXT frame is
-// ADVISORY, so RpcChannelTransport stops it at the connection stream instead of
-// answering every per-stream controller with it. That held, and behind
-// RpcClientConnection the calls died anyway.
+// A TEXT frame is ADVISORY (`text_frame_does_not_fail_calls_test.dart`):
+// RpcChannelTransport reports it on the connection stream instead of answering
+// every per-stream controller with it. Behind RpcClientConnection that error
+// must not read as a dropped connection either, or a proxy that keepalives with
+// a text frame makes the client reconnect, and fail every call, on every one.
 //
-// The proxy listened with `cancelOnError: true` and retired the transport on any
-// error, so the advisory reached it as a dropped connection. Measured with one
-// server-stream call running and the server writing one text frame:
-//
-//   text frame   transports built 1 -> 2, the call ERRORED at 3 messages
-//   nothing      transports built 1 -> 1, the call alive at 86
-//
-// A proxy that keepalives with a text frame made the client flap on every one.
+// Witnessed with one server-stream call running and the server writing one text
+// frame: the number of transports built and the call's fate.
 
 @TestOn('vm')
 library;
@@ -71,9 +66,9 @@ Future<_Rig> _rig() async {
   await server.start();
 
   final url = Uri.parse('ws://127.0.0.1:${http.port}');
-  // BARE transports: the proxy is the only reconnect machinery in the rig, so a
-  // second socket can only be its doing.
-  Future<IRpcReconnectableTransport> factory() async {
+  // The connection is the only reconnect machinery in the rig, so a second
+  // socket can only be its doing.
+  Future<IRpcTransport> factory() async {
     built++;
     return RpcWebSocketCallerTransport(IOWebSocketChannel.connect(url));
   }

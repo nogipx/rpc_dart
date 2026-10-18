@@ -352,8 +352,10 @@ class _DummyTransport extends IRpcTransport {
       RpcHealthStatus.healthy(component: 'DummyTransport');
 
   @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.healthy(component: 'DummyTransport');
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
 }
 
 class _RecordingMiddleware extends IRpcMiddleware {

@@ -19,7 +19,7 @@ void main() {
     'WITNESS a factory that never completes ends the attempt by default',
     () async {
       final connection = RpcClientConnection(
-        transportFactory: () => Completer<IRpcReconnectableTransport>().future,
+        transportFactory: () => Completer<IRpcTransport>().future,
         maxAttempts: 1,
       );
       addTearDown(connection.dispose);

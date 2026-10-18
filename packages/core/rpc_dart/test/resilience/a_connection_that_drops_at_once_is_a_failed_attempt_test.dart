@@ -14,7 +14,7 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// Drops its connection [dropAfter] after it is built, by ending its stream.
-final class _T implements IRpcReconnectableTransport {
+final class _T extends IRpcTransport {
   _T(Duration dropAfter) {
     Timer(dropAfter, () {
       if (!_incoming.isClosed) _incoming.close();
@@ -88,9 +88,6 @@ final class _T implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't', message: 'ok');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async => health();
 }
 
 const _backoff = ExponentialBackoff(

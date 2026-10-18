@@ -148,7 +148,7 @@ extension _ResponderPipelineContext on RpcResponderPipelineMixin {
   /// `maxMethodPathLength` monotone downward only: raise it past 512 and this
   /// refused the path afterwards.
   (String, String)? _parseMethodPath(String methodPath) =>
-      _policyOfTransport(transport).parseMethodPath(methodPath);
+      transport.securityPolicy.parseMethodPath(methodPath);
 
   /// The inverse of [_parseMethodPath]; both rules live in `metadata.dart`.
   String _methodPathFromKey(String methodKey) =>

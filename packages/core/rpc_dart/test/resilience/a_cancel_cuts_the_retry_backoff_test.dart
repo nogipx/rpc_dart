@@ -9,6 +9,9 @@
 
 import 'dart:async';
 
+// The reconnect outcome the retry interceptor waits on is off the public
+// barrel; tests reach it here.
+import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
@@ -82,8 +85,8 @@ void main() {
     expect(ms, greaterThanOrEqualTo(3000));
   });
 
-  // After the backoff the interceptor reconnects a transport whose connection
-  // is gone. A cancelled call must neither start that reconnect nor wait for
+  // After the backoff the interceptor waits for the next reconnect attempt of
+  // a transport whose connection is gone. A cancelled call must not wait for
   // one.
   group('with a connection that takes 3 s to come back', () {
     Future<(String, int, int)> run({required bool cancel}) async {
@@ -115,32 +118,39 @@ void main() {
       } on RpcStatusException catch (e) {
         outcome = 'status ${e.statusCode}';
       }
-      return (outcome, sw.elapsedMilliseconds, transport.reconnects);
+      return (outcome, sw.elapsedMilliseconds, transport.waits);
     }
 
-    test('a cancel during the backoff skips the reconnect', () async {
-      final (outcome, ms, reconnects) = await run(cancel: true);
+    test('a cancel during the backoff skips the reconnect wait', () async {
+      final (outcome, ms, waits) = await run(cancel: true);
       expect(outcome, 'cancelled');
       expect(ms, lessThan(1500), reason: 'waited for the reconnect: $ms ms');
-      expect(reconnects, 0, reason: 'an abandoned call started a reconnect');
+      expect(waits, 0, reason: 'an abandoned call waited for a reconnect');
     });
 
-    test('CONTROL: without a cancel the reconnect runs', () async {
-      final (outcome, ms, reconnects) = await run(cancel: false);
+    test('CONTROL: without a cancel the reconnect is waited for', () async {
+      final (outcome, ms, waits) = await run(cancel: false);
       expect(outcome, 'status ${RpcStatus.unavailable}');
-      expect(reconnects, 1);
+      expect(waits, 1);
       expect(ms, greaterThanOrEqualTo(5000));
     });
   });
 }
 
 /// A transport whose connection is gone and takes 3 s to fail to come back.
-final class _SlowReconnect implements IRpcTransport {
-  int reconnects = 0;
+final class _SlowReconnect extends IRpcTransport
+    implements IRpcReconnectOutcome {
+  int waits = 0;
 
   @override
-  Future<RpcHealthStatus> reconnect() async {
-    reconnects++;
+  int get lastIssuedStreamId => 0;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) {}
+
+  @override
+  Future<RpcHealthStatus> awaitReconnect() async {
+    waits++;
     await Future<void>.delayed(const Duration(seconds: 3));
     return RpcHealthStatus.unhealthy(component: 't', message: 'still down');
   }

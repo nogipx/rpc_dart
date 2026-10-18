@@ -18,7 +18,7 @@ final _codec = RpcCodec(RpcString.fromJson);
 
 /// Forwards everything, with `incomingMessages` delayed by a timer, as a
 /// decorator that does real asynchronous work per frame would.
-final class _AsyncDecorator extends IRpcTransport {
+final class _AsyncDecorator implements IRpcTransport {
   _AsyncDecorator(this._inner);
 
   final IRpcTransport _inner;
@@ -61,7 +61,31 @@ final class _AsyncDecorator extends IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => _inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  bool get supportsZeroCopy => _inner.supportsZeroCopy;
+  @override
+  Future<void> sendDirectObject(
+    int streamId,
+    Object object, {
+    bool endStream = false,
+  }) => _inner.sendDirectObject(streamId, object, endStream: endStream);
+  @override
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+  @override
+  Future<void> get ready => _inner.ready;
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      _inner.resetStream(streamId, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
 final class _Svc extends RpcResponderContract {

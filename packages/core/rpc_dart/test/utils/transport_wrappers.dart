@@ -10,9 +10,9 @@ import 'package:rpc_dart/transport.dart';
 /// Delegates everything, except that an end-of-stream metadata send never
 /// completes -- the shape a cancellation notice takes.
 ///
-/// Deliberately NOT an `IRpcStreamReset`: `_notifyPeerOfCancellation` tries a
-/// stream reset first and would never reach `sendMetadata` if this claimed that
-/// capability.
+/// Deliberately reports no stream reset ([resetStream] returns false):
+/// `_notifyPeerOfCancellation` tries a stream reset first and would never reach
+/// `sendMetadata` if a reset were delivered.
 final class HangingEndOfStreamTransport implements IRpcTransport {
   final IRpcTransport _inner;
 
@@ -65,7 +65,22 @@ final class HangingEndOfStreamTransport implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => _inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+  @override
+  Future<void> get ready => _inner.ready;
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) async => false;
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
 /// Rewrites `content-type` on every outbound metadata frame.
@@ -135,7 +150,23 @@ final class ContentTypeRewritingTransport implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => _inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+  @override
+  Future<void> get ready => _inner.ready;
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      _inner.resetStream(streamId, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
 final class NoZeroCopyTransport implements IRpcTransport {
@@ -198,7 +229,30 @@ final class NoZeroCopyTransport implements IRpcTransport {
   Future<RpcHealthStatus> health() => _inner.health();
 
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
+
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+
+  @override
+  Future<void> get ready => _inner.ready;
+
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      _inner.resetStream(streamId, reason: reason);
+
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }
 
 final class ThrowingTransport implements IRpcTransport {
@@ -277,5 +331,28 @@ final class ThrowingTransport implements IRpcTransport {
   Future<RpcHealthStatus> health() => _inner.health();
 
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
+
+  @override
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+
+  @override
+  Future<void> get ready => _inner.ready;
+
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      _inner.resetStream(streamId, reason: reason);
+
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
 }

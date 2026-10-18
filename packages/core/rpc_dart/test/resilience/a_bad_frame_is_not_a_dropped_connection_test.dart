@@ -67,7 +67,7 @@ Future<_Rig> _rig({bool strict = false}) async {
     closeOnProtocolError: strict,
   );
 
-  Future<IRpcReconnectableTransport> factory() async {
+  Future<IRpcTransport> factory() async {
     built++;
     final (clientCh, serverCh) = RpcFrameMultiplexedChannel.pair();
     final client = RpcChannelTransport(

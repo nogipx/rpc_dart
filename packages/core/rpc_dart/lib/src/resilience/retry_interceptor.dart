@@ -169,11 +169,10 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// Reconnecting on the status alone closes a live socket and fails every
   /// other call on it, each of those failures being UNAVAILABLE in turn.
   ///
-  /// Best-effort by construction. A transport that cannot reconnect ANSWERS —
-  /// `RpcChannelTransport` returns `degraded / supported: false` rather than
-  /// throwing — and a failed attempt leaves a recoverable transport, so the
-  /// next attempt is still worth making. Either way the original error is what
-  /// the caller sees.
+  /// Only [RpcClientConnection] reconnects, so only an endpoint built on its
+  /// `transport` waits here; over a bare transport the retry goes back to the
+  /// same one. The wait is for the connection's next attempt, which runs on
+  /// its own backoff. Either way the original error is what the caller sees.
   Future<void> _reconnectIfConnectionIsGone(
     Object error,
     RpcMiddlewareContext call,
@@ -181,9 +180,13 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     if (error is! RpcStatusException) return;
     if (error.statusCode != RpcStatus.unavailable) return;
     final transport = call.endpoint.transport;
+    if (transport is! IRpcReconnectOutcome) return;
     try {
       if ((await transport.health()).isHealthy) return;
-      await _withinCall(transport.reconnect(), call.context);
+      await _withinCall(
+        (transport as IRpcReconnectOutcome).awaitReconnect(),
+        call.context,
+      );
     } catch (_) {
       // Nothing to do: the attempt below will fail the same way and report it.
       // A health() that throws tells us nothing, and tearing a possibly live

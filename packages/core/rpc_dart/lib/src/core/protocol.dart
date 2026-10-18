@@ -308,21 +308,22 @@ final class RpcClosedException extends RpcStatusException {
   final bool byPeer;
 }
 
-/// A transport with no live connection — and which of the two such states it is.
+/// A reconnecting connection with no live transport — and which of the two
+/// such states it is.
 ///
 /// UNAVAILABLE in both, the status every transport gives for a dead peer:
-/// `RpcRetryInterceptor` retries it and reconnects before the next attempt.
+/// `RpcRetryInterceptor` retries it after the connection's next attempt.
 /// [reconnecting] and the message still say which state it is: a reconnect in
-/// flight resolves itself, a failed one needs `reconnect()`.
+/// flight resolves itself, a stopped one needs `connect()`.
 final class RpcNoConnectionException extends RpcStatusException {
-  /// [what] names the thing, e.g. `'Transport'`.
+  /// [what] names the thing, e.g. `'RpcClientConnection'`.
   RpcNoConnectionException(this.what, {required this.reconnecting})
     : super(
         RpcStatus.unavailable,
         reconnecting
             ? '$what is reconnecting and has no connection; retry.'
-            : '$what is disconnected and has no connection; call reconnect(). '
-                  'A failed reconnect leaves it recoverable, not closed.',
+            : '$what has no connection and is not reconnecting; call '
+                  'connect().',
       );
 
   /// The thing with no connection, for a caller that wants to branch on it.

@@ -42,9 +42,7 @@ Future<void> _frameAndSend(
 /// wrong in both directions, since a tighter policy is then not applied and a
 /// looser one is silently capped.
 RpcSecurityPolicy _policyOf(IRpcTransport transport) =>
-    transport is IRpcSecurityPolicyAware
-    ? (transport as IRpcSecurityPolicyAware).securityPolicy
-    : const RpcSecurityPolicy();
+    transport.securityPolicy;
 
 /// Builds a parser bounded by [transport]'s policy rather than by
 /// [RpcMessageParser]'s defaults. See [_policyOf].

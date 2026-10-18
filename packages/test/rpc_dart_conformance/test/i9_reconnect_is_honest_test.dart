@@ -32,8 +32,8 @@ import 'support/pipe.dart';
 import 'support/tcp_peer.dart';
 
 /// Members the invariant's second half exempts. Neither has a readiness
-/// signal (`IRpcTransportReadiness`), so RpcClientConnection reports Online
-/// the moment the factory returns, and that is the expected reading.
+/// signal (their `ready` completes at once), so RpcClientConnection reports
+/// Online the moment the factory returns, and that is the expected reading.
 const _notApplicable = <String, String>{
   'channel':
       'NOT APPLICABLE (I-9): a bare channel has no handshake; websocket and '
@@ -50,7 +50,7 @@ const _backoff = ExponentialBackoff(
 
 /// A connection over [factory] whose every state is recorded.
 (RpcClientConnection, List<RpcClientConnectionState>) _connection(
-  Future<IRpcReconnectableTransport> Function() factory,
+  Future<IRpcTransport> Function() factory,
 ) {
   final states = <RpcClientConnectionState>[];
   final connection = RpcClientConnection(
@@ -97,10 +97,6 @@ Future<void> _eventuallyServes(RpcCallerEndpoint endpoint) async {
   }
 }
 
-Future<IRpcReconnectableTransport> _reconnectable(
-  Future<IRpcTransport> transport,
-) async => (await transport) as IRpcReconnectableTransport;
-
 void main() {
   group('I-9 Online again after the server restarts:', () {
     for (final member in members) {
@@ -110,12 +106,11 @@ void main() {
         const policy = RpcSecurityPolicy();
 
         late final RpcClientConnection c;
-        final Future<IRpcReconnectableTransport> Function() factory;
+        final Future<IRpcTransport> Function() factory;
         final Future<void> Function() restart;
         switch (rig) {
           case NetworkRig():
-            factory = () =>
-                _reconnectable(rig.member.connectTo(rig.proxy.port, policy));
+            factory = () => rig.member.connectTo(rig.proxy.port, policy);
             // http has no connection to lose: nothing reports Offline there.
             final dropIsVisible = rig.member is! HttpMember;
             restart = () async {
@@ -127,7 +122,7 @@ void main() {
               await rig.restartServer();
             };
           case ChannelRig():
-            factory = () => _reconnectable(rig.connect(policy));
+            factory = () => rig.connect(policy);
             restart = () async {
               await rig.stopServer();
               await _reaches<RpcClientOffline>(c, 'server stopped');
@@ -165,7 +160,7 @@ void main() {
         skip: _notApplicable[member.name],
         () async {
           const policy = RpcSecurityPolicy();
-          final Future<IRpcReconnectableTransport> Function() factory;
+          final Future<IRpcTransport> Function() factory;
           switch (member) {
             case NetworkMember():
               final silent = await TcpProxy.start(
@@ -173,8 +168,7 @@ void main() {
                 behaviour: PeerBehaviour.silent,
               );
               addTearDown(silent.close);
-              factory = () =>
-                  _reconnectable(member.connectTo(silent.port, policy));
+              factory = () => member.connectTo(silent.port, policy);
             case ChannelMember():
               factory = () async => RpcChannelTransport.fromChannel(
                 channel: Pipe(behaviour: PeerBehaviour.silent).client,

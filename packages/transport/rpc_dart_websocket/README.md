@@ -59,16 +59,14 @@ import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 
 Future<RpcWebSocketCallerTransport> connectWithOptions(
   Future<String> Function() fetchToken,
-) {
+) async {
   return RpcWebSocketCallerTransport.connect(
     Uri.parse('wss://api.example.com/rpc'),
     protocols: ['rpc-v1'],
     policy: const RpcSecurityPolicy(),
     pingInterval: const Duration(seconds: 30),
     connectTimeout: const Duration(seconds: 10),
-    headersProvider: () async => {
-      'Authorization': 'Bearer ${await fetchToken()}',
-    },
+    headers: {'Authorization': 'Bearer ${await fetchToken()}'},
   );
 }
 ```
@@ -79,9 +77,8 @@ Future<RpcWebSocketCallerTransport> connectWithOptions(
 | `policy` | `RpcSecurityPolicy()` | Limits applied to this connection. |
 | `pingInterval` | off | Keepalive. See below. |
 | `enableCompression` | `false` | Offer permessage-deflate. See below. |
-| `headers` | none | Headers on the upgrade request. VM only. |
-| `headersProvider` | none | Called for the first upgrade and for every reconnect. Use it for tokens that expire. Pass `headers` or `headersProvider`, not both. |
-| `connectTimeout` | 30 s | Bounds the whole open and every reconnect, on both platforms. `null` waits without a bound: a server that accepts TCP and never completes the upgrade then holds `connect` forever. |
+| `headers` | none | Headers on the upgrade request. VM only. For a token that expires, read it in the `RpcClientConnection` factory, which calls `connect` once per attempt. |
+| `connectTimeout` | 30 s | Bounds the whole open, on both platforms. `null` waits without a bound: a server that accepts TCP and never completes the upgrade then holds `connect` forever. |
 
 **Keepalive.** A half-open connection (a NAT, load balancer or mobile network
 that stops forwarding without closing) is detected only by `pingInterval`.
@@ -92,7 +89,7 @@ and closes the socket when one goes unanswered. Pick about half the shortest
 idle timeout on the network path.
 
 **Headers in the browser.** The browser WebSocket API cannot set request
-headers, so `headers` and `headersProvider` are ignored there (not rejected).
+headers, so `headers` are ignored there (not rejected).
 Authenticate a web client with a cookie, a `Sec-WebSocket-Protocol` value or a
 query parameter.
 
@@ -108,41 +105,23 @@ its payload is buffered. A whole message past a stricter `policy` still fails
 only its own call.
 
 If you build the `WebSocketChannel` yourself, wrap it with the constructor:
-`RpcWebSocketCallerTransport(channel, reconnectFactory: ..., pingInterval: ...)`.
-Here `pingInterval` runs the library's own ping. If the channel already has a
-native ping (`IOWebSocketChannel.connect(url, pingInterval: ...)`), leave
-`pingInterval` null or pass `platformHandlesPing: true`.
+`RpcWebSocketCallerTransport(channel, pingInterval: ...)`. Here `pingInterval`
+runs the library's own ping. If the channel already has a native ping
+(`IOWebSocketChannel.connect(url, pingInterval: ...)`), leave `pingInterval`
+null or pass `platformHandlesPing: true`.
 
 The channel may still be connecting when you wrap it. The transport's `ready`
-(`IRpcTransportReadiness`) completes when the handshake answers and fails if
-it never does; until then `health()` reads degraded. `RpcClientConnection`
-waits on it before it reports Online.
+completes when the handshake answers and fails if it never does; until then
+`health()` reads degraded. `RpcClientConnection` waits on it before it reports
+Online.
 
 ### Reconnect
 
-The transport implements `IRpcReconnectableTransport`. `reconnect()` opens a new
-socket with the same options (headers included) and keeps the same transport
-object and `incomingMessages` stream, so endpoints built on it stay valid.
-Concurrent `reconnect()` calls share one attempt. It returns a health status and
-does not throw.
-
-```dart
-import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
-
-Future<bool> tryReconnect(RpcWebSocketCallerTransport transport) async {
-  final status = await transport.reconnect();
-  return status.isHealthy;
-}
-```
-
-When the socket drops, the transport stays open for `reconnect()` and emits one
-event on `connectionLost` (`IRpcConnectionLossReporting`); `incomingMessages`
-neither ends nor errors. Calls in flight when the socket drops are lost; only
-new calls use the new socket.
-
-For automatic reconnect with backoff, give `RpcClientConnection` from `rpc_dart`
-a factory that calls `RpcWebSocketCallerTransport.connect`. The connection
-reconnects on that event.
+One transport is one socket. When the socket drops the transport closes, and
+calls in flight on it fail. For reconnects with backoff, give
+`RpcClientConnection` from `rpc_dart` a factory that calls
+`RpcWebSocketCallerTransport.connect`; build endpoints once on
+`connection.transport`.
 
 A failed `connect` throws an `RpcStatusException`, as the http caller does:
 

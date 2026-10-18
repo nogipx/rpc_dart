@@ -44,15 +44,9 @@ class NotifyServiceFactory {
           repo,
           ownsRepository: repository == null,
         ),
-        dataTransferMode: transport is RpcInMemoryTransport
-            ? RpcDataTransferMode.zeroCopy
-            : RpcDataTransferMode.auto,
       ),
       publishResponder: NotifyPublishResponder(
         publisher: INotifyPublisher.repository(repo),
-        dataTransferMode: transport is RpcInMemoryTransport
-            ? RpcDataTransferMode.zeroCopy
-            : RpcDataTransferMode.auto,
       ),
     );
   }

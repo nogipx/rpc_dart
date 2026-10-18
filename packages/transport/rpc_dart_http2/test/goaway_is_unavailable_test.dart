@@ -7,28 +7,15 @@
 //
 // GOAWAY is the routine case, not an exotic one: every load balancer drains
 // with it, and every gRPC server with a max-connection-age sends it on a
-// schedule. The defect was an inconsistency inside one transport -- the same
-// underlying condition produced two different answers:
+// schedule. A call that dies mid-flight and a call made after the drain must
+// both be UNAVAILABLE: RpcRetryInterceptor's default retries UNAVAILABLE and
+// RESOURCE_EXHAUSTED, and its doc states the intent outright: "a lost
+// connection becomes UNAVAILABLE". A raw StateError, or the FAILED_PRECONDITION
+// of a transport this side closed, is not retried.
 //
-//   connection dies MID-call  -> RpcStatusException(14) "No response received"
-//                                (caller_pipeline), retryable
-//   connection dead, NEW call -> StateError, NOT retryable
-//
-// and only one of them is usable. RpcRetryInterceptor's default retries
-// UNAVAILABLE and RESOURCE_EXHAUSTED, and its doc states the intent outright:
-// "a lost connection becomes UNAVAILABLE". Measured against a raw
-// package:http2 server that answered one call and then sent GOAWAY, with
-// maxAttempts: 3 and attempts counted INSIDE the retry interceptor:
-//
-//   before: 1 attempt
-//   after : 3 attempts
-//
-// Same defect shape as e4756025, where non-200 statuses collapsing to INTERNAL
-// made 502/503/504 permanently non-retryable.
-//
-// Note this makes the failure CLASSIFIABLE; it does not by itself make a retry
-// succeed on a dead connection -- that needs reconnect(), exactly as it
-// already does for the mid-call UNAVAILABLE path.
+// UNAVAILABLE makes the failure CLASSIFIABLE. The bare transport closes when
+// its connection goes, so a retry on it cannot succeed; under
+// RpcClientConnection the retry waits for the next connection and recovers.
 //
 // Driven by a raw package:http2 peer because rpc_dart's own responder never
 // sends GOAWAY on its own.
@@ -142,9 +129,24 @@ void main() {
     expect((error as RpcStatusException).statusCode, RpcStatus.unavailable);
   });
 
-  test('a drained connection is retried as the retry doc promises', () async {
+  test('a drained connection recovers under RpcClientConnection', () async {
+    final connection = RpcClientConnection(
+      transportFactory: () =>
+          RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: socket.port),
+      backoff: const ExponentialBackoff(
+        baseDelay: Duration(milliseconds: 20),
+        maxDelay: Duration(milliseconds: 50),
+        jitter: false,
+      ),
+    );
+    addTearDown(connection.dispose);
+    connection.connect();
+    await connection.state
+        .firstWhere((s) => s is RpcClientOnline)
+        .timeout(const Duration(seconds: 5));
+
     var attempts = 0;
-    final caller = RpcCallerEndpoint(transport: transport)
+    final caller = RpcCallerEndpoint(transport: connection.transport)
       ..addInterceptor(
         RpcRetryInterceptor(
           maxAttempts: 3,
@@ -164,31 +166,20 @@ void main() {
     await drain();
     attempts = 0;
 
+    // `drain()` sends GOAWAY on ONE connection and leaves the listener up --
+    // the canonical load-balancer case. The connection reconnects in the
+    // background, and a call that lands before it is back is UNAVAILABLE (the
+    // first test), which the retry waits out; so the call RECOVERS whichever
+    // way the timing falls, in at most the retry budget.
     final afterDrain = await callAndCatch(caller);
-    expect(
-      attempts,
-      greaterThan(1),
-      reason:
-          'RpcRetryInterceptor retries UNAVAILABLE and its doc says "a lost '
-          'connection becomes UNAVAILABLE"; a StateError is not a status, so '
-          'a routine load-balancer drain got exactly one attempt',
-    );
-    // The promise in this test's name, made real by B-61. `drain()` sends
-    // GOAWAY on ONE connection and leaves the listener up — the canonical
-    // load-balancer case — so a retry that reconnects RECOVERS.
-    //
-    // This used to assert `attempts == 3`, counting failures as a proxy for
-    // "a retry happened". The proxy was only meaningful while every attempt
-    // went back to the same dead connection and none could pass; now the
-    // second one succeeds, and asserting three failures would pin the
-    // hollow version of the promise.
     expect(
       afterDrain,
       isNull,
       reason:
-          'the retry reconnects, so a drained connection recovers instead of '
-          'spending the whole budget to reach the same failure',
+          'a drained connection must recover instead of spending the whole '
+          'retry budget to reach the same failure',
     );
+    expect(attempts, inInclusiveRange(1, 3));
   });
 
   test('GUARD: health still reports the drained connection honestly', () async {

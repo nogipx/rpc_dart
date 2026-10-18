@@ -74,7 +74,7 @@ Future<void> runCalculator() async {
 
 `spawn` completes once the entrypoint has run, and returns a record:
 
-- `transport` — the host-side `IRpcReconnectableTransport`. Give it to an
+- `transport` — the host-side `IRpcTransport`. Give it to an
   `RpcCallerEndpoint`.
 - `kill` — closes the transport and terminates the isolate (or worker)
   immediately. Calls in flight fail. Safe to call more than once.

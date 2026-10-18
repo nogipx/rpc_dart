@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Round 142 stopped the stream-id sequence restarting inside a transport's own
-// reconnect(). RpcClientConnection does not reconnect a transport -- it builds a
-// WHOLE NEW one from its factory and swaps it into the proxy -- so that fix did
-// not reach the path applications are actually pointed at for auto-reconnect.
+// RpcClientConnection does not reconnect a transport -- it builds a WHOLE NEW
+// one from its factory and swaps it into the proxy -- and a fresh transport
+// starts its stream ids at 1 again.
 //
 // Measured through the proxy over a real websocket server, one forceReconnect
 // between two calls:
@@ -15,15 +14,15 @@
 //                                  request stream close and finished serving it
 //     after                     -> A keeps 1, B gets 3
 //
-// The proxy now carries a WATERMARK across transports, via the
-// IRpcStreamIdSequence capability. Three things it must get right, all of which
-// have already been got wrong once:
+// The proxy now carries a WATERMARK across transports, via
+// IRpcTransport.lastIssuedStreamId and resumeStreamIdsAfter. Three things it
+// must get right, all of which have already been got wrong once:
 //   - read the outgoing transport's cursor as early as the path allows;
 //   - the cursor must OUTLIVE that transport's close, because on a drop the
 //     peer started the transport has already closed itself by the time the
 //     proxy hears about it (round 234);
-//   - the wrapper must FORWARD the capability, or the `is` check finds only
-//     IRpcTransport and the watermark is silently never carried.
+//   - a decorator must FORWARD the cursor to the transport it wraps. Both
+//     members are required, so a decorator that forgets them does not compile.
 //
 // Driven against in-memory transports so it stays a core test: the defect is in
 // the proxy, not in any particular socket.
@@ -58,9 +57,7 @@ final class _Svc extends RpcResponderContract {
 
 /// Forwards every [IRpcTransport] member and declares nothing else.
 ///
-/// What a metrics or auth wrapper looks like written the obvious way, and the
-/// shape round 217 measured erasing the watermark: the `is` check finds only
-/// IRpcTransport, both hops return silently, and id 1 is handed out twice.
+/// What a metrics or auth wrapper looks like written the obvious way.
 final class _Plain implements IRpcTransport {
   _Plain(this.inner);
   final IRpcTransport inner;
@@ -94,9 +91,24 @@ final class _Plain implements IRpcTransport {
   @override
   Future<RpcHealthStatus> health() => inner.health();
   @override
-  Future<RpcHealthStatus> reconnect() => inner.reconnect();
-  @override
   Future<void> close() => inner.close();
+  @override
+  int get lastIssuedStreamId => inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int id) => inner.resumeStreamIdsAfter(id);
+  @override
+  RpcSecurityPolicy get securityPolicy => inner.securityPolicy;
+  @override
+  Future<void> get ready => inner.ready;
+  @override
+  Future<bool> resetStream(int id, {String? reason}) =>
+      inner.resetStream(id, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
 }
 
 /// One in-memory connection: a fresh pair plus a responder behind it.
@@ -110,13 +122,15 @@ typedef _Fixture = ({
   Future<void> Function() killPeer,
 });
 
-_Fixture _build() {
+/// [decorate] wraps each client transport the factory builds, as an
+/// application's metrics or auth decorator would.
+_Fixture _build({IRpcTransport Function(IRpcTransport)? decorate}) {
   var ended = 0;
   var built = 0;
   final responders = <RpcResponderEndpoint>[];
   final peers = <RpcChannelTransport>[];
 
-  Future<IRpcReconnectableTransport> factory() async {
+  Future<IRpcTransport> factory() async {
     built++;
     final (client, server) = RpcChannelTransport.pair();
     final responder = RpcResponderEndpoint(transport: server);
@@ -124,7 +138,7 @@ _Fixture _build() {
     responder.start();
     responders.add(responder);
     peers.add(server);
-    return client;
+    return decorate == null ? client : decorate(client);
   }
 
   final connection = RpcClientConnection(transportFactory: factory);
@@ -189,98 +203,32 @@ Future<int> _openCall(IRpcTransport t) async {
 }
 
 void main() {
-  // Round 224. Carrying the watermark is not optional for this class, and the
-  // capability is discovered by an `is` check, so a decorator that declares only
-  // IRpcTransport turned the whole mechanism off in silence -- measured at
-  // round 217 as `handlers ended 0 -> 1`, a live bidi call half-closed by an
-  // unrelated dead one. Such a transport is refused at attach instead.
-  group('WITNESS: a transport without IRpcStreamIdSequence is refused', () {
-    ({
-      RpcClientConnection connection,
-      int Function() built,
-      List<String> errors,
-    })
-    build() {
-      var built = 0;
-      final errors = <String>[];
-      final responders = <RpcResponderEndpoint>[];
-
-      // DELIBERATELY UNSOUND. `transportFactory` returns
-      // [IRpcReconnectableTransport], so this is what it takes to reach the
-      // runtime guard at all now -- which is the measurement this group exists
-      // for. See the group's own comment.
-      Future<IRpcReconnectableTransport> factory() async {
-        built++;
-        final (client, server) = RpcChannelTransport.pair();
-        final responder = RpcResponderEndpoint(transport: server);
-        responder.registerServiceContract(_Svc(() {}));
-        responder.start();
-        responders.add(responder);
-        final dynamic plain = _Plain(client);
-        return plain as IRpcReconnectableTransport;
-      }
-
-      final connection = RpcClientConnection(
-        transportFactory: factory,
-        logger: (level, message) {
-          if (level == 'error') errors.add(message);
-        },
-      );
-      addTearDown(() async {
-        await connection.dispose();
-        for (final r in responders) {
-          await r.close();
-        }
-      });
-      return (connection: connection, built: () => built, errors: errors);
-    }
-
-    test(
-      'the connection does not come online, and the reason says why',
-      () async {
-        final f = build();
-        f.connection.connect();
-
-        final deadline = DateTime.now().add(const Duration(seconds: 5));
-        while (DateTime.now().isBefore(deadline) &&
-            f.connection.currentState is! RpcClientDisconnected) {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-        }
-
-        expect(
-          f.connection.currentState,
-          isA<RpcClientDisconnected>(),
-          reason:
-              'attaching it would hand id 1 out twice, and the first call\'s '
-              'finishSending(1) would half-close the second',
-        );
-        final reason =
-            '${(f.connection.currentState as RpcClientDisconnected).reason}';
-        // Naming the remedy is the point: a bare type error teaches nothing, and
-        // the fix on the user's side is forwarding these two members.
-        expect(reason, contains('IRpcStreamIdSequence'));
-        expect(reason, contains('resumeStreamIdsAfter'));
-        expect(reason, contains('lastIssuedStreamId'));
-        expect(
-          f.errors,
-          isNotEmpty,
-          reason: 'the refusal is also logged at error level',
-        );
-      },
-    );
-
-    test('GUARD: it is refused once, not retried forever', () async {
-      final f = build();
+  // A decorator between the factory and the proxy forwards the cursor to the
+  // transport it wraps, so the watermark still reaches the real sequence and a
+  // live bidi call is not half-closed by an unrelated dead one.
+  test(
+    'WITNESS: through a decorator a dead call does not end a live one',
+    () async {
+      final f = _build(decorate: _Plain.new);
       f.connection.connect();
-      await Future<void>.delayed(const Duration(milliseconds: 700));
+      await _online(f);
 
-      // The refusal sits inside the connect loop, whose catch retries with
-      // backoff. A missing capability is not transient, so retrying would turn
-      // a loud refusal into a silent spin that also rebuilds a transport per
-      // attempt.
-      expect(f.built(), 1);
-    });
-  });
+      final idA = await _openCall(f.connection.transport);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      await _swap(f);
+
+      final idB = await _openCall(f.connection.transport);
+      expect(idB, isNot(idA), reason: 'the decorator dropped the id cursor');
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      final baseline = f.ended();
+
+      await f.connection.transport.finishSending(idA);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(f.ended(), baseline);
+    },
+  );
 
   test('WITNESS: a call after a swap does not reuse a live id', () async {
     final f = _build();
@@ -453,9 +401,7 @@ void main() {
       await _online(f);
 
       final before = f.connection.transport;
-      (before as IRpcStreamIdSequence).resumeStreamIdsAfter(
-        RpcStreamIdManager.maxId - 6,
-      );
+      before.resumeStreamIdsAfter(RpcStreamIdManager.maxId - 6);
       final first = <int>[];
       for (var i = 0; i < 5; i++) {
         final id = before.createStream();

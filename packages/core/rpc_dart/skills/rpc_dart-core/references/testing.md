@@ -22,7 +22,6 @@ SPDX-License-Identifier: MIT
   arrives.
 - Both factories take one `policy:` and give it to both halves. Use it to test
   limits; see `security-and-flow-control.md`.
-- `RpcInMemoryTransport` is a deprecated forwarder. Do not use it.
 - Start the responder (`..start()`) before calling. The caller needs no
   `start()`.
 - Close both endpoints in `tearDown` / `addTearDown`. Closing the caller

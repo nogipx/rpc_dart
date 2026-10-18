@@ -19,15 +19,7 @@ class NotifySubscriber implements INotifySubscriber {
   NotifySubscriber(this._endpoint, this._caller) : _log = LogScope.noop;
 
   factory NotifySubscriber.endpoint(RpcCallerEndpoint endpoint) =>
-      NotifySubscriber(
-        endpoint,
-        NotifySubscribeContractCaller(
-          endpoint,
-          dataTransferMode: endpoint.transport is RpcInMemoryTransport
-              ? RpcDataTransferMode.zeroCopy
-              : RpcDataTransferMode.auto,
-        ),
-      );
+      NotifySubscriber(endpoint, NotifySubscribeContractCaller(endpoint));
 
   final RpcCallerEndpoint _endpoint;
   final NotifySubscribeContractCaller _caller;

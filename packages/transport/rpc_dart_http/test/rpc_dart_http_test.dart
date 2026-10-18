@@ -327,17 +327,6 @@ void main() {
       expect(status.level, RpcHealthLevel.closed);
     });
 
-    test('reconnect_returns_healthy_for_caller', () async {
-      final transport = RpcHttpCallerTransport(
-        baseUrl: 'http://127.0.0.1:9999',
-      );
-
-      final status = await transport.reconnect();
-      expect(status.level, RpcHealthLevel.healthy);
-
-      await transport.close();
-    });
-
     test('responder_transport_closes_pending_with_503', () async {
       final serverTransport = RpcHttpResponderTransport();
       final server = await shelf_io.serve(

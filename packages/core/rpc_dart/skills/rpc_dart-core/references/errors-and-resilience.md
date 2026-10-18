@@ -145,9 +145,10 @@ void configure(RpcCallerEndpoint caller) {
   default predicate, but never overrides the cancellation and deadline rules.
 - It never sleeps past the deadline. If the next delay is longer than `remainingTime`, the last error is
   rethrown immediately. A cancel during backoff ends the wait.
-- On UNAVAILABLE it calls `transport.reconnect()` before the next attempt, but only
-  if `transport.health()` reports unhealthy. It waits for the reconnect no longer than the call's deadline or
-  cancellation; the next attempt then fails with DEADLINE_EXCEEDED or CANCELLED.
+- On an endpoint over `RpcClientConnection.transport`, an UNAVAILABLE whose transport reports unhealthy
+  waits for the connection's next reconnect attempt before retrying, no longer than the call's deadline or
+  cancellation; the next attempt then fails with DEADLINE_EXCEEDED or CANCELLED. Over a bare transport
+  it retries on the same one.
 - ONLY for idempotent methods: a lost response is also UNAVAILABLE, so a call
   may have been executed more than once. Deduplicate on the server with `context.requestId`.
 
@@ -216,9 +217,7 @@ void limit(RpcResponderEndpoint responder) {
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
 
-RpcCallerEndpoint connectWithRetry(
-  Future<IRpcReconnectableTransport> Function() open,
-) {
+RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
     transportFactory: open,
     backoff: const ExponentialBackoff(maxDelay: Duration(seconds: 30)),
@@ -242,12 +241,12 @@ RpcCallerEndpoint connectWithRetry(
 - `connectTimeout` bounds each attempt, 30 s by default; `null` disables it.
   A factory that waits on a silent peer (a WebSocket upgrade nobody answers)
   otherwise keeps the connection in `RpcClientConnecting` forever.
-- A transport implementing `IRpcTransportReadiness` (the WebSocket and HTTP/2
-  caller transports do) can be returned before its peer has answered; the
-  connection awaits its `ready` within the same `connectTimeout` and reports
-  Online only after it, so a channel that fails fails the attempt.
-- The factory must return `Future<IRpcReconnectableTransport>`.
-  `RpcChannelTransport` implements it.
+- A transport can be returned before its peer has answered (the WebSocket,
+  socket and HTTP/2 callers can be); the connection awaits its `ready` within
+  the same `connectTimeout` and reports Online only after it, so a channel
+  that fails fails the attempt.
+- The connection is the only layer that reconnects: a transport closes when
+  its connection is lost, and the factory builds the next one.
 - `connect()` returns `void` and does not wait for the connection. A call made before the state is
   `RpcClientOnline` fails with `RpcNoConnectionException` (UNAVAILABLE).
 - Other members: `state` (a broadcast stream), `currentState`, `forceReconnect()`, `disconnect()`
@@ -255,9 +254,9 @@ RpcCallerEndpoint connectWithRetry(
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.
 - A connection that drops within 5 s of coming online counts as a failed attempt, so `maxAttempts` and the backoff
   still apply to a server that accepts and then refuses. One that held up longer starts the count over.
-- `connection.transport.reconnect()` starts nothing: it waits, up to 5 s, for the outcome of the connection's next
-  attempt. So `RpcRetryInterceptor` on an endpoint over `connection.transport` retries after a real connect, not in
-  the backoff's gap, and the connection keeps its own backoff however many calls are retrying.
+- `RpcRetryInterceptor` on an endpoint over `connection.transport` waits, up to 5 s, for the outcome of the
+  connection's next attempt and starts nothing itself. So it retries after a real connect, not in the backoff's
+  gap, and the connection keeps its own backoff however many calls are retrying.
 - Calls that are in flight during a drop are lost. Issue them again.
 
 ## Pitfalls

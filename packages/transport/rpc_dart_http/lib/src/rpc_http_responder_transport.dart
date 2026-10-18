@@ -73,8 +73,7 @@ final class _PendingResponse {
 /// final transport = RpcHttpResponderTransport();
 /// final server = await shelf_io.serve(transport.handler, '127.0.0.1', 8080);
 /// ```
-class RpcHttpResponderTransport
-    implements IRpcTransport, IRpcSecurityPolicyAware {
+class RpcHttpResponderTransport extends IRpcTransport {
   final BufferedBroadcastController<RpcTransportMessage> _incoming =
       BufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
@@ -98,33 +97,18 @@ class RpcHttpResponderTransport
     if (_reported.add(kind)) _logger?.warning(message);
   }
 
-  /// The security policy this transport's OWN checks read: concurrent requests,
-  /// the method path, metadata size, and the request body.
-  ///
-  /// Nullable, and `null` really does switch all of them off — which is why the
-  /// constructor defaults it to `const RpcSecurityPolicy()` rather than leaving
-  /// it absent. Only this field is nullable; [securityPolicy], which the
-  /// PIPELINE reads, falls back to the same default, so a null here made one
-  /// object answer "what policy applies" two different ways — and the response
-  /// side of this very class reads the non-null getter, so the response was
-  /// bounded while the request body was not.
-  final RpcSecurityPolicy? _securityPolicy;
-
-  /// The policy the responder PIPELINE reads, via [IRpcSecurityPolicyAware].
-  ///
-  /// This transport enforces `maxActiveStreams`, the method path, metadata and
-  /// the body size itself — but `maxConcurrentHandlers`, `halfOpenStreamTimeout`
-  /// and the pre-method buffer budget belong to the pipeline, which finds them
-  /// through an `is IRpcSecurityPolicyAware` check. Declare only [IRpcTransport]
-  /// and every one of those goes silently inert: a handler ceiling of 3 admits
-  /// all 30 concurrent calls.
-  ///
-  /// Falls back to the default policy when none was given, which is what the
-  /// pipeline already did for a transport without the capability — so a server
-  /// that passes no policy sees no change.
+  /// The one policy for this transport: its own checks (concurrent requests,
+  /// the method path, metadata size, the request body) and the responder
+  /// pipeline's (`maxConcurrentHandlers`, `halfOpenStreamTimeout`, the
+  /// pre-method buffer budget) read the same value.
   @override
-  RpcSecurityPolicy get securityPolicy =>
-      _securityPolicy ?? const RpcSecurityPolicy();
+  final RpcSecurityPolicy securityPolicy;
+
+  @override
+  int get lastIssuedStreamId => _idManager.lastIssuedId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   /// Optional CORS policy. When set, handles `OPTIONS` preflight requests
   /// automatically and attaches CORS headers to all responses.
@@ -170,19 +154,16 @@ class RpcHttpResponderTransport
   /// Creates the transport.
   ///
   /// [securityPolicy] bounds the request body, the metadata block, the method
-  /// path and concurrent requests. It defaults to a non-null
-  /// [RpcSecurityPolicy] so the built-in limits are enforced out of the box;
-  /// pass an explicit policy to tune them. Set it to `null` only to disable all
-  /// of this transport's own limits (not recommended — this allows unbounded
-  /// request bodies). [RpcHttpServer] takes the same parameter the same way.
+  /// path and concurrent requests. The built-in limits apply by default; pass
+  /// an explicit policy to tune them. [RpcHttpServer] takes the same parameter
+  /// the same way.
   RpcHttpResponderTransport({
     LogScope? logger,
-    RpcSecurityPolicy? securityPolicy = const RpcSecurityPolicy(),
+    this.securityPolicy = const RpcSecurityPolicy(),
     this.corsPolicy,
     this.bodyReadTimeout,
     this.bodyIdleTimeout = const Duration(seconds: 30),
-  }) : _securityPolicy = securityPolicy,
-       _logger = logger?.child('HttpResponderTransport');
+  }) : _logger = logger?.child('HttpResponderTransport');
 
   /// shelf [Handler] to mount on a shelf server or router.
   Handler get handler => _handleRequest;
@@ -286,14 +267,8 @@ class RpcHttpResponderTransport
     }
 
     // Enforce concurrent stream limit.
-    //
-    // Reads the nullable FIELD, not the getter: null still means "this
-    // transport applies none of its own checks", and routing these through the
-    // default-backed getter would silently switch limits on for a server that
-    // passed no policy. That is a separate decision from making the pipeline
-    // able to see the policy, which is what the getter is for.
-    final policy = _securityPolicy;
-    if (policy != null && _pending.length >= policy.maxActiveStreams) {
+    final policy = securityPolicy;
+    if (_pending.length >= policy.maxActiveStreams) {
       _warnRejected(
         _Rejection.streams,
         'Rejected request: too many active streams (${_pending.length})',
@@ -334,7 +309,7 @@ class RpcHttpResponderTransport
     // `parseRpcMethodPath` requires it. Unmounted the two forms are identical, which
     // is why nothing noticed.
     final methodPath = '/${request.url.path}';
-    if (policy != null && !policy.isValidMethodPath(methodPath)) {
+    if (!policy.isValidMethodPath(methodPath)) {
       _warnRejected(
         _Rejection.path,
         'Rejected request: invalid method path "$methodPath"',
@@ -364,56 +339,50 @@ class RpcHttpResponderTransport
         requestHeaders.add(RpcHeader(name, value));
       });
 
-      if (policy != null) {
-        // The AGGREGATE bound. The per-header caps and `maxHeaders` do not imply
-        // a total: their defaults together allow more than an order of magnitude
-        // over `maxMetadataBytes`, every individual header legal.
-        //
-        // Counted here rather than left to the policy because each transport
-        // knows its own byte count -- the frame channel bounds the serialized
-        // payload, http2 the HPACK block, this one the header lines. Same rule,
-        // applied where the number is real.
-        var metadataBytes = 0;
-        for (final h in requestHeaders) {
-          // `name: value\r\n` is the wire form, so this undercounts by 4 per
-          // header and can only ever reject later than the wire would.
-          metadataBytes += h.name.length + h.value.length;
-        }
-        if (metadataBytes > policy.maxMetadataBytes) {
-          _warnRejected(
-            _Rejection.metadataSize,
-            'Rejected request: metadata block of $metadataBytes bytes exceeds '
-            '${policy.maxMetadataBytes} [streamId: $streamId]',
-          );
-          _pending.remove(streamId);
-          _idManager.releaseId(streamId);
-          return _reject(
-            400,
-            request,
-            body:
-                'Metadata violation: metadata block of $metadataBytes bytes '
-                'exceeds the limit of ${policy.maxMetadataBytes} bytes',
-          );
-        }
+      // The AGGREGATE bound. The per-header caps and `maxHeaders` do not imply
+      // a total: their defaults together allow more than an order of magnitude
+      // over `maxMetadataBytes`, every individual header legal.
+      //
+      // Counted here rather than left to the policy because each transport
+      // knows its own byte count -- the frame channel bounds the serialized
+      // payload, http2 the HPACK block, this one the header lines. Same rule,
+      // applied where the number is real.
+      var metadataBytes = 0;
+      for (final h in requestHeaders) {
+        // `name: value\r\n` is the wire form, so this undercounts by 4 per
+        // header and can only ever reject later than the wire would.
+        metadataBytes += h.name.length + h.value.length;
+      }
+      if (metadataBytes > policy.maxMetadataBytes) {
+        _warnRejected(
+          _Rejection.metadataSize,
+          'Rejected request: metadata block of $metadataBytes bytes exceeds '
+          '${policy.maxMetadataBytes} [streamId: $streamId]',
+        );
+        _pending.remove(streamId);
+        _idManager.releaseId(streamId);
+        return _reject(
+          400,
+          request,
+          body:
+              'Metadata violation: metadata block of $metadataBytes bytes '
+              'exceeds the limit of ${policy.maxMetadataBytes} bytes',
+        );
+      }
 
-        try {
-          policy.validateMetadata(RpcMetadata(requestHeaders));
-        } on ArgumentError catch (e) {
-          _warnRejected(
-            _Rejection.metadata,
-            'Rejected request: metadata violation — $e [streamId: $streamId]',
-          );
-          _pending.remove(streamId);
-          _idManager.releaseId(streamId);
-          // The reason travels: the caller now repeats a bounded, single-line
-          // prefix of this body in `grpc-message`, so a peer learns WHICH limit
-          // it hit instead of only "HTTP 400 from /Svc/echo".
-          return _reject(
-            400,
-            request,
-            body: 'Metadata violation: ${e.message}',
-          );
-        }
+      try {
+        policy.validateMetadata(RpcMetadata(requestHeaders));
+      } on ArgumentError catch (e) {
+        _warnRejected(
+          _Rejection.metadata,
+          'Rejected request: metadata violation — $e [streamId: $streamId]',
+        );
+        _pending.remove(streamId);
+        _idManager.releaseId(streamId);
+        // The reason travels: the caller now repeats a bounded, single-line
+        // prefix of this body in `grpc-message`, so a peer learns WHICH limit
+        // it hit instead of only "HTTP 400 from /Svc/echo".
+        return _reject(400, request, body: 'Metadata violation: ${e.message}');
       }
 
       // Read request body.
@@ -446,8 +415,7 @@ class RpcHttpResponderTransport
           // 5`, which is what keeps a unary request at exactly the configured
           // limit acceptable where the bare message limit made the real ceiling
           // `max - 5`.
-          if (policy != null &&
-              builder.length > policy.effectiveMaxBufferedBytes) {
+          if (builder.length > policy.effectiveMaxBufferedBytes) {
             exceeded = true;
             builder.clear();
           }
@@ -455,7 +423,7 @@ class RpcHttpResponderTransport
         if (exceeded) {
           // The CONFIGURED number, not the framed one: see the bound above.
           throw _BodyTooLarge(
-            policy!.maxBufferedBytes ?? policy.maxMessageLengthBytes,
+            policy.maxBufferedBytes ?? policy.maxMessageLengthBytes,
           );
         }
         return builder.takeBytes();
@@ -829,15 +797,6 @@ class RpcHttpResponderTransport
       component: runtimeType.toString(),
       message: 'HTTP responder transport ready',
       details: {'pendingRequests': pendingRequests},
-    );
-  }
-
-  @override
-  Future<RpcHealthStatus> reconnect() async {
-    return RpcHealthStatus.degraded(
-      component: runtimeType.toString(),
-      message: 'Server-side HTTP transport does not support reconnect',
-      details: {'supported': false},
     );
   }
 

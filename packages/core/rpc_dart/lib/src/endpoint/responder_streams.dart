@@ -558,7 +558,7 @@ final class RpcResponderBufferBudget {
 
   /// The transport's connection total, charged instead of [heldBytes]'s own
   /// ceiling when present.
-  final IRpcConnectionBufferTotal? shared;
+  final IRpcConnectionBuffer? shared;
 
   /// Bytes this layer holds across the connection.
   int heldBytes = 0;

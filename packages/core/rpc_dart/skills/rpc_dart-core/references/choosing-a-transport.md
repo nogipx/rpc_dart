@@ -53,13 +53,12 @@ Notes:
 | --- | --- |
 | `RpcChannelTransport.memoryPair({policy})` | Returns `(client, server)`. Objects passed by reference, `supportsZeroCopy == true`. Default for in-process use and unit tests. |
 | `RpcChannelTransport.pair({policy})` | Returns `(client, server)`. In memory but encodes real frames, `supportsZeroCopy == false`. Use in tests to exercise codecs, compression and frame limits as a network transport would. |
-| `RpcChannelTransport.fromChannel({required channel, required isClient, policy, resumeStreamIdsAfter, logger})` | Wraps a raw `IRpcChannel` (bytes in, bytes out) with rpc_dart framing, multiplexing, flow control and policy checks. Build one per side. |
+| `RpcChannelTransport.fromChannel({required channel, required isClient, policy, resumeStreamIdsAfter, ready, logger})` | Wraps a raw `IRpcChannel` (bytes in, bytes out) with rpc_dart framing, multiplexing, flow control and policy checks. Build one per side. `ready` is the channel's own readiness when it is still connecting. |
 
-`RpcInMemoryTransport` is deprecated; use `RpcChannelTransport.memoryPair()`.
 `policy` is an `RpcSecurityPolicy` (see `security-and-flow-control.md`).
 
 `IRpcChannel` and the other transport-authoring types (frames, the message
-parser, the capability interfaces) are not in `rpc_dart.dart`. Import
+parser, the flow-control interfaces) are not in `rpc_dart.dart`. Import
 `package:rpc_dart/transport.dart`, which re-exports `rpc_dart.dart`.
 
 ```dart
@@ -90,37 +89,23 @@ RpcCallerEndpoint overCustomPipe(IRpcChannel channel) => RpcCallerEndpoint(
 
 ## Reconnecting
 
-- `IRpcReconnectableTransport` is an `IRpcTransport` that also exposes its
-  stream-id cursor (`lastIssuedStreamId`, `resumeStreamIdsAfter`). A replacement
-  transport resumes ids after the old one, so late frames from dead calls never
-  land on new calls. `RpcChannelTransport` and the http, http2, websocket,
-  isolate and wasm caller transports implement it.
-- `endpoint.reconnect()` asks the transport to reconnect and returns an
-  `RpcEndpointHealth` (`endpointStatus`, `dependencies['transport']`). It never
-  throws: an unsupported or failed reconnect comes back as a degraded or
-  unhealthy status. `RpcChannelTransport.reconnect()` does not reconnect (it
-  reports `degraded` with `supported: false`); build a new transport instead.
-- For automatic reconnect with backoff, wrap a transport factory in
-  `RpcClientConnection(transportFactory: ...)` (it requires a factory returning
-  `IRpcReconnectableTransport`), call `connect()`, and give
-  `connection.transport` to a single `RpcCallerEndpoint` that you keep for the
-  app's lifetime. See `errors-and-resilience.md`.
-- `RpcClientConnection` notices a drop when the transport's `incomingMessages`
-  ends or errors, or when a transport implementing
-  `IRpcConnectionLossReporting` emits on `connectionLost`. The websocket and
-  http2 caller transports implement it, because they stay open for their own
-  `reconnect()` and their message stream does neither.
+- A transport is one connection. When the connection is lost the transport
+  closes, and its `incomingMessages` ends; no transport reconnects itself.
+- `RpcClientConnection(transportFactory: ...)` is the one layer that
+  reconnects: it builds a new transport from the factory after each drop, with
+  backoff. Call `connect()` and give `connection.transport` to a single
+  endpoint that you keep for the app's lifetime. See
+  `errors-and-resilience.md`.
+- Every `IRpcTransport` carries its stream-id cursor (`lastIssuedStreamId`,
+  `resumeStreamIdsAfter`). The connection resumes the new transport's ids after
+  the old one's, so late frames from dead calls never land on new calls. In
+  peer mode it also ends the calls the peer had opened on the lost connection.
 - In-flight calls do not survive a reconnect. Only new calls do; reissue the
   lost ones yourself (idempotent methods only).
 
 ```dart
-Future<bool> tryReconnect(RpcCallerEndpoint endpoint) async {
-  final report = await endpoint.reconnect();
-  return report.endpointStatus.level == RpcHealthLevel.healthy;
-}
-
 RpcCallerEndpoint resilientCaller(
-  Future<IRpcReconnectableTransport> Function() connectTransport,
+  Future<IRpcTransport> Function() connectTransport,
 ) {
   final connection = RpcClientConnection(transportFactory: connectTransport)
     ..connect();
@@ -142,10 +127,10 @@ RpcCallerEndpoint resilientCaller(
   cannot call them.
 - Do not create a new `RpcCallerEndpoint` per reconnect when using
   `RpcClientConnection`; its transport proxy is stable.
-- A transport decorator that forwards `IRpcTransport` but not the
-  `IRpcReconnectableTransport` members loses reconnect safety; implement the
-  capability interfaces it wraps. One that hides `IRpcConnectionLossReporting`
-  leaves `RpcClientConnection` online over a dead connection.
-- A custom transport that stays open across a lost connection must implement
-  `IRpcConnectionLossReporting`, or `RpcClientConnection` never notices the
-  drop. One that closes itself needs nothing: the stream's end says it.
+- A transport decorator `implements IRpcTransport` and forwards every member,
+  the optional ones included (`securityPolicy`, `ready`, `resetStream`,
+  `flowCredit`, `grantsMessageCredit`, `connectionBuffer`, the stream-id
+  cursor). The compiler insists; a decorator that `extends` instead silently
+  inherits the defaults for what it does not override.
+- A custom transport must close when its connection is lost. One that stays
+  open leaves `RpcClientConnection` online over a dead connection.

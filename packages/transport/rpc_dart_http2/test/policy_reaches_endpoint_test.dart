@@ -3,21 +3,16 @@
 // SPDX-License-Identifier: MIT
 
 // The responder pipeline reads maxActiveStreams and halfOpenStreamTimeout, and
-// the stream parsers read maxMessageLengthBytes, through an
-// `is IRpcSecurityPolicyAware` check on the transport -- falling back to
-// `const RpcSecurityPolicy()` when it is absent.
+// the stream parsers read maxMessageLengthBytes, from the transport's
+// `securityPolicy`, whose default is `const RpcSecurityPolicy()`.
 //
-// RpcHttp2Server plumbs its securityPolicy into RpcHttp2ResponderTransport, but
-// that transport declared only IRpcTransport, so the pipeline never saw it.
-// Nothing else bounds inbound concurrency here: the server does not derive
-// SETTINGS_MAX_CONCURRENT_STREAMS from the policy, so the pipeline is the only
-// enforcer.
+// RpcHttp2Server plumbs its securityPolicy into RpcHttp2ResponderTransport,
+// which must report it there. Nothing else bounds inbound concurrency here:
+// the server does not derive SETTINGS_MAX_CONCURRENT_STREAMS from the policy,
+// so the pipeline is the only enforcer.
 //
-// Measured against a server configured `maxActiveStreams: 3`, with a permissive
-// client so the client's own limiter is not what is being tested:
-//
-//   before: 60 of 60 concurrent streams admitted
-//   after :  3 of 60
+// The server is configured `maxActiveStreams: 3`, with a permissive client so
+// the client's own limiter is not what is being tested.
 
 import 'dart:async';
 
@@ -103,10 +98,13 @@ void main() {
           'default ceiling and admitted every stream the peer opened',
     );
 
-    expect(serverEndpoint?.transport, isA<IRpcSecurityPolicyAware>());
-    expect(client, isA<IRpcSecurityPolicyAware>());
     expect(
-      (client as IRpcSecurityPolicyAware).securityPolicy.maxActiveStreams,
+      serverEndpoint?.transport.securityPolicy.maxActiveStreams,
+      3,
+      reason: 'the responder must report the server policy, not a default one',
+    );
+    expect(
+      client.securityPolicy.maxActiveStreams,
       100000,
       reason: 'the caller must report its own policy, not a default one',
     );
@@ -126,8 +124,8 @@ void main() {
     // Same plumbing, different field -- and worth its own case because this one
     // bounds WORK rather than stream state: a handler that outlives its call
     // keeps its slot, which is invisible to `openStreams`. If the transport
-    // ever stops declaring IRpcSecurityPolicyAware the ceiling silently
-    // disappears, exactly as maxActiveStreams once did.
+    // ever stops reporting its securityPolicy the ceiling silently
+    // disappears.
     RpcResponderEndpoint? serverEndpoint;
 
     final server = RpcHttp2Server(

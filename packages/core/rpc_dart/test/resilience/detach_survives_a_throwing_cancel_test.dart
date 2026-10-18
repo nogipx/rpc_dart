@@ -25,7 +25,7 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A transport whose inbound subscription throws on cancel when asked to.
-final class _Fake implements IRpcReconnectableTransport {
+final class _Fake extends IRpcTransport {
   _Fake({required this.throwOnCancel, required this.onClosed});
 
   final bool throwOnCancel;
@@ -72,9 +72,6 @@ final class _Fake implements IRpcReconnectableTransport {
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 'fake', message: 'ok');
   @override
-  Future<RpcHealthStatus> reconnect() async =>
-      RpcHealthStatus.healthy(component: 'fake', message: 'ok');
-  @override
   int get lastIssuedStreamId => -1;
   @override
   void resumeStreamIdsAfter(int streamId) {}
@@ -98,7 +95,7 @@ _Rig _build({required bool throwOnCancel}) {
   var built = 0;
   var closed = 0;
 
-  Future<IRpcReconnectableTransport> factory() async {
+  Future<IRpcTransport> factory() async {
     built++;
     return _Fake(throwOnCancel: throwOnCancel, onClosed: () => closed++);
   }

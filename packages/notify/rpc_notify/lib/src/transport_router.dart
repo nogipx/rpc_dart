@@ -21,7 +21,7 @@ typedef PrioritizedRoutingRule = ({
 
 /// Proxy that routes RPC calls to transports using prioritized rules.
 /// Extracts `serviceName` from the `x-route-service` header set by caller endpoints.
-final class RpcTransportRouter implements IRpcTransport {
+final class RpcTransportRouter extends IRpcTransport {
   /// All routing rules sorted by priority (descending).
   final List<PrioritizedRoutingRule> _routingRules = [];
 
@@ -562,71 +562,10 @@ final class RpcTransportRouter implements IRpcTransport {
   }
 
   @override
-  Future<RpcHealthStatus> reconnect() async {
-    if (_closed) {
-      return RpcHealthStatus.closed(
-        component: runtimeType.toString(),
-        message: 'Transport router is closed',
-        details: {
-          'closed': true,
-          'routingRules': _routingRules.length,
-          'activeStreams': _streamTransports.length,
-        },
-      );
-    }
+  int get lastIssuedStreamId => _idManager.lastIssuedId;
 
-    final seenTransports = <IRpcTransport>{};
-    final dependencyStatuses = <Map<String, Object?>>[];
-    var aggregatedLevel = RpcHealthLevel.healthy;
-
-    for (final rule in _routingRules) {
-      final transport = rule.transport;
-      if (!seenTransports.add(transport)) continue;
-
-      RpcHealthStatus status;
-      try {
-        status = await transport.reconnect();
-      } catch (error, stackTrace) {
-        _logger.error(
-          'Failed to reconnect transport ${transport.runtimeType}: $error',
-          error: error,
-          stackTrace: stackTrace,
-        );
-        status = RpcHealthStatus.unhealthy(
-          component: transport.runtimeType.toString(),
-          message: 'Reconnect failed: $error',
-          details: {'error': error.toString()},
-        );
-      }
-
-      if (status.level.severity > aggregatedLevel.severity) {
-        aggregatedLevel = status.level;
-      }
-
-      dependencyStatuses.add({
-        'component': status.component,
-        'level': status.level.name,
-        'message': status.message,
-        'details': status.details,
-      });
-    }
-
-    final message = aggregatedLevel == RpcHealthLevel.healthy
-        ? 'Transport router dependencies are ready'
-        : 'Transport router dependencies reported issues during reconnect';
-
-    return RpcHealthStatus(
-      component: runtimeType.toString(),
-      level: aggregatedLevel,
-      message: message,
-      details: {
-        'closed': _closed,
-        'routingRules': _routingRules.length,
-        'activeStreams': _streamTransports.length,
-        'dependencies': dependencyStatuses,
-      },
-    );
-  }
+  @override
+  void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   @override
   Future<void> close() async {

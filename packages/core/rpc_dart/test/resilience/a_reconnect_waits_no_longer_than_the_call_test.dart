@@ -2,10 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Before an UNAVAILABLE retry RpcRetryInterceptor waits for the transport's
-// reconnect(). Behind RpcClientConnection that is the connection's next
-// attempt, up to 5 s away. The wait ends with the call: at its deadline, or
-// when it is cancelled.
+// Before an UNAVAILABLE retry behind RpcClientConnection, RpcRetryInterceptor
+// waits for the connection's next reconnect attempt, up to 5 s away. The wait
+// ends with the call: at its deadline, or when it is cancelled.
 
 import 'dart:async';
 
@@ -142,7 +141,7 @@ Future<(Object?, int)> _call(
   return (outcome, sw.elapsedMilliseconds);
 }
 
-final class _T implements IRpcReconnectableTransport {
+final class _T extends IRpcTransport {
   final _incoming = StreamController<RpcTransportMessage>.broadcast();
   bool _closed = false;
 
@@ -211,7 +210,4 @@ final class _T implements IRpcReconnectableTransport {
   @override
   Future<RpcHealthStatus> health() async =>
       RpcHealthStatus.healthy(component: 't');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async => health();
 }

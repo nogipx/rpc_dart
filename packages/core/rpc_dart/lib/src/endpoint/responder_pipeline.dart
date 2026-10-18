@@ -15,16 +15,7 @@ part of '_index.dart';
 /// the headers BY HAND were missed for exactly that reason -- they did not match
 /// the grep. This exists so there is one way to ask.
 int _trailerMessageCap(IRpcTransport transport) =>
-    _policyOfTransport(transport).maxHeaderValueBytes;
-
-/// The policy [transport] carries, or the defaults when it carries none.
-///
-/// Read through [IRpcSecurityPolicyAware] rather than a second knob, so a
-/// transport without that capability gets the safe default.
-RpcSecurityPolicy _policyOfTransport(IRpcTransport transport) =>
-    transport is IRpcSecurityPolicyAware
-    ? (transport as IRpcSecurityPolicyAware).securityPolicy
-    : const RpcSecurityPolicy();
+    transport.securityPolicy.maxHeaderValueBytes;
 
 /// Mixin providing the responder (incoming request handler) pipeline.
 ///
@@ -120,12 +111,11 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// only, so without this the inbound streams — the only ones an untrusted
   /// peer controls — are counted by nothing.
   ///
-  /// Read through [IRpcSecurityPolicyAware] rather than a second knob, so a
-  /// transport without that capability gets the safe default.
+  /// Read from the transport's policy rather than a second knob.
   int? _respMaxStreamsCache;
 
   int get _respMaxStreams =>
-      _respMaxStreamsCache ??= _policyOfTransport(transport).maxActiveStreams;
+      _respMaxStreamsCache ??= transport.securityPolicy.maxActiveStreams;
 
   /// Un-consumed request bytes held for handlers, per stream and per
   /// connection. The connection ceiling is the connection window: an honest
@@ -139,20 +129,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     final cached = _respBudgetCache;
     if (cached != null) return cached;
     final transport = this.transport;
-    final policy = _policyOfTransport(transport);
-    final noDepth = transport is IRpcNoMessageCredit;
+    final policy = transport.securityPolicy;
+    final noDepth = !transport.grantsMessageCredit;
     return _respBudgetCache = RpcResponderBufferBudget(
       streamBytes: policy.effectiveStreamBufferBytes,
-      // No depth where the peer cannot be told it; see IRpcNoMessageCredit.
+      // No depth where the peer cannot be told it; see
+      // IRpcTransport.grantsMessageCredit.
       // 2^30, not a larger int: the budget's arithmetic must hold on dart2js.
       streamEvents: noDepth ? 1 << 30 : policy.maxBufferedMessagesPerStream,
       // In its place each message weighs what it retains, or the byte totals
       // cannot see a queue of tiny messages.
       perMessageBytes: noDepth ? _heldMessageOverheadBytes : 0,
       connectionBytes: policy.effectiveConnectionBufferBytes,
-      shared: transport is IRpcConnectionBufferTotal
-          ? transport as IRpcConnectionBufferTotal
-          : null,
+      shared: transport.connectionBuffer,
     );
   }
 
@@ -162,7 +151,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// gets the default, which is the value every channel transport used before
   /// this was configurable.
   RpcContentTypeValidation get _respContentTypeValidation =>
-      _policyOfTransport(transport).contentTypeValidation;
+      transport.securityPolicy.contentTypeValidation;
 
   /// Streams holding a handler-concurrency slot: dispatched, work not finished.
   ///
@@ -187,9 +176,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   int? get _respMaxHandlers {
     if (_respMaxHandlersResolved) return _respMaxHandlersCache;
     _respMaxHandlersResolved = true;
-    return _respMaxHandlersCache = _policyOfTransport(
-      transport,
-    ).maxConcurrentHandlers;
+    return _respMaxHandlersCache =
+        transport.securityPolicy.maxConcurrentHandlers;
   }
 
   /// Bytes parked across every stream whose method is still unknown.
@@ -232,8 +220,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// one thing be". A breach fails only the stream that overflowed the budget.
   int? _respMaxPreMethodCache;
 
-  int get _respMaxPreMethodBytes => _respMaxPreMethodCache ??=
-      _policyOfTransport(transport).maxMessageLengthBytes;
+  int get _respMaxPreMethodBytes =>
+      _respMaxPreMethodCache ??= transport.securityPolicy.maxMessageLengthBytes;
 
   /// Cached half-open reclamation window, read from the transport's policy.
   Duration? _respHalfOpenCache;
@@ -242,9 +230,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   Duration? get _respHalfOpenTimeout {
     if (_respHalfOpenResolved) return _respHalfOpenCache;
     _respHalfOpenResolved = true;
-    return _respHalfOpenCache = _policyOfTransport(
-      transport,
-    ).halfOpenStreamTimeout;
+    return _respHalfOpenCache = transport.securityPolicy.halfOpenStreamTimeout;
   }
 
   void _rememberClosedStream(int streamId) {

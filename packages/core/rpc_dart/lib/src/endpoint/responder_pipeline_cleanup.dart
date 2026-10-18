@@ -286,10 +286,7 @@ extension _ResponderPipelineCleanup on RpcResponderPipelineMixin {
     // by the pipeline instead, so the transport would otherwise have to credit
     // on arrival -- which left the client-stream upload direction unbounded.
     // Claiming it here obliges us to credit on consumption below.
-    final transport = this.transport;
-    final flowControlled = transport is IRpcFlowControlled
-        ? transport as IRpcFlowControlled
-        : null;
+    final flowControlled = transport.flowCredit;
     flowControlled?.deferFlowCredit(state.id);
 
     // Everything that arrived before this point was credited on arrival, while

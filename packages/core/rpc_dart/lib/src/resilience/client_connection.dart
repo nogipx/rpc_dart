@@ -65,31 +65,29 @@ typedef RpcConnectionLogger = void Function(String level, String message);
 // Proxy transport (internal)
 // ---------------------------------------------------------------------------
 
+/// What the retry interceptor asks a reconnecting transport for: the outcome
+/// of the next reconnect attempt. Internal to the package.
+abstract interface class IRpcReconnectOutcome {
+  /// Waits for the outcome of the connection's next attempt, without starting
+  /// one.
+  Future<RpcHealthStatus> awaitReconnect();
+}
+
 /// Wraps an inner [IRpcTransport] and swaps it on reconnect.
 ///
 /// The [RpcCallerEndpoint] is created once with this proxy and survives
 /// across reconnects transparently.
 ///
-/// Forwards the inner transport's optional capabilities. Each is discovered by
-/// an `is` check in the layer above, so a wrapper implementing [IRpcTransport]
-/// alone hides them: the configured policy gives way to
-/// `const RpcSecurityPolicy()`, flow credit is returned on arrival instead of
-/// on consumption, and a codec-free call is refused outright.
+/// Forwards every optional member of the inner transport. The flow-control
+/// object is the proxy itself: the layers above may keep the object they were
+/// given, and it must follow the transport that is live now, not the one that
+/// was live when they asked.
 final class _ReconnectingTransportProxy
-    implements
-        IRpcTransport,
-        IRpcStreamReset,
-        IRpcSecurityPolicyAware,
-        IRpcFlowControlled,
-        IRpcStreamIdSequence {
+    implements IRpcTransport, IRpcFlowCredit, IRpcReconnectOutcome {
   _ReconnectingTransportProxy();
 
   IRpcTransport? _inner;
   StreamSubscription<RpcTransportMessage>? _innerSub;
-
-  /// To the live transport's [IRpcConnectionLossReporting.connectionLost], when
-  /// it has one.
-  StreamSubscription<Object?>? _lossSub;
 
   /// Remembered from the transport most recently attached.
   ///
@@ -100,6 +98,7 @@ final class _ReconnectingTransportProxy
   /// the last one attached is the honest answer while none is.
   RpcSecurityPolicy? _lastPolicy;
   bool _lastZeroCopy = false;
+  bool _lastGrantsMessageCredit = true;
 
   /// Buffered, because [attach] is what DRAINS the inner transport's own
   /// buffer. A plain broadcast here discards everything the peer sent before
@@ -120,8 +119,8 @@ final class _ReconnectingTransportProxy
   /// nothing downstream can tell the two apart: the dead call's late
   /// `finishSending(1)` ends the live one's request stream.
   ///
-  /// A transport's own `reconnect()` handles this itself; this path replaces the
-  /// transport wholesale, so it has to carry the watermark across.
+  /// Each reconnect replaces the transport wholesale, so the proxy carries the
+  /// watermark across.
   int _idWatermark = -1;
 
   /// Reads the cursor off [inner] and remembers it.
@@ -134,18 +133,71 @@ final class _ReconnectingTransportProxy
   /// Read as early as the path allows. On [_retire] that is already AFTER the
   /// transport closed itself, since a peer-started drop is reported by that
   /// close — so the cursor must outlive `close()`, which is part of
-  /// [IRpcStreamIdSequence]'s contract. Reading before an orderly close is
-  /// still the safe order for a third-party transport.
+  /// [IRpcTransport.lastIssuedStreamId]'s contract. Reading before an orderly
+  /// close is still the safe order for a third-party transport.
   void _noteIdWatermark(IRpcTransport? inner) {
-    if (inner is! IRpcStreamIdSequence) return;
-    _idWatermark = (inner as IRpcStreamIdSequence).lastIssuedStreamId;
+    if (inner == null) return;
+    _idWatermark = inner.lastIssuedStreamId;
+  }
+
+  /// Stream ids minted on the LIVE transport.
+  ///
+  /// Every caller releases its id in a `finally` and half-closes by id, and
+  /// both go to whatever transport is live NOW. The watermark keeps this side's
+  /// ids disjoint across a reconnect, so a stale one is never live again; this
+  /// set is what lets the proxy drop it instead of forwarding it. A stale id is
+  /// DROPPED, never raised on: every such path is a teardown, and a `finally`
+  /// that throws masks the error that got it there.
+  final Set<int> _ownIds = {};
+
+  /// Stream ids the PEER opened on the live transport.
+  ///
+  /// In peer mode this side answers calls too, on ids the peer chose, and the
+  /// peer numbers from the bottom again on every connection. So an answer
+  /// still being written for the dropped connection's stream N would land on
+  /// whatever call now holds N. [_abandonPeerStreams] ends those calls when the
+  /// connection goes, and the send guards drop what their handlers write after.
+  final Set<int> _peerIds = {};
+
+  /// Whether [streamId] names a stream live on the current transport, in
+  /// either direction.
+  bool _liveHere(int streamId) =>
+      _ownIds.contains(streamId) || _peerIds.contains(streamId);
+
+  /// Ends the peer-initiated calls of a transport that is gone, before the
+  /// next one can open anything.
+  ///
+  /// Said in the protocol the responder already speaks, the peer's
+  /// cancellation notice, so the handler's token is cancelled, its responder
+  /// closed and its stream state reclaimed. Without it the pipeline still holds
+  /// the old stream, and the new call on the same id reads as a repeat opening
+  /// frame and is never dispatched.
+  void _abandonPeerStreams() {
+    _ownIds.clear();
+    if (_peerIds.isEmpty) return;
+    final abandoned = _peerIds.toList(growable: false);
+    _peerIds.clear();
+    if (_msgCtl.isClosed) return;
+    for (final streamId in abandoned) {
+      _msgCtl.add(
+        RpcTransportMessage(
+          streamId: streamId,
+          metadata: RpcMetadata([
+            RpcHeader(RpcHeaders.xClientCancelled, 'true'),
+            RpcHeader(RpcHeaders.xCancellationReason, 'connection lost'),
+            RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
+          ]),
+          isEndOfStream: true,
+        ),
+      );
+    }
   }
 
   /// Called by [RpcClientConnection] when the inner transport closes.
   void Function(Object? error)? onDropped;
 
-  /// Answers [reconnect]: the outcome of the connection's next attempt.
-  Future<RpcHealthStatus> Function()? awaitReconnect;
+  /// Answers [awaitReconnect]: the outcome of the connection's next attempt.
+  Future<RpcHealthStatus> Function()? nextAttempt;
 
   /// Installs [inner] as the live transport, retiring whatever was attached.
   ///
@@ -166,35 +218,34 @@ final class _ReconnectingTransportProxy
     }
 
     final previousSub = _innerSub;
-    final previousLoss = _lossSub;
     final previous = _inner;
     // Read the outgoing transport's cursor while it is still open, then seed
     // the incoming one before any call can reach it. See [_idWatermark].
     _noteIdWatermark(previous);
-    if (inner is IRpcStreamIdSequence && _idWatermark >= 0) {
-      (inner as IRpcStreamIdSequence).resumeStreamIdsAfter(_idWatermark);
-    }
+    if (_idWatermark >= 0) inner.resumeStreamIdsAfter(_idWatermark);
+    _abandonPeerStreams();
     _innerSub = null;
-    _lossSub = null;
     _inner = inner;
-    if (inner is IRpcSecurityPolicyAware) {
-      _lastPolicy = (inner as IRpcSecurityPolicyAware).securityPolicy;
-    }
+    _lastPolicy = inner.securityPolicy;
     _lastZeroCopy = inner.supportsZeroCopy;
+    _lastGrantsMessageCredit = inner.grantsMessageCredit;
 
     // Cancel before closing, so the old transport's terminal event cannot be
     // mistaken for a drop of the new one. The identity guards below make that
     // safe even if a queued event slips through the async cancel.
     if (previousSub != null) unawaited(previousSub.cancel().catchError((_) {}));
-    if (previousLoss != null) {
-      unawaited(previousLoss.cancel().catchError((_) {}));
-    }
     if (previous != null && !identical(previous, inner)) {
       unawaited(previous.close().catchError((_) {}));
     }
 
     _innerSub = inner.incomingMessages.listen(
       (msg) {
+        if (!identical(_inner, inner)) return;
+        // A methodPath on an id this side did not mint is the peer opening a
+        // call; that is the only place the fact is observable.
+        if (msg.methodPath != null && !_ownIds.contains(msg.streamId)) {
+          _peerIds.add(msg.streamId);
+        }
         if (!_msgCtl.isClosed) _msgCtl.add(msg);
       },
       onDone: () {
@@ -220,19 +271,6 @@ final class _ReconnectingTransportProxy
       // cancelled by the first one would never see the connection end.
       cancelOnError: false,
     );
-
-    // A transport that stays open for its own reconnect() neither ends nor
-    // errors the stream above when its connection goes; it reports the loss
-    // here instead, and the proxy treats it as the end.
-    if (inner is IRpcConnectionLossReporting) {
-      _lossSub = (inner as IRpcConnectionLossReporting).connectionLost.listen((
-        error,
-      ) {
-        if (!identical(_inner, inner)) return;
-        _retire(inner);
-        onDropped?.call(error);
-      }, onError: (Object _) {});
-    }
   }
 
   /// Whether [e] describes ONE inbound frame rather than the connection.
@@ -257,6 +295,7 @@ final class _ReconnectingTransportProxy
   void _retire(IRpcTransport inner) {
     _noteIdWatermark(inner);
     _inner = null;
+    _abandonPeerStreams();
     unawaited(inner.close().catchError((_) {}));
   }
 
@@ -276,10 +315,7 @@ final class _ReconnectingTransportProxy
       await _innerSub?.cancel();
     } catch (_) {}
     _innerSub = null;
-    try {
-      await _lossSub?.cancel();
-    } catch (_) {}
-    _lossSub = null;
+    _abandonPeerStreams();
     try {
       await _inner?.close();
     } catch (_) {}
@@ -357,52 +393,78 @@ final class _ReconnectingTransportProxy
     int streamId,
     Object object, {
     bool endStream = false,
-  }) => _require().sendDirectObject(streamId, object, endStream: endStream);
+  }) async {
+    final inner = _require();
+    if (!_liveHere(streamId)) return;
+    _retirePeerStream(streamId, endStream);
+    return inner.sendDirectObject(streamId, object, endStream: endStream);
+  }
 
   @override
-  int createStream() => _require().createStream();
+  int createStream() {
+    final id = _require().createStream();
+    _ownIds.add(id);
+    return id;
+  }
 
+  /// Retires the id here too, which keeps [_ownIds] tracking outstanding
+  /// calls rather than every call ever made.
   @override
-  bool releaseStreamId(int streamId) =>
-      _inner?.releaseStreamId(streamId) ?? false;
+  bool releaseStreamId(int streamId) {
+    if (!_ownIds.remove(streamId)) return false;
+    return _inner?.releaseStreamId(streamId) ?? false;
+  }
 
   @override
   Future<bool> resetStream(int streamId, {String? reason}) async {
-    final inner = _inner;
-    if (inner is! IRpcStreamReset) return false;
-    return (inner as IRpcStreamReset).resetStream(streamId, reason: reason);
+    if (!_liveHere(streamId)) return false;
+    return await _inner?.resetStream(streamId, reason: reason) ?? false;
   }
 
-  // Optional capabilities ─────────────────────────────────────────────────
-  //
-  // Explicit casts rather than `is`-promotion: these interfaces are neither
-  // subtypes nor supertypes of IRpcTransport, so Dart forms no intersection
-  // type and the test promotes nothing.
+  /// Forgets a peer-initiated stream once this side has finished answering
+  /// it, so [_peerIds] does not grow one entry per inbound call.
+  void _retirePeerStream(int streamId, bool endStream) {
+    if (endStream) _peerIds.remove(streamId);
+  }
+
+  // Optional members ──────────────────────────────────────────────────────
 
   @override
-  RpcSecurityPolicy get securityPolicy {
-    final inner = _inner;
-    if (inner is IRpcSecurityPolicyAware) {
-      return (inner as IRpcSecurityPolicyAware).securityPolicy;
-    }
-    return _lastPolicy ?? const RpcSecurityPolicy();
-  }
+  RpcSecurityPolicy get securityPolicy =>
+      _inner?.securityPolicy ?? _lastPolicy ?? const RpcSecurityPolicy();
 
+  /// Ready once attached: the connection awaits the inner transport's own
+  /// [ready] before it attaches it.
+  @override
+  Future<void> get ready => Future<void>.value();
+
+  @override
+  bool get grantsMessageCredit =>
+      _inner?.grantsMessageCredit ?? _lastGrantsMessageCredit;
+
+  @override
+  IRpcFlowCredit get flowCredit => this;
+
+  /// Guarded like the sends: a consumer still draining the previous
+  /// connection's buffers would otherwise credit the new one for bytes nothing
+  /// on it consumed.
   @override
   void deferFlowCredit(int streamId) {
-    final inner = _inner;
-    if (inner is IRpcFlowControlled) {
-      (inner as IRpcFlowControlled).deferFlowCredit(streamId);
-    }
+    if (!_liveHere(streamId)) return;
+    _inner?.flowCredit?.deferFlowCredit(streamId);
   }
 
   @override
   void returnFlowCredit(int streamId, int bytes) {
-    final inner = _inner;
-    if (inner is IRpcFlowControlled) {
-      (inner as IRpcFlowControlled).returnFlowCredit(streamId, bytes);
-    }
+    if (!_liveHere(streamId)) return;
+    _inner?.flowCredit?.returnFlowCredit(streamId, bytes);
   }
+
+  /// None, deliberately. The total belongs to one connection, and a charge
+  /// made on one transport would be released on its replacement after a
+  /// reconnect. Without it the layers above bound what they hold on their own.
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => null;
 
   /// The live transport's cursor, or the last one noted when there is none.
   ///
@@ -410,20 +472,12 @@ final class _ReconnectingTransportProxy
   /// behind it only after a wrap, where it is the right answer. See
   /// [_noteIdWatermark].
   @override
-  int get lastIssuedStreamId {
-    final inner = _inner;
-    return inner is IRpcStreamIdSequence
-        ? (inner as IRpcStreamIdSequence).lastIssuedStreamId
-        : _idWatermark;
-  }
+  int get lastIssuedStreamId => _inner?.lastIssuedStreamId ?? _idWatermark;
 
   @override
   void resumeStreamIdsAfter(int streamId) {
     if (streamId > _idWatermark) _idWatermark = streamId;
-    final inner = _inner;
-    if (inner is IRpcStreamIdSequence) {
-      (inner as IRpcStreamIdSequence).resumeStreamIdsAfter(streamId);
-    }
+    _inner?.resumeStreamIdsAfter(streamId);
   }
 
   @override
@@ -431,18 +485,35 @@ final class _ReconnectingTransportProxy
     int streamId,
     RpcMetadata metadata, {
     bool endStream = false,
-  }) => _require().sendMetadata(streamId, metadata, endStream: endStream);
+  }) async {
+    final inner = _require();
+    // Reached by teardown as well as by ordinary sends: the cancellation
+    // notice is a sendMetadata with endStream, so a cancel racing a reconnect
+    // would otherwise cancel whichever call now holds this id.
+    if (!_liveHere(streamId)) return;
+    _retirePeerStream(streamId, endStream);
+    return inner.sendMetadata(streamId, metadata, endStream: endStream);
+  }
 
   @override
   Future<void> sendMessage(
     int streamId,
     Uint8List data, {
     bool endStream = false,
-  }) => _require().sendMessage(streamId, data, endStream: endStream);
+  }) async {
+    final inner = _require();
+    if (!_liveHere(streamId)) return;
+    _retirePeerStream(streamId, endStream);
+    return inner.sendMessage(streamId, data, endStream: endStream);
+  }
 
+  /// The worst of the stale operations: it puts a real end-of-stream frame on
+  /// the wire, so a dead call would half-close a live one's request stream.
   @override
-  Future<void> finishSending(int streamId) =>
-      _inner?.finishSending(streamId) ?? Future.value();
+  Future<void> finishSending(int streamId) async {
+    if (!_liveHere(streamId)) return;
+    return _inner?.finishSending(streamId);
+  }
 
   @override
   Future<void> close() async {
@@ -466,8 +537,8 @@ final class _ReconnectingTransportProxy
   /// reconnect -- `RpcRetryInterceptor` before each retry -- gets an attempt
   /// that lands after a real connect instead of inside the backoff's gap.
   @override
-  Future<RpcHealthStatus> reconnect() =>
-      awaitReconnect?.call() ??
+  Future<RpcHealthStatus> awaitReconnect() =>
+      nextAttempt?.call() ??
       Future.value(
         RpcHealthStatus.degraded(
           component: 'transport',
@@ -486,17 +557,11 @@ final class _ReconnectingTransportProxy
 /// [transport] to [RpcCallerEndpoint] once — the endpoint does not need to
 /// be recreated when the underlying connection drops and re-establishes.
 ///
-/// This is the recommended, transport-agnostic way to get auto-reconnect on a
-/// client: it works with any [IRpcReconnectableTransport] via
-/// [transportFactory] and exposes observable state, backoff and attempt limits.
-/// (A transport's own `reconnect()` is a lower-level primitive; prefer this
-/// wrapper for new code.)
-///
-/// The factory's return type is [IRpcReconnectableTransport] rather than
-/// [IRpcTransport] because a reconnecting connection cannot fall back when the
-/// stream-id cursor is missing — see that interface. A decorator that forwards
-/// every [IRpcTransport] member and declares nothing else now fails to compile
-/// here instead of disconnecting on the first run.
+/// The one layer that reconnects. A transport closes when its connection is
+/// lost; this builds a new one from [transportFactory] each time and exposes
+/// observable state, backoff and attempt limits. It works with any
+/// [IRpcTransport]: the stream-id cursor it carries across a reconnect is a
+/// required member of that interface.
 ///
 /// Note on semantics:
 /// - **In-flight calls do not survive a reconnect.** Only the endpoint and
@@ -532,7 +597,7 @@ class RpcClientConnection {
   /// example above -- keeps the connection in [RpcClientConnecting] for good,
   /// because nothing else ends that wait.
   RpcClientConnection({
-    required Future<IRpcReconnectableTransport> Function() transportFactory,
+    required Future<IRpcTransport> Function() transportFactory,
     BackoffPolicy backoff = const ExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
     int? maxAttempts,
@@ -547,12 +612,12 @@ class RpcClientConnection {
        _logger = logger,
        _onStateChanged = onStateChanged {
     _proxy.onDropped = _onTransportDropped;
-    _proxy.awaitReconnect = _awaitNextAttempt;
+    _proxy.nextAttempt = _awaitNextAttempt;
     _proxy.isReconnecting = () =>
         _connectingGuard != null && !_connectingGuard!.isCompleted;
   }
 
-  final Future<IRpcReconnectableTransport> Function() _factory;
+  final Future<IRpcTransport> Function() _factory;
   final BackoffPolicy _backoff;
   final bool Function(Object? error)? _shouldReconnect;
   final int? _maxAttempts;
@@ -657,7 +722,7 @@ class RpcClientConnection {
   static const Duration _reconnectWaitLimit = Duration(seconds: 5);
 
   /// The outcome of the reconnect loop's next attempt, for
-  /// [_ReconnectingTransportProxy.reconnect]. Starts nothing: waking the loop
+  /// [_ReconnectingTransportProxy.awaitReconnect]. Starts nothing: waking the loop
   /// early would let every caller's retry become a connect attempt, a burst
   /// against a server that is down.
   Future<RpcHealthStatus> _awaitNextAttempt() async {
@@ -768,7 +833,7 @@ class RpcClientConnection {
 
       try {
         final attemptClock = Stopwatch()..start();
-        final Future<IRpcReconnectableTransport> factoryFuture = _factory();
+        final factoryFuture = _factory();
         final IRpcTransport inner;
         if (_connectTimeout != null) {
           inner = await factoryFuture.timeout(
@@ -811,64 +876,32 @@ class RpcClientConnection {
           return;
         }
 
-        // Without [IRpcStreamIdSequence] the proxy's watermark is a no-op in
-        // BOTH directions and a dead call's teardown ends a live one (see
-        // [_ReconnectingTransportProxy._idWatermark]). The capability is
-        // discovered by an `is` check, so a decorator that forwards every
-        // IRpcTransport member and declares nothing else erases it in silence.
-        //
-        // Refusing costs nothing real: every first-party caller transport
-        // implements it, so what is refused is a hand-written decorator or mock
-        // that is not working today either -- it is losing a call per reconnect.
-        //
-        // Checked on EVERY attach, not just the reconnect, or it stays hidden
-        // until production. Not thrown: the catch below retries with backoff and
-        // a programmer error is not transient, so this ends the loop the way an
-        // exhausted retry budget does.
-        if (inner is! IRpcStreamIdSequence) {
-          unawaited(inner.close().catchError((_) {}));
-          final error = ArgumentError.value(
-            inner.runtimeType.toString(),
-            'transportFactory',
-            'RpcClientConnection needs a transport implementing '
-                'IRpcStreamIdSequence to carry stream ids across a reconnect. '
-                'Forward resumeStreamIdsAfter and lastIssuedStreamId from the '
-                'transport being wrapped',
-          );
-          _logger?.call('error', '$error');
-          _emit(RpcClientDisconnected(reason: error));
-          guard.complete();
-          return;
-        }
-
         // A transport may be handed over before its channel has connected.
         // Online is reported once it can carry calls, within what is left of
         // the attempt's connectTimeout; a channel that fails or never answers
         // fails the attempt like a factory that threw.
-        if (inner is IRpcTransportReadiness) {
-          final readiness = (inner as IRpcTransportReadiness).ready;
-          try {
-            final timeout = _connectTimeout;
-            if (timeout == null) {
-              await readiness;
-            } else {
-              final left = timeout - attemptClock.elapsed;
-              await readiness.timeout(
-                left.isNegative ? Duration.zero : left,
-                onTimeout: () =>
-                    throw TimeoutException('Connect timed out', timeout),
-              );
-            }
-          } catch (_) {
-            unawaited(inner.close().catchError((_) {}));
-            rethrow;
+        final readiness = inner.ready;
+        try {
+          final timeout = _connectTimeout;
+          if (timeout == null) {
+            await readiness;
+          } else {
+            final left = timeout - attemptClock.elapsed;
+            await readiness.timeout(
+              left.isNegative ? Duration.zero : left,
+              onTimeout: () =>
+                  throw TimeoutException('Connect timed out', timeout),
+            );
           }
-          if (_isStopped || _proxy.isClosed) {
-            _logger?.call('info', 'Discarding transport: connection stopped');
-            unawaited(inner.close().catchError((_) {}));
-            guard.complete();
-            return;
-          }
+        } catch (_) {
+          unawaited(inner.close().catchError((_) {}));
+          rethrow;
+        }
+        if (_isStopped || _proxy.isClosed) {
+          _logger?.call('info', 'Discarding transport: connection stopped');
+          unawaited(inner.close().catchError((_) {}));
+          guard.complete();
+          return;
         }
 
         _proxy.attach(inner);
@@ -877,29 +910,6 @@ class RpcClientConnection {
         // not here; see [_stableConnection].
         _online = Stopwatch()..start();
         _emit(const RpcClientOnline());
-        guard.complete();
-        return;
-      } on TypeError catch (e) {
-        // The factory declares [IRpcReconnectableTransport], so a transport
-        // without the stream-id cursor can only arrive through code that
-        // defeats the type -- a cast, `dynamic`, JS interop. The implicit
-        // downcast then throws HERE, before the guard below the await ever
-        // sees the value.
-        //
-        // Ending the loop is the point. A missing capability is a programmer
-        // error and not transient, so leaving it to the generic catch turns
-        // the one-shot refusal into a backoff spin that rebuilds a transport
-        // per attempt -- measured, 2 and counting where it must be 1.
-        final error = ArgumentError.value(
-          '$e',
-          'transportFactory',
-          'RpcClientConnection needs a transport implementing '
-              'IRpcStreamIdSequence to carry stream ids across a reconnect. '
-              'Forward resumeStreamIdsAfter and lastIssuedStreamId from the '
-              'transport being wrapped',
-        );
-        _logger?.call('error', '$error');
-        _emit(RpcClientDisconnected(reason: error));
         guard.complete();
         return;
       } catch (e) {

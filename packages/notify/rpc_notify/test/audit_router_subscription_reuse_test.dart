@@ -24,7 +24,7 @@ import 'package:test/test.dart';
 
 /// Client-side transport with a controllable incoming response stream and
 /// monotonically increasing server stream ids.
-class _ControllableTransport implements IRpcTransport {
+class _ControllableTransport extends IRpcTransport {
   final _idManager = RpcStreamIdManager(isClient: true); // odd ids
   final _controller = StreamController<RpcTransportMessage>.broadcast();
 
@@ -42,6 +42,12 @@ class _ControllableTransport implements IRpcTransport {
 
   @override
   bool releaseStreamId(int streamId) => _idManager.releaseId(streamId);
+
+  @override
+  int get lastIssuedStreamId => _idManager.lastIssuedId;
+
+  @override
+  void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   void emit(RpcTransportMessage message) => _controller.add(message);
 
@@ -83,10 +89,6 @@ class _ControllableTransport implements IRpcTransport {
 
   @override
   Future<RpcHealthStatus> health() async =>
-      RpcHealthStatus.healthy(component: 'ctl', message: 'ok');
-
-  @override
-  Future<RpcHealthStatus> reconnect() async =>
       RpcHealthStatus.healthy(component: 'ctl', message: 'ok');
 }
 

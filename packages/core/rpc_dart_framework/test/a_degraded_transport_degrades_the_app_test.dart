@@ -66,7 +66,23 @@ final class _Reporting implements IRpcTransport {
   @override
   Future<void> close() => _inner.close();
   @override
-  Future<RpcHealthStatus> reconnect() => _inner.reconnect();
+  RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;
+  @override
+  Future<void> get ready => _inner.ready;
+  @override
+  Future<bool> resetStream(int streamId, {String? reason}) =>
+      _inner.resetStream(streamId, reason: reason);
+  @override
+  IRpcFlowCredit? get flowCredit => _inner.flowCredit;
+  @override
+  bool get grantsMessageCredit => _inner.grantsMessageCredit;
+  @override
+  IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  int get lastIssuedStreamId => _inner.lastIssuedStreamId;
+  @override
+  void resumeStreamIdsAfter(int streamId) =>
+      _inner.resumeStreamIdsAfter(streamId);
 }
 
 final class _OneEndpoint implements IRpcServer {

@@ -107,8 +107,7 @@ String? _shortReason(Uint8List body) {
 ///   Request:  POST {baseUrl}{methodPath}  body = gRPC-framed bytes
 ///   Response: 200 OK                      body = gRPC-framed bytes
 ///             All response headers (including grpc-status) are in HTTP headers.
-class RpcHttpCallerTransport
-    implements IRpcReconnectableTransport, IRpcSecurityPolicyAware {
+class RpcHttpCallerTransport extends IRpcTransport {
   final String _baseUrl;
   final http.Client _httpClient;
   final RpcSecurityPolicy _policy;
@@ -164,7 +163,7 @@ class RpcHttpCallerTransport
   /// request after `transport.close()`. Close yours when you are done with it.
   ///
   /// [policy] bounds what a RESPONSE may cost this client, and is reported to
-  /// the endpoint layers through [IRpcSecurityPolicyAware]. It defaults to
+  /// the endpoint layers through [securityPolicy]. It defaults to
   /// `const RpcSecurityPolicy()`, so the built-in limits apply out of the box.
   RpcHttpCallerTransport({
     required String baseUrl,
@@ -310,12 +309,11 @@ class RpcHttpCallerTransport
   @override
   bool get isClosed => _isClosed;
 
-  /// See [IRpcStreamIdSequence].
+  /// See [IRpcTransport.lastIssuedStreamId].
   ///
-  /// This transport has no `reconnect()` of its own, so the only thing that can
-  /// swap it is `RpcClientConnection`, which builds a NEW one per attempt — and
-  /// a new one restarts its ids at 1, handing the first call after the swap the
-  /// id a call from the previous transport still holds.
+  /// `RpcClientConnection` builds a NEW transport per attempt, and a new one
+  /// restarts its ids at 1, handing the first call after the swap the id a call
+  /// from the previous transport still holds.
   ///
   /// The collision bites HARDER here than on the streaming transports, because
   /// HTTP/1.1 buffers the whole request and `finishSending` is what SENDS it:
@@ -390,7 +388,7 @@ class RpcHttpCallerTransport
     if (methodPath == null) {
       // A control frame for a call that is already open -- on this wire format
       // the only one core sends is the cancellation notice, which rides a
-      // metadata frame because the transport implements no IRpcStreamReset.
+      // metadata frame because this transport has no resetStream.
       //
       // There is nothing to put on the wire for it: one request IS the call, and
       // by cancellation time it has been sent. Treating it as an opening frame
@@ -815,16 +813,6 @@ class RpcHttpCallerTransport
         'activeStreams': _activeStreams.length,
         'streamControllers': _streams.length,
       },
-    );
-  }
-
-  @override
-  Future<RpcHealthStatus> reconnect() async {
-    if (_isClosed) return health();
-    return RpcHealthStatus.healthy(
-      component: _component,
-      message: 'HTTP is stateless, no reconnect required',
-      details: {'baseUrl': _shownBaseUrl},
     );
   }
 

@@ -614,7 +614,7 @@ final class IsolateRig extends Rig {
       (await spawn(policy)).transport;
 
   /// Spawns a worker and returns its host-side transport.
-  Future<({IRpcReconnectableTransport transport, void Function() kill})> spawn(
+  Future<({IRpcTransport transport, void Function() kill})> spawn(
     RpcSecurityPolicy policy,
   ) async {
     final events = ReceivePort();
