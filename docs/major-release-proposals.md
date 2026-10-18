@@ -353,8 +353,14 @@ either was used. A unary call is now 4 frames in 2 writes:
 | TCP socket | 320 -> 266 us | 1.2 -> 0.9 ms |
 | unix socket | 90 -> 80 us | 0.74 -> 0.61 ms |
 
-Left for later: an initial per-stream window announced once per connection,
-as HTTP/2's SETTINGS does, would retire the legacy-peer grace and seeding.
+Left for later:
+
+- An initial per-stream window announced once per connection, as HTTP/2's
+  SETTINGS does, would retire the legacy-peer grace and seeding.
+- What remains of a websocket call over loopback is mostly `dart:io`: 21% of
+  the CPU draws the client's masking key from `Random.secure` byte by byte,
+  22% writes, 10% reads. Only a client of our own over a raw `Socket` could
+  draw the key more cheaply; RFC 6455 still requires it to be unpredictable.
 
 ## 5. Contracts, context, registration
 
