@@ -473,6 +473,11 @@ As landed:
     - redaction covers span events (D1);
     - `traceId` on the `LogRecord` base (P8);
     - the console line escaper is shared with rpc_dart_log (D3).
+  - Done (2026-10-19). Every component holds a non-null `LogScope`; the
+    nullable fields are gone from http, http2 and the framework. Endpoints keep
+    `LogController? logger`: they are the roots that name the `rpc.*` scopes.
+    The reflection registry keeps its lazy console logger, so a missing
+    dependency is reported even without one.
 - **Errors (C15).**
   - Every exception lives in `errors.dart`.
   - `RpcException` becomes `abstract base`; the subclasses are `final`.

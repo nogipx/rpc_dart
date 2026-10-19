@@ -62,7 +62,8 @@ class RpcApp {
        _interceptors = List.unmodifiable(interceptors),
        _middlewares = List.unmodifiable(middlewares),
        _afterModulesStartHook = afterModulesStart,
-       _config = config;
+       _config = config,
+       _log = config.logger ?? LogScope.noop;
 
   /// Creates an [RpcApp] that listens for incoming connections via [server].
   ///
@@ -93,7 +94,7 @@ class RpcApp {
     );
   }
 
-  LogScope? get _log => _config.logger;
+  final LogScope _log;
 
   // -------------------------------------------------------------------------
   // Public API
@@ -143,7 +144,7 @@ class RpcApp {
 
     _modules = sortModulesByDependencies(_modulesRaw);
 
-    _log?.info(
+    _log.info(
       'RpcApp starting — ${_modules.length} module(s): '
       '${_modules.map((m) => m.name).join(' → ')}',
     );
@@ -154,8 +155,8 @@ class RpcApp {
 
     _container = RpcContainer();
     for (final module in _modules) {
-      if (_log?.isDebug ?? false) {
-        _log?.debug('configure: ${module.name}');
+      if (_log.isDebug) {
+        _log.debug('configure: ${module.name}');
       }
       module.configure(_container);
       module.configureWithEnv(_container, _env);
@@ -170,8 +171,8 @@ class RpcApp {
       // provides, so a connection arriving earlier would find it missing.
       for (final module in _modules) {
         _abortIfStopRequested();
-        if (_log?.isDebug ?? false) {
-          _log?.debug('onStart: ${module.name}');
+        if (_log.isDebug) {
+          _log.debug('onStart: ${module.name}');
         }
         await module.onStart(_container);
         startedModules.add(module);
@@ -182,24 +183,24 @@ class RpcApp {
       _abortIfStopRequested();
 
       if (_afterModulesStartHook != null) {
-        _log?.debug('afterModulesStart');
+        _log.debug('afterModulesStart');
         await _afterModulesStartHook(_container);
       }
     } on _StoppedDuringStart {
       // Not an error: the caller asked to stop. Thrown into a start() future
       // nobody awaits any more, it would be an unhandled error.
-      _log?.info('RpcApp stopped during start; rolling back');
+      _log.info('RpcApp stopped during start; rolling back');
       await _rollbackStart(startedModules);
       _started = false;
       return;
     } catch (e, st) {
-      _log?.error('RpcApp failed to start', error: e, stackTrace: st);
+      _log.error('RpcApp failed to start', error: e, stackTrace: st);
       await _rollbackStart(startedModules);
       _started = false;
       rethrow;
     }
 
-    _log?.info('RpcApp started');
+    _log.info('RpcApp started');
   }
 
   /// Concurrent calls share one stop: a second one ran every module's onStop
@@ -216,7 +217,7 @@ class RpcApp {
       try {
         await starting.timeout(_config.shutdownTimeout);
       } on TimeoutException {
-        _log?.warning(
+        _log.warning(
           'start() did not reach a stopping point within '
           '${_config.shutdownTimeout.inSeconds}s; stopping what it started',
         );
@@ -226,7 +227,7 @@ class RpcApp {
     }
     if (!_started) return;
 
-    _log?.info('RpcApp stopping');
+    _log.info('RpcApp stopping');
 
     // The SERVER drains, and it goes first so handlers can still reach module
     // resources while they finish.
@@ -239,23 +240,23 @@ class RpcApp {
     // `stop(drainTimeout:)` stops admitting and waits, and it could not be
     // reached from here because `IRpcServer.stop()` did not declare the
     // parameter.
-    _log?.info('Stopping transport server');
+    _log.info('Stopping transport server');
     await _server?.stop(drainTimeout: _config.drainTimeout);
 
     for (final module in _modules.reversed) {
-      if (_log?.isDebug ?? false) {
-        _log?.debug('onStop: ${module.name}');
+      if (_log.isDebug) {
+        _log.debug('onStop: ${module.name}');
       }
       try {
         await module.onStop().timeout(
           _config.shutdownTimeout,
-          onTimeout: () => _log?.warning(
+          onTimeout: () => _log.warning(
             '${module.name}.onStop() timed out after '
             '${_config.shutdownTimeout.inSeconds}s',
           ),
         );
       } catch (e, st) {
-        _log?.error(
+        _log.error(
           'Error in ${module.name}.onStop()',
           error: e,
           stackTrace: st,
@@ -265,8 +266,8 @@ class RpcApp {
 
     for (final module in _modules.reversed) {
       if (module is RpcIsolateModule) {
-        if (_log?.isDebug ?? false) {
-          _log?.debug('terminating isolate: ${module.name}');
+        if (_log.isDebug) {
+          _log.debug('terminating isolate: ${module.name}');
         }
         await module.terminateIsolate();
       }
@@ -274,21 +275,21 @@ class RpcApp {
 
     _started = false;
     _tornDown = true;
-    _log?.info('RpcApp stopped');
+    _log.info('RpcApp stopped');
     if (!_stopCompleter.isCompleted) _stopCompleter.complete();
   }
 
   /// Starts and blocks until SIGTERM or SIGINT, then stops cleanly.
   Future<void> run() async {
     await start();
-    _log?.info('RpcApp running — send SIGTERM or SIGINT to stop');
+    _log.info('RpcApp running — send SIGTERM or SIGINT to stop');
 
     final done = Completer<void>();
     StreamSubscription<void>? sigtermSub;
     StreamSubscription<void>? sigintSub;
 
     void onSignal(ProcessSignal signal) {
-      _log?.info('Received $signal — shutting down');
+      _log.info('Received $signal — shutting down');
       sigtermSub?.cancel();
       sigintSub?.cancel();
       if (!done.isCompleted) done.complete();
@@ -357,8 +358,8 @@ class RpcApp {
   Future<void> _spawnIsolates() async {
     for (final module in _modules) {
       if (module is RpcIsolateModule) {
-        if (_log?.isDebug ?? false) {
-          _log?.debug('spawning isolate: ${module.name}');
+        if (_log.isDebug) {
+          _log.debug('spawning isolate: ${module.name}');
         }
         await module.initIsolate();
         _spawnedIsolates.add(module);
@@ -368,9 +369,9 @@ class RpcApp {
 
   Future<void> _startServer() async {
     _server = _serverBuilder!(RpcResponderMode(_setupEndpoint));
-    _log?.info('Starting transport server');
+    _log.info('Starting transport server');
     await _server!.start();
-    _log?.info('Transport server started');
+    _log.info('Transport server started');
   }
 
   /// Unwinds a partially-completed [start]: stops the transport server, then
@@ -379,7 +380,7 @@ class RpcApp {
   /// propagated, so the original startup error reaches the caller.
   Future<void> _rollbackStart(List<RpcModule> startedModules) async {
     if (_tornDown) return;
-    _log?.warning('Rolling back partial startup');
+    _log.warning('Rolling back partial startup');
 
     // Server first, as in stop(): it may already be serving, and its handlers
     // use what the modules hold.
@@ -387,7 +388,7 @@ class RpcApp {
       try {
         await _server!.stop();
       } catch (e, st) {
-        _log?.error(
+        _log.error(
           'Error stopping server during rollback',
           error: e,
           stackTrace: st,
@@ -397,13 +398,13 @@ class RpcApp {
     }
 
     for (final module in startedModules.reversed) {
-      if (_log?.isDebug ?? false) {
-        _log?.debug('rollback onStop: ${module.name}');
+      if (_log.isDebug) {
+        _log.debug('rollback onStop: ${module.name}');
       }
       try {
         await module.onStop();
       } catch (e, st) {
-        _log?.error(
+        _log.error(
           'Error during rollback onStop of ${module.name}',
           error: e,
           stackTrace: st,
@@ -412,13 +413,13 @@ class RpcApp {
     }
 
     for (final module in _spawnedIsolates.reversed) {
-      if (_log?.isDebug ?? false) {
-        _log?.debug('rollback terminate isolate: ${module.name}');
+      if (_log.isDebug) {
+        _log.debug('rollback terminate isolate: ${module.name}');
       }
       try {
         await module.terminateIsolate();
       } catch (e, st) {
-        _log?.error(
+        _log.error(
           'Error terminating isolate ${module.name} during rollback',
           error: e,
           stackTrace: st,
@@ -452,7 +453,7 @@ class RpcApp {
         // missing services, so clients get "method not found" instead of a
         // startup failure. Log with context, then rethrow so start() aborts and
         // the normal rollback runs. endpoint.start() below is never reached.
-        _log?.error(
+        _log.error(
           'Failed to build contracts for module ${module.name}',
           error: e,
           stackTrace: st,
