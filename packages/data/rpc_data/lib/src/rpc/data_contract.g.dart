@@ -41,126 +41,130 @@ class DataServiceContractNames {
 
 class DataServiceContractCodecs {
   const DataServiceContractCodecs._();
-  static const codecBulkDeleteRequest = RpcCodec<BulkDeleteRequest>.withDecoder(
+  static const codecBulkDeleteRequest = RpcCodec<BulkDeleteRequest>(
     BulkDeleteRequest.fromJson,
   );
-  static const codecBulkDeleteResponse =
-      RpcCodec<BulkDeleteResponse>.withDecoder(BulkDeleteResponse.fromJson);
-  static const codecBulkUpsertResponse =
-      RpcCodec<BulkUpsertResponse>.withDecoder(BulkUpsertResponse.fromJson);
+  static const codecBulkDeleteResponse = RpcCodec<BulkDeleteResponse>(
+    BulkDeleteResponse.fromJson,
+  );
+  static const codecBulkUpsertResponse = RpcCodec<BulkUpsertResponse>(
+    BulkUpsertResponse.fromJson,
+  );
   static const codecCreateCollectionIndexRequest =
-      RpcCodec<CreateCollectionIndexRequest>.withDecoder(
+      RpcCodec<CreateCollectionIndexRequest>(
         CreateCollectionIndexRequest.fromJson,
       );
   static const codecCreateCollectionIndexResponse =
-      RpcCodec<CreateCollectionIndexResponse>.withDecoder(
+      RpcCodec<CreateCollectionIndexResponse>(
         CreateCollectionIndexResponse.fromJson,
       );
-  static const codecCreateRecordRequest =
-      RpcCodec<CreateRecordRequest>.withDecoder(CreateRecordRequest.fromJson);
-  static const codecCreateRecordResponse =
-      RpcCodec<CreateRecordResponse>.withDecoder(CreateRecordResponse.fromJson);
-  static const codecDataChangeEvent = RpcCodec<DataChangeEvent>.withDecoder(
+  static const codecCreateRecordRequest = RpcCodec<CreateRecordRequest>(
+    CreateRecordRequest.fromJson,
+  );
+  static const codecCreateRecordResponse = RpcCodec<CreateRecordResponse>(
+    CreateRecordResponse.fromJson,
+  );
+  static const codecDataChangeEvent = RpcCodec<DataChangeEvent>(
     DataChangeEvent.fromJson,
   );
-  static const codecDataRecord = RpcCodec<DataRecord>.withDecoder(
-    DataRecord.fromJson,
-  );
-  static const codecDatabaseChunk = RpcCodec<DatabaseChunk>.withDecoder(
+  static const codecDataRecord = RpcCodec<DataRecord>(DataRecord.fromJson);
+  static const codecDatabaseChunk = RpcCodec<DatabaseChunk>(
     DatabaseChunk.fromJson,
   );
   static const codecDeleteCollectionIndexRequest =
-      RpcCodec<DeleteCollectionIndexRequest>.withDecoder(
+      RpcCodec<DeleteCollectionIndexRequest>(
         DeleteCollectionIndexRequest.fromJson,
       );
   static const codecDeleteCollectionIndexResponse =
-      RpcCodec<DeleteCollectionIndexResponse>.withDecoder(
+      RpcCodec<DeleteCollectionIndexResponse>(
         DeleteCollectionIndexResponse.fromJson,
       );
-  static const codecDeleteCollectionRequest =
-      RpcCodec<DeleteCollectionRequest>.withDecoder(
-        DeleteCollectionRequest.fromJson,
-      );
+  static const codecDeleteCollectionRequest = RpcCodec<DeleteCollectionRequest>(
+    DeleteCollectionRequest.fromJson,
+  );
   static const codecDeleteCollectionResponse =
-      RpcCodec<DeleteCollectionResponse>.withDecoder(
-        DeleteCollectionResponse.fromJson,
-      );
-  static const codecDeleteRecordRequest =
-      RpcCodec<DeleteRecordRequest>.withDecoder(DeleteRecordRequest.fromJson);
-  static const codecDeleteRecordResponse =
-      RpcCodec<DeleteRecordResponse>.withDecoder(DeleteRecordResponse.fromJson);
-  static const codecExportDatabaseRequest =
-      RpcCodec<ExportDatabaseRequest>.withDecoder(
-        ExportDatabaseRequest.fromJson,
-      );
-  static const codecExportSnapshotRequest =
-      RpcCodec<ExportSnapshotRequest>.withDecoder(
-        ExportSnapshotRequest.fromJson,
-      );
-  static const codecExportSnapshotResponse =
-      RpcCodec<ExportSnapshotResponse>.withDecoder(
-        ExportSnapshotResponse.fromJson,
-      );
-  static const codecGetRecordRequest = RpcCodec<GetRecordRequest>.withDecoder(
+      RpcCodec<DeleteCollectionResponse>(DeleteCollectionResponse.fromJson);
+  static const codecDeleteRecordRequest = RpcCodec<DeleteRecordRequest>(
+    DeleteRecordRequest.fromJson,
+  );
+  static const codecDeleteRecordResponse = RpcCodec<DeleteRecordResponse>(
+    DeleteRecordResponse.fromJson,
+  );
+  static const codecExportDatabaseRequest = RpcCodec<ExportDatabaseRequest>(
+    ExportDatabaseRequest.fromJson,
+  );
+  static const codecExportSnapshotRequest = RpcCodec<ExportSnapshotRequest>(
+    ExportSnapshotRequest.fromJson,
+  );
+  static const codecExportSnapshotResponse = RpcCodec<ExportSnapshotResponse>(
+    ExportSnapshotResponse.fromJson,
+  );
+  static const codecGetRecordRequest = RpcCodec<GetRecordRequest>(
     GetRecordRequest.fromJson,
   );
-  static const codecGetRecordResponse = RpcCodec<GetRecordResponse>.withDecoder(
+  static const codecGetRecordResponse = RpcCodec<GetRecordResponse>(
     GetRecordResponse.fromJson,
   );
-  static const codecGetRecordsRequest = RpcCodec<GetRecordsRequest>.withDecoder(
+  static const codecGetRecordsRequest = RpcCodec<GetRecordsRequest>(
     GetRecordsRequest.fromJson,
   );
-  static const codecGetRecordsResponse =
-      RpcCodec<GetRecordsResponse>.withDecoder(GetRecordsResponse.fromJson);
-  static const codecGetSchemaRequest = RpcCodec<GetSchemaRequest>.withDecoder(
+  static const codecGetRecordsResponse = RpcCodec<GetRecordsResponse>(
+    GetRecordsResponse.fromJson,
+  );
+  static const codecGetSchemaRequest = RpcCodec<GetSchemaRequest>(
     GetSchemaRequest.fromJson,
   );
-  static const codecGetSchemaResponse = RpcCodec<GetSchemaResponse>.withDecoder(
+  static const codecGetSchemaResponse = RpcCodec<GetSchemaResponse>(
     GetSchemaResponse.fromJson,
   );
-  static const codecImportProgress = RpcCodec<ImportProgress>.withDecoder(
+  static const codecImportProgress = RpcCodec<ImportProgress>(
     ImportProgress.fromJson,
   );
-  static const codecListCollectionsRequest =
-      RpcCodec<ListCollectionsRequest>.withDecoder(
-        ListCollectionsRequest.fromJson,
-      );
-  static const codecListCollectionsResponse =
-      RpcCodec<ListCollectionsResponse>.withDecoder(
-        ListCollectionsResponse.fromJson,
-      );
-  static const codecListRecordsRequest =
-      RpcCodec<ListRecordsRequest>.withDecoder(ListRecordsRequest.fromJson);
-  static const codecListRecordsResponse =
-      RpcCodec<ListRecordsResponse>.withDecoder(ListRecordsResponse.fromJson);
-  static const codecListSchemasRequest =
-      RpcCodec<ListSchemasRequest>.withDecoder(ListSchemasRequest.fromJson);
-  static const codecListSchemasResponse =
-      RpcCodec<ListSchemasResponse>.withDecoder(ListSchemasResponse.fromJson);
-  static const codecPatchRecordRequest =
-      RpcCodec<PatchRecordRequest>.withDecoder(PatchRecordRequest.fromJson);
-  static const codecPatchRecordResponse =
-      RpcCodec<PatchRecordResponse>.withDecoder(PatchRecordResponse.fromJson);
-  static const codecSearchRecordsRequest =
-      RpcCodec<SearchRecordsRequest>.withDecoder(SearchRecordsRequest.fromJson);
-  static const codecSearchRecordsResponse =
-      RpcCodec<SearchRecordsResponse>.withDecoder(
-        SearchRecordsResponse.fromJson,
-      );
-  static const codecSetSchemaPolicyRequest =
-      RpcCodec<SetSchemaPolicyRequest>.withDecoder(
-        SetSchemaPolicyRequest.fromJson,
-      );
-  static const codecSetSchemaPolicyResponse =
-      RpcCodec<SetSchemaPolicyResponse>.withDecoder(
-        SetSchemaPolicyResponse.fromJson,
-      );
-  static const codecUpdateRecordRequest =
-      RpcCodec<UpdateRecordRequest>.withDecoder(UpdateRecordRequest.fromJson);
-  static const codecUpdateRecordResponse =
-      RpcCodec<UpdateRecordResponse>.withDecoder(UpdateRecordResponse.fromJson);
-  static const codecWatchChangesRequest =
-      RpcCodec<WatchChangesRequest>.withDecoder(WatchChangesRequest.fromJson);
+  static const codecListCollectionsRequest = RpcCodec<ListCollectionsRequest>(
+    ListCollectionsRequest.fromJson,
+  );
+  static const codecListCollectionsResponse = RpcCodec<ListCollectionsResponse>(
+    ListCollectionsResponse.fromJson,
+  );
+  static const codecListRecordsRequest = RpcCodec<ListRecordsRequest>(
+    ListRecordsRequest.fromJson,
+  );
+  static const codecListRecordsResponse = RpcCodec<ListRecordsResponse>(
+    ListRecordsResponse.fromJson,
+  );
+  static const codecListSchemasRequest = RpcCodec<ListSchemasRequest>(
+    ListSchemasRequest.fromJson,
+  );
+  static const codecListSchemasResponse = RpcCodec<ListSchemasResponse>(
+    ListSchemasResponse.fromJson,
+  );
+  static const codecPatchRecordRequest = RpcCodec<PatchRecordRequest>(
+    PatchRecordRequest.fromJson,
+  );
+  static const codecPatchRecordResponse = RpcCodec<PatchRecordResponse>(
+    PatchRecordResponse.fromJson,
+  );
+  static const codecSearchRecordsRequest = RpcCodec<SearchRecordsRequest>(
+    SearchRecordsRequest.fromJson,
+  );
+  static const codecSearchRecordsResponse = RpcCodec<SearchRecordsResponse>(
+    SearchRecordsResponse.fromJson,
+  );
+  static const codecSetSchemaPolicyRequest = RpcCodec<SetSchemaPolicyRequest>(
+    SetSchemaPolicyRequest.fromJson,
+  );
+  static const codecSetSchemaPolicyResponse = RpcCodec<SetSchemaPolicyResponse>(
+    SetSchemaPolicyResponse.fromJson,
+  );
+  static const codecUpdateRecordRequest = RpcCodec<UpdateRecordRequest>(
+    UpdateRecordRequest.fromJson,
+  );
+  static const codecUpdateRecordResponse = RpcCodec<UpdateRecordResponse>(
+    UpdateRecordResponse.fromJson,
+  );
+  static const codecWatchChangesRequest = RpcCodec<WatchChangesRequest>(
+    WatchChangesRequest.fromJson,
+  );
 }
 
 class DataServiceContractCaller extends RpcCallerContract

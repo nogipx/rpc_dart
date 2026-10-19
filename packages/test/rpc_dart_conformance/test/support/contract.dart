@@ -162,7 +162,7 @@ final class Doc implements IRpcSerializable {
 
 /// The codec I-8's rows use: the core's own CBOR codec, which is what a
 /// generated contract decodes with.
-final docCodec = RpcCodec<Doc>.withDecoder(Doc.new);
+final docCodec = RpcCodec<Doc>(Doc.new);
 
 /// The responder half.
 final class ConformanceResponder extends RpcResponderContract {

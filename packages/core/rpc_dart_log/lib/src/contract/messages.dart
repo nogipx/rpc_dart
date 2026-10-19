@@ -89,15 +89,15 @@ class LogCollectorAck implements IRpcSerializable {
 // Codecs
 // ---------------------------------------------------------------------------
 
-final logCollectorHandshakeCodec = RpcCodec<LogCollectorHandshake>.withDecoder(
+final logCollectorHandshakeCodec = RpcCodec<LogCollectorHandshake>(
   LogCollectorHandshake.fromJson,
 );
-final logCollectorWelcomeCodec = RpcCodec<LogCollectorWelcome>.withDecoder(
+final logCollectorWelcomeCodec = RpcCodec<LogCollectorWelcome>(
   LogCollectorWelcome.fromJson,
 );
-final logCollectorRecordCodec = RpcCodec<LogCollectorRecord>.withDecoder(
+final logCollectorRecordCodec = RpcCodec<LogCollectorRecord>(
   LogCollectorRecord.fromJson,
 );
-final logCollectorAckCodec = RpcCodec<LogCollectorAck>.withDecoder(
+final logCollectorAckCodec = RpcCodec<LogCollectorAck>(
   LogCollectorAck.fromJson,
 );

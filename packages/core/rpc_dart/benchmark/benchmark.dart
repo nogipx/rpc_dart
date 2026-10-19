@@ -256,8 +256,8 @@ final class TestRpcContract extends RpcResponderContract {
   final bool useCodecs;
   TestRpcContract({required this.useCodecs}) : super('TestService');
 
-  static final _req = RpcCodec.withDecoder(TestRequest.fromJson);
-  static final _res = RpcCodec.withDecoder(TestResponse.fromJson);
+  static final _req = RpcCodec(TestRequest.fromJson);
+  static final _res = RpcCodec(TestResponse.fromJson);
 
   IRpcCodec<TestRequest>? get _rc => useCodecs ? _req : null;
   IRpcCodec<TestResponse>? get _sc => useCodecs ? _res : null;
@@ -326,8 +326,8 @@ final class TestRpcContract extends RpcResponderContract {
 final class TestRpcCaller extends RpcCallerContract {
   final bool useCodecs;
 
-  static final _req = RpcCodec.withDecoder(TestRequest.fromJson);
-  static final _res = RpcCodec.withDecoder(TestResponse.fromJson);
+  static final _req = RpcCodec(TestRequest.fromJson);
+  static final _res = RpcCodec(TestResponse.fromJson);
 
   TestRpcCaller(RpcCallerEndpoint endpoint, {required this.useCodecs})
     : super('TestService', endpoint);

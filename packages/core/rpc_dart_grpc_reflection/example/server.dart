@@ -67,8 +67,8 @@ class EchoResponse implements IRpcSerializable {
 // Contract
 // ---------------------------------------------------------------------------
 
-final _reqCodec = RpcCodec<EchoRequest>.withDecoder(EchoRequest.fromJson);
-final _resCodec = RpcCodec<EchoResponse>.withDecoder(EchoResponse.fromJson);
+final _reqCodec = RpcCodec<EchoRequest>(EchoRequest.fromJson);
+final _resCodec = RpcCodec<EchoResponse>(EchoResponse.fromJson);
 
 class EchoResponderContract extends RpcResponderContract {
   EchoResponderContract() : super('echo.v1.EchoService') {

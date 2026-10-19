@@ -187,12 +187,8 @@ class CalculatorSerializeContractNames {
 
 class CalculatorSerializeContractCodecs {
   const CalculatorSerializeContractCodecs._();
-  static const codecSumRequest = RpcCodec<SumRequest>.withDecoder(
-    SumRequest.fromJson,
-  );
-  static const codecSumResponse = RpcCodec<SumResponse>.withDecoder(
-    SumResponse.fromJson,
-  );
+  static const codecSumRequest = RpcCodec<SumRequest>(SumRequest.fromJson);
+  static const codecSumResponse = RpcCodec<SumResponse>(SumResponse.fromJson);
 }
 
 class CalculatorSerializeContractCaller extends RpcCallerContract

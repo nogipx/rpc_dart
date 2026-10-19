@@ -163,10 +163,10 @@ per distinct request/response type:
 ```dart
 class CalculatorContractCodecs {
   const CalculatorContractCodecs._();
-  static const codecAddRequest = RpcCodec<AddRequest>.withDecoder(
+  static const codecAddRequest = RpcCodec<AddRequest>(
     AddRequest.fromJson,
   );
-  static const codecAddResponse = RpcCodec<AddResponse>.withDecoder(
+  static const codecAddResponse = RpcCodec<AddResponse>(
     AddResponse.fromJson,
   );
   // codecCountRequest, codecCountResponse

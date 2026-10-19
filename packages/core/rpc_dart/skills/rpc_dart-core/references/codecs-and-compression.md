@@ -20,8 +20,8 @@ Compression is a separate, per-message step applied to the encoded bytes.
 - Network transports (http, http2, websocket, wasm, `RpcChannelTransport.pair`)
   have `supportsZeroCopy == false`. Methods used over them need codecs.
 - Responder and caller must agree: same codec format for the same method.
-- `RpcCodec<T>` needs `T extends IRpcSerializable` and a decoder. Without a
-  decoder it can encode but `deserialize` throws.
+- `RpcCodec<T>` needs `T extends IRpcSerializable` and its `fromJson` decoder.
+  For any other type use `RpcBinaryCodec<T>` or implement `IRpcCodec<T>`.
 - `package:rpc_dart/rpc_dart.dart` re-exports `dart:typed_data`; do not import
   it again in the same file (the analyzer reports the import as unnecessary).
 
@@ -57,7 +57,7 @@ over `memoryPair()` or an isolate transport has no bytes to measure.
 | --- | --- |
 | `IRpcSerializable` | Interface: `Map<String, dynamic> toJson()`. Add a `fromJson` factory by convention. |
 | `IRpcCodec<T>` | Interface: `Uint8List serialize(T)`, `T deserialize(Uint8List)`. Implement for any format. `deserialize` may be given a VIEW into a larger buffer: slice it with `Uint8List.sublistView`, or copy it with `Uint8List.fromList`, never with `sublist`. Under dart2wasm in a browser the bytes can be JS-backed, and `sublist` on such a view at a non-zero offset counts the offset twice (an SDK bug), returning wrong bytes or throwing. |
-| `RpcCodec<T extends IRpcSerializable>` | CBOR of `toJson()`. `const RpcCodec([fromJson])` or `const RpcCodec.withDecoder(fromJson)`. Static `RpcCodec.fromBytes(bytes:, fromJson:)`. |
+| `RpcCodec<T extends IRpcSerializable>` | CBOR of `toJson()`. `const RpcCodec(fromJson)`; the decoder is required. |
 | `RpcBinaryCodec<T>` | Adapter: `const RpcBinaryCodec(toBytes:, fromBytes:)`. Use for protobuf or any existing byte format; `T` need not implement `IRpcSerializable`. |
 | `CborCodec` | Static `encode(Map<String, dynamic>)` / `decode(Uint8List, {int? maxItems})` used by `RpcCodec`. A decode past `maxItems` data items throws a `FormatException`; without the argument the bound is the endpoint's `RpcSecurityPolicy.maxDecodedItems` inside an endpoint and `CborCodec.defaultMaxItems` elsewhere. |
 
@@ -87,7 +87,7 @@ final class User implements IRpcSerializable {
   };
 }
 
-const userCodec = RpcCodec<User>.withDecoder(User.fromJson);
+const userCodec = RpcCodec<User>(User.fromJson);
 
 // Any byte format. The same shape fits protobuf:
 // toBytes: (m) => m.writeToBuffer(), fromBytes: Msg.fromBuffer.
@@ -128,7 +128,10 @@ final class UsersResponder extends RpcResponderContract {
 
 Wrappers for sending a bare value with `RpcCodec`. Each has a `const`
 constructor, a `.value`, a `fromJson`, and a static `.codec` getter. Wire form
-is `{'v': value}`.
+is `{'v': value}`. A missing `v` decodes to the type's zero value (`''`, `0`,
+`false`); a `v` of the wrong kind throws `FormatException`. The numbers also
+take numeric strings, and `RpcBool` takes `'true'`/`'false'`/`'1'`/`'0'` and
+numbers.
 
 | Type | Wraps | Extension |
 | --- | --- | --- |
@@ -228,8 +231,6 @@ the responder lacks gets `UNIMPLEMENTED` on every call.
 
 - Default mode is `auto`, not `zeroCopy`. Codecs omitted on a network transport
   fail at call time, not at registration.
-- `RpcCodec<T>()` with no decoder: encoding works, decoding throws
-  `RpcStatusException`. Use `withDecoder` for anything that is received.
 - Under `auto`, unary calls on in-process and VM isolate transports skip your
   codecs. A `toJson` that drops secret fields does not protect them there; use
   `RpcDataTransferMode.codec`.

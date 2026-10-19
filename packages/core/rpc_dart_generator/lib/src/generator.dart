@@ -448,7 +448,7 @@ class _Emitter {
         );
       } else if (_hasJsonFactory(info.type)) {
         b.writeln(
-          '  static const $codecName = RpcCodec<$typeName>.withDecoder($typeName.fromJson);',
+          '  static const $codecName = RpcCodec<$typeName>($typeName.fromJson);',
         );
       } else if (info.type.getDisplayString() == 'Map<String, dynamic>') {
         // `Map<String, dynamic>` has no `fromJson` factory. Encode/decode it
@@ -1724,7 +1724,7 @@ String _stableSuffix(String input) {
 }
 
 /// Whether [type] declares a usable `fromJson` factory/constructor that the
-/// generated `RpcCodec<T>.withDecoder(T.fromJson)` can reference.
+/// generated `RpcCodec<T>(T.fromJson)` can reference.
 ///
 /// Primitives and `Map<String, dynamic>` pass serialization checks but have no
 /// such factory, so emitting `Type.fromJson` for them would not compile.

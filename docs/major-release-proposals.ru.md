@@ -503,6 +503,9 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
   - `RpcException` становится `abstract base`; подклассы — `final`.
   - Маркер `IRpcPeerFault` удаляется; проверять `is RpcPeerFaultException`.
   - Тогда `wireStatusFor` видит и исключения контекста.
+  - Сделано (2026-10-19). `RpcStatusException` и `RpcFrameException` —
+    `base`, потому что от них наследуют; все остальные классы `final`, в
+    транспортах и в `rpc_data` тоже.
 - **Политика по умолчанию (T4).** `RpcHttpResponderTransport` и
   `RpcHttpServer` принимают не-null `securityPolicy` со значением по умолчанию
   `const RpcSecurityPolicy()`, как все остальные транспорты. Политика null
@@ -510,14 +513,21 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
   там `securityPolicy` стал членом `IRpcTransport`. Внутренние помощники, принимающие
   `RpcSecurityPolicy?` (общий код http2, io-соединения websocket, web-изолят),
   получают то же значение по умолчанию.
+  - Сделано (2026-10-19). `http2HeadersToRpcMetadata` требует политику.
+    io-соединения websocket и web-изолят оставляют `RpcSecurityPolicy?`:
+    там null значит «взять политику транспорта», а не «без проверок».
 - **Примитивы (C22).** Одна политика обработки сбоев: выбрасывать
   `FormatException`:
   - `RpcBool` и `RpcString` перестают возвращать значения по умолчанию на
     некорректном вводе;
   - `RpcNum` сначала разбирает int.
+  - Сделано (2026-10-19). Отсутствующий `v` по-прежнему даёт нулевое значение.
+    `RpcBool` принимает также числа и `'true'`/`'false'`/`'1'`/`'0'`.
 - **Мёртвый API (C18).** `convertMap`, `RpcCodec.fromBytes`,
   `RpcMessage.endOfStream`, игнорируемый `capacity`, `platform_error_*`;
   декодер `RpcCodec` становится обязательным.
+  - Сделано (2026-10-19). Убран и `RpcCodec.withDecoder`: единственный
+    конструктор — `const RpcCodec(fromJson)`, его и генерирует генератор.
 - **Health (D10).**
   - `GrpcHealthCheckContract` переименовывается в `RpcHealthContract`
     (собственный health rpc_dart, CBOR).
@@ -605,6 +615,8 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | `transport.reconnect()` | переподключается `RpcClientConnection`; транспорт закрывается |
 | `policy: null` у http-сервера или responder (проверки выключены) | политика по умолчанию; чтобы изменить лимиты, передать явную `RpcSecurityPolicy` |
 | `RpcBool` / `RpcString` возвращают значение по умолчанию на некорректном вводе | `FormatException` |
+| `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
+| `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
 | переопределение кодека для метода действует на все методы с тем же типом | действует только на свой метод; перегенерировать код |
 | `RpcConnectionLogger` | `LogScope` |
 | `GrpcHealthCheckContract` | `RpcHealthContract` |

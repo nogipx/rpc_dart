@@ -49,9 +49,4 @@ final class RpcMessage<T> {
       isEndOfStream: isEndOfStream,
     );
   }
-
-  /// Creates a message that marks end of stream.
-  static RpcMessage<T> endOfStream<T>() {
-    return RpcMessage<T>(isEndOfStream: true);
-  }
 }

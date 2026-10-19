@@ -32,77 +32,72 @@ class BlobServiceContractNames {
 
 class BlobServiceContractCodecs {
   const BlobServiceContractCodecs._();
-  static const codecBlobDownloadFrame = RpcCodec<BlobDownloadFrame>.withDecoder(
+  static const codecBlobDownloadFrame = RpcCodec<BlobDownloadFrame>(
     BlobDownloadFrame.fromJson,
   );
-  static const codecBlobUploadChunk = RpcCodec<BlobUploadChunk>.withDecoder(
+  static const codecBlobUploadChunk = RpcCodec<BlobUploadChunk>(
     BlobUploadChunk.fromJson,
   );
-  static const codecBulkBlobDownloadFrame =
-      RpcCodec<BulkBlobDownloadFrame>.withDecoder(
-        BulkBlobDownloadFrame.fromJson,
-      );
-  static const codecBulkDeleteBlobRequest =
-      RpcCodec<BulkDeleteBlobRequest>.withDecoder(
-        BulkDeleteBlobRequest.fromJson,
-      );
-  static const codecBulkDeleteBlobResponse =
-      RpcCodec<BulkDeleteBlobResponse>.withDecoder(
-        BulkDeleteBlobResponse.fromJson,
-      );
-  static const codecBulkGetBlobRequest =
-      RpcCodec<BulkGetBlobRequest>.withDecoder(BulkGetBlobRequest.fromJson);
-  static const codecBulkHeadBlobRequest =
-      RpcCodec<BulkHeadBlobRequest>.withDecoder(BulkHeadBlobRequest.fromJson);
-  static const codecBulkHeadBlobResponse =
-      RpcCodec<BulkHeadBlobResponse>.withDecoder(BulkHeadBlobResponse.fromJson);
-  static const codecBulkPutBlobResponse =
-      RpcCodec<BulkPutBlobResponse>.withDecoder(BulkPutBlobResponse.fromJson);
-  static const codecCollectionSizeRequest =
-      RpcCodec<CollectionSizeRequest>.withDecoder(
-        CollectionSizeRequest.fromJson,
-      );
-  static const codecCollectionSizeResponse =
-      RpcCodec<CollectionSizeResponse>.withDecoder(
-        CollectionSizeResponse.fromJson,
-      );
-  static const codecDeleteBlobRequest = RpcCodec<DeleteBlobRequest>.withDecoder(
+  static const codecBulkBlobDownloadFrame = RpcCodec<BulkBlobDownloadFrame>(
+    BulkBlobDownloadFrame.fromJson,
+  );
+  static const codecBulkDeleteBlobRequest = RpcCodec<BulkDeleteBlobRequest>(
+    BulkDeleteBlobRequest.fromJson,
+  );
+  static const codecBulkDeleteBlobResponse = RpcCodec<BulkDeleteBlobResponse>(
+    BulkDeleteBlobResponse.fromJson,
+  );
+  static const codecBulkGetBlobRequest = RpcCodec<BulkGetBlobRequest>(
+    BulkGetBlobRequest.fromJson,
+  );
+  static const codecBulkHeadBlobRequest = RpcCodec<BulkHeadBlobRequest>(
+    BulkHeadBlobRequest.fromJson,
+  );
+  static const codecBulkHeadBlobResponse = RpcCodec<BulkHeadBlobResponse>(
+    BulkHeadBlobResponse.fromJson,
+  );
+  static const codecBulkPutBlobResponse = RpcCodec<BulkPutBlobResponse>(
+    BulkPutBlobResponse.fromJson,
+  );
+  static const codecCollectionSizeRequest = RpcCodec<CollectionSizeRequest>(
+    CollectionSizeRequest.fromJson,
+  );
+  static const codecCollectionSizeResponse = RpcCodec<CollectionSizeResponse>(
+    CollectionSizeResponse.fromJson,
+  );
+  static const codecDeleteBlobRequest = RpcCodec<DeleteBlobRequest>(
     DeleteBlobRequest.fromJson,
   );
-  static const codecDeleteBlobResponse =
-      RpcCodec<DeleteBlobResponse>.withDecoder(DeleteBlobResponse.fromJson);
-  static const codecDeleteCollectionRequest =
-      RpcCodec<DeleteCollectionRequest>.withDecoder(
-        DeleteCollectionRequest.fromJson,
-      );
+  static const codecDeleteBlobResponse = RpcCodec<DeleteBlobResponse>(
+    DeleteBlobResponse.fromJson,
+  );
+  static const codecDeleteCollectionRequest = RpcCodec<DeleteCollectionRequest>(
+    DeleteCollectionRequest.fromJson,
+  );
   static const codecDeleteCollectionResponse =
-      RpcCodec<DeleteCollectionResponse>.withDecoder(
-        DeleteCollectionResponse.fromJson,
-      );
-  static const codecGetBlobRequest = RpcCodec<GetBlobRequest>.withDecoder(
+      RpcCodec<DeleteCollectionResponse>(DeleteCollectionResponse.fromJson);
+  static const codecGetBlobRequest = RpcCodec<GetBlobRequest>(
     GetBlobRequest.fromJson,
   );
-  static const codecHeadBlobRequest = RpcCodec<HeadBlobRequest>.withDecoder(
+  static const codecHeadBlobRequest = RpcCodec<HeadBlobRequest>(
     HeadBlobRequest.fromJson,
   );
-  static const codecHeadBlobResponse = RpcCodec<HeadBlobResponse>.withDecoder(
+  static const codecHeadBlobResponse = RpcCodec<HeadBlobResponse>(
     HeadBlobResponse.fromJson,
   );
-  static const codecListBlobsRequest = RpcCodec<ListBlobsRequest>.withDecoder(
+  static const codecListBlobsRequest = RpcCodec<ListBlobsRequest>(
     ListBlobsRequest.fromJson,
   );
-  static const codecListBlobsResponse = RpcCodec<ListBlobsResponse>.withDecoder(
+  static const codecListBlobsResponse = RpcCodec<ListBlobsResponse>(
     ListBlobsResponse.fromJson,
   );
-  static const codecListCollectionsRequest =
-      RpcCodec<ListCollectionsRequest>.withDecoder(
-        ListCollectionsRequest.fromJson,
-      );
-  static const codecListCollectionsResponse =
-      RpcCodec<ListCollectionsResponse>.withDecoder(
-        ListCollectionsResponse.fromJson,
-      );
-  static const codecPutBlobResponse = RpcCodec<PutBlobResponse>.withDecoder(
+  static const codecListCollectionsRequest = RpcCodec<ListCollectionsRequest>(
+    ListCollectionsRequest.fromJson,
+  );
+  static const codecListCollectionsResponse = RpcCodec<ListCollectionsResponse>(
+    ListCollectionsResponse.fromJson,
+  );
+  static const codecPutBlobResponse = RpcCodec<PutBlobResponse>(
     PutBlobResponse.fromJson,
   );
 }

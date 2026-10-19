@@ -478,6 +478,9 @@ As landed:
   - `RpcException` becomes `abstract base`; the subclasses are `final`.
   - The `IRpcPeerFault` marker goes; check `is RpcPeerFaultException`.
   - `wireStatusFor` then sees the context exceptions too.
+  - Done (2026-10-19). `RpcStatusException` and `RpcFrameException` are
+    `base`, since others extend them; every other class is `final`, in the
+    transports and `rpc_data` too.
 - **Policy defaults (T4).** `RpcHttpResponderTransport` and `RpcHttpServer`
   take a non-null `securityPolicy` defaulting to `const RpcSecurityPolicy()`,
   like every other transport. A null policy no longer turns their checks off.
@@ -485,12 +488,19 @@ As landed:
   `IRpcTransport` member there. The internal helpers that take
   `RpcSecurityPolicy?` (http2 common, websocket io connections, the web
   isolate) get the same default.
+  - Done (2026-10-19). `http2HeadersToRpcMetadata` requires its policy. The
+    websocket io connections and the web isolate keep `RpcSecurityPolicy?`:
+    there null means "take the transport's policy", not "no checks".
 - **Primitives (C22).** One failure policy, throw `FormatException`:
   - `RpcBool` and `RpcString` stop returning defaults on bad input;
   - `RpcNum` parses ints first.
+  - Done (2026-10-19). A missing `v` still decodes to the zero value.
+    `RpcBool` also takes numbers and `'true'`/`'false'`/`'1'`/`'0'`.
 - **Dead API (C18).** `convertMap`, `RpcCodec.fromBytes`,
   `RpcMessage.endOfStream`, the ignored `capacity`, `platform_error_*`; the
   `RpcCodec` decoder becomes required.
+  - Done (2026-10-19). `RpcCodec.withDecoder` goes too: the only constructor
+    is `const RpcCodec(fromJson)`, and the generator emits it.
 - **Health (D10).**
   - `GrpcHealthCheckContract` is renamed `RpcHealthContract` (rpc_dart's own
     health, CBOR).
@@ -576,6 +586,8 @@ Breaking changes are allowed throughout: this is a major release.
 | `transport.reconnect()` | `RpcClientConnection` reconnects; the transport closes |
 | `policy: null` on the http server or responder (checks off) | the default policy; pass an explicit `RpcSecurityPolicy` to change limits |
 | `RpcBool` / `RpcString` returning a default on bad input | `FormatException` |
+| `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
+| `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
 | a per-method codec override applied to every method with the same type | applied to its own method only; regenerate |
 | `RpcConnectionLogger` | `LogScope` |
 | `GrpcHealthCheckContract` | `RpcHealthContract` |

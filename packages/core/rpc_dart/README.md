@@ -94,8 +94,8 @@ class CalculatorResponder extends RpcResponderContract {
   void setup() {
     addUnaryMethod<SumRequest, SumResponse>(
       methodName: 'sum',
-      requestCodec: RpcCodec.withDecoder(SumRequest.fromJson),
-      responseCodec: RpcCodec.withDecoder(SumResponse.fromJson),
+      requestCodec: RpcCodec(SumRequest.fromJson),
+      responseCodec: RpcCodec(SumResponse.fromJson),
       handler: (request, {context}) async {
         final total = request.values.fold<double>(0, (a, b) => a + b);
         return SumResponse(total);
@@ -112,8 +112,8 @@ class CalculatorCaller extends RpcCallerContract {
       callUnary<SumRequest, SumResponse>(
         methodName: 'sum',
         request: request,
-        requestCodec: RpcCodec.withDecoder(SumRequest.fromJson),
-        responseCodec: RpcCodec.withDecoder(SumResponse.fromJson),
+        requestCodec: RpcCodec(SumRequest.fromJson),
+        responseCodec: RpcCodec(SumResponse.fromJson),
         context: context,
       );
 }

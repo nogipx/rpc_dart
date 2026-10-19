@@ -21,13 +21,10 @@ class NotifySubscribeContractNames {
 
 class NotifySubscribeContractCodecs {
   const NotifySubscribeContractCodecs._();
-  static const codecNotifyEvent = RpcCodec<NotifyEvent>.withDecoder(
-    NotifyEvent.fromJson,
+  static const codecNotifyEvent = RpcCodec<NotifyEvent>(NotifyEvent.fromJson);
+  static const codecNotifySubscribeRequest = RpcCodec<NotifySubscribeRequest>(
+    NotifySubscribeRequest.fromJson,
   );
-  static const codecNotifySubscribeRequest =
-      RpcCodec<NotifySubscribeRequest>.withDecoder(
-        NotifySubscribeRequest.fromJson,
-      );
 }
 
 class NotifySubscribeContractCaller extends RpcCallerContract

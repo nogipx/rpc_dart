@@ -29,8 +29,8 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
   RpcList.filled(int length, T fill)
     : _items = List<T>.filled(length, fill, growable: true);
 
-  /// Creates an empty growable list with optional capacity hint.
-  RpcList.empty({int capacity = 0}) : _items = List<T>.empty(growable: true);
+  /// Creates an empty growable list.
+  RpcList.empty() : _items = List<T>.empty(growable: true);
 
   /// Creates a list from a JSON representation.
   ///

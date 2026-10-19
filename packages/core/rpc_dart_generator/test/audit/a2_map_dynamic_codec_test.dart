@@ -7,9 +7,9 @@
 // generator.dart:931-936: _assertSerializable allows String/int/double/bool and
 // `Map<String, dynamic>` to pass without implementing IRpcSerializable.
 // But generator.dart:437 _buildCodecs unconditionally emits:
-//   RpcCodec<T>.withDecoder(T.fromJson)
+//   RpcCodec<T>(T.fromJson)
 // For T == `Map<String, dynamic>` this produces
-//   RpcCodec<Map<String, dynamic>>.withDecoder(Map<String, dynamic>.fromJson)
+//   RpcCodec<Map<String, dynamic>>(Map<String, dynamic>.fromJson)
 // `Map<String, dynamic>.fromJson` does not exist -> generated code won't compile.
 //
 // CORRECT behavior: output must NOT contain `Map<String, dynamic>.fromJson`

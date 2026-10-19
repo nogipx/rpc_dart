@@ -28,8 +28,8 @@ class PingResponse implements IRpcSerializable {
       PingResponse(j['reply'] as String);
 }
 
-final _reqCodec = RpcCodec<PingRequest>.withDecoder(PingRequest.fromJson);
-final _resCodec = RpcCodec<PingResponse>.withDecoder(PingResponse.fromJson);
+final _reqCodec = RpcCodec<PingRequest>(PingRequest.fromJson);
+final _resCodec = RpcCodec<PingResponse>(PingResponse.fromJson);
 
 // ---------------------------------------------------------------------------
 // EchoService / EchoModule

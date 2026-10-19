@@ -5,8 +5,6 @@
 
 import 'dart:typed_data';
 
-import '../core/errors.dart' show RpcStatusException;
-import '../core/protocol.dart' show RpcStatus;
 import 'special_cbor.dart';
 
 export 'special_cbor.dart' show CborCodec;

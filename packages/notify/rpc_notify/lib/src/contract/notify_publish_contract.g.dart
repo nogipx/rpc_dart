@@ -22,16 +22,15 @@ class NotifyPublishContractNames {
 
 class NotifyPublishContractCodecs {
   const NotifyPublishContractCodecs._();
-  static const codecNotifyPublishRequest =
-      RpcCodec<NotifyPublishRequest>.withDecoder(NotifyPublishRequest.fromJson);
-  static const codecNotifyPublishResponse =
-      RpcCodec<NotifyPublishResponse>.withDecoder(
-        NotifyPublishResponse.fromJson,
-      );
-  static const codecNotifyPublishToRequest =
-      RpcCodec<NotifyPublishToRequest>.withDecoder(
-        NotifyPublishToRequest.fromJson,
-      );
+  static const codecNotifyPublishRequest = RpcCodec<NotifyPublishRequest>(
+    NotifyPublishRequest.fromJson,
+  );
+  static const codecNotifyPublishResponse = RpcCodec<NotifyPublishResponse>(
+    NotifyPublishResponse.fromJson,
+  );
+  static const codecNotifyPublishToRequest = RpcCodec<NotifyPublishToRequest>(
+    NotifyPublishToRequest.fromJson,
+  );
 }
 
 class NotifyPublishContractCaller extends RpcCallerContract
