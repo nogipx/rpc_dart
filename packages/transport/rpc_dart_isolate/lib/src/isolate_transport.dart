@@ -101,6 +101,8 @@ abstract interface class RpcIsolateTransport {
     // for either target, which is why it is not an error to pass it.
     Uri? workerUri,
     Duration startupTimeout = const Duration(seconds: 30),
+    // The host side's transport only: a scope cannot cross into the worker.
+    LogScope? logger,
   }) async {
     final name = debugName ?? 'rpc-isolate-$isolateId';
 
@@ -438,6 +440,7 @@ abstract interface class RpcIsolateTransport {
       channel: hostChannel,
       isClient: true,
       policy: policy,
+      logger: logger,
     );
 
     // Wait for the worker to confirm it started (its entrypoint ran without

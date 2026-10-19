@@ -50,6 +50,7 @@ abstract interface class RpcIsolateTransport {
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Uri? workerUri,
     Duration startupTimeout = const Duration(seconds: 30),
+    LogScope? logger,
   }) async {
     // Unused on the web, as is `isolateId`: a function cannot cross into a
     // Worker, so the worker script passes its own entrypoint to
@@ -81,6 +82,7 @@ abstract interface class RpcIsolateTransport {
       channel: channel,
       isClient: true,
       policy: policy,
+      logger: logger,
     );
 
     // A worker that fails to LOAD -- a 404 on the script, or a parse error --
