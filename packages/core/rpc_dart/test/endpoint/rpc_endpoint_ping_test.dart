@@ -42,6 +42,11 @@ void main() {
 
       expect(result.roundTrip.isNegative, isFalse);
       expect(result.responderTimestamp, isNotNull);
+      expect(result.responderTimestamp!.isUtc, isTrue);
+      expect(
+        result.responderTimestamp!.difference(DateTime.now().toUtc()).abs(),
+        lessThan(const Duration(minutes: 1)),
+      );
       expect(
         result.responseHeaders[RpcHeaders.grpcStatus],
         equals(RpcStatus.ok.toString()),
@@ -52,7 +57,34 @@ void main() {
         ),
         isTrue,
       );
-      expect(result.responderTransportType, contains('RpcChannelTransport'));
+    });
+
+    test('the answer is one trailer: no response headers before it', () async {
+      final (client, server) = RpcChannelTransport.pair();
+      final responder = RpcResponderEndpoint(transport: server)..start();
+      addTearDown(() async {
+        await responder.close();
+        await client.close();
+      });
+
+      final id = client.createStream();
+      final frames = client.getMessagesForStream(id).toList();
+      await client.sendMetadata(
+        id,
+        RpcMetadata.forClientRequest(
+          RpcEndpointPingProtocol.serviceName,
+          RpcEndpointPingProtocol.methodName,
+        ),
+        endStream: true,
+      );
+      final received = await frames.timeout(const Duration(seconds: 5));
+
+      expect(received, hasLength(1));
+      expect(received.single.isEndOfStream, isTrue);
+      expect(
+        received.single.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
+        '0',
+      );
     });
 
     test("ping carries the responder endpoint's debug label", () async {

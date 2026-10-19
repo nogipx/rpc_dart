@@ -630,6 +630,7 @@ Breaking changes are allowed throughout: this is a major release.
 | `OtelRpcInterceptorBase.startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)`; `callTypeAttribute(type)` gives the attribute value |
 | a hand-written observer of the four `intercept*` methods | `RpcCallObserverInterceptor` |
 | `RpcAppHealth.modules['X']['level']`, `endpoints[i]['isActive']` | `modules['X'].level` (`RpcHealthStatus`), `endpoints[i]` (`RpcEndpointHealth`); maps only in `toJson()` |
+| `RpcEndpointPingResult.responderTransportType`, `RpcEndpointPingProtocol.requestTimestampHeader` / `responseTransportHeader` | gone; `x-rpc-pong-timestamp` is microseconds since the epoch |
 | `GrpcHealthCheckContract` speaking CBOR; `Check` on an unknown service answering `serviceUnknown` | protobuf on the wire; `Check` fails with `NOT_FOUND`. The messages lose `toJson`/`fromJson`; use their `codec` |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |

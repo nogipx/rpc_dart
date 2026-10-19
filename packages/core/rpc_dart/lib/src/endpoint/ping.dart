@@ -19,17 +19,12 @@ abstract final class RpcEndpointPingProtocol {
   /// HTTP/2 path `/Service/Method`.
   static const String methodPath = '/$serviceName/$methodName';
 
-  /// Header with client ping timestamp.
-  static const String requestTimestampHeader = 'x-rpc-ping-timestamp';
-
-  /// Header with responder processing timestamp.
+  /// Header with the responder's clock when it answered, in microseconds
+  /// since the Unix epoch.
   static const String responseTimestampHeader = 'x-rpc-pong-timestamp';
 
   /// Header with responder endpoint debug label.
   static const String responseDebugLabelHeader = 'x-rpc-pong-endpoint';
-
-  /// Header with responder transport type.
-  static const String responseTransportHeader = 'x-rpc-pong-transport';
 }
 
 /// Ping result between endpoints.
@@ -43,14 +38,11 @@ final class RpcEndpointPingResult {
   /// Full round-trip time.
   final Duration roundTrip;
 
-  /// Responder processing timestamp, if provided.
+  /// The responder's clock when it answered (UTC), if provided.
   final DateTime? responderTimestamp;
 
   /// Responder endpoint debug label, if provided.
   final String? responderDebugLabel;
-
-  /// Responder transport type, if provided.
-  final String? responderTransportType;
 
   /// Response headers in readable form.
   final Map<String, String> responseHeaders;
@@ -62,7 +54,6 @@ final class RpcEndpointPingResult {
     required this.roundTrip,
     this.responderTimestamp,
     this.responderDebugLabel,
-    this.responderTransportType,
     Map<String, String>? responseHeaders,
   }) : responseHeaders = Map.unmodifiable(responseHeaders ?? const {});
 }
@@ -173,12 +164,9 @@ final class RpcEndpointPingExchange {
               return;
             }
 
-            DateTime? responderTimestamp;
-            final responderTimestampRaw =
-                headersMap[RpcEndpointPingProtocol.responseTimestampHeader];
-            if (responderTimestampRaw != null) {
-              responderTimestamp = DateTime.tryParse(responderTimestampRaw);
-            }
+            final responderMicros = int.tryParse(
+              headersMap[RpcEndpointPingProtocol.responseTimestampHeader] ?? '',
+            );
 
             final result = RpcEndpointPingResult(
               sentAt: sentAt,
@@ -188,11 +176,14 @@ final class RpcEndpointPingExchange {
               // trip negative or hours long. `sentAt`/`receivedAt` stay on the
               // result because they are what went on the wire.
               roundTrip: elapsed.elapsed,
-              responderTimestamp: responderTimestamp,
+              responderTimestamp: responderMicros == null
+                  ? null
+                  : DateTime.fromMicrosecondsSinceEpoch(
+                      responderMicros,
+                      isUtc: true,
+                    ),
               responderDebugLabel:
                   headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
-              responderTransportType:
-                  headersMap[RpcEndpointPingProtocol.responseTransportHeader],
               responseHeaders: headersMap,
             );
 

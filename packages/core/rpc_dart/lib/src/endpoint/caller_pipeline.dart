@@ -424,10 +424,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         RpcEndpointPingProtocol.serviceName,
         RpcEndpointPingProtocol.methodName,
         routingContext,
-        extra: {
-          RpcEndpointPingProtocol.requestTimestampHeader: sentAt
-              .toIso8601String(),
-        },
       );
 
       // The context's deadline bounds the wait LOCALLY too, not only as the

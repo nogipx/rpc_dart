@@ -659,6 +659,7 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | `OtelRpcInterceptorBase.startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)`; значение атрибута даёт `callTypeAttribute(type)` |
 | рукописный наблюдатель четырёх методов `intercept*` | `RpcCallObserverInterceptor` |
 | `RpcAppHealth.modules['X']['level']`, `endpoints[i]['isActive']` | `modules['X'].level` (`RpcHealthStatus`), `endpoints[i]` (`RpcEndpointHealth`); map только в `toJson()` |
+| `RpcEndpointPingResult.responderTransportType`, `RpcEndpointPingProtocol.requestTimestampHeader` / `responseTransportHeader` | удалены; `x-rpc-pong-timestamp` — микросекунды с эпохи |
 | `GrpcHealthCheckContract` говорит на CBOR; `Check` неизвестного сервиса отвечает `serviceUnknown` | protobuf на проводе; `Check` падает с `NOT_FOUND`. У сообщений нет `toJson`/`fromJson`; используйте их `codec` |
 | `transferMode:` у `unaryRequest` | режим передачи контракта |
 | `RpcMethodKind` в `@RpcMethod` | `RpcMethodType` |

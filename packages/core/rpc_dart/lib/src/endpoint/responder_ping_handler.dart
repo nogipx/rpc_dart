@@ -23,44 +23,31 @@ final class RpcResponderPingHandler {
     required this.debugLabel,
   }) : _log = logger ?? LogScope.noop;
 
-  /// Sends a ping response for the given [streamId].
+  static final _okStatus = RpcHeader(
+    RpcHeaders.grpcStatus,
+    RpcStatus.ok.toString(),
+  );
+
+  /// Sends a ping response for the given [streamId]: one trailer, with no
+  /// response headers before it (gRPC's Trailers-Only), carrying this side's
+  /// clock and [debugLabel].
   Future<void> respond({
     required int streamId,
-    required RpcContext context,
     required Future<void> Function() onComplete,
   }) async {
-    final responderTimestamp = DateTime.now().toUtc();
-
     try {
+      final label = debugLabel;
       await transport.sendMetadata(
         streamId,
-        RpcMetadata.forServerInitialResponse(),
-      );
-
-      final responseHeaders = <RpcHeader>[
-        RpcHeader(
-          RpcEndpointPingProtocol.responseTimestampHeader,
-          responderTimestamp.toIso8601String(),
-        ),
-        RpcHeader(
-          RpcEndpointPingProtocol.responseTransportHeader,
-          transport.runtimeType.toString(),
-        ),
-        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.ok.toString()),
-      ];
-
-      if (debugLabel != null && debugLabel!.isNotEmpty) {
-        responseHeaders.add(
+        RpcMetadata([
+          _okStatus,
           RpcHeader(
-            RpcEndpointPingProtocol.responseDebugLabelHeader,
-            debugLabel!,
+            RpcEndpointPingProtocol.responseTimestampHeader,
+            DateTime.now().microsecondsSinceEpoch.toString(),
           ),
-        );
-      }
-
-      await transport.sendMetadata(
-        streamId,
-        RpcMetadata(responseHeaders),
+          if (label != null && label.isNotEmpty)
+            RpcHeader(RpcEndpointPingProtocol.responseDebugLabelHeader, label),
+        ]),
         endStream: true,
       );
 

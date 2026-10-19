@@ -203,9 +203,11 @@ Future<void> checkHealth(RpcCallerEndpoint caller, LogScope log) async {
 
 `ping({Duration? timeout, RpcContext? context})` is on `RpcCallerEndpoint` and
 `RpcPeerEndpoint` (not on `RpcResponderEndpoint`). The responder answers it
-automatically. Returns `RpcEndpointPingResult`: `sentAt`, `receivedAt`,
-`roundTrip`, `responderTimestamp`, `responderDebugLabel`,
-`responderTransportType`, `responseHeaders`.
+automatically, with one trailer and without running middleware,
+interceptors or a handler, so it measures the transport and the endpoint's
+dispatch, not your services. Returns `RpcEndpointPingResult`: `sentAt`,
+`receivedAt`, `roundTrip` (monotonic), `responderTimestamp` (the responder's
+UTC clock), `responderDebugLabel`, `responseHeaders`.
 
 ```dart
 Future<Duration?> probe(RpcCallerEndpoint caller) async {

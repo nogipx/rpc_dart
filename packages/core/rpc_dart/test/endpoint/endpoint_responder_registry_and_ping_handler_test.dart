@@ -99,11 +99,7 @@ void main() {
       });
       addTearDown(sub.cancel);
 
-      await handler.respond(
-        streamId: streamId,
-        context: RpcContext.withHeaders({'x': 'y'}),
-        onComplete: () async {},
-      );
+      await handler.respond(streamId: streamId, onComplete: () async {});
       // respond() returning does not mean the frames have reached this
       // listener: stream delivery is asynchronous, so the trailer lands a
       // microtask later. Asserting immediately happened to work only while
@@ -157,11 +153,7 @@ void main() {
         });
         addTearDown(sub.cancel);
 
-        await handler.respond(
-          streamId: streamId,
-          context: RpcContext.empty(),
-          onComplete: () async {},
-        );
+        await handler.respond(streamId: streamId, onComplete: () async {});
 
         final trailer = await trailers.future.timeout(
           const Duration(seconds: 2),
@@ -198,7 +190,6 @@ void main() {
       final completed = Completer<void>();
       await handler.respond(
         streamId: client.createStream(),
-        context: RpcContext.empty(),
         onComplete: () async => completed.complete(),
       );
 

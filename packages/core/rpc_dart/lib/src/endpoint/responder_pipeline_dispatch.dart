@@ -306,19 +306,20 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     state.setMethodKey(methodKey);
     state.storeMetadata(message);
 
-    final context = _cacheContext(state, message);
-
+    // Before the context: a ping runs no handler, so it needs none of what
+    // the context carries (deadline timer, call scope, log scope, token).
     if (_isPingMethodKey(methodKey)) {
       _detached(
         _respPingHandler.respond(
           streamId: state.id,
-          context: context,
           onComplete: () => _cleanupStream(state.id, only: state),
         ),
         'ping response',
       );
       return;
     }
+
+    _cacheContext(state, message);
 
     final binding = state.binding ??= _respRegistry.lookup(methodKey);
     if (binding == null) {
