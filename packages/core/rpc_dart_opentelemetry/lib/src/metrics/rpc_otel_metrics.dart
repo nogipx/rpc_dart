@@ -27,15 +27,14 @@ enum RpcMetricSide { client, server }
 ///   completed call, regardless of success or failure. The outcome is encoded
 ///   in the `rpc.grpc.status_code` attribute (numeric gRPC code, 0 = OK).
 /// - `rpc.server.duration` / `rpc.client.duration` — Counter (ms). Running sum
-///   of the measured call duration, labelled identically. Every published
-///   `opentelemetry` version up to and including the latest (0.18.11, checked
-///   2026-06) exposes only [Meter.createCounter] — there is no Histogram or
-///   UpDownCounter instrument on [Meter] — so duration is recorded as a sum
-///   counter.
+///   of the measured call duration, labelled identically. The
+///   `opentelemetry` package's [Meter] exposes only [Meter.createCounter] —
+///   there is no Histogram or UpDownCounter instrument — so duration is
+///   recorded as a sum counter.
 ///   TODO(#6): switch to a Histogram (createHistogram/record) once the Workiva
-///   `opentelemetry` package exposes one. Still blocked upstream as of 0.18.11.
-///   A sum counter loses the distribution (no percentiles) but at least makes
-///   the measured time observable instead of discarding it.
+///   `opentelemetry` package exposes one.
+///   A sum counter loses the distribution (no percentiles) but keeps the
+///   measured time observable.
 ///
 /// The same instance is used by both the server interceptor
 /// ([OtelRpcInterceptor]) and the client interceptor
