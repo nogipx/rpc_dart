@@ -4,10 +4,6 @@
 
 part of 'rpc_http2_caller_transport.dart';
 
-/// How many policy violations a connection may cost before the peer is
-/// treated as hostile. The same 256 as `RpcChannelTransport`.
-const int _maxPolicyViolations = 256;
-
 extension _Http2CallerInbound on RpcHttp2CallerTransport {
   /// Subscribes to one stream's incoming messages.
   void _setupStreamListener(
@@ -245,7 +241,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // on this path was being charged to the peer's budget. See the same
       // narrowing on the responder.
       if (e is RpcMetadataViolation &&
-          ++_policyViolations > _maxPolicyViolations) {
+          ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations) {
         _log.warning('Peer sent $_policyViolations policy violations; closing');
         unawaited(close());
       }
@@ -333,7 +329,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       );
       // Charged here because this path does not reach the catch that charges it,
       // and a peer that does this 256 times is not one rich error.
-      if (++_policyViolations > _maxPolicyViolations) {
+      if (++_policyViolations > RpcSecurityPolicy.maxPolicyViolations) {
         _log.warning('Peer sent $_policyViolations policy violations; closing');
         unawaited(close());
       }

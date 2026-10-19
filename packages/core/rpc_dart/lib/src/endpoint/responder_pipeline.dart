@@ -11,7 +11,7 @@ part of '_index.dart';
 /// Every outbound trailer needs it, because `grpc-message` is a header value:
 /// one longer than the cap fails validation and the whole answer is lost, so
 /// the peer gets silence or a generic fallback instead of the status. Round 175
-/// fixed the sites that call `RpcMetadata.forTrailer`, and the two that built
+/// fixed the sites that call `RpcTrailers.status`, and the two that built
 /// the headers BY HAND were missed for exactly that reason -- they did not match
 /// the grep. This exists so there is one way to ask.
 int _trailerMessageCap(IRpcTransport transport) =>
@@ -517,8 +517,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _rememberClosedStream(streamId);
     try {
       // Trimmed to the policy this trailer is about to be validated against;
-      // see RpcMetadata.forTrailer. The status is what must reach the peer.
-      final trailer = RpcMetadata.forTrailer(
+      // see RpcTrailers.status. The status is what must reach the peer.
+      final trailer = RpcTrailers.status(
         status,
         message: message,
         maxMessageLength: _trailerMessageCap(transport),

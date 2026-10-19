@@ -349,7 +349,7 @@ void main() {
           responseStreamId,
           Uint8List.fromList('test response'.codeUnits),
         );
-        final trailerMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
+        final trailerMetadata = RpcTrailers.status(RpcStatus.ok);
         await serverTransport.sendMetadata(
           responseStreamId,
           trailerMetadata,

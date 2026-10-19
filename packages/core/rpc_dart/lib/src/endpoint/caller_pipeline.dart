@@ -477,16 +477,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // `.catchError` and every other non-`try` handler of the call.
     if (!isActive) return Future.error(RpcClosedException('Endpoint'));
 
-    final isZeroCopy = requestCodec == null && responseCodec == null;
-    if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError(
-        'Zero-copy requires a transport that supports zero-copy.',
-      );
-    }
-    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Both codecs are required for serialization mode.');
-    }
-
     final ctx = _prepareCallerContext(context, serviceName, methodName);
     // Unary starts immediately, so tracking starts here.
     _trackCallerRequest(serviceName, methodName, ctx);
@@ -527,16 +517,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }) {
     // Through the stream, for the same reason as unaryRequest's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
-
-    final isZeroCopy = requestCodec == null && responseCodec == null;
-    if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError(
-        'Zero-copy requires a transport that supports zero-copy.',
-      );
-    }
-    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError('Both codecs are required for serialization mode.');
-    }
 
     final ctx = _prepareCallerContext(context, serviceName, methodName);
 

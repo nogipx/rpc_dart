@@ -106,7 +106,7 @@ void main() {
     RpcChannelFrame.encodeEndOfStream(5),
     RpcChannelFrame.encodeMetadata(
       streamId: 7,
-      metadata: RpcMetadata.forTrailer(13, message: 'Ж 100%'),
+      metadata: RpcTrailers.status(13, message: 'Ж 100%'),
     ),
   ];
 

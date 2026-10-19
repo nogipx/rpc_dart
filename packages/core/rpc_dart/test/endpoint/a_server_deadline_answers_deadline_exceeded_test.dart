@@ -107,7 +107,7 @@ void main() {
       unawaited(
         server.sendMetadata(
           m.streamId,
-          RpcMetadata.forTrailer(RpcStatus.deadlineExceeded),
+          RpcTrailers.status(RpcStatus.deadlineExceeded),
           endStream: true,
         ),
       );

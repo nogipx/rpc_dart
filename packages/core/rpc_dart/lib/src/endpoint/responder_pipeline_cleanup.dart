@@ -19,27 +19,22 @@ extension _ResponderPipelineCleanup on RpcResponderPipelineMixin {
   Future<void> _answerActiveStreams(Object error) async {
     if (_respStreams.length == 0) return;
 
-    final wire = wireStatusFor(error);
+    // The STATUS must survive a message longer than the header cap.
+    final trailer = RpcTrailers.forError(
+      error,
+      maxMessageLength: _trailerMessageCap(transport),
+    );
     final ids = _respStreams.values.map((s) => s.id).toList(growable: false);
     if (_log.isInternal) {
       _log.internal(
-        'Answering ${ids.length} active stream(s) with ${wire.status}',
+        'Answering ${ids.length} active stream(s) with '
+        '${trailer.getHeaderValue(RpcHeaders.grpcStatus)}',
       );
     }
 
     for (final streamId in ids) {
       try {
-        await transport.sendMetadata(
-          streamId,
-          RpcMetadata.forTrailer(
-            wire.status,
-            message: wire.message,
-            statusDetailsBin: wire.detailsBin,
-            // The STATUS must survive a message longer than the header cap.
-            maxMessageLength: _trailerMessageCap(transport),
-          ),
-          endStream: true,
-        );
+        await transport.sendMetadata(streamId, trailer, endStream: true);
       } catch (e, st) {
         // Best-effort by construction: the reason the transport errored is
         // often that it is going away, so this send failing is not news.

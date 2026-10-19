@@ -63,11 +63,11 @@ void main() {
       });
     });
 
-    group('forTrailer', () {
+    group('RpcTrailers.status', () {
       test('builds an OK trailer', () {
         const statusCode = RpcStatus.ok;
 
-        final metadata = RpcMetadata.forTrailer(statusCode);
+        final metadata = RpcTrailers.status(statusCode);
 
         expect(metadata.headers.length, equals(1));
         expect(_getHeaderValue(metadata, RpcHeaders.grpcStatus), equals('0'));
@@ -77,7 +77,7 @@ void main() {
         const statusCode = RpcStatus.internal;
         const message = 'internal server error';
 
-        final metadata = RpcMetadata.forTrailer(statusCode, message: message);
+        final metadata = RpcTrailers.status(statusCode, message: message);
 
         expect(metadata.headers.length, equals(2));
         expect(_getHeaderValue(metadata, RpcHeaders.grpcStatus), equals('13'));
@@ -90,7 +90,7 @@ void main() {
       test('an empty message adds no header', () {
         const statusCode = RpcStatus.cancelled;
 
-        final metadata = RpcMetadata.forTrailer(statusCode, message: '');
+        final metadata = RpcTrailers.status(statusCode, message: '');
 
         expect(metadata.headers.length, equals(1));
         expect(_getHeaderValue(metadata, RpcHeaders.grpcMessage), isNull);

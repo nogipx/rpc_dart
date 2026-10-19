@@ -39,7 +39,7 @@ RpcCallerEndpoint _answering(List<String> responses) {
       }
       await server.sendMetadata(
         m.streamId,
-        RpcMetadata.forTrailer(0),
+        RpcTrailers.status(0),
         endStream: true,
       );
     }());

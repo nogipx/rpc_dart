@@ -341,13 +341,10 @@ final class _ReconnectingTransportProxy
   @override
   bool get isClosed => _closed;
 
-  /// Answers for the transport being wrapped, not for the wrapper.
-  ///
-  /// Hardcoding false made every codec-free call throw
-  /// `Zero-copy requires a transport that supports zero-copy` behind a
-  /// connection that supports it perfectly well — `sendDirectObject` has always
-  /// delegated. Held across a reconnect gap so a call that arrives while
-  /// offline is refused by [_require] rather than silently downgraded.
+  /// Answers for the transport being wrapped, not for the wrapper, so a
+  /// codec-free call works behind a connection whose transport carries
+  /// objects. Held across a reconnect gap so a call that arrives while offline
+  /// is refused by [_require] rather than silently downgraded.
   @override
   bool get supportsZeroCopy => _inner?.supportsZeroCopy ?? _lastZeroCopy;
 

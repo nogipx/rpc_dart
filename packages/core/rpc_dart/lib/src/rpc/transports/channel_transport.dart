@@ -7,7 +7,6 @@ import 'dart:typed_data';
 
 import '../../core/_index.dart';
 import '../../core/owned_payload.dart';
-import '../../core/recent_ids.dart';
 import '../../logger/_index.dart';
 import 'direct_multiplexed_channel.dart';
 import 'flow_controller.dart';
@@ -589,15 +588,6 @@ class RpcChannelTransport extends IRpcTransport
 
   // -- Internal ---------------------------------------------------------------
 
-  /// How many policy violations a connection may cost before it is treated as
-  /// hostile rather than misconfigured.
-  ///
-  /// `closeOnProtocolError` defaults to false, which says one bad frame must
-  /// not end the connection — not that a peer may grind forever. 200k violating
-  /// frames, 5.9 MiB on the wire, cost 100 MiB of RSS with the connection still
-  /// open to repeat it. 256 is far past any misconfiguration.
-  static const int _maxPolicyViolations = 256;
-
   int _policyViolations = 0;
 
   /// Checks peer-supplied [metadata] against the policy; false means drop the
@@ -644,7 +634,7 @@ class RpcChannelTransport extends IRpcTransport
       // The budget is charged either way: a peer that does this 256 times is not
       // one rich error.
       if (_policy.closeOnProtocolError ||
-          ++_policyViolations > _maxPolicyViolations) {
+          ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations) {
         // Two separate jobs; doing only one of them is a defect.
         //
         // (1) Tell the PEER it was at fault, as the framing path does. A policy
@@ -688,7 +678,7 @@ class RpcChannelTransport extends IRpcTransport
         unawaited(
           sendMetadata(
             streamId,
-            RpcMetadata.forTrailer(RpcStatus.invalidArgument),
+            RpcTrailers.status(RpcStatus.invalidArgument),
             endStream: true,
           ).catchError((_) {}),
         );

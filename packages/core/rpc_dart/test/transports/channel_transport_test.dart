@@ -545,7 +545,7 @@ void main() {
         );
         await server.sendMetadata(
           responseStream,
-          RpcMetadata.forTrailer(RpcStatus.ok),
+          RpcTrailers.status(RpcStatus.ok),
           endStream: true,
         );
 

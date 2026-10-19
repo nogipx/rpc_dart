@@ -3,8 +3,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:convert';
 import 'dart:typed_data';
+
+import 'protobuf.dart';
 
 /// A structured error detail attached to [RpcStatusException].
 ///
@@ -19,52 +20,28 @@ abstract class RpcErrorDetail {
 
   /// Encodes as a protobuf `google.protobuf.Any` message.
   Uint8List encodeAsAny() {
-    final typeUrlBytes = utf8.encode(typeUrl);
-    final valueBytes = encode();
-    final buf = BytesBuilder(copy: false);
-    // field 1 (type_url): tag=0x0A, length-delimited
-    buf.addByte(0x0A);
-    _writeVarint(buf, typeUrlBytes.length);
-    buf.add(typeUrlBytes);
-    // field 2 (value): tag=0x12, length-delimited
-    if (valueBytes.isNotEmpty) {
-      buf.addByte(0x12);
-      _writeVarint(buf, valueBytes.length);
-      buf.add(valueBytes);
-    }
-    return buf.toBytes();
+    final out = RpcProtoWriter()..writeStringField(1, typeUrl);
+    final value = encode();
+    if (value.isNotEmpty) out.writeBytesField(2, value);
+    return out.toBytes();
   }
 
   /// Decodes an Any message into a typed [RpcErrorDetail].
   /// Returns [RpcRawErrorDetail] for unknown types.
   static RpcErrorDetail decodeAny(Uint8List data) {
-    String? typeUrl;
-    Uint8List? value;
-
-    var offset = 0;
-    while (offset < data.length) {
-      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-
-      if (wireType == 2) {
-        // length-delimited
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final bytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        if (fieldNumber == 1) typeUrl = utf8.decode(bytes);
-        if (fieldNumber == 2) value = bytes;
-      } else if (wireType == 0) {
-        // varint — skip
-        final (_, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-      } else {
-        offset = _skipField(data, offset, wireType);
+    var typeUrl = '';
+    var value = Uint8List(0);
+    _readFields(data, (field, r) {
+      switch (field) {
+        case (1, RpcProtoWireType.lengthDelimited):
+          typeUrl = r.readString();
+        case (2, RpcProtoWireType.lengthDelimited):
+          value = r.readBytes();
+        default:
+          return false;
       }
-    }
-
-    typeUrl ??= '';
-    value ??= Uint8List(0);
+      return true;
+    });
 
     switch (typeUrl) {
       case RpcBadRequest.type:
@@ -87,27 +64,13 @@ Uint8List encodeRpcStatus(
   String message,
   List<RpcErrorDetail> details,
 ) {
-  final buf = BytesBuilder(copy: false);
-  // field 1 (code): tag=0x08, varint
-  if (code != 0) {
-    buf.addByte(0x08);
-    _writeVarint(buf, code);
-  }
-  // field 2 (message): tag=0x12, length-delimited
-  if (message.isNotEmpty) {
-    final msgBytes = utf8.encode(message);
-    buf.addByte(0x12);
-    _writeVarint(buf, msgBytes.length);
-    buf.add(msgBytes);
-  }
-  // field 3 (details): tag=0x1A, length-delimited (repeated Any)
+  final out = RpcProtoWriter();
+  if (code != 0) out.writeVarintField(1, code);
+  if (message.isNotEmpty) out.writeStringField(2, message);
   for (final detail in details) {
-    final anyBytes = detail.encodeAsAny();
-    buf.addByte(0x1A);
-    _writeVarint(buf, anyBytes.length);
-    buf.add(anyBytes);
+    out.writeBytesField(3, detail.encodeAsAny());
   }
-  return buf.toBytes();
+  return out.toBytes();
 }
 
 /// Decodes a `google.rpc.Status` message from `grpc-status-details-bin`.
@@ -115,35 +78,22 @@ Uint8List encodeRpcStatus(
 ({int code, String message, List<RpcErrorDetail> details}) decodeRpcStatus(
   Uint8List data,
 ) {
-  int code = 0;
-  String message = '';
+  var code = 0;
+  var message = '';
   final details = <RpcErrorDetail>[];
-
-  var offset = 0;
-  while (offset < data.length) {
-    if (offset >= data.length) break;
-    final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-    offset = tagEnd;
-
-    if (wireType == 0) {
-      final (value, newOffset) = _readVarint(data, offset);
-      offset = newOffset;
-      if (fieldNumber == 1) code = value;
-    } else if (wireType == 2) {
-      final (len, newOffset) = _readVarint(data, offset);
-      offset = newOffset;
-      final bytes = _readLengthDelimited(data, offset, len);
-      offset += len;
-      if (fieldNumber == 2) {
-        message = utf8.decode(bytes);
-      } else if (fieldNumber == 3) {
-        details.add(RpcErrorDetail.decodeAny(bytes));
-      }
-    } else {
-      offset = _skipField(data, offset, wireType);
+  _readFields(data, (field, r) {
+    switch (field) {
+      case (1, RpcProtoWireType.varint):
+        code = r.readVarint();
+      case (2, RpcProtoWireType.lengthDelimited):
+        message = r.readString();
+      case (3, RpcProtoWireType.lengthDelimited):
+        details.add(RpcErrorDetail.decodeAny(r.readBytes()));
+      default:
+        return false;
     }
-  }
-
+    return true;
+  });
   return (code: code, message: message, details: details);
 }
 
@@ -165,69 +115,42 @@ class RpcBadRequest extends RpcErrorDetail {
 
   @override
   Uint8List encode() {
-    final buf = BytesBuilder(copy: false);
+    final out = RpcProtoWriter();
     for (final v in violations) {
-      final inner = BytesBuilder(copy: false);
-      // field 1 (field): string
-      if (v.field.isNotEmpty) {
-        final fieldBytes = utf8.encode(v.field);
-        inner.addByte(0x0A);
-        _writeVarint(inner, fieldBytes.length);
-        inner.add(fieldBytes);
-      }
-      // field 2 (description): string
+      final violation = RpcProtoWriter();
+      if (v.field.isNotEmpty) violation.writeStringField(1, v.field);
       if (v.description.isNotEmpty) {
-        final descBytes = utf8.encode(v.description);
-        inner.addByte(0x12);
-        _writeVarint(inner, descBytes.length);
-        inner.add(descBytes);
+        violation.writeStringField(2, v.description);
       }
-      // wrap as field 1 of BadRequest (repeated FieldViolation)
-      final innerBytes = inner.toBytes();
-      buf.addByte(0x0A);
-      _writeVarint(buf, innerBytes.length);
-      buf.add(innerBytes);
+      out.writeBytesField(1, violation.toBytes());
     }
-    return buf.toBytes();
+    return out.toBytes();
   }
 
   static RpcBadRequest _decode(Uint8List data) {
     final violations = <RpcFieldViolation>[];
-    var offset = 0;
-    while (offset < data.length) {
-      final (_, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-      if (wireType == 2) {
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final bytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        violations.add(_decodeFieldViolation(bytes));
-      } else {
-        offset = _skipField(data, offset, wireType);
-      }
-    }
+    _readFields(data, (field, r) {
+      if (field != (1, RpcProtoWireType.lengthDelimited)) return false;
+      violations.add(_decodeFieldViolation(r.readBytes()));
+      return true;
+    });
     return RpcBadRequest(violations);
   }
 
   static RpcFieldViolation _decodeFieldViolation(Uint8List data) {
-    String field = '';
-    String description = '';
-    var offset = 0;
-    while (offset < data.length) {
-      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-      if (wireType == 2) {
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final bytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        if (fieldNumber == 1) field = utf8.decode(bytes);
-        if (fieldNumber == 2) description = utf8.decode(bytes);
-      } else {
-        offset = _skipField(data, offset, wireType);
+    var field = '';
+    var description = '';
+    _readFields(data, (tag, r) {
+      switch (tag) {
+        case (1, RpcProtoWireType.lengthDelimited):
+          field = r.readString();
+        case (2, RpcProtoWireType.lengthDelimited):
+          description = r.readString();
+        default:
+          return false;
       }
-    }
+      return true;
+    });
     return RpcFieldViolation(field: field, description: description);
   }
 
@@ -266,66 +189,34 @@ class RpcRetryInfo extends RpcErrorDetail {
 
   @override
   Uint8List encode() {
-    // google.protobuf.Duration: field 1 = seconds (int64), field 2 = nanos (int32)
-    final buf = BytesBuilder(copy: false);
-    // field 1 of RetryInfo is google.protobuf.Duration (retry_delay)
-    final durationBuf = BytesBuilder(copy: false);
+    // Field 1, retry_delay, is a google.protobuf.Duration: seconds (int64) and
+    // nanos (int32).
+    final duration = RpcProtoWriter();
     final seconds = retryDelay.inSeconds;
     final nanos = (retryDelay.inMicroseconds - seconds * 1000000) * 1000;
-    if (seconds != 0) {
-      durationBuf.addByte(0x08);
-      _writeVarint(durationBuf, seconds);
-    }
-    if (nanos != 0) {
-      durationBuf.addByte(0x10);
-      _writeVarint(durationBuf, nanos);
-    }
-    final durationBytes = durationBuf.toBytes();
-    buf.addByte(0x0A);
-    _writeVarint(buf, durationBytes.length);
-    buf.add(durationBytes);
-    return buf.toBytes();
+    if (seconds != 0) duration.writeVarintField(1, seconds);
+    if (nanos != 0) duration.writeVarintField(2, nanos);
+    return (RpcProtoWriter()..writeBytesField(1, duration.toBytes())).toBytes();
   }
 
   static RpcRetryInfo _decode(Uint8List data) {
-    // field 1 is Duration message
-    var offset = 0;
-    int seconds = 0;
-    int nanos = 0;
-    while (offset < data.length) {
-      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-      if (wireType == 2 && fieldNumber == 1) {
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final durationBytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        // parse Duration
-        var dOffset = 0;
-        while (dOffset < durationBytes.length) {
-          final (dField, dWireType, dTagEnd) = _readTag(durationBytes, dOffset);
-          dOffset = dTagEnd;
-          // Dispatch on the wire type like every other decoder here. Reading a
-          // varint unconditionally (the old behaviour) desynchronised the
-          // cursor the moment a field arrived with any other wire type — a
-          // later revision of google.protobuf.Duration, or a hostile peer —
-          // and every field after it decoded as garbage.
-          if (dWireType != 0) {
-            dOffset = _skipField(durationBytes, dOffset, dWireType);
-            continue;
-          }
-          final (val, dNewOffset) = _readVarint(durationBytes, dOffset);
-          dOffset = dNewOffset;
-          if (dField == 1) seconds = val;
-          if (dField == 2) nanos = val;
+    var seconds = 0;
+    var nanos = 0;
+    _readFields(data, (field, r) {
+      if (field != (1, RpcProtoWireType.lengthDelimited)) return false;
+      _readFields(r.readBytes(), (durationField, d) {
+        switch (durationField) {
+          case (1, RpcProtoWireType.varint):
+            seconds = d.readVarint();
+          case (2, RpcProtoWireType.varint):
+            nanos = d.readVarint();
+          default:
+            return false;
         }
-      } else if (wireType == 0) {
-        final (_, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-      } else {
-        offset = _skipField(data, offset, wireType);
-      }
-    }
+        return true;
+      });
+      return true;
+    });
     return RpcRetryInfo(
       Duration(seconds: seconds, microseconds: nanos ~/ 1000),
     );
@@ -354,42 +245,28 @@ class RpcDebugInfo extends RpcErrorDetail {
 
   @override
   Uint8List encode() {
-    final buf = BytesBuilder(copy: false);
-    // field 1 (stack_entries): repeated string
+    final out = RpcProtoWriter();
     for (final entry in stackEntries) {
-      final entryBytes = utf8.encode(entry);
-      buf.addByte(0x0A);
-      _writeVarint(buf, entryBytes.length);
-      buf.add(entryBytes);
+      out.writeStringField(1, entry);
     }
-    // field 2 (detail): string
-    if (detail.isNotEmpty) {
-      final detailBytes = utf8.encode(detail);
-      buf.addByte(0x12);
-      _writeVarint(buf, detailBytes.length);
-      buf.add(detailBytes);
-    }
-    return buf.toBytes();
+    if (detail.isNotEmpty) out.writeStringField(2, detail);
+    return out.toBytes();
   }
 
   static RpcDebugInfo _decode(Uint8List data) {
     final entries = <String>[];
-    String detail = '';
-    var offset = 0;
-    while (offset < data.length) {
-      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-      if (wireType == 2) {
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final bytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        if (fieldNumber == 1) entries.add(utf8.decode(bytes));
-        if (fieldNumber == 2) detail = utf8.decode(bytes);
-      } else {
-        offset = _skipField(data, offset, wireType);
+    var detail = '';
+    _readFields(data, (field, r) {
+      switch (field) {
+        case (1, RpcProtoWireType.lengthDelimited):
+          entries.add(r.readString());
+        case (2, RpcProtoWireType.lengthDelimited):
+          detail = r.readString();
+        default:
+          return false;
       }
-    }
+      return true;
+    });
     return RpcDebugInfo(stackEntries: entries, detail: detail);
   }
 
@@ -423,89 +300,54 @@ class RpcErrorInfo extends RpcErrorDetail {
 
   @override
   Uint8List encode() {
-    final buf = BytesBuilder(copy: false);
-    // field 1 (reason): string
-    if (reason.isNotEmpty) {
-      final reasonBytes = utf8.encode(reason);
-      buf.addByte(0x0A);
-      _writeVarint(buf, reasonBytes.length);
-      buf.add(reasonBytes);
-    }
-    // field 2 (domain): string
-    if (domain.isNotEmpty) {
-      final domainBytes = utf8.encode(domain);
-      buf.addByte(0x12);
-      _writeVarint(buf, domainBytes.length);
-      buf.add(domainBytes);
-    }
-    // field 3 (metadata): map<string, string>
-    // Proto map encoding: repeated message { string key = 1; string value = 2; }
+    final out = RpcProtoWriter();
+    if (reason.isNotEmpty) out.writeStringField(1, reason);
+    if (domain.isNotEmpty) out.writeStringField(2, domain);
+    // map<string, string>: repeated { string key = 1; string value = 2; }
     for (final entry in metadata.entries) {
-      final mapEntry = BytesBuilder(copy: false);
-      final keyBytes = utf8.encode(entry.key);
-      mapEntry.addByte(0x0A);
-      _writeVarint(mapEntry, keyBytes.length);
-      mapEntry.add(keyBytes);
-      final valBytes = utf8.encode(entry.value);
-      mapEntry.addByte(0x12);
-      _writeVarint(mapEntry, valBytes.length);
-      mapEntry.add(valBytes);
-      final mapEntryBytes = mapEntry.toBytes();
-      buf.addByte(0x1A);
-      _writeVarint(buf, mapEntryBytes.length);
-      buf.add(mapEntryBytes);
+      final mapEntry = RpcProtoWriter()
+        ..writeStringField(1, entry.key)
+        ..writeStringField(2, entry.value);
+      out.writeBytesField(3, mapEntry.toBytes());
     }
-    return buf.toBytes();
+    return out.toBytes();
   }
 
   static RpcErrorInfo _decode(Uint8List data) {
-    String reason = '';
-    String domain = '';
+    var reason = '';
+    var domain = '';
     final metadata = <String, String>{};
-    var offset = 0;
-    while (offset < data.length) {
-      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-      if (wireType == 2) {
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final bytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        if (fieldNumber == 1) reason = utf8.decode(bytes);
-        if (fieldNumber == 2) domain = utf8.decode(bytes);
-        if (fieldNumber == 3) {
-          // decode map entry
-          final (key, value) = _decodeMapEntry(bytes);
+    _readFields(data, (field, r) {
+      switch (field) {
+        case (1, RpcProtoWireType.lengthDelimited):
+          reason = r.readString();
+        case (2, RpcProtoWireType.lengthDelimited):
+          domain = r.readString();
+        case (3, RpcProtoWireType.lengthDelimited):
+          final (key, value) = _decodeMapEntry(r.readBytes());
           if (key != null) metadata[key] = value ?? '';
-        }
-      } else if (wireType == 0) {
-        final (_, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-      } else {
-        offset = _skipField(data, offset, wireType);
+        default:
+          return false;
       }
-    }
+      return true;
+    });
     return RpcErrorInfo(reason: reason, domain: domain, metadata: metadata);
   }
 
   static (String?, String?) _decodeMapEntry(Uint8List data) {
     String? key;
     String? value;
-    var offset = 0;
-    while (offset < data.length) {
-      final (fieldNumber, wireType, tagEnd) = _readTag(data, offset);
-      offset = tagEnd;
-      if (wireType == 2) {
-        final (len, newOffset) = _readVarint(data, offset);
-        offset = newOffset;
-        final bytes = _readLengthDelimited(data, offset, len);
-        offset += len;
-        if (fieldNumber == 1) key = utf8.decode(bytes);
-        if (fieldNumber == 2) value = utf8.decode(bytes);
-      } else {
-        offset = _skipField(data, offset, wireType);
+    _readFields(data, (field, r) {
+      switch (field) {
+        case (1, RpcProtoWireType.lengthDelimited):
+          key = r.readString();
+        case (2, RpcProtoWireType.lengthDelimited):
+          value = r.readString();
+        default:
+          return false;
       }
-    }
+      return true;
+    });
     return (key, value);
   }
 
@@ -531,167 +373,16 @@ class RpcRawErrorDetail extends RpcErrorDetail {
   String toString() => 'RpcRawErrorDetail($typeUrl, ${value.length} bytes)';
 }
 
-// -- Protobuf varint helpers --
-
-/// Reads a field tag, returning its field number, wire type and the new offset.
-///
-/// A protobuf tag is a VARINT, not a byte. Every decoder here used to read it
-/// with `data[offset++]`, which is only correct for field numbers 1..15 — the
-/// point at which the tag stops fitting in one byte. A field number of 16 or
-/// more (a later revision of one of these messages, or any peer that emits
-/// one) left the continuation byte in the stream, so `fieldNumber` came out
-/// with the 0x80 bit folded in, the wire type was read from the wrong bits,
-/// and the cursor desynchronised — decoding every remaining field of the
-/// message as garbage. That is precisely the forward-compatibility case
-/// [_skipField] exists to handle.
-(int fieldNumber, int wireType, int newOffset) _readTag(
+/// Reads every field of [data], handing each (field number, wire type) to
+/// [read]; a field it does not take (returns false) is skipped, as protobuf's
+/// forward-compatibility rule requires.
+void _readFields(
   Uint8List data,
-  int offset,
+  bool Function((int, int) field, RpcProtoReader reader) read,
 ) {
-  final (tag, newOffset) = _readVarint(data, offset);
-  return (tag ~/ 8, tag % 8, newOffset);
-}
-
-/// Encodes a signed integer as a protobuf base-128 varint.
-///
-/// Per the protobuf spec, signed `int32`/`int64` fields encode negative values
-/// as their unsigned 64-bit two's-complement representation, which always
-/// occupies the full 10 bytes. Both reachable numeric fields here are signed:
-/// the gRPC status `code` (int32) and the `RetryInfo` Duration `seconds`
-/// (int64). A negative [Duration] yields a negative `seconds`, and a long
-/// retry delay can push `seconds` above 2^32.
-///
-/// dart2js-safe: it never relies on `>>`/`<<` past 32 bits (undefined in
-/// JavaScript, where ints are doubles). Non-negative values are peeled with
-/// integer division (`~/ 0x80`); negatives are streamed from their two's
-/// complement split into 32-bit hi/lo halves, mirroring the uint64 technique in
-/// `special_cbor.dart` (`value ~/ 0x100000000`).
-void _writeVarint(BytesBuilder buf, int value) {
-  if (value >= 0) {
-    var v = value;
-    while (v >= 0x80) {
-      buf.addByte((v & 0x7F) | 0x80);
-      v = v ~/ 0x80;
-    }
-    buf.addByte(v & 0x7F);
-    return;
+  final reader = RpcProtoReader(data);
+  while (!reader.atEnd) {
+    final (:field, :wireType) = reader.readTag();
+    if (!read((field, wireType), reader)) reader.skip(wireType);
   }
-  // Build the unsigned 64-bit two's complement as 32-bit hi/lo halves.
-  final magnitude = -value;
-  final magLo = magnitude & 0xFFFFFFFF;
-  final magHi = (magnitude ~/ 0x100000000) & 0xFFFFFFFF;
-  final invLo = (~magLo) & 0xFFFFFFFF;
-  final invHi = (~magHi) & 0xFFFFFFFF;
-  var lo = (invLo + 1) & 0xFFFFFFFF;
-  final carry = (invLo + 1) > 0xFFFFFFFF ? 1 : 0;
-  var hi = (invHi + carry) & 0xFFFFFFFF;
-  // Stream the first 9 of 10 groups, shifting the 64-bit value right by 7 each
-  // step using division on each half (carry the low 7 bits of hi into lo).
-  for (var i = 0; i < 9; i++) {
-    buf.addByte((lo & 0x7F) | 0x80);
-    final carryBits = (hi & 0x7F) * 0x2000000; // hi[0..6] -> lo[25..31]
-    lo = ((lo ~/ 0x80) + carryBits) & 0xFFFFFFFF;
-    hi = hi ~/ 0x80;
-  }
-  buf.addByte(lo & 0x7F);
-}
-
-/// Advances [offset] past one field of the given [wireType] without decoding
-/// it, returning the new offset.
-///
-/// Protobuf's forward-compatibility rule requires unknown fields to be SKIPPED
-/// rather than treated as fatal: a peer (or a future revision of the message)
-/// may add a field of any wire type before one we care about, and aborting on
-/// it would silently drop every field that follows. Throws [FormatException]
-/// for the deprecated group wire types (3/4), which this decoder does not
-/// support.
-int _skipField(Uint8List data, int offset, int wireType) {
-  switch (wireType) {
-    case 0: // varint
-      final (_, newOffset) = _readVarint(data, offset);
-      return newOffset;
-    case 1: // 64-bit fixed
-      if (offset + 8 > data.length) {
-        throw const FormatException(
-          'Malformed protobuf: truncated 64-bit field',
-        );
-      }
-      return offset + 8;
-    case 2: // length-delimited
-      final (len, newOffset) = _readVarint(data, offset);
-      // Validate bounds the same way _readLengthDelimited does.
-      _readLengthDelimited(data, newOffset, len);
-      return newOffset + len;
-    case 5: // 32-bit fixed
-      if (offset + 4 > data.length) {
-        throw const FormatException(
-          'Malformed protobuf: truncated 32-bit field',
-        );
-      }
-      return offset + 4;
-    default: // 3/4 = groups (deprecated), or invalid
-      throw FormatException('Unsupported protobuf wire type: $wireType');
-  }
-}
-
-(int value, int newOffset) _readVarint(Uint8List data, int offset) {
-  // Accumulate into 32-bit lo/hi halves instead of `result |= byte << shift`:
-  // on dart2js a shift of 32+ silently overflows, corrupting large (> 2^32) and
-  // negative (10-byte two's-complement) varints. Shifts here never exceed 31
-  // bits; halves combine as `hi * 2^32 + lo`, the boundary-safe technique used
-  // for uint64 in `special_cbor.dart`.
-  var lo = 0; // bits 0..31
-  var hi = 0; // bits 32..63
-  var shift = 0;
-  var terminated = false;
-  // A 64-bit varint is at most 10 bytes; bound the loop to reject runaway/
-  // unterminated varints in hostile or truncated frames.
-  while (offset < data.length && shift < 64) {
-    final byte = data[offset++];
-    final bits = byte & 0x7F;
-    if (shift < 32) {
-      lo |= (bits << shift) & 0xFFFFFFFF;
-      // A group straddling bit 32 spills its top bits into the high half.
-      if (shift > 25) hi |= bits >> (32 - shift);
-    } else {
-      hi |= (bits << (shift - 32)) & 0xFFFFFFFF;
-    }
-    if ((byte & 0x80) == 0) {
-      terminated = true;
-      break;
-    }
-    shift += 7;
-  }
-  if (!terminated) {
-    throw const FormatException(
-      'Malformed protobuf: unterminated or truncated varint',
-    );
-  }
-  lo &= 0xFFFFFFFF;
-  hi &= 0xFFFFFFFF;
-  // Sign bit (bit 63) set => reproduce the signed (two's-complement) value so
-  // negative int32/int64 fields round-trip.
-  if ((hi & 0x80000000) != 0) {
-    final invLo = (~lo) & 0xFFFFFFFF;
-    final invHi = (~hi) & 0xFFFFFFFF;
-    final magLo = (invLo + 1) & 0xFFFFFFFF;
-    final carry = (invLo + 1) > 0xFFFFFFFF ? 1 : 0;
-    final magnitude = ((invHi + carry) & 0xFFFFFFFF) * 0x100000000 + magLo;
-    return (-magnitude, offset);
-  }
-  return (hi * 0x100000000 + lo, offset);
-}
-
-/// Returns a view of [len] bytes starting at [offset], validating bounds.
-///
-/// Throws [FormatException] on a negative or out-of-range length instead of
-/// leaking an uncaught [RangeError] from [Uint8List.sublistView].
-Uint8List _readLengthDelimited(Uint8List data, int offset, int len) {
-  if (len < 0 || offset + len > data.length) {
-    throw FormatException(
-      'Malformed protobuf: length-delimited field of $len bytes at offset '
-      '$offset exceeds buffer of ${data.length} bytes',
-    );
-  }
-  return Uint8List.sublistView(data, offset, offset + len);
 }

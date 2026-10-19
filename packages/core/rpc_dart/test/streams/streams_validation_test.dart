@@ -232,7 +232,7 @@ void main() {
         if (message.isMetadataOnly && message.metadata?.methodPath == '/S/M') {
           await serverTransport.sendMetadata(
             message.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
         }

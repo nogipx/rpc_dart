@@ -43,7 +43,7 @@ void main() {
     });
 
     test('trailers do NOT include :status', () {
-      final metadata = RpcMetadata.forTrailer(RpcStatus.ok);
+      final metadata = RpcTrailers.status(RpcStatus.ok);
       final headers = rpcMetadataToHttp2Trailers(metadata);
 
       final headerMap = _toMap(headers);
@@ -57,7 +57,7 @@ void main() {
     });
 
     test('trailers with error include grpc-status and grpc-message', () {
-      final metadata = RpcMetadata.forTrailer(
+      final metadata = RpcTrailers.status(
         RpcStatus.notFound,
         message: 'Method not found',
       );
@@ -71,7 +71,7 @@ void main() {
     });
 
     test('Trailers-Only includes :status and content-type', () {
-      final metadata = RpcMetadata.forTrailer(
+      final metadata = RpcTrailers.status(
         RpcStatus.unimplemented,
         message: 'Method not registered',
       );
@@ -230,7 +230,7 @@ void main() {
     test('percent-encoded grpc-message (ASCII) still passes through', () {
       // The core metadata layer percent-encodes grpc-message to ASCII before
       // it reaches the transport, so a Unicode status message is fine.
-      final metadata = RpcMetadata.forTrailer(2, message: 'Ошибка');
+      final metadata = RpcTrailers.status(2, message: 'Ошибка');
       final headers = rpcMetadataToHttp2Trailers(metadata);
       final wire = _toMap(headers)['grpc-message']!;
       // Already ASCII (percent-encoded) on the wire.

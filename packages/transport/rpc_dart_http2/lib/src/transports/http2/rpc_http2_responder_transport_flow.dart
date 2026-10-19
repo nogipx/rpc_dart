@@ -45,7 +45,7 @@ extension _Http2ResponderFlow on RpcHttp2ResponderTransport {
     unawaited(
       sendMetadata(
         streamId,
-        RpcMetadata.forTrailer(
+        RpcTrailers.status(
           RpcStatus.resourceExhausted,
           message:
               'Request exceeds the un-consumed window '

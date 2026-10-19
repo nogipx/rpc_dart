@@ -108,7 +108,7 @@ List<Uint8List> framedResponse(int streamId) => [
   RpcChannelFrame.encodeData(streamId: streamId + 2, payload: garbage(64)),
   RpcChannelFrame.encodeMetadata(
     streamId: streamId,
-    metadata: RpcMetadata.forTrailer(RpcStatus.ok),
+    metadata: RpcTrailers.status(RpcStatus.ok),
     endOfStream: true,
   ),
 ];

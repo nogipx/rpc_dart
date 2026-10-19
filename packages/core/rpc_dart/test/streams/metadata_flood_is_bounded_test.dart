@@ -112,7 +112,7 @@ void main() {
     await client.sendMessage(streamId, Uint8List.fromList([1, 2, 3]));
     await client.sendMetadata(
       streamId,
-      RpcMetadata.forTrailer(RpcStatus.ok),
+      RpcTrailers.status(RpcStatus.ok),
       endStream: true,
     );
     await Future<void>.delayed(const Duration(milliseconds: 100));

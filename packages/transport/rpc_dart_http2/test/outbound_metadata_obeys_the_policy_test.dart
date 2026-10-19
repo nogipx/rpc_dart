@@ -20,6 +20,7 @@ import 'dart:io';
 
 import 'package:http2/http2.dart' as http2;
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart' show RpcTrailers;
 import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:test/test.dart';
 
@@ -165,7 +166,7 @@ void main() {
     final t = await caller();
     addTearDown(t.close);
 
-    final details = RpcMetadata.forTrailer(
+    final details = RpcTrailers.status(
       RpcStatus.internal,
       message: 'boom',
       statusDetailsBin: Uint8List.fromList(List.generate(32, (i) => i)),

@@ -184,7 +184,7 @@ void main() {
     'the hand-built trailers are capped too',
     () async {
       // WITNESS for the sites round 175 MISSED, because they built the headers
-      // by hand and so did not match a grep for `forTrailer`.
+      // by hand and so did not match a grep for `RpcTrailers.status`.
       // `_handleUnsupportedZeroCopy` answers "Zero-copy method $methodKey
       // requires zero-copy transport", and `methodKey` is a name the service
       // author chooses -- 133 characters here. Measured over websocket:

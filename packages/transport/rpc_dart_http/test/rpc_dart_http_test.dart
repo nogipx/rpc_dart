@@ -48,7 +48,7 @@ void main() {
           );
           await serverTransport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
           if (!serverReplied.isCompleted) serverReplied.complete();
@@ -86,7 +86,7 @@ void main() {
           );
           await serverTransport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
           if (!serverReplied.isCompleted) serverReplied.complete();
@@ -128,7 +128,7 @@ void main() {
           await serverTransport.sendMessage(msg.streamId, responseBody);
           await serverTransport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
         }
@@ -464,7 +464,7 @@ void main() {
             );
             await serverTransport.sendMetadata(
               msg.streamId,
-              RpcMetadata.forTrailer(RpcStatus.ok),
+              RpcTrailers.status(RpcStatus.ok),
               endStream: true,
             );
           }
@@ -518,7 +518,7 @@ void main() {
           await serverTransport.sendMessage(msg.streamId, responseBody);
           await serverTransport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
         }
@@ -631,7 +631,7 @@ void main() {
           );
           await transport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
           serverDone.complete();
@@ -807,7 +807,7 @@ void main() {
           );
           await transport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
           serverDone.complete();
@@ -873,7 +873,7 @@ void main() {
           );
           await transport.sendMetadata(
             msg.streamId,
-            RpcMetadata.forTrailer(RpcStatus.ok),
+            RpcTrailers.status(RpcStatus.ok),
             endStream: true,
           );
           serverDone.complete();

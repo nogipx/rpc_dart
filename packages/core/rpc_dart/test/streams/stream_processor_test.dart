@@ -177,7 +177,7 @@ void main() {
       messageStreamController.add(
         RpcTransportMessage(
           streamId: streamId,
-          metadata: RpcMetadata.forTrailer(RpcStatus.ok),
+          metadata: RpcTrailers.status(RpcStatus.ok),
           isEndOfStream: true,
         ),
       );

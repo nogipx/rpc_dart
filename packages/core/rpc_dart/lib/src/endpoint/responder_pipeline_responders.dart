@@ -247,10 +247,10 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     try {
       await transport.sendMetadata(
         state.id,
-        // Through forTrailer, so the message is trimmed to the cap that will
+        // Through RpcTrailers.status, so the message is trimmed to the cap that will
         // judge it. Built by hand it was invisible to round 175's sweep, and a
         // long `methodKey` was enough to lose the whole answer.
-        RpcMetadata.forTrailer(
+        RpcTrailers.status(
           RpcStatus.unimplemented,
           message: 'Zero-copy method $methodKey requires zero-copy transport',
           maxMessageLength: _trailerMessageCap(transport),

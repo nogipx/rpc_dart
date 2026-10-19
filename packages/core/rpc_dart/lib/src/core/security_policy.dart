@@ -6,6 +6,7 @@
 // For RpcMetadataViolation: peer metadata failing this policy is a wire fact,
 // not a caller's programming mistake, and the type says which.
 import '../codec/special_cbor.dart' show CborCodec;
+import 'channel_frame.dart' show RpcChannelFrame;
 import 'errors.dart' show RpcMetadataViolation;
 import 'metadata.dart';
 import 'protocol.dart';
@@ -455,8 +456,7 @@ final class RpcSecurityPolicy {
 
   /// Effective max buffered bytes, falling back to message size + prefix when unset.
   int get effectiveMaxBufferedBytes =>
-      maxBufferedBytes ??
-      (maxMessageLengthBytes + RpcConstants.messagePrefixSize);
+      maxBufferedBytes ?? maxFramedMessageBytes;
 
   /// Un-consumed bytes one stream's queue may hold: [maxBufferedBytes] when
   /// set, otherwise enough for what flow control lets a peer send.
@@ -474,7 +474,7 @@ final class RpcSecurityPolicy {
     final explicit = maxBufferedBytes;
     if (explicit != null) return explicit;
     final window = flowControlWindowBytes;
-    final message = maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+    final message = maxFramedMessageBytes;
     if (window == null) return message;
     return window + message + maxMetadataBytes;
   }
@@ -497,7 +497,7 @@ final class RpcSecurityPolicy {
   int? get effectiveConnectionBufferBytes {
     final window = flowControlConnectionWindowBytes;
     if (window == null) return null;
-    final message = maxMessageLengthBytes + RpcConstants.messagePrefixSize;
+    final message = maxFramedMessageBytes;
     return window + (message < window ? message : window) + maxMetadataBytes;
   }
 
@@ -514,15 +514,25 @@ final class RpcSecurityPolicy {
     final window = flowControlWindowBytes;
     if (window == null) return null;
     final buffer = effectiveStreamBufferBytes;
-    final spare =
-        buffer -
-        maxMessageLengthBytes -
-        RpcConstants.messagePrefixSize -
-        maxMetadataBytes;
+    final spare = buffer - maxFramedMessageBytes - maxMetadataBytes;
     final room = spare > buffer ~/ 2 ? spare : buffer ~/ 2;
     if (room >= window) return window;
     return room < 1 ? 1 : room;
   }
+
+  /// The largest channel frame a multiplexed channel reassembles: one
+  /// buffered message, [effectiveMaxBufferedBytes], under its frame header.
+  int get maxChannelFrameBytes =>
+      effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
+
+  /// How many policy violations one connection may cost before it is closed
+  /// as hostile rather than misconfigured.
+  ///
+  /// [closeOnProtocolError] false says one bad frame must not end the
+  /// connection, not that a peer may send violating frames forever, each of
+  /// which costs this side work and memory. 256 is far past any
+  /// misconfiguration.
+  static const int maxPolicyViolations = 256;
 
   /// The largest a single gRPC FRAME may be: one message plus its 5-byte prefix.
   ///
@@ -530,15 +540,7 @@ final class RpcSecurityPolicy {
   /// That limit is expressed in MESSAGE bytes, and everything on a wire carries
   /// the prefix, so comparing a framed length against it makes the effective
   /// limit `maxMessageLengthBytes - 5` and rejects a message at exactly the
-  /// limit. Measured over HTTP/1.1 with the limit set to one message's exact
-  /// serialized length:
-  ///
-  ///     channel transport   ACCEPTED
-  ///     HTTP/1.1            REFUSED, RESOURCE_EXHAUSTED
-  ///     both, limit + 5     ACCEPTED   <- so it is the five bytes
-  ///
-  /// One home for the rule. It was computed inline in three places before, and
-  /// the two HTTP sites did not compute it at all.
+  /// limit.
   int get maxFramedMessageBytes =>
       maxMessageLengthBytes + RpcConstants.messagePrefixSize;
 

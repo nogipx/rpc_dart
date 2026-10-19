@@ -66,7 +66,7 @@ void _answerWithForeignTrailer(
     ).statusDetailsBin!;
     transport.sendMetadata(
       message.streamId,
-      RpcMetadata.forTrailer(RpcStatus.notFound, statusDetailsBin: bin),
+      RpcTrailers.status(RpcStatus.notFound, statusDetailsBin: bin),
       endStream: true,
     );
   });

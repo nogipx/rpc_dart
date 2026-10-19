@@ -33,7 +33,7 @@ RpcCallerEndpoint _againstGarbage() {
       );
       await server.sendMetadata(
         m.streamId,
-        RpcMetadata.forTrailer(0),
+        RpcTrailers.status(0),
         endStream: true,
       );
     }());

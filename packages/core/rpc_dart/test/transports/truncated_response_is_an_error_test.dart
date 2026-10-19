@@ -92,7 +92,7 @@ void main() {
     await server.sendMessage(id, _message('two'));
     await server.sendMetadata(
       id,
-      RpcMetadata.forTrailer(RpcStatus.ok),
+      RpcTrailers.status(RpcStatus.ok),
       endStream: true,
     );
 
@@ -130,7 +130,7 @@ void main() {
     final drained = _drain(client, id);
 
     await server.sendMessage(id, _message('one'), endStream: true);
-    await server.sendMetadata(id, RpcMetadata.forTrailer(RpcStatus.ok));
+    await server.sendMetadata(id, RpcTrailers.status(RpcStatus.ok));
 
     expect(await drained, 'status ${RpcStatus.internal} after 1');
   });
@@ -153,7 +153,7 @@ void main() {
 
       await server.sendMetadata(
         id,
-        RpcMetadata.forTrailer(RpcStatus.permissionDenied, message: 'nope'),
+        RpcTrailers.status(RpcStatus.permissionDenied, message: 'nope'),
         endStream: true,
       );
       await done.future;

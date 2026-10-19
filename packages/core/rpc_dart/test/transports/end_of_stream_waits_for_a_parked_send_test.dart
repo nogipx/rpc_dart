@@ -24,6 +24,7 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart' show RpcTrailers;
 import 'package:test/test.dart';
 
 /// Small enough that one frame exhausts it. The gate admits on `credit > 0`,
@@ -86,7 +87,7 @@ void main() {
       final seen = await _observe(
         (c, id) => c.sendMetadata(
           id,
-          RpcMetadata.forTrailer(RpcStatus.ok),
+          RpcTrailers.status(RpcStatus.ok),
           endStream: true,
         ),
       );

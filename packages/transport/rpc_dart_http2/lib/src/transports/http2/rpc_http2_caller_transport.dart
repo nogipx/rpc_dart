@@ -120,10 +120,9 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   ///
   /// http2 reports the abort back to us as a stream error; without this we
   /// would hand a consumer that deliberately cancelled an RpcHttp2StreamError
-  /// describing its own cancellation. Insertion-ordered and bounded so it
-  /// cannot grow without limit on a long-lived connection.
-  final Set<int> _resetStreams = {};
-  static const int _maxRememberedResetStreams = 1024;
+  /// describing its own cancellation. Bounded so it cannot grow without limit
+  /// on a long-lived connection.
+  final RpcRecentIds _resetStreams = RpcRecentIds(1024);
 
   final String _host;
 
@@ -670,10 +669,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     // reset back to us as a stream error, and _emitStreamError would then
     // push an RpcHttp2StreamError at a consumer that deliberately cancelled --
     // reporting its own cancellation to it as a transport failure.
-    if (_resetStreams.add(streamId) &&
-        _resetStreams.length > _maxRememberedResetStreams) {
-      _resetStreams.remove(_resetStreams.first);
-    }
+    _resetStreams.add(streamId);
 
     // Read BEFORE the cleanup below drops it.
     final halfClosed = call.halfClosedLocal;

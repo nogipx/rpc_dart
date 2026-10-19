@@ -13,7 +13,7 @@
 // operator who passed their own `allowedHeaders` silently dropped
 // `application/grpc` -- which is not CORS-safelisted -- and broke every call.
 //
-// EXPOSE: `RpcMetadata.forTrailer` writes `grpc-status-details-bin` whenever a
+// EXPOSE: `RpcTrailers.status` writes `grpc-status-details-bin` whenever a
 // status carries details, and the expose-list did not name it, so the details
 // were unreadable from a browser. That is the same field B-64 drops on five of
 // seven trailer paths -- two independent routes to the same loss.
@@ -128,7 +128,7 @@ void main() {
         _exposed(policy),
         contains(RpcHeaders.grpcStatusDetails),
         reason:
-            'forTrailer writes it whenever a status carries details, and it is '
+            'RpcTrailers.status writes it whenever a status carries details, and it is '
             'the only place those details exist on the wire',
       );
     });

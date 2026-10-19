@@ -4,16 +4,6 @@
 
 part of 'rpc_http2_responder_transport.dart';
 
-/// How many policy violations a connection may cost before it is treated as
-/// hostile rather than misconfigured.
-///
-/// The same backstop, and the same 256, as `RpcChannelTransport`: the field
-/// defaulting to false says one bad frame must not end the connection, NOT
-/// that a peer may grind forever. Measured here at the default policy, 2000
-/// violating header blocks were all accepted with the connection still open
-/// and RSS up 27 MiB, against a shared-layer control that closed after 256.
-const int _maxPolicyViolations = 256;
-
 extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   /// Wires up one new client-initiated stream.
   void _handleIncomingStream(http2.ServerTransportStream stream) {
@@ -169,7 +159,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
           // out: `grpc-message` is a header value, so a rejection long enough to
           // explain itself could fail the same check that produced it, and the
           // catch below would swallow the whole answer.
-          RpcMetadata.forTrailer(
+          RpcTrailers.status(
             status,
             message: message,
             statusDetailsBin: detailsBin,
@@ -195,7 +185,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         try {
           await sendMetadata(
             streamId,
-            RpcMetadata.forTrailer(status),
+            RpcTrailers.status(status),
             endStream: true,
           );
         } catch (e2) {
@@ -222,7 +212,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         // and it still IS an ArgumentError, so nothing else had to change.
         if (error is RpcMetadataViolation &&
             (_policy.closeOnProtocolError ||
-                ++_policyViolations > _maxPolicyViolations)) {
+                ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations)) {
           await _closeForProtocolError();
         }
       }
@@ -444,7 +434,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         // apart at all.
         if (status != RpcStatus.resourceExhausted &&
             (_policy.closeOnProtocolError ||
-                ++_policyViolations > _maxPolicyViolations)) {
+                ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations)) {
           await _closeForProtocolError();
         }
       }

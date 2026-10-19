@@ -91,7 +91,7 @@ Future<List<LogEvent>> _serverStream(Uint8List first, Uint8List? after) async {
   chan.feed(
     RpcChannelFrame.encodeMetadata(
       streamId: id,
-      metadata: RpcMetadata.forTrailer(0),
+      metadata: RpcTrailers.status(0),
       endOfStream: true,
     ),
   );

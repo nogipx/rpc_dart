@@ -155,39 +155,6 @@ final class RpcMetadata {
     ]);
   }
 
-  /// Creates the end-of-stream trailer carrying [statusCode] (see [RpcStatus])
-  /// and, on error, an optional [message].
-  ///
-  /// **Pass [maxMessageLength]**, which caps the ENCODED `grpc-message` — the
-  /// same thing [RpcSecurityPolicy.isValidHeaderValue] measures. A trailer that
-  /// fails validation is never sent, and the caller then gets whatever the
-  /// pipeline makes of a call with no status at all: the status the handler
-  /// deliberately CHOSE, destroyed by a length limit on its explanation.
-  /// Trimming keeps the code and as much of the text as fits.
-  static RpcMetadata forTrailer(
-    int statusCode, {
-    String message = '',
-    Uint8List? statusDetailsBin,
-    int? maxMessageLength,
-  }) {
-    final headers = [RpcHeader(RpcHeaders.grpcStatus, statusCode.toString())];
-
-    if (message.isNotEmpty) {
-      final encoded = encodeGrpcMessage(message, maxLength: maxMessageLength);
-      if (encoded.isNotEmpty) {
-        headers.add(RpcHeader(RpcHeaders.grpcMessage, encoded));
-      }
-    }
-
-    if (statusDetailsBin != null && statusDetailsBin.isNotEmpty) {
-      headers.add(
-        RpcHeader(RpcHeaders.grpcStatusDetails, base64Encode(statusDetailsBin)),
-      );
-    }
-
-    return RpcMetadata(headers);
-  }
-
   /// Parses `grpc-timeout` into a [Duration].
   ///
   /// Format: 1-8 digits followed by a unit:
@@ -314,7 +281,7 @@ final class RpcMetadata {
   /// [maxLength] exists because the ENCODED string is what
   /// [RpcSecurityPolicy.isValidHeaderValue] measures, and a trailer failing that
   /// check is not sent at all — so an over-long message costs the whole answer.
-  /// See [forTrailer].
+  /// See `RpcTrailers.status`.
   static String encodeGrpcMessage(String message, {int? maxLength}) {
     final limit = maxLength == null
         ? _maxGrpcMessageLength

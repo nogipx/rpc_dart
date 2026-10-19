@@ -111,7 +111,7 @@ void main() {
       }, onError: completer.completeError);
 
       // Send metadata from the server end.
-      final metadata = RpcMetadata.forTrailer(RpcStatus.ok, message: 'Success');
+      final metadata = RpcTrailers.status(RpcStatus.ok, message: 'Success');
       await serverTransport.sendMetadata(processor.streamId, metadata);
 
       // Wait for it to arrive.
@@ -222,7 +222,7 @@ void main() {
       );
 
       // Send END_STREAM from the server end.
-      final endMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
+      final endMetadata = RpcTrailers.status(RpcStatus.ok);
       await serverTransport.sendMetadata(
         processor.streamId,
         endMetadata,

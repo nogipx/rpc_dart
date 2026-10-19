@@ -33,8 +33,13 @@ export 'src/_index.dart'
         RpcMessageParser,
         RpcTransportMessage,
         RpcStreamIdManager,
+        RpcRecentIds,
         RpcStreamRouter,
         RpcConstants,
+        // Protobuf wire format
+        RpcProtoReader,
+        RpcProtoWireType,
+        RpcProtoWriter,
         // What IRpcTransport's optional members return
         IRpcFlowCredit,
         IRpcConnectionBuffer,

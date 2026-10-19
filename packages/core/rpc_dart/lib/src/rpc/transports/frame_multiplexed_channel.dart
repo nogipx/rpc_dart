@@ -205,8 +205,7 @@ class RpcFrameMultiplexedChannel
   /// buffer budget describes gRPC reassembly and knows nothing of this
   /// channel's own header, so the header is added here rather than stolen from
   /// the message budget.
-  int get _maxBufferedFrameBytes =>
-      _policy.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
+  int get _maxBufferedFrameBytes => _policy.maxChannelFrameBytes;
 
   /// Grows [_buf] so it can hold at least [needed] bytes, copying the existing
   /// (not-yet-emitted) bytes. Capacity doubles, so total copy cost across a
@@ -312,7 +311,7 @@ class RpcFrameMultiplexedChannel
     if (_incomingCtl.isClosed) return;
     _incomingCtl.add(
       RpcTransportMessage(
-        metadata: RpcMetadata.forTrailer(
+        metadata: RpcTrailers.status(
           RpcStatus.resourceExhausted,
           message:
               'Received message larger than max '
@@ -367,7 +366,7 @@ class RpcFrameMultiplexedChannel
     }
     _incomingCtl.add(
       RpcTransportMessage(
-        metadata: RpcMetadata.forTrailer(
+        metadata: RpcTrailers.status(
           RpcStatus.internal,
           message: 'Undecodable metadata frame',
           maxMessageLength: _policy.maxHeaderValueBytes,
@@ -654,7 +653,7 @@ class RpcFrameMultiplexedChannel
     if (refusedStreamId != null && !_closed) {
       final answer = send(
         RpcTransportMessage(
-          metadata: RpcMetadata.forTrailer(
+          metadata: RpcTrailers.status(
             RpcStatus.resourceExhausted,
             message: error.message,
             maxMessageLength: _policy.maxHeaderValueBytes,

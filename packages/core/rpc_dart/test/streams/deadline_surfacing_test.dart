@@ -91,7 +91,7 @@ void main() {
         );
         await server.sendMetadata(
           message.streamId,
-          RpcMetadata.forTrailer(RpcStatus.ok),
+          RpcTrailers.status(RpcStatus.ok),
           endStream: true,
         );
       });

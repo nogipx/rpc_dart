@@ -62,15 +62,12 @@ final class RpcResponderPingHandler {
       );
 
       try {
-        // Through wireStatusFor: the error's own text stays here, logged
-        // above, and the peer gets only what the gate lets out.
-        final wire = wireStatusFor(error);
+        // The error's own text stays here, logged above, and the peer gets
+        // only what wireStatusFor lets out.
         await transport.sendMetadata(
           streamId,
-          RpcMetadata.forTrailer(
-            wire.status,
-            message: wire.message,
-            statusDetailsBin: wire.detailsBin,
+          RpcTrailers.forError(
+            error,
             maxMessageLength: _trailerMessageCap(transport),
           ),
           endStream: true,

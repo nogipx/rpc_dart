@@ -116,7 +116,7 @@ extension _StreamProcessorInternals<
     _trailerSent = true;
 
     try {
-      final trailers = RpcMetadata.forTrailer(RpcStatus.ok);
+      final trailers = RpcTrailers.status(RpcStatus.ok);
       await _transport.sendMetadata(_streamId, trailers, endStream: true);
       if (_logger.isInternal) {
         _logger.internal(

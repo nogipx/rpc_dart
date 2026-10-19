@@ -4,12 +4,14 @@
 
 import 'dart:typed_data';
 
+import 'channel_frame.dart';
+
 /// Bytes reserved in front of an encoded gRPC frame: the channel frame header.
 ///
 /// A channel transport frames a gRPC frame a second time. Without room in
 /// front it copies the whole message into a new buffer to put its header there;
 /// with it, it writes the header in place.
-const int kFrameHeadroom = 9;
+const int kFrameHeadroom = RpcChannelFrame.headerSize;
 
 /// Below this a frame gets no headroom. Copying a small frame is cheaper than
 /// the [Expando] lookup that proves the headroom is ours.

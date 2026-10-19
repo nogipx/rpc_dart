@@ -1077,7 +1077,7 @@ void _testFullCycleServer(
       }
 
       // Then the trailer.
-      final finalMetadata = RpcMetadata.forTrailer(RpcStatus.ok);
+      final finalMetadata = RpcTrailers.status(RpcStatus.ok);
       await transport.sendMetadata(
         message.streamId,
         finalMetadata,
@@ -1093,7 +1093,7 @@ void _testErrorServer(IRpcTransport transport, Map<String, dynamic> params) {
   transport.incomingMessages.listen((message) async {
     if (!message.isMetadataOnly && message.payload != null) {
       // Answer with an error.
-      final errorMetadata = RpcMetadata.forTrailer(
+      final errorMetadata = RpcTrailers.status(
         RpcStatus.internal,
         message: 'Test error',
       );
@@ -1203,7 +1203,7 @@ void _testZeroCopyErrorServer(
       // An id of -1 is the error trigger.
       if (receivedObject.id == -1) {
         // The error goes back in metadata, the way gRPC carries one.
-        final errorMetadata = RpcMetadata.forTrailer(
+        final errorMetadata = RpcTrailers.status(
           RpcStatus.invalidArgument,
           message: 'Invalid object ID: ${receivedObject.id}',
         );

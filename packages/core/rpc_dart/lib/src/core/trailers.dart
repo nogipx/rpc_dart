@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'errors.dart';
@@ -13,23 +14,42 @@ import 'rpc_headers.dart';
 /// trailers, the cancellation notice, and the trailers a caller synthesizes
 /// for a response that is not gRPC.
 ///
-/// Every one goes through [RpcMetadata.forTrailer], so `grpc-message` is
+/// Every status trailer goes through [status], so `grpc-message` is
 /// always percent-encoded the same way and trimmed to [maxMessageLength] when
 /// given. A trailer that fails the policy's header check is never sent, and
 /// the caller then reports a call with no status at all.
 abstract final class RpcTrailers {
   /// A status trailer: [code] (see [RpcStatus]), [message] and details.
+  ///
+  /// **Pass [maxMessageLength]**, which caps the ENCODED `grpc-message` -- the
+  /// same thing `RpcSecurityPolicy.isValidHeaderValue` measures. A trailer that
+  /// fails validation is never sent, and the caller then gets whatever the
+  /// pipeline makes of a call with no status at all: the status the handler
+  /// chose, destroyed by a length limit on its explanation. Trimming keeps the
+  /// code and as much of the text as fits.
   static RpcMetadata status(
     int code, {
     String message = '',
     Uint8List? statusDetailsBin,
     int? maxMessageLength,
-  }) => RpcMetadata.forTrailer(
-    code,
-    message: message,
-    statusDetailsBin: statusDetailsBin,
-    maxMessageLength: maxMessageLength,
-  );
+  }) {
+    final headers = [RpcHeader(RpcHeaders.grpcStatus, code.toString())];
+    if (message.isNotEmpty) {
+      final encoded = RpcMetadata.encodeGrpcMessage(
+        message,
+        maxLength: maxMessageLength,
+      );
+      if (encoded.isNotEmpty) {
+        headers.add(RpcHeader(RpcHeaders.grpcMessage, encoded));
+      }
+    }
+    if (statusDetailsBin != null && statusDetailsBin.isNotEmpty) {
+      headers.add(
+        RpcHeader(RpcHeaders.grpcStatusDetails, base64Encode(statusDetailsBin)),
+      );
+    }
+    return RpcMetadata(headers);
+  }
 
   /// The trailer carrying [error]'s status, message and details.
   ///
@@ -42,6 +62,19 @@ abstract final class RpcTrailers {
         statusDetailsBin: error.statusDetailsBin,
         maxMessageLength: maxMessageLength,
       );
+
+  /// The trailer answering [error], which a handler or the code around it
+  /// threw: through [wireStatusFor], so a foreign error's text stays on this
+  /// side.
+  static RpcMetadata forError(Object error, {int? maxMessageLength}) {
+    final wire = wireStatusFor(error);
+    return status(
+      wire.status,
+      message: wire.message,
+      statusDetailsBin: wire.detailsBin,
+      maxMessageLength: maxMessageLength,
+    );
+  }
 
   /// The cancellation notice: `x-client-cancelled`, its [reason], and
   /// CANCELLED.

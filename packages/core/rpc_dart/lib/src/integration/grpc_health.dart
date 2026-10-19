@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 
 import '../codec/_index.dart';
 import '../contracts/_index.dart';
 import '../core/errors.dart' show RpcStatusException;
+import '../core/protobuf.dart';
 import '../core/protocol.dart' show RpcStatus;
 
 // ---------------------------------------------------------------------------
@@ -70,29 +70,22 @@ final class GrpcHealthCheckRequest {
 
   static Uint8List _encode(GrpcHealthCheckRequest request) {
     if (request.service.isEmpty) return Uint8List(0);
-    final text = utf8.encode(request.service);
-    final out = BytesBuilder(copy: false)..addByte(_serviceTag);
-    _writeVarint(out, text.length);
-    out.add(text);
-    return out.takeBytes();
+    return (RpcProtoWriter()..writeStringField(1, request.service)).toBytes();
   }
 
   static GrpcHealthCheckRequest _decode(Uint8List bytes) {
-    final reader = _ProtoReader(bytes);
+    final reader = RpcProtoReader(bytes);
     var service = '';
     while (!reader.atEnd) {
-      final tag = reader.readVarint();
-      if (tag == _serviceTag) {
-        service = utf8.decode(reader.readDelimited());
+      final (:field, :wireType) = reader.readTag();
+      if (field == 1 && wireType == RpcProtoWireType.lengthDelimited) {
+        service = reader.readString();
       } else {
-        reader.skip(tag);
+        reader.skip(wireType);
       }
     }
     return GrpcHealthCheckRequest(service: service);
   }
-
-  /// Field 1, wire type 2 (length-delimited).
-  static const int _serviceTag = 0x0a;
 }
 
 /// Health check response carrying the [status] of a service.
@@ -116,102 +109,21 @@ final class GrpcHealthCheckResponse {
   static Uint8List _encode(GrpcHealthCheckResponse response) {
     final value = response.status.value;
     if (value == 0) return Uint8List(0);
-    final out = BytesBuilder(copy: false)..addByte(_statusTag);
-    _writeVarint(out, value);
-    return out.takeBytes();
+    return (RpcProtoWriter()..writeVarintField(1, value)).toBytes();
   }
 
   static GrpcHealthCheckResponse _decode(Uint8List bytes) {
-    final reader = _ProtoReader(bytes);
+    final reader = RpcProtoReader(bytes);
     var value = 0;
     while (!reader.atEnd) {
-      final tag = reader.readVarint();
-      if (tag == _statusTag) {
+      final (:field, :wireType) = reader.readTag();
+      if (field == 1 && wireType == RpcProtoWireType.varint) {
         value = reader.readVarint();
       } else {
-        reader.skip(tag);
+        reader.skip(wireType);
       }
     }
     return GrpcHealthCheckResponse(status: GrpcServingStatus.fromValue(value));
-  }
-
-  /// Field 1, wire type 0 (varint).
-  static const int _statusTag = 0x08;
-}
-
-// ---------------------------------------------------------------------------
-// Protobuf wire format: just what the two messages above need
-// ---------------------------------------------------------------------------
-
-void _writeVarint(BytesBuilder out, int value) {
-  var v = value;
-  while (v >= 0x80) {
-    out.addByte((v & 0x7f) | 0x80);
-    v = v ~/ 0x80;
-  }
-  out.addByte(v);
-}
-
-/// Reads protobuf fields from a buffer, skipping the ones it does not know.
-///
-/// Every malformed input throws [FormatException].
-final class _ProtoReader {
-  _ProtoReader(this._bytes);
-
-  final Uint8List _bytes;
-  int _offset = 0;
-
-  bool get atEnd => _offset >= _bytes.length;
-
-  /// A varint of up to 10 bytes. Bits past 2^53 are not exact, which only
-  /// matters for a negative enum value; [GrpcServingStatus.fromValue] maps
-  /// any value it does not know to `unknown`.
-  int readVarint() {
-    var value = 0;
-    var factor = 1;
-    for (var i = 0; i < 10; i++) {
-      if (_offset >= _bytes.length) {
-        throw const FormatException('Truncated protobuf varint');
-      }
-      final byte = _bytes[_offset++];
-      value += (byte & 0x7f) * factor;
-      if (byte < 0x80) return value;
-      factor *= 0x80;
-    }
-    throw const FormatException('Protobuf varint longer than 10 bytes');
-  }
-
-  Uint8List readDelimited() {
-    final length = readVarint();
-    if (length > _bytes.length - _offset) {
-      throw const FormatException('Protobuf field runs past the message');
-    }
-    final field = Uint8List.sublistView(_bytes, _offset, _offset + length);
-    _offset += length;
-    return field;
-  }
-
-  /// Skips the value of a field whose [tag] was just read.
-  void skip(int tag) {
-    switch (tag & 0x7) {
-      case 0:
-        readVarint();
-      case 1:
-        _advance(8);
-      case 2:
-        readDelimited();
-      case 5:
-        _advance(4);
-      default:
-        throw FormatException('Unsupported protobuf wire type ${tag & 0x7}');
-    }
-  }
-
-  void _advance(int count) {
-    if (count > _bytes.length - _offset) {
-      throw const FormatException('Protobuf field runs past the message');
-    }
-    _offset += count;
   }
 }
 

@@ -470,7 +470,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // `grpc-message` is a header value like any other. Untrimmed, an
       // over-long message turned the handler's status into a generic internal
       // error, or into silence. The STATUS must survive; the text gives way.
-      final trailers = RpcMetadata.forTrailer(
+      final trailers = RpcTrailers.status(
         statusCode,
         message: message,
         statusDetailsBin: statusDetailsBin,
@@ -580,7 +580,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       await _sendSequence;
       await _transport.sendMetadata(
         _streamId,
-        RpcMetadata.forTrailer(
+        RpcTrailers.status(
           RpcStatus.cancelled,
           message: reason,
           maxMessageLength: _policyOf(_transport).maxHeaderValueBytes,

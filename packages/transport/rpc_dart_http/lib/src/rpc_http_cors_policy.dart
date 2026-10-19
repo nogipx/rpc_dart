@@ -11,7 +11,7 @@ import 'package:shelf/shelf.dart';
 /// client has to read. Without it in `Access-Control-Expose-Headers` the
 /// browser hides the header, and the failure is invisible server-side.
 ///
-/// `grpc-status-details-bin` is here because [RpcMetadata.forTrailer] writes it
+/// `grpc-status-details-bin` is here because [RpcTrailers.status] writes it
 /// whenever a status carries details, and it is the only place those details
 /// live on the wire.
 const _requiredGrpcExposedHeaders = [
