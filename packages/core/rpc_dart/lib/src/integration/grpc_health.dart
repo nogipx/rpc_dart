@@ -3,9 +3,12 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 
 import '../codec/_index.dart';
 import '../contracts/_index.dart';
+import '../core/errors.dart' show RpcStatusException;
+import '../core/protocol.dart' show RpcStatus;
 
 // ---------------------------------------------------------------------------
 // gRPC Health Checking Protocol (grpc.health.v1)
@@ -48,48 +51,168 @@ enum GrpcServingStatus {
 
 /// Health check request. [service] is the fully-qualified service name
 /// (e.g. `"grpc.health.v1.Health"`). Empty string means the overall server.
-final class GrpcHealthCheckRequest implements IRpcSerializable {
+///
+/// On the wire it is the protobuf `grpc.health.v1.HealthCheckRequest`
+/// (`string service = 1`), so any gRPC health client can send it.
+final class GrpcHealthCheckRequest {
   /// The fully-qualified service name to check.
   final String service;
 
   /// Creates a [GrpcHealthCheckRequest].
   const GrpcHealthCheckRequest({this.service = ''});
 
-  /// Deserializes from JSON.
-  factory GrpcHealthCheckRequest.fromJson(Map<String, dynamic> json) {
-    final s = json['service'];
-    return GrpcHealthCheckRequest(service: s is String ? s : '');
+  /// Protobuf codec for [GrpcHealthCheckRequest].
+  static const IRpcCodec<GrpcHealthCheckRequest> codec =
+      RpcBinaryCodec<GrpcHealthCheckRequest>(
+        toBytes: _encode,
+        fromBytes: _decode,
+      );
+
+  static Uint8List _encode(GrpcHealthCheckRequest request) {
+    if (request.service.isEmpty) return Uint8List(0);
+    final text = utf8.encode(request.service);
+    final out = BytesBuilder(copy: false)..addByte(_serviceTag);
+    _writeVarint(out, text.length);
+    out.add(text);
+    return out.takeBytes();
   }
 
-  @override
-  Map<String, dynamic> toJson() => {'service': service};
+  static GrpcHealthCheckRequest _decode(Uint8List bytes) {
+    final reader = _ProtoReader(bytes);
+    var service = '';
+    while (!reader.atEnd) {
+      final tag = reader.readVarint();
+      if (tag == _serviceTag) {
+        service = utf8.decode(reader.readDelimited());
+      } else {
+        reader.skip(tag);
+      }
+    }
+    return GrpcHealthCheckRequest(service: service);
+  }
 
-  /// Codec for [GrpcHealthCheckRequest].
-  static RpcCodec<GrpcHealthCheckRequest> get codec =>
-      RpcCodec<GrpcHealthCheckRequest>(GrpcHealthCheckRequest.fromJson);
+  /// Field 1, wire type 2 (length-delimited).
+  static const int _serviceTag = 0x0a;
 }
 
 /// Health check response carrying the [status] of a service.
-final class GrpcHealthCheckResponse implements IRpcSerializable {
+///
+/// On the wire it is the protobuf `grpc.health.v1.HealthCheckResponse`
+/// (`ServingStatus status = 1`).
+final class GrpcHealthCheckResponse {
   /// The serving status of the queried service.
   final GrpcServingStatus status;
 
   /// Creates a [GrpcHealthCheckResponse].
   const GrpcHealthCheckResponse({required this.status});
 
-  /// Deserializes from JSON.
-  factory GrpcHealthCheckResponse.fromJson(Map<String, dynamic> json) {
-    final s = json['status'];
-    final value = s is int ? s : 0;
+  /// Protobuf codec for [GrpcHealthCheckResponse].
+  static const IRpcCodec<GrpcHealthCheckResponse> codec =
+      RpcBinaryCodec<GrpcHealthCheckResponse>(
+        toBytes: _encode,
+        fromBytes: _decode,
+      );
+
+  static Uint8List _encode(GrpcHealthCheckResponse response) {
+    final value = response.status.value;
+    if (value == 0) return Uint8List(0);
+    final out = BytesBuilder(copy: false)..addByte(_statusTag);
+    _writeVarint(out, value);
+    return out.takeBytes();
+  }
+
+  static GrpcHealthCheckResponse _decode(Uint8List bytes) {
+    final reader = _ProtoReader(bytes);
+    var value = 0;
+    while (!reader.atEnd) {
+      final tag = reader.readVarint();
+      if (tag == _statusTag) {
+        value = reader.readVarint();
+      } else {
+        reader.skip(tag);
+      }
+    }
     return GrpcHealthCheckResponse(status: GrpcServingStatus.fromValue(value));
   }
 
-  @override
-  Map<String, dynamic> toJson() => {'status': status.value};
+  /// Field 1, wire type 0 (varint).
+  static const int _statusTag = 0x08;
+}
 
-  /// Codec for [GrpcHealthCheckResponse].
-  static RpcCodec<GrpcHealthCheckResponse> get codec =>
-      RpcCodec<GrpcHealthCheckResponse>(GrpcHealthCheckResponse.fromJson);
+// ---------------------------------------------------------------------------
+// Protobuf wire format: just what the two messages above need
+// ---------------------------------------------------------------------------
+
+void _writeVarint(BytesBuilder out, int value) {
+  var v = value;
+  while (v >= 0x80) {
+    out.addByte((v & 0x7f) | 0x80);
+    v = v ~/ 0x80;
+  }
+  out.addByte(v);
+}
+
+/// Reads protobuf fields from a buffer, skipping the ones it does not know.
+///
+/// Every malformed input throws [FormatException].
+final class _ProtoReader {
+  _ProtoReader(this._bytes);
+
+  final Uint8List _bytes;
+  int _offset = 0;
+
+  bool get atEnd => _offset >= _bytes.length;
+
+  /// A varint of up to 10 bytes. Bits past 2^53 are not exact, which only
+  /// matters for a negative enum value; [GrpcServingStatus.fromValue] maps
+  /// any value it does not know to `unknown`.
+  int readVarint() {
+    var value = 0;
+    var factor = 1;
+    for (var i = 0; i < 10; i++) {
+      if (_offset >= _bytes.length) {
+        throw const FormatException('Truncated protobuf varint');
+      }
+      final byte = _bytes[_offset++];
+      value += (byte & 0x7f) * factor;
+      if (byte < 0x80) return value;
+      factor *= 0x80;
+    }
+    throw const FormatException('Protobuf varint longer than 10 bytes');
+  }
+
+  Uint8List readDelimited() {
+    final length = readVarint();
+    if (length > _bytes.length - _offset) {
+      throw const FormatException('Protobuf field runs past the message');
+    }
+    final field = Uint8List.sublistView(_bytes, _offset, _offset + length);
+    _offset += length;
+    return field;
+  }
+
+  /// Skips the value of a field whose [tag] was just read.
+  void skip(int tag) {
+    switch (tag & 0x7) {
+      case 0:
+        readVarint();
+      case 1:
+        _advance(8);
+      case 2:
+        readDelimited();
+      case 5:
+        _advance(4);
+      default:
+        throw FormatException('Unsupported protobuf wire type ${tag & 0x7}');
+    }
+  }
+
+  void _advance(int count) {
+    if (count > _bytes.length - _offset) {
+      throw const FormatException('Protobuf field runs past the message');
+    }
+    _offset += count;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,9 +269,13 @@ final class GrpcHealthServiceStatus {
 
 /// gRPC Health Checking service contract (`grpc.health.v1.Health`).
 ///
-/// Implements the standard gRPC health checking protocol:
-/// - `Check` — unary: returns current status for a service
-/// - `Watch` — server stream: streams status changes for a service
+/// Implements the standard gRPC health checking protocol, protobuf on the
+/// wire, so `grpc_health_probe` and Kubernetes gRPC probes can query it over
+/// an HTTP/2 transport:
+/// - `Check` — unary: returns current status for a service; an unknown one
+///   fails with NOT_FOUND
+/// - `Watch` — server stream: streams status changes for a service; an
+///   unknown one reads SERVICE_UNKNOWN until it is registered
 ///
 /// Usage:
 /// ```dart
@@ -193,16 +320,11 @@ final class GrpcHealthCheckContract extends RpcResponderContract {
   }) async {
     final status = _status.getStatus(request.service);
     if (status == null) {
-      // Per gRPC spec: if service is not registered, return NOT_FOUND via
-      // grpc-status. But since the contract layer returns a response (not
-      // a trailer), we return SERVICE_UNKNOWN in the response body as a
-      // fallback. The caller contract can inspect this status.
-      //
-      // For strict gRPC compliance, the endpoint-level error handling sends
-      // grpc-status NOT_FOUND. However, returning a response here is more
-      // compatible with non-gRPC transports.
-      return const GrpcHealthCheckResponse(
-        status: GrpcServingStatus.serviceUnknown,
+      // The protocol answers an unknown service with NOT_FOUND; SERVICE_UNKNOWN
+      // is for Watch only.
+      throw RpcStatusException(
+        RpcStatus.notFound,
+        'Unknown service: ${request.service}',
       );
     }
     return GrpcHealthCheckResponse(status: status);

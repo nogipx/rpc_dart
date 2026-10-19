@@ -221,8 +221,14 @@ Future<Duration?> probe(RpcCallerEndpoint caller) async {
 `GrpcHealthCheckContract` implements `grpc.health.v1.Health` (`Check` unary,
 `Watch` server stream), backed by a `GrpcHealthServiceStatus` you update.
 Service name `''` means the whole server. `GrpcServingStatus`: `unknown`,
-`serving`, `notServing`, `serviceUnknown`. An unregistered service answers
-`serviceUnknown` in the response body, not a NOT_FOUND status.
+`serving`, `notServing`, `serviceUnknown`. `Check` on an unregistered service
+throws `RpcStatusException` with `RpcStatus.notFound`; `Watch` on one sends
+`serviceUnknown` and then each change.
+
+The messages are protobuf on the wire, so `grpc_health_probe`, grpcurl and
+Kubernetes gRPC probes can query it over `rpc_dart_http2`. A caller passes
+`GrpcHealthCheckRequest.codec` and `GrpcHealthCheckResponse.codec`; the
+messages are not `IRpcSerializable`.
 
 ```dart
 GrpcHealthServiceStatus serveHealth(RpcResponderEndpoint responder) {

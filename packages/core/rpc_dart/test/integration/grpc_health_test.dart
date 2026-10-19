@@ -123,7 +123,110 @@ void main() {
         expect(decoded.status, equals(status));
       }
     });
+
+    // The bytes protoc writes for these messages, so a gRPC health client
+    // reads what this codec writes and the other way round.
+    test('request is the protobuf HealthCheckRequest', () {
+      final bytes = GrpcHealthCheckRequest.codec.serialize(
+        const GrpcHealthCheckRequest(service: 'ab'),
+      );
+      expect(bytes, [0x0a, 0x02, 0x61, 0x62]);
+      expect(
+        GrpcHealthCheckRequest.codec.serialize(const GrpcHealthCheckRequest()),
+        isEmpty,
+      );
+    });
+
+    test('response is the protobuf HealthCheckResponse', () {
+      final codec = GrpcHealthCheckResponse.codec;
+      expect(
+        codec.serialize(
+          const GrpcHealthCheckResponse(status: GrpcServingStatus.notServing),
+        ),
+        [0x08, 0x02],
+      );
+      expect(
+        codec.serialize(
+          const GrpcHealthCheckResponse(status: GrpcServingStatus.unknown),
+        ),
+        isEmpty,
+      );
+      expect(codec.deserialize(Uint8List(0)).status, GrpcServingStatus.unknown);
+    });
+
+    test('decoding skips fields it does not know', () {
+      // field 2 varint, field 3 fixed64, field 4 fixed32, then service.
+      final bytes = Uint8List.fromList([
+        0x10, 0x05, //
+        0x19, 1, 2, 3, 4, 5, 6, 7, 8, //
+        0x25, 1, 2, 3, 4, //
+        0x0a, 0x01, 0x78,
+      ]);
+      expect(GrpcHealthCheckRequest.codec.deserialize(bytes).service, 'x');
+    });
+
+    test('decoding reads a view at an offset', () {
+      final backing = Uint8List.fromList([0xff, 0xff, 0x08, 0x01, 0xff]);
+      final view = Uint8List.sublistView(backing, 2, 4);
+      expect(
+        GrpcHealthCheckResponse.codec.deserialize(view).status,
+        GrpcServingStatus.serving,
+      );
+    });
+
+    test('malformed input throws FormatException', () {
+      final request = GrpcHealthCheckRequest.codec;
+      final response = GrpcHealthCheckResponse.codec;
+      // Length past the end.
+      expect(
+        () => request.deserialize(Uint8List.fromList([0x0a, 0x05, 0x61])),
+        throwsFormatException,
+      );
+      // Truncated varint.
+      expect(
+        () => response.deserialize(Uint8List.fromList([0x08, 0x80])),
+        throwsFormatException,
+      );
+      // Wire type 3 (group) is not supported.
+      expect(
+        () => response.deserialize(Uint8List.fromList([0x13])),
+        throwsFormatException,
+      );
+      // Invalid UTF-8.
+      expect(
+        () => request.deserialize(Uint8List.fromList([0x0a, 0x01, 0xff])),
+        throwsFormatException,
+      );
+    });
   });
+
+  test(
+    'Check round-trips through the codec on a serializing transport',
+    () async {
+      final healthStatus = GrpcHealthServiceStatus()
+        ..setStatus('Svc', GrpcServingStatus.serving);
+      final (clientTransport, serverTransport) = RpcChannelTransport.pair();
+      final caller = RpcCallerEndpoint(transport: clientTransport);
+      final responder = RpcResponderEndpoint(transport: serverTransport)
+        ..registerServiceContract(GrpcHealthCheckContract(healthStatus))
+        ..start();
+      addTearDown(() async {
+        await caller.close();
+        await responder.close();
+        healthStatus.dispose();
+      });
+
+      final response = await caller
+          .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+            serviceName: GrpcHealthCheckContract.grpcServiceName,
+            methodName: 'Check',
+            requestCodec: GrpcHealthCheckRequest.codec,
+            responseCodec: GrpcHealthCheckResponse.codec,
+            request: const GrpcHealthCheckRequest(service: 'Svc'),
+          );
+      expect(response.status, GrpcServingStatus.serving);
+    },
+  );
 
   group('GrpcServingStatus', () {
     test('fromValue maps all known values', () {
@@ -192,8 +295,8 @@ void main() {
       expect(response.status, equals(GrpcServingStatus.notServing));
     });
 
-    test('Check returns serviceUnknown for unregistered service', () async {
-      final response = await caller
+    test('Check fails with NOT_FOUND for unregistered service', () async {
+      final call = caller
           .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
             serviceName: GrpcHealthCheckContract.grpcServiceName,
             methodName: 'Check',
@@ -202,7 +305,16 @@ void main() {
             request: GrpcHealthCheckRequest(service: 'NoSuchService'),
           );
 
-      expect(response.status, equals(GrpcServingStatus.serviceUnknown));
+      await expectLater(
+        call,
+        throwsA(
+          isA<RpcStatusException>().having(
+            (e) => e.statusCode,
+            'statusCode',
+            RpcStatus.notFound,
+          ),
+        ),
+      );
     });
 
     test('Watch emits current status then changes', () async {

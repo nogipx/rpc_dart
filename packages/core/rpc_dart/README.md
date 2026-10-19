@@ -247,8 +247,9 @@ GrpcHealthServiceStatus serveHealth(RpcResponderEndpoint responder) {
 }
 ```
 
-Any standard gRPC health client (for example `grpc_health_probe`) can query it
-over `rpc_dart_http2`.
+The messages are protobuf on the wire, so any standard gRPC health client (for
+example `grpc_health_probe` or a Kubernetes gRPC probe) can query it over
+`rpc_dart_http2`. `Check` on an unregistered service fails with `NOT_FOUND`.
 
 ---
 
