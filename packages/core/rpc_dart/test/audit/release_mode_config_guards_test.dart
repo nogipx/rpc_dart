@@ -80,17 +80,6 @@ void main() {
         () => RpcRateLimiter(maxTrackedKeys: 0),
       );
     });
-
-    test('RpcResponderMethodBinding rejects having no registration', () {
-      expectsSurvivingGuard(
-        'a binding with neither variant',
-        () => RpcResponderMethodBinding(
-          serviceName: 'Svc',
-          methodName: 'm',
-          type: RpcMethodType.unaryRequest,
-        ),
-      );
-    });
   });
 
   group('valid configuration is untouched', () {
@@ -101,23 +90,6 @@ void main() {
 
     test('maxAttempts: 1 means no retries, and is legal', () {
       expect(() => RpcRetryInterceptor(maxAttempts: 1), returnsNormally);
-    });
-
-    test('a binding with either variant alone constructs', () {
-      expect(
-        () => RpcResponderMethodBinding(
-          serviceName: 'Svc',
-          methodName: 'm',
-          type: RpcMethodType.unaryRequest,
-          zeroCopyRegistration: RpcZeroCopyMethodRegistration<Object, Object>(
-            name: 'm',
-            type: RpcMethodType.unaryRequest,
-            handler: (Object r, {RpcContext? context}) async => r,
-            description: '',
-          ),
-        ),
-        returnsNormally,
-      );
     });
   });
 

@@ -40,100 +40,13 @@ enum RpcMethodType {
   bidirectionalStream,
 }
 
-/// Method registration within a contract.
+/// One method of a contract: its name, shape and handler, and the codecs it
+/// serializes with. No codecs is zero-copy: objects pass by reference.
+///
+/// Held as `RpcMethodRegistration<Object, Object>` by the endpoint, so the
+/// `call*` methods take untyped requests and give them to the handler as the
+/// types it was registered with.
 final class RpcMethodRegistration<
-  TRequest extends IRpcSerializable,
-  TResponse extends IRpcSerializable
-> {
-  /// Method identifier used for routing.
-  final String name;
-
-  /// Communication pattern for this method.
-  final RpcMethodType type;
-
-  /// User-provided handler function.
-  final Function handler;
-
-  /// Human-readable description of the method.
-  final String description;
-
-  /// Codec used to serialize/deserialize requests.
-  final IRpcCodec<TRequest> requestCodec;
-
-  /// Codec used to serialize/deserialize responses.
-  final IRpcCodec<TResponse> responseCodec;
-
-  /// Creates a method registration entry.
-  const RpcMethodRegistration({
-    required this.name,
-    required this.type,
-    required this.handler,
-    required this.description,
-    required this.requestCodec,
-    required this.responseCodec,
-  });
-
-  /// Type-safe unary handler invocation with context.
-  Future<TResponse> callUnaryHandler(
-    RpcContext context,
-    TRequest request,
-  ) async {
-    final typedHandler =
-        handler as Future<TResponse> Function(TRequest, {RpcContext? context});
-    return typedHandler(request, context: context);
-  }
-
-  /// Type-safe server-stream handler invocation with context.
-  Stream<TResponse> callServerStreamHandler(
-    RpcContext context,
-    TRequest request,
-  ) {
-    final typedHandler =
-        handler as Stream<TResponse> Function(TRequest, {RpcContext? context});
-    return typedHandler(request, context: context);
-  }
-
-  /// Type-safe client-stream handler invocation with context.
-  Future<TResponse> callClientStreamHandler(
-    RpcContext context,
-    Stream<TRequest> requests,
-  ) async {
-    final typedHandler =
-        handler
-            as Future<TResponse> Function(
-              Stream<TRequest>, {
-              RpcContext? context,
-            });
-    return typedHandler(requests, context: context);
-  }
-
-  /// Type-safe bidirectional-stream handler invocation with context.
-  Stream<TResponse> callBidirectionalStreamHandler(
-    RpcContext context,
-    Stream<TRequest> requests,
-  ) {
-    final typedHandler =
-        handler
-            as Stream<TResponse> Function(
-              Stream<TRequest>, {
-              RpcContext? context,
-            });
-    return typedHandler(requests, context: context);
-  }
-
-  /// Safely casts the incoming request stream.
-  Stream<TRequest> castRequestStream(Stream<IRpcSerializable> stream) {
-    return stream.cast<TRequest>();
-  }
-
-  /// Safely casts the response to the base type.
-  IRpcSerializable castResponse(TResponse response) {
-    return response as IRpcSerializable;
-  }
-}
-
-/// Zero-copy method registration without [IRpcSerializable] bounds.
-final class RpcZeroCopyMethodRegistration<
   TRequest extends Object,
   TResponse extends Object
 > {
@@ -143,44 +56,52 @@ final class RpcZeroCopyMethodRegistration<
   /// Communication pattern for this method.
   final RpcMethodType type;
 
-  /// User-provided handler function.
+  /// User-provided handler function, of the shape [type] names.
   final Function handler;
 
   /// Human-readable description of the method.
   final String description;
 
-  /// Creates a zero-copy method registration entry.
-  const RpcZeroCopyMethodRegistration({
+  /// Codec for requests; null with [responseCodec] for zero-copy.
+  final IRpcCodec<TRequest>? requestCodec;
+
+  /// Codec for responses; null with [requestCodec] for zero-copy.
+  final IRpcCodec<TResponse>? responseCodec;
+
+  /// Creates a method registration entry.
+  const RpcMethodRegistration({
     required this.name,
     required this.type,
     required this.handler,
     required this.description,
+    this.requestCodec,
+    this.responseCodec,
   });
 
-  /// Type-safe unary handler invocation with context.
-  Future<TResponse> callUnaryHandler(
-    RpcContext context,
-    TRequest request,
-  ) async {
+  /// Whether the method passes objects instead of serializing them.
+  bool get isZeroCopy => requestCodec == null && responseCodec == null;
+
+  /// Runs a unary handler on [request].
+  Future<TResponse> callUnaryHandler(RpcContext context, Object request) async {
     final typedHandler =
         handler as Future<TResponse> Function(TRequest, {RpcContext? context});
-    return typedHandler(request, context: context);
+    return typedHandler(request as TRequest, context: context);
   }
 
-  /// Type-safe server-stream handler invocation with context.
+  /// Runs a server-stream handler on [request].
   Stream<TResponse> callServerStreamHandler(
     RpcContext context,
-    TRequest request,
+    Object request,
   ) {
     final typedHandler =
         handler as Stream<TResponse> Function(TRequest, {RpcContext? context});
-    return typedHandler(request, context: context);
+    return typedHandler(request as TRequest, context: context);
   }
 
-  /// Type-safe client-stream handler invocation with context.
+  /// Runs a client-stream handler on [requests].
   Future<TResponse> callClientStreamHandler(
     RpcContext context,
-    Stream<TRequest> requests,
+    Stream<Object> requests,
   ) async {
     final typedHandler =
         handler
@@ -188,13 +109,13 @@ final class RpcZeroCopyMethodRegistration<
               Stream<TRequest>, {
               RpcContext? context,
             });
-    return typedHandler(requests, context: context);
+    return typedHandler(requests.cast<TRequest>(), context: context);
   }
 
-  /// Type-safe bidirectional-stream handler invocation with context.
+  /// Runs a bidirectional-stream handler on [requests].
   Stream<TResponse> callBidirectionalStreamHandler(
     RpcContext context,
-    Stream<TRequest> requests,
+    Stream<Object> requests,
   ) {
     final typedHandler =
         handler
@@ -202,6 +123,6 @@ final class RpcZeroCopyMethodRegistration<
               Stream<TRequest>, {
               RpcContext? context,
             });
-    return typedHandler(requests, context: context);
+    return typedHandler(requests.cast<TRequest>(), context: context);
   }
 }

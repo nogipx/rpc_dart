@@ -5,7 +5,7 @@
 
 part of '_index.dart';
 
-/// Associates a method key with its codec or zero-copy registration.
+/// Associates a method key with its registration.
 final class RpcResponderMethodBinding {
   /// Service that owns this method.
   final String serviceName;
@@ -13,54 +13,24 @@ final class RpcResponderMethodBinding {
   /// Method name within the service.
   final String methodName;
 
-  /// Communication pattern of the method.
-  final RpcMethodType type;
+  /// The method as its contract registered it.
+  final RpcMethodRegistration<Object, Object> registration;
 
-  /// Codec-based registration, present when not zero-copy.
-  final RpcMethodRegistration<IRpcSerializable, IRpcSerializable>?
-  codecRegistration;
-
-  /// Zero-copy registration, present when not using serialization.
-  final RpcZeroCopyMethodRegistration<Object, Object>? zeroCopyRegistration;
-
-  /// Creates a method binding with at least one registration variant.
-  ///
-  /// Throws [ArgumentError] when both are null. This was an `assert`, which
-  /// Dart strips in release: a binding with neither variant then survived
-  /// construction and failed later at [codecMethod]/[zeroCopyMethod] with a
-  /// bare null-check error, pointing at the dispatch site rather than the
-  /// registration that was actually malformed.
+  /// Creates a method binding.
   RpcResponderMethodBinding({
     required this.serviceName,
     required this.methodName,
-    required this.type,
-    this.codecRegistration,
-    this.zeroCopyRegistration,
-  }) {
-    if (codecRegistration == null && zeroCopyRegistration == null) {
-      throw ArgumentError(
-        'Method binding for $serviceName.$methodName requires either a codec '
-        'or a zero-copy registration',
-      );
-    }
-  }
+    required this.registration,
+  });
+
+  /// Communication pattern of the method.
+  RpcMethodType get type => registration.type;
 
   /// Fully-qualified key `serviceName.methodName`.
   String get methodKey => '$serviceName.$methodName';
 
   /// True when this binding uses zero-copy (no serialization).
-  bool get isZeroCopy => zeroCopyRegistration != null;
-
-  /// True when this binding uses codec serialization.
-  bool get usesSerialization => codecRegistration != null;
-
-  /// Returns the codec registration, throwing if absent.
-  RpcMethodRegistration<IRpcSerializable, IRpcSerializable> get codecMethod =>
-      codecRegistration!;
-
-  /// Returns the zero-copy registration, throwing if absent.
-  RpcZeroCopyMethodRegistration<Object, Object> get zeroCopyMethod =>
-      zeroCopyRegistration!;
+  bool get isZeroCopy => registration.isZeroCopy;
 }
 
 /// Stores and manages registered contracts and their method bindings.
@@ -77,21 +47,11 @@ final class RpcResponderMethodRegistry {
   Map<String, RpcResponderMethodBinding> get methods =>
       Map.unmodifiable(_methods);
 
-  /// Exports all bindings as codec-typed registrations (wrapping zero-copy when needed).
-  Map<String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>
-  exportMethodRegistrations() {
-    final exported =
-        <String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>{};
-
-    for (final entry in _methods.entries) {
-      final binding = entry.value;
-      exported[entry.key] = binding.usesSerialization
-          ? binding.codecMethod
-          : _convertZeroCopy(binding.zeroCopyMethod);
-    }
-
-    return Map.unmodifiable(exported);
-  }
+  /// Every registration, keyed by `serviceName.methodName`.
+  Map<String, RpcMethodRegistration<Object, Object>>
+  exportMethodRegistrations() => Map.unmodifiable({
+    for (final entry in _methods.entries) entry.key: entry.value.registration,
+  });
 
   /// Registers [contract] and indexes all its methods.
   ///
@@ -128,7 +88,7 @@ final class RpcResponderMethodRegistry {
     //
     // This also makes registering one contract instance on two endpoints work,
     // which had the same double-setup problem.
-    if (contract.methods.isEmpty && contract.zeroCopyMethods.isEmpty) {
+    if (contract.registrations.isEmpty) {
       contract.setup();
     }
 
@@ -151,11 +111,7 @@ final class RpcResponderMethodRegistry {
       );
     }
 
-    void reserve(
-      String methodName,
-      RpcResponderMethodBinding binding, {
-      required String conflictSuffix,
-    }) {
+    void reserve(String methodName, RpcResponderMethodBinding binding) {
       if (!kMethodTokenPattern.hasMatch(methodName)) {
         throw RpcStatusException(
           RpcStatus.internal,
@@ -167,37 +123,20 @@ final class RpcResponderMethodRegistry {
       if (_methods.containsKey(methodKey) || pending.containsKey(methodKey)) {
         throw RpcStatusException(
           RpcStatus.internal,
-          'Method $methodKey is already registered$conflictSuffix',
+          'Method $methodKey is already registered',
         );
       }
       pending[methodKey] = binding;
     }
 
-    for (final entry in contract.methods.entries) {
-      final registration = entry.value;
+    for (final entry in contract.registrations.entries) {
       reserve(
         entry.key,
         RpcResponderMethodBinding(
           serviceName: serviceName,
           methodName: entry.key,
-          type: registration.type,
-          codecRegistration: registration,
+          registration: entry.value,
         ),
-        conflictSuffix: '',
-      );
-    }
-
-    for (final entry in contract.zeroCopyMethods.entries) {
-      final zeroCopyRegistration = entry.value;
-      reserve(
-        entry.key,
-        RpcResponderMethodBinding(
-          serviceName: serviceName,
-          methodName: entry.key,
-          type: zeroCopyRegistration.type,
-          zeroCopyRegistration: zeroCopyRegistration,
-        ),
-        conflictSuffix: ' (zero-copy conflict)',
       );
     }
 
@@ -211,13 +150,11 @@ final class RpcResponderMethodRegistry {
         final binding = entry.value;
         _log.internal(
           'Registering method: ${entry.key} (${binding.type.name})'
-          '${binding.usesSerialization ? '' : ' [ZERO-COPY]'}',
+          '${binding.isZeroCopy ? ' [ZERO-COPY]' : ''}',
         );
       }
       _log.internal(
-        'Contract $serviceName registered with '
-        '${contract.methods.length} methods and '
-        '${contract.zeroCopyMethods.length} zero-copy methods',
+        'Contract $serviceName registered with ${pending.length} methods',
       );
     }
   }
@@ -305,75 +242,4 @@ final class RpcResponderMethodRegistry {
 
   /// Returns true if [methodKey] is registered.
   bool containsMethod(String methodKey) => _methods.containsKey(methodKey);
-
-  RpcMethodRegistration<IRpcSerializable, IRpcSerializable> _convertZeroCopy(
-    RpcZeroCopyMethodRegistration<Object, Object> zeroCopyMethod,
-  ) {
-    final dummyRequestCodec = _ZeroCopyDummyCodec<IRpcSerializable>();
-    final dummyResponseCodec = _ZeroCopyDummyCodec<IRpcSerializable>();
-
-    late final Function wrappedHandler;
-
-    switch (zeroCopyMethod.type) {
-      case RpcMethodType.unaryRequest:
-        wrappedHandler = (dynamic request, {RpcContext? context}) async {
-          final result = await zeroCopyMethod.callUnaryHandler(
-            context!,
-            request as Object,
-          );
-          return result;
-        };
-        break;
-      case RpcMethodType.serverStream:
-        wrappedHandler = (dynamic request, {RpcContext? context}) {
-          return zeroCopyMethod.callServerStreamHandler(
-            context!,
-            request as Object,
-          );
-        };
-        break;
-      case RpcMethodType.clientStream:
-        wrappedHandler =
-            (Stream<dynamic> requests, {RpcContext? context}) async {
-              final objectStream = requests.cast<Object>();
-              final result = await zeroCopyMethod.callClientStreamHandler(
-                context!,
-                objectStream,
-              );
-              return result;
-            };
-        break;
-      case RpcMethodType.bidirectionalStream:
-        wrappedHandler = (Stream<dynamic> requests, {RpcContext? context}) {
-          final objectStream = requests.cast<Object>();
-          return zeroCopyMethod.callBidirectionalStreamHandler(
-            context!,
-            objectStream,
-          );
-        };
-        break;
-    }
-
-    return RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-      name: zeroCopyMethod.name,
-      type: zeroCopyMethod.type,
-      handler: wrappedHandler,
-      description: zeroCopyMethod.description,
-      requestCodec: dummyRequestCodec,
-      responseCodec: dummyResponseCodec,
-    );
-  }
-}
-
-final class _ZeroCopyDummyCodec<T extends IRpcSerializable>
-    implements IRpcCodec<T> {
-  @override
-  T deserialize(Uint8List data) {
-    throw UnsupportedError('Zero-copy methods do not use serialization');
-  }
-
-  @override
-  Uint8List serialize(T object) {
-    throw UnsupportedError('Zero-copy methods do not use serialization');
-  }
 }

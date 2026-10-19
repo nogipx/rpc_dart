@@ -13,7 +13,7 @@ import '../utils/transport_wrappers.dart';
 
 void main() {
   group('RpcResponderMethodRegistry', () {
-    test('exports zero-copy methods with wrapped handlers', () async {
+    test('exports zero-copy methods with their own handlers', () async {
       final (client, server) = RpcChannelTransport.memoryPair();
       final responder = RpcResponderEndpoint(transport: server);
       addTearDown(() async {
@@ -54,14 +54,10 @@ void main() {
       );
       expect(await (bidiResult as Stream).toList(), equals(['A', 'B']));
 
-      expect(
-        () => unary.requestCodec.serialize(_DummySerializable()),
-        throwsA(isA<UnsupportedError>()),
-      );
-      expect(
-        () => unary.requestCodec.deserialize(Uint8List(0)),
-        throwsA(isA<UnsupportedError>()),
-      );
+      // Exported as registered: zero-copy, with no codecs to stand in.
+      expect(unary.isZeroCopy, isTrue);
+      expect(unary.requestCodec, isNull);
+      expect(unary.responseCodec, isNull);
     });
 
     test('unregister ignores contract dispose errors', () async {
@@ -262,11 +258,6 @@ final class _DisposeThrowsContract extends RpcResponderContract {
   void dispose() {
     throw StateError('dispose failed');
   }
-}
-
-final class _DummySerializable implements IRpcSerializable {
-  @override
-  Map<String, dynamic> toJson() => const {};
 }
 
 final class _ThrowOnceOnSendMetadata implements IRpcTransport {

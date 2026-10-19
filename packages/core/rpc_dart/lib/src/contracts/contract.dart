@@ -105,8 +105,7 @@ abstract class RpcResponderContract implements IRpcContract {
 
   /// Data transfer mode used by this contract's methods.
   final RpcDataTransferMode dataTransferMode;
-  final Map<String, RpcMethodRegistration> _methods = {};
-  final Map<String, RpcZeroCopyMethodRegistration> _zeroCopyMethods = {};
+  final Map<String, RpcMethodRegistration<Object, Object>> _registrations = {};
 
   /// Creates a responder contract with the given [serviceName].
   RpcResponderContract(
@@ -119,27 +118,19 @@ abstract class RpcResponderContract implements IRpcContract {
 
   /// Rejects a second registration of [methodName] on this contract.
   ///
-  /// Both maps were plain assignments, so a repeated name silently replaced the
-  /// earlier entry and the LAST one won. Same shape twice is merely confusing;
-  /// different shapes is dangerous, because the shape changes with it -- a
-  /// contract declaring `m` as unary and then as a server stream answered a
-  /// unary call from the streaming handler, with nothing logged.
-  ///
-  /// The registry already throws for the codec/zero-copy version of this
-  /// collision ("zero-copy conflict"), so refusing the same-map case is the
-  /// consistent behaviour rather than a new one. It is a construction-time
-  /// programming error, raised where the duplicate is written and never
-  /// reachable from peer input.
+  /// Same shape twice is merely confusing; different shapes is dangerous,
+  /// because the shape changes with it -- a contract declaring `m` as unary
+  /// and then as a server stream would answer a unary call from the streaming
+  /// handler. It is a construction-time programming error, raised where the
+  /// duplicate is written and never reachable from peer input.
   void _rejectDuplicate(String methodName) {
-    if (_methods.containsKey(methodName) ||
-        _zeroCopyMethods.containsKey(methodName)) {
+    if (_registrations.containsKey(methodName)) {
       // INTERNAL: a setup mistake on this side, never a peer's doing — the doc
       // three lines up says this is not reachable from peer input.
       throw RpcStatusException(
         RpcStatus.internal,
         'Method $_baseServiceName.$methodName is already registered on this '
-        'contract. Each method name may be registered once; a second '
-        'registration used to silently replace the first.',
+        'contract. Each method name may be registered once.',
       );
     }
   }
@@ -161,27 +152,33 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
   ) => _RpcCodecMode.validate(dataTransferMode, requestCodec, responseCodec);
 
-  /// The three decisions every `add*Method` makes before it registers anything:
-  /// are the codecs valid for this mode, which codecs actually apply, and is
-  /// this name already taken.
-  ///
-  /// Shared because all four registrations answered them with the same twelve
-  /// lines, and `_rejectDuplicate` was called from EIGHT places — once per
-  /// branch per method — for a rule that has nothing to do with the branch. A
-  /// duplicate name is refused before the mode is chosen, so a second
+  /// Registers [handler] as [methodName], after the three checks every
+  /// `add*Method` makes: are the codecs valid for this mode, is the name
+  /// already taken, and which codecs actually apply — none in zero-copy mode.
+  /// A duplicate name is refused before the mode is chosen, so a second
   /// registration cannot depend on which mode it would have used.
-  ///
-  /// Returns null codecs exactly when the mode is zero-copy; a caller reads
-  /// that as the branch condition rather than recomputing it.
-  (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?)
-  _prepareRegistration<TRequest, TResponse>(
-    String methodName,
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
-  ) {
+  void _register<TRequest extends Object, TResponse extends Object>({
+    required String methodName,
+    required RpcMethodType type,
+    required Function handler,
+    required String description,
+    required IRpcCodec<TRequest>? requestCodec,
+    required IRpcCodec<TResponse>? responseCodec,
+  }) {
     _validateCodecsForCodecMode(requestCodec, responseCodec);
     _rejectDuplicate(methodName);
-    return _getEffectiveCodecs(requestCodec, responseCodec);
+    final (effectiveRequestCodec, effectiveResponseCodec) = _getEffectiveCodecs(
+      requestCodec,
+      responseCodec,
+    );
+    _registrations[methodName] = RpcMethodRegistration<TRequest, TResponse>(
+      name: methodName,
+      type: type,
+      handler: handler,
+      description: description,
+      requestCodec: effectiveRequestCodec,
+      responseCodec: effectiveResponseCodec,
+    );
   }
 
   /// Registers a unary method with automatic mode selection.
@@ -196,40 +193,14 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final (effectiveRequestCodec, effectiveResponseCodec) =
-        _prepareRegistration(methodName, requestCodec, responseCodec);
-    final isZeroCopy =
-        effectiveRequestCodec == null && effectiveResponseCodec == null;
-
-    if (isZeroCopy) {
-      _zeroCopyMethods[methodName] =
-          RpcZeroCopyMethodRegistration<TRequest, TResponse>(
-            name: methodName,
-            type: RpcMethodType.unaryRequest,
-            handler: handler,
-            description: '$description [ZERO-COPY]',
-          );
-    } else {
-      // Serialized registration with type-safe wrapper.
-      Future<IRpcSerializable> wrappedHandler(
-        IRpcSerializable request, {
-        RpcContext? context,
-      }) async {
-        final typedRequest = _OpaqueValue.unwrap<TRequest>(request);
-        final response = await handler(typedRequest, context: context);
-        return _OpaqueValue.wrap(response);
-      }
-
-      _methods[methodName] =
-          RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-            name: methodName,
-            type: RpcMethodType.unaryRequest,
-            handler: wrappedHandler,
-            description: description,
-            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-          );
-    }
+    _register(
+      methodName: methodName,
+      type: RpcMethodType.unaryRequest,
+      handler: handler,
+      description: description,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+    );
   }
 
   /// Registers a server stream with automatic mode selection.
@@ -245,42 +216,14 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final (effectiveRequestCodec, effectiveResponseCodec) =
-        _prepareRegistration(methodName, requestCodec, responseCodec);
-    final isZeroCopy =
-        effectiveRequestCodec == null && effectiveResponseCodec == null;
-
-    if (isZeroCopy) {
-      _zeroCopyMethods[methodName] =
-          RpcZeroCopyMethodRegistration<TRequest, TResponse>(
-            name: methodName,
-            type: RpcMethodType.serverStream,
-            handler: handler,
-            description: '$description [ZERO-COPY]',
-          );
-    } else {
-      // Serialized registration with type-safe wrapper.
-      Stream<IRpcSerializable> wrappedHandler(
-        IRpcSerializable request, {
-        RpcContext? context,
-      }) async* {
-        final typedRequest = _OpaqueValue.unwrap<TRequest>(request);
-        final responseStream = handler(typedRequest, context: context);
-        await for (final response in responseStream) {
-          yield _OpaqueValue.wrap(response);
-        }
-      }
-
-      _methods[methodName] =
-          RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-            name: methodName,
-            type: RpcMethodType.serverStream,
-            handler: wrappedHandler,
-            description: description,
-            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-          );
-    }
+    _register(
+      methodName: methodName,
+      type: RpcMethodType.serverStream,
+      handler: handler,
+      description: description,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+    );
   }
 
   /// Registers a client stream with automatic mode selection.
@@ -320,50 +263,14 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final (effectiveRequestCodec, effectiveResponseCodec) =
-        _prepareRegistration(methodName, requestCodec, responseCodec);
-    final isZeroCopy =
-        effectiveRequestCodec == null && effectiveResponseCodec == null;
-
-    if (isZeroCopy) {
-      // Zero-copy registration with type adapter.
-      adaptedHandler(Stream<Object> requests, {RpcContext? context}) async {
-        // Cast Stream<Object> to Stream<TRequest>.
-        final typedRequests = requests.cast<TRequest>();
-        final result = await handler(typedRequests, context: context);
-        return result as Object;
-      }
-
-      _zeroCopyMethods[methodName] =
-          RpcZeroCopyMethodRegistration<Object, Object>(
-            name: methodName,
-            type: RpcMethodType.clientStream,
-            handler: adaptedHandler,
-            description: '$description [ZERO-COPY]',
-          );
-    } else {
-      // Serialized registration with type-safe wrapper.
-      Future<IRpcSerializable> wrappedHandler(
-        Stream<IRpcSerializable> requests, {
-        RpcContext? context,
-      }) async {
-        final typedRequestStream = requests.map<TRequest>(
-          (r) => _OpaqueValue.unwrap<TRequest>(r),
-        );
-        final response = await handler(typedRequestStream, context: context);
-        return _OpaqueValue.wrap(response);
-      }
-
-      _methods[methodName] =
-          RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-            name: methodName,
-            type: RpcMethodType.clientStream,
-            handler: wrappedHandler,
-            description: description,
-            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-          );
-    }
+    _register(
+      methodName: methodName,
+      type: RpcMethodType.clientStream,
+      handler: handler,
+      description: description,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+    );
   }
 
   /// Registers a bidirectional stream with automatic mode selection.
@@ -383,62 +290,19 @@ abstract class RpcResponderContract implements IRpcContract {
     IRpcCodec<TResponse>? responseCodec,
     String description = '',
   }) {
-    final (effectiveRequestCodec, effectiveResponseCodec) =
-        _prepareRegistration(methodName, requestCodec, responseCodec);
-    final isZeroCopy =
-        effectiveRequestCodec == null && effectiveResponseCodec == null;
-
-    if (isZeroCopy) {
-      // Zero-copy registration with type adapter.
-      adaptedHandler(Stream<Object> requests, {RpcContext? context}) async* {
-        // Cast Stream<Object> to Stream<TRequest>.
-        final typedRequests = requests.cast<TRequest>();
-        final responseStream = handler(typedRequests, context: context);
-        await for (final response in responseStream) {
-          yield response as Object;
-        }
-      }
-
-      _zeroCopyMethods[methodName] =
-          RpcZeroCopyMethodRegistration<Object, Object>(
-            name: methodName,
-            type: RpcMethodType.bidirectionalStream,
-            handler: adaptedHandler,
-            description: '$description [ZERO-COPY]',
-          );
-    } else {
-      // Serialized registration with type-safe wrapper.
-      Stream<IRpcSerializable> wrappedHandler(
-        Stream<IRpcSerializable> requests, {
-        RpcContext? context,
-      }) async* {
-        final typedRequestStream = requests.map<TRequest>(
-          (r) => _OpaqueValue.unwrap<TRequest>(r),
-        );
-        final responseStream = handler(typedRequestStream, context: context);
-        await for (final response in responseStream) {
-          yield _OpaqueValue.wrap(response);
-        }
-      }
-
-      _methods[methodName] =
-          RpcMethodRegistration<IRpcSerializable, IRpcSerializable>(
-            name: methodName,
-            type: RpcMethodType.bidirectionalStream,
-            handler: wrappedHandler,
-            description: description,
-            requestCodec: _OpaqueCodec(effectiveRequestCodec!),
-            responseCodec: _OpaqueCodec(effectiveResponseCodec!),
-          );
-    }
+    _register(
+      methodName: methodName,
+      type: RpcMethodType.bidirectionalStream,
+      handler: handler,
+      description: description,
+      requestCodec: requestCodec,
+      responseCodec: responseCodec,
+    );
   }
 
-  /// Registered methods map.
-  Map<String, RpcMethodRegistration> get methods => Map.unmodifiable(_methods);
-
-  /// Registered zero-copy methods.
-  Map<String, RpcZeroCopyMethodRegistration> get zeroCopyMethods =>
-      Map.unmodifiable(_zeroCopyMethods);
+  /// The registered methods by name, zero-copy and serialized alike.
+  Map<String, RpcMethodRegistration<Object, Object>> get registrations =>
+      Map.unmodifiable(_registrations);
 
   /// Releases contract resources during deregistration.
   void dispose() {
@@ -639,68 +503,4 @@ abstract class RpcPeerContract extends RpcResponderContract
 
   @override
   RpcDataTransferMode get _outgoingMode => callerDataTransferMode;
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers: bridge non-IRpcSerializable types into the codec path.
-// ---------------------------------------------------------------------------
-
-/// Opaque wrapper that makes any value satisfy [IRpcSerializable].
-///
-/// Used internally by [RpcResponderContract] when the registered types do not
-/// implement [IRpcSerializable] (e.g. protobuf-generated classes).
-/// The wrapper is transparent to the codec layer — [_OpaqueCodec] unwraps it
-/// before serialising and wraps the result after deserialising.
-final class _OpaqueValue implements IRpcSerializable {
-  final Object _value;
-
-  const _OpaqueValue(this._value);
-
-  /// Wraps [value] in [_OpaqueValue] if it is not already [IRpcSerializable].
-  static IRpcSerializable wrap(Object value) {
-    if (value is IRpcSerializable) return value;
-    return _OpaqueValue(value);
-  }
-
-  /// Unwraps an [IRpcSerializable] that may be an [_OpaqueValue].
-  static T unwrap<T extends Object>(IRpcSerializable value) {
-    if (value is _OpaqueValue) return value._value as T;
-    return value as T;
-  }
-
-  @override
-  Map<String, dynamic> toJson() => const {};
-}
-
-/// Codec adapter that bridges [IRpcCodec<T>] to [IRpcCodec<IRpcSerializable>].
-///
-/// Serialisation: unwraps an [_OpaqueValue] (or casts directly if the value
-/// already is a [T]) and delegates to the inner codec.
-/// Deserialisation: delegates to the inner codec and wraps the result in
-/// [_OpaqueValue] so that the framework can treat it as [IRpcSerializable].
-final class _OpaqueCodec<T extends Object>
-    implements IRpcCodec<IRpcSerializable> {
-  final IRpcCodec<T> _inner;
-
-  const _OpaqueCodec(this._inner);
-
-  @override
-  Uint8List serialize(IRpcSerializable message) {
-    final T actual;
-    if (message is _OpaqueValue) {
-      actual = message._value as T;
-    } else {
-      actual = message as T;
-    }
-    return _inner.serialize(actual);
-  }
-
-  @override
-  IRpcSerializable deserialize(Uint8List bytes) {
-    // Use wrap so values that already implement IRpcSerializable (the
-    // common case for codegen-generated DTOs) reach the interceptor
-    // chain as their typed selves — not as an opaque wrapper that
-    // interceptors can't introspect.
-    return _OpaqueValue.wrap(_inner.deserialize(bytes));
-  }
 }

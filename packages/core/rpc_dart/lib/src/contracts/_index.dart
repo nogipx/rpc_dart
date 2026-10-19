@@ -11,7 +11,6 @@ import 'dart:typed_data';
 import '../_internal.dart'
     show
         IRpcCodec,
-        IRpcSerializable,
         RpcCallerEndpoint,
         RpcCallerPipelineMixin,
         RpcPeerEndpoint,

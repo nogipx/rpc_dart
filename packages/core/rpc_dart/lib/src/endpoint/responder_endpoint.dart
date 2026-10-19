@@ -29,8 +29,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   }
 
   /// All method registrations exported from all contracts.
-  Map<String, RpcMethodRegistration<IRpcSerializable, IRpcSerializable>>
-  get registeredMethods => _respRegistry.exportMethodRegistrations();
+  Map<String, RpcMethodRegistration<Object, Object>> get registeredMethods =>
+      _respRegistry.exportMethodRegistrations();
 
   @override
   Map<String, Object?> collectEndpointMetrics() {

@@ -250,7 +250,7 @@ void main() {
 
     test('distinct names in one contract still register', () {
       final contract = _Ordinary()..setup();
-      expect(contract.methods.keys.toList()..sort(), ['a', 'b']);
+      expect(contract.registrations.keys.toList()..sort(), ['a', 'b']);
     });
   });
 }

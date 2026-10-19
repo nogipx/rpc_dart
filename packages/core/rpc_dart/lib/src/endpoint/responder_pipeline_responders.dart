@@ -50,15 +50,21 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       _respSlotHeld.add(state.id);
     }
 
+    final context = _ensureResponderContext(state);
+    if (binding.isZeroCopy && !transport.supportsZeroCopy) {
+      await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
+      return;
+    }
+
     switch (binding.type) {
       case RpcMethodType.unaryRequest:
-        await _ensureUnaryResponder(state, binding);
+        _ensureUnaryResponder(state, binding, context);
       case RpcMethodType.clientStream:
-        await _ensureClientStreamResponder(state, binding);
+        _ensureClientStreamResponder(state, binding, context);
       case RpcMethodType.serverStream:
-        await _ensureServerStreamResponder(state, binding);
+        _ensureServerStreamResponder(state, binding, context);
       case RpcMethodType.bidirectionalStream:
-        await _ensureBidirectionalResponder(state, binding);
+        _ensureBidirectionalResponder(state, binding, context);
     }
 
     // Dispatched: the half-open window is over and a running handler must never
@@ -68,25 +74,22 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     if (state.responder != null) state.cancelHalfOpen();
   }
 
-  Future<void> _ensureUnaryResponder(
+  void _ensureUnaryResponder(
     RpcResponderStreamState state,
     RpcResponderMethodBinding binding,
-  ) async {
-    final context = _ensureResponderContext(state);
-    final contextLogger = context.log;
+    RpcContext context,
+  ) {
     final streamId = state.id;
-
-    if (binding.isZeroCopy) {
-      if (!transport.supportsZeroCopy) {
-        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
-        return;
-      }
-
-      final responder = UnaryResponder<Object, Object>(
+    final method = binding.registration;
+    _install(
+      state,
+      UnaryResponder<Object, Object>(
         id: streamId,
         transport: transport,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
+        requestCodec: method.requestCodec,
+        responseCodec: method.responseCodec,
         handler: (request) => _withHandlerSlot(
           streamId,
           () => handleUnary<Object, Object>(
@@ -95,66 +98,35 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
             methodName: binding.methodName,
             context: context,
             request: request,
-            handler: (ctx, req) =>
-                binding.zeroCopyMethod.callUnaryHandler(ctx, req),
+            handler: method.callUnaryHandler,
           ),
         ),
         context: context,
-        logger: contextLogger,
-      );
-
-      _install(state, responder, _pipelineFedPreBound(state));
-      return;
-    }
-
-    final method = binding.codecMethod;
-    final responder = UnaryResponder<IRpcSerializable, IRpcSerializable>(
-      id: streamId,
-      transport: transport,
-      serviceName: binding.serviceName,
-      methodName: binding.methodName,
-      requestCodec: method.requestCodec,
-      responseCodec: method.responseCodec,
-      handler: (request) => _withHandlerSlot(
-        streamId,
-        () => handleUnary<IRpcSerializable, IRpcSerializable>(
-          direction: RpcCallDirection.incoming,
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          context: context,
-          request: request,
-          handler: (ctx, req) async {
-            final response = await method.callUnaryHandler(ctx, req);
-            return method.castResponse(response);
-          },
-        ),
+        logger: context.log,
       ),
-      context: context,
-      logger: contextLogger,
+      _pipelineFedPreBound(state),
     );
-
-    _install(state, responder, _pipelineFedPreBound(state));
   }
 
-  Future<void> _ensureClientStreamResponder(
+  void _ensureClientStreamResponder(
     RpcResponderStreamState state,
     RpcResponderMethodBinding binding,
-  ) async {
-    final context = _ensureResponderContext(state);
-    final contextLogger = context.log;
+    RpcContext context,
+  ) {
     final streamId = state.id;
-
-    if (binding.isZeroCopy) {
-      if (!transport.supportsZeroCopy) {
-        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
-        return;
-      }
-
-      final responder = ClientStreamResponder<Object, Object>(
+    final method = binding.registration;
+    // The responder starts on the first request frame, so the buffer holds a
+    // mid-call prefix. _pipelineFedRequestStream replays the half-close when
+    // the peer has already sent one, which covers the zero-message call.
+    _install(
+      state,
+      ClientStreamResponder<Object, Object>(
         id: streamId,
         transport: transport,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
+        requestCodec: method.requestCodec,
+        responseCodec: method.responseCodec,
         handler: (requests) => _withHandlerSlot(
           streamId,
           () => handleClientStream<Object, Object>(
@@ -163,62 +135,12 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
             methodName: binding.methodName,
             context: context,
             requests: requests,
-            handler: (ctx, reqs) =>
-                binding.zeroCopyMethod.callClientStreamHandler(ctx, reqs),
+            handler: method.callClientStreamHandler,
           ),
         ),
         context: context,
-        logger: contextLogger,
-      );
-
-      // The responder starts on the first request frame, so the buffer holds a
-      // mid-call prefix. _pipelineFedRequestStream replays the half-close when
-      // the peer has already sent one, which covers the zero-message call.
-      _install(
-        state,
-        responder,
-        _pipelineFedRequestStream(
-          state,
-          initialMessages: state.takeClientBufferedMessages(),
-        ),
-      );
-      return;
-    }
-
-    final method = binding.codecMethod;
-    final responder = ClientStreamResponder<IRpcSerializable, IRpcSerializable>(
-      id: streamId,
-      transport: transport,
-      serviceName: binding.serviceName,
-      methodName: binding.methodName,
-      requestCodec: method.requestCodec,
-      responseCodec: method.responseCodec,
-      handler: (requests) => _withHandlerSlot(
-        streamId,
-        () => handleClientStream<IRpcSerializable, IRpcSerializable>(
-          direction: RpcCallDirection.incoming,
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          context: context,
-          requests: requests,
-          handler: (ctx, reqs) async {
-            final result = await method.callClientStreamHandler(
-              ctx,
-              method.castRequestStream(reqs),
-            );
-            return method.castResponse(result);
-          },
-        ),
+        logger: context.log,
       ),
-      context: context,
-      logger: contextLogger,
-    );
-
-    // See the zero-copy branch above: the buffer is a mid-call prefix now, and
-    // _pipelineFedRequestStream supplies the half-close when there is one.
-    _install(
-      state,
-      responder,
       _pipelineFedRequestStream(
         state,
         initialMessages: state.takeClientBufferedMessages(),
@@ -226,25 +148,22 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     );
   }
 
-  Future<void> _ensureServerStreamResponder(
+  void _ensureServerStreamResponder(
     RpcResponderStreamState state,
     RpcResponderMethodBinding binding,
-  ) async {
-    final context = _ensureResponderContext(state);
-    final contextLogger = context.log;
+    RpcContext context,
+  ) {
     final streamId = state.id;
-
-    if (binding.isZeroCopy) {
-      if (!transport.supportsZeroCopy) {
-        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
-        return;
-      }
-
-      final responder = ServerStreamResponder<Object, Object>(
+    final method = binding.registration;
+    _install(
+      state,
+      ServerStreamResponder<Object, Object>(
         id: streamId,
         transport: transport,
         serviceName: binding.serviceName,
         methodName: binding.methodName,
+        requestCodec: method.requestCodec,
+        responseCodec: method.responseCodec,
         handler: (request) => _withHandlerSlotStream(
           streamId,
           () => handleServerStream<Object, Object>(
@@ -253,90 +172,26 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
             methodName: binding.methodName,
             context: context,
             request: request,
-            handler: (ctx, req) =>
-                binding.zeroCopyMethod.callServerStreamHandler(ctx, req),
+            handler: method.callServerStreamHandler,
           ),
         ),
         context: context,
-        logger: contextLogger,
-      );
-
-      _install(state, responder, _pipelineFedPreBound(state));
-      return;
-    }
-
-    final method = binding.codecMethod;
-    final responder = ServerStreamResponder<IRpcSerializable, IRpcSerializable>(
-      id: streamId,
-      transport: transport,
-      serviceName: binding.serviceName,
-      methodName: binding.methodName,
-      requestCodec: method.requestCodec,
-      responseCodec: method.responseCodec,
-      handler: (request) => _withHandlerSlotStream(
-        streamId,
-        () => handleServerStream<IRpcSerializable, IRpcSerializable>(
-          direction: RpcCallDirection.incoming,
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          context: context,
-          request: request,
-          handler: (ctx, req) =>
-              method.callServerStreamHandler(ctx, req).map(method.castResponse),
-        ),
+        logger: context.log,
       ),
-      context: context,
-      logger: contextLogger,
+      _pipelineFedPreBound(state),
     );
-
-    _install(state, responder, _pipelineFedPreBound(state));
   }
 
-  Future<void> _ensureBidirectionalResponder(
+  void _ensureBidirectionalResponder(
     RpcResponderStreamState state,
     RpcResponderMethodBinding binding,
-  ) async {
-    final context = _ensureResponderContext(state);
-    final contextLogger = context.log;
+    RpcContext context,
+  ) {
     final streamId = state.id;
-
-    if (binding.isZeroCopy) {
-      if (!transport.supportsZeroCopy) {
-        await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
-        return;
-      }
-
-      _install(
-        state,
-        BidirectionalStreamResponder<Object, Object>(
-          id: streamId,
-          transport: transport,
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          handler: (requests) => _withHandlerSlotStream(
-            streamId,
-            () => handleBidirectionalStream<Object, Object>(
-              direction: RpcCallDirection.incoming,
-              serviceName: binding.serviceName,
-              methodName: binding.methodName,
-              context: context,
-              requests: requests,
-              handler: (ctx, reqs) => binding.zeroCopyMethod
-                  .callBidirectionalStreamHandler(ctx, reqs),
-            ),
-          ),
-          context: context,
-          logger: contextLogger,
-        ),
-        _pipelineFedPreBound(state),
-      );
-      return;
-    }
-
-    final method = binding.codecMethod;
+    final method = binding.registration;
     _install(
       state,
-      BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
+      BidirectionalStreamResponder<Object, Object>(
         id: streamId,
         transport: transport,
         serviceName: binding.serviceName,
@@ -345,22 +200,17 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         responseCodec: method.responseCodec,
         handler: (requests) => _withHandlerSlotStream(
           streamId,
-          () => handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
+          () => handleBidirectionalStream<Object, Object>(
             direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,
             requests: requests,
-            handler: (ctx, reqs) => method
-                .callBidirectionalStreamHandler(
-                  ctx,
-                  method.castRequestStream(reqs),
-                )
-                .map(method.castResponse),
+            handler: method.callBidirectionalStreamHandler,
           ),
         ),
         context: context,
-        logger: contextLogger,
+        logger: context.log,
       ),
       _pipelineFedPreBound(state),
     );
