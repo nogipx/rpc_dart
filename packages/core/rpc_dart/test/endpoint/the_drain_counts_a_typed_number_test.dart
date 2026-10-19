@@ -25,6 +25,7 @@
 
 import 'dart:async';
 
+import 'package:rpc_dart/src/integration/drain.dart';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 

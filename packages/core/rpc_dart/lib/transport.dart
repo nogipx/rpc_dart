@@ -60,5 +60,4 @@ export 'src/_index.dart'
         RpcWriteBacklog,
         RpcWriteCoalescer,
         drainUntilIdle,
-        inFlightResponderCalls,
         notifyWithoutDying;

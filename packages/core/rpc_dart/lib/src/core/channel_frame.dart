@@ -123,20 +123,26 @@ abstract final class RpcChannelFrame {
   ///
   /// Returns null if [data] is too short (less than [headerSize] bytes).
   ///
-  /// When [maxPayloadLen] is non-null, a declared payload length exceeding it
-  /// throws [RpcFrameException] instead of allocating, guarding against a peer
-  /// claiming a huge frame to force unbounded buffering.
+  /// A declared payload length over [maxPayloadLen], or a metadata frame's
+  /// over [maxMetadataLen], throws [RpcFrameException] instead of allocating,
+  /// as [decodeAll] does: a peer claiming a huge frame cannot force unbounded
+  /// buffering.
   ///
   /// Malformed metadata (a length past the end, bytes after the last header,
   /// invalid UTF-8) throws [RpcFrameException] rather than letting a raw
   /// [RangeError]/[FormatException] escape into the receive loop.
-  static RpcDecodedFrame? decode(Uint8List data, {int? maxPayloadLen}) {
+  static RpcDecodedFrame? decode(
+    Uint8List data, {
+    int? maxPayloadLen,
+    int? maxMetadataLen,
+  }) {
     if (data.length < headerSize) return null;
     return _decodeAt(
       data,
       ByteData.sublistView(data),
       0,
       maxPayloadLen: maxPayloadLen,
+      maxMetadataLen: maxMetadataLen,
     );
   }
 

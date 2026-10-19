@@ -113,53 +113,34 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     RpcMiddlewareContext call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
-  ) async {
-    final admission = _checkState();
-
-    try {
-      final response = await next(call.context, request);
-      _onSuccess(admission);
-      return response;
-    } catch (e) {
-      _onFailure(admission, e);
-      rethrow;
-    }
-  }
+  ) => _guardResponse(() => next(call.context, request));
 
   @override
   FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
-  ) async {
-    final _Admission admission;
-    try {
-      admission = _checkState();
-    } on CircuitBreakerOpenException catch (e, st) {
-      // Surface the open-circuit rejection through the stream so consumers
-      // observe it the same way as an emitted stream error.
-      return Stream<TResponse>.error(e, st);
-    }
-
-    try {
-      final stream = await next(call.context, request);
-      return _wrapStream(stream, admission);
-    } catch (e) {
-      _onFailure(admission, e);
-      rethrow;
-    }
-  }
+  ) => _guardStream(() => next(call.context, request));
 
   @override
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
     RpcMiddlewareContext call,
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
-  ) async {
-    final admission = _checkState();
+  ) => _guardResponse(() => next(call.context, requests));
 
+  @override
+  FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
+    RpcMiddlewareContext call,
+    Stream<TRequest> requests,
+    RpcBidirectionalStreamNext<TRequest, TResponse> next,
+  ) => _guardStream(() => next(call.context, requests));
+
+  /// Runs a call with one response, counted when it completes.
+  Future<T> _guardResponse<T>(Future<T> Function() call) async {
+    final admission = _checkState();
     try {
-      final response = await next(call.context, requests);
+      final response = await call();
       _onSuccess(admission);
       return response;
     } catch (e) {
@@ -168,22 +149,17 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     }
   }
 
-  @override
-  FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    Stream<TRequest> requests,
-    RpcBidirectionalStreamNext<TRequest, TResponse> next,
-  ) async {
+  /// Runs a call with a streamed response, counted when the stream ends. An
+  /// open circuit is the stream's error, as any other failure of it is.
+  Future<Stream<T>> _guardStream<T>(FutureOr<Stream<T>> Function() call) async {
     final _Admission admission;
     try {
       admission = _checkState();
     } on CircuitBreakerOpenException catch (e, st) {
-      return Stream<TResponse>.error(e, st);
+      return Stream<T>.error(e, st);
     }
-
     try {
-      final stream = await next(call.context, requests);
-      return _wrapStream(stream, admission);
+      return _wrapStream(await call(), admission);
     } catch (e) {
       _onFailure(admission, e);
       rethrow;
