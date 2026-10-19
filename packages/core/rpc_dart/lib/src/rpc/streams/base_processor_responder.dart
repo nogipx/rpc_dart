@@ -254,7 +254,7 @@ extension _StreamProcessorInternals<
   void _processDataMessage(List<int> messageBytes) {
     if (_isZeroCopy) {
       // Answered, not dropped -- see _reportTransferModeMismatch. The mirror
-      // direction never had this problem: a direct object arriving at a
+      // direction needs no report: a direct object arriving at a
       // serialized processor is cast to TRequest and delivered, which is how a
       // zero-copy caller talks to a codec-declared responder.
       _reportTransferModeMismatch(

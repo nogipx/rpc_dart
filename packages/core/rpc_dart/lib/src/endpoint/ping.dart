@@ -149,10 +149,8 @@ final class RpcEndpointPingExchange {
             final receivedAt = DateTime.now().toUtc();
 
             if (statusCode != RpcStatus.ok) {
-              // The shared rule, like every other caller shape. Building the
-              // exception here instead dropped the peer's details, and the
-              // composed 'Ping failed with status N: ' prefix said nothing the
-              // status did not already carry.
+              // The shared rule, like every other caller shape, so the peer's
+              // details are kept.
               final error = RpcCallerTrailer.errorOf(
                 message.metadata!,
                 statusCode,
@@ -212,9 +210,9 @@ final class RpcEndpointPingExchange {
 
     // Before the send, because the send is awaited and an error delivered while
     // it is still in flight completes a future nobody is listening to yet — an
-    // unhandled async error in the root zone, which is the pattern UnaryCaller
-    // was fixed for after it killed an isolate. `ignore()` marks the completer's
-    // future as having an owner; the real `await` is below.
+    // unhandled async error in the root zone, which can kill the isolate.
+    // `ignore()` marks the completer's future as having an owner; the real
+    // `await` is below.
     completer.future.ignore();
 
     if (cancellationToken != null) {

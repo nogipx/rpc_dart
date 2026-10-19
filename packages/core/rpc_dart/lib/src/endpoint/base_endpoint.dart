@@ -37,12 +37,11 @@ abstract base class RpcEndpointBase {
 
   /// Live responder streams this endpoint is serving.
   ///
-  /// **Typed, because a graceful drain polls it.** Both servers used to read
-  /// this out of `collectEndpointMetrics()['activeResponders']` with
-  /// `as int? ?? 0`, so renaming that key — an observability key, free to
-  /// change — made every endpoint count ZERO, every drain complete instantly,
-  /// and the failure look exactly like success. A metrics map is for reading;
-  /// a shutdown decision needs something the compiler checks.
+  /// **Typed, because a graceful drain polls it.** Read out of
+  /// `collectEndpointMetrics()` instead, renaming an observability key would
+  /// make every endpoint count ZERO and every drain complete instantly, and
+  /// the failure would look exactly like success. A metrics map is for
+  /// reading; a shutdown decision needs something the compiler checks.
   ///
   /// Zero by default, for the same reason [markDraining] is a no-op: an
   /// endpoint with no responder half is serving nothing.
@@ -181,9 +180,8 @@ abstract base class RpcEndpointBase {
 
   /// Closes the endpoint and releases all resources.
   ///
-  /// Concurrent and later calls share one close and return when it is done: a
-  /// second call used to return at once while the transport was still
-  /// closing, and the subclasses released their resources twice.
+  /// Concurrent and later calls share one close and return when it is done,
+  /// so subclasses release their resources once.
   Future<void> close() => _closing ??= _closeOnce();
 
   Future<void>? _closing;
@@ -333,8 +331,8 @@ abstract base class RpcEndpointBase {
   /// registry for `cancelMethod`, `cancelRequest` and `close`; the responder's
   /// stream state for a client cancel, a deadline, a drain. An interceptor that
   /// hands `next` a context with its own token -- the only way it can own
-  /// cancellation -- cut every one of those off: the caller's call could not be
-  /// cancelled and went uncounted, and the handler never heard of a cancel.
+  /// cancellation -- would cut every one of those off: the caller's call could
+  /// not be cancelled, and the handler would never hear of a cancel.
   ///
   /// Linked one way: cancelling [origin] cancels the replacement, and the
   /// interceptor's own token stays its own to fire.

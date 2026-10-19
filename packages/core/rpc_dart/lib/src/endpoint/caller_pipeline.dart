@@ -19,9 +19,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// Key: "serviceName/methodName", Value: each call's context -> its token.
   ///
   /// Keyed by the call's own context object, not its requestId: a context
-  /// reused across calls gives them all one requestId, and keyed by it the
-  /// later call replaced the earlier one, which then could not be cancelled
-  /// -- not even by close().
+  /// reused across calls gives them all one requestId, and keyed by it a later
+  /// call would replace the earlier one, which then could not be cancelled --
+  /// not even by close().
   final Map<String, Map<RpcContext, RpcCancellationToken>> _callerTokens = {};
 
   /// Subscription to the transport's global inbound stream. See
@@ -241,11 +241,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     if (compressionEnabled &&
         !transport.supportsZeroCopy &&
         !result.headers.containsKey(RpcHeaders.grpcEncoding)) {
-      // From the REGISTRY, like the accept-encoding header below. This was the
-      // constant `gzip`, and the two lines then disagreed about what this endpoint
-      // can do: where no gzip codec is registered the caller declared an encoding
-      // it could not perform, the peer refused it UNIMPLEMENTED, and every call
-      // failed. Null means nothing is registered, so nothing is declared.
+      // From the REGISTRY, like the accept-encoding header below, so the two
+      // agree about what this endpoint can do. Declaring an encoding with no
+      // codec registered for it makes the peer refuse every call UNIMPLEMENTED.
+      // Null means nothing is registered, so nothing is declared.
       final encoding = RpcGrpcCompression.requestEncoding();
       if (encoding != null) {
         result = result.withAdditionalHeaders({
@@ -256,7 +255,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     // On a zero-copy transport too: a codec call there is framed like any other,
     // and the request metadata's own default offers gzip, so leaving the header
-    // out had every response compressed without compression enabled.
+    // out gets every response compressed without compression enabled.
     if (!result.headers.containsKey(RpcHeaders.grpcAcceptEncoding)) {
       final accept = compressionEnabled
           ? RpcGrpcCompression.supportedEncodings().join(',')
@@ -281,10 +280,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// Fully prepares context for an outgoing call.
   ///
   /// Building the context does NOT start tracking it — see
-  /// [_trackCallerRequest]. The two were fused, so the streaming entry points
-  /// registered a token the moment they were CALLED, while they only untrack
-  /// once the returned stream is done or cancelled. A stream that is never
-  /// listened to therefore leaked its token forever.
+  /// [_trackCallerRequest].
   RpcContext _prepareCallerContext(RpcContext? context, String serviceName) =>
       _enhanceCallerContext(_ensureCallerContext(context), serviceName);
 
@@ -333,7 +329,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   ///    triggers `CallProcessor._sendCancellationToServer`, and without firing
   ///    it the handler keeps producing for an abandoned stream.
   ///
-  /// [cancelReason] is the only thing the two shapes disagreed on.
+  /// [cancelReason] is the only thing the two shapes differ on.
   ///
   /// The pause forwarding, the unawaited cancel and the close-on-done belong to
   /// [StreamBridge]; what is left here is the one rule that is this call's own.
@@ -424,10 +420,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       );
 
       // The context's deadline bounds the wait LOCALLY too, not only as the
-      // `grpc-timeout` header built above. It was pre-checked once and then
-      // ignored, so `ping(context: withTimeout(200ms))` against a peer that
-      // accepts the ping and never answers ran until the probe gave up at 3 s —
-      // and ping IS the keepalive, so the stalled peer is the case it exists for.
+      // `grpc-timeout` header built above. Otherwise a peer that accepts the
+      // ping and never answers holds it past the deadline — and ping IS the
+      // keepalive, so the stalled peer is the case it exists for.
       //
       // An explicit `timeout:` still wins: it is the caller's own bound on this
       // one call, where the deadline belongs to the whole context.
@@ -724,7 +719,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         // middleware chain (_applyRequestMiddlewaresToStream), and cancelling
         // a generator parked in `await for` does not complete until its
         // upstream produces again -- which, for a bidi request stream the
-        // caller keeps open, is never. Awaiting it deadlocked cancel(). Fire
+        // caller keeps open, is never. Awaiting it deadlocks cancel(). Fire
         // the teardown and return, exactly as the server-stream bridge does.
         // The controller is already being torn down, so it needs no close.
         unawaited(response?.cancel().catchError((_) {}));
@@ -754,11 +749,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     }
 
     // Hand this consumer's demand upstream. This controller is the inner half
-    // of the bidirectional bridge and had no pause forwarding, so the response
-    // chain was drained at full speed however slowly the caller read. The VM
-    // masked it -- the outer bridge's own hop was enough there within a test
-    // window -- and dart2js did not: with the consumer paused, 2600 further
-    // messages were still decoded (`consumer_demand_propagation_test`).
+    // of the bidirectional bridge; without pause forwarding the response chain
+    // drains at full speed however slowly the caller reads.
     controller.onPause = () => responseSub?.pause();
     controller.onResume = () => responseSub?.resume();
 

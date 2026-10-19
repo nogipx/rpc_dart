@@ -85,7 +85,7 @@ abstract base class RpcResponderBase<
   ///
   /// Through a bridge this responder owns, so [close] can cancel the handler
   /// and end the loop; a bare `await for` keeps a subscription nothing can
-  /// reach, and a long-lived handler kept producing after the client left.
+  /// reach, and a long-lived handler keeps producing after the client left.
   /// The bridge also hands the loop's demand back: without it the relay is an
   /// unbounded buffer, since an `async*` handler keeps allocating while a send
   /// is in flight.

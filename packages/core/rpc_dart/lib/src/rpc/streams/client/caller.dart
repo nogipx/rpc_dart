@@ -34,8 +34,7 @@ final class ClientStreamCaller<
   /// The payload, held until the status says what it means.
   ///
   /// gRPC's status is authoritative: a payload followed by an error trailer is
-  /// an error. Completing on the payload made it a success here while the unary
-  /// shape, which has always held it, reported the error.
+  /// an error. Completing on the payload would make it a success.
   TResponse? _pendingResponse;
 
   /// Call context, kept so the response wait can honour its deadline.
@@ -137,7 +136,7 @@ final class ClientStreamCaller<
         }
 
         // Held, not delivered: a payload followed by an error trailer is an
-        // ERROR, and completing here made it a success.
+        // ERROR, and completing here would make it a success.
         if (!rpcMessage.isMetadataOnly &&
             !_responseCompleter.isCompleted &&
             rpcMessage.payload != null) {
@@ -268,13 +267,9 @@ final class ClientStreamCaller<
   /// Convenience: send a request stream and return the single response (auto-closes).
   ///
   /// Aborts as soon as EITHER the request stream is drained or the call itself
-  /// fails. That second half used to be missing: the body was
-  /// `await for (final r in requests) { await send(r); }`, and a deadline or a
-  /// cancellation is delivered on the RESPONSE path, which that loop never
-  /// reached. A client stream whose producer stalled therefore ignored both
-  /// entirely -- measured with the request stream left open, a 1s deadline and
-  /// a cancellation at 500ms each hung past 4s, while the same call with the
-  /// stream closed returned in 37ms.
+  /// fails. A deadline or a cancellation is delivered on the RESPONSE path, so
+  /// a loop that only awaits sends never sees them, and a client stream whose
+  /// producer stalls would ignore both.
   Future<TResponse> call(Stream<TRequest> requests) async {
     _logger.internal('Executing client stream call');
 
@@ -354,7 +349,7 @@ final class ClientStreamCaller<
   ///
   /// A response still pending fails with [RpcCancelledException]: once the
   /// subscription is cancelled nothing else can settle it, and a
-  /// [finishSending] waiting on it with no deadline waited forever. The server,
+  /// [finishSending] waiting on it with no deadline would wait forever. The server,
   /// which has no answer from this side either, is told the call is abandoned.
   Future<void> close() async {
     _logger.internal('Closing ClientStreamCaller');

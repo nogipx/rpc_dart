@@ -350,9 +350,9 @@ extension _CallProcessorInternals<
   /// `clock().isAfter(deadline)` -- STRICT -- while the scope's timer is armed
   /// for `deadline.difference(clock())`, and Timer and DateTime do not share a
   /// clock source, so on firing `now` can be a hair short of the deadline.
-  /// Guarding on it made this disposer return and the controllers close with no
-  /// error at all -- the exact failure it exists to prevent, as an intermittent
-  /// flake under load.
+  /// Guarding on it makes this disposer return and the controllers close with
+  /// no error at all -- the exact failure it exists to prevent, intermittently
+  /// under load.
   void _setupDeadlineMonitoring() {
     final context = _context;
     final deadline = context?.deadline;
@@ -400,11 +400,11 @@ extension _CallProcessorInternals<
 
         // Telling the SERVER is best-effort and must not gate telling OUR OWN
         // consumer: the cancellation is a local fact, the notice is a network
-        // round trip. Awaiting the notice first meant a send that never
-        // completed took the local error with it -- and the `try` below catches
-        // a throw, not a hang. Only a transport whose send awaits a platform
-        // reply can hang that way, and the consumer then saw a clean DONE,
-        // indistinguishable from a stream that finished.
+        // round trip. Awaiting the notice first means a send that never
+        // completes takes the local error with it -- and the `try` below
+        // catches a throw, not a hang. Only a transport whose send awaits a
+        // platform reply can hang that way, and the consumer then sees a clean
+        // DONE, indistinguishable from a stream that finished.
         unawaited(
           _sendCancellationToServer(
             _context.cancellationToken!.reason ??
@@ -477,8 +477,8 @@ extension _CallProcessorInternals<
   /// Ends the call with INTERNAL if the response ended inside a gRPC frame,
   /// and returns whether it did.
   ///
-  /// Without this the partial frame was dropped and the call ended OK, so a
-  /// stream cut mid-message read as a complete one with its last item gone.
+  /// Without this the partial frame is dropped and the call ends OK, so a
+  /// stream cut mid-message reads as a complete one with its last item gone.
   bool _failIfEndedMidMessage() {
     if (!(_parser?.holdsPartialFrame ?? false)) return false;
     if (!_responseController.isClosed) {
@@ -673,7 +673,7 @@ extension _CallProcessorInternals<
             _responseController.addError(_undecodableResponse(e), stackTrace);
             _responseController.close();
           }
-          // The call has failed. Decoding the rest of the chunk logged an
+          // The call has failed. Decoding the rest of the chunk would log an
           // error with a stack per message, a volume the peer chooses.
           return;
         }

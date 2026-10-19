@@ -6,11 +6,6 @@
 part of '_index.dart';
 
 /// Returns true if [error] indicates the underlying transport is closed.
-///
-/// One TYPE check. This used to compare the exception's MESSAGE text against a
-/// literal, in two spellings, because the transports disagreed on which to
-/// throw — so the wording was a contract that nothing declared and the compiler
-/// could not check.
 bool _isTransportClosed(Object error) => error is RpcClosedException;
 
 /// Compresses [serialized] with [encoding] (null or `identity` = no
@@ -127,8 +122,8 @@ final Expando<bool> _mismatchReported = Expando<bool>('transfer mode mismatch');
 /// The two ends pick their mode from their OWN contract, so they can disagree:
 /// a caller in [RpcDataTransferMode.codec] sends bytes to a method registered
 /// zero-copy, which reads `directPayload` and finds none. Both sites must
-/// ANSWER. Logging and returning left the peer with no reply at all until its
-/// own deadline.
+/// answer: logging and returning leaves the peer with no reply until its own
+/// deadline.
 ///
 /// An [RpcException] because it is a library diagnostic with no user data in
 /// it, so `wireStatusFor` forwards the text to the peer -- the side that can
@@ -227,8 +222,8 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// A drain, an endpoint closing or a peer's cancel stop every write. The
   /// call is then still answered, CANCELLED with this reason, when the
   /// handler finishes ([_answerCancelled]): dropping the answer without a
-  /// status left a caller waiting out its own deadline for a call the server
-  /// had finished with.
+  /// status leaves the caller waiting out its own deadline for a call the
+  /// server has finished with.
   String? _cancelReason;
 
   /// The pipeline has torn the call down, so this processor writes nothing at
@@ -410,7 +405,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       _responseController.add(response);
       // Then WAIT for it to leave. The queue is what preserves ordering;
       // awaiting it here is what keeps the queue depth at one. Returning as
-      // soon as the write was enqueued turned _sendSequence into an unbounded
+      // soon as the write is enqueued turns _sendSequence into an unbounded
       // buffer between handler and transport, defeating the `await send(...)`
       // the server-stream pump uses to let a slow transport throttle the
       // handler.
@@ -418,7 +413,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     } else if (_logger.isInternal) {
       // The call was already answered (an error trailer closes the controller)
       // while the handler still produced: a race after the end, not a fault. A
-      // warning here let a peer write one per call it made invalid.
+      // warning here would let a peer write one per call it makes invalid.
       _logger.internal(
         'Response after the call was answered; dropped [streamId: $_streamId]',
       );
@@ -475,7 +470,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
       // Trimmed to the policy the trailer will itself be validated against: a
       // refusal's own answer must satisfy the rule that refused, and
       // `grpc-message` is a header value like any other. Untrimmed, an
-      // over-long message turned the handler's status into a generic internal
+      // over-long message turns the handler's status into a generic internal
       // error, or into silence. The STATUS must survive; the text gives way.
       final trailers = RpcTrailers.status(
         statusCode,
@@ -766,10 +761,10 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
   /// Sends a request to the server.
   Future<void> send(TRequest request) async {
     if (!_isActive) {
-      // Returning here reported success for a request that was never sent, and
-      // the caller's own `await send(...)` could not tell the difference. On a
-      // client-stream the peer then answers over a shorter sequence than the
-      // caller handed over, and both sides call it a success.
+      // Returning here would report success for a request that was never sent,
+      // and the caller's own `await send(...)` could not tell the difference.
+      // On a client-stream the peer would then answer over a shorter sequence
+      // than the caller handed over, and both sides would call it a success.
       _logger.warning('Attempted to send request on inactive processor');
       throw RpcStatusException(
         RpcStatus.unavailable,

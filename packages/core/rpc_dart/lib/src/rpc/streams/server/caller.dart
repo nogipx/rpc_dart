@@ -100,10 +100,7 @@ final class ServerStreamCaller<
       // Send request.
       await send(request);
 
-      // ONE record where the call actually begins. "Executing server stream
-      // call" and "Request sent, awaiting response stream" bracketed a single
-      // await and said the same thing twice; the per-response line below said
-      // it again for every payload.
+      // One record where the call begins, none per response.
       if (_logger.isInternal) {
         _logger.internal('Server stream call sent, awaiting responses');
       }
