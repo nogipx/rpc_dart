@@ -80,11 +80,20 @@ abstract final class RpcGrpcCompression {
 
   static Map<String, RpcCompressionCodec> _initDefaults() {
     final map = <String, RpcCompressionCodec>{};
-    if (gzip_impl.rpcGzipSupported) {
-      map[gzip] = const _BuiltinGzipCodec();
-    }
+    final builtin = platformGzip;
+    if (builtin != null) map[gzip] = builtin;
     return map;
   }
+
+  /// The `dart:io` gzip codec where `dart:io` exists (VM, Flutter native),
+  /// null elsewhere.
+  ///
+  /// Its `decompress` honours `maxOutputBytes`: it stops as soon as the output
+  /// passes the limit. A codec of its own that wants that bound on native
+  /// platforms delegates here. This is the codec itself, not whatever
+  /// [register] put under `gzip`.
+  static RpcCompressionCodec? get platformGzip =>
+      gzip_impl.rpcGzipSupported ? const _BuiltinGzipCodec() : null;
 
   /// Normalises a content-coding name for lookup.
   ///

@@ -34,10 +34,10 @@ Uint8List rpcGzipDecompress(Uint8List data, {int? maxOutputBytes}) {
   }
 
   final builder = BytesBuilder(copy: false);
-  // Drive the gzip decoder over the input chunk and observe output
-  // incrementally via a chunked sink so we can abort before allocating the
-  // full expansion. The sink delivers output synchronously for in-memory
-  // input, so no async hop is needed at the parser call site.
+  // The decoder hands its output to the sink piece by piece while it works
+  // through one `add`, so the sink's throw stops it there: the input need not
+  // be fed in chunks. Delivery is synchronous for in-memory input, so no async
+  // hop is needed at the parser call site.
   final sink = gzip.decoder.startChunkedConversion(
     _LimitedByteSink(builder, maxOutputBytes),
   );

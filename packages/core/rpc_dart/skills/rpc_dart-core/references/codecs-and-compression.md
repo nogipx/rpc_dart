@@ -161,6 +161,10 @@ RpcList<RpcString> names() => RpcList.from(['a'.rpc, 'b'.rpc]);
 - Where `dart:io` exists (VM, Flutter native), `gzip` is registered
   automatically. On web nothing is registered; add a codec, e.g. the gzip codec
   from the `rpc_dart_compression` package (see its README).
+- `RpcGrpcCompression.platformGzip` is that built-in `dart:io` codec, or null
+  on web. It is the codec itself, not whatever is registered under `gzip`, so
+  a custom gzip codec can delegate to it on native platforms to get a
+  `maxOutputBytes` bound that stops mid-stream.
 - Requests are compressed only when the caller endpoint was created with
   `compressionEnabled: true` (`RpcCallerEndpoint`, `RpcPeerEndpoint`; default
   `false`). It then declares `grpc-encoding` (gzip if registered) and advertises
