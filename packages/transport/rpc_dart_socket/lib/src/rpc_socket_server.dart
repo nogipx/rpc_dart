@@ -45,7 +45,8 @@ class RpcSocketServer implements IRpcServer {
   /// caller reports as UNAVAILABLE. Null means no cap.
   ///
   /// [prefaceTimeout] bounds how long an accepted socket may take to send its
-  /// preface (see [RpcSocketChannel]). No endpoint exists before it arrives,
+  /// preface (see `RpcFrameMultiplexedChannel.ready`). No endpoint exists
+  /// before it arrives,
   /// so a peer that connects and stays silent costs a socket for this long
   /// and no more. Null waits for ever.
   ///
@@ -366,18 +367,24 @@ class RpcSocketServer implements IRpcServer {
     configureRpcSocket(socket, _address);
     final channel = RpcSocketChannel(
       socket,
-      prefaceTimeout: _prefaceTimeout,
       maxWriteBacklogBytes: RpcWriteBacklog.defaultServerMax,
     );
+    // Built now, so it reads the client's preface; the endpoint waits for it.
+    final frames = RpcFrameMultiplexedChannel(
+      channel: channel,
+      isClient: false,
+      policy: _policy,
+      prefaceTimeout: _prefaceTimeout,
+    );
     _handshaking.add(channel);
-    channel.ready.then(
+    frames.ready.then(
       (_) {
         if (!_handshaking.remove(channel)) return; // stop() took it
         if (!_isRunning) {
-          unawaited(channel.close());
+          unawaited(frames.close());
           return;
         }
-        _serve(channel);
+        _serve(channel, frames);
       },
       onError: (Object e) {
         _handshaking.remove(channel);
@@ -389,14 +396,14 @@ class RpcSocketServer implements IRpcServer {
   }
 
   /// Builds the endpoint for a connection whose preface has arrived.
-  void _serve(RpcSocketChannel channel) {
+  void _serve(RpcSocketChannel channel, RpcFrameMultiplexedChannel frames) {
     final label = 'peer-${++_connCounter}';
     _notify('onConnectionOpened', () => _onConnectionOpened?.call(channel));
 
     try {
       _host.serve(
-        RpcChannelTransport.fromChannel(
-          channel: channel,
+        RpcChannelTransport(
+          channel: frames,
           isClient: false,
           policy: _policy,
           logger: _log,

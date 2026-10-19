@@ -8,20 +8,13 @@ import 'dart:io';
 import 'package:rpc_dart/transport.dart';
 
 /// [IRpcChannel] over a `dart:io` [Socket]: the socket's byte stream as a raw
-/// pipe, opened by a preface in each direction.
-///
-/// **The preface.** Each side writes [preface] as its first bytes and reads
-/// the peer's before anything else. A bare socket otherwise says nothing about
-/// who answered it: a process that accepts and never speaks, or one speaking
-/// another protocol on the same path, looks exactly like an idle rpc_dart
-/// server. [ready] completes once the peer's preface has arrived intact, and
-/// fails when it is wrong, when the connection ends first, or when
-/// [prefaceTimeout] passes. Both ends must therefore be an [RpcSocketChannel].
+/// pipe.
 ///
 /// A socket has no message boundaries, and none are needed:
 /// `RpcFrameMultiplexedChannel`, which [RpcChannelTransport.fromChannel] puts
-/// on top, reassembles frames from arbitrary chunks. Bytes the peer sends
-/// right behind its preface are kept and delivered after it.
+/// on top, reassembles frames from arbitrary chunks. That channel also opens
+/// the connection with its preface, which is how each side learns that the
+/// other is rpc_dart, and of which version.
 ///
 /// **Writes never wait; reads do.** [send] queues and returns. Flow control
 /// bounds DATA, but not what a call is answered with outside it (metadata,
@@ -33,11 +26,7 @@ import 'package:rpc_dart/transport.dart';
 /// connection closed for a protocol violation reaches the peer as an ordinary
 /// end of stream, which its caller reports as UNAVAILABLE.
 class RpcSocketChannel implements IRpcChannel {
-  /// Wraps [socket], which this channel then owns: [close] closes it. The
-  /// preface is written at once.
-  ///
-  /// [prefaceTimeout] bounds the wait for the peer's preface; past it the
-  /// channel closes and [ready] fails with UNAVAILABLE. Null waits for ever.
+  /// Wraps [socket], which this channel then owns: [close] closes it.
   ///
   /// [closeTimeout] bounds the orderly close. Closing flushes what is still
   /// buffered and then sends FIN, and a peer that stopped reading can hold
@@ -48,37 +37,25 @@ class RpcSocketChannel implements IRpcChannel {
   /// paused, each would wait for the other to read.
   RpcSocketChannel(
     Socket socket, {
-    Duration? prefaceTimeout = const Duration(seconds: 10),
     Duration closeTimeout = const Duration(seconds: 5),
     this.maxWriteBacklogBytes,
   }) : _socket = socket,
        _closeTimeout = closeTimeout,
        _backlog = RpcWriteBacklog(maxUnsentBytes: maxWriteBacklogBytes),
        peer = _describe(socket) {
-    // Marked handled here, or a failed handshake nobody awaited is an
-    // unhandled async error. Whoever does await [ready] still sees it fail.
-    unawaited(_ready.future.catchError((Object _) {}));
-
     _sub = _socket.listen(
-      _onChunk,
+      (chunk) {
+        // The chunk is dart:io's fresh list, handed over whole and never
+        // written to again, which is what [incoming] requires.
+        if (!_incoming.isClosed) _incoming.add(chunk);
+      },
       onError: (Object e) => _fail(
         RpcStatusException(
           RpcStatus.unavailable,
           'Socket connection to $peer failed: $e',
         ),
       ),
-      onDone: () {
-        if (!_ready.isCompleted) {
-          _fail(
-            RpcStatusException(
-              RpcStatus.unavailable,
-              'Socket connection to $peer closed before its preface',
-            ),
-          );
-          return;
-        }
-        unawaited(close());
-      },
+      onDone: () => unawaited(close()),
     );
     _backlog.attachReader(_sub);
 
@@ -105,37 +82,7 @@ class RpcSocketChannel implements IRpcChannel {
     _writing = _backlog
         .pipe(_out.stream, _socket)
         .then((_) {}, onError: failed);
-
-    if (prefaceTimeout != null) {
-      _prefaceTimer = Timer(
-        prefaceTimeout,
-        () => _fail(
-          RpcStatusException(
-            RpcStatus.unavailable,
-            'No preface from $peer within $prefaceTimeout',
-          ),
-        ),
-      );
-    }
-
-    _out.add(preface);
   }
-
-  /// The first bytes each side writes: `rpcsock` and a protocol version.
-  ///
-  /// A peer with the same seven bytes and another version is an rpc_dart
-  /// socket of a different protocol revision, which is reported as such.
-  static final Uint8List preface = Uint8List.fromList([
-    ...'rpcsock'.codeUnits,
-    protocolVersion,
-  ]);
-
-  /// The wire revision this channel speaks.
-  ///
-  /// The frame channel above checks `RpcChannelFrame.protocolVersion` on its
-  /// own; this one is raised when what follows the preface changes, so a peer
-  /// of another revision is refused here, by version, before any frame.
-  static const int protocolVersion = 3;
 
   /// Unsent bytes past which this side stops reading the peer, or null.
   final int? maxWriteBacklogBytes;
@@ -144,7 +91,6 @@ class RpcSocketChannel implements IRpcChannel {
   final Duration _closeTimeout;
   final RpcWriteBacklog _backlog;
   late final StreamSubscription<Uint8List> _sub;
-  Timer? _prefaceTimer;
 
   /// Synchronous, so a write the kernel can take now is not held a microtask.
   final StreamController<List<int>> _out = StreamController<List<int>>(
@@ -152,26 +98,17 @@ class RpcSocketChannel implements IRpcChannel {
   );
   late final Future<void> _writing;
 
-  /// Single-subscription, so frames that arrive before the frame channel
+  /// Single-subscription, so bytes that arrive before the frame channel
   /// subscribes are buffered rather than dropped.
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
 
-  final Completer<void> _ready = Completer<void>();
   final Completer<void> _done = Completer<void>();
-  final Uint8List _peerPreface = Uint8List(preface.length);
-  int _prefaceSeen = 0;
   bool _closed = false;
 
   /// The remote end, for logs: the socket path for a Unix socket,
   /// `address:port` for TCP. Read at construction, because a destroyed socket
   /// throws on `remoteAddress`.
   final String peer;
-
-  /// Completes once the peer's preface has arrived intact. Fails with an
-  /// [RpcStatusException] when it never will: UNAVAILABLE when the connection
-  /// ended or the wait timed out, FAILED_PRECONDITION for another protocol
-  /// version, UNKNOWN for a peer that is not an rpc_dart socket at all.
-  Future<void> get ready => _ready.future;
 
   /// Completes once this channel has closed, whoever closed it.
   Future<void> get done => _done.future;
@@ -182,61 +119,14 @@ class RpcSocketChannel implements IRpcChannel {
   @override
   Stream<Uint8List> get incoming => _incoming.stream;
 
-  void _onChunk(Uint8List chunk) {
-    var data = chunk;
-    if (!_ready.isCompleted) {
-      var i = 0;
-      while (i < data.length && _prefaceSeen < preface.length) {
-        _peerPreface[_prefaceSeen++] = data[i++];
-      }
-      if (_prefaceSeen < preface.length) return;
-      final mismatch = _checkPreface();
-      if (mismatch != null) {
-        _fail(mismatch);
-        return;
-      }
-      _prefaceTimer?.cancel();
-      _ready.complete();
-      if (i == data.length) return;
-      // A view, not a copy: the chunk is dart:io's fresh list, handed over
-      // whole and never written to again, which is what [incoming] requires.
-      data = Uint8List.sublistView(data, i);
-    }
-    if (!_incoming.isClosed) _incoming.add(data);
-  }
-
-  RpcStatusException? _checkPreface() {
-    for (var i = 0; i < preface.length - 1; i++) {
-      if (_peerPreface[i] != preface[i]) {
-        return RpcStatusException(
-          RpcStatus.unknown,
-          'The peer at $peer is not an rpc_dart socket: unexpected preface',
-        );
-      }
-    }
-    final version = _peerPreface[preface.length - 1];
-    if (version != protocolVersion) {
-      return RpcStatusException(
-        RpcStatus.failedPrecondition,
-        'The peer at $peer speaks rpc_dart socket protocol $version, this side '
-        'speaks $protocolVersion',
-      );
-    }
-    return null;
-  }
-
-  /// Ends the channel on a transport failure, reporting [error] to [ready] if
-  /// the handshake is still open, and to every call.
+  /// Ends the channel on a transport failure, reporting [error] to every
+  /// call.
   ///
-  /// Calls may start before the handshake answers, so a wrong preface has to
-  /// reach them too: otherwise they see only the end of the stream and report
-  /// a retryable UNAVAILABLE for a peer that will never be the right one.
+  /// A transport failure has to reach every call as a status: a retry
+  /// interceptor keys off the gRPC code, and a bare SocketException is not
+  /// one. Buffered if nothing listens yet, and dropped with the controller.
   void _fail(RpcStatusException error) {
     if (_closed) return;
-    if (!_ready.isCompleted) _ready.completeError(error);
-    // A transport failure has to reach every call as a status: a retry
-    // interceptor keys off the gRPC code, and a bare SocketException is not
-    // one. Buffered if nothing listens yet, and dropped with the controller.
     if (!_incoming.isClosed) _incoming.addError(error);
     unawaited(close());
   }
@@ -256,15 +146,6 @@ class RpcSocketChannel implements IRpcChannel {
     if (_closed) return;
     _writes.flush();
     _closed = true;
-    _prefaceTimer?.cancel();
-    if (!_ready.isCompleted) {
-      _ready.completeError(
-        RpcStatusException(
-          RpcStatus.unavailable,
-          'Socket connection to $peer closed before its preface',
-        ),
-      );
-    }
     // NOT awaited: closing a single-subscription controller nobody listened to
     // never completes, so an unwrapped channel would hang here.
     if (!_incoming.isClosed) unawaited(_incoming.close());

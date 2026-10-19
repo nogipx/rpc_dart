@@ -40,7 +40,7 @@ import 'rpc_socket_channel.dart';
 /// UNAVAILABLE: no call was made, so a later attempt may succeed. That covers
 /// a missing socket file, a refused connection and the timeout alike. A
 /// preface that fails later fails `ready` and every call; see
-/// [RpcSocketChannel.ready]. An [Error] passes through unchanged.
+/// `RpcFrameMultiplexedChannel.ready`. An [Error] passes through unchanged.
 ///
 /// TCP sockets get `TCP_NODELAY`: rpc_dart writes one frame per send, and
 /// Nagle's algorithm would hold a small unary request back for a round trip.
@@ -75,11 +75,9 @@ Future<RpcSocketCallerTransport> connectRpcSocket(
   configureRpcSocket(socket, address);
   final left = connectTimeout == null ? null : connectTimeout - clock.elapsed;
   return RpcSocketCallerTransport(
-    RpcSocketChannel(
-      socket,
-      prefaceTimeout: left == null || !left.isNegative ? left : Duration.zero,
-    ),
+    RpcSocketChannel(socket),
     policy: policy,
+    prefaceTimeout: left == null || !left.isNegative ? left : Duration.zero,
     logger: logger,
   );
 }

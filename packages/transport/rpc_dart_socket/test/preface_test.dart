@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The preface is how each side learns that the other is an rpc_dart socket.
-// A client is not ready until the server's has arrived, and a server builds no
-// endpoint until the client's has.
+// The frame channel's preface is how each side learns that the other is
+// rpc_dart. A client is not ready until the server has answered it, and a
+// server builds no endpoint until the client's has arrived.
 
 @TestOn('vm')
 library;
@@ -12,7 +12,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 import 'package:test/test.dart';
 
@@ -73,8 +73,8 @@ void main() {
   test('WITNESS: another protocol version is FAILED_PRECONDITION', () async {
     final address = await _fake(
       (s) => s.add([
-        ...RpcSocketChannel.preface.sublist(0, 7),
-        RpcSocketChannel.protocolVersion + 1,
+        ...RpcChannelFrame.preface.sublist(0, RpcChannelFrame.prefaceSize - 1),
+        RpcChannelFrame.protocolVersion + 1,
       ]),
     );
     final transport = await connectRpcSocket(address);
@@ -87,7 +87,7 @@ void main() {
 
   test('WITNESS: a preface split across reads is still a preface', () async {
     final address = await _fake((s) async {
-      for (final b in RpcSocketChannel.preface) {
+      for (final b in RpcChannelFrame.preface) {
         s.add([b]);
         await s.flush();
         await Future<void>.delayed(const Duration(milliseconds: 5));

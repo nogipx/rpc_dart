@@ -132,16 +132,21 @@ connection is Online again.
 
 ## The preface
 
-Each side writes eight bytes first, `rpcsock` and a protocol version, and reads
-the peer's before anything else. A bare socket otherwise says nothing about who
+The client writes eight bytes first, `rpcdart` and the frame protocol version,
+and the server answers with the same eight before anything else. This is the
+preface every rpc_dart channel transport opens with, see
+`RpcChannelFrame.preface`. A bare socket otherwise says nothing about who
 answered it. A peer that never speaks, or that speaks another protocol on the
 same address, would look exactly like an idle server.
 
 | Peer | `ready` and every call fail with |
 | --- | --- |
 | Closes or never sends a preface within the timeout | UNAVAILABLE |
-| Sends `rpcsock` with another version | FAILED_PRECONDITION |
+| Sends `rpcdart` with another version | FAILED_PRECONDITION |
 | Sends anything else | UNKNOWN |
+
+The server's timeout is `prefaceTimeout` (10 s by default); the client's is
+what is left of `connectTimeout`.
 
 ## Limits of a raw socket
 
