@@ -309,7 +309,7 @@ RpcAppConfig(
 
 `logger` is a `LogScope` and `logController` a `LogController`, both from `rpc_dart`.
 
-`onError` and `onCall` are automatically wired as interceptors covering all four call types (unary, server-stream, client-stream, bidirectional). `onError` runs, then the exception is rethrown. `RpcCallEvent` carries `serviceName`, `methodName`, `callType`, `duration`, `success`, `error` and `context`.
+`onError` and `onCall` are automatically wired as interceptors covering all four call types (unary, server-stream, client-stream, bidirectional); both are `RpcCallObserverInterceptor`s from `rpc_dart`. `onError` gets the error of every failed call, and the error still reaches the caller. `onCall` gets an `RpcCallEvent` for every call that ends: `serviceName`, `methodName`, `callType` (`RpcMethodType`), `duration`, `outcome` (`RpcCallSucceeded`, `RpcCallFailed`, `RpcCallCancelled`), `context`, and the shortcuts `success` and `error`. A stream its consumer cancels ends as cancelled; it is not an error and does not reach `onError`.
 
 `stop()` stops the server with `drainTimeout` (it stops admitting and lets in-flight calls finish), then calls `onStop()` in reverse order, each bounded by `shutdownTimeout`, then terminates isolates. Called during `start()`, it makes `start()` roll back at its next step instead of starting the server, waiting at most `shutdownTimeout` for that; the interrupted `start()` completes without error. Concurrent calls share one stop.
 
@@ -493,7 +493,7 @@ Interceptor that records every call passing through an endpoint. Useful for asse
 final spy = RpcCallSpy();
 // add to RpcTestApp interceptors or RpcApp.server interceptors
 
-spy.entries;                           // List<RpcSpyEntry> — all calls, in order
+spy.entries;                           // List<RpcCallEvent>, in the order calls ended
 spy.callsTo('UserService', 'getUser'); // filtered by service and method
 spy.wasCalled('UserService', 'getUser');
 spy.callCount;
@@ -502,7 +502,7 @@ spy.errorCount;
 spy.reset();
 ```
 
-Each `RpcSpyEntry` has `serviceName`, `methodName`, `callType`, `success`, `error`, `duration`, `calledAt` and `context`. An unbounded spy keeps every entry; pass `RpcCallSpy(maxEntries: 1000)` to drop the oldest.
+Each entry is the call's `RpcCallEvent` (see `onCall` above). A cancelled call counts as neither a success nor an error. An unbounded spy keeps every entry; pass `RpcCallSpy(maxEntries: 1000)` to drop the oldest.
 
 ### RpcFaultInjector
 

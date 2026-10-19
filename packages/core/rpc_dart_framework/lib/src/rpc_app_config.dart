@@ -4,10 +4,10 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-/// Metadata emitted for every completed RPC call (success or failure).
+/// One finished RPC call: succeeded, failed or cancelled.
 ///
-/// Passed to [RpcAppConfig.onCall] when set. Useful for metrics, tracing,
-/// and audit logging.
+/// Passed to [RpcAppConfig.onCall] when set, and recorded by `RpcCallSpy`.
+/// Useful for metrics, tracing and audit logging.
 class RpcCallEvent {
   /// Name of the RPC service.
   final String serviceName;
@@ -15,17 +15,15 @@ class RpcCallEvent {
   /// Name of the RPC method.
   final String methodName;
 
-  /// One of `'unary'`, `'serverStream'`, `'clientStream'`, `'bidiStream'`.
-  final String callType;
+  /// The call's shape.
+  final RpcMethodType callType;
 
-  /// Wall-clock duration of the call (for streams: until the stream ended).
+  /// Wall-clock duration of the call; for a stream, until it ended or its
+  /// consumer cancelled it.
   final Duration duration;
 
-  /// True when the call completed without throwing.
-  final bool success;
-
-  /// The exception that was thrown, or null on success.
-  final Object? error;
+  /// How the call ended.
+  final RpcCallOutcome outcome;
 
   /// The [RpcContext] that was active during the call.
   final RpcContext context;
@@ -35,17 +33,23 @@ class RpcCallEvent {
     required this.methodName,
     required this.callType,
     required this.duration,
-    required this.success,
+    required this.outcome,
     required this.context,
-    this.error,
   });
 
+  /// Whether the call completed.
+  bool get success => outcome is RpcCallSucceeded;
+
+  /// What the call failed with, or null when it did not fail.
+  Object? get error => switch (outcome) {
+    RpcCallFailed(:final error) => error,
+    _ => null,
+  };
+
   @override
-  String toString() {
-    final status = success ? 'OK' : 'ERROR(${error.runtimeType})';
-    return 'RpcCallEvent($serviceName.$methodName [$callType] '
-        '${duration.inMilliseconds}ms $status)';
-  }
+  String toString() =>
+      'RpcCallEvent($serviceName.$methodName [${callType.name}] '
+      '${duration.inMilliseconds}ms $outcome)';
 }
 
 /// Signature for the global error hook.
@@ -78,14 +82,12 @@ class RpcAppConfig {
   /// responder handlers.
   final LogController? logController;
 
-  /// Called for every unhandled exception that escapes an RPC handler.
-  ///
-  /// The framework automatically wires an interceptor that catches errors from
-  /// all four call types (unary, server-stream, client-stream, bidi-stream)
-  /// and routes them here before re-throwing.
+  /// Called for every call that fails, of all four call types, with the error
+  /// that failed it. The error still reaches the caller. A cancelled call is
+  /// not a failure and is not reported here.
   final RpcErrorHandler? onError;
 
-  /// Called after every RPC call finishes (success or failure).
+  /// Called after every RPC call ends: succeeded, failed or cancelled.
   ///
   /// Use this to feed Prometheus counters, OpenTelemetry spans, etc.
   /// The framework automatically wires a timing interceptor.

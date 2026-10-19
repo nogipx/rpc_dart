@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcCallSpy records every call and each RpcSpyEntry holds the call's
+// RpcCallSpy records every call and each RpcCallEvent holds the call's
 // RpcContext, so an uncapped spy pins one context graph per call for the life
 // of the process. Its own doc invited exactly that: "Attach to RpcTestApp or
 // RpcApp" -- RpcApp being the production app class -- with no retention bound

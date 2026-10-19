@@ -88,7 +88,7 @@ SIGTERM or SIGINT, then `stop()`.
 | `RpcAppConfig` | `shutdownTimeout` (30 s), `drainTimeout` (10 s), `logger` (`LogScope?`), `logController`, `onError`, `onCall`, `env` |
 | `RpcAppHealth` | `level` (`RpcAppHealthLevel`), `isHealthy`, `isServing`, `modules`, `endpoints`, `checkedAt`, `toJson()` |
 | `RpcTestApp` | `RpcTestApp.start(...)`, `caller`, `health()`, `dispose()` |
-| `RpcCallSpy` | interceptor that records calls: `entries`, `callCount`, `successCount`, `errorCount`, `callsTo`, `wasCalled`, `reset`; `maxEntries:` caps retention |
+| `RpcCallSpy` | interceptor that records each finished call as an `RpcCallEvent`: `entries`, `callCount`, `successCount`, `errorCount` (cancelled calls count as neither), `callsTo`, `wasCalled`, `reset`; `maxEntries:` caps retention |
 | `RpcFaultInjector` | interceptor: `failMethod`, `failMethodOnce`, `delayMethod`, `removeMethod`, `clear` |
 
 Rate limiting (`RpcRateLimiter`) and the reconnecting client
@@ -204,9 +204,14 @@ contracts are registered and the app serves nothing. Servers that create
 their endpoint late (`RpcHttpServer`) are finished in `afterModulesStart`; see
 that transport's README.
 
-`onError` runs for every exception that escapes a handler, then the exception
-is rethrown. `onCall` gets an `RpcCallEvent` (`serviceName`, `methodName`,
-`callType`, `duration`, `success`, `error`, `context`) after each call.
+`onError` runs for every call that fails, with the error that failed it; the
+error still reaches the caller. `onCall` gets an `RpcCallEvent` after each
+call ends: `serviceName`, `methodName`, `callType` (an `RpcMethodType`),
+`duration`, `outcome` (`RpcCallSucceeded`, `RpcCallFailed` or
+`RpcCallCancelled`), `context`, and the shortcuts `success` and `error`. A
+stream its consumer cancels is reported to `onCall` as cancelled and is not an
+error, so `onError` does not see it. All three, and `RpcCallSpy`, are
+`RpcCallObserverInterceptor`s from core.
 
 `await app.health()` returns `RpcAppHealth`. The level is the worst over the
 modules and the server endpoints. A `closed` module or endpoint counts as

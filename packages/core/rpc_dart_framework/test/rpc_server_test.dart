@@ -953,7 +953,10 @@ void main() {
       expect(spy.callCount, 2);
       expect(spy.successCount, 2);
       expect(spy.errorCount, 0);
-      expect(spy.entries.every((e) => e.callType == 'unary'), isTrue);
+      expect(
+        spy.entries.every((e) => e.callType == RpcMethodType.unary),
+        isTrue,
+      );
       expect(spy.entries.every((e) => e.success), isTrue);
     });
 
@@ -1039,7 +1042,7 @@ void main() {
       final entry = spy.entries.first;
       expect(entry.duration, isA<Duration>());
       expect(entry.context, isA<RpcContext>());
-      expect(entry.calledAt, isA<DateTime>());
+      expect(entry.outcome, isA<RpcCallSucceeded>());
       expect(entry.serviceName, 'EchoService');
       expect(entry.methodName, 'ping');
     });
@@ -1170,7 +1173,7 @@ void main() {
       await app.dispose();
       expect(events.length, 2);
       expect(events.every((e) => e.success), isTrue);
-      expect(events.every((e) => e.callType == 'unary'), isTrue);
+      expect(events.every((e) => e.callType == RpcMethodType.unary), isTrue);
       expect(events.every((e) => e.serviceName == 'EchoService'), isTrue);
       // ignore: unnecessary_non_null_assertion
     });
