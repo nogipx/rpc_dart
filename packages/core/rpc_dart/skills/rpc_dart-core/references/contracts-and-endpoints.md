@@ -280,6 +280,34 @@ void wireChain(RpcResponderEndpoint server) {
 }
 ```
 
+To OBSERVE calls (metrics, logs, audit), extend
+`RpcCallObserverInterceptor<S>` instead of writing the four `intercept*`
+methods. `onCallStart(call, type)` returns per-call state `S` (`type` is an
+`RpcMethodType`); `onCallEnd(state, outcome, duration)` runs exactly once per
+call with an `RpcCallOutcome`: `RpcCallSucceeded`, `RpcCallFailed(error,
+stackTrace)` or `RpcCallCancelled`. A streamed response ends when the stream
+is done or its consumer cancels it (cancelled), and an error on it is not
+terminal: the call fails with the last one. Optional hooks: `contextFor`
+(the context the rest of the chain gets), `runCall` (run the chain inside a
+zone), `onResponseMessage` and `onResponseError` (each streamed event).
+
+```dart
+final class SlowCalls extends RpcCallObserverInterceptor<String> {
+  final slow = <String>[];
+
+  @override
+  String onCallStart(RpcMiddlewareContext call, RpcMethodType type) =>
+      '${call.serviceName}.${call.methodName}';
+
+  @override
+  void onCallEnd(String name, RpcCallOutcome outcome, Duration duration) {
+    if (outcome is RpcCallFailed || duration > const Duration(seconds: 1)) {
+      slow.add('$name: $outcome');
+    }
+  }
+}
+```
+
 Retry and circuit-breaker
 interceptors: `errors-and-resilience.md`. Headers and `RpcContext`:
 `context-and-metadata.md`.
