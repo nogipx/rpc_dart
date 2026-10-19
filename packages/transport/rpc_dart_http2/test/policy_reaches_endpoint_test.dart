@@ -52,7 +52,7 @@ void main() {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 3),
+      policy: const RpcSecurityPolicy(maxActiveStreams: 3),
       mode: RpcResponderMode((endpoint) {
         serverEndpoint = endpoint;
         endpoint.registerServiceContract(_Contract());
@@ -131,7 +131,7 @@ void main() {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: const RpcSecurityPolicy(
+      policy: const RpcSecurityPolicy(
         maxActiveStreams: 1000,
         maxConcurrentHandlers: 3,
       ),

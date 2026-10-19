@@ -48,14 +48,14 @@ http2.ClientTransportConnection _guardedConnection({
   required void Function() destroy,
   required RpcSecurityPolicy policy,
   required Duration? settingsTimeout,
-  LogScope? logger,
+  required LogScope logger,
   _DrainSignal? drainSignal,
 }) {
   final number = drainSignal == null ? 0 : ++drainSignal.built;
   Timer? settingsWatch;
   if (settingsTimeout != null) {
     settingsWatch = Timer(settingsTimeout, () {
-      logger?.warning(
+      logger.warning(
         'HTTP/2 peer sent no SETTINGS within $settingsTimeout; '
         'closing connection',
       );
@@ -72,11 +72,11 @@ http2.ClientTransportConnection _guardedConnection({
       drainSignal?.onSocketEnded?.call(number);
     },
     onGoaway: () {
-      logger?.internal('HTTP/2 peer sent GOAWAY: this connection is draining');
+      logger.internal('HTTP/2 peer sent GOAWAY: this connection is draining');
       drainSignal?.goawayReceived = true;
     },
     onViolation: (observedBytes) {
-      logger?.warning(
+      logger.warning(
         'HTTP/2 header-block cap exceeded by the peer: $observedBytes bytes '
         '(max: ${policy.maxMetadataBytes}); closing connection',
       );
@@ -112,7 +112,7 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
   required RpcSecurityPolicy policy,
   Duration handshakeTimeout = RpcHttp2CallerTransport._proxyHandshakeTimeout,
   Duration? connectTimeout,
-  LogScope? logger,
+  required LogScope logger,
   _DrainSignal? drainSignal,
 }) async {
   final proxyHost = proxyUri.host;
@@ -134,7 +134,7 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
   try {
     raw.setOption(SocketOption.tcpNoDelay, true);
   } catch (error) {
-    logger?.warning('Could not disable Nagle on proxy socket: $error');
+    logger.warning('Could not disable Nagle on proxy socket: $error');
   }
 
   // Build CONNECT request. The target in authority-form, so an IPv6 literal

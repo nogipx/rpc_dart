@@ -377,7 +377,7 @@ final class _Http2Rig extends NetworkRig {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: serverPolicy,
+      policy: serverPolicy,
       mode: RpcResponderMode(registerOn),
     );
     await server.start();
@@ -425,7 +425,7 @@ final class _HttpRig extends NetworkRig {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: serverPolicy,
+      policy: serverPolicy,
       mode: RpcResponderMode(registerOn),
     );
     await server.start();

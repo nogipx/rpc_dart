@@ -61,7 +61,7 @@ Future<({RpcCallerEndpoint caller, RpcHttp2CallerTransport client})> _connect(
   final server = RpcHttp2Server(
     host: '127.0.0.1',
     port: 0,
-    securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 100000),
+    policy: const RpcSecurityPolicy(maxActiveStreams: 100000),
     mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
   );
   await server.start();

@@ -19,7 +19,7 @@ void main() {
         // end up on a stack the server never bound.
         host: '127.0.0.1',
         port: 0,
-        securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
+        policy: const RpcSecurityPolicy(maxMessageLengthBytes: 16),
         mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoContract());
         }),
@@ -55,7 +55,7 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
+        policy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
         mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoContract());
         }),

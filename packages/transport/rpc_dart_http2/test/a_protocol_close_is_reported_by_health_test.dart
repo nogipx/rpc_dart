@@ -22,7 +22,7 @@ void main() {
     final server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: const RpcSecurityPolicy(closeOnProtocolError: true),
+      policy: const RpcSecurityPolicy(closeOnProtocolError: true),
       mode: RpcResponderMode(endpoints.add),
     );
     await server.start();

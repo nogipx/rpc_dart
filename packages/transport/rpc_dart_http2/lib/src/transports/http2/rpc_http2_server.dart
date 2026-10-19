@@ -18,7 +18,7 @@ import 'rpc_http2_responder_transport.dart';
 class RpcHttp2Server implements IRpcServer {
   final String _host;
   final int _port;
-  final RpcSecurityPolicy _securityPolicy;
+  final RpcSecurityPolicy _policy;
   final SecurityContext? _securityContext;
 
   /// Set once a connection that never sent its preface has been reported.
@@ -64,7 +64,7 @@ class RpcHttp2Server implements IRpcServer {
   /// endpoint. [onConnectionError], [onConnectionOpened] and
   /// [onConnectionClosed] are observability hooks.
   ///
-  /// [securityPolicy] bounds per-stream message size, buffered bytes, and the
+  /// [policy] bounds per-stream message size, buffered bytes, and the
   /// number of concurrent active streams per connection. Forwarded to every
   /// [RpcHttp2ResponderTransport]. Defaults to `const RpcSecurityPolicy()` so
   /// the built-in limits are enforced.
@@ -78,14 +78,19 @@ class RpcHttp2Server implements IRpcServer {
   /// [pingInterval] and [pingTimeout] configure PING keepalive; see the field
   /// docs, which explain why the default is on. [prefaceTimeout] bounds an
   /// accepted socket that never speaks HTTP/2.
+  ///
+  /// [maxConnections] caps concurrent connections, those still in their TLS
+  /// handshake included; one past it is closed as it is accepted. Null, the
+  /// default, sets no cap.
   RpcHttp2Server({
     String host = 'localhost',
     required int port,
     required RpcResponderMode mode,
-    RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     SecurityContext? securityContext,
     LogScope? logger,
     LogController? logController,
+    int? maxConnections,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(Socket socket)? onConnectionOpened,
     void Function(Socket socket)? onConnectionClosed,
@@ -100,11 +105,12 @@ class RpcHttp2Server implements IRpcServer {
     Duration? prefaceTimeout = const Duration(seconds: 30),
   }) : _host = host,
        _port = port,
-       _securityPolicy = securityPolicy,
+       _policy = policy,
        _securityContext = securityContext,
        _log = logger?.child('Http2Server') ?? LogScope.noop,
        _connectionHost = RpcConnectionHost(
          mode: mode,
+         maxConnections: maxConnections,
          logger: logger?.child('Http2Server'),
          logController: logController,
        ),
@@ -125,8 +131,9 @@ class RpcHttp2Server implements IRpcServer {
   /// byte. Every other limit this server has is PER CONNECTION, so
   /// `maxActiveStreams`, `maxConcurrentHandlers`, `halfOpenStreamTimeout` and
   /// the pre-method budget are all downstream of a peer that has not opened a
-  /// stream. Without this deadline nothing counts connections at all, and a TCP
-  /// SYN buys an endpoint plus a run of the application's callback.
+  /// stream. Without this deadline a TCP SYN buys an endpoint plus a run of
+  /// the application's callback, held until the peer closes; `maxConnections`
+  /// caps how many, not how long.
   ///
   /// **What it is and is not for.** It bounds traffic that never speaks HTTP/2
   /// at all: port scanners, TLS probes, misdirected HTTP/1.1 clients, a stuck
@@ -182,9 +189,11 @@ class RpcHttp2Server implements IRpcServer {
     required int port,
     required List<RpcResponderContract> contracts,
     String host = 'localhost',
-    RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     SecurityContext? securityContext,
     LogScope? logger,
+    LogController? logController,
+    int? maxConnections,
     Duration? pingInterval = const Duration(seconds: 30),
     Duration? pingTimeout,
     Duration? prefaceTimeout = const Duration(seconds: 30),
@@ -193,9 +202,11 @@ class RpcHttp2Server implements IRpcServer {
       host: host,
       port: port,
       mode: RpcResponderMode.contracts(contracts),
-      securityPolicy: securityPolicy,
+      policy: policy,
       securityContext: securityContext,
       logger: logger,
+      logController: logController,
+      maxConnections: maxConnections,
       pingInterval: pingInterval,
       pingTimeout: pingTimeout,
       prefaceTimeout: prefaceTimeout,
@@ -358,7 +369,7 @@ class RpcHttp2Server implements IRpcServer {
       _log.info('HTTP/2 server listening ($scheme) on $_host:$port');
 
       final subscription = connections.listen(
-        _securityContext == null ? _handleConnection : _acceptTls,
+        _accept,
         onError: (Object error, StackTrace stackTrace) {
           _log.error(
             'Server socket error',
@@ -503,6 +514,20 @@ class RpcHttp2Server implements IRpcServer {
     }
   }
 
+  /// Admits [socket] under the connection cap, then serves it, after a TLS
+  /// handshake when the server is secure.
+  void _accept(Socket socket) {
+    if (!_connectionHost.admit(pending: _handshaking.length)) {
+      socket.destroy();
+      return;
+    }
+    if (_securityContext == null) {
+      _handleConnection(socket);
+    } else {
+      _acceptTls(socket);
+    }
+  }
+
   /// Builds the transport, endpoint and lifecycle wiring for one connection.
   void _handleConnection(Socket socket) {
     final clientAddress = '${socket.remoteAddress}:${socket.remotePort}';
@@ -533,7 +558,7 @@ class RpcHttp2Server implements IRpcServer {
         incoming: socket,
         outgoing: socket,
         destroy: socket.destroy,
-        policy: _securityPolicy,
+        policy: _policy,
         logger: _log,
         onHeaderBlockViolation: (observedBytes) {
           _notify(
@@ -541,7 +566,7 @@ class RpcHttp2Server implements IRpcServer {
             () => _onConnectionError?.call(
               RpcStatusException(
                 RpcStatus.resourceExhausted,
-                'HTTP/2 header block exceeded ${_securityPolicy.maxMetadataBytes} '
+                'HTTP/2 header block exceeded ${_policy.maxMetadataBytes} '
                 'bytes ($observedBytes observed): probable CONTINUATION flood '
                 'from $clientAddress',
               ),

@@ -85,7 +85,7 @@ Future<RpcHttp2Server> _serve(RpcSecurityPolicy policy) async {
   final server = RpcHttp2Server(
     host: '127.0.0.1',
     port: 0,
-    securityPolicy: policy,
+    policy: policy,
     mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
   );
   await server.start();

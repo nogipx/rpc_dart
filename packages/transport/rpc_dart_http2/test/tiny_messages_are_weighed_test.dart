@@ -64,7 +64,7 @@ void main() {
         port: 0,
         // 100k messages of 2 payload bytes are 200 KB by payload and about
         // 13 MB by retention.
-        securityPolicy: const RpcSecurityPolicy(
+        policy: const RpcSecurityPolicy(
           flowControlConnectionWindowBytes: 4 * 1024 * 1024,
         ),
         mode: RpcResponderMode(

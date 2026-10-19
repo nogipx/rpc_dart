@@ -263,7 +263,7 @@ This path has no preface timeout and no keepalive; `RpcHttp2Server` adds both.
 | --- | --- | --- |
 | `host` | `'localhost'` | Bind address. |
 | `port` | required | `0` picks a free port. |
-| `securityPolicy` | `const RpcSecurityPolicy()` | Per-connection limits; see [Limits](#limits). |
+| `policy` | `const RpcSecurityPolicy()` | Per-connection limits; see [Limits](#limits). |
 | `securityContext` | `null` | TLS (h2) when set, plaintext (h2c) otherwise. |
 | `pingInterval` | 30 s | PING on idle connections. The only bound on a peer that went silent after the handshake. `null` disables it. |
 | `pingTimeout` | `pingInterval` | Wait for the PING ACK before the socket is destroyed. |
@@ -273,13 +273,14 @@ This path has no preface timeout and no keepalive; `RpcHttp2Server` adds both.
 | `transportWrapper` | `null` | Wraps each connection's transport. |
 | `logger` | `null` | A `LogScope` for the server and its transports. |
 | `logController` | `null` | Passed to every responder endpoint. |
+| `maxConnections` | `null` | Caps concurrent connections, TLS handshakes included; one past it is closed as it is accepted. `null` sets no cap. |
 
-`createWithContracts` takes `host`, `port`, `contracts`, `securityPolicy`,
-`securityContext` and `logger`, and uses the defaults for the rest.
+`createWithContracts` takes `contracts` in place of `mode` and every other
+option except the connection hooks and `transportWrapper`.
 
 ## Limits
 
-The server's `securityPolicy` applies per connection. On top of what the
+The server's `policy` applies per connection. On top of what the
 endpoint enforces:
 
 - `maxActiveStreams` is advertised to the peer as `SETTINGS_MAX_CONCURRENT_STREAMS`

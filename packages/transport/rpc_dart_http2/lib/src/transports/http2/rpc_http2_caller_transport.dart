@@ -191,7 +191,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     required int port,
     required String scheme,
     required RpcSecurityPolicy policy,
-    LogScope? logger,
+    required LogScope logger,
     Duration? pingInterval,
     Duration? pingTimeout,
     _DrainSignal? drainSignal,
@@ -199,7 +199,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
        _host = host,
        _port = port,
        _scheme = scheme,
-       _log = logger?.child('Http2ClientTransport') ?? LogScope.noop,
+       _log = logger.child('Http2ClientTransport'),
        _policy = policy,
        _pingInterval = pingInterval,
        _pingTimeout = pingTimeout,
@@ -242,7 +242,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     host: host,
     port: port,
     proxyUri: proxyUri,
-    logger: logger,
+    logger: logger ?? LogScope.noop,
     policy: policy,
     proxyHandshakeTimeout: proxyHandshakeTimeout,
     connectTimeout: connectTimeout,
@@ -268,6 +268,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     Duration? pingInterval,
     Duration? pingTimeout,
   }) {
+    final log = logger ?? LogScope.noop;
     final drainSignal = _DrainSignal();
     final connection = _guardedConnection(
       incoming: socket,
@@ -275,7 +276,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       destroy: socket.destroy,
       policy: policy,
       settingsTimeout: _connectTimeout,
-      logger: logger,
+      logger: log,
       drainSignal: drainSignal,
     );
     return RpcHttp2CallerTransport._(
@@ -284,7 +285,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       port: port,
       scheme: scheme,
       policy: policy,
-      logger: logger,
+      logger: log,
       pingInterval: pingInterval,
       pingTimeout: pingTimeout,
       drainSignal: drainSignal,
@@ -310,7 +311,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     host: host,
     port: port,
     proxyUri: proxyUri,
-    logger: logger,
+    logger: logger ?? LogScope.noop,
     policy: policy,
     proxyHandshakeTimeout: proxyHandshakeTimeout,
     connectTimeout: connectTimeout,
@@ -325,15 +326,15 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     required String host,
     required int port,
     required Uri? proxyUri,
-    required LogScope? logger,
+    required LogScope logger,
     required RpcSecurityPolicy policy,
     required Duration proxyHandshakeTimeout,
     required Duration? connectTimeout,
     required Duration? pingInterval,
     required Duration? pingTimeout,
   }) async {
-    if (logger?.isInternal ?? false) {
-      logger?.internal(
+    if (logger.isInternal) {
+      logger.internal(
         'Opening ${secure ? 'a secure' : 'an'} HTTP/2 connection to '
         '$host:$port',
       );
@@ -386,7 +387,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     }
 
     final connection = await _asStatus(open);
-    logger?.internal('HTTP/2 connection established');
+    logger.internal('HTTP/2 connection established');
 
     return RpcHttp2CallerTransport._(
       connection: connection,

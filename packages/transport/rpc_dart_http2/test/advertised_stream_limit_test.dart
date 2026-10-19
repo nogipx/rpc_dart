@@ -178,7 +178,7 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 7),
+        policy: const RpcSecurityPolicy(maxActiveStreams: 7),
         mode: RpcResponderMode(
           (e) => e.registerServiceContract(_Svc(() => parked++)),
         ),
@@ -217,7 +217,7 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        securityPolicy: RpcSecurityPolicy(maxActiveStreams: limit),
+        policy: RpcSecurityPolicy(maxActiveStreams: limit),
         mode: RpcResponderMode(
           (e) => e.registerServiceContract(_Svc(() => parked++)),
         ),
@@ -293,7 +293,7 @@ void main() {
       final server = RpcHttp2Server(
         host: '127.0.0.1',
         port: 0,
-        securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 3),
+        policy: const RpcSecurityPolicy(maxActiveStreams: 3),
         mode: RpcResponderMode(
           (e) => e.registerServiceContract(_Svc(() => parked++)),
         ),

@@ -103,7 +103,7 @@ void main() {
         port: 0,
         // A small cap keeps the test fast: the flood is refused after a few
         // frames instead of after tens of thousands.
-        securityPolicy: const RpcSecurityPolicy(maxMetadataBytes: 64 * 1024),
+        policy: const RpcSecurityPolicy(maxMetadataBytes: 64 * 1024),
         mode: RpcResponderMode((e) => e.registerServiceContract(_Contract())),
       );
       await server.start();

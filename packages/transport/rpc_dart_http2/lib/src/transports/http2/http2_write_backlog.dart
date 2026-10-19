@@ -25,27 +25,10 @@ final class Http2WriteBacklog {
     sync: true,
   );
   Future<void>? _writing;
-  StreamSubscription<List<int>>? _reader;
 
   /// [incoming], paused while the backlog is over the limit.
-  Stream<List<int>> reads(Stream<List<int>> incoming) {
-    late final StreamController<List<int>> controller;
-    controller = StreamController<List<int>>(
-      sync: true,
-      onListen: () {
-        final reader = _reader = incoming.listen(
-          controller.add,
-          onError: controller.addError,
-          onDone: controller.close,
-        );
-        _backlog.attachReader(reader);
-      },
-      onPause: () => _reader?.pause(),
-      onResume: () => _reader?.resume(),
-      onCancel: () => _reader?.cancel(),
-    );
-    return controller.stream;
-  }
+  Stream<List<int>> reads(Stream<List<int>> incoming) =>
+      _backlog.reads(incoming);
 
   /// The sink package:http2 writes its frames to.
   ///

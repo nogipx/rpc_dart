@@ -299,7 +299,7 @@ Future<({int open, IRpcTransport transport, _CountingTransport? wrapper})> _run(
   final server = RpcHttp2Server(
     host: '127.0.0.1',
     port: 0,
-    securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 3),
+    policy: const RpcSecurityPolicy(maxActiveStreams: 3),
     transportWrapper: wrap == null
         ? null
         : (inner, _) {

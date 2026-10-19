@@ -61,7 +61,7 @@ void main() {
     server = RpcHttp2Server(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: _limit),
+      policy: const RpcSecurityPolicy(maxMessageLengthBytes: _limit),
       mode: RpcResponderMode((endpoint) {
         endpoint.registerServiceContract(_Svc());
       }),
