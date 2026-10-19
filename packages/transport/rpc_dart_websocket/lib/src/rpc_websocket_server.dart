@@ -16,7 +16,7 @@ import 'websocket_server_policy.dart';
 ///
 /// Each incoming [WebSocketChannel] is wrapped via
 /// [RpcWebSocketResponderTransport] (3-layer architecture under the hood).
-class RpcWebSocketServer implements IRpcServer {
+class RpcWebSocketServer extends IRpcServer {
   final LogScope _log;
   final Stream<WebSocketChannel> _connections;
   final RpcSecurityPolicy _policy;

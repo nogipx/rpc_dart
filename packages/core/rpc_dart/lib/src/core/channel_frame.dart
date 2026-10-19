@@ -25,6 +25,9 @@ typedef _FrameHeader = ({int streamId, int flags, int payloadLen});
 /// Flags:
 /// - bit 0: endOfStream
 /// - bit 1: metadata frame (payload = encoded headers)
+/// - bits 2-7: reserved. A sender writes 0; a receiver ignores them, so a
+///   later revision can give one an optional meaning without raising
+///   [protocolVersion]. A flag the peer must understand needs a new version.
 ///
 /// A metadata payload, every length an unsigned LEB128 varint of at most 5
 /// bytes, every string UTF-8:

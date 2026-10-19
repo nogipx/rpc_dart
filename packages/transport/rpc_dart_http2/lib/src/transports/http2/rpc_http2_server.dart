@@ -15,7 +15,7 @@ import 'rpc_http2_responder_transport.dart';
 ///
 /// Binds the listening socket and wires up a transport per connection, creating
 /// a separate [RpcResponderEndpoint] for each one.
-class RpcHttp2Server implements IRpcServer {
+class RpcHttp2Server extends IRpcServer {
   final String _host;
   final int _port;
   final RpcSecurityPolicy _policy;

@@ -73,7 +73,7 @@ Future<void> main(List<String> argv) async {
 
   if (mode == 'cancel') {
     // Byte for byte what base_processor.dart sends when a caller cancels: bare
-    // metadata, no methodPath, x-client-cancelled true.
+    // metadata, no methodPath, x-rpc-client-cancelled true.
     await client.sendMetadata(
       id,
       RpcMetadata([

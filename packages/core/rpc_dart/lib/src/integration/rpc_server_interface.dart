@@ -12,7 +12,7 @@ import '../_internal.dart';
 /// Defines a common contract for all kinds of RPC servers (HTTP/2, WebSocket,
 /// gRPC, etc.). Used in [RpcServerBootstrap] to abstract over the concrete
 /// transport implementation.
-abstract interface class IRpcServer {
+abstract class IRpcServer {
   /// Whether the server is running.
   bool get isRunning;
 

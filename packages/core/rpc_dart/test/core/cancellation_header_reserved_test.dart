@@ -2,12 +2,12 @@
 //
 // SPDX-License-Identifier: MIT
 
-// x-client-cancelled is a control signal the responder ACTS on: a metadata
-// frame carrying it tears the stream down. It was not in RpcHeaders.reserved,
-// so it travelled as ordinary user metadata -- and a context that happened to
-// carry the key killed its own call at the door:
+// x-rpc-client-cancelled is a control signal the responder ACTS on: a metadata
+// frame carrying it tears the stream down. Not reserved, it would travel as
+// ordinary user metadata -- and a context that happened to carry the key would
+// kill its own call at the door:
 //
-//   (a) call with x-client-cancelled in context
+//   (a) call with x-rpc-client-cancelled in context
 //       outcome      : TimeoutException   <- no gRPC status, just a hang
 //       handler runs : 0
 //
@@ -19,7 +19,7 @@
 // metadata; and a call-OPENING frame can no longer be a cancellation, since
 // cancelling a call in the same breath as opening it is not a coherent request.
 //
-// gRPC compatibility: x-client-cancelled and x-cancellation-reason are
+// gRPC compatibility: x-rpc-client-cancelled and x-rpc-cancellation-reason are
 // rpc_dart's own keys, NOT gRPC's. gRPC signals cancellation with HTTP/2
 // RST_STREAM, which this package uses via IRpcStreamReset wherever the
 // transport offers one; the metadata notice is only the fallback for transports
@@ -97,7 +97,9 @@ void main() {
   test('the control keys are reserved', () {
     expect(RpcHeaders.isReserved(RpcHeaders.xClientCancelled), isTrue);
     expect(RpcHeaders.isReserved(RpcHeaders.xCancellationReason), isTrue);
-    expect(RpcHeaders.isReserved('X-Client-Cancelled'), isTrue);
+    expect(RpcHeaders.isReserved('X-RPC-Client-Cancelled'), isTrue);
+    // The whole prefix, so a later release can add a control header.
+    expect(RpcHeaders.isReserved('x-rpc-not-yet-defined'), isTrue);
 
     // Compression negotiation rides the context by design and must stay open,
     // as must ordinary user metadata.

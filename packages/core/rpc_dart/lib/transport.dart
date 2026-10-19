@@ -24,10 +24,8 @@ export 'src/_index.dart'
         RpcFrameException,
         RpcMetadataViolation,
         RpcFrameMultiplexedChannel,
-        RpcDirectMultiplexedChannel,
         // Messages and streams
         BufferedBroadcastController,
-        RpcMessage,
         RpcMessageFrame,
         RpcMessageHeader,
         RpcMessageParser,
@@ -50,7 +48,6 @@ export 'src/_index.dart'
         grpcStatusFromHttpStatus,
         wireStatusFor,
         kInternalErrorWireMessage,
-        rpcIsUnsafeCodePoint,
         rpcPeerText,
         // Ping, for a transport that probes a half-open path itself
         RpcEndpointPingExchange,

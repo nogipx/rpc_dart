@@ -240,6 +240,25 @@ stricter rule.
 - Companion pubspecs allow `rpc_dart >=6.0.0` but use APIs from this refactor.
   Versions are the owner's, at release.
 
+## Later: protocol versions outside the frame preface
+
+The channel frame format carries a version in its preface. Two other wire
+formats do not.
+
+- **Isolate web worker** (`rpc_dart_isolate`, `PortFrame`). The host sends
+  `init`, the worker answers `ready`, and neither carries a version. On the VM
+  the isolate runs the same code, so this cannot drift. A web worker is a
+  separately compiled script that a browser can cache, so a new page can start
+  a stale worker, and mismatched `PortFrame` maps then decode as garbage. Fix:
+  the host puts its version in `init`, the worker echoes its own in `ready`,
+  and `spawn` fails on a mismatch with a message naming the stale script. Do it
+  before the format first changes: once workers without a version are
+  deployed, a missing version looks the same as an old worker.
+- **HTTP/1.1 profile** (`rpc_dart_http`, status in response headers). Can wait.
+  A request header with the version can be added later, and a server that does
+  not see it treats the request as version 1. An absent header unambiguously
+  means an old client.
+
 ## Suggested order
 
 1. R1-R5, R7, R8, R10: real and small. R1 and R3 leak per connection or per

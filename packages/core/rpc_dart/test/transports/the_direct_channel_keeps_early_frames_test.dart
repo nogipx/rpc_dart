@@ -20,7 +20,7 @@
 @TestOn('vm')
 library;
 
-import 'package:rpc_dart/transport.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 /// Builds both ends of a `pair()`, awaiting one event-loop turn in between when

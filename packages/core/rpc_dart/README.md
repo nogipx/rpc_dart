@@ -478,10 +478,26 @@ It is installed into your agent's skills directory, for example
 
 A minor release may add members to the classes you build on: `IRpcTransport`,
 `IRpcChannel`, `IRpcMultiplexedChannel`, `IRpcCodec`, `IRpcMiddleware`,
-`IRpcInterceptor`, `BackoffPolicy` and the contract base classes. A new member
-comes with a default body, so code that `extends` them keeps compiling. Code
-that `implements` them may have to add the member. Mocks that implement an
-interface are fine in tests; for production code, extend.
+`IRpcInterceptor`, `IRpcServer`, `RpcCompressionCodec`, `BackoffPolicy` and
+the contract base classes. A new member comes with a default body, so code that
+`extends` them keeps compiling. Code that `implements` them may have to add the
+member. Mocks that implement an interface are fine in tests; for production
+code, extend. A transport decorator implements `IRpcTransport` on purpose, so
+that it forwards every member; it is the one place to expect such an addition.
+
+The small role interfaces never gain a member: `IRpcSerializable`,
+`IRpcCallCheck`, `IRpcFlowCredit` and `IRpcConnectionBuffer`. A new capability
+comes as a new interface.
+
+A minor release may add a value to an enum or a subtype to a sealed family,
+such as `RpcHealthLevel`, `RpcClientConnectionState` or `RpcCallOutcome`. A
+`switch` over one of them keeps a default branch. These are closed and stay
+as they are: `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`,
+`GrpcServingStatus` and `RpcProtoWireType`.
+
+Every metadata name starting with `x-rpc-` is reserved
+(`RpcHeaders.reservedPrefix`), so a minor release can add a control header
+without taking a name your metadata uses.
 
 The channel transports' wire format carries a version (see
 `RpcChannelFrame.protocolVersion`). The client states it when it connects and

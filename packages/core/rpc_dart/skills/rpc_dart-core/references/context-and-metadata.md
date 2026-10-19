@@ -29,9 +29,9 @@ receives one as its named `context` parameter.
   (`RpcHeaders.isHiddenFromHandler`). Do not carry application data under a
   `grpc-` name.
 - Reserved headers (`RpcHeaders.reserved`: `content-type`, `te`, `user-agent`,
-  `grpc-timeout`, `x-client-cancelled`, `x-cancellation-reason`,
-  `x-rpc-window-update`, `x-rpc-conn-window-update`) in user metadata are
-  skipped when sending. Check with `RpcHeaders.isReserved(name)`.
+  `grpc-timeout`; and every name starting with `x-rpc-`,
+  `RpcHeaders.reservedPrefix`) in user metadata are skipped when sending.
+  Check with `RpcHeaders.isReserved(name)`.
 - The trace id and request id are always sent from the context's
   `traceId` / `requestId`. An `x-trace-id` or `x-request-id` header you set yourself is
   overwritten. Use `withTraceId` instead.

@@ -76,13 +76,13 @@ abstract final class RpcTrailers {
     );
   }
 
-  /// The cancellation notice: `x-client-cancelled`, its [reason], and
+  /// The cancellation notice: `x-rpc-client-cancelled`, its [reason], and
   /// CANCELLED.
   ///
   /// A caller sends it when a transport cannot reset one stream. A transport
   /// also raises it inbound for a stream whose peer went away, so the side
   /// reading it ends the call the same way either way. A responder acts on
-  /// `x-client-cancelled` and ignores the status.
+  /// `x-rpc-client-cancelled` and ignores the status.
   static RpcMetadata cancelled(String reason) => RpcMetadata([
     const RpcHeader(RpcHeaders.xClientCancelled, 'true'),
     RpcHeader(RpcHeaders.xCancellationReason, reason),

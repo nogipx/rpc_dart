@@ -111,7 +111,7 @@ limit as a bound on what you accept, and on web assume refusing is not free.
 
 ## Custom codecs
 
-Any algorithm can be added by implementing `RpcCompressionCodec` and
+Any algorithm can be added by extending `RpcCompressionCodec` and
 registering it under its encoding name. Both peers must register it; a caller
 that declares an encoding the responder lacks gets `UNIMPLEMENTED`.
 
@@ -120,7 +120,7 @@ that declares an encoding the responder lacks gets `UNIMPLEMENTED`.
 it throws is treated as malformed input (`INTERNAL`).
 
 ```dart
-final class BrotliCodec implements RpcCompressionCodec {
+final class BrotliCodec extends RpcCompressionCodec {
   const BrotliCodec();
 
   @override

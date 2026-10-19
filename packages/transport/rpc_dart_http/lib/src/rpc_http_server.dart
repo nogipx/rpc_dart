@@ -56,7 +56,7 @@ import 'rpc_http_responder_transport.dart';
 ///   await httpServer!.afterModulesStart(preamble: webhook?.call);
 /// },
 /// ```
-class RpcHttpServer implements IRpcServer {
+class RpcHttpServer extends IRpcServer {
   final String _host;
   final int _port;
   final RpcHttpCorsPolicy? _corsPolicy;

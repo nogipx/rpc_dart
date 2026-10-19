@@ -11,7 +11,7 @@ import 'compression_gzip_stub.dart'
 
 /// Interface for a pluggable compression codec.
 ///
-/// Implement this class and register it with [RpcGrpcCompression.register]
+/// Extend this class and register it with [RpcGrpcCompression.register]
 /// to add compression support for a given encoding on any platform:
 ///
 /// ```dart
@@ -42,7 +42,7 @@ abstract class RpcCompressionCodec {
 }
 
 /// Built-in codec backed by the dart:io gzip stub/io conditional import.
-final class _BuiltinGzipCodec implements RpcCompressionCodec {
+final class _BuiltinGzipCodec extends RpcCompressionCodec {
   const _BuiltinGzipCodec();
 
   @override

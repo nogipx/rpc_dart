@@ -179,7 +179,7 @@ RpcList<RpcString> names() => RpcList.from(['a'.rpc, 'b'.rpc]);
 - A request with an unregistered `grpc-encoding` is refused with
   `UNIMPLEMENTED`, listing the supported encodings.
 
-Custom algorithm: extend or implement `RpcCompressionCodec`
+Custom algorithm: extend `RpcCompressionCodec`
 (`const RpcCompressionCodec()`), which has two members:
 `Uint8List compress(Uint8List data)` and
 `Uint8List decompress(Uint8List data, {int? maxOutputBytes})`.

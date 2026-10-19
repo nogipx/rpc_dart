@@ -109,7 +109,7 @@ class RpcTestApp {
 
 /// The [IRpcServer] of an [RpcTestApp]: one connection, an in-memory
 /// transport.
-final class _InMemoryServer implements IRpcServer {
+final class _InMemoryServer extends IRpcServer {
   _InMemoryServer(RpcResponderMode mode, this._transport)
     : _host = RpcConnectionHost(mode: mode);
 

@@ -19,7 +19,7 @@
 //   after  : 0 further messages, openStreams=0
 //   websocket sibling, same probe: 1 further message
 //
-// Registering `onTerminated` and synthesising the `x-client-cancelled` frame
+// Registering `onTerminated` and synthesising the `x-rpc-client-cancelled` frame
 // reuses the cancellation path the responder pipeline already implements --
 // the same one the websocket transport reaches through ordinary metadata.
 //

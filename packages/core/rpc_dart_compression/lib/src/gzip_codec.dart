@@ -21,7 +21,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 /// ```dart
 /// RpcGzipCodec.register(level: 9); // smallest output, slowest
 /// ```
-final class RpcGzipCodec implements RpcCompressionCodec {
+final class RpcGzipCodec extends RpcCompressionCodec {
   /// Compression level passed to the gzip encoder, in the range 0..9
   /// (`0` = store/no compression, `1` = fastest, `9` = smallest output).
   ///

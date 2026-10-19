@@ -597,7 +597,7 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     }
   }
 
-  /// Handles the peer's `x-client-cancelled` notice for [state].
+  /// Handles the peer's `x-rpc-client-cancelled` notice for [state].
   ///
   /// Trips the handler's cancellation token FIRST, with the client's [reason].
   ///

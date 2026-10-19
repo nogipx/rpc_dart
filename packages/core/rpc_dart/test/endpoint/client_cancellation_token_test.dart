@@ -18,7 +18,7 @@
 //
 // Note this affects every transport EXCEPT HTTP/2: CallProcessor prefers a
 // transport-level reset (IRpcStreamReset) and only falls back to the
-// x-client-cancelled metadata notice when the transport has none.
+// x-rpc-client-cancelled metadata notice when the transport has none.
 
 import 'dart:async';
 

@@ -61,10 +61,10 @@ abstract final class RpcHeaders {
   static const xRouteService = 'x-route-service';
 
   /// Set to `'true'` when the client cancels an in-flight call.
-  static const xClientCancelled = 'x-client-cancelled';
+  static const xClientCancelled = 'x-rpc-client-cancelled';
 
   /// Human-readable reason accompanying a client cancellation.
-  static const xCancellationReason = 'x-cancellation-reason';
+  static const xCancellationReason = 'x-rpc-cancellation-reason';
 
   /// Per-stream flow-control credit, in bytes, granted to the peer.
   ///
@@ -114,36 +114,23 @@ abstract final class RpcHeaders {
   /// through the call context, so they are framework-controlled signals that
   /// must pass through, not user headers to strip.
   ///
-  /// [xClientCancelled] and [xCancellationReason] are here because the
-  /// responder ACTS on them: a metadata frame carrying `x-client-cancelled:
-  /// true` tears the stream down. Left settable as ordinary user metadata, a
-  /// context that happened to carry the key — one built from a forwarded header
-  /// map, say — killed its own call at the door, before the handler ran, and
-  /// the caller got no status back at all: it hung until its own timeout.
+  /// rpc_dart's own control headers are reserved by [reservedPrefix].
+  static const reserved = <String>{contentType, te, userAgent, grpcTimeout};
+
+  /// The prefix of rpc_dart's own control headers, all reserved.
   ///
-  /// These two are rpc_dart's own control keys, not gRPC's. gRPC cancels with
-  /// HTTP/2 RST_STREAM (which this package uses via `resetStream` wherever
-  /// the transport offers it); the metadata notice is only the fallback for
-  /// transports with no reset primitive. Reserving them therefore sends FEWER
-  /// non-standard headers on the wire, so gRPC interop can only improve.
-  static const reserved = <String>{
-    contentType,
-    te,
-    userAgent,
-    grpcTimeout,
-    xClientCancelled,
-    xCancellationReason,
-    // The transport ACTS on this one too: it grants send credit. User metadata
-    // carrying the key would let a caller lift its own peer's flow-control
-    // limit, which is the one thing the limit exists to prevent.
-    xWindowUpdate,
-    xWindowUpdateMessages,
-    xConnWindowUpdate,
-  };
+  /// The transport acts on them: [xClientCancelled] tears a stream down,
+  /// [xWindowUpdate] grants send credit. Reserving the prefix rather than the
+  /// names lets a release add a control header without taking a name that
+  /// user metadata already carries.
+  static const reservedPrefix = 'x-rpc-';
 
   /// Whether [name] (case-insensitive) is a protocol-reserved header that user
   /// metadata is not allowed to set.
-  static bool isReserved(String name) => reserved.contains(name.toLowerCase());
+  static bool isReserved(String name) {
+    final lower = name.toLowerCase();
+    return reserved.contains(lower) || lower.startsWith(reservedPrefix);
+  }
 
   /// Whether a REQUEST header named [name] is withheld from the handler's
   /// context: gRPC reserves the `grpc-` prefix, and only the three the

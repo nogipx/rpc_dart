@@ -80,7 +80,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     // and the call runs to completion with no client at all: the handler keeps
     // producing indefinitely with its stream slot held.
     //
-    // Synthesising the same `x-client-cancelled` frame the websocket sibling
+    // Synthesising the same `x-rpc-client-cancelled` frame the websocket sibling
     // sends reuses that tested teardown path rather than adding a second one.
     stream.onTerminated = (errorCode) {
       if (_log.isInternal) {

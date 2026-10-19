@@ -492,7 +492,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
   }
 
   /// Cancels the call on [streamId] whose client has gone, unless it was
-  /// already answered. The same `x-client-cancelled` frame the http2 and
+  /// already answered. The same `x-rpc-client-cancelled` frame the http2 and
   /// websocket responders send, so the pipeline tears the call down and the
   /// handler's token fires.
   void _cancelForGonePeer(int streamId, _PendingResponse pending) {

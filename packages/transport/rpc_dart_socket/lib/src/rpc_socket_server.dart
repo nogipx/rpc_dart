@@ -37,7 +37,7 @@ import 'rpc_socket_connect.dart';
 /// one path are not told apart; use one path per process.
 ///
 /// A clean [stop] removes both the socket file and the lock file.
-class RpcSocketServer implements IRpcServer {
+class RpcSocketServer extends IRpcServer {
   /// Creates a server for [address]. Nothing is bound until [start].
   ///
   /// [maxConnections] caps concurrent connections, those still in their

@@ -76,7 +76,8 @@ No error message is a contract: match on the type or the status.
 | `logger:` on the three endpoints, `RpcConnectionHost(endpointLogger:)` | `logController:` |
 | `RpcConnectionLogger` | `LogScope` |
 | `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
-| `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
+| `RpcMessage` | not exported; a transport works with `RpcTransportMessage` |
+| `RpcDirectMultiplexedChannel` | not exported; `RpcChannelTransport.memoryPair()` |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |
 | a hand-written observer of the four `intercept*` methods | `RpcCallObserverInterceptor` |
@@ -114,6 +115,9 @@ their `codec`.
 - **`global` in the rate limiter is a ceiling**, not a fallback.
 - **A request encoding is declared only if a codec for it is registered.**
 - **A peer that repeats the same fault is logged once.**
+- **Every `x-rpc-*` header is reserved** (`RpcHeaders.reservedPrefix`): user
+  metadata under that prefix is dropped when sending. The cancellation notice
+  moved into it, as `x-rpc-client-cancelled` and `x-rpc-cancellation-reason`.
 
 ### New
 

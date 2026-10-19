@@ -162,11 +162,12 @@ Credit-based, per stream and per connection, enforced by `RpcChannelTransport`
 | `grpcStatus` / `grpcMessage` / `grpcStatusDetails` | `grpc-status` / `grpc-message` / `grpc-status-details-bin` | Trailers. |
 | `xTraceId` / `xRequestId` | `x-trace-id` / `x-request-id` | Correlation, from the context. |
 | `xRouteService` | `x-route-service` | Routing through a proxy. |
-| `xClientCancelled` / `xCancellationReason` | `x-client-cancelled` / `x-cancellation-reason` | Reserved. Cancellation notice on transports with no stream reset. |
+| `xClientCancelled` / `xCancellationReason` | `x-rpc-client-cancelled` / `x-rpc-cancellation-reason` | Reserved. Cancellation notice on transports with no stream reset. |
 | `xWindowUpdate` / `xConnWindowUpdate` | `x-rpc-window-update` / `x-rpc-conn-window-update` | Reserved. Flow-control grants. |
 
-`RpcHeaders.reserved` is the set user metadata may not set;
-`RpcHeaders.isReserved(name)` checks it case-insensitively. Reserved keys in a
+User metadata may not set a name in `RpcHeaders.reserved` or one starting with
+`RpcHeaders.reservedPrefix` (`x-rpc-`); `RpcHeaders.isReserved(name)` checks
+both case-insensitively. Reserved keys in a
 context's headers are silently skipped when the call is sent.
 
 ## Pitfalls
