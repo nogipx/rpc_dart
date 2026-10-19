@@ -110,4 +110,44 @@ void main() {
     out.add(List<int>.filled(1 << 20, 0));
     expect(reader.isPaused, isFalse);
   });
+
+  group('reads', () {
+    test('stops pulling from the source while over', () async {
+      final backlog = RpcWriteBacklog(maxUnsentBytes: 10);
+      final source = StreamController<int>();
+      final got = <int>[];
+      final sub = backlog.reads(source.stream).listen(got.add);
+      addTearDown(sub.cancel);
+
+      final out = StreamController<List<int>>(sync: true);
+      unawaited(backlog.pipe(out.stream, _HeldSink()));
+      out.add(List<int>.filled(20, 0));
+
+      source.add(1);
+      await Future<void>.delayed(Duration.zero);
+      expect(got, isEmpty);
+      expect(source.isPaused, isTrue);
+    });
+
+    test('a chunk admit refuses ends the stream and the source', () async {
+      final backlog = RpcWriteBacklog(maxUnsentBytes: null);
+      final source = StreamController<int>();
+      var sourceCancelled = false;
+      source.onCancel = () => sourceCancelled = true;
+      final got = <int>[];
+      final done = Completer<void>();
+      backlog
+          .reads(source.stream, admit: (n) => n < 3)
+          .listen(got.add, onDone: done.complete);
+
+      source
+        ..add(1)
+        ..add(2)
+        ..add(3)
+        ..add(4);
+      await done.future;
+      expect(got, [1, 2]);
+      expect(sourceCancelled, isTrue);
+    });
+  });
 }

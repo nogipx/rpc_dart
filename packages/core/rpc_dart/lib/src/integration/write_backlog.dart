@@ -38,6 +38,39 @@ final class RpcWriteBacklog {
     if (_over) reader.pause();
   }
 
+  /// [incoming] as a stream whose reader is the one this pauses: the form
+  /// for a connection whose bytes go on to someone else's parser.
+  ///
+  /// With [admit], each chunk is passed only if it returns true; on false the
+  /// reader is cancelled and the stream closes.
+  Stream<T> reads<T>(Stream<T> incoming, {bool Function(T data)? admit}) {
+    StreamSubscription<T>? reader;
+    late final StreamController<T> out;
+    out = StreamController<T>(
+      sync: true,
+      onListen: () {
+        attachReader(
+          reader = incoming.listen(
+            (data) {
+              if (admit == null || admit(data)) {
+                out.add(data);
+                return;
+              }
+              unawaited(reader?.cancel());
+              unawaited(out.close());
+            },
+            onError: out.addError,
+            onDone: out.close,
+          ),
+        );
+      },
+      onPause: () => reader?.pause(),
+      onResume: () => reader?.resume(),
+      onCancel: () => reader?.cancel(),
+    );
+    return out.stream;
+  }
+
   /// Writes [source] to [sink] through `addStream`, counting what [sink] has
   /// not taken yet.
   ///
