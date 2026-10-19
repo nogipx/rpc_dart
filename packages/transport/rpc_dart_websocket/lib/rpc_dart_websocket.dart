@@ -12,8 +12,7 @@ library;
 // `grpcStatusFromWebSocketCloseCode` is deliberately NOT re-exported. It is the
 // wire-level mapping this package applies for you — a close code reaches a
 // caller already turned into an `RpcStatusException` — so a user never calls
-// it, and publishing it promises the table. Its sibling in `rpc_dart_http2`,
-// `grpcStatusFromHttpStatus`, is private to that package for the same reason.
+// it, and publishing it promises the table.
 //
 // The package's own code and tests import the file directly.
 // `RpcWebSocketNonBinaryFrame` IS exported: it is what arrives on
