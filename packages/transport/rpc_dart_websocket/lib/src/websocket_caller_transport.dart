@@ -55,16 +55,11 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
     WebSocketChannel channel, {
     super.policy,
     Duration? pingInterval,
-    bool? platformHandlesPing,
+    // For a channel handed in, nobody is known to ping it. `connect()` opened
+    // the socket itself and passes `platformHonoursPingInterval`.
+    bool platformHandlesPing = false,
     super.logger,
-  }) : // Defaults to "nobody is pinging this socket", because for a channel
-       // handed in that is all this constructor can know. `connect()` passes
-       // `platformHonoursPingInterval` explicitly, which is the only place that
-       // constant's premise holds -- it describes `openWebSocket`, and a caller
-       // who built the channel never went through it.
-       _heartbeatInterval = (platformHandlesPing ?? false)
-           ? null
-           : pingInterval,
+  }) : _heartbeatInterval = platformHandlesPing ? null : pingInterval,
        super.fromChannel(
          channel: RpcWebSocketChannel(channel),
          isClient: true,

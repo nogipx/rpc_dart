@@ -288,7 +288,7 @@ class RpcWebSocketServer implements IRpcServer {
 
     try {
       _host.serve(
-        RpcWebSocketResponderTransport(channel, policy: _policy),
+        RpcWebSocketResponderTransport(channel, policy: _policy, logger: _log),
         done: channel.sink.done,
         debugLabel: 'WebSocketEndpoint-$clientLabel',
         onRelease: () => _onConnectionClosed?.call(channel),

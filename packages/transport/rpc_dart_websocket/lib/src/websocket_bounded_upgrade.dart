@@ -191,34 +191,17 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
     RpcWriteBacklog backlog,
   ) {
     final guard = WebSocketFrameGuard(maxMessageBytes);
-    StreamSubscription<Uint8List>? source;
-    late final StreamController<Uint8List> out;
-    out = StreamController<Uint8List>(
-      sync: true,
-      onListen: () {
-        final reader = source = socket.listen(
-          (data) {
-            if (guard.admit(data)) {
-              out.add(data);
-              return;
-            }
-            // Bytes read together with the upgrade request are replayed by
-            // dart:http and keep arriving after destroy(); only cancelling
-            // the subscription stops them.
-            unawaited(source?.cancel());
-            socket.destroy();
-            unawaited(out.close());
-          },
-          onError: out.addError,
-          onDone: out.close,
-        );
-        backlog.attachReader(reader);
+    return backlog.reads(
+      socket,
+      admit: (data) {
+        if (guard.admit(data)) return true;
+        // Bytes read together with the upgrade request are replayed by
+        // dart:http and keep arriving after destroy(); the reads stream
+        // cancels its subscription, which is what stops them.
+        socket.destroy();
+        return false;
       },
-      onPause: () => source?.pause(),
-      onResume: () => source?.resume(),
-      onCancel: () => source?.cancel(),
     );
-    return out.stream;
   }
 
   @override
