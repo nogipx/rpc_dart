@@ -68,15 +68,24 @@ Future<void> _reaches<T extends RpcClientConnectionState>(
   String what,
 ) async {
   if (connection.currentState is T) return;
-  await connection.state
-      .firstWhere((s) => s is T)
-      .timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => fail(
-          '$what: still ${connection.currentState.runtimeType} after 5 s',
-        ),
-      );
+  await _passes<T>(connection, what);
 }
+
+/// Completes when [connection] next enters [T], within 5 s.
+///
+/// Call it BEFORE the action that causes the state: a drop reports Offline
+/// and moves on to Connecting in the same turn, and the state stream does not
+/// replay, so a wait started after the drop never sees it.
+Future<void> _passes<T extends RpcClientConnectionState>(
+  RpcClientConnection connection,
+  String what,
+) => connection.state
+    .firstWhere((s) => s is T)
+    .timeout(
+      const Duration(seconds: 5),
+      onTimeout: () =>
+          fail('$what: still ${connection.currentState.runtimeType} after 5 s'),
+    );
 
 /// Calls until one succeeds, within 5 s.
 Future<void> _eventuallyServes(RpcCallerEndpoint endpoint) async {
@@ -114,25 +123,28 @@ void main() {
             // http has no connection to lose: nothing reports Offline there.
             final dropIsVisible = rig.member is! HttpMember;
             restart = () async {
+              final offline = dropIsVisible
+                  ? _passes<RpcClientOffline>(c, 'server stopped')
+                  : null;
               await rig.stopServer();
               rig.proxy.killAll();
-              if (dropIsVisible) {
-                await _reaches<RpcClientOffline>(c, 'server stopped');
-              }
+              await offline;
               await rig.restartServer();
             };
           case ChannelRig():
             factory = () => rig.connect(policy);
             restart = () async {
+              final offline = _passes<RpcClientOffline>(c, 'server stopped');
               await rig.stopServer();
-              await _reaches<RpcClientOffline>(c, 'server stopped');
+              await offline;
               rig.startServer();
             };
           case IsolateRig():
             factory = () async => (await rig.spawn(policy)).transport;
             restart = () async {
+              final offline = _passes<RpcClientOffline>(c, 'worker exited');
               await rig.killPeer();
-              await _reaches<RpcClientOffline>(c, 'worker exited');
+              await offline;
             };
           default:
             throw UnsupportedError('$rig');
