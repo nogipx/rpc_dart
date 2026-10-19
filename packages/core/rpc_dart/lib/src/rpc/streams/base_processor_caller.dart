@@ -17,6 +17,49 @@ Object _undecodableResponse(Object error) => error is RpcException
         'Response could not be decoded',
       );
 
+/// The opening metadata of a call from this side: the method's base headers,
+/// then [context]'s own headers (never over a reserved one), its trace id,
+/// its request id and the time left to its deadline, then [extra].
+///
+/// A map underneath, so a context header replaces a base one (e.g.
+/// grpc-accept-encoding) rather than repeating it. With no context the call
+/// still gets a request id.
+RpcMetadata callerRequestMetadata(
+  String serviceName,
+  String methodName,
+  RpcContext? context, {
+  Map<String, String> extra = const {},
+}) {
+  final base = RpcMetadata.forClientRequest(serviceName, methodName);
+  final headers = <String, String>{
+    for (final h in base.headers) h.name: h.value,
+  };
+  if (context == null) {
+    headers[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
+  } else {
+    for (final entry in context.headers.entries) {
+      if (RpcHeaders.isReserved(entry.key)) continue;
+      RpcHeaders.checkUserHeader(entry.key, entry.value);
+      headers[entry.key] = entry.value;
+    }
+    final traceId = context.traceId;
+    if (traceId != null) headers[RpcHeaders.xTraceId] = traceId;
+    headers[RpcHeaders.xRequestId] = context.requestId;
+    if (context.deadline != null) {
+      final remaining = context.remainingTime;
+      if (remaining != null) {
+        headers[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
+          remaining,
+        );
+      }
+    }
+  }
+  headers.addAll(extra);
+  return RpcMetadata([
+    for (final e in headers.entries) RpcHeader(e.key, e.value),
+  ], methodPath: base.methodPath);
+}
+
 /// Tells the peer that [streamId] was cancelled, so its handler can stop.
 ///
 /// Prefers a transport-level reset: the metadata fallback rides a frame with
@@ -279,59 +322,10 @@ extension _CallProcessorInternals<
       );
     }
 
-    final baseMetadata = RpcMetadata.forClientRequest(
-      _serviceName,
-      _methodName,
+    await _transport.sendMetadata(
+      _streamId,
+      callerRequestMetadata(_serviceName, _methodName, _context),
     );
-
-    // A map, so context headers override base headers rather than duplicating
-    // them (e.g. grpc-accept-encoding).
-    final headerMap = <String, String>{
-      for (final h in baseMetadata.headers) h.name: h.value,
-    };
-
-    if (_context != null) {
-      // User metadata must not clobber protocol-reserved headers.
-      for (final entry in _context.headers.entries) {
-        if (RpcHeaders.isReserved(entry.key)) continue;
-        RpcHeaders.checkUserHeader(entry.key, entry.value);
-        headerMap[entry.key] = entry.value;
-      }
-
-      if (_context.traceId != null) {
-        headerMap[RpcHeaders.xTraceId] = _context.traceId!;
-      }
-      headerMap[RpcHeaders.xRequestId] = _context.requestId;
-
-      if (_context.deadline != null) {
-        final timeout = _context.remainingTime;
-        if (timeout != null) {
-          headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
-            timeout,
-          );
-        }
-      }
-
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Context headers added: ${_context.headers.length} custom + system '
-          '[streamId: $_streamId]',
-        );
-      }
-    } else {
-      headerMap[RpcHeaders.xRequestId] = RpcContext.empty().requestId;
-
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Added base request-id for null context [streamId: $_streamId]',
-        );
-      }
-    }
-
-    final metadata = RpcMetadata([
-      for (final e in headerMap.entries) RpcHeader(e.key, e.value),
-    ], methodPath: baseMetadata.methodPath);
-    await _transport.sendMetadata(_streamId, metadata);
 
     if (_logger.isInternal) {
       _logger.internal(

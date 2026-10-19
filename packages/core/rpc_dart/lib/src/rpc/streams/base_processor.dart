@@ -45,21 +45,56 @@ Future<void> _frameAndSend(
 RpcSecurityPolicy _policyOf(IRpcTransport transport) =>
     transport.securityPolicy;
 
-/// Builds a parser bounded by [transport]'s policy rather than by
-/// [RpcMessageParser]'s defaults. See [_policyOf].
-RpcMessageParser _policyBoundParser({
+/// Applies the transfer-mode rule and builds the parser a processor reads
+/// with.
+///
+/// Codecs on both sides serialize: the parser is bounded by [transport]'s
+/// policy rather than by [RpcMessageParser]'s defaults (see [_policyOf]) and
+/// decompresses with the encoding [encoding] names when a payload arrives.
+/// No codecs is zero-copy, which has no parser and needs a zero-copy
+/// transport. One codec alone is refused.
+RpcMessageParser? _transferParser({
   required IRpcTransport transport,
   required LogScope logger,
-  required Uint8List Function(Uint8List payload, {int? maxOutputBytes})
-  decompressor,
+  required bool requestCodec,
+  required bool responseCodec,
+  required String? Function() encoding,
 }) {
+  if (!requestCodec && !responseCodec) {
+    if (!transport.supportsZeroCopy) {
+      throw ArgumentError(
+        'Zero-copy mode requires a transport with zero-copy support. '
+        'Provide codecs for network transports.',
+      );
+    }
+    return null;
+  }
+  if (!requestCodec || !responseCodec) {
+    throw ArgumentError(
+      'Codecs are required for serialization mode. '
+      'For zero-copy leave codecs null.',
+    );
+  }
   final policy = _policyOf(transport);
   return RpcMessageParser(
     logger: logger,
     maxMessageLength: policy.maxMessageLengthBytes,
     maxBufferedBytes: policy.effectiveMaxBufferedBytes,
     maxMessagesPerChunk: policy.maxMessagesPerChunk,
-    decompressor: decompressor,
+    decompressor: (payload, {int? maxOutputBytes}) {
+      final name = encoding();
+      if (RpcGrpcCompression.isIdentity(name)) {
+        throw RpcPeerFaultException(
+          RpcStatus.internal,
+          'Compressed gRPC payload received without grpc-encoding',
+        );
+      }
+      return RpcGrpcCompression.decompress(
+        payload,
+        encoding: name!,
+        maxOutputBytes: maxOutputBytes,
+      );
+    },
   );
 }
 
@@ -226,40 +261,14 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
        _context = context,
        _scope = RpcCallScope(context: context),
        _logger = logger?.child('StreamProcessor') ?? LogScope.noop {
-    if (!_isZeroCopy) {
-      if (_requestCodec == null || _responseCodec == null) {
-        throw ArgumentError(
-          'Codecs are required for serialization mode. '
-          'For zero-copy leave codecs null.',
-        );
-      }
-      _parser = _policyBoundParser(
-        transport: transport,
-        logger: _logger,
-        decompressor: (payload, {int? maxOutputBytes}) {
-          final encoding =
-              _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding);
-          if (RpcGrpcCompression.isIdentity(encoding)) {
-            throw RpcPeerFaultException(
-              RpcStatus.internal,
-              'Compressed gRPC payload received without grpc-encoding',
-            );
-          }
-          return RpcGrpcCompression.decompress(
-            payload,
-            encoding: encoding!,
-            maxOutputBytes: maxOutputBytes,
-          );
-        },
-      );
-    } else {
-      if (!transport.supportsZeroCopy) {
-        throw ArgumentError(
-          'Zero-copy mode requires a transport with zero-copy support. '
-          'Provide codecs for network transports.',
-        );
-      }
-    }
+    _parser = _transferParser(
+      transport: transport,
+      logger: _logger,
+      requestCodec: requestCodec != null,
+      responseCodec: responseCodec != null,
+      encoding: () =>
+          _requestEncoding ?? _context?.getHeader(RpcHeaders.grpcEncoding),
+    );
 
     _methodPath = '/$_serviceName/$_methodName';
     _responseEncoding = _pickResponseEncoding(context);
@@ -667,39 +676,13 @@ final class CallProcessor<TRequest extends Object, TResponse extends Object> {
        _scope = RpcCallScope(context: context),
        _logger = logger?.child('CallProcessor') ?? LogScope.noop {
     try {
-      if (!_isZeroCopy) {
-        if (_requestCodec == null || _responseCodec == null) {
-          throw ArgumentError(
-            'Codecs are required for serialization mode. '
-            'For zero-copy leave codecs null.',
-          );
-        }
-        _parser = _policyBoundParser(
-          transport: transport,
-          logger: _logger,
-          decompressor: (payload, {int? maxOutputBytes}) {
-            final encoding = _peerGrpcEncoding;
-            if (RpcGrpcCompression.isIdentity(encoding)) {
-              throw RpcPeerFaultException(
-                RpcStatus.internal,
-                'Compressed gRPC payload received without grpc-encoding',
-              );
-            }
-            return RpcGrpcCompression.decompress(
-              payload,
-              encoding: encoding!,
-              maxOutputBytes: maxOutputBytes,
-            );
-          },
-        );
-      } else {
-        if (!transport.supportsZeroCopy) {
-          throw ArgumentError(
-            'Zero-copy mode requires a transport with zero-copy support. '
-            'Provide codecs for network transports.',
-          );
-        }
-      }
+      _parser = _transferParser(
+        transport: transport,
+        logger: _logger,
+        requestCodec: requestCodec != null,
+        responseCodec: responseCodec != null,
+        encoding: () => _peerGrpcEncoding,
+      );
 
       _methodPath = '/$_serviceName/$_methodName';
 

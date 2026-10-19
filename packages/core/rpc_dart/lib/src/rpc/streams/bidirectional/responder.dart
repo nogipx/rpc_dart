@@ -36,9 +36,6 @@ final class BidirectionalStreamResponder<
   /// hand.
   Stream<TResponse> Function(Stream<TRequest> requests)? _handler;
 
-  /// The bridge over the handler's response stream, closed with the call.
-  StreamBridge<TResponse>? _handlerRelay;
-
   /// Incoming requests from the client; completes when the client closes its side.
   Stream<TRequest> get requests => _processor.requests;
 
@@ -105,32 +102,6 @@ final class BidirectionalStreamResponder<
     }
   }
 
-  /// Forwards [responses], owning the subscription so the relay stops as
-  /// soon as the call ends.
-  ///
-  /// A bare `await for` over the handler's stream keeps an implicit
-  /// subscription that nothing can reach, and [send] returns silently once
-  /// the responder is inactive rather than throwing, so a long-lived handler
-  /// kept producing after the client cancelled. The bridge also hands the
-  /// loop's demand back to the handler: without it the relay is an unbounded
-  /// buffer, since an `async*` handler keeps allocating while a send is in
-  /// flight.
-  Future<void> _relay(Stream<TResponse> responses) async {
-    final relay = StreamBridge<TResponse>(source: responses);
-    _handlerRelay = relay;
-    unawaited(done.whenComplete(relay.close));
-    try {
-      await for (final response in relay.stream) {
-        await send(response);
-        // A response that could not go out ends the call; the handler must
-        // not keep producing behind it. The finish that follows answers it.
-        if (isAnswered) break;
-      }
-    } finally {
-      relay.close();
-    }
-  }
-
   /// Whether the call has had, or is about to have, its last word; see
   /// `StreamProcessor.isAnswered`.
   bool get isAnswered => _processor.isAnswered;
@@ -192,8 +163,5 @@ final class BidirectionalStreamResponder<
     // an `await` never completes its cancellation, and teardown must not hang
     // on it.
     _responsePump?.close();
-    final relay = _handlerRelay;
-    _handlerRelay = null;
-    relay?.close();
   }
 }

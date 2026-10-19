@@ -14,18 +14,6 @@ final class ServerStreamResponder<
   /// Incoming request subscription.
   StreamSubscription<void>? _subscription;
 
-  /// The bridge over the user handler's response stream.
-  ///
-  /// The handler stream used to be consumed with a bare `await for`, whose
-  /// implicit subscription nothing could reach. [close] therefore had no way to
-  /// stop it, and `_processor.send()` returns silently once the processor is
-  /// inactive rather than throwing, so the loop's error `break` never fired
-  /// either. A long-lived handler kept producing forever after the client
-  /// vanished — burning CPU and pinning everything the generator captured, for
-  /// the life of the server process. Owning the subscription lets [close] tear
-  /// it down and end the generator at its next suspension point.
-  StreamBridge<TResponse>? _handlerRelay;
-
   /// True once the request is answered: served, refused or failed.
   bool _requestHandled = false;
 
@@ -224,47 +212,7 @@ final class ServerStreamResponder<
         _logger.internal('Request handler returned a stream [id: $id]');
       }
 
-      // Relay the handler stream through a bridge we own, so close() can
-      // cancel the upstream subscription and end the `await for`. The bridge
-      // is also what passes the loop's demand back: without that the relay is
-      // an unbounded buffer, and an `async*` handler keeps allocating while a
-      // send is in flight.
-      final relay = StreamBridge<TResponse>(source: handlerStream);
-      _handlerRelay = relay;
-
-      int responseCount = 0;
-      await for (var response in relay.stream) {
-        if (!_isActive) break;
-        responseCount++;
-
-        try {
-          await _processor.send(response);
-          if (_logger.isInternal) {
-            _logger.internal(
-              'Response #$responseCount sent to client [id: $id]',
-            );
-          }
-        } catch (e, stackTrace) {
-          _logger.error(
-            'Failed to send response #$responseCount to client [id: $id]',
-            error: e,
-            stackTrace: stackTrace,
-          );
-          // Client disconnected or processor closed — stop iterating to avoid
-          // leaking the handler subscription on broadcast streams.
-          break;
-        }
-        // A response that could not go out ends the call; the handler must
-        // not keep producing behind it. finishSending answers it.
-        if (_processor.isAnswered) break;
-      }
-
-      if (_logger.isInternal) {
-        _logger.internal(
-          'Handler response stream completed, total responses: $responseCount [id: $id]',
-        );
-      }
-
+      await _relay(handlerStream);
       await _processor.finishSending();
       if (_logger.isInternal) {
         _logger.internal('Response sending finished [id: $id]');
@@ -286,13 +234,5 @@ final class ServerStreamResponder<
   @override
   Future<void> _stopHandler() async {
     await _subscription?.cancel();
-
-    // Stop pulling from the user's handler. Cancelling ends its generator at
-    // the next suspension point; closing the relay unblocks the `await for`
-    // that is waiting on it. Neither is awaited: a handler stuck in cancel must
-    // not block teardown of the rest of the call.
-    final relay = _handlerRelay;
-    _handlerRelay = null;
-    relay?.close();
   }
 }

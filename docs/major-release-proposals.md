@@ -268,12 +268,16 @@ Possible once section 1 makes the shape classes internal.
   and `bindToMessageStream`, and the pipeline installs every responder
   through one `_install`. A second `close()` waits for the first.
 - **Pumps**: `SinkPump` gets a failure policy and replaces the two hand-rolled
-  request pumps. One response relay serves server-stream and bidi.
-- **Small copies go with it**:
-  - The codec/zero-copy argument check: once, in the processor. Done
-    (2026-10-19).
-  - The decompressor: built by the policy-bound parser.
-  - One `policyOf` and one client-metadata builder.
+  request pumps. One response relay serves server-stream and bidi. Done
+  (2026-10-19): `onSendFailed` and `logFailures`; the relay is
+  `RpcResponderBase._relay`.
+- **Small copies go with it**. Done (2026-10-19):
+  - The codec/zero-copy argument check: once, in the processor.
+  - The decompressor: built by the policy-bound parser (`_transferParser`).
+  - One `policyOf` and one client-metadata builder (`callerRequestMetadata`,
+    which ping uses too).
+  - Still two branches per shape in the responder pipeline (zero-copy and
+    codecs): they merge with section 5's single registration.
 
 Behaviour changes (all deliberate):
 

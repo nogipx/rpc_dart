@@ -364,38 +364,15 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         );
       }
 
-      final baseMetadata = RpcMetadata.forClientRequest(
+      final metadata = callerRequestMetadata(
         RpcEndpointPingProtocol.serviceName,
         RpcEndpointPingProtocol.methodName,
+        routingContext,
+        extra: {
+          RpcEndpointPingProtocol.requestTimestampHeader: sentAt
+              .toIso8601String(),
+        },
       );
-
-      final headerMap = <String, String>{
-        for (final h in baseMetadata.headers) h.name: h.value,
-      };
-      // User metadata must not clobber protocol-reserved headers.
-      for (final entry in routingContext.headers.entries) {
-        if (RpcHeaders.isReserved(entry.key)) continue;
-        RpcHeaders.checkUserHeader(entry.key, entry.value);
-        headerMap[entry.key] = entry.value;
-      }
-      if (routingContext.traceId != null) {
-        headerMap[RpcHeaders.xTraceId] = routingContext.traceId!;
-      }
-      headerMap[RpcHeaders.xRequestId] = routingContext.requestId;
-      if (routingContext.deadline != null) {
-        final remaining = routingContext.remainingTime;
-        if (remaining != null) {
-          headerMap[RpcHeaders.grpcTimeout] = RpcMetadata.encodeGrpcTimeout(
-            remaining,
-          );
-        }
-      }
-      headerMap[RpcEndpointPingProtocol.requestTimestampHeader] = sentAt
-          .toIso8601String();
-
-      final metadata = RpcMetadata([
-        for (final e in headerMap.entries) RpcHeader(e.key, e.value),
-      ], methodPath: baseMetadata.methodPath);
 
       // The context's deadline bounds the wait LOCALLY too, not only as the
       // `grpc-timeout` header built above. It was pre-checked once and then
