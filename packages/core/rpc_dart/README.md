@@ -474,6 +474,19 @@ It is installed into your agent's skills directory, for example
 
 ---
 
+## Versioning
+
+A minor release may add members to the classes you build on: `IRpcTransport`,
+`IRpcChannel`, `IRpcMultiplexedChannel`, `IRpcCodec`, `IRpcMiddleware`,
+`IRpcInterceptor`, `BackoffPolicy` and the contract base classes. A new member
+comes with a default body, so code that `extends` them keeps compiling. Code
+that `implements` them may have to add the member. Mocks that implement an
+interface are fine in tests; for production code, extend.
+
+The channel transports' wire format carries a version (see
+`RpcChannelFrame.protocolVersion`). Peers of different versions refuse each
+other with `FAILED_PRECONDITION` instead of misreading frames.
+
 ## Ecosystem
 
 This package is the core of the rpc_dart ecosystem. Additional packages are available:
