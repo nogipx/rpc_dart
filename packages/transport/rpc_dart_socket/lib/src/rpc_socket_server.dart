@@ -399,6 +399,7 @@ class RpcSocketServer implements IRpcServer {
           channel: channel,
           isClient: false,
           policy: _policy,
+          logger: _log,
         ),
         // The channel closes on every path -- peer hang-up, read error, local
         // close -- so this is the one place a connection is released.
