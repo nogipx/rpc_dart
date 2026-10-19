@@ -27,7 +27,7 @@ void main() {
     );
     expect(message, contains('Invalid methodPath'));
     expect(message, isNot(matches(_control)));
-    expect(message, contains(r'\u{d}\u{a}FORGED LINE'));
+    expect(message, contains(r'\r\nFORGED LINE'));
   });
 
   test('WITNESS: a header name with a newline is quoted escaped', () {

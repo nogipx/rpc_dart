@@ -49,7 +49,7 @@ void main() {
     final message = await _failureWhenClosedWith('bye\r\nFORGED LINE');
     expect(message, contains('code 4000'));
     expect(message, isNot(matches(RegExp(r'[\x00-\x1f\x7f]'))));
-    expect(message, contains(r'bye\u{d}\u{a}FORGED LINE'));
+    expect(message, contains(r'bye\r\nFORGED LINE'));
   });
 
   test('GUARD: a printable close reason is quoted as it is', () async {

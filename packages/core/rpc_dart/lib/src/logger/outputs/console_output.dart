@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import '../../core/peer_text.dart';
 import '../log_level.dart';
 import '../log_output.dart';
 import '../log_record.dart';
@@ -132,33 +133,17 @@ class ConsoleOutput extends LogOutput {
     }
   }
 
-  /// [text] with control characters escaped, so one record stays one line.
+  /// [text] with every [rpcIsUnsafeCodePoint] escaped, so one record stays one
+  /// line and reads as written; other non-ASCII text is kept.
   ///
   /// A message often quotes a peer: a status message, a close reason, a path.
   /// Printed raw, a CR/LF in it starts a forged record of the peer's choosing,
-  /// and an ESC sequence acts on the terminal.
+  /// an ESC sequence acts on the terminal, and a bidi control reorders what
+  /// the operator sees.
   ///
   /// Public for any renderer of records that came from elsewhere, such as a
   /// remote log collector.
-  static String escapeLine(String text) {
-    if (!text.codeUnits.any(_isControl)) return text;
-    final out = StringBuffer();
-    for (final unit in text.codeUnits) {
-      if (!_isControl(unit)) {
-        out.writeCharCode(unit);
-      } else if (unit == 0x0a) {
-        out.write(r'\n');
-      } else if (unit == 0x0d) {
-        out.write(r'\r');
-      } else {
-        out.write('\\u{${unit.toRadixString(16)}}');
-      }
-    }
-    return out.toString();
-  }
-
-  static bool _isControl(int unit) =>
-      (unit < 0x20 && unit != 0x09) || unit == 0x7f;
+  static String escapeLine(String text) => rpcPeerText(text, asciiOnly: false);
 
   void _writeJson(LogRecord record) {
     switch (record) {

@@ -122,10 +122,12 @@ Future<RpcString> echo(RpcString request, {RpcContext? context}) async {
 
 - `ConsoleOutput({colored = true, format = ConsoleFormat.pretty, scopeFilter})`;
   formats `pretty`, `json`, `compact`. Uses `print`. One record is one line:
-  control characters in the message, error and data (a peer's status message
-  or close reason can carry CR/LF or an ESC sequence) are printed escaped, and
-  `json` escapes every one, so each line parses. A custom `LogOutput` that
-  writes text has to do the same.
+  control characters, bidi controls and U+2028/U+2029 in the message, error
+  and data (a peer's status message or close reason can carry CR/LF or an ESC
+  sequence) are printed escaped, a backslash doubled, other non-ASCII text
+  kept; `json` escapes every control character, so each line parses. A custom
+  `LogOutput` that writes text does the same with
+  `ConsoleOutput.escapeLine(text)`.
 - `RingBufferOutput({maxEntries = 1000, scopeFilter})`; read with `entries`,
   `query(LogFilter(...), limit:)`, `length`, `clear()`. Use it in tests and for
   an in-app log viewer.
