@@ -29,6 +29,21 @@ void main() {
       final decompressed = codec.decompress(compressed);
       expect(decompressed, isEmpty);
     });
+
+    test('anything shorter than the empty frame is too short', () {
+      final empty = codec.compress(Uint8List(0));
+      expect(empty.length, 20);
+      expect(
+        () => codec.decompress(Uint8List.sublistView(empty, 0, 19)),
+        throwsA(
+          isA<FormatException>().having(
+            (e) => e.message,
+            'message',
+            contains('too short'),
+          ),
+        ),
+      );
+    });
   });
 
   group('RpcGzipCodec.level', () {

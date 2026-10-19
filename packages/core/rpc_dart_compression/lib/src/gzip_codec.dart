@@ -240,8 +240,9 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// gzip header (RFC 1952): byte 0 = 0x1f, byte 1 = 0x8b, byte 2 = CM (8 =
   /// DEFLATE, the only method gzip defines).
   static void _validateGzipHeader(Uint8List data) {
-    if (data.length < 18) {
-      // Minimum valid gzip: 10-byte header + 8-byte trailer.
+    if (data.length < 20) {
+      // Minimum valid gzip: 10-byte header, the 2-byte empty deflate stream
+      // and the 8-byte trailer.
       throw const FormatException('Invalid gzip data: too short');
     }
     if (data[0] != 0x1f || data[1] != 0x8b) {
