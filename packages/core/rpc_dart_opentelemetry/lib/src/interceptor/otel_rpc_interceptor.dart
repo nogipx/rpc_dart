@@ -76,7 +76,6 @@ class OtelRpcInterceptor extends OtelRpcInterceptorBase {
     );
 
     final updatedContext = call.context.withValue(OtelRpcKeys.span, span);
-    call.updateContext(updatedContext);
 
     // Make the span the active ambient OTel context for the downstream call,
     // so spans/log-spans created inside the handler nest under the RPC span.

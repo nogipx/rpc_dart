@@ -55,7 +55,6 @@ class OtelRpcClientInterceptor extends OtelRpcInterceptorBase {
       call.context,
       context: otelContext,
     );
-    call.updateContext(injected);
     return (span, injected, otelContext);
   }
 }

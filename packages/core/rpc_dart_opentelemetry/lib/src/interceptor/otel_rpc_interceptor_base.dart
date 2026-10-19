@@ -13,7 +13,13 @@ import '../metrics/rpc_status_names.dart';
 
 /// One observed call: its span and what the span ends with.
 final class OtelRpcCall {
-  OtelRpcCall._(this.call, this.type, this.span, this.otelContext);
+  OtelRpcCall._(
+    this.call,
+    this.type,
+    this.span,
+    this.context,
+    this.otelContext,
+  );
 
   /// The call.
   final RpcMiddlewareContext call;
@@ -23,6 +29,9 @@ final class OtelRpcCall {
 
   /// The call's span.
   final Span span;
+
+  /// The context the rest of the chain runs with.
+  final RpcContext context;
 
   /// The ambient OTel context the rest of the chain runs in.
   final Context otelContext;
@@ -79,9 +88,11 @@ abstract class OtelRpcInterceptorBase
   @override
   OtelRpcCall onCallStart(RpcMiddlewareContext call, RpcMethodType type) {
     final (span, context, otelContext) = startSpan(call, type);
-    call.updateContext(context);
-    return OtelRpcCall._(call, type, span, otelContext);
+    return OtelRpcCall._(call, type, span, context, otelContext);
   }
+
+  @override
+  RpcContext contextFor(OtelRpcCall state, RpcContext context) => state.context;
 
   @override
   Future<T> runCall<T>(OtelRpcCall state, Future<T> Function() body) =>
