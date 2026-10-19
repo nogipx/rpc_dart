@@ -567,7 +567,9 @@ void main() {
         );
 
         // Act
-        final sut = RpcContextUtils.withBasicAuth(username, password);
+        final sut = RpcContextBuilder()
+            .withBasicAuth(username, password)
+            .build();
 
         // Assert
         expect(
@@ -581,7 +583,7 @@ void main() {
         const token = 'abc123def456';
 
         // Act
-        final sut = RpcContextUtils.withBearerToken(token);
+        final sut = RpcContextBuilder().withBearerAuth(token).build();
 
         // Assert
         expect(sut.getHeader('authorization'), equals('Bearer $token'));
@@ -592,7 +594,7 @@ void main() {
         const key = 'api-key-12345';
 
         // Act
-        final sut = RpcContextUtils.withApiKey(key);
+        final sut = RpcContextBuilder().withApiKey(key).build();
 
         // Assert
         expect(sut.getHeader('x-api-key'), equals(key));
@@ -604,7 +606,9 @@ void main() {
         const headerName = 'custom-auth-header';
 
         // Act
-        final sut = RpcContextUtils.withApiKey(key, headerName: headerName);
+        final sut = RpcContextBuilder()
+            .withApiKey(key, headerName: headerName)
+            .build();
 
         // Assert
         expect(sut.getHeader(headerName), equals(key));

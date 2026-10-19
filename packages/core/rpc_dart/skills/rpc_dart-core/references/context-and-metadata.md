@@ -73,9 +73,9 @@ earlier: a derived context can shorten the deadline, never extend it.
 `ctx.forward({headers, timeout})` is the same with `authorization`, `x-api-key`
 and `cookie` dropped: the context for a downstream call.
 
-`RpcContextUtils`: `withBearerToken`, `withBasicAuth`, `withApiKey`,
-`withTracing({traceId, spanId, parentSpanId})`, `generateTraceId()`,
-`traceIdFor(requestId)`, `merge(left, right)` (on conflict, `right` wins).
+`RpcContextUtils`: `withTracing({traceId, spanId, parentSpanId})`,
+`generateTraceId()`, `traceIdFor(requestId)`, `merge(left, right)` (on
+conflict, `right` wins). Credentials are set through `RpcContextBuilder`.
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';

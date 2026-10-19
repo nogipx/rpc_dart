@@ -37,9 +37,11 @@ class UnaryRpcExample {
       print('CLIENT: response: "$response1"');
       // 2: a call carrying a context.
       print('\n--- 2: a call with a context ---');
-      final context2 = RpcContextUtils.withBearerToken('secret-token-123')
-          .withAdditionalHeaders({'user-id': 'user-456'})
-          .withTraceId('trace-${DateTime.now().millisecondsSinceEpoch}');
+      final context2 = RpcContextBuilder()
+          .withBearerAuth('secret-token-123')
+          .withHeader('user-id', 'user-456')
+          .withTraceId('trace-${DateTime.now().millisecondsSinceEpoch}')
+          .build();
       final response2 = await client.getCurrentTime(
         'Time'.rpc,
         context: context2,

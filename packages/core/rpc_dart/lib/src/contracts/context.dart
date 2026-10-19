@@ -95,117 +95,66 @@ final class RpcContext {
   ///
   /// Existing headers merge FIRST, so an over-cap addition is dropped rather
   /// than displacing a header already in the context.
-  RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) {
-    final merged = Map<String, String>.from(_headers)
-      ..addAll(additionalHeaders);
-
-    return RpcContext._(
-      headers: _sanitizeHeaders(merged),
-      deadline: deadline,
-      cancellationToken: cancellationToken,
-      traceId: traceId,
-      requestId: requestId,
-      log: log,
-      values: _values,
-      clock: clock,
-    );
-  }
+  RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) =>
+      _copy(
+        headers: _sanitizeHeaders(
+          Map<String, String>.from(_headers)..addAll(additionalHeaders),
+        ),
+      );
 
   /// Creates a copy of the context with a new deadline.
-  RpcContext withDeadline(DateTime newDeadline) => RpcContext._(
-    headers: _headers,
-    deadline: newDeadline,
-    cancellationToken: cancellationToken,
-    traceId: traceId,
-    requestId: requestId,
-    log: log,
-    values: _values,
-    clock: clock,
-  );
+  RpcContext withDeadline(DateTime newDeadline) => _copy(deadline: newDeadline);
 
   /// Creates a copy of the context with a new timeout.
   RpcContext withTimeout(Duration timeout) =>
       withDeadline(clock().add(timeout));
 
   /// Creates a copy of the context with a cancellation token.
-  RpcContext withCancellation(RpcCancellationToken token) => RpcContext._(
-    headers: _headers,
-    deadline: deadline,
-    cancellationToken: token,
-    traceId: traceId,
-    requestId: requestId,
-    log: log,
-    values: _values,
-    clock: clock,
-  );
+  RpcContext withCancellation(RpcCancellationToken token) =>
+      _copy(cancellationToken: token);
 
   /// Creates a copy of the context with a trace ID.
-  RpcContext withTraceId(String newTraceId) => RpcContext._(
-    headers: _headers,
-    deadline: deadline,
-    cancellationToken: cancellationToken,
-    traceId: newTraceId,
-    requestId: requestId,
-    log: log,
-    values: _values,
-    clock: clock,
-  );
+  RpcContext withTraceId(String newTraceId) => _copy(traceId: newTraceId);
 
   /// Creates a copy carrying [newRequestId].
   ///
   /// The mirror of [withTraceId], and it exists for the same reason: a
   /// responder adopts the id the caller sent so both sides' logs name the same
   /// call.
-  RpcContext withRequestId(String newRequestId) => RpcContext._(
-    headers: _headers,
-    deadline: deadline,
-    cancellationToken: cancellationToken,
-    traceId: traceId,
-    requestId: newRequestId,
-    log: log,
-    values: _values,
-    clock: clock,
-  );
+  RpcContext withRequestId(String newRequestId) =>
+      _copy(requestId: newRequestId);
 
   /// Creates a copy of the context with an additional value.
-  RpcContext withValue(Object key, Object value) {
-    final newValues = Map<Object, Object>.from(_values);
-    newValues[key] = value;
-
-    return RpcContext._(
-      headers: _headers,
-      deadline: deadline,
-      cancellationToken: cancellationToken,
-      traceId: traceId,
-      requestId: requestId,
-      log: log,
-      values: newValues,
-      clock: clock,
-    );
-  }
+  RpcContext withValue(Object key, Object value) =>
+      _copy(values: Map<Object, Object>.from(_values)..[key] = value);
 
   /// Creates a copy of the context with the given logger.
-  RpcContext withLog(LogScope log) => RpcContext._(
-    headers: _headers,
-    deadline: deadline,
-    cancellationToken: cancellationToken,
-    traceId: traceId,
-    requestId: requestId,
-    log: log,
-    values: _values,
-    clock: clock,
-  );
+  RpcContext withLog(LogScope log) => _copy(log: log);
 
   /// Creates a copy of the context with a custom [clock] (mainly for tests).
-  RpcContext withClock(DateTime Function() clock) => RpcContext._(
-    headers: _headers,
-    deadline: deadline,
-    cancellationToken: cancellationToken,
-    traceId: traceId,
-    requestId: requestId,
-    log: log,
-    values: _values,
-    clock: clock,
+  RpcContext withClock(DateTime Function() clock) => _copy(clock: clock);
+
+  /// This context with the given fields replaced and the rest kept.
+  /// [newRequestId] mints a fresh request id instead of keeping this one.
+  RpcContext _copy({
+    Map<String, String>? headers,
+    DateTime? deadline,
+    RpcCancellationToken? cancellationToken,
+    String? traceId,
+    String? requestId,
+    bool newRequestId = false,
+    LogScope? log,
+    Map<Object, Object>? values,
+    DateTime Function()? clock,
+  }) => RpcContext._(
+    headers: headers ?? _headers,
+    deadline: deadline ?? this.deadline,
+    cancellationToken: cancellationToken ?? this.cancellationToken,
+    traceId: traceId ?? this.traceId,
+    requestId: newRequestId ? null : (requestId ?? this.requestId),
+    log: log ?? this.log,
+    values: values ?? _values,
+    clock: clock ?? this.clock,
   );
 
   /// Returns the value of a header.
@@ -520,22 +469,9 @@ final class RpcDeadlineExceededException extends RpcStatusException {
   String toString() => 'RpcDeadlineExceededException: $message';
 }
 
-/// Utilities for working with the context.
+/// Utilities for working with the context. Credentials are set through
+/// [RpcContextBuilder].
 abstract final class RpcContextUtils {
-  /// Creates a context with basic authentication.
-  static RpcContext withBasicAuth(String username, String password) {
-    final credentials = base64Encode(utf8.encode('$username:$password'));
-    return RpcContext.withHeaders({'authorization': 'Basic $credentials'});
-  }
-
-  /// Creates a context with a Bearer token.
-  static RpcContext withBearerToken(String token) =>
-      RpcContext.withHeaders({'authorization': 'Bearer $token'});
-
-  /// Creates a context with an API key.
-  static RpcContext withApiKey(String key, {String headerName = 'x-api-key'}) =>
-      RpcContext.withHeaders({headerName: key});
-
   /// Creates a context for tracing.
   ///
   /// ONE token for both ids. A call that starts its own trace holds exactly one
@@ -581,23 +517,16 @@ abstract final class RpcContextUtils {
 
   /// Merges several contexts (the right one takes precedence).
   static RpcContext merge(RpcContext left, RpcContext right) {
-    final mergedHeaders = Map<String, String>.from(left._headers);
-    mergedHeaders.addAll(right._headers);
-
-    final mergedValues = Map<Object, Object>.from(left._values);
-    mergedValues.addAll(right._values);
-
-    return RpcContext._(
+    return right._copy(
       // Re-cap the union: both sides are individually within the header count
       // and byte budgets, but their merge is not bounded by either.
-      headers: RpcContext._sanitizeHeaders(mergedHeaders),
+      headers: RpcContext._sanitizeHeaders(
+        Map<String, String>.from(left._headers)..addAll(right._headers),
+      ),
       deadline: right.deadline ?? left.deadline,
       cancellationToken: right.cancellationToken ?? left.cancellationToken,
       traceId: right.traceId ?? left.traceId,
-      requestId: right.requestId,
-      log: right.log,
-      values: mergedValues,
-      clock: right.clock,
+      values: Map<Object, Object>.from(left._values)..addAll(right._values),
     );
   }
 }
@@ -668,16 +597,7 @@ class RpcContextBuilder {
 
   /// Generates a new request ID (for chained calls).
   RpcContextBuilder withGeneratedRequestId() {
-    _context = RpcContext._(
-      headers: _context._headers,
-      deadline: _context.deadline,
-      cancellationToken: _context.cancellationToken,
-      traceId: _context.traceId,
-      requestId: null,
-      log: _context.log,
-      values: _context._values,
-      clock: _context.clock,
-    );
+    _context = _context._copy(newRequestId: true);
     return this;
   }
 
@@ -764,17 +684,10 @@ extension RpcContextExtensions on RpcContext {
   /// (`authorization`, `x-api-key`, `cookie`) do not.
   RpcContext forward({Map<String, String>? headers, Duration? timeout}) {
     final child = createChildWith(headers: headers, timeout: timeout);
-    return RpcContext._(
+    return child._copy(
       headers: Map.of(
         child._headers,
       )..removeWhere((name, _) => RpcContext._credentialHeaders.contains(name)),
-      deadline: child.deadline,
-      cancellationToken: child.cancellationToken,
-      traceId: child.traceId,
-      requestId: child.requestId,
-      log: child.log,
-      values: child._values,
-      clock: child.clock,
     );
   }
 }

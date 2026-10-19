@@ -379,11 +379,18 @@ Closes C7, C8, C9, P12.
   - The `IRpcSerializable` bound and `_OpaqueValue` / `_OpaqueCodec` go.
   - `methods` and `zeroCopyMethods` become one read-only `registrations` view,
     or are hidden.
+  - Done (2026-10-19): `registrations`; the endpoint's binding holds the one
+    registration, `registeredMethods` exports them as registered (no dummy
+    codecs for zero-copy), and the responder pipeline has one branch per
+    shape. `RpcResponderMethodBinding` no longer throws for "neither
+    variant": the type has one required registration.
 - **Caller and peer contracts** share one private set of four `call*`
-  implementations over the caller-pipeline mixin.
+  implementations over the caller-pipeline mixin. Done in step 4
+  (`_RpcOutgoingCalls`).
 - **`RpcContext`** gets one private `_copy({...})`. Every `with*`, `merge`,
   `forward` and builder method calls it. The auth helpers live in one place
-  (keep `RpcContextBuilder`'s, drop `RpcContextUtils`' copies).
+  (keep `RpcContextBuilder`'s, drop `RpcContextUtils`' copies). Done
+  (2026-10-19).
 - **Call tracking** (`cancelMethod`, `trackedMethods`) moves to the caller
   mixin, so `RpcPeerEndpoint` has it too (C21).
 - **One enum for the four shapes**: `@RpcMethod` takes `RpcMethodType`;

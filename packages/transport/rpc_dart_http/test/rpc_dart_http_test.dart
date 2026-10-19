@@ -268,9 +268,10 @@ void main() {
     });
 
     test('context_headers_arrive_on_server', () async {
-      final context = RpcContextUtils.withBearerToken(
-        'test-token',
-      ).withAdditionalHeaders({'x-tenant-id': 'tenant-42'});
+      final context = RpcContextBuilder()
+          .withBearerAuth('test-token')
+          .withHeader('x-tenant-id', 'tenant-42')
+          .build();
 
       final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
         serviceName: 'Echo',

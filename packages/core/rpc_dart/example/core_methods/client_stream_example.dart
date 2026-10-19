@@ -62,7 +62,9 @@ class ClientStreamingExample {
       print('CLIENT: aggregate: "${result1.value}"');
       // 2: aggregating with authentication.
       print('\n--- 2: aggregating with authentication ---');
-      final authContext = RpcContextUtils.withBearerToken('aggregate-token-456')
+      final authContext = RpcContextBuilder()
+          .withBearerAuth('aggregate-token-456')
+          .build()
           .withAdditionalHeaders({
             'client-version': '1.4.0',
             'aggregation-format': 'structured',

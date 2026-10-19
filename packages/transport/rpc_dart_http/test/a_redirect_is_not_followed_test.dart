@@ -57,9 +57,10 @@ Future<({List<String> seen, Object? error})> _redirectedBy(int status) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      context: RpcContextUtils.withApiKey(
-        'secret',
-      ).withTimeout(const Duration(seconds: 3)),
+      context: RpcContextBuilder()
+          .withApiKey('secret')
+          .withTimeout(const Duration(seconds: 3))
+          .build(),
     );
   } catch (e) {
     error = e;

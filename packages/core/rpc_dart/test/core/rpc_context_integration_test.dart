@@ -37,7 +37,9 @@ void main() {
         serverEndpoint.registerServiceContract(testService);
         serverEndpoint.start();
 
-        final context = RpcContextUtils.withBearerToken('test-token-123');
+        final context = RpcContextBuilder()
+            .withBearerAuth('test-token-123')
+            .build();
 
         // Act
         final response = await clientEndpoint
@@ -91,7 +93,9 @@ void main() {
         serverEndpoint.registerServiceContract(combinedService);
         serverEndpoint.start();
 
-        final authContext = RpcContextUtils.withBearerToken('auth-token');
+        final authContext = RpcContextBuilder()
+            .withBearerAuth('auth-token')
+            .build();
         final tracingContext = RpcContextUtils.withTracing(
           traceId: 'combined-trace',
         );
@@ -238,7 +242,9 @@ void main() {
         serverEndpoint.registerServiceContract(aggregationService);
         serverEndpoint.start();
 
-        final context = RpcContextUtils.withBearerToken('client-stream-token')
+        final context = RpcContextBuilder()
+            .withBearerAuth('client-stream-token')
+            .build()
             .withAdditionalHeaders({
               'aggregation-type': 'authenticated',
               'user-id': 'auth-user-789',
@@ -336,7 +342,9 @@ void main() {
         serverEndpoint.registerServiceContract(echoService);
         serverEndpoint.start();
 
-        final context = RpcContextUtils.withBearerToken('bidi-token')
+        final context = RpcContextBuilder()
+            .withBearerAuth('bidi-token')
+            .build()
             .withTraceId('bidi-trace-123')
             .withAdditionalHeaders({
               'echo-prefix': 'SECURE:',
@@ -388,7 +396,9 @@ void main() {
         serverEndpoint.start();
 
         final callerContract = _TestServiceCallerContract(clientEndpoint);
-        final context = RpcContextUtils.withBearerToken('contract-token');
+        final context = RpcContextBuilder()
+            .withBearerAuth('contract-token')
+            .build();
 
         // Act
         final response = await callerContract.getUserData(

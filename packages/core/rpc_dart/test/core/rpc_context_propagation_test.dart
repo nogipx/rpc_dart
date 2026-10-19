@@ -165,7 +165,7 @@ void main() {
 
   group('RpcContextUtils', () {
     test('creates context with Basic auth', () {
-      final context = RpcContextUtils.withBasicAuth('user', 'pass');
+      final context = RpcContextBuilder().withBasicAuth('user', 'pass').build();
       final authHeader = context.getHeader('authorization');
 
       expect(authHeader, isNotNull);
@@ -175,7 +175,7 @@ void main() {
 
     test('creates context with Bearer token', () {
       final token = 'abc123token';
-      final context = RpcContextUtils.withBearerToken(token);
+      final context = RpcContextBuilder().withBearerAuth(token).build();
       final authHeader = context.getHeader('authorization');
 
       expect(authHeader, equals('Bearer $token'));
@@ -183,7 +183,7 @@ void main() {
 
     test('creates context with API key', () {
       final apiKey = 'secret-key-123';
-      final context = RpcContextUtils.withApiKey(apiKey);
+      final context = RpcContextBuilder().withApiKey(apiKey).build();
 
       expect(context.getHeader('x-api-key'), equals(apiKey));
     });
@@ -191,10 +191,9 @@ void main() {
     test('creates context with custom API key header', () {
       final apiKey = 'secret-key-123';
       final headerName = 'x-custom-key';
-      final context = RpcContextUtils.withApiKey(
-        apiKey,
-        headerName: headerName,
-      );
+      final context = RpcContextBuilder()
+          .withApiKey(apiKey, headerName: headerName)
+          .build();
 
       expect(context.getHeader(headerName), equals(apiKey));
       expect(context.getHeader('x-api-key'), isNull);
