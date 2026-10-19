@@ -20,6 +20,10 @@ class RpcHttp2Server implements IRpcServer {
   final int _port;
   final RpcSecurityPolicy _securityPolicy;
   final SecurityContext? _securityContext;
+
+  /// Set once a connection that never sent its preface has been reported.
+  bool _warnedSilentPeer = false;
+
   final LogScope _log;
   final RpcConnectionHost _connectionHost;
   final void Function(Object error, StackTrace? stackTrace)? _onConnectionError;
@@ -609,10 +613,14 @@ class RpcHttp2Server implements IRpcServer {
       if (deadline != null) {
         prefaceDeadline = Timer(deadline, () {
           prefaceDeadline = null;
-          _log.warning(
-            'Dropping $clientAddress: no HTTP/2 connection preface within '
-            '${deadline.inSeconds}s',
-          );
+          // Any scanner can open sockets that say nothing: warned once.
+          if (!_warnedSilentPeer) {
+            _warnedSilentPeer = true;
+            _log.warning(
+              'Dropping $clientAddress: no HTTP/2 connection preface within '
+              '${deadline.inSeconds}s',
+            );
+          }
           _connectionHost.release(endpoint);
           socket.destroy();
         });
