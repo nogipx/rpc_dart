@@ -85,7 +85,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
   final Map<int, _PendingResponse> _pending = {};
   final RpcStreamIdManager _idManager = RpcStreamIdManager(isClient: false);
   bool _isClosed = false;
-  final LogScope? _logger;
+  final LogScope _log;
 
   /// Rejection kinds already reported. Any client chooses how many requests
   /// it sends, a scanner or a cross-origin preflight included, so each kind is
@@ -94,7 +94,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
   final Set<_Rejection> _reported = {};
 
   void _warnRejected(_Rejection kind, String message) {
-    if (_reported.add(kind)) _logger?.warning(message);
+    if (_reported.add(kind)) _log.warning(message);
   }
 
   /// The one policy for this transport: its own checks (concurrent requests,
@@ -163,7 +163,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
     this.corsPolicy,
     this.bodyReadTimeout,
     this.bodyIdleTimeout = const Duration(seconds: 30),
-  }) : _logger = logger?.child('HttpResponderTransport');
+  }) : _log = logger?.child('HttpResponderTransport') ?? LogScope.noop;
 
   /// shelf [Handler] to mount on a shelf server or router.
   Handler get handler => _handleRequest;
@@ -220,7 +220,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
         // NOT silent. Every other failure here is the peer's doing; this one is
         // ours -- it can only mean the body was already read, so the caller wanted
         // `drainBody: false`.
-        _logger?.warning('Rejection drain skipped: ${e.message}');
+        _log.warning('Rejection drain skipped: ${e.message}');
       } catch (_) {
         // The peer may have gone already, or spent its budget; the status below
         // is still worth trying.
@@ -321,10 +321,8 @@ class RpcHttpResponderTransport extends IRpcTransport {
     final pending = _PendingResponse(request);
     _pending[streamId] = pending;
 
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal(
-        'Incoming HTTP request $methodPath [streamId: $streamId]',
-      );
+    if (_log.isInternal) {
+      _log.internal('Incoming HTTP request $methodPath [streamId: $streamId]');
     }
 
     try {
@@ -481,7 +479,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
     } catch (e, st) {
       _pending.remove(streamId);
       _idManager.releaseId(streamId);
-      _logger?.error(
+      _log.error(
         'Failed to read request [streamId: $streamId]: $e',
         error: e,
         stackTrace: st,
@@ -559,7 +557,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
     // On every ORDINARY ending `_flushResponse` has already removed the entry,
     // so this cannot answer twice.
     if (pending != null && !pending.completer.isCompleted) {
-      _logger?.warning(
+      _log.warning(
         'Stream $streamId was released before it answered; closing the HTTP '
         'request with CANCELLED.',
       );
@@ -587,7 +585,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
     if (_isClosed) return;
     final pending = _pending[streamId];
     if (pending == null) {
-      _logger?.warning(
+      _log.warning(
         'sendMetadata: no pending response for [streamId: $streamId]',
       );
       return;
@@ -610,7 +608,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
     if (_isClosed) return;
     final pending = _pending[streamId];
     if (pending == null) {
-      _logger?.warning(
+      _log.warning(
         'sendMessage: no pending response for [streamId: $streamId]',
       );
       return;
@@ -646,7 +644,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
   void _answerOversizedResponse(int streamId, _PendingResponse pending) {
     pending.answered = true;
     pending.bodyBuffer.clear();
-    _logger?.warning(
+    _log.warning(
       'Response for [streamId: $streamId] exceeded '
       '${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes} bytes and was ended early. '
       'HTTP/1.1 buffers a whole server stream before sending it.',
@@ -688,8 +686,8 @@ class RpcHttpResponderTransport extends IRpcTransport {
     // handler's remaining sends had somewhere quiet to land.
     if (pending.answered) return;
 
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal('Flushing HTTP response [streamId: $streamId]');
+    if (_log.isInternal) {
+      _log.internal('Flushing HTTP response [streamId: $streamId]');
     }
     _completeResponse(streamId, pending);
   }

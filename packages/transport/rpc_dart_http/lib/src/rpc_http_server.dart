@@ -66,7 +66,7 @@ class RpcHttpServer implements IRpcServer {
   final Duration? _headerTimeout;
   final int? _maxConnections;
   final RpcResponderMode _mode;
-  final LogScope? _logger;
+  final LogScope _log;
   final LogController? _logController;
 
   RpcHttpResponderTransport? _transport;
@@ -98,7 +98,7 @@ class RpcHttpServer implements IRpcServer {
     }
     if (!_warnedUnparseable) {
       _warnedUnparseable = true;
-      _logger?.warning(
+      _log.warning(
         'Refused a request whose target is not a valid URL (answered 400); '
         'further ones are not logged',
       );
@@ -158,7 +158,7 @@ class RpcHttpServer implements IRpcServer {
        _maxConnections = maxConnections,
        _mode = mode,
        _logController = logController,
-       _logger = logger?.child('HttpServer');
+       _log = logger?.child('HttpServer') ?? LogScope.noop;
 
   @override
   bool get isRunning => _isRunning;
@@ -190,7 +190,7 @@ class RpcHttpServer implements IRpcServer {
     final stopping = _stopping;
     if (stopping != null) await stopping;
     if (_transport != null) {
-      _logger?.warning('start() called again; the server is already set up');
+      _log.warning('start() called again; the server is already set up');
       return;
     }
     _transport = RpcHttpResponderTransport(
@@ -198,9 +198,9 @@ class RpcHttpServer implements IRpcServer {
       securityPolicy: _securityPolicy,
       bodyReadTimeout: _bodyReadTimeout,
       bodyIdleTimeout: _bodyIdleTimeout,
-      logger: _logger,
+      logger: _log,
     );
-    _logger?.debug(
+    _log.debug(
       'Transport created — port binding deferred to afterModulesStart',
     );
   }
@@ -232,7 +232,7 @@ class RpcHttpServer implements IRpcServer {
     // claim is released in the bind's catch, because the documented response to
     // "address in use" is to call this again.
     if (_httpServer != null || _binding) {
-      _logger?.warning(
+      _log.warning(
         'afterModulesStart() called again; already '
         '${_httpServer != null ? 'listening on http://$_host:${_httpServer!.port}' : 'binding'}',
       );
@@ -342,7 +342,7 @@ class RpcHttpServer implements IRpcServer {
       try {
         await endpoint.close();
       } catch (e) {
-        _logger?.warning('Error closing endpoint after a failed bind: $e');
+        _log.warning('Error closing endpoint after a failed bind: $e');
       }
       // Put the server back exactly where start() left it, so the ordinary
       // response to "address in use" -- wait, call afterModulesStart() again --
@@ -355,14 +355,14 @@ class RpcHttpServer implements IRpcServer {
         securityPolicy: _securityPolicy,
         bodyReadTimeout: _bodyReadTimeout,
         bodyIdleTimeout: _bodyIdleTimeout,
-        logger: _logger,
+        logger: _log,
       );
       // Released with the rest: the documented recovery is to call this again.
       _binding = false;
       rethrow;
     }
     _isRunning = true;
-    _logger?.info('Listening on http://$_host:${_httpServer!.port}');
+    _log.info('Listening on http://$_host:${_httpServer!.port}');
   }
 
   /// Waits, up to [budget], for the transport to finish its pending requests.
@@ -380,7 +380,7 @@ class RpcHttpServer implements IRpcServer {
     return drainUntilIdle(
       pending: () => transport.pendingRequests,
       budget: budget,
-      logger: _logger,
+      logger: _log,
       unit: 'request',
     );
   }
@@ -480,12 +480,12 @@ class RpcHttpServer implements IRpcServer {
         await sockets?.close();
       }
     } catch (e) {
-      _logger?.warning('Error closing the HTTP server: $e');
+      _log.warning('Error closing the HTTP server: $e');
     }
     try {
       await endpoint?.close();
     } catch (e) {
-      _logger?.warning('Error closing endpoint: $e');
+      _log.warning('Error closing endpoint: $e');
     }
     // Closing the endpoint closes the transport it was given; this covers the
     // case where start() ran and afterModulesStart() never did, so there is a
@@ -493,8 +493,8 @@ class RpcHttpServer implements IRpcServer {
     try {
       await transport?.close();
     } catch (e) {
-      _logger?.warning('Error closing transport: $e');
+      _log.warning('Error closing transport: $e');
     }
-    _logger?.debug('Stopped');
+    _log.debug('Stopped');
   }
 }
