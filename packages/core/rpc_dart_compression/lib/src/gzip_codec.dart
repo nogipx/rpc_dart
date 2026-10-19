@@ -26,7 +26,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// (`0` = store/no compression, `1` = fastest, `9` = smallest output).
   ///
   /// Defaults to `6`, matching the archive package default
-  /// ([defaultLevel]); existing callers see unchanged behaviour.
+  /// ([defaultLevel]).
   final int level;
 
   /// Maximum allowed decompressed size in bytes. Decompression throws a
@@ -47,10 +47,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// Wasm have no incremental inflater — `package:archive` materialises the
   /// whole output — so the check runs on the finished buffer. Nothing over the
   /// limit is ever returned, but on web the refusal costs the full allocation
-  /// and the event-loop time first: against a 16 MiB limit, ~65 KiB of wire
-  /// inflating to 64 MiB is refused about three orders of magnitude slower
-  /// there than on the VM. `test/audit/isize_understates_on_web_test.dart`
-  /// carries the current figures.
+  /// and the event-loop time first.
   ///
   /// So on web this is a bound on what you will accept, not a defence against
   /// what it costs to refuse.
