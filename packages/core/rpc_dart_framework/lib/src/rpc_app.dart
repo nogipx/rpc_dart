@@ -132,6 +132,11 @@ class RpcApp {
   /// afterwards does not tear it down a second time.
   bool _tornDown = false;
 
+  /// The modules whose `onStart` completed, in start order. [stop] stops
+  /// these and no others: one whose start is still hanging, or never ran, has
+  /// nothing to release.
+  final List<RpcModule> _startedModules = [];
+
   void _abortIfStopRequested() {
     if (_stopRequested) throw const _StoppedDuringStart();
   }
@@ -162,7 +167,7 @@ class RpcApp {
       module.configureWithEnv(_container, _env);
     }
 
-    final startedModules = <RpcModule>[];
+    final startedModules = _startedModules;
     try {
       await _spawnIsolates();
 
@@ -243,7 +248,7 @@ class RpcApp {
     _log.info('Stopping transport server');
     await _server?.stop(drainTimeout: _config.drainTimeout);
 
-    for (final module in _modules.reversed) {
+    for (final module in _startedModules.reversed) {
       if (_log.isDebug) {
         _log.debug('onStop: ${module.name}');
       }
@@ -309,10 +314,25 @@ class RpcApp {
   }
 
   /// Returns an aggregated health report from all modules and active endpoints.
-  Future<RpcAppHealth> health() => appHealthOf(
-    _modules,
-    _server?.endpoints ?? const <RpcResponderEndpoint>[],
-  );
+  ///
+  /// Before [start] there is nothing serving, so the report is unhealthy and
+  /// names no module.
+  Future<RpcAppHealth> health() {
+    if (!_startAttempted) {
+      return Future.value(
+        RpcAppHealth(
+          level: RpcAppHealthLevel.unhealthy,
+          modules: const {},
+          endpoints: const [],
+          checkedAt: DateTime.now(),
+        ),
+      );
+    }
+    return appHealthOf(
+      _modules,
+      _server?.endpoints ?? const <RpcResponderEndpoint>[],
+    );
+  }
 
   // -------------------------------------------------------------------------
   // Private helpers

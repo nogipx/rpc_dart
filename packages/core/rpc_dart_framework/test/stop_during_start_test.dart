@@ -45,11 +45,29 @@ class _SlowModule extends RpcServerModule {
 }
 
 class _HungModule extends RpcServerModule {
+  var stopped = false;
+
   @override
   String get name => 'Hung';
 
   @override
   Future<void> onStart(RpcContainer container) => Completer<void>().future;
+
+  @override
+  Future<void> onStop() async => stopped = true;
+
+  @override
+  List<RpcResponderContract> buildContracts(RpcContainer container) => const [];
+}
+
+class _QuickModule extends RpcServerModule {
+  var stopped = false;
+
+  @override
+  String get name => 'Quick';
+
+  @override
+  Future<void> onStop() async => stopped = true;
 
   @override
   List<RpcResponderContract> buildContracts(RpcContainer container) => const [];
@@ -118,6 +136,38 @@ void main() {
 
     expect(returned, isTrue, reason: 'stop() waited on a hung onStart');
     expect(server, isNull, reason: 'a server started after stop()');
+  });
+
+  test(
+    'stop() past a hung onStart stops only the modules that started',
+    () async {
+      final quick = _QuickModule();
+      final hung = _HungModule();
+      final app = RpcApp.server(
+        modules: [quick, hung],
+        server: _Server.new,
+        config: const RpcAppConfig(
+          shutdownTimeout: Duration(milliseconds: 200),
+        ),
+      );
+      unawaited(app.start());
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await app.stop().timeout(const Duration(seconds: 3));
+
+      expect(quick.stopped, isTrue);
+      expect(
+        hung.stopped,
+        isFalse,
+        reason: 'onStop ran on a module whose onStart never completed',
+      );
+    },
+  );
+
+  test('health() before start() reports unhealthy', () async {
+    final app = RpcApp.server(modules: [_QuickModule()], server: _Server.new);
+    final health = await app.health();
+    expect(health.level, RpcAppHealthLevel.unhealthy);
   });
 
   test('WITNESS two concurrent stop() calls stop each module once', () async {
