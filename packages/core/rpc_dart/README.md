@@ -484,8 +484,10 @@ that `implements` them may have to add the member. Mocks that implement an
 interface are fine in tests; for production code, extend.
 
 The channel transports' wire format carries a version (see
-`RpcChannelFrame.protocolVersion`). Peers of different versions refuse each
-other with `FAILED_PRECONDITION` instead of misreading frames.
+`RpcChannelFrame.protocolVersion`). The client states it when it connects and
+the server answers in the same version, so a server can go on serving older
+clients; a version the other side does not speak fails the calls with
+`FAILED_PRECONDITION` instead of misreading frames. Upgrade servers first.
 
 ## Ecosystem
 

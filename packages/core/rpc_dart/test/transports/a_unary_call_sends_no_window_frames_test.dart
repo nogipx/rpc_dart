@@ -69,11 +69,11 @@ void main() {
   setUp(() {
     (a, b) = TapPipe.pair();
     final client = RpcChannelTransport(
-      channel: RpcFrameMultiplexedChannel(channel: a),
+      channel: RpcFrameMultiplexedChannel(channel: a, isClient: true),
       isClient: true,
     );
     final server = RpcChannelTransport(
-      channel: RpcFrameMultiplexedChannel(channel: b),
+      channel: RpcFrameMultiplexedChannel(channel: b, isClient: false),
       isClient: false,
     );
     responder = RpcResponderEndpoint(transport: server)

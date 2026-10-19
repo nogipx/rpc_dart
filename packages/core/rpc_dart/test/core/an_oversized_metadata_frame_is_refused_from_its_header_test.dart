@@ -46,7 +46,7 @@ Future<({int accepted, String? refusal})> _dribble({
   required bool metadata,
 }) async {
   final pipe = RawPeerChannel();
-  final channel = RpcFrameMultiplexedChannel(channel: pipe);
+  final channel = RpcFrameMultiplexedChannel(isClient: false, channel: pipe);
   addTearDown(() async {
     await pipe.close();
     await channel.close();
@@ -117,7 +117,10 @@ void main() {
       // Moving a limit check earlier is one edit from moving it to where it refuses
       // everything. This drives a real, legal metadata frame all the way through.
       final pipe = RawPeerChannel();
-      final channel = RpcFrameMultiplexedChannel(channel: pipe);
+      final channel = RpcFrameMultiplexedChannel(
+        isClient: false,
+        channel: pipe,
+      );
       addTearDown(() async {
         await pipe.close();
         await channel.close();

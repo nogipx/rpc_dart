@@ -16,7 +16,7 @@ import '../support/raw_channel.dart';
 
 Future<(int micros, int count)> dribble(int payloadSize) async {
   final fake = RawPeerChannel(sync: true);
-  final ch = RpcFrameMultiplexedChannel(channel: fake);
+  final ch = RpcFrameMultiplexedChannel(isClient: false, channel: fake);
   var count = 0;
   ch.incoming.listen((_) => count++);
 

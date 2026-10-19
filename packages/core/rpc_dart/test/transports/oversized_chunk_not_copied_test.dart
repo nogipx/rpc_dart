@@ -31,6 +31,7 @@ void main() {
 
     final channel = RawPeerChannel();
     final mux = RpcFrameMultiplexedChannel(
+      isClient: false,
       channel: channel,
       policy: const RpcSecurityPolicy(
         maxMessageLengthBytes: 128 * 1024 * 1024,
@@ -78,6 +79,7 @@ void main() {
 
     final channel = RawPeerChannel();
     final mux = RpcFrameMultiplexedChannel(
+      isClient: false,
       channel: channel,
       policy: const RpcSecurityPolicy(
         maxMessageLengthBytes: capBytes,

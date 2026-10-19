@@ -243,14 +243,8 @@ class RpcChannelTransport extends IRpcTransport
   }) : this(
          channel: RpcFrameMultiplexedChannel(
            channel: channel,
+           isClient: isClient,
            policy: policy,
-           // A server closes on an oversized frame, a client refuses the call.
-           // See RpcFrameMultiplexedChannel.closeOnOversizedFrame: the peak is
-           // unavoidable on this transport, so closing is a server's only
-           // defence against a peer repeating it -- and it is exactly the wrong
-           // answer for a client, whose other in-flight calls die with the
-           // connection.
-           closeOnOversizedFrame: !isClient,
          ),
          isClient: isClient,
          policy: policy,

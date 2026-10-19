@@ -61,17 +61,17 @@ _Rig _rig() {
 
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport(
-      channel: RpcFrameMultiplexedChannel(
-        channel: client,
-        closeOnOversizedFrame: false,
-      ),
+      channel: RpcFrameMultiplexedChannel(channel: client, isClient: true),
       isClient: true,
     ),
   );
   final responder =
       RpcResponderEndpoint(
           transport: RpcChannelTransport(
-            channel: RpcFrameMultiplexedChannel(channel: server),
+            channel: RpcFrameMultiplexedChannel(
+              channel: server,
+              isClient: false,
+            ),
             isClient: false,
           ),
         )

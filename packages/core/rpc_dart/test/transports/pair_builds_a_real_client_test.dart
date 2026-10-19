@@ -61,13 +61,20 @@ void main() {
     server.close();
   });
 
-  // GUARD: the default is the server's, and it stays that way. A caller that
-  // builds the channel directly and says nothing is a server.
-  test('GUARD: the bare constructor still defaults to the server policy', () {
-    final bare = RpcFrameMultiplexedChannel(channel: RawPeerChannel());
+  test('GUARD: the oversize policy follows the role', () {
+    final server = RpcFrameMultiplexedChannel(
+      isClient: false,
+      channel: RawPeerChannel(),
+    );
+    final client = RpcFrameMultiplexedChannel(
+      isClient: true,
+      channel: RawPeerChannel(),
+    );
 
-    expect(bare.closeOnOversizedFrame, isTrue);
+    expect(server.closeOnOversizedFrame, isTrue);
+    expect(client.closeOnOversizedFrame, isFalse);
 
-    bare.close();
+    server.close();
+    client.close();
   });
 }

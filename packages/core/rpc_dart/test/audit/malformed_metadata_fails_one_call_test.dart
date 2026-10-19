@@ -46,10 +46,7 @@ void main() {
   test('an undecodable metadata frame fails only its own call', () async {
     // WITNESS. Pre-fix this closed the channel and every other call with it.
     final fake = RawPeerChannel();
-    final channel = RpcFrameMultiplexedChannel(
-      channel: fake,
-      closeOnOversizedFrame: false,
-    );
+    final channel = RpcFrameMultiplexedChannel(channel: fake, isClient: true);
     final seen = <RpcTransportMessage>[];
     final sub = channel.incoming.listen(seen.add, onError: (Object _) {});
 
@@ -73,10 +70,7 @@ void main() {
   test('the connection still works afterwards', () async {
     // The point of the fix: everything else on the connection carries on.
     final fake = RawPeerChannel();
-    final channel = RpcFrameMultiplexedChannel(
-      channel: fake,
-      closeOnOversizedFrame: false,
-    );
+    final channel = RpcFrameMultiplexedChannel(channel: fake, isClient: true);
     final seen = <RpcTransportMessage>[];
     final sub = channel.incoming.listen(seen.add, onError: (Object _) {});
 
@@ -117,10 +111,7 @@ void main() {
     // A peer with a bug sends a handful; one sending hundreds is hostile, and
     // gets the connection its behaviour asked for.
     final fake = RawPeerChannel();
-    final channel = RpcFrameMultiplexedChannel(
-      channel: fake,
-      closeOnOversizedFrame: false,
-    );
+    final channel = RpcFrameMultiplexedChannel(channel: fake, isClient: true);
     final seen = <RpcTransportMessage>[];
     final errors = <Object>[];
     final sub = channel.incoming.listen(seen.add, onError: errors.add);
@@ -155,7 +146,7 @@ void main() {
     // gets the connection shut rather than an unlimited supply of malformed
     // frames.
     final fake = RawPeerChannel();
-    final channel = RpcFrameMultiplexedChannel(channel: fake);
+    final channel = RpcFrameMultiplexedChannel(channel: fake, isClient: false);
     final errors = <Object>[];
     final sub = channel.incoming.listen((_) {}, onError: errors.add);
 
@@ -176,7 +167,7 @@ void main() {
     final channel = RpcFrameMultiplexedChannel(
       channel: fake,
       policy: const RpcSecurityPolicy(maxMetadataBytes: 16),
-      closeOnOversizedFrame: false,
+      isClient: true,
     );
     final seen = <RpcTransportMessage>[];
     final errors = <Object>[];

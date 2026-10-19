@@ -74,7 +74,7 @@ _Rig _rig({RpcSecurityPolicy policy = _policy}) {
     channel: feed,
     policy: policy,
     // The client side. A server keeps closing -- see the guard at the bottom.
-    closeOnOversizedFrame: false,
+    isClient: true,
   );
   final messages = <RpcTransportMessage>[];
   final errors = <Object>[];
@@ -377,7 +377,11 @@ void main() {
     // oversized_message_is_refused_test; pinned here too so the default cannot
     // drift.
     final feed = RawPeerChannel();
-    final channel = RpcFrameMultiplexedChannel(channel: feed, policy: _policy);
+    final channel = RpcFrameMultiplexedChannel(
+      channel: feed,
+      isClient: false,
+      policy: _policy,
+    );
     final errors = <Object>[];
     channel.incoming.listen((_) {}, onError: errors.add);
     addTearDown(channel.close);

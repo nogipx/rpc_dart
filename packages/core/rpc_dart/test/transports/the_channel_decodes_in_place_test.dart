@@ -44,7 +44,7 @@ Uint8List _join(List<Uint8List> parts) {
 /// Feeds [chunks] and returns one `(tag, length)` per decoded frame.
 Future<List<(int, int)>> _decode(List<Uint8List> chunks) async {
   final pipe = RawPeerChannel();
-  final channel = RpcFrameMultiplexedChannel(channel: pipe);
+  final channel = RpcFrameMultiplexedChannel(isClient: false, channel: pipe);
   addTearDown(() async {
     await pipe.close();
     await channel.close();

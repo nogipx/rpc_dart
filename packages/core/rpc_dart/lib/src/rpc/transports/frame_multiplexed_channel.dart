@@ -60,14 +60,23 @@ class RpcFrameMultiplexedChannel
   /// while the close (and a refused stream's answer) is under way.
   bool _failed = false;
 
-  /// Whether an oversized inbound frame kills the connection.
+  /// Whether this end opened the connection.
+  ///
+  /// Decides who speaks first. The client writes its preface at once and
+  /// sends frames right behind it. The server writes nothing until the
+  /// client's preface has arrived, then answers with the same version, so a
+  /// server that still speaks an older version can serve an older client.
+  final bool isClient;
+
+  /// Whether an oversized inbound frame kills the connection. Defaults to
+  /// `!isClient`.
   ///
   /// The two sides of a connection want opposite answers:
   ///
-  /// - A SERVER (true, the default). dart:io buffers a whole WebSocket message
-  ///   before delivering it, so the peak is resident before this class sees a
-  ///   byte and cannot be avoided. Closing is then the only lever left — a
-  ///   connection that survives lets one peer repeat that peak at will.
+  /// - A SERVER (true). dart:io buffers a whole WebSocket message before
+  ///   delivering it, so the peak is resident before this class sees a byte and
+  ///   cannot be avoided. Closing is then the only lever left — a connection
+  ///   that survives lets one peer repeat that peak at will.
   /// - A CLIENT (false). The peer is the server it chose, and killing the
   ///   connection over one large response takes every other in-flight call with
   ///   it. gRPC's answer is RESOURCE_EXHAUSTED on that RPC, which is what this
@@ -78,24 +87,42 @@ class RpcFrameMultiplexedChannel
   final Uint8List _peerPreface = Uint8List(RpcChannelFrame.prefaceSize);
   int _prefaceSeen = 0;
 
+  /// A server's frames sent before it has answered the client's preface, in
+  /// call order. Null once the preface is out.
+  List<Uint8List>? _held;
+
+  /// Completes when [_held] has been written, or dropped by a close.
+  final Completer<void> _released = Completer<void>();
+
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
   ///
-  /// Writes [RpcChannelFrame.preface] at once, and expects the peer's before
-  /// its first frame. A peer of another [RpcChannelFrame.protocolVersion] fails
-  /// [incoming] with FAILED_PRECONDITION, one that is not an rpc_dart channel
-  /// with UNKNOWN, and the channel closes.
+  /// Each end writes [RpcChannelFrame.preface] once, before its first frame;
+  /// see [isClient] for the order. A peer of another
+  /// [RpcChannelFrame.protocolVersion] fails [incoming] with
+  /// FAILED_PRECONDITION, one that is not an rpc_dart channel with UNKNOWN,
+  /// and the channel closes.
   ///
   /// [policy] bounds the RECEIVE path: a declared frame payload larger than
   /// [_maxFramePayloadBytes] is rejected from the header without buffering, and
   /// the reassembly buffer is capped at [_maxBufferedFrameBytes].
   RpcFrameMultiplexedChannel({
     required IRpcChannel channel,
+    required this.isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-    this.closeOnOversizedFrame = true,
+    bool? closeOnOversizedFrame,
   }) : _channel = channel,
-       _policy = policy {
-    // Before any frame: frames go out through the same channel, in call order.
-    unawaited(_channel.send(RpcChannelFrame.preface).catchError((Object _) {}));
+       _policy = policy,
+       closeOnOversizedFrame = closeOnOversizedFrame ?? !isClient {
+    if (isClient) {
+      // Before any frame: frames go out through the same channel, in call
+      // order.
+      unawaited(
+        _channel.send(RpcChannelFrame.preface).catchError((Object _) {}),
+      );
+      _released.complete();
+    } else {
+      _held = [];
+    }
     _channelSub = _channel.incoming.listen(
       _onData,
       onError: (Object e) {
@@ -167,7 +194,34 @@ class RpcFrameMultiplexedChannel
       return;
     }
 
+    final held = _held;
+    if (held != null) {
+      held.add(frame);
+      return _released.future;
+    }
     await _channel.send(frame);
+  }
+
+  /// A server's answer to a matching client preface: the same version, then
+  /// every frame held until now, in order and before any later send.
+  void _answerPreface(int version) {
+    final held = _held;
+    if (held == null) return;
+    _held = null;
+    final preface = RpcChannelFrame.preface
+      ..[RpcChannelFrame.prefaceSize - 1] = version;
+    final sends = [
+      _channel.send(preface),
+      for (final frame in held) _channel.send(frame),
+    ];
+    _released.complete(Future.wait(sends).then((_) {}));
+  }
+
+  /// Drops what a server still holds: the channel is closing before its
+  /// preface went out.
+  void _dropHeld() {
+    _held = null;
+    if (!_released.isCompleted) _released.complete();
   }
 
   @override
@@ -186,8 +240,9 @@ class RpcFrameMultiplexedChannel
   }
 
   /// What every close does once the byte channel is closed: stop reading, drop
-  /// the reassembly buffer, end [incoming].
+  /// the reassembly buffer and held frames, end [incoming].
   Future<void> _releaseAfterChannelClose() async {
+    _dropHeld();
     await _channelSub?.cancel();
     _channelSub = null;
     _buf = Uint8List(0);
@@ -401,9 +456,13 @@ class RpcFrameMultiplexedChannel
       final mismatch = _checkPreface();
       if (mismatch != null) {
         _failed = true;
+        _dropHeld();
         if (!_incomingCtl.isClosed) _incomingCtl.addError(mismatch);
         unawaited(closeForProtocolError(mismatch.message));
         return;
+      }
+      if (!isClient) {
+        _answerPreface(_peerPreface[RpcChannelFrame.prefaceSize - 1]);
       }
       if (i == data.length) return;
       data = Uint8List.sublistView(data, i);
@@ -772,12 +831,6 @@ class RpcFrameMultiplexedChannel
   }
 
   /// Creates a paired client/server frame channel over in-memory byte streams.
-  ///
-  /// **The client half gets the CLIENT's [closeOnOversizedFrame].** Both used
-  /// to take the constructor default, which is the server's — so this harness,
-  /// the one path that exercises the real encoder and decoder, handed every
-  /// suite a "client" that killed its connection where a real one fails the
-  /// stream and leaves the other calls alone.
   static (RpcFrameMultiplexedChannel, RpcFrameMultiplexedChannel) pair({
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   }) {
@@ -790,10 +843,14 @@ class RpcFrameMultiplexedChannel
     return (
       RpcFrameMultiplexedChannel(
         channel: clientChannel,
+        isClient: true,
         policy: policy,
-        closeOnOversizedFrame: false,
       ),
-      RpcFrameMultiplexedChannel(channel: serverChannel, policy: policy),
+      RpcFrameMultiplexedChannel(
+        channel: serverChannel,
+        isClient: false,
+        policy: policy,
+      ),
     );
   }
 }

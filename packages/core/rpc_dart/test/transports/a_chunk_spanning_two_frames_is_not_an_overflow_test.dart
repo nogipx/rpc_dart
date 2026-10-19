@@ -35,7 +35,11 @@ Future<({List<RpcTransportMessage> got, List<Object> errors})> _deliver(
   int frames,
 ) async {
   final channel = RawPeerChannel();
-  final mux = RpcFrameMultiplexedChannel(channel: channel, policy: _policy);
+  final mux = RpcFrameMultiplexedChannel(
+    isClient: false,
+    channel: channel,
+    policy: _policy,
+  );
   final got = <RpcTransportMessage>[];
   final errors = <Object>[];
   final settled = Completer<void>();

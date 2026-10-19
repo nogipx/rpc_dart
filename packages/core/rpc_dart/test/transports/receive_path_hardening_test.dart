@@ -51,6 +51,7 @@ void main() {
         // transports/oversized_frame_is_per_call_test.dart.
         final channel = RawPeerChannel();
         final mux = RpcFrameMultiplexedChannel(
+          isClient: false,
           channel: channel,
           policy: const RpcSecurityPolicy(
             maxMessageLengthBytes: 1024,
@@ -86,6 +87,7 @@ void main() {
       () async {
         final channel = RawPeerChannel();
         final mux = RpcFrameMultiplexedChannel(
+          isClient: false,
           channel: channel,
           // Small message limit but a larger buffer cap so we exercise the
           // buffer-cap path with legitimately-shaped (but oversized) dribbles.
@@ -186,7 +188,10 @@ void main() {
         'malformed metadata over the channel surfaces a clean typed error',
         () async {
           final channel = RawPeerChannel();
-          final mux = RpcFrameMultiplexedChannel(channel: channel);
+          final mux = RpcFrameMultiplexedChannel(
+            isClient: false,
+            channel: channel,
+          );
 
           final errors = <Object>[];
           final done = Completer<void>();
@@ -261,6 +266,7 @@ void main() {
 
       final channel = RawPeerChannel();
       final mux = RpcFrameMultiplexedChannel(
+        isClient: false,
         channel: channel,
         policy: const RpcSecurityPolicy(
           maxMessageLengthBytes: 64 * 1024,
@@ -300,6 +306,7 @@ void main() {
       // refactor cannot quietly start reporting only the chunk.
       final channel = RawPeerChannel();
       final mux = RpcFrameMultiplexedChannel(
+        isClient: false,
         channel: channel,
         policy: const RpcSecurityPolicy(
           maxMessageLengthBytes: 64 * 1024,

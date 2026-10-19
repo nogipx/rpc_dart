@@ -154,7 +154,10 @@ RpcCallerEndpoint _rig({
   final responder =
       RpcResponderEndpoint(
           transport: RpcChannelTransport(
-            channel: RpcFrameMultiplexedChannel(channel: server),
+            channel: RpcFrameMultiplexedChannel(
+              channel: server,
+              isClient: false,
+            ),
             isClient: false,
             policy: responderPolicy ?? const RpcSecurityPolicy(),
           ),
@@ -163,10 +166,7 @@ RpcCallerEndpoint _rig({
         ..start();
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport(
-      channel: RpcFrameMultiplexedChannel(
-        channel: client,
-        closeOnOversizedFrame: false,
-      ),
+      channel: RpcFrameMultiplexedChannel(channel: client, isClient: true),
       isClient: true,
     ),
   );
@@ -454,7 +454,10 @@ void main() {
       final responder =
           RpcResponderEndpoint(
               transport: RpcChannelTransport(
-                channel: RpcFrameMultiplexedChannel(channel: server),
+                channel: RpcFrameMultiplexedChannel(
+                  channel: server,
+                  isClient: false,
+                ),
                 isClient: false,
               ),
             )
@@ -462,10 +465,7 @@ void main() {
             ..start();
       final caller = RpcCallerEndpoint(
         transport: RpcChannelTransport(
-          channel: RpcFrameMultiplexedChannel(
-            channel: client,
-            closeOnOversizedFrame: false,
-          ),
+          channel: RpcFrameMultiplexedChannel(channel: client, isClient: true),
           isClient: true,
         ),
       );

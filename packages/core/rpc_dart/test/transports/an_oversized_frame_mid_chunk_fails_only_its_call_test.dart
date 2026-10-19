@@ -42,7 +42,7 @@ Future<(List<String>, bool)> _deliver(List<Uint8List> chunks) async {
   final mux = RpcFrameMultiplexedChannel(
     channel: feed,
     policy: _policy,
-    closeOnOversizedFrame: false,
+    isClient: true,
   );
   addTearDown(mux.close);
   final got = <String>[];

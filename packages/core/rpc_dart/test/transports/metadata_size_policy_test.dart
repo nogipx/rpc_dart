@@ -29,7 +29,11 @@ final _oversized = RpcMetadata([
 void main() {
   test('an oversized metadata frame is rejected at its own limit', () async {
     final pipe = RawPeerChannel();
-    final server = RpcFrameMultiplexedChannel(channel: pipe, policy: _policy);
+    final server = RpcFrameMultiplexedChannel(
+      isClient: false,
+      channel: pipe,
+      policy: _policy,
+    );
 
     final errors = <Object>[];
     server.incoming.listen((_) {}, onError: errors.add);

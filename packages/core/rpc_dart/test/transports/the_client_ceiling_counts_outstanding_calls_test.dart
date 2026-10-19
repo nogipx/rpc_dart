@@ -75,7 +75,7 @@ _Rig _rig(int ceiling, Future<void> release) {
       channel: RpcFrameMultiplexedChannel(
         channel: clientSide,
         policy: policy,
-        closeOnOversizedFrame: false,
+        isClient: true,
       ),
       isClient: true,
       policy: policy,
@@ -84,7 +84,10 @@ _Rig _rig(int ceiling, Future<void> release) {
   final responder =
       RpcResponderEndpoint(
           transport: RpcChannelTransport(
-            channel: RpcFrameMultiplexedChannel(channel: serverSide),
+            channel: RpcFrameMultiplexedChannel(
+              channel: serverSide,
+              isClient: false,
+            ),
             isClient: false,
           ),
         )
