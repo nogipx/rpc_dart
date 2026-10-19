@@ -140,33 +140,22 @@ class LogCollectorOutput extends LogOutput {
   }
 
   /// Number of records buffered but not yet handed to the wire.
-  /// Exposed for tests/diagnostics.
   int get bufferedCount => _buffer.length;
 
   /// Number of records sent but not yet acknowledged.
-  /// Exposed for tests/diagnostics.
   int get inFlightCount => _inFlight.length;
 
   /// Bytes charged by the buffered and in-flight records.
-  /// Exposed for tests/diagnostics.
   int get bufferedBytes => _bytes;
 
   /// Whether the client currently has a live, handshaken connection.
-  /// Exposed for tests/diagnostics.
   bool get isConnected => _connected;
 
   @override
   void write(LogRecord record) {
     if (_disposed) return;
-    if (record is LogSpanStart) return;
-
-    final json = switch (record) {
-      LogSpanStart() => throw UnsupportedError(
-        'LogSpanStart is filtered out before this point',
-      ),
-      final LogEvent event => event.toJson(),
-      final LogSpan span => span.toJson(),
-    };
+    final json = serializeRecord(record);
+    if (json == null) return;
     _enqueue(LogCollectorRecord(json));
     _pump();
   }

@@ -20,10 +20,6 @@ const _magenta = '\x1B[35m';
 const _cyan = '\x1B[36m';
 const _white = '\x1B[37m';
 
-/// Every field printed here came from a remote device, so each one passes
-/// through this before it reaches the terminal.
-String _e(Object? value) => ConsoleOutput.escapeLine('$value');
-
 /// Terminal renderer for logCollector. Prints tagged log records with device
 /// labels and ANSI colors.
 class LogCollectorConsole {
@@ -38,11 +34,11 @@ class LogCollectorConsole {
 
   /// Print a connection event.
   void printConnection(LogCollectorConnectionEvent event) {
-    final now = _formatTime(DateTime.now());
+    final now = formatClock(DateTime.now(), millis: true);
     switch (event) {
       case final DeviceConnected e:
-        final name = _e(e.session.deviceName);
-        final app = _e(e.session.app);
+        final name = escapeRemote(e.session.deviceName);
+        final app = escapeRemote(e.session.app);
         if (colored) {
           _sink.writeln(
             '$_dim$now$_reset $_green+$_reset '
@@ -53,7 +49,7 @@ class LogCollectorConsole {
           _sink.writeln('$now + $name ($app)');
         }
       case final DeviceDisconnected e:
-        final name = _e(e.session.deviceName);
+        final name = escapeRemote(e.session.deviceName);
         if (colored) {
           _sink.writeln(
             '$_dim$now$_reset $_red-$_reset '
@@ -68,7 +64,7 @@ class LogCollectorConsole {
   /// Print a tagged log record.
   void printRecord(TaggedRecord tagged) {
     final record = tagged.record;
-    final label = _padLabel(_e(tagged.deviceLabel));
+    final label = _padLabel(escapeRemote(tagged.deviceLabel));
 
     switch (record) {
       case LogSpanStart():
@@ -81,10 +77,10 @@ class LogCollectorConsole {
   }
 
   void _printEvent(String label, LogEvent event) {
-    final time = _formatTime(event.timestamp);
+    final time = formatClock(event.timestamp, millis: true);
     final level = _formatLevel(event.level);
-    final scope = _e(event.scope);
-    final msg = _e(event.message);
+    final scope = escapeRemote(event.scope);
+    final msg = escapeRemote(event.message);
     final traceId = event.traceId;
 
     final buf = StringBuffer();
@@ -97,39 +93,41 @@ class LogCollectorConsole {
 
       if (traceId != null) {
         buf.write(
-          ' $_dim${_e(traceId.substring(0, 8.clamp(0, traceId.length)))}$_reset',
+          ' $_dim${escapeRemote(traceId.substring(0, 8.clamp(0, traceId.length)))}$_reset',
         );
       }
       if (event.data != null && event.data!.isNotEmpty) {
         for (final entry in event.data!.entries) {
-          buf.write(' $_dim${_e(entry.key)}=$_reset${_e(entry.value)}');
+          buf.write(
+            ' $_dim${escapeRemote(entry.key)}=$_reset${escapeRemote(entry.value)}',
+          );
         }
       }
       if (event.error != null) {
-        buf.write(' ${_red}err=$_reset${_e(event.error)}');
+        buf.write(' ${_red}err=$_reset${escapeRemote(event.error)}');
       }
     } else {
       buf.write(
         '$time $label ${event.level.name.toUpperCase().padRight(3)} $scope $msg',
       );
-      if (traceId != null) buf.write(' trace=${_e(traceId)}');
+      if (traceId != null) buf.write(' trace=${escapeRemote(traceId)}');
       if (event.data != null) {
         for (final entry in event.data!.entries) {
-          buf.write(' ${_e(entry.key)}=${_e(entry.value)}');
+          buf.write(' ${escapeRemote(entry.key)}=${escapeRemote(entry.value)}');
         }
       }
-      if (event.error != null) buf.write(' err=${_e(event.error)}');
+      if (event.error != null) buf.write(' err=${escapeRemote(event.error)}');
     }
 
     _sink.writeln(buf);
   }
 
   void _printSpan(String label, LogSpan span) {
-    final time = _formatTime(span.endTime);
+    final time = formatClock(span.endTime, millis: true);
     final ms = span.duration.inMilliseconds;
     final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
-    final scope = _e(span.scope);
-    final name = _e(span.name);
+    final scope = escapeRemote(span.scope);
+    final name = escapeRemote(span.name);
     final error = span.error;
 
     if (colored) {
@@ -142,22 +140,14 @@ class LogCollectorConsole {
         '$name '
         '$_dim${ms}ms$_reset '
         '$statusColor$status$_reset'
-        '${error != null ? ' ${_red}err=$_reset${_e(error)}' : ''}',
+        '${error != null ? ' ${_red}err=$_reset${escapeRemote(error)}' : ''}',
       );
     } else {
       _sink.writeln(
         '$time $label SPN $scope $name ${ms}ms $status'
-        '${error != null ? ' err=${_e(error)}' : ''}',
+        '${error != null ? ' err=${escapeRemote(error)}' : ''}',
       );
     }
-  }
-
-  String _formatTime(DateTime t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    final s = t.second.toString().padLeft(2, '0');
-    final ms = t.millisecond.toString().padLeft(3, '0');
-    return '$h:$m:$s.$ms';
   }
 
   String _formatLevel(RpcLogLevel level) {

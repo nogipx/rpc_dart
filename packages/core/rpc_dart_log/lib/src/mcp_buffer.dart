@@ -77,11 +77,7 @@ class LogCollectorMcpBuffer {
 
   void addRecord(TaggedRecord tagged) {
     final r = tagged.record;
-    final size = approxJsonBytes(switch (r) {
-      final LogEvent event => event.toJson(),
-      final LogSpan span => span.toJson(),
-      _ => null,
-    });
+    final size = approxJsonBytes(serializeRecord(r));
     _records.add(tagged);
     _sizes.add(size);
     _bytes += size;
@@ -111,14 +107,13 @@ class LogCollectorMcpBuffer {
         _traceIdOrder.add(tid);
         _traceErrorCounts[tid] = 0;
       }
-      if (r is LogEvent &&
-          (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal)) {
+      if (isErrorRecord(r)) {
         _traceErrorCounts[tid] = _traceErrorCounts[tid]! + 1;
       }
     }
 
     if (r is LogEvent) {
-      if (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal) {
+      if (isErrorRecord(r)) {
         _totalErrors++;
         _addUniqueError(tagged, r);
       } else if (r.level == RpcLogLevel.warning) {
@@ -154,7 +149,7 @@ class LogCollectorMcpBuffer {
       buf.writeln('Devices (${sessions.length}):');
       for (final s in sessions) {
         buf.writeln(
-          '  ${_e(s.label)} [${_e(s.app)}] since ${_fmtTime(s.connectedAt)}',
+          '  ${escapeRemote(s.label)} [${escapeRemote(s.app)}] since ${formatClock(s.connectedAt)}',
         );
       }
     }
@@ -170,7 +165,7 @@ class LogCollectorMcpBuffer {
         ? ' (buffer full -- oldest evicted)'
         : '';
     buf.writeln(
-      'Buffer: ${_records.length} records | ${_fmtTime(first)} - ${_fmtTime(last)} | cursor: $_cursor$overflow',
+      'Buffer: ${_records.length} records | ${formatClock(first)} - ${formatClock(last)} | cursor: $_cursor$overflow',
     );
 
     final totalParts = <String>[];
@@ -183,7 +178,7 @@ class LogCollectorMcpBuffer {
       ..sort((a, b) => b.value.total.compareTo(a.value.total));
     buf.writeln('Scopes:');
     for (final entry in sortedScopes.take(maxScopes)) {
-      buf.writeln('  ${_e(entry.key)}: ${entry.value}');
+      buf.writeln('  ${escapeRemote(entry.key)}: ${entry.value}');
     }
     if (sortedScopes.length > maxScopes) {
       buf.writeln('  ... +${sortedScopes.length - maxScopes} more scopes');
@@ -204,7 +199,9 @@ class LogCollectorMcpBuffer {
       final shown = _traceIdOrder.reversed.take(maxTrace).toList();
       final parts = shown
           .map((tid) {
-            final prefix = _e(tid.length > 8 ? tid.substring(0, 8) : tid);
+            final prefix = escapeRemote(
+              tid.length > 8 ? tid.substring(0, 8) : tid,
+            );
             final errs = _traceErrorCounts[tid]!;
             return errs > 0 ? '$prefix ($errs err)' : prefix;
           })
@@ -481,10 +478,9 @@ class LogCollectorMcpBuffer {
 
   /// Every field of a record came from a remote device; each passes through
   /// this, so one record stays one line of the tool's output.
-  static String _e(Object? value) => ConsoleOutput.escapeLine('$value');
 
   String _formatTaggedRecord(TaggedRecord tagged, {bool noData = false}) {
-    final device = _e(tagged.deviceLabel);
+    final device = escapeRemote(tagged.deviceLabel);
     return switch (tagged.record) {
       LogSpanStart() => '',
       final LogEvent event => _formatEvent(device, event, noData: noData),
@@ -494,14 +490,16 @@ class LogCollectorMcpBuffer {
 
   String _formatEvent(String device, LogEvent event, {bool noData = false}) {
     final sb = StringBuffer(
-      '${_fmtTime(event.timestamp)} [$device] ${event.level.name.toUpperCase().padRight(5)} '
-      '${_e(event.scope)}  ${_e(event.message)}',
+      '${formatClock(event.timestamp)} [$device] ${event.level.name.toUpperCase().padRight(5)} '
+      '${escapeRemote(event.scope)}  ${escapeRemote(event.message)}',
     );
-    if (event.error != null) sb.write('  err=${_e(event.error)}');
-    if (event.traceId != null) sb.write('  trace=${_e(event.traceId)}');
+    if (event.error != null) sb.write('  err=${escapeRemote(event.error)}');
+    if (event.traceId != null) {
+      sb.write('  trace=${escapeRemote(event.traceId)}');
+    }
     if (!noData && event.data != null && event.data!.isNotEmpty) {
       final dataStr = event.data!.entries
-          .map((e) => '${_e(e.key)}=${_e(e.value)}')
+          .map((e) => '${escapeRemote(e.key)}=${escapeRemote(e.value)}')
           .join(' ');
       final truncated = dataStr.length > 120
           ? '${dataStr.substring(0, 120)}...'
@@ -513,11 +511,11 @@ class LogCollectorMcpBuffer {
 
   String _formatSpan(String device, LogSpan span) {
     final sb = StringBuffer(
-      '${_fmtTime(span.endTime)} [$device] SPAN  ${_e(span.scope)}  '
-      '${_e(span.name)} ${span.duration.inMilliseconds}ms ${span.status.name}',
+      '${formatClock(span.endTime)} [$device] SPAN  ${escapeRemote(span.scope)}  '
+      '${escapeRemote(span.name)} ${span.duration.inMilliseconds}ms ${span.status.name}',
     );
-    if (span.error != null) sb.write('  err=${_e(span.error)}');
-    if (span.traceId != null) sb.write('  trace=${_e(span.traceId)}');
+    if (span.error != null) sb.write('  err=${escapeRemote(span.error)}');
+    if (span.traceId != null) sb.write('  trace=${escapeRemote(span.traceId)}');
     return sb.toString();
   }
 
@@ -580,13 +578,6 @@ class LogCollectorMcpBuffer {
       }
     }
     return lo;
-  }
-
-  String _fmtTime(DateTime t) {
-    final h = t.hour.toString().padLeft(2, '0');
-    final m = t.minute.toString().padLeft(2, '0');
-    final s = t.second.toString().padLeft(2, '0');
-    return '$h:$m:$s';
   }
 }
 
@@ -668,10 +659,8 @@ class _ScopeStats {
 
   void add(LogRecord r) {
     total++;
+    if (isErrorRecord(r)) errors++;
     if (r is LogEvent) {
-      if (r.level == RpcLogLevel.error || r.level == RpcLogLevel.fatal) {
-        errors++;
-      }
       if (r.level == RpcLogLevel.warning) warnings++;
     }
     if (r is LogSpan) spans++;

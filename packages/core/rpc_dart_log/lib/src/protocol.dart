@@ -49,3 +49,25 @@ LogRecord? deserializeRecord(Map<String, dynamic> json) {
   if (type == 'event') return LogEvent.fromJson(json);
   return null;
 }
+
+/// [record] as the JSON it is sent and weighed as, or null for a span start,
+/// which is neither.
+Map<String, dynamic>? serializeRecord(LogRecord record) => switch (record) {
+  final LogEvent event => event.toJson(),
+  final LogSpan span => span.toJson(),
+  LogSpanStart() => null,
+};
+
+/// Whether [record] is an event at error level or above.
+bool isErrorRecord(LogRecord record) =>
+    record is LogEvent && record.level >= RpcLogLevel.error;
+
+/// [value] made safe to print: every field came from a remote device.
+String escapeRemote(Object? value) => ConsoleOutput.escapeLine('$value');
+
+/// [t] as `HH:MM:SS`, followed by `.mmm` with [millis].
+String formatClock(DateTime t, {bool millis = false}) {
+  String two(int n) => n.toString().padLeft(2, '0');
+  final clock = '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+  return millis ? '$clock.${t.millisecond.toString().padLeft(3, '0')}' : clock;
+}
