@@ -324,45 +324,44 @@ final class ClientStreamCaller<
     _logger.internal('Executing client stream call');
 
     final drained = Completer<void>();
-    // Listening rather than `await for` gives us a subscription to cancel when
-    // the call ends early. Ordering is preserved by the processor's send
-    // sequence, so pausing here only bounds how far ahead the producer runs.
-    //
-    // It has to pause: the listener returns immediately, so without this the
-    // request stream was drained at full speed however long a send took -- an
-    // unbounded queue between the application and the transport, and the
-    // reason flow control could not throttle an upload. Measured with a
-    // handler that consumed one message and stalled, against a 1 MB window,
-    // the caller pulled all 2000 messages (32.8 MB) from its request stream.
     // Set when the call is abandoned from THIS side -- the request stream
     // errored, or a send failed. The server is mid-handler and has heard
     // nothing, so it has to be told; a failure that arrived from the server is
     // not this and must not trigger a notice.
     var abortedLocally = false;
+    void abandon(Object e, StackTrace st) {
+      abortedLocally = true;
+      if (!drained.isCompleted) drained.completeError(e, st);
+    }
 
-    late final StreamSubscription<TRequest> requestSub;
-    requestSub = requests.listen(
-      (request) {
-        if (_sendingFinished) return;
-        requestSub.pause();
-        unawaited(
-          send(request)
-              .catchError((Object e, StackTrace st) {
-                abortedLocally = true;
-                if (!drained.isCompleted) drained.completeError(e, st);
-              })
-              .whenComplete(() {
-                if (!_sendingFinished) requestSub.resume();
-              }),
-        );
+    // The pump pauses the producer while each request is in flight, so flow
+    // control throttles the upload, and stops pulling once the response has
+    // settled. The call reports its failures itself, below.
+    late final SinkPump<TRequest> pump;
+    pump = SinkPump<TRequest>(
+      what: 'client stream requests',
+      // Sending is over once the call has half-closed, which an early answer
+      // from the server does before the producer is done.
+      send: (request) async {
+        if (_sendingFinished) {
+          pump.stop();
+          return;
+        }
+        await send(request);
       },
-      onError: (Object e, StackTrace st) {
-        abortedLocally = true;
-        if (!drained.isCompleted) drained.completeError(e, st);
-      },
-      onDone: () {
+      halfClose: () async {
         if (!drained.isCompleted) drained.complete();
       },
+      onSourceFailed: abandon,
+      onSendFailed: abandon,
+      ended: _responseCompleter.future.then((_) {}, onError: (Object _) {}),
+      logFailures: false,
+      logger: _logger,
+    );
+    unawaited(
+      pump.sink
+          .addStream(requests)
+          .then((_) => pump.sink.close(), onError: (Object _) {}),
     );
 
     try {
@@ -382,9 +381,9 @@ final class ClientStreamCaller<
       }
       rethrow;
     } finally {
-      // Not awaited: cancelling a stalled producer can block indefinitely, and
-      // the call is already over.
-      unawaited(requestSub.cancel().catchError((_) {}));
+      // Does not wait for the producer: cancelling a stalled one can block
+      // indefinitely, and the call is already over.
+      pump.close();
       // Before close(), which drops the processor and with it any way to reach
       // the transport. onDone half-closes via finishSending() and the handler
       // ends on its own; this path has no such signal, so without the notice

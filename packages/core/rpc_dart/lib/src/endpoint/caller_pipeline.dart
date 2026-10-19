@@ -662,15 +662,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     );
 
     StreamSubscription<RpcMessage<R>>? responseSub;
-    StreamSubscription<C>? requestSub;
+    SinkPump<C>? requestPump;
     var isCleaned = false;
-    var sendSeq = Future<void>.value();
-
-    void enqueue(Future<void> Function() op) {
-      sendSeq = sendSeq.then((_) async {
-        if (!isCleaned) await op();
-      });
-    }
+    final ended = Completer<void>();
 
     // Set once the call ended on its own (server finished, or errored), as
     // opposed to the consumer walking away. Mirrors the server-stream bridge:
@@ -685,6 +679,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     }) async {
       if (isCleaned) return;
       isCleaned = true;
+      ended.complete();
 
       // The request side failed on OUR end -- the producer threw, or a send did
       // -- and the server is mid-handler having heard nothing. `onDone`
@@ -713,9 +708,9 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       _untrackCallerRequest(serviceName, methodName, tracked);
 
       final response = responseSub;
-      final request = requestSub;
+      final request = requestPump;
       responseSub = null;
-      requestSub = null;
+      requestPump = null;
 
       if (fromCancel) {
         // sub.cancel() on the consumer side awaits this handler, so nothing
@@ -727,7 +722,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         // the teardown and return, exactly as the server-stream bridge does.
         // The controller is already being torn down, so it needs no close.
         unawaited(response?.cancel().catchError((_) {}));
-        unawaited(request?.cancel().catchError((_) {}));
+        request?.close();
         unawaited(caller.close().catchError((_) {}));
         return;
       }
@@ -737,7 +732,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       // `controller.close()` below is unreachable, so a bidi call whose server
       // ends the conversation while the client still holds its request sink
       // open, an ordinary shape, never terminates for the consumer.
-      unawaited(request?.cancel().catchError((_) {}));
+      request?.close();
 
       // Everything else is best-effort: the controller MUST close, or the
       // consumer waits forever on a call that is already over.
@@ -802,44 +797,35 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       },
     );
 
-    requestSub = requests.listen(
-      (req) {
-        // Pause while this request is in flight. `enqueue` chains onto a
-        // future sequence, so the listener returned immediately and the
-        // request stream was drained at full speed however long the send took:
-        // an unbounded queue between the application and the transport, and
-        // the reason flow control could not throttle this direction. Measured
-        // with a bidi handler that consumed one message and stalled, against a
-        // 1 MB window, the caller pulled all 2000 messages (32.8 MB).
-        requestSub?.pause();
-        enqueue(() async {
-          try {
-            await caller.send(req);
-          } catch (e, st) {
-            controller.addError(e, st);
-            await cleanup(abortPeer: true);
-          } finally {
-            // Not after cleanup: the subscription is cancelled by then.
-            if (!isCleaned) requestSub?.resume();
-          }
-        });
+    // The pump pauses the producer while each request is in flight, so flow
+    // control throttles this direction, and stops pulling once the call has
+    // been cleaned up. Its failures reach the consumer here.
+    void requestSideFailed(Object e, StackTrace st) {
+      controller.addError(e, st);
+      unawaited(cleanup(abortPeer: true));
+    }
+
+    final pump = requestPump = SinkPump<C>(
+      what: 'bidirectional requests',
+      send: caller.send,
+      halfClose: () async {
+        try {
+          await caller.finishSending();
+        } catch (e, st) {
+          controller.addError(e, st);
+          await cleanup();
+        }
       },
-      onError: (Object e, StackTrace st) {
-        controller.addError(e, st);
-        unawaited(cleanup(abortPeer: true));
-      },
-      onDone: () {
-        // Mark before the queued send runs: a cancel arriving in between must
-        // already see the request side as closing.
-        enqueue(() async {
-          try {
-            await caller.finishSending();
-          } catch (e, st) {
-            controller.addError(e, st);
-            await cleanup();
-          }
-        });
-      },
+      onSourceFailed: requestSideFailed,
+      onSendFailed: requestSideFailed,
+      ended: ended.future,
+      logFailures: false,
+      logger: _log,
+    );
+    unawaited(
+      pump.sink
+          .addStream(requests)
+          .then((_) => pump.sink.close(), onError: (Object _) {}),
     );
 
     controller.onCancel = () => cleanup(fromCancel: true);

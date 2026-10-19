@@ -34,6 +34,8 @@ final class SinkPump<T> {
   final Future<void> Function(T item) _send;
   final Future<void> Function() _halfClose;
   final void Function(Object error, StackTrace stackTrace) _onSourceFailed;
+  final void Function(Object error, StackTrace stackTrace)? _onSendFailed;
+  final bool _logFailures;
   final LogScope _log;
 
   final StreamController<T> _controller = StreamController<T>();
@@ -45,17 +47,26 @@ final class SinkPump<T> {
   /// [halfClose] runs when the source ends normally; [onSourceFailed] when it
   /// errors, once, and it owns telling the peer. [ended] is the call's own
   /// end-of-life signal, whatever produced it.
+  ///
+  /// A failed send is logged and the pump goes on; with [onSendFailed] it
+  /// stops instead and hands the failure over, once. [logFailures] false
+  /// leaves every record to the owner, for one that reports the failure
+  /// itself.
   SinkPump({
     required String what,
     required Future<void> Function(T item) send,
     required Future<void> Function() halfClose,
     required void Function(Object error, StackTrace stackTrace) onSourceFailed,
+    void Function(Object error, StackTrace stackTrace)? onSendFailed,
     required Future<void> ended,
+    bool logFailures = true,
     LogScope? logger,
   }) : _what = what,
        _send = send,
        _halfClose = halfClose,
        _onSourceFailed = onSourceFailed,
+       _onSendFailed = onSendFailed,
+       _logFailures = logFailures,
        _log = logger ?? LogScope.noop {
     _subscription = _controller.stream.listen(
       (item) {
@@ -66,11 +77,17 @@ final class SinkPump<T> {
         unawaited(
           _send(item)
               .catchError((Object error, StackTrace stackTrace) {
-                _log.error(
-                  '$_what: a send failed',
-                  error: error,
-                  stackTrace: stackTrace,
-                );
+                if (_logFailures) {
+                  _log.error(
+                    '$_what: a send failed',
+                    error: error,
+                    stackTrace: stackTrace,
+                  );
+                }
+                final onSendFailed = _onSendFailed;
+                if (onSendFailed == null || _finished) return;
+                stop();
+                onSendFailed(error, stackTrace);
               })
               .whenComplete(() {
                 if (!_finished) _subscription.resume();
@@ -78,6 +95,8 @@ final class SinkPump<T> {
         );
       },
       onDone: () async {
+        // A pump stopped by a failure, or by [ended], does not half-close.
+        if (_finished) return;
         _finished = true;
         try {
           await _halfClose();
@@ -90,11 +109,13 @@ final class SinkPump<T> {
         }
       },
       onError: (Object error, StackTrace stackTrace) {
-        _log.error(
-          '$_what: the source failed',
-          error: error,
-          stackTrace: stackTrace,
-        );
+        if (_logFailures) {
+          _log.error(
+            '$_what: the source failed',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
         if (_finished) return;
         stop();
         _onSourceFailed(error, stackTrace);
