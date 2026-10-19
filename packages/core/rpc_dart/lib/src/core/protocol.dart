@@ -100,9 +100,9 @@ abstract interface class RpcStatus {
 
   /// [isFault] for a caught [error]. A throw that carries no status is a fault:
   /// an unclassifiable failure is not an application answering. An
-  /// [IRpcPeerFault] is not, whatever its status: the peer sent it.
+  /// [RpcPeerFaultException] is not, whatever its status: the peer sent it.
   static bool isFaultError(Object error) {
-    if (error is IRpcPeerFault) return false;
+    if (error is RpcPeerFaultException) return false;
     return error is! RpcStatusException || isFault(error.statusCode);
   }
 }
@@ -151,7 +151,7 @@ abstract interface class RpcMessageFrame {
   /// limit", so a corrupt frame came back retryable — measured, `grpc-status 8`
   /// for a compression flag of 2.
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
-    // Both refusals are the PEER's malformed prefix (IRpcPeerFault): INTERNAL
+    // Both refusals are the PEER's malformed prefix (RpcPeerFaultException): INTERNAL
     // on the wire, as gRPC answers it, but not a fault of this side.
     if (headerBytes.length < RpcConstants.messagePrefixSize) {
       throw RpcPeerFaultException(
@@ -273,65 +273,6 @@ int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
   429 || 502 || 503 || 504 => RpcStatus.unavailable,
   _ => RpcStatus.unknown,
 };
-
-/// A closed endpoint or transport was asked to do work.
-///
-/// **A TYPE, because the message was load-bearing and could not be.** Ten sites
-/// across four packages threw `StateError('Transport is closed')` and one threw
-/// `RpcStatusException(unavailable, 'Transport is closed')`, and the code that
-/// has to recognise an ordinary shutdown matched BOTH spellings by comparing
-/// the text — so the wording was a contract with no declaration, and the one
-/// site that drifted had already made a clean shutdown log as a real failure.
-///
-/// FAILED_PRECONDITION when this side closed it: that is terminal, and a retry
-/// cannot reopen something closed on purpose. UNAVAILABLE when the PEER went
-/// away ([RpcClosedException.byPeer]), which is what every transport reports for
-/// a dead peer.
-final class RpcClosedException extends RpcStatusException {
-  /// [what] names the thing, e.g. `'Transport'` or `'Endpoint'`.
-  RpcClosedException(this.what, {String? detail})
-    : byPeer = false,
-      super(
-        RpcStatus.failedPrecondition,
-        detail == null ? '$what is closed' : '$what is closed: $detail',
-      );
-
-  /// Closed because the peer went away, not by this side.
-  RpcClosedException.byPeer(this.what)
-    : byPeer = true,
-      super(RpcStatus.unavailable, '$what is closed: the peer went away');
-
-  /// The thing that was closed, for a caller that wants to branch on it.
-  final String what;
-
-  /// Whether the peer, rather than this side, ended it.
-  final bool byPeer;
-}
-
-/// A reconnecting connection with no live transport — and which of the two
-/// such states it is.
-///
-/// UNAVAILABLE in both, the status every transport gives for a dead peer:
-/// `RpcRetryInterceptor` retries it after the connection's next attempt.
-/// [reconnecting] and the message still say which state it is: a reconnect in
-/// flight resolves itself, a stopped one needs `connect()`.
-final class RpcNoConnectionException extends RpcStatusException {
-  /// [what] names the thing, e.g. `'RpcClientConnection'`.
-  RpcNoConnectionException(this.what, {required this.reconnecting})
-    : super(
-        RpcStatus.unavailable,
-        reconnecting
-            ? '$what is reconnecting and has no connection; retry.'
-            : '$what has no connection and is not reconnecting; call '
-                  'connect().',
-      );
-
-  /// The thing with no connection, for a caller that wants to branch on it.
-  final String what;
-
-  /// Whether a reconnect was in flight when this was thrown.
-  final bool reconnecting;
-}
 
 /// The grpc-message sent for an error the handler did NOT describe itself.
 ///

@@ -13,6 +13,8 @@ import '../_internal.dart'
         IRpcCodec,
         RpcCallerEndpoint,
         RpcCallerPipelineMixin,
+        RpcCancelledException,
+        RpcDeadlineExceededException,
         RpcPeerEndpoint,
         RpcHeaders,
         RpcMetadata,

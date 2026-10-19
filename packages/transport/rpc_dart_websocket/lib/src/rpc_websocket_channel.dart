@@ -54,7 +54,7 @@ int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
 /// controller, so a single app-level keepalive from a proxy failed every call
 /// in flight — with a non-retryable [RpcException], over a connection that was
 /// still working.
-class RpcWebSocketNonBinaryFrame extends RpcException
+final class RpcWebSocketNonBinaryFrame extends RpcException
     implements IRpcAdvisoryChannelError {
   /// Creates the report for a frame of type [runtimeTypeName].
   RpcWebSocketNonBinaryFrame(String runtimeTypeName)

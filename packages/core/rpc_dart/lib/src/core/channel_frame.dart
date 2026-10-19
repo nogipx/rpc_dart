@@ -8,9 +8,6 @@ import 'dart:typed_data';
 import 'errors.dart';
 import 'frame_headroom.dart';
 import 'metadata.dart';
-// For RpcStatus: RpcFrameException carries the status for its kind, so the
-// three kinds stop collapsing into INTERNAL on the wire.
-import 'protocol.dart';
 
 /// Multiplexed frame format for [IRpcChannel]-based transports.
 ///
@@ -442,79 +439,6 @@ final class _MetadataReader {
     }
     return String.fromCharCodes(_bytes, start, end);
   }
-}
-
-/// Thrown when an incoming multiplexed frame violates protocol limits or is
-/// malformed (oversized declared payload, bad metadata encoding/shape).
-///
-/// Surfaced as a handled, typed error on the incoming stream rather than an
-/// uncaught throw into the receive loop's zone.
-/// Carries the gRPC status for its KIND, because the three kinds are not one
-/// answer. Untyped, every frame failure reached a peer as INTERNAL — including
-/// the limits, where INTERNAL is final and RESOURCE_EXHAUSTED is retryable, so
-/// a sender that could have corrected itself was told never to try again.
-///
-/// The split is not invented here; it is the one the http2 responder already
-/// makes in `_answerFramingViolation` and the one the channel transport already
-/// sends as a trailer for a policy violation.
-class RpcFrameException extends RpcStatusException {
-  /// Malformed framing — bad UTF-8, a length past the end, trailing bytes.
-  ///
-  /// INTERNAL, matching `_answerFramingViolation`'s "anything else reaching
-  /// here is malformed framing, which is INTERNAL". The default, so the six
-  /// sites of this kind are unchanged.
-  RpcFrameException(String message) : super(RpcStatus.internal, message);
-
-  /// A limit the peer can correct by sending less.
-  ///
-  /// RESOURCE_EXHAUSTED, which grpc-go and grpc-java both answer and which
-  /// `RpcRetryInterceptor` treats as transient where INTERNAL is final.
-  RpcFrameException.limit(String message)
-    : super(RpcStatus.resourceExhausted, message);
-
-  /// The peer's metadata failed the configured policy.
-  ///
-  /// INVALID_ARGUMENT — deterministic, so it should be retried never, and it is
-  /// already the trailer `RpcChannelTransport._validateInbound` sends.
-  RpcFrameException.policy(String message)
-    : super(RpcStatus.invalidArgument, message);
-}
-
-/// A peer's metadata failed [RpcSecurityPolicy.validateMetadata].
-///
-/// **Implements [ArgumentError] on purpose.** That is what `validateMetadata`
-/// threw, and five decision points read `is ArgumentError` to mean "the peer is
-/// at fault" — including whether to charge the 256-violation backstop that ends
-/// a connection. Keeping the interface keeps every one of them working, and
-/// keeps any caller's `catch` working too.
-///
-/// What it adds is the thing `ArgumentError` cannot say. `ArgumentError` means
-/// a CALLER passed a bad argument — a programming mistake — so using it for
-/// untrusted peer input left those five sites unable to tell a hostile peer
-/// from an ordinary bug raised anywhere else on the same path. Narrowing a site
-/// to `is RpcMetadataViolation` makes that distinction available; this type
-/// exists so it can be made.
-///
-/// And it is in the hierarchy, so a peer is told INVALID_ARGUMENT with the
-/// diagnostic rather than a redacted INTERNAL.
-class RpcMetadataViolation extends RpcStatusException implements ArgumentError {
-  /// The offending value, when there is a single one worth naming.
-  @override
-  final dynamic invalidValue;
-
-  /// The parameter-style name of what was rejected, e.g. `metadata.headers`.
-  @override
-  final String? name;
-
-  /// Creates a violation describing [message].
-  RpcMetadataViolation(String message, {this.invalidValue, this.name})
-    : super(RpcStatus.invalidArgument, message);
-
-  @override
-  StackTrace? get stackTrace => null;
-
-  @override
-  String toString() => 'Invalid argument: $message';
 }
 
 /// A decoded multiplexed frame.

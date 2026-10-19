@@ -3,6 +3,10 @@
 //
 // SPDX-License-Identifier: MIT
 
+/// Every exception rpc_dart throws, in one hierarchy: [RpcException] at the
+/// root, [RpcStatusException] for everything that carries a gRPC status.
+library;
+
 import 'dart:typed_data';
 
 import 'error_details.dart';
@@ -20,12 +24,10 @@ const String kAbsentTrailerMessage = 'Unknown error';
 ///
 /// **Abstract, and that is the point.** A bare `RpcException` said only "some
 /// rpc_dart error", and `wireStatusFor` had to answer it with INTERNAL — so
-/// every throw site that did not bother to classify itself became INTERNAL on
-/// the wire, including limits a peer could have corrected and methods that do
-/// not exist. Worse, `RpcException` is the BASE, so any `is RpcException` check
-/// meant to identify a KIND matched everything: the http2 responder read it as
-/// "a resource limit" and answered a corrupt frame RESOURCE_EXHAUSTED, which is
-/// retryable.
+/// every throw site that did not classify itself became INTERNAL on the wire,
+/// including limits a peer could have corrected and methods that do not
+/// exist. And since `RpcException` is the BASE, an `is RpcException` check
+/// meant to identify a KIND matched everything.
 ///
 /// Throw [RpcStatusException] with the status that fits, or a subclass that
 /// picks one for you ([RpcFrameException], [RpcMetadataViolation],
@@ -33,15 +35,11 @@ const String kAbsentTrailerMessage = 'Unknown error';
 ///
 /// Still the type to CATCH: `e is RpcException` remains the one check that
 /// means "this came from rpc_dart".
-class RpcException implements Exception {
+abstract base class RpcException implements Exception {
   /// Human-readable description of the error.
   final String message;
 
   /// Creates an [RpcException] with the given [message].
-  ///
-  /// `const` so subclasses that were const before joining this hierarchy stay
-  /// const. Widening a constructor to const is additive: every existing
-  /// non-const invocation keeps working.
   const RpcException(this.message);
 
   @override
@@ -60,24 +58,6 @@ class RpcException implements Exception {
 /// endpoints log it — which is the whole point of reporting rather than
 /// dropping. It just stops there.
 abstract interface class IRpcAdvisoryChannelError {}
-
-/// Marks an error raised because the PEER sent something invalid: a second
-/// request on a call that carries one, or a payload the request codec could
-/// not decode.
-///
-/// The peer is told, with the status the error carries. It is not a fault of
-/// this side, so [RpcStatus.isFaultError] reads false and it is not logged as
-/// one: a peer repeating the call would otherwise choose how many error
-/// records the server writes.
-abstract interface class IRpcPeerFault {}
-
-/// An [RpcStatusException] raised for the peer's own invalid input. See
-/// [IRpcPeerFault].
-final class RpcPeerFaultException extends RpcStatusException
-    implements IRpcPeerFault {
-  /// Creates a peer fault with [statusCode] and [message].
-  RpcPeerFaultException(super.statusCode, super.message);
-}
 
 /// An exception thrown from an RPC handler to return a specific gRPC status
 /// code to the caller.
@@ -105,7 +85,7 @@ final class RpcPeerFaultException extends RpcStatusException
 ///   return Response(user: user);
 /// }
 /// ```
-class RpcStatusException extends RpcException {
+base class RpcStatusException extends RpcException {
   /// gRPC status code (see [RpcStatus] constants).
   final int statusCode;
 
@@ -153,11 +133,9 @@ class RpcStatusException extends RpcException {
   /// `grpc-message`.** The precedence below is: the trailer message, then the
   /// one inside `grpc-status-details-bin`, then [kAbsentTrailerMessage] — and a
   /// placeholder passed in as [message] is indistinguishable from a real one,
-  /// so it suppresses the details message permanently. Five of the seven call
-  /// sites used to pass `'Unknown error'`, which is why a peer that puts its
-  /// detail in `google.rpc.Status` and omits `grpc-message` — legal, and what
-  /// that field is for — was readable on two call shapes and opaque on the
-  /// other five.
+  /// so it would suppress the details message permanently. A peer may put its
+  /// detail in `google.rpc.Status` and omit `grpc-message`; that is what the
+  /// field is for.
   factory RpcStatusException.fromTrailer(
     int statusCode,
     String message, {
@@ -186,5 +164,209 @@ class RpcStatusException extends RpcException {
   String toString() {
     final detailStr = details.isNotEmpty ? ', details: $details' : '';
     return 'RpcStatusException($statusCode): $message$detailStr';
+  }
+}
+
+/// Raised because the PEER sent something invalid: a second request on a call
+/// that carries one, or a payload the request codec could not decode.
+///
+/// The peer is told, with the status the error carries. It is not a fault of
+/// this side, so [RpcStatus.isFaultError] reads false and it is not logged as
+/// one: a peer repeating the call would otherwise choose how many error
+/// records the server writes.
+final class RpcPeerFaultException extends RpcStatusException {
+  /// Creates a peer fault with [statusCode] and [message].
+  RpcPeerFaultException(super.statusCode, super.message);
+}
+
+/// A closed endpoint or transport was asked to do work.
+///
+/// A type, so the code that recognises an ordinary shutdown matches a type and
+/// not the wording of a message.
+///
+/// FAILED_PRECONDITION when this side closed it: that is terminal, and a retry
+/// cannot reopen something closed on purpose. UNAVAILABLE when the PEER went
+/// away ([RpcClosedException.byPeer]), which is what every transport reports for
+/// a dead peer.
+final class RpcClosedException extends RpcStatusException {
+  /// [what] names the thing, e.g. `'Transport'` or `'Endpoint'`.
+  RpcClosedException(this.what, {String? detail})
+    : byPeer = false,
+      super(
+        RpcStatus.failedPrecondition,
+        detail == null ? '$what is closed' : '$what is closed: $detail',
+      );
+
+  /// Closed because the peer went away, not by this side.
+  RpcClosedException.byPeer(this.what)
+    : byPeer = true,
+      super(RpcStatus.unavailable, '$what is closed: the peer went away');
+
+  /// The thing that was closed, for a caller that wants to branch on it.
+  final String what;
+
+  /// Whether the peer, rather than this side, ended it.
+  final bool byPeer;
+}
+
+/// A reconnecting connection with no live transport — and which of the two
+/// such states it is.
+///
+/// UNAVAILABLE in both, the status every transport gives for a dead peer:
+/// `RpcRetryInterceptor` retries it after the connection's next attempt.
+/// [reconnecting] and the message still say which state it is: a reconnect in
+/// flight resolves itself, a stopped one needs `connect()`.
+final class RpcNoConnectionException extends RpcStatusException {
+  /// [what] names the thing, e.g. `'RpcClientConnection'`.
+  RpcNoConnectionException(this.what, {required this.reconnecting})
+    : super(
+        RpcStatus.unavailable,
+        reconnecting
+            ? '$what is reconnecting and has no connection; retry.'
+            : '$what has no connection and is not reconnecting; call '
+                  'connect().',
+      );
+
+  /// The thing with no connection, for a caller that wants to branch on it.
+  final String what;
+
+  /// Whether a reconnect was in flight when this was thrown.
+  final bool reconnecting;
+}
+
+/// Thrown when an incoming multiplexed frame violates protocol limits or is
+/// malformed (oversized declared payload, bad metadata encoding).
+///
+/// Surfaced as a handled, typed error on the incoming stream rather than an
+/// uncaught throw into the receive loop's zone. Carries the gRPC status for its
+/// KIND, because the three kinds are not one answer: INTERNAL is final, and a
+/// limit the sender can correct is RESOURCE_EXHAUSTED, which is retryable.
+base class RpcFrameException extends RpcStatusException {
+  /// Malformed framing — bad UTF-8, a length past the end, trailing bytes.
+  /// INTERNAL.
+  RpcFrameException(String message) : super(RpcStatus.internal, message);
+
+  /// A limit the peer can correct by sending less.
+  ///
+  /// RESOURCE_EXHAUSTED, which grpc-go and grpc-java both answer and which
+  /// `RpcRetryInterceptor` treats as transient where INTERNAL is final.
+  RpcFrameException.limit(String message)
+    : super(RpcStatus.resourceExhausted, message);
+
+  /// The peer's metadata failed the configured policy.
+  ///
+  /// INVALID_ARGUMENT — deterministic, so it should be retried never, and it is
+  /// the trailer `RpcChannelTransport` sends for a policy violation.
+  RpcFrameException.policy(String message)
+    : super(RpcStatus.invalidArgument, message);
+}
+
+/// A peer's metadata failed `RpcSecurityPolicy.validateMetadata`.
+///
+/// **Implements [ArgumentError] on purpose.** That is what `validateMetadata`
+/// throws, and decision points read `is ArgumentError` to mean "the peer is at
+/// fault" — including whether to charge the violation backstop that ends a
+/// connection. Narrowing a site to `is RpcMetadataViolation` tells a hostile
+/// peer from an ordinary bug raised anywhere else on the same path.
+///
+/// And it is in the hierarchy, so a peer is told INVALID_ARGUMENT with the
+/// diagnostic rather than a redacted INTERNAL.
+final class RpcMetadataViolation extends RpcStatusException
+    implements ArgumentError {
+  /// The offending value, when there is a single one worth naming.
+  @override
+  final dynamic invalidValue;
+
+  /// The parameter-style name of what was rejected, e.g. `metadata.headers`.
+  @override
+  final String? name;
+
+  /// Creates a violation describing [message].
+  RpcMetadataViolation(String message, {this.invalidValue, this.name})
+    : super(RpcStatus.invalidArgument, message);
+
+  @override
+  StackTrace? get stackTrace => null;
+
+  @override
+  String toString() => 'Invalid argument: $message';
+}
+
+/// Operation cancellation exception, carrying CANCELLED.
+///
+/// The status is load-bearing: `wireStatusFor` is DEFAULT DENY — only this
+/// hierarchy reaches a peer intact — so a handler throwing an exception outside
+/// it is indistinguishable from a foreign `StateError`.
+final class RpcCancelledException extends RpcStatusException {
+  /// Creates an [RpcCancelledException] with the given [message].
+  const RpcCancelledException(String message)
+    : super(RpcStatus.cancelled, message);
+
+  /// Reason the operation was cancelled.
+  String get reason => message;
+
+  @override
+  String toString() => 'RpcCancelledException: $message';
+}
+
+/// Deadline-exceeded exception, carrying DEADLINE_EXCEEDED.
+///
+/// Not const, unlike its sibling: the wire message interpolates [deadline], and
+/// a const constructor cannot.
+final class RpcDeadlineExceededException extends RpcStatusException {
+  /// The deadline that was exceeded.
+  final DateTime deadline;
+
+  /// The timeout duration that was configured.
+  final Duration timeout;
+
+  /// Creates an [RpcDeadlineExceededException] with [deadline] and [timeout].
+  RpcDeadlineExceededException(this.deadline, this.timeout)
+    : super(
+        RpcStatus.deadlineExceeded,
+        'Deadline $deadline exceeded (timeout: $timeout)',
+      );
+
+  @override
+  String toString() => 'RpcDeadlineExceededException: $message';
+}
+
+/// Thrown by `RpcRateLimiter` when a call exceeds the configured limit.
+///
+/// RESOURCE_EXHAUSTED, so retry policies can back off and retry. [retryAfter]
+/// travels as an [RpcRetryInfo] detail: that pushback is what tells a remote
+/// `RpcRetryInterceptor` this RESOURCE_EXHAUSTED is transient; a size refusal
+/// has the same status and none.
+final class RpcRateLimitException extends RpcStatusException {
+  /// Creates an [RpcRateLimitException].
+  RpcRateLimitException(String message, {Duration? retryAfter})
+    : super(
+        RpcStatus.resourceExhausted,
+        message,
+        details: retryAfter == null ? const [] : [RpcRetryInfo(retryAfter)],
+      );
+}
+
+/// Exception thrown when a circuit breaker is open.
+///
+/// UNAVAILABLE, because an open breaker is exactly "try again later", which is
+/// also what `RpcRetryInterceptor` treats as retryable.
+final class CircuitBreakerOpenException extends RpcStatusException {
+  /// Time until the circuit breaker will transition to half-open.
+  final Duration? retryAfter;
+
+  /// Creates a [CircuitBreakerOpenException].
+  ///
+  /// `const`, which is why [retryAfter] is rendered in [toString] rather than
+  /// folded into the status message: a const constructor cannot interpolate.
+  const CircuitBreakerOpenException({this.retryAfter})
+    : super(RpcStatus.unavailable, 'circuit is open');
+
+  @override
+  String toString() {
+    if (retryAfter != null) {
+      return 'CircuitBreakerOpenException: circuit is open, retry after ${retryAfter!.inMilliseconds}ms';
+    }
+    return 'CircuitBreakerOpenException: circuit is open';
   }
 }

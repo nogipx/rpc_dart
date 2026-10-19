@@ -757,22 +757,3 @@ class RpcRateLimiter extends IRpcInterceptor {
 // ---------------------------------------------------------------------------
 // Public exception type
 // ---------------------------------------------------------------------------
-
-/// Thrown by [RpcRateLimiter] when a call exceeds the configured limit.
-///
-/// Carries gRPC status RESOURCE_EXHAUSTED so it survives the wire as status 8
-/// (the responder maps a plain [RpcException] to INTERNAL/13, which clients
-/// cannot recognise as retryable) — letting retry policies back off and retry.
-///
-/// [retryAfter] travels as an [RpcRetryInfo] detail. That pushback is what
-/// tells a remote [RpcRetryInterceptor] this RESOURCE_EXHAUSTED is transient; a
-/// size refusal has the same status and none.
-class RpcRateLimitException extends RpcStatusException {
-  /// Creates an [RpcRateLimitException].
-  RpcRateLimitException(String message, {Duration? retryAfter})
-    : super(
-        RpcStatus.resourceExhausted,
-        message,
-        details: retryAfter == null ? const [] : [RpcRetryInfo(retryAfter)],
-      );
-}

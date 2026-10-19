@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'channel_frame.dart' show RpcMetadataViolation;
+import 'errors.dart' show RpcMetadataViolation;
 
 /// gRPC-semantic header name constants.
 ///

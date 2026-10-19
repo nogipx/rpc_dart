@@ -298,7 +298,7 @@ extension _StreamProcessorInternals<
           }
         } catch (e, stackTrace) {
           // The PEER's bytes did not decode: its fault, answered INTERNAL as
-          // gRPC does, but not an incident here (IRpcPeerFault).
+          // gRPC does, but not an incident here (RpcPeerFaultException).
           if (_logger.isInternal) {
             _logger.internal(
               'request_deserialization error [methodPath: $_methodPath, '

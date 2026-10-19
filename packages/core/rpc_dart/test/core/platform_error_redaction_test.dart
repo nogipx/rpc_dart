@@ -125,6 +125,6 @@ void main() {
 /// `RpcException` is abstract, and every core subclass now carries a status, so
 /// this is what wireStatusFor's second branch looks like from outside core —
 /// `RpcDataError` and `RpcWebSocketNonBinaryFrame` are the real ones.
-class _LibraryAuthored extends RpcException {
+final class _LibraryAuthored extends RpcException {
   _LibraryAuthored(super.message);
 }

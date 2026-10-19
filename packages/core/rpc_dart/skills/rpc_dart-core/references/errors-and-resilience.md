@@ -13,9 +13,12 @@ tools: retry, circuit breaker, rate limiter and reconnecting connection.
 
 - To tell the caller something, throw `RpcStatusException(statusCode, message,
   {details})` with a constant from `RpcStatus`. Nothing else keeps its status.
-- `RpcException` is the base type. Its constructor is `const RpcException(this.message)`: it has a
-  message only, with no code and no details. Catch `RpcException` to mean "came from rpc_dart".
-  Throw `RpcStatusException` or one of its subclasses.
+- `RpcException` is the `abstract base` root: a message only, with no code and
+  no details, and it cannot be thrown itself. Catch `RpcException` to mean
+  "came from rpc_dart". Throw `RpcStatusException` or one of its subclasses.
+  Every rpc_dart exception class is `final` except `RpcStatusException` and
+  `RpcFrameException`, which are `base`: a subclass of either must itself be
+  `base` or `final`.
 - On the caller, a server-sent error ALWAYS arrives as a plain
   `RpcStatusException`. Branch on `e.statusCode`, not on subtype. Only
   errors raised on the caller itself keep their subtype:

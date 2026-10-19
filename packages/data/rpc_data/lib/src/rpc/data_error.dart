@@ -9,7 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 /// Базовый класс для ошибок сервиса данных.
 @immutable
-class RpcDataError extends RpcException {
+final class RpcDataError extends RpcException {
   RpcDataError(
     super.message, {
     required this.status,

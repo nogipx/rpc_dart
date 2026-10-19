@@ -334,12 +334,12 @@ void main() {
 /// An [RpcException] that is NOT an [RpcStatusException] — what wireStatusFor's
 /// second branch looks like from outside core, where `RpcDataError` and
 /// `RpcWebSocketNonBinaryFrame` are the real ones.
-class _LibraryAuthored extends RpcException {
+final class _LibraryAuthored extends RpcException {
   _LibraryAuthored(super.message);
 }
 
 /// The shape of rpc_data's RpcDataError: a message, and a cause in toString.
-class _WithCause extends RpcException {
+final class _WithCause extends RpcException {
   _WithCause(super.message);
 
   @override

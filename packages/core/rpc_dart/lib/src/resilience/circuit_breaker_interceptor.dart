@@ -18,35 +18,6 @@ enum CircuitBreakerState {
   halfOpen,
 }
 
-/// Exception thrown when the circuit breaker is open.
-///
-/// An [RpcStatusException] carrying UNAVAILABLE so it is findable by the one
-/// `catch` that covers this library — untyped, it sat outside the hierarchy and
-/// `catch (e) { if (e is RpcException) }` missed it entirely. UNAVAILABLE
-/// because an open breaker is exactly "try again later", which is also what
-/// `RpcRetryInterceptor` already treats as retryable.
-class CircuitBreakerOpenException extends RpcStatusException {
-  /// Time until the circuit breaker will transition to half-open.
-  final Duration? retryAfter;
-
-  /// Creates a [CircuitBreakerOpenException].
-  ///
-  /// Still `const`, which is why [retryAfter] is rendered in [toString] rather
-  /// than folded into the status message: a const constructor cannot
-  /// interpolate. `const CircuitBreakerOpenException()` is existing public API
-  /// and appears twice in this file.
-  const CircuitBreakerOpenException({this.retryAfter})
-    : super(RpcStatus.unavailable, 'circuit is open');
-
-  @override
-  String toString() {
-    if (retryAfter != null) {
-      return 'CircuitBreakerOpenException: circuit is open, retry after ${retryAfter!.inMilliseconds}ms';
-    }
-    return 'CircuitBreakerOpenException: circuit is open';
-  }
-}
-
 /// Interceptor that implements the circuit breaker pattern.
 ///
 /// Tracks consecutive failures. When failures exceed [failureThreshold],

@@ -6,7 +6,7 @@
 // For RpcMetadataViolation: peer metadata failing this policy is a wire fact,
 // not a caller's programming mistake, and the type says which.
 import '../codec/special_cbor.dart' show CborCodec;
-import 'channel_frame.dart';
+import 'errors.dart' show RpcMetadataViolation;
 import 'metadata.dart';
 import 'protocol.dart';
 import 'rpc_headers.dart';
