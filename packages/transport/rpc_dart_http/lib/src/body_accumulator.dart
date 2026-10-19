@@ -7,8 +7,8 @@ import 'dart:typed_data';
 /// Collects an HTTP body whose chunk sizes the PEER chooses.
 ///
 /// A `BytesBuilder(copy: false)` keeps every chunk as its own list, with a
-/// fixed cost whatever its length, so a body sent as one-byte chunks held many
-/// times its size in heap under a ceiling that counts bytes. Small chunks are
+/// fixed cost whatever its length, so a body sent as one-byte chunks would hold
+/// many times its size in heap under a ceiling that counts bytes. Small chunks are
 /// therefore copied into one buffer, and only large ones are kept as they
 /// came, which is the copy `copy: false` exists to avoid.
 ///

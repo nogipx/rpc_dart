@@ -83,9 +83,9 @@ String? _shortReason(Uint8List body) {
 ///    everything at once. Client-streaming and bidirectional round-trip the same
 ///    way. Nothing warns that the streaming semantics are gone.
 ///  * "Fits" is TWO ceilings, and a finite stream past either one fails
-///    RESOURCE_EXHAUSTED rather than degrading. Measured on the defaults:
-///    `1500 x 10 B` and `20 x 1 MiB` both fail here and both succeed over a
-///    channel transport.
+///    RESOURCE_EXHAUSTED rather than degrading. On the defaults, `1500 x 10 B`
+///    and `20 x 1 MiB` both fail here and both succeed over a channel
+///    transport.
 ///      - bytes: the whole body against [RpcSecurityPolicy.maxBufferedBytes]
 ///        (16 MiB when unset, from `maxMessageLengthBytes`).
 ///      - count: the body reaches the parser as ONE chunk, so
@@ -168,8 +168,7 @@ class RpcHttpCallerTransport extends IRpcTransport {
   ///
   /// **A client you pass in stays yours.** [close] closes only a client this
   /// transport created, because closing one it was given breaks it for every other
-  /// user — measured: an injected client answered `ClientException` on its next
-  /// request after `transport.close()`. Close yours when you are done with it.
+  /// user. Close yours when you are done with it.
   ///
   /// [policy] bounds what a RESPONSE may cost this client, and is reported to
   /// the endpoint layers through [securityPolicy]. It defaults to
@@ -224,22 +223,17 @@ class RpcHttpCallerTransport extends IRpcTransport {
   /// [metadata] if it satisfies the policy, else the status it carries alone.
   ///
   /// This transport is not an `RpcChannelTransport`, so core's `_validateInbound`
-  /// never runs on it and the response headers used to go up unchecked -- measured, a
-  /// server answering with 1000 extra headers had `1007` delivered against a
-  /// `maxHeaders` of 128.
+  /// never runs on it; without this check the response headers go up unchecked.
   ///
   /// Reduced rather than refused, because refusing destroys the server's status:
-  /// `RpcSecurityPolicy.statusOnly` owns that rule and carries the measurement that
-  /// settled it.
+  /// `RpcSecurityPolicy.statusOnly` owns that rule.
   ///
-  /// [isTrailer] decides what a violation leaves behind, and getting it wrong
-  /// reproduces the very defect this guards against. **The status lives in the
-  /// TRAILER frame** on this transport — the split above routes `grpc-status` and
+  /// [isTrailer] decides what a violation leaves behind. **The status lives in the
+  /// TRAILER frame** on this transport — `_fireRequest` routes `grpc-status` and
   /// `grpc-message` there — so an offending INITIAL frame has no status to keep and
-  /// must not invent one: a first attempt answered it with this side's
-  /// INVALID_ARGUMENT, which reached the caller BEFORE the server's real
-  /// `grpc-status: 9` and won. An initial frame is therefore reduced to nothing and
-  /// the trailers answer the call.
+  /// must not invent one: this side's INVALID_ARGUMENT would reach the caller
+  /// BEFORE the server's real `grpc-status` and win. An initial frame is therefore
+  /// reduced to nothing and the trailers answer the call.
   RpcMetadata _checkedResponseMetadata(
     RpcMetadata metadata,
     int streamId, {
@@ -280,9 +274,7 @@ class RpcHttpCallerTransport extends IRpcTransport {
     // `maxBufferedBytes` ("max buffered bytes for reassembly/parsing"), not the
     // per-message one. Identical by default, since `effectiveMaxBufferedBytes`
     // falls back to `maxMessageLengthBytes + 5`, which is what keeps a unary
-    // response at exactly the configured limit acceptable. What changes is that
-    // a server stream over 16 MiB is now raisable by the knob whose name means
-    // it; bounded by the message limit, raising that one did nothing.
+    // response at exactly the configured limit acceptable.
     final limit = _policy.effectiveMaxBufferedBytes;
     final configured =
         _policy.maxBufferedBytes ?? _policy.maxMessageLengthBytes;
@@ -332,11 +324,9 @@ class RpcHttpCallerTransport extends IRpcTransport {
   @override
   int createStream() {
     if (_isClosed) throw RpcClosedException('Transport');
-    // `maxActiveStreams` was inert here: a client configured with 4 opened 12
-    // concurrent calls, all 12 reaching the server at once, while the same
-    // configuration refused the 5th over core and HTTP/2. The HttpClient
-    // connection pool does not cover for it -- measured, 12 concurrent server
-    // requests -- because its default is unlimited per host.
+    // `maxActiveStreams` is enforced here, as over core and HTTP/2. The
+    // HttpClient connection pool does not cover for it, because its default is
+    // unlimited per host.
     if (_activeStreams.length >= _policy.maxActiveStreams) {
       // RESOURCE_EXHAUSTED and the same wording as the two siblings: a
       // transient limit the caller can back off from, not a mistake it made.
@@ -352,15 +342,14 @@ class RpcHttpCallerTransport extends IRpcTransport {
 
   /// Abort triggers for requests currently on the wire, one per stream.
   ///
-  /// Releasing an id used to free bookkeeping ONLY: the POST and the body read
-  /// carried on to the end, so a cancelled or timed-out call kept its socket and
-  /// its bandwidth until the server finished — measured at the server, which wrote
-  /// every chunk of a long response after the client had abandoned it. The
-  /// `maxActiveStreams` slot is returned at the same moment, so the ceiling stops
-  /// bounding real sockets exactly when it matters most.
+  /// Without them, releasing an id frees bookkeeping ONLY: the POST and the body
+  /// read carry on to the end, so a cancelled or timed-out call keeps its socket
+  /// and its bandwidth until the server finishes. The `maxActiveStreams` slot is
+  /// returned at the same moment, so the ceiling stops bounding real sockets
+  /// exactly when it matters most.
   ///
   /// `package:http`'s [http.Abortable] is what makes the request itself
-  /// cancellable; completing the trigger is what [releaseStreamId] now does.
+  /// cancellable; [releaseStreamId] completes the trigger.
   final Map<int, Completer<void>> _abortTriggers = {};
 
   @override
@@ -393,12 +382,12 @@ class RpcHttpCallerTransport extends IRpcTransport {
       // metadata frame because this transport has no resetStream.
       //
       // There is nothing to put on the wire for it: one request IS the call, and
-      // by cancellation time it has been sent. Treating it as an opening frame
-      // fired a second POST to `/Unknown/Unknown` for every cancel -- answered
-      // UNIMPLEMENTED, preflight-failing in a browser, and leaving the real
-      // handler running regardless. And the pending call must survive it
-      // intact: the old code REPLACED it, so a cancel arriving before the
-      // request fired lost the method path and the buffered body with it.
+      // by cancellation time it has been sent. Treated as an opening frame it
+      // would fire a second POST to `/Unknown/Unknown` for every cancel --
+      // answered UNIMPLEMENTED, preflight-failing in a browser, and leaving the
+      // real handler running regardless. And the pending call must survive it
+      // intact: replacing it would lose the method path and the buffered body
+      // of a call cancelled before its request fired.
       return;
     }
     _pending[streamId] = _PendingCall(
@@ -483,8 +472,7 @@ class RpcHttpCallerTransport extends IRpcTransport {
       // `,` is the delimiter PROTOCOL-HTTP2 names: duplicate header names "may have
       // their values joined with ',' as the delimiter and be considered semantically
       // equivalent". So this is the encoding the field's own definition provides
-      // for, and writing `map[name] = value` instead dropped every value but the
-      // last.
+      // for.
       //
       // The receive path does NOT split this back apart -- see there. Joined and
       // repeated are equivalent on the wire, and only the receiver knows whether a
@@ -538,12 +526,10 @@ class RpcHttpCallerTransport extends IRpcTransport {
       }
 
       // A 200 whose content-type is not gRPC is not a gRPC response, and its
-      // body is not gRPC frames. The HTTP/2 caller has refused this since it
-      // met a proxy's HTML error page; this one had no such check, so the body
-      // reached the parser and the call failed as
-      // `Invalid compression flag in gRPC message: 60` -- 60 being '<'. Same
-      // status either way, and a diagnostic that names a framing detail instead
-      // of the problem.
+      // body is not gRPC frames. Without this check the body reaches the parser
+      // and the call fails as `Invalid compression flag in gRPC message: 60` --
+      // 60 being '<', a diagnostic that names a framing detail instead of the
+      // problem.
       //
       // Lenient, like the HTTP/2 caller: a Trailers-Only answer legitimately
       // carries no content-type.
@@ -581,10 +567,9 @@ class RpcHttpCallerTransport extends IRpcTransport {
         // joined LIST from one value containing a comma needs the field's
         // definition, and the wire carries no marker for that: `date`'s comma
         // follows the weekday and `www-authenticate`'s sits inside a quoted
-        // string, so splitting every field cut those in half. The alternative was
-        // a list of standard fields to exempt, whose every missing entry is that
-        // same defect for that field, silently, and which has to track HTTP's own
-        // evolution.
+        // string, so splitting every field would cut those in half. A list of
+        // standard fields to exempt would have that same defect for every
+        // missing entry, silently, and would have to track HTTP's own evolution.
         //
         // So splitting is the RECEIVER's job, where the key's meaning is known.
         // The delimiter is ',' with optional surrounding whitespace: gRPC names
@@ -609,15 +594,13 @@ class RpcHttpCallerTransport extends IRpcTransport {
         }
       });
 
-      // THE POLICY APPLIES INBOUND HERE TOO, and it did not: this transport is not an
-      // `RpcChannelTransport`, so core's `_validateInbound` never runs on it, and the
-      // response headers went up with no count, size or character check. Measured
-      // against a server answering with 1000 extra headers: `1007 delivered` on a
-      // `maxHeaders` of 128.
+      // THE POLICY APPLIES INBOUND HERE TOO: this transport is not an
+      // `RpcChannelTransport`, so core's `_validateInbound` never runs on it, and
+      // without this the response headers go up with no count, size or character
+      // check.
       //
       // Reduced, not refused, when it breaks -- `RpcSecurityPolicy.statusOnly` owns
-      // that rule and carries why. Refusing destroys the server's status, which is
-      // what round 567 had to undo on http2.
+      // that rule. Refusing destroys the server's status.
       final initial = _checkedResponseMetadata(
         RpcMetadata(initialHeaders),
         streamId,
@@ -693,13 +676,10 @@ class RpcHttpCallerTransport extends IRpcTransport {
       _abortTriggers.remove(streamId);
       _inFlight.remove(streamId);
       // The second give-back, matching both siblings: core prunes on a terminal
-      // inbound frame as well as in releaseStreamId, and http2 removes at four
-      // sites. Measured REDUNDANT today -- with this line ablated, all four
-      // endings (completion, connection refused, HTTP 503, a non-gRPC 200) still
-      // return the slot, because the endpoint above calls releaseStreamId on
-      // every one. Kept because that is another layer's behaviour, and the
-      // failure if it ever changes is the worst one this limit has: a ceiling
-      // that ratchets shut for good, N calls into a process.
+      // inbound frame as well as in releaseStreamId. The endpoint above calls
+      // releaseStreamId on every ending, but that is another layer's behaviour;
+      // if it ever changes, without this line the ceiling ratchets shut for
+      // good, N calls into a process.
       _activeStreams.remove(streamId);
       _idManager.releaseId(streamId);
     }
@@ -810,7 +790,7 @@ class RpcHttpCallerTransport extends IRpcTransport {
     _pending.clear();
     _activeStreams.clear();
     // Only if this transport created it. Closing a client the caller passed in
-    // breaks it for every other user of it, and nothing said who owned it.
+    // breaks it for every other user of it.
     if (_ownsHttpClient) _httpClient.close();
     // Only the calls actually in flight are told why they ended; the rest just
     // close. See [_closedDuringCall].
@@ -833,11 +813,9 @@ class RpcHttpCallerTransport extends IRpcTransport {
   /// very often NOT the code that called close(), so it gets something it can
   /// only string-match.
   ///
-  /// UNAVAILABLE is chosen to MATCH the other three transports rather than on
-  /// its own merits; `CANCELLED` (gRPC's code for a locally-aborted call, and
-  /// non-retryable) is arguably the better fit and remains the maintainer's
-  /// call, as a one-line change per transport. Matching is the smaller move: it
-  /// removes the unclassifiable error without inventing a fourth behaviour.
+  /// UNAVAILABLE MATCHES the other three transports. `CANCELLED` (gRPC's code
+  /// for a locally-aborted call, and non-retryable) is arguably the better fit,
+  /// but would make this transport behave unlike the rest.
   ///
   /// Deliberately DISTINCT from a call made after close, which is
   /// [RpcClosedException] — FAILED_PRECONDITION, because closed is terminal and
@@ -866,7 +844,8 @@ class RpcHttpCallerTransport extends IRpcTransport {
 
 /// One request's failure, as the broadcast carries it. Advisory: every call is
 /// its own HTTP request, so one failing says nothing about the others, and
-/// `RpcClientConnection` retired the transport on it -- failing all of them.
+/// `RpcClientConnection` retires the transport on a non-advisory error --
+/// failing all of them.
 final class _OneRequestFailure extends RpcStatusException
     implements IRpcAdvisoryChannelError {
   _OneRequestFailure(super.statusCode, super.message, {super.details});
