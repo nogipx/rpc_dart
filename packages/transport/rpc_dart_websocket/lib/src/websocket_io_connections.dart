@@ -236,7 +236,9 @@ Stream<WebSocket> _upgradeEach(
             protocolSelector: protocolSelector,
           ).then(
             (socket) {
-              if (out.isClosed) {
+              // A cancelled subscription leaves the controller open but with
+              // no listener, and an add there drops the socket unclosed.
+              if (out.isClosed || !out.hasListener) {
                 unawaited(socket.close());
               } else {
                 out.add(socket);
