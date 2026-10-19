@@ -283,7 +283,13 @@ final class ConformanceResponder extends RpcResponderContract {
         throw RpcStatusException(RpcStatus.cancelled, 'call ended');
       case Mode.fail:
         await _wait(request.delayMs, context);
-        throw RpcStatusException(RpcStatus.aborted, 'failed on purpose');
+        // A responseSize past the header pads the message, so a caller
+        // chooses what the failure weighs on the wire.
+        final pad = request.responseSize - Blob.headerSize;
+        throw RpcStatusException(
+          RpcStatus.aborted,
+          pad > 0 ? 'failed on purpose ${'x' * pad}' : 'failed on purpose',
+        );
       case Mode.echo:
       case Mode.hold:
       case Mode.produce:

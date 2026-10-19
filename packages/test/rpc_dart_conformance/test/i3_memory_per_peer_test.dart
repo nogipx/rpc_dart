@@ -249,8 +249,10 @@ void main() {
   group('I-3 a peer that never reads is not answered without bound:', () {
     // Each call is answered by a trailer alone, which flow control does not
     // hold back: a DATA answer would park in the send window instead, under
-    // the many-streams bound. 100k trailers are ~30 MiB; what the server may
-    // take on is its write backlog limit plus the kernel's buffers both ways.
+    // the many-streams bound. Its failure message is padded to about 300
+    // bytes, so 100k trailers are ~30 MiB whatever the frame encoding costs;
+    // what the server may take on is its write backlog limit plus the
+    // kernel's buffers both ways.
     // The HTTP/2 peer opens its windows and asks for 1 KiB answers instead:
     // its trailers are ~130 bytes, and the kernel alone holds 60k of them.
     const calls = 100000;
@@ -329,6 +331,10 @@ void main() {
 
 const _batch = 500;
 
+/// What the deaf peer's failures add to their message: about 300 bytes a
+/// trailer with the status and the frame.
+const _failurePadding = 256;
+
 /// Starts [calls] unary calls on [rig]'s server answered at once, from a peer
 /// that does not read its socket until `hear` is called. Returns once every
 /// call is written or the server has stopped taking them, with how many were
@@ -345,7 +351,11 @@ Future<({int written, void Function() hear})> _deafPeer(
     final out = BytesBuilder(copy: false);
     for (var i = first; i < first + _batch && i < calls; i++) {
       final streamId = 2 * i + 1;
-      final request = Blob.request(id: nextCallId(), mode: Mode.fail);
+      final request = Blob.request(
+        id: nextCallId(),
+        mode: Mode.fail,
+        responseSize: Blob.headerSize + _failurePadding,
+      );
       out
         ..add(
           RpcChannelFrame.encodeMetadata(
