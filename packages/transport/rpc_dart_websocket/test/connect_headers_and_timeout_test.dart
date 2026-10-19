@@ -20,7 +20,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
 
@@ -34,6 +34,8 @@ Future<(Uri, List<Map<String, List<String>>>)> _recordingServer() async {
     req.headers.forEach((name, values) => headers[name] = values);
     seen.add(headers);
     final ws = await WebSocketTransformer.upgrade(req);
+    // Answers the client's preface, or the client never reports Online.
+    ws.add(RpcChannelFrame.preface);
     ws.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
   });
   return (Uri.parse('ws://${server.address.host}:${server.port}'), seen);

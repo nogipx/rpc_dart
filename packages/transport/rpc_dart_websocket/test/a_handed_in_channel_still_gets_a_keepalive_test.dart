@@ -26,7 +26,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
@@ -43,6 +43,8 @@ Future<HttpServer> _silentServer() async {
   unawaited(
     server.forEach((request) async {
       final socket = await WebSocketTransformer.upgrade(request);
+      // Answers the client's preface and then says nothing more.
+      socket.add(RpcChannelFrame.preface);
       socket.listen((_) {}, onError: (Object _) {}, cancelOnError: false);
     }),
   );

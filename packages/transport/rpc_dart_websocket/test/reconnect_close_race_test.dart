@@ -19,7 +19,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
 
@@ -39,6 +39,8 @@ class _CountingServer {
     final server = _CountingServer(http);
     http.transform(WebSocketTransformer()).listen((ws) {
       server.opened++;
+      // Answers the client's preface, or the client never reports Online.
+      ws.add(RpcChannelFrame.preface);
       ws.listen(
         (_) {},
         onError: (Object _) => server.closed++,

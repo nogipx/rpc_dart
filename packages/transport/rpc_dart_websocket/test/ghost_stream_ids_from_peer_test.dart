@@ -122,6 +122,8 @@ void main() {
       await http.close(force: true);
     });
 
+    // Health reports its details once the server has answered the preface.
+    await client.ready;
     final id = client.createStream();
     client.getMessagesForStream(id).listen((_) {}, onError: (Object _) {});
     await client.sendMetadata(id, RpcMetadata.forClientRequest('Svc', 'hold'));

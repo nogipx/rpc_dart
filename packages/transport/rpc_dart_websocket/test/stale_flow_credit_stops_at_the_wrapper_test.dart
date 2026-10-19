@@ -78,8 +78,8 @@ void main() {
     () async {
       final one = _pair();
       final two = _pair();
-      final connection = await _connect([one.client, two.client]);
-      final client = connection.transport;
+      // Built before the client connects: Online waits for the server's
+      // answer to the preface.
       final server1 = RpcWebSocketResponderTransport(
         one.server,
         policy: _policy,
@@ -87,6 +87,8 @@ void main() {
       addTearDown(() async {
         await server1.close().catchError((Object _) {});
       });
+      final connection = await _connect([one.client, two.client]);
+      final client = connection.transport;
 
       // A stream the PEER opened, which is what the responder pipeline defers
       // and credits. It is live on the first connection and on no other.
@@ -97,7 +99,6 @@ void main() {
       );
       await _settle();
 
-      await _reconnect(connection);
       // A peer really is there on the new socket; it just has not reused the
       // number yet. Without one the counted sink has no reader and teardown
       // never finishes.
@@ -108,6 +109,7 @@ void main() {
       addTearDown(() async {
         await server2.close().catchError((Object _) {});
       });
+      await _reconnect(connection);
       await _settle();
 
       final before = two.frames;
@@ -132,8 +134,6 @@ void main() {
     'CONTROL: a credit for a live id still grants',
     () async {
       final one = _pair();
-      final connection = await _connect([one.client]);
-      final client = connection.transport;
       final server = RpcWebSocketResponderTransport(
         one.server,
         policy: _policy,
@@ -141,6 +141,8 @@ void main() {
       addTearDown(() async {
         await server.close().catchError((Object _) {});
       });
+      final connection = await _connect([one.client]);
+      final client = connection.transport;
 
       final liveId = server.createStream();
       await server.sendMetadata(
@@ -171,8 +173,6 @@ void main() {
     () async {
       final one = _pair();
       final two = _pair();
-      final connection = await _connect([one.client, two.client]);
-      final client = connection.transport;
       final server1 = RpcWebSocketResponderTransport(
         one.server,
         policy: _policy,
@@ -180,6 +180,8 @@ void main() {
       addTearDown(() async {
         await server1.close().catchError((Object _) {});
       });
+      final connection = await _connect([one.client, two.client]);
+      final client = connection.transport;
 
       final staleId = server1.createStream();
       await server1.sendMetadata(
@@ -188,7 +190,6 @@ void main() {
       );
       await _settle();
 
-      await _reconnect(connection);
       final server2 = RpcWebSocketResponderTransport(
         two.server,
         policy: _policy,
@@ -196,6 +197,7 @@ void main() {
       addTearDown(() async {
         await server2.close().catchError((Object _) {});
       });
+      await _reconnect(connection);
       await _settle();
 
       final before = two.frames;
