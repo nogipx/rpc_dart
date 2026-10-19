@@ -85,7 +85,7 @@ SIGTERM or SIGINT, then `stop()`.
 | `RpcIsolateModule` | `workerEntrypoint`, `isolateParams`, `buildProxyContracts(RpcCallerEndpoint)` |
 | `RpcContainer` | `registerSingleton<T>`, `registerLazySingleton<T>`, `registerFactory<T>` (new instance per `get`), `get<T>`, `tryGet<T>`, `has<T>`, `clear` |
 | `RpcEnvConfig` | `env['KEY']`, `require`, `getInt`, `requireInt`, `getDouble`, `getBool`, `getList`, `getDuration` (`300ms`, `30s`, `5m`, `2h`), `has`, `keys` |
-| `RpcAppConfig` | `shutdownTimeout` (30 s), `drainTimeout` (10 s), `logger` (`LogScope?`), `logController`, `onError`, `onCall`, `env` |
+| `RpcAppConfig` | `shutdownTimeout` (30 s), `drainTimeout` (10 s), `logger` (`LogScope?`), `logController`, `onError`, `onCall` (an `RpcCallEventHandler`), `env`; `copyWith` |
 | `RpcAppHealth` | `level` (`RpcAppHealthLevel`), `isHealthy`, `isServing`, `modules`, `endpoints`, `checkedAt`, `toJson()` |
 | `RpcTestApp` | `RpcTestApp.start(...)`, `caller`, `health()`, `dispose()` |
 | `RpcCallSpy` | interceptor that records each finished call as an `RpcCallEvent`: `entries`, `callCount`, `successCount`, `errorCount` (cancelled calls count as neither), `callsTo`, `wasCalled`, `reset`; `maxEntries:` caps retention |

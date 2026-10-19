@@ -80,17 +80,7 @@ class RpcTestApp {
       server: (mode) => _InMemoryServer(mode, serverTransport),
       interceptors: interceptors,
       middlewares: middlewares,
-      config: env == null
-          ? config
-          : RpcAppConfig(
-              shutdownTimeout: config.shutdownTimeout,
-              drainTimeout: config.drainTimeout,
-              logger: config.logger,
-              logController: config.logController,
-              onError: config.onError,
-              onCall: config.onCall,
-              env: env,
-            ),
+      config: config.copyWith(env: env),
     );
     try {
       await app.start();

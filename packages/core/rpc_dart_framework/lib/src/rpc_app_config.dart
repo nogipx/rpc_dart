@@ -62,7 +62,7 @@ typedef RpcErrorHandler =
     );
 
 /// Signature for the per-call metrics observer.
-typedef RpcCallObserver = void Function(RpcCallEvent event);
+typedef RpcCallEventHandler = void Function(RpcCallEvent event);
 
 /// Framework-level configuration for [RpcApp].
 class RpcAppConfig {
@@ -91,7 +91,7 @@ class RpcAppConfig {
   ///
   /// Use this to feed Prometheus counters, OpenTelemetry spans, etc.
   /// The framework automatically wires a timing interceptor.
-  final RpcCallObserver? onCall;
+  final RpcCallEventHandler? onCall;
 
   /// Override [Platform.environment] for env-based module configuration.
   ///
@@ -108,4 +108,24 @@ class RpcAppConfig {
     this.onCall,
     this.env,
   });
+
+  /// This config with the given fields replaced; a null argument keeps the
+  /// field.
+  RpcAppConfig copyWith({
+    Duration? shutdownTimeout,
+    Duration? drainTimeout,
+    LogScope? logger,
+    LogController? logController,
+    RpcErrorHandler? onError,
+    RpcCallEventHandler? onCall,
+    Map<String, String>? env,
+  }) => RpcAppConfig(
+    shutdownTimeout: shutdownTimeout ?? this.shutdownTimeout,
+    drainTimeout: drainTimeout ?? this.drainTimeout,
+    logger: logger ?? this.logger,
+    logController: logController ?? this.logController,
+    onError: onError ?? this.onError,
+    onCall: onCall ?? this.onCall,
+    env: env ?? this.env,
+  );
 }

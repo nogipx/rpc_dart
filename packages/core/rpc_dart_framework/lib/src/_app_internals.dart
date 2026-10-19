@@ -156,7 +156,7 @@ class ErrorReportingInterceptor extends CallEventInterceptor {
 
 /// Hands every finished call to [RpcAppConfig.onCall].
 class CallMetricsInterceptor extends CallEventInterceptor {
-  final RpcCallObserver _observer;
+  final RpcCallEventHandler _observer;
   const CallMetricsInterceptor(this._observer);
 
   @override
