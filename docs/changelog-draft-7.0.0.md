@@ -1,0 +1,269 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
+# CHANGELOG draft for the major release
+
+A draft, not a release. Versions are the owner's to choose; the core section is
+written for `rpc_dart` 7.0.0, the rest as "next version" per package. Move each
+section into that package's `CHANGELOG.md` at release and cut what is not worth
+a line. Source: commits since `rpc_dart-6.3.0` and the migration table in
+`major-release-proposals.md`.
+
+---
+
+## rpc_dart 7.0.0
+
+### Upgrade both ends together
+
+**The channel-frame wire format changed.** Frame metadata is encoded in binary.
+A 6.x peer and a 7.0 peer cannot talk over a channel transport (websocket,
+socket, isolate, in-memory). Upgrade client and server in one step. HTTP/2 and
+HTTP/1.1 speak gRPC on the wire and are not affected.
+
+### Public API
+
+**Two libraries.** `package:rpc_dart/rpc_dart.dart` is the application API.
+Transport-authoring types (channels, frames, the message parser and router,
+flow-control interfaces, write backlog, connection host, `RpcTrailers`) moved to
+`package:rpc_dart/transport.dart`, which re-exports the first. Types that only
+the library itself used are no longer exported.
+
+**Transport capabilities are members of `IRpcTransport`**, with defaults:
+`transport.securityPolicy`, `flowCredit`, `connectionBuffer`, `ready` and the
+rest. Replace `is IRpcSecurityPolicyAware` and similar checks with the member.
+A custom transport adds the members, or `extends IRpcTransport`.
+
+**Reconnect lives in one layer, `RpcClientConnection`.** `transport.reconnect()`
+and `endpoint.reconnect()` are gone. Wrap the transport factory in
+`RpcClientConnection`; `forceReconnect()` replaces a manual reconnect.
+`transportFactory` must return an `IRpcReconnectableTransport`. The connection
+waits for a transport to be ready and learns from the transport when the
+connection is lost.
+
+**Call shapes are built by the endpoint.** `UnaryCaller`, the stream callers and
+the stream responders are no longer built by hand. Use the endpoint calls
+(`unaryRequest`, `serverStream`, ...) or generated callers.
+
+**Errors.** `RpcException` is abstract, and every error carries a gRPC status.
+No error message is a contract: match on the type or the status.
+
+**Renamed and replaced:**
+
+| Was | Becomes |
+|---|---|
+| `RpcInMemoryTransport.pair()` | `RpcChannelTransport.memoryPair()` |
+| `connectionLost` on a transport | `incomingMessages` ends: the transport closes |
+| `onEndpointCreated:` / `onPeerEndpointCreated:` | `mode: RpcResponderMode(...)` / `RpcPeerMode(...)`; contracts only: `RpcResponderMode.contracts([...])` |
+| `logger:` on the three endpoints, `RpcConnectionHost(endpointLogger:)` | `logController:` |
+| `RpcConnectionLogger` | `LogScope` |
+| `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
+| `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
+| `transferMode:` on `unaryRequest` | the contract's transfer mode |
+| `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |
+| a hand-written observer of the four `intercept*` methods | `RpcCallObserverInterceptor` |
+| `RpcEndpointPingResult.responderTransportType`, the ping timestamp and transport headers | gone; `x-rpc-pong-timestamp` is microseconds since the epoch |
+| `RpcBool` / `RpcString` returning a default on bad input | `FormatException` |
+| header count and size limits on `RpcContext` | `RpcSecurityPolicy` |
+| health metric `clientStreamBuffers` | `preBindBuffers` |
+
+**`grpc.health.v1` speaks protobuf.** `GrpcHealthCheckContract` was CBOR on the
+wire, so real gRPC health checkers could not read it. `Check` on an unknown
+service fails with `NOT_FOUND`. The messages lose `toJson`/`fromJson`; use
+their `codec`.
+
+### Behaviour you will notice without changing code
+
+- **No deadline means no timeout.** A call without a deadline waits until it
+  ends. Set a deadline on the context to bound it.
+- **Internal error text stays on the server.** An unexpected exception reaches
+  the caller as `INTERNAL` without its message. Throw an `RpcStatusException`
+  to send your own status and text.
+- **A response that ends without a gRPC status is `INTERNAL`**, not a success
+  with partial data, and it is not retried.
+- **`RESOURCE_EXHAUSTED` is retried only with server pushback.**
+- **A call after the peer died is `UNAVAILABLE`** on every transport.
+- **A second message on a single-message side fails the call.**
+- **Stricter registration.** A method name may not contain a dot, and names the
+  wire grammar refuses are refused at registration.
+- **`maxActiveStreams` counts a call until it ends**, not until half-close.
+- **An un-consumed stream is bounded by queue depth** as well as bytes, and
+  buffering is charged to one per-connection total. A peer that sends without
+  reading gets `RESOURCE_EXHAUSTED` instead of growing memory.
+- **One CBOR message has an item budget**, so a small message cannot decode to
+  a huge object graph.
+- **A derived context cannot outlive its parent.**
+- **`global` in the rate limiter is a ceiling**, not a fallback.
+- **A request encoding is declared only if a codec for it is registered.**
+- **A peer that repeats the same fault is logged once.**
+
+### New
+
+- `IRpcCallCheck`: a check that runs for every call shape.
+- `RpcCallObserverInterceptor`: observe every call of every shape. Middleware
+  can tell an outgoing call from an incoming one.
+- `IRpcServer.stop(drainTimeout:)` stops admitting and waits for in-flight
+  calls; `pair()` builds a client.
+- For transport authors: `RpcWriteBacklog` (with `reads`), `RpcWriteCoalescer`,
+  `RpcConnectionHost`, `RpcTrailers`, `drainUntilIdle`, `notifyWithoutDying`.
+- `approxJsonBytes` for byte-bounded message buffers; `platformGzip`, the
+  built-in gzip codec.
+- Unary tolerates a gRPC frame split across transport messages.
+- An Agent Skill ships with the package: `dart run skills get`.
+
+---
+
+## rpc_dart_generator (next version)
+
+- **Regenerate.** A per-method codec override now applies to its own method
+  only, as `<Base>Codecs.requestOf<Method>` / `responseOf<Method>`. It used to
+  apply to every method with the same type.
+- Every type a gRPC descriptor names is described; stored fields are described;
+  codecs compile for bare primitives.
+
+## rpc_dart_framework (next version)
+
+- **Breaking:**
+  - `RpcApp.server(server: (onEndpoint) => ...)` becomes `server: (mode) => ... mode: mode`.
+  - `RpcCallEvent.callType` / `RpcSpyEntry.callType` strings become `RpcMethodType`. `RpcSpyEntry` is `RpcCallEvent`, with `outcome`; `calledAt` is gone.
+  - App health is typed: `modules['X'].level` (`RpcHealthStatus`) and `endpoints[i]` (`RpcEndpointHealth`). Maps remain only in `toJson()`.
+  - The typedef `RpcCallObserver` is `RpcCallEventHandler`.
+  - `RpcTestApp` runs as an `RpcApp`.
+- **New:** `RpcAppConfig.copyWith`.
+- **Fixed:**
+  - Modules start before the server accepts connections, and every teardown stops the server before the modules.
+  - Only modules that started are stopped. `stop()` waits for a `start()` in progress, does not wait on a hung `onStart`, and concurrent `stop()` calls share one stop.
+  - A dead isolate worker makes the app unhealthy.
+  - A failed `RpcTestApp.start` rolls back what it started.
+
+## rpc_dart_compression (next version)
+
+- **Breaking:** `maxDecompressedSize: null` means no limit; `-1` is gone. A
+  decompressor's size overrun is `RESOURCE_EXHAUSTED`.
+- Native platforms always decompress through `dart:io` and stop at the limit
+  mid-stream. Gzip shorter than an empty frame is rejected.
+
+## rpc_dart_grpc_reflection (next version)
+
+- **Breaking:** `processRequestForTest` and `parseFileDescriptorSet` are gone.
+- Protobuf is read and written through core. A missing dependency set is
+  warned about once.
+
+## rpc_dart_log (next version)
+
+- Record buffers are bounded in bytes as well as records.
+- The collector contract is generated and reports real ids. Remote text is
+  escaped in the console and the MCP view. The collector upgrades through the
+  transport's guards.
+
+## rpc_dart_opentelemetry (next version)
+
+- **Breaking:** `OtelRpcInterceptorBase.startSpan(call, String callType)`
+  becomes `startSpan(call, RpcMethodType type)`; `callTypeAttribute(type)`
+  gives the attribute value. The interceptors are built on
+  `RpcCallObserverInterceptor`, and `OtelRpcInterceptorBase` is exported.
+- The recorded status is the one the caller receives.
+
+## rpc_dart_websocket (next version)
+
+- **Breaking:**
+  - `headersProvider:` and `reconnectFactory:` on the caller are replaced by
+    `RpcClientConnection`; build `headers:` inside its factory, which runs for
+    every connection.
+  - A failed connect is a gRPC status, and a disconnected transport refuses in
+    one shape.
+  - A stopped server refuses connections instead of abandoning them.
+  - The endpoint callbacks are refused. `createWithContracts` passes
+    `logController` through.
+- **New:**
+  - `maxConnections`.
+  - `bindRpcWebSocketHttpServer` bounds the upgrade request.
+  - The caller transport reports when it is ready.
+  - Half-open detection where the platform drops ping.
+- **Hardening:**
+  - `connect()` is bounded by default.
+  - An unfinished message is bounded before `dart:io` buffers it, and a message in thousands of fragments is refused.
+  - Inbound pings are rate-limited.
+  - Reading stops while 1 MiB of answers is unsent.
+  - Credentials and close reasons no longer reach the log unescaped.
+  - Several inputs that killed the server no longer do: a repeated `Sec-WebSocket-Key` and a refused frame during the handshake.
+- **Fixed:**
+  - `RpcClientConnection` reconnects after a server restart.
+  - A peer client can answer calls.
+  - A reused peer stream id gets its own answer.
+  - An ended connection returns its `maxConnections` slot.
+
+## rpc_dart_socket (new package, first release)
+
+Unix domain socket and TCP transport over core's channel framing: a server with
+a lock file guarding a live socket path, frames of one turn written together,
+and reading stopped while a peer's answers go unsent.
+
+## rpc_dart_http (next version)
+
+- **Breaking:**
+  - The security policy is `policy:`, and `policy: null` (checks off) is gone: the default policy applies.
+  - A redirect is a refusal, not a second request.
+  - Response headers are no longer split on the comma.
+  - The bare responder transport gets the limits its server has.
+- **New:**
+  - A per-chunk body idle timeout, on by default.
+  - An unfinished request header block is bounded.
+- **Fixed:**
+  - `maxActiveStreams` is enforced on the caller.
+  - Abandoning a call abandons the request.
+  - A caller's cancel reaches the handler.
+  - Error details reach the caller over HTTP/1.1.
+  - Repeated request metadata is joined, not dropped.
+  - Routing uses the path relative to the mount.
+  - A failed request no longer logs the base URL's password.
+  - Stop and restart wait for the drain in flight.
+
+## rpc_dart_http2 (next version)
+
+- **Breaking:**
+  - The security policy is `policy:`; header conversion requires one.
+  - Requires `http2 ^3.1.0`.
+  - A failed connect is a status.
+  - Reconnect lives in `RpcClientConnection`.
+  - A cancel is not a request, and a live id refuses a second open.
+- **New:**
+  - A connection cap.
+  - The connect is bounded, not just the proxy's reply.
+  - The caller transport is ready once the peer sends SETTINGS.
+  - Health details count outgoing pumps.
+- **Fixed:**
+  - One stream's error no longer fails every call.
+  - A message larger than the window is no longer refused.
+  - A peer that never sends SETTINGS is dropped.
+  - The TLS server selects h2 in ALPN, and a TLS peer that did not choose h2 is refused.
+  - `secureConnect` works through a CONNECT proxy, and GOAWAY is seen through one.
+  - Reading stops while 1 MiB of answers is unsent.
+  - A stream cut mid-message is an error on every ending.
+
+## rpc_dart_isolate (next version)
+
+- `spawn` takes a logger for the host transport.
+- A frame that fails to decode does not kill the isolate. A web worker gets
+  its window and dies cleanly.
+- One channel serves the VM and the web. Small payloads cross as bytes.
+
+## rpc_dart_wasm (next version)
+
+- `fromBridge` takes a logger.
+- **Android:** a long guest stream is not cut off, a sandbox killed while idle is reported, and a runtime loads after the sandbox died.
+- **iOS:** the guest queue is bounded, and concurrent support probes agree.
+- **Both platforms:**
+  - Frames sent while either side boots are kept.
+  - Guest timers fire in deadline order.
+  - A client-stream call to a dart2wasm guest works.
+  - `canRunDartWasm` says no where load would refuse.
+
+## rpc_data, rpc_notify, rpc_blob*
+
+- A watcher or subscriber that stops reading no longer holds every change or
+  the topic. Buffered events are sized with core's `approxJsonBytes`.
+- A data error keeps its status and code on the wire.
+- rpc_blob: one contract for a conditional delete across all four adapters.
