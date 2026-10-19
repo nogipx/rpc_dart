@@ -60,6 +60,7 @@ over `memoryPair()` or an isolate transport has no bytes to measure.
 | `RpcCodec<T extends IRpcSerializable>` | CBOR of `toJson()`. `const RpcCodec(fromJson)`; the decoder is required. |
 | `RpcBinaryCodec<T>` | Adapter: `const RpcBinaryCodec(toBytes:, fromBytes:)`. Use for protobuf or any existing byte format; `T` need not implement `IRpcSerializable`. |
 | `CborCodec` | Static `encode(Map<String, dynamic>)` / `decode(Uint8List, {int? maxItems})` used by `RpcCodec`. A decode past `maxItems` data items throws a `FormatException`; without the argument the bound is the endpoint's `RpcSecurityPolicy.maxDecodedItems` inside an endpoint and `CborCodec.defaultMaxItems` elsewhere. |
+| `approxJsonBytes(Object?)` | Function: the approximate size of a value's JSON form without encoding it (string code units, keys included, plus 8 per other scalar; an `IRpcSerializable` counts as its `toJson()`). Use it to bound a buffer of messages in bytes. |
 
 ```dart
 import 'dart:convert';

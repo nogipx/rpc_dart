@@ -47,6 +47,7 @@ export 'src/_index.dart'
         RpcCodec,
         RpcBinaryCodec,
         CborCodec,
+        approxJsonBytes,
         // Primitive messages
         RpcPrimitiveMessage,
         RpcString,

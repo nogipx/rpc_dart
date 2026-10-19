@@ -23,6 +23,27 @@ abstract interface class IRpcSerializable {
   /// static T fromBytes(Uint8List bytes);
 }
 
+/// Approximate size of [value]'s JSON form, without encoding it: the UTF-16
+/// code units of every string, keys included, plus 8 for each other scalar.
+/// An [IRpcSerializable] counts as its [IRpcSerializable.toJson].
+///
+/// Cheap enough to charge every message against a byte budget, which is what
+/// it is for: bounding a buffer of messages that have not been encoded yet.
+int approxJsonBytes(Object? value) => switch (value) {
+  null => 0,
+  final String s => s.length,
+  final Map<dynamic, dynamic> m => m.entries.fold(
+    0,
+    (sum, e) => sum + approxJsonBytes(e.key) + approxJsonBytes(e.value),
+  ),
+  final Iterable<dynamic> items => items.fold(
+    0,
+    (sum, item) => sum + approxJsonBytes(item),
+  ),
+  final IRpcSerializable s => approxJsonBytes(s.toJson()),
+  _ => 8,
+};
+
 /// Contract for encoding and decoding messages.
 ///
 /// Hides the underlying serialization format (JSON, Protocol Buffers,
