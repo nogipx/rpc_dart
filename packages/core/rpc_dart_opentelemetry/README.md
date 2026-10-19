@@ -98,8 +98,9 @@ Each span is named `<Service>/<Method>`, with kind `server` (from
 | `rpc.stream.messages` | response messages emitted (server and bidirectional streams) |
 
 On success the span status is `ok`. On error the exception is recorded and the
-status is `error`; the code comes from `RpcStatusException.statusCode`, and any
-other error is reported as `UNKNOWN` (2).
+status is `error`; the code comes from `RpcStatusException.statusCode`. Any
+other error is `INTERNAL` (13) on the server, which is what its caller
+receives, and `UNKNOWN` (2) on the client.
 
 A streaming span ends when the response stream completes or its subscriber
 cancels. A cancelled call, a stream its subscriber cancelled or a call that

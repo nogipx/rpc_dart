@@ -46,7 +46,8 @@ Pure Dart, no `dart:io`: it also runs on the web.
   `client_stream`, `bidirectional_stream`), `rpc.grpc.status_code` (int, `0`
   is OK), `rpc.grpc.status` (name). Server spans also carry `rpc.trace_id`.
 - A failed call records the exception and sets status `error`. The code comes
-  from `RpcStatusException.statusCode`; any other error is `UNKNOWN` (2).
+  from `RpcStatusException.statusCode`; any other error is `INTERNAL` (13) on
+  the server, as its caller receives it, and `UNKNOWN` (2) on the client.
 - A streaming span ends when the response stream completes or is cancelled.
   A cancelled call ends with `rpc.grpc.status_code` 1 (`CANCELLED`).
 

@@ -6,6 +6,7 @@ import 'dart:async';
 
 import 'package:opentelemetry/api.dart';
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart' show wireStatusFor;
 
 import '../metrics/rpc_otel_metrics.dart';
 import '../metrics/rpc_status_names.dart';
@@ -166,7 +167,11 @@ abstract class OtelRpcInterceptorBase
     StackTrace stackTrace,
   ) {
     final span = state.span;
-    final statusCode = rpcStatusCodeFromError(error);
+    // A server records the status its caller receives, which core's
+    // translation decides; a client records what reached it.
+    final statusCode = metricSide == RpcMetricSide.server
+        ? wireStatusFor(error).status
+        : rpcStatusCodeFromError(error);
     final statusName = rpcGrpcStatusName(statusCode);
     // A stream's errors are already on the span, recorded as they arrived.
     if (!state._streamErrorRecorded) {
