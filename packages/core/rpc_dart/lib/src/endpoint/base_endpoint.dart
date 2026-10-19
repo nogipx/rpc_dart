@@ -179,11 +179,6 @@ abstract base class RpcEndpointBase {
     _log.internal('Starting RPC endpoint');
   }
 
-  /// Stops the endpoint.
-  void stop() {
-    _log.internal('Stopping RPC endpoint');
-  }
-
   /// Closes the endpoint and releases all resources.
   ///
   /// Concurrent and later calls share one close and return when it is done: a

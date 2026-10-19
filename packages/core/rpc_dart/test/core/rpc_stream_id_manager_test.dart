@@ -55,23 +55,18 @@ void main() {
       expect(manager.releaseId(999), isFalse);
     });
 
-    test('reset() clears every live id', () {
+    test('releaseAll() clears every live id and keeps the cursor', () {
       final manager = RpcStreamIdManager(isClient: true);
 
-      // Issue a few ids.
       manager.generateId();
       manager.generateId();
       manager.generateId();
-
       expect(manager.activeCount, equals(3));
 
-      // Reset.
-      manager.reset();
+      manager.releaseAll();
 
       expect(manager.activeCount, equals(0));
-
-      // Numbering starts over.
-      expect(manager.generateId(), equals(1));
+      expect(manager.lastIssuedId, equals(5));
     });
 
     test('there is a ceiling on the id', () {

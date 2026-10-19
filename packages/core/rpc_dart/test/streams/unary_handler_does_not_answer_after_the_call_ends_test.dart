@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `UnaryResponder` answered calls that were already over.
+// The unary responder answered calls that were already over.
 //
 // `StreamProcessor` gates `send`, `sendError` and `finishSending` on
 // `_isActive`, so no streaming shape can emit after its call ends. The codec

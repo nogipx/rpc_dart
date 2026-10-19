@@ -93,7 +93,7 @@ void main() {
     // WITNESS: a status reaches the peer, and it is the one the streaming
     // shape sends for the same failure.
     final unaryTransport = _RecordingTransport();
-    final unary = UnaryResponder<RpcString, RpcString>(
+    final unary = ServerStreamResponder<RpcString, RpcString>.unary(
       id: 1,
       transport: unaryTransport,
       serviceName: 'Svc',

@@ -39,9 +39,12 @@ final class ServerStreamResponder<
     _setupRequestHandler((request) => _serve(request, handler));
   }
 
-  /// A server stream of exactly one response, [UnaryResponder]'s: the
+  /// The unary responder: a server stream of exactly one response.
+  ///
+  /// The request is held until the request stream ends; a second one is
+  /// refused INTERNAL and a call that carried none INVALID_ARGUMENT. The
   /// handler's future is answered directly, with no stream to relay.
-  ServerStreamResponder._single({
+  ServerStreamResponder.unary({
     required super.id,
     required super.transport,
     required super.serviceName,

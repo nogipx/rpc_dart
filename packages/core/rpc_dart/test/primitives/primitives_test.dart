@@ -49,7 +49,6 @@ void main() {
 
     test('RpcNull codecs and factories ignore input', () {
       expect(RpcNull.fromJson({'v': 123}), isA<RpcNull>());
-      expect(RpcNull.fromBytes(Uint8List.fromList([1, 2, 3])), isA<RpcNull>());
       expect(const RpcNull().toJson(), equals({'v': null}));
       expect(const RpcNull().toString(), equals('null'));
     });

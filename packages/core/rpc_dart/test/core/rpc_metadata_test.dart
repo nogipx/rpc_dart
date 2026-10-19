@@ -39,20 +39,6 @@ void main() {
       });
     });
 
-    group('forClientRequestWithPath', () {
-      test('accepts a path that is already built', () {
-        const methodPath = '/CustomService/CustomMethod';
-
-        final metadata = RpcMetadata.forClientRequestWithPath(methodPath);
-
-        expect(metadata.methodPath, equals(methodPath));
-        expect(
-          _getHeaderValue(metadata, RpcHeaders.contentType),
-          equals(RpcHeaders.contentTypeGrpc),
-        );
-      });
-    });
-
     group('forServerInitialResponse', () {
       test('builds the server initial-response headers', () {
         final metadata = RpcMetadata.forServerInitialResponse();
@@ -141,67 +127,10 @@ void main() {
         expect(metadata.methodPath, equals('/TestService/TestMethod'));
       });
 
-      test('falls back to the legacy path header', () {
-        // HTTP/2 transport creates metadata with :path header.
-        final metadata = RpcMetadata([
-          RpcHeader(':path', '/TestService/TestMethod'),
-        ]);
-
-        expect(metadata.methodPath, equals('/TestService/TestMethod'));
-      });
-
       test('returns null when there is no path at all', () {
         final metadata = RpcMetadata([]);
 
         expect(metadata.methodPath, isNull);
-      });
-    });
-
-    group('serviceName', () {
-      test('takes the service name out of the path', () {
-        final metadata = RpcMetadata.forClientRequest(
-          'TestService',
-          'TestMethod',
-        );
-
-        expect(metadata.serviceName, equals('TestService'));
-      });
-
-      test('takes it from the legacy path header too', () {
-        final metadata = RpcMetadata([
-          RpcHeader(':path', '/TestService/TestMethod'),
-        ]);
-
-        expect(metadata.serviceName, equals('TestService'));
-      });
-
-      test('returns null for a malformed path', () {
-        final metadata = RpcMetadata([RpcHeader(':path', 'invalid-path')]);
-
-        expect(metadata.serviceName, isNull);
-      });
-
-      test('returns null for an empty path', () {
-        final metadata = RpcMetadata([RpcHeader(':path', '/')]);
-
-        expect(metadata.serviceName, isNull);
-      });
-    });
-
-    group('methodName', () {
-      test('takes the method name out of the path', () {
-        final metadata = RpcMetadata.forClientRequest(
-          'TestService',
-          'TestMethod',
-        );
-
-        expect(metadata.methodName, equals('TestMethod'));
-      });
-
-      test('returns null for a path with no method', () {
-        final metadata = RpcMetadata([RpcHeader(':path', '/TestService')]);
-
-        expect(metadata.methodName, isNull);
       });
     });
   });

@@ -111,7 +111,7 @@ void main() {
         policy: const RpcSecurityPolicy(maxActiveStreams: 1),
       );
 
-      // No server responder is bound, so the call times out; the id must be
+      // No server responder is bound, so the deadline ends the call; the id must be
       // released in the finally block.
       final caller1 = UnaryCaller<RpcString, RpcString>(
         transport: client,
@@ -119,11 +119,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
+        context: RpcContext.withTimeout(const Duration(milliseconds: 50)),
       );
-      await expectLater(
-        caller1.call('x'.rpc, timeout: const Duration(milliseconds: 50)),
-        throwsA(anything),
-      );
+      await expectLater(caller1.call('x'.rpc), throwsA(anything));
 
       // A second unary call must be able to allocate the (now-released) id.
       final caller2 = UnaryCaller<RpcString, RpcString>(
@@ -132,11 +130,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
+        context: RpcContext.withTimeout(const Duration(milliseconds: 50)),
       );
-      await expectLater(
-        caller2.call('y'.rpc, timeout: const Duration(milliseconds: 50)),
-        throwsA(anything),
-      );
+      await expectLater(caller2.call('y'.rpc), throwsA(anything));
 
       await client.close();
       await server.close();

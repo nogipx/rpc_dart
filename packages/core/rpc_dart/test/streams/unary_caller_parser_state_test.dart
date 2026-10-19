@@ -2,18 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-// UnaryCaller is reusable: call() takes no identity of its own, the class
-// exposes close(), and nothing documents a one-shot lifetime. But it used to
-// hold ONE RpcMessageParser (and one _peerGrpcEncoding) for the whole
-// instance, and RpcMessageParser carries a reassembly buffer across
-// invocations. A call that ended while the parser still held a partial gRPC
-// frame — a peer that truncated its response, or a call abandoned on timeout
-// mid-frame — left those bytes in the buffer, and the NEXT call's response was
-// appended to them. The parser then read the stale 5-byte header and either
-// waited forever for a message that would never arrive or handed the codec a
-// window of the wrong bytes.
-
-import 'dart:async';
+// Each unary call parses its response with its own parser. A call that ends
+// while the parser holds a partial gRPC frame -- a peer that truncated its
+// response, a call abandoned at its deadline mid-frame -- leaves nothing for
+// the next call on the same transport to read before its own response.
 
 import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
@@ -56,32 +48,34 @@ void main() {
       );
     });
 
-    final caller = UnaryCaller<RpcString, RpcString>(
-      transport: client,
-      serviceName: 'S',
-      methodName: 'M',
-      requestCodec: codec,
-      responseCodec: codec,
-    );
+    UnaryCaller<RpcString, RpcString> caller({RpcContext? context}) =>
+        UnaryCaller<RpcString, RpcString>(
+          transport: client,
+          serviceName: 'S',
+          methodName: 'M',
+          requestCodec: codec,
+          responseCodec: codec,
+          context: context,
+        );
 
     // First call never completes: the frame is incomplete, so the parser
-    // buffers it and emits nothing.
+    // buffers it and emits nothing until the deadline.
     await expectLater(
-      caller.call('first'.rpc, timeout: const Duration(milliseconds: 100)),
-      throwsA(isA<TimeoutException>()),
+      caller(
+        context: RpcContext.withTimeout(const Duration(milliseconds: 100)),
+      ).call('first'.rpc),
+      throwsA(isA<RpcDeadlineExceededException>()),
     );
 
     // Second call must be unaffected. With a shared parser the 9 orphaned
-    // bytes preceded this response and it timed out too.
-    final response = await caller.call(
-      'second'.rpc,
-      timeout: const Duration(seconds: 5),
-    );
+    // bytes preceded this response and it never completed either.
+    final response = await caller()
+        .call('second'.rpc)
+        .timeout(const Duration(seconds: 5));
     expect(response.value, 'ok');
     expect(served, 2);
 
     await sub.cancel();
-    await caller.close();
     await client.close();
     await server.close();
   });

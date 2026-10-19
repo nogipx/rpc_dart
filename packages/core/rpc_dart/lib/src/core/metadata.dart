@@ -106,16 +106,15 @@ final class RpcMetadata {
   /// Headers that comprise the metadata.
   final List<RpcHeader> headers;
 
-  /// RPC method path in `/ServiceName/MethodName` format.
+  /// RPC method path in `/ServiceName/MethodName` format, set by the metadata
+  /// that opens a call.
   ///
-  /// Stored as a dedicated field rather than a `:path` header so that core
-  /// metadata stays transport-agnostic. Falls back to reading the legacy
-  /// `:path` header for metadata produced by HTTP/2 transport internals.
-  final String? _explicitMethodPath;
+  /// A dedicated field rather than a `:path` header, so core metadata stays
+  /// transport-agnostic.
+  final String? methodPath;
 
   /// Builds metadata from a list of headers with an optional method path.
-  const RpcMetadata(this.headers, {String? methodPath})
-    : _explicitMethodPath = methodPath;
+  const RpcMetadata(this.headers, {this.methodPath});
 
   /// Creates metadata for a client request.
   ///
@@ -133,26 +132,6 @@ final class RpcMetadata {
         methodPath,
         'methodPath',
         'Method path longer than $kDefaultMaxMethodPathLength characters',
-      );
-    }
-    return RpcMetadata([
-      const RpcHeader(RpcHeaders.contentType, RpcHeaders.contentTypeGrpc),
-      RpcHeader(
-        RpcHeaders.grpcAcceptEncoding,
-        RpcGrpcCompression.acceptEncodingHeader(),
-      ),
-    ], methodPath: methodPath);
-  }
-
-  /// Creates client metadata when the method path is already computed.
-  ///
-  /// [methodPath] Method path in `/ServiceName/MethodName` format.
-  static RpcMetadata forClientRequestWithPath(String methodPath) {
-    if (!_isValidMethodPath(methodPath)) {
-      throw ArgumentError.value(
-        methodPath,
-        'methodPath',
-        'Invalid method path (expected /Service/Method)',
       );
     }
     return RpcMetadata([
@@ -323,55 +302,6 @@ final class RpcMetadata {
       }
     }
     return null;
-  }
-
-  /// RPC method path in `/ServiceName/MethodName` format.
-  ///
-  /// Returns the explicit field when set by factory methods. Falls back to the
-  /// legacy `:path` header so metadata produced by HTTP/2 transport internals
-  /// continues to work without changes.
-  String? get methodPath => _explicitMethodPath ?? getHeaderValue(':path');
-
-  /// Extracts the service name from the method path.
-  ///
-  /// Parses `/ServiceName/MethodName` and returns `ServiceName`, or null if the
-  /// path is missing or malformed.
-  String? get serviceName => _parsedPath.$1;
-
-  /// Extracts the method name from the method path.
-  ///
-  /// Parses `/ServiceName/MethodName` and returns `MethodName`, or null if the
-  /// path is missing or malformed.
-  String? get methodName => _parsedPath.$2;
-
-  /// Cache holder for the parsed (serviceName, methodName) record.
-  ///
-  /// Stored off-instance (keyed by identity) so the const constructor and the
-  /// final `headers`/`_explicitMethodPath` fields are preserved while still
-  /// computing the `methodPath` split exactly once per metadata object.
-  static final Expando<(String?, String?)> _parsedPathCache =
-      Expando<(String?, String?)>('rpcMetadataParsedPath');
-
-  (String?, String?) get _parsedPath {
-    final cached = _parsedPathCache[this];
-    if (cached != null) return cached;
-
-    final path = methodPath;
-    (String?, String?) result;
-    if (path == null || !path.startsWith('/')) {
-      result = (null, null);
-    } else {
-      final parts = path.substring(1).split('/');
-      final service = (parts.isNotEmpty && parts[0].isNotEmpty)
-          ? parts[0]
-          : null;
-      final method = (parts.length >= 2 && parts[1].isNotEmpty)
-          ? parts[1]
-          : null;
-      result = (service, method);
-    }
-    _parsedPathCache[this] = result;
-    return result;
   }
 
   /// Percent-encode `grpc-message` per gRPC HTTP/2 spec (RFC 3986).

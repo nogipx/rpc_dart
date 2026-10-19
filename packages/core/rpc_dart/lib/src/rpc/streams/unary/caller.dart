@@ -41,18 +41,20 @@ final class UnaryCaller<TRequest extends Object, TResponse extends Object> {
   /// Sends [request] and returns the response.
   ///
   /// The wait is bounded by the context's deadline, which fails the call with
-  /// [RpcDeadlineExceededException], and otherwise unbounded. [timeout] is a
-  /// local bound on top of it: past it the server is told the call is
-  /// abandoned and this fails with [TimeoutException].
+  /// [RpcDeadlineExceededException] and tells the server, and otherwise
+  /// unbounded.
   ///
   /// Every failure arrives through the returned future, the ones found before
   /// a stream exists (a cancelled or expired context, a transport at its
   /// stream limit) included. The stream is released before it completes.
-  Future<TResponse> call(TRequest request, {Duration? timeout}) async {
+  ///
+  /// `async`, so a failure the caller's constructor finds -- an expired
+  /// context -- is the returned future's, not a synchronous throw.
+  Future<TResponse> call(TRequest request) async {
     if (_logger.isInternal) {
       _logger.internal('Unary call /$_serviceName/$_methodName started');
     }
-    final caller = ClientStreamCaller<TRequest, TResponse>(
+    return ClientStreamCaller<TRequest, TResponse>(
       transport: _transport,
       serviceName: _serviceName,
       methodName: _methodName,
@@ -60,26 +62,6 @@ final class UnaryCaller<TRequest extends Object, TResponse extends Object> {
       responseCodec: _responseCodec,
       context: _context,
       logger: _logger,
-    );
-    final response = caller._callOne(request);
-    if (timeout == null) return response;
-    // RpcLongTimer.timeout, not Future.timeout: a bare Timer past the JS
-    // ceiling fires at once. See [RpcLongTimer].
-    return RpcLongTimer.timeout(
-      response,
-      timeout,
-      onTimeout: () async {
-        _logger.error('Unary call timed out after $timeout');
-        // The notice is not awaited: a send that never completes must not
-        // hold the timeout. The stream id waits for it on its own.
-        unawaited(caller._notifyAbort('Caller timed out after $timeout'));
-        await caller.close();
-        throw TimeoutException('Call timeout: $timeout', timeout);
-      },
-    );
+    )._callOne(request);
   }
-
-  /// Closes the caller; the transport stays open, and each call has already
-  /// released its own stream.
-  Future<void> close() async {}
 }

@@ -54,7 +54,7 @@ void main() {
 
     await client.sendMetadata(
       streamId,
-      RpcMetadata([const RpcHeader(':path', '/Svc/sink')]),
+      const RpcMetadata([], methodPath: '/Svc/sink'),
     );
     for (var i = 0; i < 200; i++) {
       await client.sendMetadata(streamId, _headerBlock());
@@ -107,7 +107,7 @@ void main() {
 
     await client.sendMetadata(
       streamId,
-      RpcMetadata([const RpcHeader(':path', '/Svc/echo')]),
+      const RpcMetadata([], methodPath: '/Svc/echo'),
     );
     await client.sendMessage(streamId, Uint8List.fromList([1, 2, 3]));
     await client.sendMetadata(
@@ -143,7 +143,7 @@ void main() {
 
     await client.sendMetadata(
       streamId,
-      RpcMetadata([const RpcHeader(':path', '/Svc/sink')]),
+      const RpcMetadata([], methodPath: '/Svc/sink'),
     );
     for (var i = 0; i < 200; i++) {
       await client.sendMetadata(streamId, _headerBlock());

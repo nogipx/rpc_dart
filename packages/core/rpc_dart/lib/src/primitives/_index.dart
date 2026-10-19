@@ -12,9 +12,6 @@ part 'num.dart';
 part 'string.dart';
 part 'extensions.dart';
 
-/// Function type that maps a message key to a human-readable string.
-typedef RpcMessageProducer = String Function(String);
-
 /// Base class for all primitive message types.
 abstract class RpcPrimitiveMessage<T> implements IRpcSerializable {
   /// The wrapped primitive value.

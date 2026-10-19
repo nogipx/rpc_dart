@@ -19,7 +19,6 @@ class RpcSocketCallerTransport extends RpcChannelTransport {
   RpcSocketCallerTransport(
     RpcSocketChannel channel, {
     super.policy,
-    super.resumeStreamIdsAfter,
     super.logger,
   }) : super.fromChannel(
          channel: channel,

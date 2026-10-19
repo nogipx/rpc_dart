@@ -36,10 +36,8 @@ import 'package:rpc_dart_http2/rpc_dart_http2.dart';
 import 'package:test/test.dart';
 
 final _meta = RpcMetadata([
-  const RpcHeader(':method', 'POST'),
-  const RpcHeader(':path', '/svc/M'),
   const RpcHeader('content-type', 'application/grpc'),
-]);
+], methodPath: '/svc/M');
 
 void main() {
   test(

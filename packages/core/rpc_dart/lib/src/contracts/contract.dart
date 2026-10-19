@@ -93,15 +93,8 @@ abstract interface class IRpcContract {
 
 /// Server-side contract that registers and handles methods.
 abstract class RpcResponderContract implements IRpcContract {
-  final String _baseServiceName;
-  String _serviceNameSuffix = '';
-
   @override
-  String get serviceName => '$_baseServiceName$_serviceNameSuffix';
-
-  /// Append a suffix to the service name.
-  /// Used by scoped registrars to add podId isolation.
-  set serviceNameSuffix(String value) => _serviceNameSuffix = value;
+  final String serviceName;
 
   /// Data transfer mode used by this contract's methods.
   final RpcDataTransferMode dataTransferMode;
@@ -109,9 +102,9 @@ abstract class RpcResponderContract implements IRpcContract {
 
   /// Creates a responder contract with the given [serviceName].
   RpcResponderContract(
-    String serviceName, {
+    this.serviceName, {
     this.dataTransferMode = RpcDataTransferMode.auto,
-  }) : _baseServiceName = serviceName;
+  });
 
   /// Declarative method registration hook.
   void setup() {}
@@ -129,7 +122,7 @@ abstract class RpcResponderContract implements IRpcContract {
       // three lines up says this is not reachable from peer input.
       throw RpcStatusException(
         RpcStatus.internal,
-        'Method $_baseServiceName.$methodName is already registered on this '
+        'Method $serviceName.$methodName is already registered on this '
         'contract. Each method name may be registered once.',
       );
     }

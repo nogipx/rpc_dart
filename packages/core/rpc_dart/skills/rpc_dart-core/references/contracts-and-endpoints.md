@@ -124,8 +124,8 @@ final class GreeterCaller extends RpcCallerContract {
 
 | Endpoint | Constructor | Own API |
 | --- | --- | --- |
-| `RpcResponderEndpoint` | `transport:` (required), `debugLabel:`, `logger:` (`LogController?`) | `registerServiceContract(c)`, `unregisterServiceContract(name)`, `start()`, `markDraining()`, `drain({timeout})` |
-| `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logger:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod`, `cancelServiceMethods`, `cancelRequest`, `activeCallCount`; `close()` cancels in-flight calls |
+| `RpcResponderEndpoint` | `transport:` (required), `debugLabel:`, `logController:` (`LogController?`) | `registerServiceContract(c)`, `unregisterServiceContract(name)`, `start()`, `markDraining()`, `drain({timeout})` |
+| `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logController:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod`, `cancelServiceMethods`, `cancelRequest`, `activeCallCount`; `close()` cancels in-flight calls |
 | `RpcPeerEndpoint` | same as caller | union of both, call tracking included; needs `start()` |
 
 All endpoints: `addMiddleware`, `addInterceptor`, `close()`, `health()`,

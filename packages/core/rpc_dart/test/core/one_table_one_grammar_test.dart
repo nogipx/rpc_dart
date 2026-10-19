@@ -118,8 +118,11 @@ void main() {
     // The outbound constructor was the 258 answer, so a client could not send
     // a path the policy's own default describes.
     test('the outbound constructor accepts what the policy default does', () {
-      final path = '/${'S' * 200}/${'M' * 200}'; // 402 characters, over 258
-      expect(() => RpcMetadata.forClientRequestWithPath(path), returnsNormally);
+      // 402 characters, over 258.
+      expect(
+        () => RpcMetadata.forClientRequest('S' * 200, 'M' * 200),
+        returnsNormally,
+      );
     });
   });
 }

@@ -361,7 +361,10 @@ void main() {
         // Verify request
         expect(serverMessages.length, equals(3));
         expect(serverMessages[0].isMetadataOnly, isTrue);
-        expect(serverMessages[0].metadata?.serviceName, equals('TestService'));
+        expect(
+          serverMessages[0].metadata?.methodPath,
+          startsWith('/TestService/'),
+        );
         expect(serverMessages[1].isMetadataOnly, isFalse);
         expect(
           String.fromCharCodes(serverMessages[1].payload!),

@@ -40,7 +40,7 @@ Neither library re-exports `package:rpc_dart`; import it for `LogController`.
 - On the app side add a `LogCollectorOutput` to the `outputs:` of your
   `LogController`, or later with `controller.addOutput`. Everything that passes
   the controller's filters is shipped, including the endpoint logs when that
-  controller is the endpoints' `logger:`.
+  controller is the endpoints' `logController:`.
 - `LogCollectorOutput({required Uri uri, required DeviceInfo device,
   bufferSize = 2000, bufferBytes = 8 MiB, maxInFlight = 32, scopeFilter,
   channelFactory})`.
@@ -85,7 +85,7 @@ LogController buildAppLogger({Uri? collector}) => LogController(
 );
 ```
 
-Pass the controller to every endpoint as `logger:` and get scopes with
+Pass the controller to every endpoint as `logController:` and get scopes with
 `controller.scope('name')`, exactly as in `logging-and-health.md`. A
 `LogCollectorOutput` exposes `sessionId`, `isConnected`, `bufferedCount` and
 `inFlightCount` for diagnostics.

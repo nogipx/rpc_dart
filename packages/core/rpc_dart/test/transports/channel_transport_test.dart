@@ -553,7 +553,10 @@ void main() {
 
         // Verify request
         expect(serverReceived.length, equals(3));
-        expect(serverReceived[0].metadata?.serviceName, equals('TestService'));
+        expect(
+          serverReceived[0].metadata?.methodPath,
+          startsWith('/TestService/'),
+        );
         expect(
           String.fromCharCodes(serverReceived[1].payload!),
           equals('request body'),

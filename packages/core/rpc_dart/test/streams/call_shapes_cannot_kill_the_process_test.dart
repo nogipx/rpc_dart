@@ -157,7 +157,7 @@ void main() {
       final uncaught = await _collectingUncaught(() async {
         final (client, server) = RpcChannelTransport.pair();
 
-        final unary = UnaryResponder<RpcString, RpcString>(
+        final unary = ServerStreamResponder<RpcString, RpcString>.unary(
           id: 0,
           transport: server,
           serviceName: 'Svc',
@@ -179,16 +179,12 @@ void main() {
           methodName: 'boom',
           requestCodec: _codec,
           responseCodec: _codec,
+          context: RpcContext.withTimeout(const Duration(milliseconds: 400)),
         );
-        unawaited(
-          caller
-              .call('a'.rpc, timeout: const Duration(milliseconds: 400))
-              .catchError((Object _) => 'x'.rpc),
-        );
+        unawaited(caller.call('a'.rpc).catchError((Object _) => 'x'.rpc));
 
         await Future<void>.delayed(const Duration(milliseconds: 500));
         await unary.close().catchError((_) {});
-        await caller.close().catchError((_) {});
         await client.close();
       });
 

@@ -542,20 +542,10 @@ final class RpcStreamIdManager {
   ///
   /// What a transport wants at close: the ids are no longer in use, but the
   /// sequence they came from is exactly what a reconnecting wrapper needs
-  /// afterwards. [reset] rewinds the cursor as well, and using it here meant a
-  /// transport that closed ITSELF — which is how every peer-started drop is
-  /// reported — erased the cursor before anything above could read it.
+  /// afterwards, and a transport that closes itself -- how every peer-started
+  /// drop is reported -- does so before anything above can read it.
   void releaseAll() {
     _activeIds.clear();
-  }
-
-  /// Resets manager state (clears active IDs and rewinds the cursor).
-  ///
-  /// Starts the id space over, so anything holding an id from before now shares
-  /// a namespace with new calls. Use [releaseAll] to end the calls without that.
-  void reset() {
-    _activeIds.clear();
-    _lastId = _lastIssued = isClient ? -1 : 0;
   }
 
   String get _sideLabel => isClient ? 'client' : 'server';

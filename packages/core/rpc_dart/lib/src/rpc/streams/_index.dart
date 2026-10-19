@@ -23,7 +23,6 @@ part 'server/caller.dart';
 part 'server/responder.dart';
 
 part 'unary/caller.dart';
-part 'unary/responder.dart';
 part 'responder_base.dart';
 
 /// Contract for server-side responders that handle a single stream.

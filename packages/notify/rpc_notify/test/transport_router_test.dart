@@ -284,19 +284,14 @@ void main() {
         final adminStreamId = router.createStream();
         final adminMetadata = RpcMetadata([
           RpcHeader(RpcHeaders.xRouteService, 'UserService'),
-          RpcHeader(
-            ':path',
-            '/admin/deleteUser',
-          ), // Указываем method path через :path заголовок
-        ]);
+        ], methodPath: '/admin/deleteUser');
         await router.sendMetadata(adminStreamId, adminMetadata);
 
         // Act - отправляем обычный метод
         final userStreamId = router.createStream();
         final userMetadata = RpcMetadata([
           RpcHeader(RpcHeaders.xRouteService, 'UserService'),
-          RpcHeader(':path', '/UserService/getUser'), // Обычный method path
-        ]);
+        ], methodPath: '/UserService/getUser');
         await router.sendMetadata(userStreamId, userMetadata);
 
         await Future.delayed(Duration(milliseconds: 1));

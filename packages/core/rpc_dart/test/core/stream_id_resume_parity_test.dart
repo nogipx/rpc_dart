@@ -20,8 +20,8 @@
 // on it alone.
 //
 // `IRpcStreamIdSequence.resumeStreamIdsAfter` is public and its contract
-// demands this: "must leave parity intact". The constructor is reachable
-// through `RpcChannelTransport.fromChannel(resumeStreamIdsAfter:)`.
+// demands this: "must leave parity intact". The manager is exported, so its
+// constructor is public too.
 
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';

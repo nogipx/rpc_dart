@@ -21,8 +21,8 @@ void main() {
   final codec = RpcCodec(RpcString.fromJson);
 
   test('abandoned calls do not accumulate finished-stream entries', () async {
-    // No responder is bound, so every call times out without a reply and the
-    // transport never sees an inbound end-of-stream for those ids.
+    // No responder is bound, so every call ends at its deadline without a reply
+    // and the transport never sees an inbound end-of-stream for those ids.
     final (client, server) = RpcChannelTransport.pair();
 
     expect(await _finishedStreams(client), 0);
@@ -34,25 +34,17 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
+        context: RpcContext.withTimeout(const Duration(milliseconds: 20)),
       );
-      await expectLater(
-        caller.call('x'.rpc, timeout: const Duration(milliseconds: 20)),
-        throwsA(anything),
-      );
+      await expectLater(caller.call('x'.rpc), throwsA(anything));
     }
 
-    // POLLED, because the release is now chained onto a cancellation notice.
-    //
-    // Round 498 made a timed-out unary call TELL the server before releasing its
-    // id, and that notice rides a frame with `endStream: true` — which marks the
+    // POLLED: a call past its deadline tells the server before it releases its
+    // id, and that notice rides a frame with `endStream: true`, which marks the
     // stream finished on the way out. The release that prunes the entry is
-    // chained onto the notice (round 448's ordering: notice first, release after,
-    // bounded), so immediately after the call returns there is one entry still
-    // in flight. It is not accumulation: five abandoned calls read 1, not 5.
-    //
-    // What this test is for — the set returns to zero rather than growing once
-    // per abandoned call — is unchanged, so the assertion is unchanged and only
-    // the instrument waits.
+    // chained onto the notice, so right after the call returns one entry can
+    // still be in flight. What matters is that the set returns to zero rather
+    // than growing once per abandoned call.
     final deadline = DateTime.now().add(const Duration(seconds: 5));
     while (await _finishedStreams(client) > 0 &&
         DateTime.now().isBefore(deadline)) {

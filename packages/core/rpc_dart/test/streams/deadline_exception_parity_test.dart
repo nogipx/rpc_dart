@@ -265,34 +265,6 @@ void main() {
   });
 
   group('unchanged behaviour', () {
-    test('an explicit timeout: argument is not a deadline', () async {
-      // UnaryCaller.call(timeout:) is a caller-supplied bound, not an RPC
-      // deadline, and keeps TimeoutException.
-      final (client, server) = RpcChannelTransport.pair();
-      final caller = RpcCallerEndpoint(transport: client);
-      final responder = RpcResponderEndpoint(transport: server);
-      responder.registerServiceContract(_Contract());
-      responder.start();
-
-      final unary = UnaryCaller<RpcString, RpcString>(
-        transport: client,
-        serviceName: 'Svc',
-        methodName: 'unary',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
-
-      await expectLater(
-        unary.call('a'.rpc, timeout: const Duration(milliseconds: 300)),
-        throwsA(isA<TimeoutException>()),
-      );
-
-      await caller.close();
-      await responder.close();
-      await client.close();
-      await server.close();
-    });
-
     test('a call that answers inside its deadline is unaffected', () async {
       final rig = _connect();
       final result = await rig.caller.unaryRequest<RpcString, RpcString>(

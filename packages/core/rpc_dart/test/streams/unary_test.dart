@@ -78,7 +78,6 @@ void main() {
         expect(receivedRequests.first, equals('test request'.rpc));
 
         // Cleanup
-        await client.close();
         await server.close();
       });
 
@@ -108,7 +107,6 @@ void main() {
         );
 
         // Cleanup
-        await client.close();
         await server.close();
       });
 
@@ -130,17 +128,17 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
+          context: RpcContext.withTimeout(const Duration(milliseconds: 1)),
           logger: LogScope.noop,
         );
 
         // Act & Assert
         await expectLater(
-          client.call('test request'.rpc, timeout: Duration(milliseconds: 1)),
-          throwsA(isA<TimeoutException>()),
+          client.call('test request'.rpc),
+          throwsA(isA<RpcDeadlineExceededException>()),
         );
 
         // Cleanup
-        await client.close();
         await server.close();
       });
 
@@ -180,7 +178,6 @@ void main() {
         expect(receivedStreamIds.toSet().length, equals(3)); // All distinct.
 
         // Cleanup
-        await client.close();
         await server.close();
       });
     });
@@ -216,7 +213,6 @@ void main() {
         expect(receivedRequests.first, equals('Hello Server'.rpc));
 
         // Cleanup
-        await client.close();
         await server.close();
       });
 
@@ -245,7 +241,6 @@ void main() {
         );
 
         // Cleanup
-        await client.close();
         await server.close();
       });
 
@@ -294,8 +289,6 @@ void main() {
         expect(response2, equals('response from DifferentMethod'.rpc));
 
         // Cleanup
-        await correctClient.close();
-        await otherClient.close();
         await server.close();
       });
     });
@@ -326,7 +319,6 @@ void main() {
         expect(response2, equals('Echo: World'.rpc));
 
         // Cleanup
-        await client.close();
         await server.close();
       });
 
@@ -355,7 +347,6 @@ void main() {
           );
 
           responses.add(await client.call('increment'.rpc));
-          await client.close();
         }
 
         // Assert

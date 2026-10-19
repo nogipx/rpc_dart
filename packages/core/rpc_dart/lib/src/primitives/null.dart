@@ -15,11 +15,6 @@ class RpcNull extends RpcPrimitiveMessage<void> {
     return RpcNull();
   }
 
-  /// Creates an [RpcNull] from bytes (always returns a new instance).
-  static RpcNull fromBytes(Uint8List bytes) {
-    return RpcNull();
-  }
-
   /// Default codec for [RpcNull].
   static RpcCodec<RpcNull> get codec => RpcCodec<RpcNull>(RpcNull.fromJson);
 

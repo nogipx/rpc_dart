@@ -83,7 +83,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     final method = binding.registration;
     _install(
       state,
-      UnaryResponder<Object, Object>(
+      ServerStreamResponder<Object, Object>.unary(
         id: streamId,
         transport: transport,
         serviceName: binding.serviceName,

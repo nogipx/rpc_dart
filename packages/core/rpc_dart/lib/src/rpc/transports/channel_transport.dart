@@ -155,9 +155,6 @@ class RpcChannelTransport extends IRpcTransport
   ///
   /// [isClient] determines stream ID parity (odd for client, even for server).
   ///
-  /// [resumeStreamIdsAfter] continues an earlier transport's id sequence rather
-  /// than starting over — pass the previous instance's [lastIssuedStreamId].
-  ///
   /// [ready] is the channel's own readiness, for a channel that is still
   /// connecting when the transport is built (a WebSocket whose upgrade has not
   /// answered). It becomes this transport's [ready], and [health] reads
@@ -166,14 +163,10 @@ class RpcChannelTransport extends IRpcTransport
     required IRpcMultiplexedChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-    int? resumeStreamIdsAfter,
     Future<void>? ready,
     LogScope? logger,
   }) : _channel = channel,
-       _idManager = RpcStreamIdManager(
-         isClient: isClient,
-         resumeAfter: resumeStreamIdsAfter,
-       ),
+       _idManager = RpcStreamIdManager(isClient: isClient),
        _policy = policy,
        _ready = ready ?? Future<void>.value(),
        _isReady = ready == null,
@@ -246,7 +239,6 @@ class RpcChannelTransport extends IRpcTransport
     required IRpcChannel channel,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
-    int? resumeStreamIdsAfter,
     Future<void>? ready,
     LogScope? logger,
   }) : this(
@@ -263,7 +255,6 @@ class RpcChannelTransport extends IRpcTransport
          ),
          isClient: isClient,
          policy: policy,
-         resumeStreamIdsAfter: resumeStreamIdsAfter,
          ready: ready,
          logger: logger,
        );

@@ -61,7 +61,6 @@ void main() {
         final response = await client.call('ping'.rpc);
         expect(response, 'Echo: ping'.rpc);
 
-        await client.close();
         await server.close();
         await rawClient.close();
         await rawServer.close();
@@ -90,7 +89,6 @@ void main() {
           throwsA(isA<RpcStatusException>()),
         );
 
-        await client.close();
         await server.close();
         await rawClient.close();
         await rawServer.close();
@@ -98,12 +96,12 @@ void main() {
     );
 
     test(
-      'UnaryResponder answers a direct-object request serialized when zero-copy is off',
+      'the unary responder answers a direct-object request serialized when zero-copy is off',
       () async {
         final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final serverTransport = NoZeroCopyTransport(rawServer);
 
-        final server = UnaryResponder<RpcString, RpcString>(
+        final server = ServerStreamResponder<RpcString, RpcString>.unary(
           id: 1,
           transport: serverTransport,
           serviceName: 'S',
@@ -158,13 +156,13 @@ void main() {
       },
     );
 
-    test('UnaryResponder ignores messages for other stream id', () async {
+    test('the unary responder ignores messages for other stream id', () async {
       final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
       final clientTransport = NoZeroCopyTransport(rawClient);
       final serverTransport = NoZeroCopyTransport(rawServer);
 
       var handlerCalls = 0;
-      final server = UnaryResponder<RpcString, RpcString>(
+      final server = ServerStreamResponder<RpcString, RpcString>.unary(
         id: 1,
         transport: serverTransport,
         serviceName: 'S',
@@ -203,7 +201,7 @@ void main() {
     });
 
     test(
-      'UnaryResponder: a cancelled call and a metadata-only message do not run the handler',
+      'the unary responder: a cancelled call and a metadata-only message do not run the handler',
       () async {
         final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
         final serverTransport = NoZeroCopyTransport(rawServer);
@@ -219,16 +217,17 @@ void main() {
 
         // 1) Cancelled context => the request is not served.
         final cancelled = RpcCancellationToken.cancelled('stop');
-        final cancelledServer = UnaryResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'S',
-          methodName: 'M',
-          requestCodec: codec,
-          responseCodec: codec,
-          context: RpcContext.withCancellation(cancelled),
-          handler: handler,
-        );
+        final cancelledServer =
+            ServerStreamResponder<RpcString, RpcString>.unary(
+              id: 1,
+              transport: serverTransport,
+              serviceName: 'S',
+              methodName: 'M',
+              requestCodec: codec,
+              responseCodec: codec,
+              context: RpcContext.withCancellation(cancelled),
+              handler: handler,
+            );
         final cancelledFeed = StreamController<RpcTransportMessage>();
         cancelledServer.bindToMessageStream(cancelledFeed.stream);
         cancelledFeed.add(
@@ -240,15 +239,16 @@ void main() {
         );
 
         // 2) Metadata-only message => not a request.
-        final metadataServer = UnaryResponder<RpcString, RpcString>(
-          id: 5,
-          transport: serverTransport,
-          serviceName: 'S',
-          methodName: 'M',
-          requestCodec: codec,
-          responseCodec: codec,
-          handler: handler,
-        );
+        final metadataServer =
+            ServerStreamResponder<RpcString, RpcString>.unary(
+              id: 5,
+              transport: serverTransport,
+              serviceName: 'S',
+              methodName: 'M',
+              requestCodec: codec,
+              responseCodec: codec,
+              handler: handler,
+            );
         final metadataFeed = StreamController<RpcTransportMessage>();
         metadataServer.bindToMessageStream(metadataFeed.stream);
         metadataFeed.add(

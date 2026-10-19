@@ -13,14 +13,12 @@ part 'codec.dart';
 part 'binary_codec.dart';
 
 /// Base interface for RPC messages that can be turned into bytes.
-/// All request/response types should implement this for binary serialization
-/// (protobuf, msgpack, etc.).
+///
+/// [toJson] gives the map a codec encodes; the type's `fromJson` factory,
+/// handed to `RpcCodec`, reads it back.
 abstract interface class IRpcSerializable {
   /// Serializes an object to a map representation.
   Map<String, dynamic> toJson();
-
-  /// Deserializes an object from bytes (should be a static factory).
-  /// static T fromBytes(Uint8List bytes);
 }
 
 /// Approximate size of [value]'s JSON form, without encoding it: the UTF-16

@@ -120,10 +120,10 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // The responder's served-call record. Ablate its guard to `if (false)`
-      // and this row disappears while the call still succeeds -- which is
-      // exactly the failure this test exists to make loud.
-      expectLine('Served /Svc/echo', 'unary/responder.dart');
+      // The responder's request record. Ablate its guard to `if (false)` and
+      // this row disappears while the call still succeeds -- which is exactly
+      // the failure this test exists to make loud.
+      expectLine('Received a request [id:', 'server/responder.dart');
 
       // The caller, the processor that serializes for it, and the parser.
       expectLine('Unary call /Svc/echo started', 'unary/caller.dart');
