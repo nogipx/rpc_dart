@@ -1,17 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 // SPDX-License-Identifier: MIT
 
-import 'dart:convert';
-
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 
 // Minimal protobuf binary parser — only the fields needed for gRPC reflection.
-//
-// Wire types:
-//   0 = VARINT
-//   1 = I64
-//   2 = LEN (length-delimited)
-//   5 = I32
 //
 // FileDescriptorProto fields parsed:
 //   1  = name (string)
@@ -25,11 +17,6 @@ import 'package:rpc_dart/rpc_dart.dart';
 //   1  = name (string)
 //   3  = nested_type (repeated DescriptorProto)
 //   4  = enum_type (repeated EnumDescriptorProto)
-
-const int _wireVarint = 0;
-const int _wireI64 = 1;
-const int _wireLen = 2;
-const int _wireI32 = 5;
 
 /// Parsed representation of a FileDescriptorProto (fields used for reflection).
 class ParsedFileDescriptor {
@@ -77,20 +64,18 @@ ParsedFileDescriptor parseFileDescriptorProto(Uint8List bytes) =>
 
 /// Parses a serialized FileDescriptorSet and returns all contained FileDescriptorProtos.
 List<ParsedFileDescriptor> parseFileDescriptorSet(Uint8List bytes) {
-  final reader = _ProtoReader(bytes);
+  final reader = RpcProtoReader(bytes);
   final result = <ParsedFileDescriptor>[];
 
-  while (reader.hasMore) {
-    final tag = reader.readTag();
-    final fieldNumber = tag >> 3;
-    final wireType = tag & 0x7;
+  while (!reader.atEnd) {
+    final (field: fieldNumber, :wireType) = reader.readTag();
 
-    if (fieldNumber == 1 && wireType == _wireLen) {
+    if (fieldNumber == 1 && wireType == RpcProtoWireType.lengthDelimited) {
       // repeated FileDescriptorProto file = 1
-      final fileBytes = reader.readLenDelimited();
+      final fileBytes = reader.readBytes();
       result.add(_parseFileDescriptorProto(fileBytes));
     } else {
-      reader.skipField(wireType);
+      reader.skip(wireType);
     }
   }
 
@@ -98,7 +83,7 @@ List<ParsedFileDescriptor> parseFileDescriptorSet(Uint8List bytes) {
 }
 
 ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
-  final reader = _ProtoReader(bytes);
+  final reader = RpcProtoReader(bytes);
   var name = '';
   var package = '';
   final dependencies = <String>[];
@@ -107,34 +92,27 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
   final messageTypes = <String>[];
   final enumTypes = <String>[];
 
-  while (reader.hasMore) {
-    final tag = reader.readTag();
-    final fieldNumber = tag >> 3;
-    final wireType = tag & 0x7;
+  while (!reader.atEnd) {
+    final (field: fieldNumber, :wireType) = reader.readTag();
 
     switch (fieldNumber) {
-      case 1 when wireType == _wireLen:
-        name = utf8.decode(reader.readLenDelimited());
-      case 2 when wireType == _wireLen:
-        package = utf8.decode(reader.readLenDelimited());
-      case 3 when wireType == _wireLen:
+      case 1 when wireType == RpcProtoWireType.lengthDelimited:
+        name = reader.readString();
+      case 2 when wireType == RpcProtoWireType.lengthDelimited:
+        package = reader.readString();
+      case 3 when wireType == RpcProtoWireType.lengthDelimited:
         // repeated string dependency
-        dependencies.add(utf8.decode(reader.readLenDelimited()));
-      case 4 when wireType == _wireLen:
+        dependencies.add(reader.readString());
+      case 4 when wireType == RpcProtoWireType.lengthDelimited:
         // repeated DescriptorProto message_type — collect names recursively
-        _collectAllTypeNames(
-          reader.readLenDelimited(),
-          '',
-          messageTypes,
-          enumTypes,
-        );
-      case 5 when wireType == _wireLen:
+        _collectAllTypeNames(reader.readBytes(), '', messageTypes, enumTypes);
+      case 5 when wireType == RpcProtoWireType.lengthDelimited:
         // repeated EnumDescriptorProto enum_type (file-level)
-        final enumName = _parseNameField(reader.readLenDelimited());
+        final enumName = _parseNameField(reader.readBytes());
         if (enumName.isNotEmpty) enumTypes.add(enumName);
-      case 6 when wireType == _wireLen:
+      case 6 when wireType == RpcProtoWireType.lengthDelimited:
         // repeated ServiceDescriptorProto service
-        final svcBytes = reader.readLenDelimited();
+        final svcBytes = reader.readBytes();
         final svcName = _parseNameField(svcBytes);
         if (svcName.isNotEmpty) {
           services.add(svcName);
@@ -142,7 +120,7 @@ ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
           if (methods.isNotEmpty) serviceMethods[svcName] = methods;
         }
       default:
-        reader.skipField(wireType);
+        reader.skip(wireType);
     }
   }
 
@@ -168,27 +146,25 @@ void _collectAllTypeNames(
   List<String> messages,
   List<String> enums,
 ) {
-  final reader = _ProtoReader(bytes);
+  final reader = RpcProtoReader(bytes);
   var name = '';
   final nestedMessageBytes = <Uint8List>[];
   final nestedEnumBytes = <Uint8List>[];
 
-  while (reader.hasMore) {
-    final tag = reader.readTag();
-    final fn = tag >> 3;
-    final wt = tag & 0x7;
+  while (!reader.atEnd) {
+    final (field: fn, wireType: wt) = reader.readTag();
 
     switch (fn) {
-      case 1 when wt == _wireLen:
-        name = utf8.decode(reader.readLenDelimited());
-      case 3 when wt == _wireLen:
+      case 1 when wt == RpcProtoWireType.lengthDelimited:
+        name = reader.readString();
+      case 3 when wt == RpcProtoWireType.lengthDelimited:
         // nested_type (repeated DescriptorProto)
-        nestedMessageBytes.add(reader.readLenDelimited());
-      case 4 when wt == _wireLen:
+        nestedMessageBytes.add(reader.readBytes());
+      case 4 when wt == RpcProtoWireType.lengthDelimited:
         // enum_type (repeated EnumDescriptorProto)
-        nestedEnumBytes.add(reader.readLenDelimited());
+        nestedEnumBytes.add(reader.readBytes());
       default:
-        reader.skipField(wt);
+        reader.skip(wt);
     }
   }
 
@@ -207,7 +183,6 @@ void _collectAllTypeNames(
   }
 }
 
-/// Reads field 1 (string name) from a proto message.
 /// Extracts the method names from a serialized `ServiceDescriptorProto`.
 ///
 /// `ServiceDescriptorProto.method` is field 2, and each `MethodDescriptorProto`
@@ -220,106 +195,28 @@ void _collectAllTypeNames(
 /// index them under.
 List<String> _parseServiceMethodNames(Uint8List bytes) {
   final methods = <String>[];
-  final reader = _ProtoReader(bytes);
-  while (reader.hasMore) {
-    final tag = reader.readTag();
-    final fieldNumber = tag >> 3;
-    final wireType = tag & 0x7;
-    if (fieldNumber == 2 && wireType == _wireLen) {
-      final name = _parseNameField(reader.readLenDelimited());
+  final reader = RpcProtoReader(bytes);
+  while (!reader.atEnd) {
+    final (field: fieldNumber, :wireType) = reader.readTag();
+    if (fieldNumber == 2 && wireType == RpcProtoWireType.lengthDelimited) {
+      final name = _parseNameField(reader.readBytes());
       if (name.isNotEmpty) methods.add(name);
       continue;
     }
-    reader.skipField(wireType);
+    reader.skip(wireType);
   }
   return methods;
 }
 
+/// Reads field 1 (string name) from a proto message.
 String _parseNameField(Uint8List bytes) {
-  final reader = _ProtoReader(bytes);
-  while (reader.hasMore) {
-    final tag = reader.readTag();
-    final fieldNumber = tag >> 3;
-    final wireType = tag & 0x7;
-    if (fieldNumber == 1 && wireType == _wireLen) {
-      return utf8.decode(reader.readLenDelimited());
+  final reader = RpcProtoReader(bytes);
+  while (!reader.atEnd) {
+    final (field: fieldNumber, :wireType) = reader.readTag();
+    if (fieldNumber == 1 && wireType == RpcProtoWireType.lengthDelimited) {
+      return reader.readString();
     }
-    reader.skipField(wireType);
+    reader.skip(wireType);
   }
   return '';
-}
-
-class _ProtoReader {
-  final Uint8List _bytes;
-  int _pos = 0;
-
-  _ProtoReader(this._bytes);
-
-  bool get hasMore => _pos < _bytes.length;
-
-  int readTag() => readVarint();
-
-  int readVarint() {
-    // Accumulate the low and high 32-bit halves separately. On dart2js the
-    // bitwise `<<` is a 32-bit operation, so shifting past bit 31 in a single
-    // native int saturates/loses the high bits. Combining the halves via
-    // multiplication keeps full 64-bit values correct under both the VM and JS.
-    var low = 0;
-    var high = 0;
-    var shift = 0;
-    while (_pos < _bytes.length) {
-      if (shift >= 64) throw const FormatException('Varint exceeds 64 bits');
-      final b = _bytes[_pos++];
-      final part = b & 0x7F;
-      if (shift < 28) {
-        low |= part << shift;
-      } else if (shift == 28) {
-        // 4 bits stay in the low half, the remaining 3 start the high half.
-        low |= (part & 0x0F) << 28;
-        high = (part >> 4) & 0x07;
-      } else {
-        high |= part << (shift - 32);
-      }
-      if (b & 0x80 == 0) {
-        return high == 0 ? low : (high * 0x100000000) + (low & 0xFFFFFFFF);
-      }
-      shift += 7;
-    }
-    throw const FormatException('Truncated varint');
-  }
-
-  Uint8List readLenDelimited() {
-    final length = readVarint();
-    if (length < 0 || _pos + length > _bytes.length) {
-      throw FormatException(
-        'Length-delimited field runs past end of buffer: '
-        'need $length bytes at offset $_pos but only '
-        '${_bytes.length - _pos} remain',
-      );
-    }
-    final data = Uint8List.sublistView(_bytes, _pos, _pos + length);
-    _pos += length;
-    return data;
-  }
-
-  void skipField(int wireType) {
-    switch (wireType) {
-      case _wireVarint:
-        readVarint();
-      case _wireI64:
-        _pos += 8;
-      case _wireLen:
-        final length = readVarint();
-        _pos += length;
-      case _wireI32:
-        _pos += 4;
-      default:
-        // INVALID_ARGUMENT: this parses a descriptor the PEER supplied, so a
-        // bad wire type is untrusted input rather than a bug here.
-        throw RpcStatusException(
-          RpcStatus.invalidArgument,
-          'Unknown wire type: $wireType at pos $_pos',
-        );
-    }
-  }
 }

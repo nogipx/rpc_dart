@@ -6,13 +6,10 @@ import 'dart:typed_data';
 import 'package:rpc_dart_grpc_reflection/src/proto_writer.dart';
 import 'package:test/test.dart';
 
-// Pins the canonical byte output of ProtoWriter. rpc_dart_generator carries a
-// byte-identical private copy (_ProtoWriter) which cannot share this class
-// because that package is published and this one is publish_to:none. The
-// matching test on the generator side encodes the same operations and asserts
-// the same golden bytes, proving the two writers stay in lockstep.
+// Pins the canonical byte output of ProtoWriter: the descriptors the generator
+// embeds are built through it, so their bytes are these.
 void main() {
-  group('ProtoWriter — canonical byte output (generator parity)', () {
+  group('ProtoWriter — canonical byte output', () {
     test('writeString golden bytes', () {
       final w = ProtoWriter();
       w.writeString(1, 'Echo');
