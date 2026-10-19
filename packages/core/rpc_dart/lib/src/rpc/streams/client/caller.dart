@@ -126,7 +126,11 @@ final class ClientStreamCaller<
           if (_pendingResponse != null) {
             _responseCompleter.complete(_pendingResponse as TResponse);
           } else {
-            _logger.warning('Status OK but no response payload');
+            // The caller gets the error; a server answering this way answers
+            // every call so, which is no news to log at warning each time.
+            if (_logger.isDebug) {
+              _logger.debug('Status OK but no response payload');
+            }
             _responseCompleter.completeError(RpcCallerTrailer.noPayload());
           }
           return;

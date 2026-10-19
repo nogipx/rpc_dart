@@ -303,4 +303,45 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );
+
+  // Every later frame of a mismatched call would repeat the record, and the
+  // peer chooses how many frames it sends.
+  test(
+    'a mismatched call is logged once however many frames it sends',
+    () async {
+      final records = <LogEvent>[];
+      final controller = LogController(minLevel: RpcLogLevel.error);
+      controller.stream.listen((r) {
+        if (r is LogEvent) records.add(r);
+      });
+      addTearDown(controller.dispose);
+      final (clientTransport, serverTransport) =
+          RpcChannelTransport.memoryPair();
+      final responder = RpcResponderEndpoint(
+        transport: serverTransport,
+        logController: controller,
+      )..registerServiceContract(_ZeroCopySvc());
+      responder.start();
+      final caller = RpcCallerEndpoint(transport: clientTransport);
+      addTearDown(() async {
+        await caller.close();
+        await responder.close();
+      });
+
+      final call = caller.clientStream<Msg, Msg>(
+        serviceName: _zeroCopyService,
+        methodName: 'client',
+        requestCodec: _codec,
+        responseCodec: _codec,
+      )(Stream.fromIterable(List.generate(5, (i) => Msg('$i'))));
+      await expectLater(call.timeout(const Duration(seconds: 15)), _mismatch);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(
+        records.where((r) => r.message.startsWith('transfer_mode_mismatch')),
+        hasLength(1),
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }

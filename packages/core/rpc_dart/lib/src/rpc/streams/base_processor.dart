@@ -119,6 +119,9 @@ T _decodePeerMessage<T>(
   }
 }
 
+/// The calls whose transfer-mode mismatch was reported, by their controller.
+final Expando<bool> _mismatchReported = Expando<bool>('transfer mode mismatch');
+
 /// Answers a peer whose payload SHAPE does not match this side's transfer mode.
 ///
 /// The two ends pick their mode from their OWN contract, so they can disagree:
@@ -130,6 +133,8 @@ T _decodePeerMessage<T>(
 /// An [RpcException] because it is a library diagnostic with no user data in
 /// it, so `wireStatusFor` forwards the text to the peer -- the side that can
 /// fix it.
+///
+/// Once per call: every later frame of the same call would repeat it.
 void _reportTransferModeMismatch(
   StreamController<dynamic> controller,
   LogScope logger,
@@ -137,6 +142,8 @@ void _reportTransferModeMismatch(
   int streamId,
   String direction,
 ) {
+  if (_mismatchReported[controller] ?? false) return;
+  _mismatchReported[controller] = true;
   // INTERNAL: the two ends were configured with different transfer modes, which
   // is a wiring mistake rather than anything the peer did wrong at call time.
   final error = RpcStatusException(

@@ -15,6 +15,7 @@ export 'message.dart';
 export 'metadata.dart';
 export 'multiplexed_channel.dart';
 export 'parser.dart';
+export 'peer_text.dart';
 export 'protobuf.dart';
 export 'protocol.dart';
 export 'recent_ids.dart';
