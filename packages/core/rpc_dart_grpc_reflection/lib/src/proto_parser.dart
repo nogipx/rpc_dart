@@ -33,8 +33,7 @@ class ParsedFileDescriptor {
   ///
   /// Carried so a fully-qualified METHOD can be indexed for
   /// `file_containing_symbol`, which the reflection proto documents as
-  /// accepting `<package>.<service>[.<method>]`. Defaulted rather than
-  /// required, so adding it does not break an existing construction.
+  /// accepting `<package>.<service>[.<method>]`.
   final Map<String, List<String>> serviceMethods;
 
   /// All message type names including nested, relative to package.

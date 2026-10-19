@@ -116,7 +116,7 @@ class RpcReflectionRegistry {
   /// Dependencies that are declared (via proto `import`) but not registered
   /// (e.g. well-known types) are skipped, producing a partial descriptor set.
   /// When this happens a WARNING is emitted naming the missing files; the
-  /// partial set is still returned so existing clients keep working.
+  /// partial set is still returned.
   List<Uint8List>? fileByFilename(String filename) {
     if (!_files.containsKey(filename)) return null;
     return _resolveWithDeps(filename);
@@ -199,7 +199,7 @@ class RpcReflectionRegistry {
     if (bytes == null) {
       // Declared dependency that was never registered (e.g. an unregistered
       // well-known type). Record it so the caller can be warned, then skip:
-      // the partial set is still returned to stay non-breaking.
+      // the partial set is still returned.
       missing.add(filename);
       return;
     }
