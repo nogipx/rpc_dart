@@ -409,7 +409,10 @@ Future<({int written, void Function() hear})> _deafPeer(
       return _rawDeafPeer(
         rig,
         calls: calls,
-        preface: RpcSocketChannel.preface,
+        preface: Uint8List.fromList([
+          ...RpcSocketChannel.preface,
+          ...RpcChannelFrame.preface,
+        ]),
         batch: batch,
       );
     case Http2Member():
@@ -442,13 +445,14 @@ Future<({int written, void Function() hear})> _deafPeer(
       return _rawDeafPeer(
         rig,
         calls: calls,
-        preface: Uint8List.fromList(
-          latin1.encode(
+        preface: Uint8List.fromList([
+          ...latin1.encode(
             'GET / HTTP/1.1\r\nhost: 127.0.0.1\r\nupgrade: websocket\r\n'
             'connection: Upgrade\r\nsec-websocket-version: 13\r\n'
             'sec-websocket-key: $key\r\n\r\n',
           ),
-        ),
+          ..._wsClientFrame(RpcChannelFrame.preface),
+        ]),
         batch: (first) => _wsClientFrame(batch(first)),
       );
     default:
