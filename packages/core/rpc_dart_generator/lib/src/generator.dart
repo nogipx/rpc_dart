@@ -528,10 +528,7 @@ class _Emitter {
       if (endpointType != null) 'endpoint',
       for (final mode in modes) '$mode: dataTransferMode',
     ].join(', ');
-    final initializers = [
-      ?parentInit,
-      'super($superArgs)',
-    ].join(', ');
+    final initializers = [?parentInit, 'super($superArgs)'].join(', ');
     return '  $className($params) : $initializers;';
   }
 
