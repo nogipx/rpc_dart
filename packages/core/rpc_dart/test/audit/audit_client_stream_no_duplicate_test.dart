@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 /// A client-stream handler must observe each request exactly once.
 ///
 /// The responder pipeline buffers client-stream payloads itself
-/// (`_clientBufferedMessages`) and replays them at bind time, while
+/// (`_preBindBufferedMessages`) and replays them at bind time, while
 /// [RpcChannelTransport] ALSO keeps a per-stream single-subscription
 /// controller that buffers until its consumer subscribes. If both buffers hold
 /// the same frames, the handler sees every message twice.

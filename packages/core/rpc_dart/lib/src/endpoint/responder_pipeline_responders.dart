@@ -149,7 +149,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       ),
       _pipelineFedRequestStream(
         state,
-        initialMessages: state.takeClientBufferedMessages(),
+        initialMessages: state.takePreBindBufferedMessages(),
       ),
     );
   }

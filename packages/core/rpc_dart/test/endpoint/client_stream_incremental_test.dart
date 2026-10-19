@@ -19,7 +19,7 @@
 //   702ms handler got chunk c1 .. c5
 //
 // The same cause is an unauthenticated memory exhaustion: the messages pile up
-// in `_clientBufferedMessages`, a plain List with no bound. maxMessageSize
+// in `_preBindBufferedMessages`, a plain List with no bound. maxMessageSize
 // bounds one frame and maxActiveStreams bounds the stream count, but nothing
 // bounds how much a single stream accumulates. A peer that opens one
 // client-stream and never half-closes, against a handler that consumes and

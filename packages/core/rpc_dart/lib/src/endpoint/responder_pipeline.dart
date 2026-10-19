@@ -472,8 +472,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       'bufferedMessages': _respStreams.values
           .where((state) => state.lastPayloadMessage != null)
           .length,
-      'clientStreamBuffers': _respStreams.values
-          .where((state) => state.hasBufferedClientMessages)
+      'preBindBuffers': _respStreams.values
+          .where((state) => state.hasPreBindBuffered)
           .length,
       // The metrics key and the drain now read ONE source. The key is
       // observability and free to rename; the count is a shutdown decision.

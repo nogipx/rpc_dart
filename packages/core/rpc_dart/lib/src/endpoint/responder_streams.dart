@@ -26,7 +26,6 @@ final class RpcResponderStreamState {
   /// The most recently received payload message.
   RpcTransportMessage? lastPayloadMessage;
   final List<RpcTransportMessage> _preBindBufferedMessages = [];
-  final List<RpcTransportMessage> _clientBufferedMessages = [];
   final List<RpcTransportMessage> _preMethodBufferedMessages = [];
   int _preMethodBufferedBytes = 0;
   RpcContext? _cachedContext;
@@ -125,8 +124,8 @@ final class RpcResponderStreamState {
   /// True when a metadata message has been stored.
   bool get hasMetadata => metadataMessage != null;
 
-  /// True when there are buffered client-stream messages pending dispatch.
-  bool get hasBufferedClientMessages => _clientBufferedMessages.isNotEmpty;
+  /// True when payload frames arrived before the responder was bound.
+  bool get hasPreBindBuffered => _preBindBufferedMessages.isNotEmpty;
 
   /// True when payload frames arrived before the method was resolved and are
   /// waiting to be replayed once the metadata frame is processed.
@@ -358,14 +357,13 @@ final class RpcResponderStreamState {
     _cachedContext = null;
   }
 
-  /// Stores a payload [message], optionally buffering it for client-stream methods.
+  /// Stores a payload [message], buffering it until the responder is bound.
   ///
-  /// False when buffering it would cross [limitBytes] or [limitEvents]; the
-  /// caller fails the stream. A unary state is never marked bound, so every
-  /// frame a peer sends while its handler runs lands in the pre-bind buffer.
+  /// False when buffering it would exceed [budget]; the caller fails the
+  /// stream. A unary state is never marked bound, so every frame a peer sends
+  /// while its handler runs lands in the pre-bind buffer.
   bool storePayload(
     RpcTransportMessage message, {
-    required bool bufferForClientStream,
     required RpcResponderBufferBudget budget,
   }) {
     if (!_boundToMessageStream) message = ownedPayload(message);
@@ -387,30 +385,15 @@ final class RpcResponderStreamState {
       // Only until the responder is bound: after that every frame reaches it
       // directly, and keeping the latest one here pinned a payload per call.
       lastPayloadMessage = message;
-    }
-
-    // For bidirectional/server-stream/unary methods we can receive multiple
-    // payload messages before the responder is bound to the per-stream message
-    // stream. Since transports are broadcast streams (no replay), buffer
-    // everything pre-bind to avoid losing messages.
-    if (!bufferForClientStream && !_boundToMessageStream) {
+      // Transports do not replay, so a frame that arrives before the responder
+      // subscribes is kept here and handed to it at bind. After the bind each
+      // frame reaches it directly.
       _preBindBufferedMessages.add(message);
-    }
-
-    // Same pre-bind condition for the client-stream buffer. It used to append
-    // unconditionally, which was harmless only because nothing bound a
-    // client-stream responder until the peer half-closed. Now that one is bound
-    // on the first request frame, every later message already reaches the
-    // handler through the per-stream subscription -- appending here too would
-    // retain a second copy of the whole request for the life of the call, and
-    // nothing would ever take it.
-    if (bufferForClientStream && !_boundToMessageStream) {
-      _clientBufferedMessages.add(message);
     }
     return true;
   }
 
-  /// What [storePayload] has charged to the two pre-bind buffers.
+  /// What [storePayload] has charged to the pre-bind buffer.
   int _preBindBytes = 0;
   int _preBindOverhead = 0;
   int _preBindEvents = 0;
@@ -451,6 +434,10 @@ final class RpcResponderStreamState {
   }
 
   /// Returns and clears all messages buffered before the responder was bound.
+  ///
+  /// The peer's half-close is not stamped onto them: the request stream
+  /// replays it when the peer has already sent one, which also covers a call
+  /// that carried no messages at all.
   List<RpcTransportMessage> takePreBindBufferedMessages() {
     if (_preBindBufferedMessages.isEmpty) {
       return const [];
@@ -474,19 +461,6 @@ final class RpcResponderStreamState {
       _budget?.give(bytes + overhead);
       if (_preBindEvents > 0) _preBindEvents--;
     }
-  }
-
-  /// Returns and clears the buffered client-stream messages.
-  ///
-  /// The peer's half-close is not stamped onto them: the pipeline-fed request
-  /// stream replays it when the peer has already sent one, which also covers a
-  /// call that carried no messages at all.
-  List<RpcTransportMessage> takeClientBufferedMessages() {
-    if (_clientBufferedMessages.isEmpty) return const [];
-    final messages = List<RpcTransportMessage>.from(_clientBufferedMessages);
-    _clientBufferedMessages.clear();
-    _releasePreBind(messages);
-    return messages;
   }
 
   /// The cached [RpcContext] parsed from the metadata message, if available.

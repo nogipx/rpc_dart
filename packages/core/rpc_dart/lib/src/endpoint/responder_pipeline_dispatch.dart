@@ -469,11 +469,7 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     }
 
     final budget = _respBudget;
-    if (!state.storePayload(
-      message,
-      bufferForClientStream: binding.type == RpcMethodType.clientStream,
-      budget: budget,
-    )) {
+    if (!state.storePayload(message, budget: budget)) {
       if (!_warnedPreBind) {
         _warnedPreBind = true;
         _log.warning(
