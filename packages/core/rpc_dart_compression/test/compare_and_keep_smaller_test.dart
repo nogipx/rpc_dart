@@ -44,10 +44,13 @@ final class _Side implements IRpcChannel {
 
   @override
   Future<void> send(Uint8List data) async {
-    final view = ByteData.sublistView(data);
-    final len = view.getUint32(5);
-    if ((view.getUint8(4) & RpcChannelFrame.flagMetadata) == 0 && len > 0) {
-      dataSizes.add(len);
+    // The preface is shorter than a frame header and is not a frame.
+    if (data.length >= RpcChannelFrame.headerSize) {
+      final view = ByteData.sublistView(data);
+      final len = view.getUint32(5);
+      if ((view.getUint8(4) & RpcChannelFrame.flagMetadata) == 0 && len > 0) {
+        dataSizes.add(len);
+      }
     }
     if (!peer._ctl.isClosed) peer._ctl.add(data);
   }
