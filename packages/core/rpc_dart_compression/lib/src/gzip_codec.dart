@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:math' show min;
+
 import 'package:archive/archive.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
@@ -32,7 +34,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// ISIZE trailer declares a larger output, guarding against decompression
   /// bombs. Malformed input throws [FormatException].
   ///
-  /// Defaults to unlimited ([_unlimited]). The check is cheap because gzip
+  /// Null, the default, sets no limit of its own. The check is cheap because gzip
   /// already stores the uncompressed size (mod 2^32) in its trailer, so no
   /// extra work is done for payloads within the limit.
   ///
@@ -52,7 +54,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   ///
   /// So on web this is a bound on what you will accept, not a defence against
   /// what it costs to refuse.
-  final int maxDecompressedSize;
+  final int? maxDecompressedSize;
 
   /// Default compression level (archive / zlib default).
   static const int defaultLevel = 6;
@@ -63,16 +65,11 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// Smallest-output compression level.
   static const int bestLevel = 9;
 
-  /// Sentinel for "no decompressed-size limit".
-  static const int _unlimited = -1;
-
-  const RpcGzipCodec({
-    this.level = defaultLevel,
-    this.maxDecompressedSize = _unlimited,
-  }) : assert(
-         level >= 0 && level <= 9,
-         'gzip level must be in 0..9, got $level',
-       );
+  const RpcGzipCodec({this.level = defaultLevel, this.maxDecompressedSize})
+    : assert(
+        level >= 0 && level <= 9,
+        'gzip level must be in 0..9, got $level',
+      );
 
   /// Registers a [RpcGzipCodec] with [RpcGrpcCompression] for the `gzip`
   /// encoding.
@@ -80,10 +77,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
   /// Replaces any previously registered gzip codec (including the built-in
   /// dart:io one on native platforms). [level] and [maxDecompressedSize] are
   /// forwarded to the codec constructor.
-  static void register({
-    int level = defaultLevel,
-    int maxDecompressedSize = _unlimited,
-  }) {
+  static void register({int level = defaultLevel, int? maxDecompressedSize}) {
     assert(level >= 0 && level <= 9, 'gzip level must be in 0..9, got $level');
     RpcGrpcCompression.register(
       RpcGrpcCompression.gzip,
@@ -124,24 +118,15 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // allocating anything. Cheap and never triggers for in-limit payloads.
     // Effective limit = the tighter of the codec's configured cap and the
     // per-call hint from RpcCompressionCodec.decompress(maxOutputBytes:).
-    final int effectiveLimit;
-    if (maxOutputBytes == null) {
-      effectiveLimit = maxDecompressedSize;
-    } else if (maxDecompressedSize == _unlimited) {
-      effectiveLimit = maxOutputBytes;
-    } else {
-      effectiveLimit = maxOutputBytes < maxDecompressedSize
-          ? maxOutputBytes
-          : maxDecompressedSize;
-    }
+    final own = maxDecompressedSize;
+    final effectiveLimit = maxOutputBytes == null
+        ? own
+        : own == null
+        ? maxOutputBytes
+        : min(own, maxOutputBytes);
 
-    if (effectiveLimit != _unlimited) {
-      final n = data.length;
-      final declaredSize =
-          data[n - 4] |
-          (data[n - 3] << 8) |
-          (data[n - 2] << 16) |
-          (data[n - 1] << 24);
+    final declaredSize = _le32(data, data.length - 4);
+    if (effectiveLimit != null) {
       if (declaredSize > effectiveLimit) {
         throw RpcStatusException(
           RpcStatus.resourceExhausted,
@@ -164,7 +149,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // [RpcGrpcCompression.platformGzip] is null, leaving the whole-buffer path
     // with its after-the-fact check -- documented, not fixed, because
     // `Inflate.stream(input).getBytes()` gives nothing to interrupt.
-    final bounded = effectiveLimit == _unlimited
+    final bounded = effectiveLimit == null
         ? null
         : RpcGrpcCompression.platformGzip;
     final List<int> result;
@@ -186,7 +171,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // now materialized, so enforce the limit on the actual length too --
     // BEFORE the trailer check, which such a payload also fails, so that an
     // oversized output reads as a size on the web as it does on the VM.
-    if (effectiveLimit != _unlimited && result.length > effectiveLimit) {
+    if (effectiveLimit != null && result.length > effectiveLimit) {
       throw RpcStatusException(
         RpcStatus.resourceExhausted,
         'Decompressed gzip output is ${result.length} bytes, over the limit '
@@ -198,7 +183,7 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // verify:true is a no-op there: corrupted or truncated payloads decode to
     // garbage without throwing. Re-check the gzip trailer ourselves so the
     // behaviour matches the VM on every platform.
-    _verifyTrailer(data, result);
+    _verifyTrailer(data, result, declaredSize);
 
     // decodeBytes returns a Uint8List on every platform, so avoid the extra
     // Uint8List.fromList copy. Cast defensively in case a future archive
@@ -206,21 +191,22 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     return result is Uint8List ? result : Uint8List.fromList(result);
   }
 
+  /// The little-endian 32-bit value at [offset] of [data].
+  static int _le32(Uint8List data, int offset) =>
+      data[offset] |
+      (data[offset + 1] << 8) |
+      (data[offset + 2] << 16) |
+      (data[offset + 3] << 24);
+
   /// Validates the gzip trailer (RFC 1952): the last 8 bytes are CRC32 and
-  /// ISIZE (uncompressed size mod 2^32), both little-endian. Throws a
-  /// [FormatException] if either does not match the decoded output.
-  static void _verifyTrailer(Uint8List data, List<int> output) {
-    final n = data.length;
-    final expectedCrc =
-        data[n - 8] |
-        (data[n - 7] << 8) |
-        (data[n - 6] << 16) |
-        (data[n - 5] << 24);
-    final expectedSize =
-        data[n - 4] |
-        (data[n - 3] << 8) |
-        (data[n - 2] << 16) |
-        (data[n - 1] << 24);
+  /// ISIZE (uncompressed size mod 2^32, [expectedSize]), both little-endian.
+  /// Throws a [FormatException] if either does not match the decoded output.
+  static void _verifyTrailer(
+    Uint8List data,
+    List<int> output,
+    int expectedSize,
+  ) {
+    final expectedCrc = _le32(data, data.length - 8);
 
     if ((output.length & 0xffffffff) != (expectedSize & 0xffffffff)) {
       throw FormatException(

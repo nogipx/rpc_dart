@@ -55,8 +55,8 @@ dependencies:
 
 | Member | Meaning |
 | --- | --- |
-| `const RpcGzipCodec({int level = 6, int maxDecompressedSize})` | The codec. `maxDecompressedSize` defaults to no codec-side cap; the policy limit still applies. |
-| `static void register({int level, int maxDecompressedSize})` | Shorthand for `RpcGrpcCompression.register(RpcGrpcCompression.gzip, RpcGzipCodec(...))`. |
+| `const RpcGzipCodec({int level = 6, int? maxDecompressedSize})` | The codec. `maxDecompressedSize` defaults to null, no codec-side cap; the policy limit still applies. |
+| `static void register({int level, int? maxDecompressedSize})` | Shorthand for `RpcGrpcCompression.register(RpcGrpcCompression.gzip, RpcGzipCodec(...))`. |
 | `RpcGzipCodec.defaultLevel` / `fastestLevel` / `bestLevel` | 6 / 1 / 9. |
 | `Uint8List compress(Uint8List data)` | gzip encode. |
 | `Uint8List decompress(Uint8List data, {int? maxOutputBytes})` | gzip decode. Throws `RpcStatusException` (`RpcStatus.resourceExhausted`) over the limit, `FormatException` on malformed input (bad header, CRC or size trailer). |
