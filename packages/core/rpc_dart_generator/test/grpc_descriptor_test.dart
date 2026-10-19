@@ -88,6 +88,8 @@ class Item implements IRpcSerializable {
 
         expect(parsed.services, contains('Catalog'));
         expect(parsed.messageTypes, containsAll(['Query', 'Item']));
+        // The enum a field names is defined in the file, or it cannot resolve.
+        expect(parsed.enumTypes, contains('Color'));
 
         // The Item message must carry an enum-typed field (proto type 14).
         expect(
@@ -134,6 +136,7 @@ class Ack implements IRpcSerializable {
 ''';
 
       final captured = <String>[];
+      String? output;
       await testBuilder(
         rpcDartBuilder(BuilderOptions({})),
         {'rpc_dart_generator|lib/no_num.dart': source},
@@ -141,7 +144,19 @@ class Ack implements IRpcSerializable {
         packageConfig: packageConfig,
         readerWriter: readerWriter,
         onLog: (record) => captured.add(record.message),
+        outputs: {
+          'rpc_dart_generator|lib/no_num.rpc_dart.g.part': decodedMatches(
+            predicate<String>((s) {
+              output = s;
+              return true;
+            }),
+          ),
+        },
       );
+
+      // Ack has no fields, and an empty message is still a message.
+      final parsed = parseFileDescriptorProto(_extractDescriptorBytes(output!));
+      expect(parsed.messageTypes, containsAll(['AddReq', 'Ack']));
 
       expect(
         captured.any(
@@ -314,6 +329,13 @@ class Order implements IRpcSerializable {
         // And it must match the service input/output ref naming convention.
         final inputTypeName = _serviceMethodTypeName(descriptor, 'get', 2);
         expect(inputTypeName, '.shop.v1.Query');
+
+        // Item is no method's type, but a field names it, so the file
+        // defines it.
+        expect(
+          parseFileDescriptorProto(descriptor).messageTypes,
+          containsAll(['Query', 'Order', 'Item']),
+        );
       },
     );
   });

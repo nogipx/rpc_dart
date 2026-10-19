@@ -23,6 +23,8 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcServiceKind;
 import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart'
     show
+        RpcEnumDescriptor,
+        RpcEnumValueDescriptor,
         RpcFieldDescriptor,
         RpcFieldLabel,
         RpcFieldType,
@@ -1242,6 +1244,13 @@ class _GrpcDescriptorBuilder {
 
   _GrpcDescriptorBuilder(this.service, this.methods);
 
+  /// Message types named by the fields described since the last read, so the
+  /// file can define them too.
+  final Map<String, InterfaceType> _referencedMessages = {};
+
+  /// Enum types named by any field described, defined once in the file.
+  final Map<String, EnumElement> _referencedEnums = {};
+
   /// Proto package for this service, or empty when none is set. Derived from
   /// the dotted service name (everything before the last dot).
   String get _package {
@@ -1270,27 +1279,48 @@ class _GrpcDescriptorBuilder {
         ? service.name.substring(lastDot + 1)
         : service.name;
 
-    // Collect unique non-zeroCopy message types.
-    final messageTypes = <String, DartType>{};
+    // The request and response types, then every message type their fields
+    // reach: a field's typeName must resolve inside the file.
+    final pending = <String, DartType>{};
     for (final method in methods) {
       for (final t in [
         method.signature.requestType,
         method.signature.responseType,
       ]) {
-        final name = _typeName(t);
-        messageTypes.putIfAbsent(name, () => t);
+        pending.putIfAbsent(_typeName(t), () => t);
       }
     }
-    if (messageTypes.isEmpty) return null;
+    if (pending.isEmpty) return null;
 
     final file = RpcFileDescriptorBuilder(
       name: '${service.name.replaceAll('.', '_')}.proto',
       package: _package,
     );
-    for (final entry in messageTypes.entries) {
-      final message = _messageDescriptor(entry.key, entry.value);
+    final described = <String>{};
+    while (pending.isNotEmpty) {
+      final name = pending.keys.first;
+      final type = pending.remove(name)!;
+      if (!described.add(name)) continue;
+      final message = _messageDescriptor(name, type);
       if (message == null) return null;
       file.addMessage(message);
+      for (final entry in _referencedMessages.entries) {
+        if (!described.contains(entry.key)) {
+          pending.putIfAbsent(entry.key, () => entry.value);
+        }
+      }
+      _referencedMessages.clear();
+    }
+    for (final entry in _referencedEnums.entries) {
+      file.addEnum(
+        RpcEnumDescriptor(
+          name: entry.key,
+          values: [
+            for (final (i, value) in entry.value.constants.indexed)
+              RpcEnumValueDescriptor(name: value.name ?? '', number: i),
+          ],
+        ),
+      );
     }
     file.addService(
       name: serviceName,
@@ -1326,8 +1356,8 @@ class _GrpcDescriptorBuilder {
       if (field == null) return null;
       return RpcMessageDescriptor(name: name, fields: [field]);
     }
+    // A type with no stored fields (an Ack, an Empty) is an empty message.
     final fields = _messageFields(type);
-    if (fields.isEmpty) return null;
 
     // Determine field numbers. An explicit @RpcProtoField(n) pins the number;
     // otherwise we fall back to declaration order (i + 1), which is unstable
@@ -1455,10 +1485,22 @@ class _GrpcDescriptorBuilder {
       fieldType = RpcFieldType.typeBool;
     } else if (actual is InterfaceType && actual.element is EnumElement) {
       fieldType = RpcFieldType.typeEnum;
-      typeName = _qualifiedTypeName(_typeName(actual));
+      final enumName = _typeName(actual);
+      typeName = _qualifiedTypeName(enumName);
+      _referencedEnums[enumName] = actual.element as EnumElement;
+    } else if (actual is InterfaceType && actual.element.library.isDartCore) {
+      // DateTime, Duration, Uri, BigInt, Object: their fields are private
+      // runtime state, not a message anyone can decode.
+      log.warning(
+        'gRPC descriptor: field "$name" has type "${_typeName(type)}", which '
+        'has no proto equivalent. The field is left out of the descriptor.',
+      );
+      return null;
     } else if (actual is InterfaceType) {
       fieldType = RpcFieldType.typeMessage;
-      typeName = _qualifiedTypeName(_typeName(actual));
+      final messageName = _typeName(actual);
+      typeName = _qualifiedTypeName(messageName);
+      _referencedMessages[messageName] = actual;
     } else {
       return null;
     }
