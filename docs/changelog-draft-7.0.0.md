@@ -34,7 +34,10 @@ client's version, a later server can keep serving older clients. A
 hand-written byte peer has to send `RpcChannelFrame.preface` before its first
 frame. `RpcFrameMultiplexedChannel` takes a required `isClient`, and
 `closeOnOversizedFrame` defaults from it: true for a server, false for a
-client.
+client. Its `ready` completes when the peer's preface has matched, and
+`prefaceTimeout` (also on `RpcChannelTransport.fromChannel`) bounds the wait.
+A channel transport's `ready` includes it, so `RpcClientConnection` reports
+Online only once an rpc_dart server has answered.
 
 ### Public API
 
@@ -212,7 +215,9 @@ their `codec`.
 
 Unix domain socket and TCP transport over core's channel framing: a server with
 a lock file guarding a live socket path, frames of one turn written together,
-and reading stopped while a peer's answers go unsent.
+and reading stopped while a peer's answers go unsent. The connection opens with
+core's frame preface; the server builds no endpoint before it arrives and
+drops a silent peer after `prefaceTimeout`.
 
 ## rpc_dart_http (next version)
 
