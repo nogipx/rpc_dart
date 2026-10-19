@@ -44,6 +44,22 @@ behaviour", references to removed code (`_fcConnStreamId`, `ArchiveGzipCodec`,
 `InMemoryTransport`, `RpcServerBootstrap`, `_endpoints`, `fromBytes`). The full
 site lists are in the auditors' reports; a sweep reads every file anyway.
 
+*Status 2026-10-20: partly done, postponed for token cost.* Cleaned: core
+`endpoint/` (base_endpoint, caller_pipeline, ping) and `rpc/streams/`, http's
+caller transport and body accumulator, and the compression, framework,
+grpc_reflection, log and opentelemetry files that had markers. About 130
+marker lines remain (`Measured`, `round N`, `used to`, `previously`, `no
+longer`, `canary`, `CONFIRMED`), most in core `core/`, `endpoint/`
+(responder side), `rpc/transports/`, http2, websocket, isolate and wasm.
+Comment volume for scale: core has 8.3k comment lines to 15.9k code lines,
+websocket 860 to 1141.
+
+Agreed approach for the rest: DELETE narrative comments (how a bug was found,
+figures) rather than rewrite them, keeping one present-tense sentence where a
+paragraph carries a real hazard. Keep public dartdoc (`public_member_api_docs`
+is on in core) and short why-comments on non-obvious hazards. Do it in the main
+session, one package per commit, no subagents.
+
 **Y2. Public dartdoc that contradicts the code.** Worse than history, because
 a user acts on it:
 - `RpcDataTransferMode.auto` says only unary passes objects; every shape does
