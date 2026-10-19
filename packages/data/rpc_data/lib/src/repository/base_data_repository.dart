@@ -943,7 +943,7 @@ abstract class BaseDataRepository implements IDataRepository {
                 listener.add(event);
                 return;
               }
-              final size = _approxJsonBytes(event.toJson());
+              final size = approxJsonBytes(event);
               if (held.length >= maxPendingWatchEvents ||
                   heldBytes + size > maxPendingWatchBytes) {
                 ended = true;
@@ -1083,20 +1083,3 @@ class _SnapshotSchemaEntry {
   final bool enabled;
   final bool requireValidation;
 }
-
-/// Approximate size of a JSON value: the UTF-16 code units of every string in
-/// it, keys included, plus 8 for each other scalar.
-int _approxJsonBytes(Object? value) => switch (value) {
-  null => 0,
-  final String s => s.length,
-  final Map<dynamic, dynamic> m => m.entries.fold(
-    0,
-    (sum, e) => sum + _approxJsonBytes(e.key) + _approxJsonBytes(e.value),
-  ),
-  final Iterable<dynamic> items => items.fold(
-    0,
-    (sum, item) => sum + _approxJsonBytes(item),
-  ),
-  final IRpcSerializable s => _approxJsonBytes(s.toJson()),
-  _ => 8,
-};
