@@ -85,10 +85,7 @@ Future<int> _frameSize(String text, {required bool compress}) async {
 
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport(
-      channel: RpcFrameMultiplexedChannel(
-        channel: client,
-        closeOnOversizedFrame: false,
-      ),
+      channel: RpcFrameMultiplexedChannel(channel: client, isClient: true),
       isClient: true,
     ),
     compressionEnabled: compress,
@@ -96,7 +93,10 @@ Future<int> _frameSize(String text, {required bool compress}) async {
   final responder =
       RpcResponderEndpoint(
           transport: RpcChannelTransport(
-            channel: RpcFrameMultiplexedChannel(channel: server),
+            channel: RpcFrameMultiplexedChannel(
+              channel: server,
+              isClient: false,
+            ),
             isClient: false,
           ),
         )
