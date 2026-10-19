@@ -20,8 +20,16 @@ a line. Source: commits since `rpc_dart-6.3.0` and the migration table in
 
 **The channel-frame wire format changed.** Frame metadata is encoded in binary.
 A 6.x peer and a 7.0 peer cannot talk over a channel transport (websocket,
-socket, isolate, in-memory). Upgrade client and server in one step. HTTP/2 and
+socket, wasm, in-memory). Upgrade client and server in one step. HTTP/2 and
 HTTP/1.1 speak gRPC on the wire and are not affected.
+
+**Channel transports now carry a protocol version.** Each end opens with an
+8-byte preface, `rpcdart` and `RpcChannelFrame.protocolVersion`, once per
+connection. A peer of another version fails every call with
+`FAILED_PRECONDITION` and a message naming both versions; a peer that is not
+an rpc_dart channel fails with `UNKNOWN`. Future format changes are refused by
+name instead of being decoded as garbage. A hand-written byte peer has to send
+`RpcChannelFrame.preface` before its first frame.
 
 ### Public API
 
