@@ -547,6 +547,12 @@ As landed:
     shape) replaces ErrorReporting, CallMetrics and `RpcCallSpy`; OTel builds on
     it.
   - Call types are `RpcMethodType`, not strings.
+  - Done (2026-10-19): `RpcCallObserverInterceptor<S>` with `onCallStart` /
+    `onCallEnd(state, RpcCallOutcome, duration)`, streams observed through
+    `StreamBridge`. Owner: a consumer cancel is its own outcome,
+    `RpcCallCancelled`; OTel ends that span as CANCELLED, `onError` does not
+    hear it. `RpcSpyEntry` merges into `RpcCallEvent`, which carries the
+    outcome. OTel's `rpc.call_type` attribute values are unchanged.
   - `RpcTestApp` runs through `RpcApp` over an in-memory server.
   - Docs fixed.
 - **rpc_dart_log (P10, P11).**
@@ -613,6 +619,9 @@ Breaking changes are allowed throughout: this is a major release.
 | `RpcConnectionLogger` | `LogScope` |
 | `logger:` on `RpcCallerEndpoint`, `RpcResponderEndpoint`, `RpcPeerEndpoint` | `logController:` |
 | `RpcConnectionHost(endpointLogger:)` | `logController:` |
+| `RpcCallEvent.callType` / `RpcSpyEntry.callType` strings (`'serverStream'`, ...) | `RpcMethodType`; `RpcSpyEntry` is `RpcCallEvent`, with `outcome` (`calledAt` is gone) |
+| `OtelRpcInterceptorBase.startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)`; `callTypeAttribute(type)` gives the attribute value |
+| a hand-written observer of the four `intercept*` methods | `RpcCallObserverInterceptor` |
 | `GrpcHealthCheckContract` speaking CBOR; `Check` on an unknown service answering `serviceUnknown` | protobuf on the wire; `Check` fails with `NOT_FOUND`. The messages lose `toJson`/`fromJson`; use their `codec` |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |

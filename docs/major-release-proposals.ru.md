@@ -575,6 +575,12 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
     отмена, для каждой формы) заменяет ErrorReporting, CallMetrics и
     `RpcCallSpy`; OTel строится на нём.
   - Типы вызовов — `RpcMethodType`, а не строки.
+  - Сделано (2026-10-19): `RpcCallObserverInterceptor<S>` с `onCallStart` /
+    `onCallEnd(state, RpcCallOutcome, duration)`, стримы наблюдаются через
+    `StreamBridge`. Владелец: отмена потребителем — отдельный исход,
+    `RpcCallCancelled`; OTel закрывает такой span как CANCELLED, `onError`
+    о ней не узнаёт. `RpcSpyEntry` слит в `RpcCallEvent`, который несёт
+    исход. Значения атрибута `rpc.call_type` в OTel не изменились.
   - `RpcTestApp` работает через `RpcApp` поверх сервера в памяти.
   - Документация исправлена.
 - **rpc&#95;dart&#95;log (P10, P11).**
@@ -642,6 +648,9 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | `RpcConnectionLogger` | `LogScope` |
 | `logger:` у `RpcCallerEndpoint`, `RpcResponderEndpoint`, `RpcPeerEndpoint` | `logController:` |
 | `RpcConnectionHost(endpointLogger:)` | `logController:` |
+| строки `RpcCallEvent.callType` / `RpcSpyEntry.callType` (`'serverStream'`, ...) | `RpcMethodType`; `RpcSpyEntry` — это `RpcCallEvent`, с `outcome` (`calledAt` удалён) |
+| `OtelRpcInterceptorBase.startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)`; значение атрибута даёт `callTypeAttribute(type)` |
+| рукописный наблюдатель четырёх методов `intercept*` | `RpcCallObserverInterceptor` |
 | `GrpcHealthCheckContract` говорит на CBOR; `Check` неизвестного сервиса отвечает `serviceUnknown` | protobuf на проводе; `Check` падает с `NOT_FOUND`. У сообщений нет `toJson`/`fromJson`; используйте их `codec` |
 | `transferMode:` у `unaryRequest` | режим передачи контракта |
 | `RpcMethodKind` в `@RpcMethod` | `RpcMethodType` |

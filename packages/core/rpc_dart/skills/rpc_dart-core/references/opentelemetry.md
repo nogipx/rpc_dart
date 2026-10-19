@@ -48,6 +48,7 @@ Pure Dart, no `dart:io`: it also runs on the web.
 - A failed call records the exception and sets status `error`. The code comes
   from `RpcStatusException.statusCode`; any other error is `UNKNOWN` (2).
 - A streaming span ends when the response stream completes or is cancelled.
+  A cancelled call ends with `rpc.grpc.status_code` 1 (`CANCELLED`).
 
 ## Trace id vs. RpcContext.traceId
 

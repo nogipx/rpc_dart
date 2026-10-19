@@ -102,8 +102,13 @@ status is `error`; the code comes from `RpcStatusException.statusCode`, and any
 other error is reported as `UNKNOWN` (2).
 
 A streaming span ends when the response stream completes or its subscriber
-cancels. An error event in the middle of a stream does not end it: each error
-is recorded on the span, and the last one sets the final status.
+cancels. A cancelled call, a stream its subscriber cancelled or a call that
+threw `RpcCancelledException`, ends with code `CANCELLED` (1). An error event
+in the middle of a stream does not end it: each error is recorded on the span,
+and the last one sets the final status. `rpc.stream.messages` counts the
+messages of a streamed response.
+
+Both interceptors are `RpcCallObserverInterceptor`s from `rpc_dart`.
 
 ### Accessing the span in a handler
 

@@ -52,7 +52,7 @@ class OtelRpcInterceptor extends OtelRpcInterceptorBase {
   @override
   (Span, RpcContext, Context) startSpan(
     RpcMiddlewareContext call,
-    String callType,
+    RpcMethodType type,
   ) {
     final parentContext = RpcOtelPropagator.extract(call.context);
 
@@ -60,7 +60,10 @@ class OtelRpcInterceptor extends OtelRpcInterceptorBase {
       Attribute.fromString('rpc.system', 'rpc_dart'),
       Attribute.fromString('rpc.service', call.serviceName),
       Attribute.fromString('rpc.method', call.methodName),
-      Attribute.fromString('rpc.call_type', callType),
+      Attribute.fromString(
+        'rpc.call_type',
+        OtelRpcInterceptorBase.callTypeAttribute(type),
+      ),
       if (call.context.traceId != null)
         Attribute.fromString('rpc.trace_id', call.context.traceId!),
     ];

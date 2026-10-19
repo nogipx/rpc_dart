@@ -10,137 +10,107 @@ import 'package:rpc_dart/rpc_dart.dart';
 import '../metrics/rpc_otel_metrics.dart';
 import '../metrics/rpc_status_names.dart';
 
+/// One observed call: its span and what the span ends with.
+final class OtelRpcCall {
+  OtelRpcCall._(this.call, this.type, this.span, this.otelContext);
+
+  /// The call.
+  final RpcMiddlewareContext call;
+
+  /// The call's shape.
+  final RpcMethodType type;
+
+  /// The call's span.
+  final Span span;
+
+  /// The ambient OTel context the rest of the chain runs in.
+  final Context otelContext;
+
+  int _messages = 0;
+  bool _streamErrorRecorded = false;
+
+  bool get _streamsResponse =>
+      type == RpcMethodType.serverStream ||
+      type == RpcMethodType.bidirectionalStream;
+}
+
 /// Shared base for the server and client OpenTelemetry interceptors.
 ///
-/// Holds the common fields ([_tracer], [_metrics]) and contains the full
-/// `intercept*` flow plus the span finishing/stream-wrapping helpers, which are
-/// identical for both sides. Subclasses implement only [startSpan], which is the
-/// single point of difference (server extracts the W3C parent context and uses
-/// [SpanKind.server]; client injects the context and uses [SpanKind.client]).
-abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
+/// Built on [RpcCallObserverInterceptor]: it sees every call start and end,
+/// for every call shape. Subclasses implement only [startSpan], the single
+/// point of difference (the server extracts the W3C parent context and uses
+/// [SpanKind.server]; the client injects the context and uses
+/// [SpanKind.client]).
+///
+/// A span ends with status OK when the call succeeds, CANCELLED when it is
+/// cancelled (its consumer cancelled the response stream), and the call's
+/// error status when it fails. A streamed response records every error on the
+/// span and the number of messages as `rpc.stream.messages`.
+abstract class OtelRpcInterceptorBase
+    extends RpcCallObserverInterceptor<OtelRpcCall> {
   final Tracer tracer;
   final RpcOtelMetrics? metrics;
 
   const OtelRpcInterceptorBase({required this.tracer, this.metrics});
 
   /// Which side this interceptor sits on. Determines the metric namespace
-  /// (`rpc.server.*` vs `rpc.client.*`) used by [recordCall]. Mirrors the
-  /// [SpanKind] each subclass uses in [startSpan].
+  /// (`rpc.server.*` vs `rpc.client.*`) used by [RpcOtelMetrics.recordCall].
+  /// Mirrors the [SpanKind] each subclass uses in [startSpan].
   RpcMetricSide get metricSide;
 
-  /// Starts a new span for [call] of the given [callType], applies whatever
-  /// W3C context propagation the side requires, stores the span in the
+  /// Starts a new span for [call] of the given [type], applies whatever W3C
+  /// context propagation the side requires, stores the span in the
   /// [RpcContext] values for downstream access, and returns the span together
   /// with the updated [RpcContext] and the active ambient OTel [Context].
   (Span, RpcContext, Context) startSpan(
     RpcMiddlewareContext call,
-    String callType,
+    RpcMethodType type,
   );
 
-  // ---------------------------------------------------------------------------
-  // Unary
-  // ---------------------------------------------------------------------------
+  /// The `rpc.call_type` attribute value for [type].
+  static String callTypeAttribute(RpcMethodType type) => switch (type) {
+    RpcMethodType.unary => 'unary',
+    RpcMethodType.serverStream => 'server_stream',
+    RpcMethodType.clientStream => 'client_stream',
+    RpcMethodType.bidirectionalStream => 'bidirectional_stream',
+  };
 
   @override
-  Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    TRequest request,
-    RpcUnaryNext<TRequest, TResponse> next,
-  ) async {
-    final (span, context, otelContext) = startSpan(call, 'unary');
-    final stopwatch = Stopwatch()..start();
-    try {
-      final response = await _runInContext(
-        otelContext,
-        () => next(context, request),
-      );
-      _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
-      return response;
-    } catch (e, st) {
-      _finishWithError(span, call, stopwatch, e, st);
-      rethrow;
-    }
+  OtelRpcCall onCallStart(RpcMiddlewareContext call, RpcMethodType type) {
+    final (span, context, otelContext) = startSpan(call, type);
+    call.updateContext(context);
+    return OtelRpcCall._(call, type, span, otelContext);
   }
-
-  // ---------------------------------------------------------------------------
-  // Server stream
-  // ---------------------------------------------------------------------------
 
   @override
-  FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    TRequest request,
-    RpcServerStreamNext<TRequest, TResponse> next,
-  ) async {
-    final (span, context, otelContext) = startSpan(call, 'server_stream');
-    final stopwatch = Stopwatch()..start();
-    try {
-      final stream = await _runInContext(
-        otelContext,
-        () async => await next(context, request),
-      );
-      return _wrapWithSpan(stream, span, call, stopwatch);
-    } catch (e, st) {
-      _finishWithError(span, call, stopwatch, e, st);
-      rethrow;
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Client stream
-  // ---------------------------------------------------------------------------
+  Future<T> runCall<T>(OtelRpcCall state, Future<T> Function() body) =>
+      _runInContext(state.otelContext, body);
 
   @override
-  Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    Stream<TRequest> requests,
-    RpcClientStreamNext<TRequest, TResponse> next,
-  ) async {
-    final (span, context, otelContext) = startSpan(call, 'client_stream');
-    final stopwatch = Stopwatch()..start();
-    try {
-      final response = await _runInContext(
-        otelContext,
-        () => next(context, requests),
-      );
-      _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
-      return response;
-    } catch (e, st) {
-      _finishWithError(span, call, stopwatch, e, st);
-      rethrow;
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Bidirectional stream
-  // ---------------------------------------------------------------------------
+  void onResponseMessage(OtelRpcCall state) => state._messages++;
 
   @override
-  FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
-    Stream<TRequest> requests,
-    RpcBidirectionalStreamNext<TRequest, TResponse> next,
-  ) async {
-    final (span, context, otelContext) = startSpan(
-      call,
-      'bidirectional_stream',
-    );
-    final stopwatch = Stopwatch()..start();
-    try {
-      final stream = await _runInContext(
-        otelContext,
-        () async => await next(context, requests),
-      );
-      return _wrapWithSpan(stream, span, call, stopwatch);
-    } catch (e, st) {
-      _finishWithError(span, call, stopwatch, e, st);
-      rethrow;
-    }
+  void onResponseError(OtelRpcCall state, Object error, StackTrace stackTrace) {
+    state.span.recordException(error, stackTrace: stackTrace);
+    state._streamErrorRecorded = true;
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
+  @override
+  void onCallEnd(OtelRpcCall state, RpcCallOutcome outcome, Duration duration) {
+    if (state._streamsResponse) {
+      state.span.setAttribute(
+        Attribute.fromInt('rpc.stream.messages', state._messages),
+      );
+    }
+    switch (outcome) {
+      case RpcCallSucceeded():
+        _finish(state, duration, statusCode: RpcStatus.ok);
+      case RpcCallCancelled():
+        _finish(state, duration, statusCode: RpcStatus.cancelled);
+      case RpcCallFailed(:final error, :final stackTrace):
+        _finishWithError(state, duration, error, stackTrace);
+    }
+  }
 
   /// Runs [body] with [otelContext] attached as the ambient OTel context, then
   /// returns its value (or rethrows its error preserving the stack trace).
@@ -156,7 +126,7 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
   /// re-surface the error outside the zone where it propagates normally.
   Future<T> _runInContext<T>(
     Context otelContext,
-    FutureOr<T> Function() body,
+    Future<T> Function() body,
   ) async {
     final outcome = await zone(otelContext).run<Future<_Outcome<T>>>(() async {
       try {
@@ -169,12 +139,11 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
   }
 
   void _finish(
-    Span span,
-    RpcMiddlewareContext call,
-    Stopwatch stopwatch, {
+    OtelRpcCall state,
+    Duration duration, {
     required int statusCode,
   }) {
-    stopwatch.stop();
+    final span = state.span;
     final statusName = rpcGrpcStatusName(statusCode);
     // semconv requires rpc.grpc.status_code as the numeric code (0..16);
     // the human-readable name goes under the non-semconv rpc.grpc.status key.
@@ -186,49 +155,45 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
     } else {
       span.setStatus(StatusCode.error, statusName);
     }
+    _recordCall(state, duration, statusCode);
+    span.end();
+  }
+
+  void _finishWithError(
+    OtelRpcCall state,
+    Duration duration,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    final span = state.span;
+    final statusCode = rpcStatusCodeFromError(error);
+    final statusName = rpcGrpcStatusName(statusCode);
+    // A stream's errors are already on the span, recorded as they arrived.
+    if (!state._streamErrorRecorded) {
+      span.recordException(error, stackTrace: stackTrace);
+    }
+    span
+      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', statusCode))
+      ..setAttribute(Attribute.fromString('rpc.grpc.status', statusName))
+      ..setStatus(StatusCode.error, error.toString());
+    _recordCall(state, duration, statusCode);
+    span.end();
+  }
+
+  void _recordCall(OtelRpcCall state, Duration duration, int statusCode) {
     try {
       metrics?.recordCall(
-        call,
+        state.call,
         statusCode: statusCode,
-        duration: stopwatch.elapsed,
+        duration: duration,
         side: metricSide,
       );
     } catch (e, st) {
       // Best-effort: a misconfigured meter must not break the wrapped RPC call.
       // No logger is reachable here, so surface the failure on the span (which
       // is the diagnostic facility this class owns) instead of dropping it.
-      _recordMetricsFailure(span, e, st);
+      _recordMetricsFailure(state.span, e, st);
     }
-    span.end();
-  }
-
-  void _finishWithError(
-    Span span,
-    RpcMiddlewareContext call,
-    Stopwatch stopwatch,
-    Object error,
-    StackTrace stackTrace,
-  ) {
-    stopwatch.stop();
-    final statusCode = rpcStatusCodeFromError(error);
-    final statusName = rpcGrpcStatusName(statusCode);
-    span
-      ..recordException(error, stackTrace: stackTrace)
-      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', statusCode))
-      ..setAttribute(Attribute.fromString('rpc.grpc.status', statusName))
-      ..setStatus(StatusCode.error, error.toString());
-    try {
-      metrics?.recordCall(
-        call,
-        statusCode: statusCode,
-        duration: stopwatch.elapsed,
-        side: metricSide,
-      );
-    } catch (e, st) {
-      // Best-effort: a misconfigured meter must not break the wrapped RPC call.
-      _recordMetricsFailure(span, e, st);
-    }
-    span.end();
   }
 
   /// Surfaces a best-effort `metrics.recordCall` failure on the active [span]
@@ -244,83 +209,6 @@ abstract class OtelRpcInterceptorBase implements IRpcInterceptor {
         Attribute.fromString('exception.stacktrace', stackTrace.toString()),
       ],
     );
-  }
-
-  /// Wraps a response stream in a span: ends the span when the stream
-  /// terminates (completes, is cancelled, or errors fatally). Counts messages
-  /// and records the total as a span attribute on completion.
-  ///
-  /// The source is listened with `cancelOnError: false`, so an `onError` event
-  /// is NOT terminal: a server/bidi stream may emit a non-fatal item error and
-  /// then keep going (or complete normally). The span therefore must end on
-  /// stream TERMINATION (onDone / onCancel), not on the first error. Each error
-  /// is recorded on the span as it arrives, and the *last* one determines the
-  /// final error status; the span still ends exactly once.
-  ///
-  /// Uses [StreamController] with an [onCancel] hook instead of
-  /// [StreamTransformer.fromHandlers] because the latter has no cancel callback,
-  /// which would leave spans open forever when consumers unsubscribe early.
-  Stream<T> _wrapWithSpan<T>(
-    Stream<T> source,
-    Span span,
-    RpcMiddlewareContext call,
-    Stopwatch stopwatch,
-  ) {
-    var messageCount = 0;
-    var finished = false;
-    Object? lastError;
-    StackTrace? lastStackTrace;
-
-    void finishOnce() {
-      if (finished) return;
-      finished = true;
-      span.setAttribute(Attribute.fromInt('rpc.stream.messages', messageCount));
-      if (lastError != null) {
-        _finishWithError(
-          span,
-          call,
-          stopwatch,
-          lastError!,
-          lastStackTrace ?? StackTrace.empty,
-        );
-      } else {
-        _finish(span, call, stopwatch, statusCode: RpcStatus.ok);
-      }
-    }
-
-    late StreamController<T> controller;
-    late StreamSubscription<T> subscription;
-
-    controller = StreamController<T>(
-      onListen: () {
-        subscription = source.listen(
-          (data) {
-            messageCount++;
-            controller.add(data);
-          },
-          onError: (Object error, StackTrace st) {
-            // Non-terminal under cancelOnError:false. Record the error on the
-            // span but keep it open — the stream may still complete normally.
-            // The span ends on termination (onDone / onCancel).
-            span.recordException(error, stackTrace: st);
-            lastError = error;
-            lastStackTrace = st;
-            controller.addError(error, st);
-          },
-          onDone: () {
-            finishOnce();
-            controller.close();
-          },
-          cancelOnError: false,
-        );
-      },
-      onCancel: () {
-        finishOnce();
-        return subscription.cancel();
-      },
-    );
-
-    return controller.stream;
   }
 }
 

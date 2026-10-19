@@ -81,4 +81,22 @@ void main() {
     // Final status reflects the last seen error (the stream carried an error).
     expect(span.status.code, equals(StatusCode.error));
   });
+
+  test('a stream its subscriber cancels ends its span as CANCELLED', () async {
+    final t = buildTracer();
+    final interceptor = OtelRpcInterceptor(tracer: t.tracer);
+
+    final wrapped = await interceptor.interceptServerStream<int, int>(
+      buildCall(),
+      0,
+      (ctx, req) async =>
+          Stream.periodic(const Duration(milliseconds: 1), (i) => i),
+    );
+    expect(await wrapped.take(2).toList(), [0, 1]);
+
+    final span = t.exporter.spans.single;
+    expect(span.attributes.get('rpc.grpc.status_code'), 1);
+    expect(span.attributes.get('rpc.grpc.status'), 'CANCELLED');
+    expect(span.attributes.get('rpc.stream.messages'), 2);
+  });
 }

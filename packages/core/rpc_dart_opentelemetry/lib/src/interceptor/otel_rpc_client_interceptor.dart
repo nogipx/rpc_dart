@@ -34,7 +34,7 @@ class OtelRpcClientInterceptor extends OtelRpcInterceptorBase {
   @override
   (Span, RpcContext, Context) startSpan(
     RpcMiddlewareContext call,
-    String callType,
+    RpcMethodType type,
   ) {
     final span = tracer.startSpan(
       '${call.serviceName}/${call.methodName}',
@@ -43,7 +43,10 @@ class OtelRpcClientInterceptor extends OtelRpcInterceptorBase {
         Attribute.fromString('rpc.system', 'rpc_dart'),
         Attribute.fromString('rpc.service', call.serviceName),
         Attribute.fromString('rpc.method', call.methodName),
-        Attribute.fromString('rpc.call_type', callType),
+        Attribute.fromString(
+          'rpc.call_type',
+          OtelRpcInterceptorBase.callTypeAttribute(type),
+        ),
       ],
     );
 
