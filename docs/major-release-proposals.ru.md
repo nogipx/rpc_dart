@@ -59,6 +59,11 @@ X — сквозная проблема, C — rpc_dart, T — транспор�
 пользовалось контрактами и эндпоинтами, изменений не заметит. Код, который
 вручную собирал `UnaryCaller` и подобные классы, переходит на вызовы эндпоинта.
 
+Сделано (2026-10-18). Оба barrel-файла — списки `show`; `transport.dart`
+реэкспортирует `rpc_dart.dart`; `drain.dart` лежит в `integration/`; ни
+одного класса формы вызова нет ни в одном списке. `transport_io.dart` пришёл
+вместе с T6 (3c).
+
 ## 2. Возможности транспорта: члены, а не маркеры
 
 Закрывает X1, D4, расхождение в пяти пробрасывающих обёртках, T7.
@@ -129,6 +134,11 @@ abstract class IRpcTransport {
 новые члены (или переходит на `extends`). Каждая проверка `is` на возможность в
 пользовательском коде, если такие есть, становится чтением члена.
 
+Сделано (2026-10-18), вместе с разделом 6. Интерфейсов возможностей,
+`_CapabilityPreservingTransport`, `_RpcWasmChannel` и `RpcInMemoryTransport`
+больше нет; caller- и responder-транспорты websocket и socket наследуют
+`RpcChannelTransport`; `RpcWasmBridge` реализует `IRpcChannel`.
+
 ## 3. Общая механика транспортов в ядре
 
 ### 3a. `RpcWriteBacklog`
@@ -158,6 +168,9 @@ final class RpcWriteBacklog {
   навсегда. http2 это получает.
 - socket, websocket и http2 делегируют ему. Три константы `1024 * 1024`
   становятся `defaultServerMax`.
+
+Сделано (2026-10-18). `Http2WriteBacklog` в http2 подключает к нему sink из
+package:http2, а не считает байты сам.
 
 ### 3b. `RpcConnectionHost`
 
@@ -211,6 +224,9 @@ final class RpcPeerMode extends RpcServerMode {
   закрытые `stop()` (http2 их пропускал).
 - Однократное предупреждение на лимите сбрасывается, когда следующее
   соединение принято.
+
+Сделано (2026-10-18). Серверы http и http2 принимают `RpcResponderMode`,
+socket и websocket — `RpcServerMode`.
 
 ### 3c. Одно место для правил статусов и трейлеров
 
@@ -454,6 +470,11 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 - Цена: пользователь websocket, который полагался на `reconnectFactory`,
   оборачивает транспорт в `RpcClientConnection`. Документация ядра и
   документация websocket уже это рекомендуют.
+
+Сделано (2026-10-18), вместе с разделом 2. Ни у одного транспорта нет
+`reconnect()`; retry-интерсептор ждёт через
+`IRpcReconnectOutcome.awaitReconnect()`, который реализует только прокси
+соединения.
 
 ## 7. Внутреннее устройство http2
 

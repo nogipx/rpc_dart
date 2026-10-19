@@ -53,6 +53,10 @@ Migration: an application that imported only `rpc_dart.dart` and used
 contracts and endpoints sees no change. Code that built `UnaryCaller` and the
 like by hand switches to endpoint calls.
 
+Done (2026-10-18). Both barrels are `show` lists; `transport.dart`
+re-exports `rpc_dart.dart`; `drain.dart` is in `integration/`; no call-shape
+class is in either list. `transport_io.dart` landed with T6 (3c).
+
 ## 2. Transport capabilities: members, not markers
 
 Closes X1, D4, the drift in five forwarders, T7.
@@ -118,6 +122,11 @@ Migration: a third-party transport that `implements IRpcTransport` adds the new
 members (or switches to `extends`). One `is` check per capability in user code,
 if any, becomes a member read.
 
+Done (2026-10-18), together with section 6. The capability interfaces,
+`_CapabilityPreservingTransport`, `_RpcWasmChannel` and `RpcInMemoryTransport`
+are gone; the websocket and socket caller and responder transports extend
+`RpcChannelTransport`; `RpcWasmBridge` implements `IRpcChannel`.
+
 ## 3. Shared transport machinery in core
 
 ### 3a. `RpcWriteBacklog`
@@ -146,6 +155,9 @@ final class RpcWriteBacklog {
   failed write cannot leave a peer paused for ever. http2 gains this.
 - socket, websocket and http2 delegate. The three `1024 * 1024` constants become
   `defaultServerMax`.
+
+Done (2026-10-18). http2's `Http2WriteBacklog` adapts package:http2's sink
+to it rather than counting on its own.
 
 ### 3b. `RpcConnectionHost`
 
@@ -197,6 +209,9 @@ final class RpcPeerMode extends RpcServerMode {
   fires once for every connection, those `stop()` closes included (http2 used
   to skip them).
 - The warn-once at the cap resets when a connection is next admitted.
+
+Done (2026-10-18). http and http2 servers take `RpcResponderMode`, socket and
+websocket take `RpcServerMode`.
 
 ### 3c. One home for status and trailer rules
 
@@ -430,6 +445,10 @@ Today three mechanisms solve stale ids after a reconnect:
 - Cost: a websocket user who relied on `reconnectFactory` wraps the transport in
   `RpcClientConnection`. The core docs and the websocket doc already recommend
   that.
+
+Done (2026-10-18), together with section 2. No transport has `reconnect()`;
+the retry interceptor waits through `IRpcReconnectOutcome.awaitReconnect()`,
+which only the connection's proxy implements.
 
 ## 7. http2 internals
 
