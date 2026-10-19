@@ -26,6 +26,12 @@ Future<(int micros, int count)> dribble(int payloadSize) async {
     endOfStream: false,
   );
 
+  // The preface is queued before the channel listens, and a synchronous
+  // controller holds everything added behind a queued event until it is
+  // delivered. Without this wait every byte below only joins that queue, and
+  // the stopwatch measures the queueing, not the reassembly.
+  await ch.ready;
+
   final sw = Stopwatch()..start();
   for (var i = 0; i < frame.length; i++) {
     fake.feed(Uint8List.fromList([frame[i]]));
@@ -35,35 +41,24 @@ Future<(int micros, int count)> dribble(int payloadSize) async {
   return (sw.elapsedMicroseconds, count);
 }
 
-/// Measures N and 2N ALTERNATELY, [reps] times each, and returns the fastest of
-/// each.
+/// The median of [reps] ratios, each from N and 2N measured back to back.
 ///
-/// The minimum is the stable estimate: GC pauses and scheduler jitter only ever
-/// ADD time, so the fastest run is the closest to the interference-free cost.
-///
-/// **Interleaved, because a minimum per batch is not enough.** Minima suppress
-/// jitter WITHIN a batch and do nothing about contention that RISES between two
-/// batches — that inflates whichever size was measured second and shows up as a
-/// ratio, which is exactly how this arm fails under `dart test`'s own suite
-/// concurrency. Alternating puts both sizes in the same window, so a drift moves
-/// numerator and denominator together.
-Future<((int micros, int count), (int micros, int count))> dribblePair(
-  int n,
-  int reps,
-) async {
-  var bestN = -1;
-  var best2N = -1;
-  var countN = 0;
-  var count2N = 0;
+/// A pair shares one window of machine load, so contention that rises or falls
+/// moves numerator and denominator together; the median then drops the pairs
+/// a GC pause or a scheduler hiccup landed in. Separate minima of N and of 2N
+/// do not: under a loaded suite run the two minima come from different
+/// windows, and their ratio drifts towards the quadratic figure.
+Future<double> dribbleRatio(int n, int reps) async {
+  final ratios = <double>[];
   for (var i = 0; i < reps; i++) {
     final (usN, cN) = await dribble(n);
     final (us2N, c2N) = await dribble(2 * n);
-    countN = cN;
-    count2N = c2N;
-    if (bestN < 0 || usN < bestN) bestN = usN;
-    if (best2N < 0 || us2N < best2N) best2N = us2N;
+    expect(cN, 1);
+    expect(c2N, 1);
+    ratios.add(us2N / (usN == 0 ? 1 : usN));
   }
-  return ((bestN, countN), (best2N, count2N));
+  ratios.sort();
+  return ratios[ratios.length ~/ 2];
 }
 
 void main() {
@@ -71,20 +66,16 @@ void main() {
     'R5: dribbled frame reassembly scales linearly, not quadratically',
     () async {
       const n = 80000;
-      const reps = 5;
+      const reps = 9;
 
-      // Warm up to stabilize timing (JIT), then take the fastest of several
-      // INTERLEAVED runs at N and 2N — see [dribblePair].
+      // Warm up to stabilize timing (JIT), then the median of paired ratios —
+      // see [dribbleRatio].
       await dribble(n);
-      final ((usN, countN), (us2N, count2N)) = await dribblePair(n, reps);
-      expect(countN, 1);
-      expect(count2N, 1);
-
-      final ratio = us2N / (usN == 0 ? 1 : usN);
+      final ratio = await dribbleRatio(n, reps);
       // ignore: avoid_print
       print(
-        'R5 scaling: dribble(N)=${usN}us dribble(2N)=${us2N}us '
-        'ratio=${ratio.toStringAsFixed(2)} (≈2 linear, ≈4 quadratic)',
+        'R5 scaling: median ratio=${ratio.toStringAsFixed(2)} '
+        '(≈2 linear, ≈4 quadratic)',
       );
 
       // Linear (≈2). Allow generous headroom for timing noise but well below the
