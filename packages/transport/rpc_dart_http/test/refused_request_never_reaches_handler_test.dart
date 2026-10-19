@@ -99,9 +99,7 @@ void main() {
 
   setUp(() async {
     _handlerRuns = 0;
-    transport = RpcHttpResponderTransport(
-      securityPolicy: const RpcSecurityPolicy(),
-    );
+    transport = RpcHttpResponderTransport(policy: const RpcSecurityPolicy());
     responder = RpcResponderEndpoint(transport: transport);
     responder.registerServiceContract(_Contract());
     responder.start();

@@ -53,7 +53,7 @@ Future<RpcCallerEndpoint> _caller(int ceiling) async {
   final responderTransport = RpcHttpResponderTransport(
     // Deliberately far above the caller's, so a refusal can only be the
     // caller's own ceiling.
-    securityPolicy: const RpcSecurityPolicy(maxActiveStreams: 1024),
+    policy: const RpcSecurityPolicy(maxActiveStreams: 1024),
   );
   final responder = RpcResponderEndpoint(transport: responderTransport);
   responder.registerServiceContract(_Svc());

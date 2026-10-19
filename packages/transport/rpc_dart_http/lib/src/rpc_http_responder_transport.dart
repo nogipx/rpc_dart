@@ -32,7 +32,6 @@ enum _Rejection {
   streams,
   contentType,
   path,
-  metadataSize,
   metadata,
   body,
   unanswered,
@@ -162,17 +161,18 @@ class RpcHttpResponderTransport extends IRpcTransport {
 
   /// Creates the transport.
   ///
-  /// [securityPolicy] bounds the request body, the metadata block, the method
-  /// path and concurrent requests. The built-in limits apply by default; pass
-  /// an explicit policy to tune them. [RpcHttpServer] takes the same parameter
+  /// [policy] bounds the request body, the metadata block, the method path
+  /// and concurrent requests. The built-in limits apply by default; pass an
+  /// explicit policy to tune them. [RpcHttpServer] takes the same parameter
   /// the same way.
   RpcHttpResponderTransport({
     LogScope? logger,
-    this.securityPolicy = const RpcSecurityPolicy(),
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     this.corsPolicy,
     this.bodyReadTimeout,
     this.bodyIdleTimeout = const Duration(seconds: 30),
-  }) : _log = logger?.child('HttpResponderTransport') ?? LogScope.noop;
+  }) : securityPolicy = policy,
+       _log = logger?.child('HttpResponderTransport') ?? LogScope.noop;
 
   /// shelf [Handler] to mount on a shelf server or router.
   Handler get handler => _handleRequest;
@@ -346,37 +346,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
         requestHeaders.add(RpcHeader(name, value));
       });
 
-      // The AGGREGATE bound. The per-header caps and `maxHeaders` do not imply
-      // a total: their defaults together allow more than an order of magnitude
-      // over `maxMetadataBytes`, every individual header legal.
-      //
-      // Counted here rather than left to the policy because each transport
-      // knows its own byte count -- the frame channel bounds the serialized
-      // payload, http2 the HPACK block, this one the header lines. Same rule,
-      // applied where the number is real.
-      var metadataBytes = 0;
-      for (final h in requestHeaders) {
-        // `name: value\r\n` is the wire form, so this undercounts by 4 per
-        // header and can only ever reject later than the wire would.
-        metadataBytes += h.name.length + h.value.length;
-      }
-      if (metadataBytes > policy.maxMetadataBytes) {
-        _warnRejected(
-          _Rejection.metadataSize,
-          'Rejected request: metadata block of $metadataBytes bytes exceeds '
-          '${policy.maxMetadataBytes} [streamId: $streamId]',
-        );
-        _pending.remove(streamId);
-        _idManager.releaseId(streamId);
-        return _reject(
-          400,
-          request,
-          body:
-              'Metadata violation: metadata block of $metadataBytes bytes '
-              'exceeds the limit of ${policy.maxMetadataBytes} bytes',
-        );
-      }
-
+      // Bounds the total as well as each header.
       try {
         policy.validateMetadata(RpcMetadata(requestHeaders));
       } on ArgumentError catch (e) {

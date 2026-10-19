@@ -61,7 +61,7 @@ Future<_Rig> _serve({
   RpcSecurityPolicy policy = const RpcSecurityPolicy(),
 }) async {
   final gate = Completer<void>();
-  final transport = RpcHttpResponderTransport(securityPolicy: policy);
+  final transport = RpcHttpResponderTransport(policy: policy);
   final responder = RpcResponderEndpoint(transport: transport);
   final svc = _Svc(gate);
   responder.registerServiceContract(svc);

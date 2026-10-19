@@ -41,7 +41,7 @@ void main() {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
+      policy: const RpcSecurityPolicy(maxMessageLengthBytes: 1024),
       logger: controller.scope('http'),
       mode: RpcResponderMode((e) => e.registerServiceContract(_Svc())),
     );

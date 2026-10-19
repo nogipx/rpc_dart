@@ -63,7 +63,7 @@ typedef _Rig = ({RpcCallerEndpoint caller, int Function() produced});
 Future<_Rig> _serve(int count) async {
   var produced = 0;
   const policy = RpcSecurityPolicy(maxMessageLengthBytes: _limit);
-  final responder = RpcHttpResponderTransport(securityPolicy: policy);
+  final responder = RpcHttpResponderTransport(policy: policy);
   final endpoint = RpcResponderEndpoint(transport: responder)
     ..registerServiceContract(_Svc(count, () => produced++)..setup())
     ..start();

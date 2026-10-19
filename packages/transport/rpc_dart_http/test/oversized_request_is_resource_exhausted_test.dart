@@ -57,7 +57,7 @@ Future<_Rig> _serve() async {
   final server = RpcHttpServer(
     host: '127.0.0.1',
     port: 0,
-    securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: _limit),
+    policy: const RpcSecurityPolicy(maxMessageLengthBytes: _limit),
     mode: RpcResponderMode((e) {
       e.registerServiceContract(_Svc(seen));
       e.start();

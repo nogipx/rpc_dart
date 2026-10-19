@@ -59,7 +59,7 @@ Future<({int received, Object? error})> _stream({
   required int size,
   required RpcSecurityPolicy policy,
 }) async {
-  final responder = RpcHttpResponderTransport(securityPolicy: policy);
+  final responder = RpcHttpResponderTransport(policy: policy);
   final endpoint = RpcResponderEndpoint(transport: responder)
     ..registerServiceContract(_Svc(count, size)..setup())
     ..start();

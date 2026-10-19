@@ -561,7 +561,7 @@ void main() {
   group('Security policy', () {
     test('rejects_request_when_concurrent_limit_reached', () async {
       final transport = RpcHttpResponderTransport(
-        securityPolicy: RpcSecurityPolicy(maxActiveStreams: 0),
+        policy: RpcSecurityPolicy(maxActiveStreams: 0),
       );
       final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
@@ -580,7 +580,7 @@ void main() {
 
     test('rejects_request_with_oversized_body', () async {
       final transport = RpcHttpResponderTransport(
-        securityPolicy: RpcSecurityPolicy(maxMessageLengthBytes: 10),
+        policy: RpcSecurityPolicy(maxMessageLengthBytes: 10),
       );
       final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       transport.incomingMessages.listen((_) {});
@@ -909,7 +909,7 @@ void main() {
       final server = RpcHttpServer(
         host: '127.0.0.1',
         port: 0,
-        securityPolicy: const RpcSecurityPolicy(maxMessageLengthBytes: 10),
+        policy: const RpcSecurityPolicy(maxMessageLengthBytes: 10),
         mode: RpcResponderMode((endpoint) {
           endpoint.registerServiceContract(_EchoService());
         }),

@@ -231,7 +231,7 @@ too, so a page sees the real status instead of an opaque CORS error.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `securityPolicy` | `const RpcSecurityPolicy()` | Limits on requests; see below. Always applied; pass a policy to change the limits. |
+| `policy` | `const RpcSecurityPolicy()` | Limits on requests; see below. Always applied; pass a policy to change the limits. |
 | `corsPolicy` | `null` | CORS for browser callers. |
 | `bodyIdleTimeout` | 30 s | Longest silence while the body arrives, reset by every chunk. A body that keeps arriving is never refused by it. `null` disables it. |
 | `bodyReadTimeout` | `null` | Ceiling on the whole body read. It refuses a slow honest upload as readily as a stalled one. |
@@ -277,7 +277,7 @@ the host, or put a proxy with its own body limits in front.
 ### Deploy behind a reverse proxy
 
 dart:io holds a request's header block below every check above. `RpcHttpServer`
-bounds that block itself: by size, at four times what `securityPolicy` admits
+bounds that block itself: by size, at four times what `policy` admits
 as one request's head (about 270 KiB by default; a block a little over the
 policy is still answered `400` with the reason, one far over it is cut), and by
 time, with `headerTimeout`. The number of connections is not bounded unless you

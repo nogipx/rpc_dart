@@ -65,7 +65,7 @@ Future<int> _statusFor(String? contentType) async {
 void main() {
   setUp(() async {
     final transport = RpcHttpResponderTransport(
-      securityPolicy: const RpcSecurityPolicy(),
+      policy: const RpcSecurityPolicy(),
     );
     final responder = RpcResponderEndpoint(transport: transport);
     responder.registerServiceContract(_Svc());

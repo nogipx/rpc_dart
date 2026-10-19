@@ -60,9 +60,7 @@ void main() {
 
   setUp(() async {
     _handlerRuns = 0;
-    transport = RpcHttpResponderTransport(
-      securityPolicy: const RpcSecurityPolicy(),
-    );
+    transport = RpcHttpResponderTransport(policy: const RpcSecurityPolicy());
     responder = RpcResponderEndpoint(transport: transport);
     responder.registerServiceContract(_Contract());
     responder.start();
@@ -145,7 +143,7 @@ void main() {
     // able to READ the 405 rather than see an opaque failure.
     final corsTransport = RpcHttpResponderTransport(
       corsPolicy: RpcHttpCorsPolicy(allowedOrigins: const ['https://app.test']),
-      securityPolicy: const RpcSecurityPolicy(),
+      policy: const RpcSecurityPolicy(),
     );
     final corsResponder = RpcResponderEndpoint(transport: corsTransport);
     corsResponder.registerServiceContract(_Contract());
@@ -187,7 +185,7 @@ void main() {
         corsPolicy: RpcHttpCorsPolicy(
           allowedOrigins: const ['https://app.test'],
         ),
-        securityPolicy: const RpcSecurityPolicy(),
+        policy: const RpcSecurityPolicy(),
       );
       final corsServer = await shelf_io.serve(
         corsTransport.handler,

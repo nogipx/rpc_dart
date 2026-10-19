@@ -63,7 +63,7 @@ typedef Probe =
 Future<Probe> _serve(RpcHttpCorsPolicy corsPolicy) async {
   final transport = RpcHttpResponderTransport(
     corsPolicy: corsPolicy,
-    securityPolicy: const RpcSecurityPolicy(),
+    policy: const RpcSecurityPolicy(),
   );
   final responder = RpcResponderEndpoint(transport: transport);
   responder.registerServiceContract(_Contract());

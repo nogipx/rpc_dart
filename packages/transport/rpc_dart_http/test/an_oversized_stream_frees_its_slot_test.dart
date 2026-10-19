@@ -61,7 +61,7 @@ void main() {
   test(
     'WITNESS refused streams stop and the server keeps answering',
     () async {
-      final transport = RpcHttpResponderTransport(securityPolicy: _policy);
+      final transport = RpcHttpResponderTransport(policy: _policy);
       final server = await shelf_io.serve(transport.handler, '127.0.0.1', 0);
       final endpoint = RpcResponderEndpoint(transport: transport)
         ..registerServiceContract(_Svc())

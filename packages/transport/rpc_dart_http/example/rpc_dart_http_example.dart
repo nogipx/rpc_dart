@@ -72,7 +72,7 @@ Future<void> example2SecurityPolicy() async {
   print('\n=== 2. Security policy ===');
 
   final serverTransport = RpcHttpResponderTransport(
-    securityPolicy: RpcSecurityPolicy(
+    policy: RpcSecurityPolicy(
       maxActiveStreams: 100,
       maxMessageLengthBytes: 4 * 1024 * 1024,
     ),

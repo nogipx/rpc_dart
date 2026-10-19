@@ -48,7 +48,7 @@ void main() {
     final server = RpcHttpServer(
       host: '127.0.0.1',
       port: 0,
-      securityPolicy: policy,
+      policy: policy,
       mode: RpcResponderMode((e) {
         e.registerServiceContract(_EchoService());
         e.start();

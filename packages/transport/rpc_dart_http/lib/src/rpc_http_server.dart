@@ -60,7 +60,7 @@ class RpcHttpServer implements IRpcServer {
   final String _host;
   final int _port;
   final RpcHttpCorsPolicy? _corsPolicy;
-  final RpcSecurityPolicy _securityPolicy;
+  final RpcSecurityPolicy _policy;
   final Duration? _bodyReadTimeout;
   final Duration? _bodyIdleTimeout;
   final Duration? _headerTimeout;
@@ -118,7 +118,7 @@ class RpcHttpServer implements IRpcServer {
 
   /// Creates an HTTP/1.1 RPC server.
   ///
-  /// [securityPolicy] bounds request body size, header sizes, and concurrent
+  /// [policy] bounds request body size, header sizes, and concurrent
   /// requests. The built-in limits (e.g. `maxMessageLengthBytes`) apply by
   /// default; pass an explicit policy to tune them.
   ///
@@ -135,13 +135,13 @@ class RpcHttpServer implements IRpcServer {
   /// an unfinished block indefinitely, and `HttpServer.idleTimeout` does not
   /// cover it. [maxConnections] closes a connection accepted past that many
   /// open ones; `null` disables it. The header block is also bounded in
-  /// bytes by [securityPolicy] (its method path, metadata and header count).
+  /// bytes by [policy] (its method path, metadata and header count).
   RpcHttpServer({
     required String host,
     required int port,
     required RpcResponderMode mode,
     RpcHttpCorsPolicy? corsPolicy,
-    RpcSecurityPolicy securityPolicy = const RpcSecurityPolicy(),
+    RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Duration? bodyReadTimeout,
     Duration? bodyIdleTimeout = const Duration(seconds: 30),
     Duration? headerTimeout = const Duration(seconds: 60),
@@ -151,7 +151,7 @@ class RpcHttpServer implements IRpcServer {
   }) : _host = host,
        _port = port,
        _corsPolicy = corsPolicy,
-       _securityPolicy = securityPolicy,
+       _policy = policy,
        _bodyReadTimeout = bodyReadTimeout,
        _bodyIdleTimeout = bodyIdleTimeout,
        _headerTimeout = headerTimeout,
@@ -195,7 +195,7 @@ class RpcHttpServer implements IRpcServer {
     }
     _transport = RpcHttpResponderTransport(
       corsPolicy: _corsPolicy,
-      securityPolicy: _securityPolicy,
+      policy: _policy,
       bodyReadTimeout: _bodyReadTimeout,
       bodyIdleTimeout: _bodyIdleTimeout,
       logger: _log,
@@ -304,7 +304,7 @@ class RpcHttpServer implements IRpcServer {
       final sockets = RpcHeaderBoundedServerSocket(
         await ServerSocket.bind(_host, _port),
         maxHeaderBytes: RpcHeaderBoundedServerSocket.defaultMaxHeaderBytes(
-          _securityPolicy,
+          _policy,
         ),
         headerTimeout: _headerTimeout,
         maxConnections: _maxConnections,
@@ -354,7 +354,7 @@ class RpcHttpServer implements IRpcServer {
       // which is worse.
       _transport = RpcHttpResponderTransport(
         corsPolicy: _corsPolicy,
-        securityPolicy: _securityPolicy,
+        policy: _policy,
         bodyReadTimeout: _bodyReadTimeout,
         bodyIdleTimeout: _bodyIdleTimeout,
         logger: _log,

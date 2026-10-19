@@ -64,9 +64,7 @@ typedef _Rig = ({
 
 Future<_Rig> _serve() async {
   final transport = RpcHttpResponderTransport(
-    securityPolicy: const RpcSecurityPolicy(
-      maxActiveStreams: _maxActiveStreams,
-    ),
+    policy: const RpcSecurityPolicy(maxActiveStreams: _maxActiveStreams),
     bodyReadTimeout: _bodyReadTimeout,
   );
   final endpoint = RpcResponderEndpoint(transport: transport)
