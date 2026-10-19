@@ -274,27 +274,30 @@ class RpcHttpServer implements IRpcServer {
       logController: _logController,
     );
     _endpoint = endpoint;
-    _mode.register(endpoint);
-
-    // Started HERE, as the sibling servers do right after their own
-    // register. Leave it to the application and one written by analogy
-    // with those two registers its contracts and gets a server that accepts
-    // connections and answers nothing at all -- a silent hang, no error on
-    // either side.
-    //
-    // Safe when the application starts it too: startResponderListening() guards
-    // on `_respIsListening` precisely because the http2 server and the shipped
-    // examples both do this.
-    endpoint.start();
-
-    final Handler handler;
-    if (preamble != null) {
-      handler = Cascade().add(preamble).add(transport.handler).handler;
-    } else {
-      handler = transport.handler;
-    }
 
     try {
+      // Registering runs the application's contract builders, so it can
+      // throw as well as the bind below.
+      _mode.register(endpoint);
+
+      // Started HERE, as the sibling servers do right after their own
+      // register. Leave it to the application and one written by analogy
+      // with those two registers its contracts and gets a server that accepts
+      // connections and answers nothing at all -- a silent hang, no error on
+      // either side.
+      //
+      // Safe when the application starts it too: startResponderListening()
+      // guards on `_respIsListening` precisely because the http2 server and
+      // the shipped examples both do this.
+      endpoint.start();
+
+      final Handler handler;
+      if (preamble != null) {
+        handler = Cascade().add(preamble).add(transport.handler).handler;
+      } else {
+        handler = transport.handler;
+      }
+
       // Bound here rather than by shelf_io.serve, so a connection's close
       // reaches the transport and a caller's cancel its handler
       // (kRpcHttpPeerGoneKey).
@@ -331,13 +334,12 @@ class RpcHttpServer implements IRpcServer {
       _httpServer = httpServer;
       _sockets = sockets;
     } catch (_) {
-      // The bind is the one fallible step here, and it fails for the most
-      // ordinary reason there is: the port is taken. By now the endpoint has
-      // been created, handed to the mode's register (so it holds the
-      // application's contracts) and started -- and nothing else can release
-      // it, because stop() gives up on `!_isRunning` and _isRunning is set on
-      // the line after the bind. Without this the contracts keep everything
-      // they hold for the life of the process.
+      // The register throws when a contract builder does, and the bind fails
+      // for the most ordinary reason there is: the port is taken. Either way
+      // the endpoint exists and may hold the application's contracts, and
+      // nothing else can release it, because stop() gives up on `!_isRunning`
+      // and _isRunning is set on the line after the bind. Without this the
+      // contracts keep everything they hold for the life of the process.
       _endpoint = null;
       try {
         await endpoint.close();
