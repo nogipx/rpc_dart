@@ -9,6 +9,9 @@ import 'errors.dart';
 import 'frame_headroom.dart';
 import 'metadata.dart';
 
+/// The three fields of a frame header.
+typedef _FrameHeader = ({int streamId, int flags, int payloadLen});
+
 /// Multiplexed frame format for [IRpcChannel]-based transports.
 ///
 /// Wire layout (9-byte header + payload):
@@ -137,23 +140,21 @@ abstract final class RpcChannelFrame {
     int? maxMetadataLen,
   }) {
     if (data.length < headerSize) return null;
-    return _decodeAt(
-      data,
+    final header = _readHeader(
       ByteData.sublistView(data),
       0,
       maxPayloadLen: maxPayloadLen,
       maxMetadataLen: maxMetadataLen,
     );
+    if (data.length < headerSize + header.payloadLen) return null;
+    return _frameAt(data, 0, header);
   }
 
-  /// Decodes a single frame starting at [offset] using an existing [view] over
-  /// [data], reading the 9-byte header once and slicing the payload directly.
+  /// Reads the 9-byte header at [offset] of [view] and checks the declared
+  /// payload against the limits.
   ///
-  /// The caller must ensure `offset + headerSize <= data.length`. Returns null
-  /// when the declared payload is not yet fully present. Behaves identically to
-  /// [decode] for the bytes at [offset].
-  static RpcDecodedFrame? _decodeAt(
-    Uint8List data,
+  /// The caller must ensure `offset + headerSize <= view.lengthInBytes`.
+  static _FrameHeader _readHeader(
     ByteData view,
     int offset, {
     int? maxPayloadLen,
@@ -175,9 +176,9 @@ abstract final class RpcChannelFrame {
     // bounds separately and far more tightly than a data payload: 64 KiB against
     // 16 MiB by default.
     //
-    // **Above the completeness check, from the header alone**, which is the whole
-    // point: below it, an incomplete frame returns null and the caller keeps
-    // buffering, so the limit would only fire once the payload had ARRIVED in
+    // **Before the completeness check, from the header alone**, which is the
+    // whole point: an incomplete frame makes the caller keep buffering, so a
+    // limit checked after it would only fire once the payload had ARRIVED in
     // full — a peer dribbling bytes could make us hold many times this ceiling
     // before being told the frame was too large. Both inputs here are header
     // fields, so there is nothing to wait for.
@@ -187,16 +188,24 @@ abstract final class RpcChannelFrame {
         '(max: $maxMetadataLen)',
       );
     }
+    return (streamId: streamId, flags: flags, payloadLen: payloadLen);
+  }
 
+  /// Decodes the frame whose [header] was read at [offset]; its payload must
+  /// be present in full. Malformed metadata throws [RpcFrameException].
+  static RpcDecodedFrame _frameAt(
+    Uint8List data,
+    int offset,
+    _FrameHeader header,
+  ) {
     final payloadStart = offset + headerSize;
-    if (data.length < payloadStart + payloadLen) return null;
-
     final payload = Uint8List.sublistView(
       data,
       payloadStart,
-      payloadStart + payloadLen,
+      payloadStart + header.payloadLen,
     );
-    final endOfStream = (flags & _flagEndOfStream) != 0;
+    final isMetadata = (header.flags & flagMetadata) != 0;
+    final endOfStream = (header.flags & _flagEndOfStream) != 0;
 
     RpcMetadata? metadata;
     String? methodPath;
@@ -207,7 +216,7 @@ abstract final class RpcChannelFrame {
     }
 
     return RpcDecodedFrame(
-      streamId: streamId,
+      streamId: header.streamId,
       endOfStream: endOfStream,
       isMetadata: isMetadata,
       payload: isMetadata ? null : payload,
@@ -245,55 +254,33 @@ abstract final class RpcChannelFrame {
 
     if (data.length < headerSize) return (frames, offset);
 
-    // One view over the whole buffer; the header is read once per frame inside
-    // _decodeAt (no second view, no intermediate frame slice).
+    // One view over the whole buffer, and no intermediate frame slice.
     final view = ByteData.sublistView(data);
 
     while (offset + headerSize <= data.length) {
-      // _decodeAt re-reads the declared length to enforce maxPayloadLen and to
-      // detect a not-yet-complete payload; on incompleteness it returns null.
-      final RpcDecodedFrame? frame;
-      if (onMalformedMetadata == null) {
-        frame = _decodeAt(
-          data,
-          view,
-          offset,
-          maxPayloadLen: maxPayloadLen,
-          maxMetadataLen: maxMetadataLen,
-        );
-      } else {
-        RpcDecodedFrame? decoded;
-        try {
-          decoded = _decodeAt(
-            data,
-            view,
-            offset,
-            maxPayloadLen: maxPayloadLen,
-            maxMetadataLen: maxMetadataLen,
-          );
-        } on RpcFrameException {
-          // Only a metadata payload that will not parse can be stepped over:
-          // the SIZE rejections above fire before the payload is known to be
-          // present, so re-check that this frame is complete and let a size
-          // violation keep throwing.
-          final len = view.getUint32(offset + 5);
-          final isMetadata = (view.getUint8(offset + 4) & flagMetadata) != 0;
-          final complete = data.length >= offset + headerSize + len;
-          final withinLimits =
-              (maxPayloadLen == null || len <= maxPayloadLen) &&
-              (!isMetadata || maxMetadataLen == null || len <= maxMetadataLen);
-          if (!isMetadata || !complete || !withinLimits) rethrow;
-          onMalformedMetadata(view.getUint32(offset));
-          offset += headerSize + len;
-          continue;
-        }
-        frame = decoded;
-      }
-      if (frame == null) break;
+      // A size violation throws here, before the payload is known to be
+      // present, and is never stepped over.
+      final header = _readHeader(
+        view,
+        offset,
+        maxPayloadLen: maxPayloadLen,
+        maxMetadataLen: maxMetadataLen,
+      );
+      final end = offset + headerSize + header.payloadLen;
+      if (data.length < end) break;
 
-      final payloadLen = view.getUint32(offset + 5);
-      offset += headerSize + payloadLen;
-      frames.add(frame);
+      if (onMalformedMetadata == null) {
+        frames.add(_frameAt(data, offset, header));
+      } else {
+        try {
+          frames.add(_frameAt(data, offset, header));
+        } on RpcFrameException {
+          // Only a complete metadata payload that will not parse gets here,
+          // and its framing is intact.
+          onMalformedMetadata(header.streamId);
+        }
+      }
+      offset = end;
     }
 
     return (frames, offset);
