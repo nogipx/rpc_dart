@@ -566,6 +566,12 @@ As landed:
   - Its contract is generated.
   - The fake `sessionId` and the hard-coded MCP version go.
   - `approxJsonBytes` moves to core for log, notify and data.
+  - Done (2026-10-19). `ILogCollectorService` is generated; the wire is
+    unchanged. A handshake is welcomed with the collector's own session id
+    for that connection. The MCP server reports `packageVersion` from
+    `lib/src/version.dart`, which a test holds to the pubspec.
+    `approxJsonBytes` is exported from `rpc_dart.dart` and counts an
+    `IRpcSerializable` as its `toJson()`.
 - **isolate (T9).**
   - One base channel for VM and web, with encode/decode as the only difference.
   - One entrypoint typedef; `policy` non-null with the default on every

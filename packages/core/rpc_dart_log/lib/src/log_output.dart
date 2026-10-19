@@ -11,7 +11,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'contract/log_caller.dart';
+import 'contract/log_collector_contract.dart';
 import 'contract/messages.dart';
 import 'protocol.dart';
 

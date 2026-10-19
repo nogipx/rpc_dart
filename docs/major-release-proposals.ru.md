@@ -594,6 +594,12 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
   - Его контракт генерируется.
   - Фиктивный `sessionId` и зашитая версия MCP удаляются.
   - `approxJsonBytes` переезжает в ядро для log, notify и data.
+  - Сделано (2026-10-19). `ILogCollectorService` генерируется; формат на
+    проводе не изменился. На handshake коллектор отвечает своим id сессии
+    для этого соединения. MCP-сервер сообщает `packageVersion` из
+    `lib/src/version.dart`, и тест держит его равным pubspec.
+    `approxJsonBytes` экспортируется из `rpc_dart.dart` и считает
+    `IRpcSerializable` по его `toJson()`.
 - **isolate (T9).**
   - Один базовый канал для VM и web, единственное различие — encode/decode.
   - Один typedef точки входа; `policy` не-null со значением по умолчанию на

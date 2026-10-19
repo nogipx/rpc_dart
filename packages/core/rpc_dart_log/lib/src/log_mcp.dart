@@ -12,6 +12,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'log_console.dart';
 import 'log_server.dart';
 import 'mcp_buffer.dart';
+import 'version.dart';
 
 /// MCP server that exposes log collector data to AI assistants via HTTP.
 ///
@@ -154,7 +155,7 @@ class LogCollectorMcpServer {
     }
 
     if (request.method == 'GET') {
-      return _json({'name': 'rpc_dart_log', 'version': '0.1.0'});
+      return _json(_serverInfo);
     }
 
     return Response(405);
@@ -191,6 +192,11 @@ class LogCollectorMcpServer {
   // MCP JSON-RPC
   // ---------------------------------------------------------------------------
 
+  static const _serverInfo = {
+    'name': 'rpc_dart_log',
+    'version': packageVersion,
+  };
+
   static const _mcpInstructions = '''
 Real-time log collector for rpc_dart applications.
 
@@ -222,7 +228,7 @@ Investigation strategy:
       'initialize' => _rpcResult(id, {
         'protocolVersion': '2024-11-05',
         'capabilities': {'tools': <String, Object?>{}},
-        'serverInfo': {'name': 'rpc_dart_log', 'version': '0.1.0'},
+        'serverInfo': _serverInfo,
         'instructions': _mcpInstructions,
       }),
       'notifications/initialized' => _rpcResult(id, {}),

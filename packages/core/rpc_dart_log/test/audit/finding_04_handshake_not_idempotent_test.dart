@@ -20,7 +20,7 @@ import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_log/rpc_dart_log_server.dart';
-import 'package:rpc_dart_log/src/contract/log_caller.dart';
+import 'package:rpc_dart_log/src/contract/log_collector_contract.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
@@ -57,12 +57,13 @@ void main() {
         endpoint.start();
         final caller = LogCollectorServiceCaller(endpoint);
 
-        await caller.handshake(
+        final first = await caller.handshake(
           const LogCollectorHandshake(deviceName: 'devA', app: 'appA'),
         );
-        await caller.handshake(
+        final second = await caller.handshake(
           const LogCollectorHandshake(deviceName: 'devA-again', app: 'appA'),
         );
+        expect(second.sessionId, first.sessionId);
 
         // Let events settle.
         await Future<void>.delayed(const Duration(milliseconds: 200));

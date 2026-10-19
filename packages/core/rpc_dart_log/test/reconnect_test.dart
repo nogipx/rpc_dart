@@ -24,7 +24,7 @@ import 'dart:async';
 import 'package:async/async.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_log/rpc_dart_log.dart';
-import 'package:rpc_dart_log/src/contract/log_responder.dart';
+import 'package:rpc_dart_log/src/contract/log_collector_contract.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:stream_channel/stream_channel.dart';
@@ -201,8 +201,11 @@ class _Collector {
     final transport = RpcWebSocketResponderTransport(server);
     final endpoint = RpcResponderEndpoint(transport: transport);
     endpoint.registerServiceContract(
-      LogCollectorServiceResponder(
-        onHandshake: (h) => handshake = h,
+      LogCollectorHandler(
+        onHandshake: (h) {
+          handshake = h;
+          return 1;
+        },
         onRecord: received.add,
       ),
     );

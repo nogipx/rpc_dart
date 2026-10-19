@@ -6,7 +6,7 @@
 //
 // Exercises the LogCollectorOutput CLIENT path (construction, buffering, flush,
 // pipelined ack-driven drain) over an in-memory WebSocketChannel pair wired to
-// a real LogCollectorServiceResponder. No dart:io anywhere -- it MUST compile
+// a real LogCollectorHandler. No dart:io anywhere -- it MUST compile
 // and run on dart2js (node), proving the log client is web-correct. Mobile and
 // Flutter-Web apps embed exactly this client.
 @TestOn('vm || node || browser')
@@ -17,7 +17,7 @@ import 'dart:async';
 import 'package:async/async.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_log/rpc_dart_log.dart';
-import 'package:rpc_dart_log/src/contract/log_responder.dart';
+import 'package:rpc_dart_log/src/contract/log_collector_contract.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:stream_channel/stream_channel.dart';
@@ -83,8 +83,11 @@ void main() {
         final transport = RpcWebSocketResponderTransport(server);
         final endpoint = RpcResponderEndpoint(transport: transport);
         endpoint.registerServiceContract(
-          LogCollectorServiceResponder(
-            onHandshake: (h) => handshake = h,
+          LogCollectorHandler(
+            onHandshake: (h) {
+              handshake = h;
+              return 1;
+            },
             onRecord: received.add,
           ),
         );

@@ -9,7 +9,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/io.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 
-import 'contract/log_responder.dart';
+import 'contract/log_collector_contract.dart';
 import 'contract/messages.dart';
 import 'protocol.dart';
 
@@ -134,7 +134,7 @@ class LogCollectorServer {
   }
 
   void _onEndpointCreated(RpcResponderEndpoint endpoint) {
-    final responder = LogCollectorServiceResponder(
+    final responder = LogCollectorHandler(
       onHandshake: (info) => _handleHandshake(endpoint, info),
       onRecord: (record) => _handleRecord(endpoint, record),
     );
@@ -150,14 +150,16 @@ class LogCollectorServer {
     );
   }
 
-  void _handleHandshake(
+  /// Returns the session id of [endpoint].
+  int _handleHandshake(
     RpcResponderEndpoint endpoint,
     LogCollectorHandshake info,
   ) {
     // Idempotent per endpoint: a duplicate handshake on an already-registered
     // connection must NOT allocate a new session, leak the old one, or fire a
     // spurious DeviceConnected. Reuse the existing session for this endpoint.
-    if (_endpointSessions.containsKey(endpoint)) return;
+    final existing = _endpointSessions[endpoint];
+    if (existing != null) return existing.id;
 
     final id = _nextSessionId++;
     final session = LogCollectorSession(
@@ -168,6 +170,7 @@ class LogCollectorServer {
     _sessions[id] = session;
     _endpointSessions[endpoint] = session;
     _connectionController.add(DeviceConnected(session));
+    return id;
   }
 
   void _handleRecord(RpcResponderEndpoint endpoint, LogCollectorRecord record) {

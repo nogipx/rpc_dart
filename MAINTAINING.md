@@ -41,6 +41,8 @@ on `Version X already exists`, after the other packages have gone out.
    package: bump its `version:` in the pubspec (patch/minor/major per the commit
    types since the last release) and write the CHANGELOG entry by hand (newest
    section on top, terse, why-focused). Do NOT tag here — `publish:release` tags.
+   `rpc_dart_log` also states its version in `lib/src/version.dart`, which it
+   reports to MCP clients; a test fails until the two match.
 1b. **Raise the `rpc_dart` floor in every package that started using a NEW core
    API.** `melos run bump:rpc_dart` does it. This is invisible to every gate:
    the pub workspace always resolves core from local source, so a transport that

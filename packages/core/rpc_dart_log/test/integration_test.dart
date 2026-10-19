@@ -7,8 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_log/rpc_dart_log.dart';
 import 'package:rpc_dart_log/rpc_dart_log_server.dart';
-import 'package:rpc_dart_log/src/contract/log_caller.dart';
-import 'package:rpc_dart_log/src/contract/log_responder.dart';
+import 'package:rpc_dart_log/src/contract/log_collector_contract.dart';
 import 'package:rpc_dart_log/src/contract/messages.dart';
 import 'package:test/test.dart';
 
@@ -159,9 +158,12 @@ void main() {
       final received = <LogCollectorRecord>[];
       LogCollectorHandshake? handshakeInfo;
 
-      final contract = LogCollectorServiceResponder(
-        onHandshake: (info) => handshakeInfo = info,
-        onRecord: (record) => received.add(record),
+      final contract = LogCollectorHandler(
+        onHandshake: (info) {
+          handshakeInfo = info;
+          return 7;
+        },
+        onRecord: received.add,
       );
       responder.registerServiceContract(contract);
 
@@ -174,7 +176,7 @@ void main() {
         LogCollectorHandshake(deviceName: 'TestPhone', app: 'TestApp'),
       );
 
-      expect(welcome.sessionId, isPositive);
+      expect(welcome.sessionId, 7);
       expect(handshakeInfo?.deviceName, 'TestPhone');
       expect(handshakeInfo?.app, 'TestApp');
 

@@ -4,10 +4,6 @@
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-// ---------------------------------------------------------------------------
-// Handshake
-// ---------------------------------------------------------------------------
-
 /// Sent by the client to identify itself.
 class LogCollectorHandshake implements IRpcSerializable {
   final String deviceName;
@@ -30,7 +26,7 @@ class LogCollectorHandshake implements IRpcSerializable {
     if (appVersion != null) 'appVersion': appVersion,
   };
 
-  static LogCollectorHandshake fromJson(Map<String, dynamic> json) =>
+  factory LogCollectorHandshake.fromJson(Map<String, dynamic> json) =>
       LogCollectorHandshake(
         deviceName: json['deviceName'] as String? ?? 'unknown',
         app: json['app'] as String? ?? 'unknown',
@@ -41,6 +37,8 @@ class LogCollectorHandshake implements IRpcSerializable {
 
 /// Server response to a handshake.
 class LogCollectorWelcome implements IRpcSerializable {
+  /// The collector's id for this connection. A repeated handshake on the same
+  /// connection gets the same id.
   final int sessionId;
 
   const LogCollectorWelcome({required this.sessionId});
@@ -48,13 +46,9 @@ class LogCollectorWelcome implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {'sessionId': sessionId};
 
-  static LogCollectorWelcome fromJson(Map<String, dynamic> json) =>
+  factory LogCollectorWelcome.fromJson(Map<String, dynamic> json) =>
       LogCollectorWelcome(sessionId: json['sessionId'] as int? ?? 0);
 }
-
-// ---------------------------------------------------------------------------
-// Log record transport
-// ---------------------------------------------------------------------------
 
 /// A serialized log record (event or span) sent from client to collector.
 class LogCollectorRecord implements IRpcSerializable {
@@ -65,39 +59,22 @@ class LogCollectorRecord implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => payload;
 
-  static LogCollectorRecord fromJson(Map<String, dynamic> json) =>
+  factory LogCollectorRecord.fromJson(Map<String, dynamic> json) =>
       LogCollectorRecord(json);
 }
 
 /// Acknowledgement returned by the collector for a received record.
 ///
-/// The client ([LogCollectorOutput]) pipelines `send` calls: it does not await
-/// the ack before sending the next record, so per-record RTT no longer caps
-/// throughput. The ack is still used off the hot path to advance the in-flight
-/// window and drop confirmed records from the buffer (no loss on reconnect).
+/// The client (`LogCollectorOutput`) pipelines `send` calls: it does not await
+/// the ack before sending the next record. The ack advances the in-flight
+/// window off the hot path and drops confirmed records from the buffer (no
+/// loss on reconnect).
 class LogCollectorAck implements IRpcSerializable {
   const LogCollectorAck();
 
   @override
   Map<String, dynamic> toJson() => const {};
 
-  static LogCollectorAck fromJson(Map<String, dynamic> json) =>
+  factory LogCollectorAck.fromJson(Map<String, dynamic> json) =>
       const LogCollectorAck();
 }
-
-// ---------------------------------------------------------------------------
-// Codecs
-// ---------------------------------------------------------------------------
-
-final logCollectorHandshakeCodec = RpcCodec<LogCollectorHandshake>(
-  LogCollectorHandshake.fromJson,
-);
-final logCollectorWelcomeCodec = RpcCodec<LogCollectorWelcome>(
-  LogCollectorWelcome.fromJson,
-);
-final logCollectorRecordCodec = RpcCodec<LogCollectorRecord>(
-  LogCollectorRecord.fromJson,
-);
-final logCollectorAckCodec = RpcCodec<LogCollectorAck>(
-  LogCollectorAck.fromJson,
-);
