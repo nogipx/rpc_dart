@@ -28,6 +28,9 @@ class RpcWebSocketServer implements IRpcServer {
 
   StreamSubscription<WebSocketChannel>? _connectionsSub;
   bool _isRunning = false;
+
+  /// Set once a connection refused while stopped has been reported.
+  bool _warnedStopped = false;
   int _connCounter = 0;
 
   /// A server over [connections].
@@ -268,7 +271,11 @@ class RpcWebSocketServer implements IRpcServer {
     // peer that completed its handshake is told, rather than left holding a
     // socket nobody owns.
     if (!_isRunning) {
-      _log.warning('Refusing connection $clientLabel: the server is stopped');
+      // Every peer that arrives while stopped lands here: warned once.
+      if (!_warnedStopped) {
+        _warnedStopped = true;
+        _log.warning('Refusing connection $clientLabel: the server is stopped');
+      }
       _refuse(channel, clientLabel, 'server is not accepting');
       return;
     }
