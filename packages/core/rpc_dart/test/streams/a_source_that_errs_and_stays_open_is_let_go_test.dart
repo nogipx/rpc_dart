@@ -2,15 +2,15 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `requestSink.addStream(source)` where the source emits an error and stays
-// open -- a StreamController, a shared feed. An `async*` ends at its error, so
-// it never showed this. The call fails at the error; after that the source
-// must be let go: its addStream completes, nothing more is sent, and closing
-// the caller works and frees the stream.
+// A bidi request stream that emits an error and stays open -- a
+// StreamController, a shared feed. An `async*` ends at its error, so it cannot
+// show this. The call fails at the error; after that the source must be let
+// go: it is cancelled, nothing more is sent, the call ends for the consumer and
+// the stream is freed.
 
 import 'dart:async';
 
-import 'package:rpc_dart/src/_internal.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
@@ -43,25 +43,32 @@ void main() {
     final responder = RpcResponderEndpoint(transport: server)
       ..registerServiceContract(_Echo(got))
       ..start();
+    final caller = RpcCallerEndpoint(transport: client);
     addTearDown(() async {
+      await caller.close();
       await responder.close();
       await client.close();
       await server.close();
     });
-    final caller = BidirectionalStreamCaller<RpcString, RpcString>(
-      transport: client,
-      serviceName: 'Svc',
-      methodName: 'echo',
-      requestCodec: _codec,
-      responseCodec: _codec,
-    );
-    caller.responses.listen((_) {}, onError: (Object _) {});
 
     var sourceCancelled = false;
     final source = StreamController<RpcString>(
       onCancel: () => sourceCancelled = true,
     );
-    final addStream = caller.requestSink.addStream(source.stream);
+    final ended = Completer<void>();
+    caller
+        .bidirectionalStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'echo',
+          requests: source.stream,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .listen(
+          (_) {},
+          onError: (Object _) {},
+          onDone: () => ended.isCompleted ? null : ended.complete(),
+        );
     source.add('a'.rpc);
     await Future<void>.delayed(const Duration(milliseconds: 20));
     source.addError(StateError('transient'));
@@ -70,10 +77,9 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
     expect(sourceCancelled, isTrue, reason: 'the source is still pulled');
-    await addStream.timeout(const Duration(seconds: 2));
+    await ended.future.timeout(const Duration(seconds: 2));
     expect(got, ['a'], reason: 'nothing goes out after the failure');
 
-    await caller.close();
     final health = await client.health();
     expect(health.details['activeStreams'], 0);
     expect(health.details['streamControllers'], 0);

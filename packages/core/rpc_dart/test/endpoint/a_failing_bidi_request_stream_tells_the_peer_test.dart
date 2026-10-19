@@ -2,18 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A bidi caller whose request sink ERRORS used to tell the peer nothing, so the
-// handler sat in `await for (requests)` forever. Measured on one connection at
-// three scales, counting the server's open streams, responders and live
-// handlers: 1 / 6 / 26, unchanged three seconds later. The healthy half-close
-// and an explicit abort() both read 0.
-//
-// The sibling is the control: ClientStreamCaller.call(Stream) has notified the
-// peer on this path all along.
+// A bidi call whose request stream ERRORS must tell the peer, or the handler
+// sits in `await for (requests)` forever, holding its stream state, responder
+// and live handler. Many calls on one connection, so a per-connection leak and
+// retention-versus-churn are both visible.
 
 import 'dart:async';
 
-import 'package:rpc_dart/src/_internal.dart';
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
@@ -53,6 +49,7 @@ final class _Contract extends RpcResponderContract {
 typedef _Rig = ({
   RpcChannelTransport client,
   RpcChannelTransport server,
+  RpcCallerEndpoint caller,
   RpcResponderEndpoint responder,
   _Counters counters,
 });
@@ -66,29 +63,30 @@ _Rig _connect() {
   return (
     client: client,
     server: server,
+    caller: RpcCallerEndpoint(transport: client),
     responder: responder,
     counters: counters,
   );
 }
 
 Future<void> _teardown(_Rig rig) async {
+  await rig.caller.close();
   await rig.responder.close();
   await rig.client.close();
   await rig.server.close();
 }
 
-BidirectionalStreamCaller<RpcString, RpcString> _call(_Rig rig) {
-  final caller = BidirectionalStreamCaller<RpcString, RpcString>(
-    transport: rig.client,
-    serviceName: 'Svc',
-    methodName: 'echo',
-    requestCodec: _codec,
-    responseCodec: _codec,
-  );
-  // A consumer, so responses are not merely buffered.
-  caller.responses.listen((_) {}, onError: (Object _) {});
-  return caller;
-}
+/// Runs one call fed by [requests], reading every response, until it ends.
+Future<void> _call(_Rig rig, Stream<RpcString> requests) => rig.caller
+    .bidirectionalStream<RpcString, RpcString>(
+      serviceName: 'Svc',
+      methodName: 'echo',
+      requests: requests,
+      requestCodec: _codec,
+      responseCodec: _codec,
+    )
+    .drain<void>()
+    .catchError((Object _) {});
 
 /// Nothing the server holds for a call that is over.
 String _residue(_Rig rig) {
@@ -131,7 +129,7 @@ Stream<RpcString> _twoThenError() async* {
 }
 
 void main() {
-  group('a bidi request sink that fails tells the peer', () {
+  group('a bidi request stream that fails tells the peer', () {
     // Twenty calls on ONE connection: a per-call connection cannot see a
     // per-connection leak, and a single call cannot tell retention from churn.
     const calls = 20;
@@ -140,10 +138,7 @@ void main() {
       final rig = _connect();
 
       for (var i = 0; i < calls; i++) {
-        final caller = _call(rig);
-        await caller.requestSink
-            .addStream(_twoThenError())
-            .catchError((Object _) {});
+        await _call(rig, _twoThenError());
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
 
@@ -158,10 +153,10 @@ void main() {
       final rig = _connect();
 
       for (var i = 0; i < calls; i++) {
-        final caller = _call(rig);
-        caller.requestSink.add('a'.rpc);
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        await caller.requestSink.close();
+        await _call(rig, () async* {
+          yield 'a'.rpc;
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }());
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
 
@@ -180,15 +175,12 @@ void main() {
         final rig = _connect();
 
         for (var i = 0; i < calls; i++) {
-          final caller = _call(rig);
-          await caller.requestSink
-              .addStream(() async* {
-                yield 'a'.rpc;
-                yield 'b'.rpc;
-                await Future<void>.delayed(const Duration(milliseconds: 40));
-                throw StateError('producer died');
-              }())
-              .catchError((Object _) {});
+          await _call(rig, () async* {
+            yield 'a'.rpc;
+            yield 'b'.rpc;
+            await Future<void>.delayed(const Duration(milliseconds: 40));
+            throw StateError('producer died');
+          }());
           await Future<void>.delayed(const Duration(milliseconds: 20));
         }
 

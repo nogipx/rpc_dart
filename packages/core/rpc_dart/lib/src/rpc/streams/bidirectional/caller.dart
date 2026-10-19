@@ -83,103 +83,15 @@ final class BidirectionalStreamCaller<
   ///
   /// [finishSending] is the healthy counterpart: it half-closes and the
   /// handler's `await for` ends on its own. Abandoning is not half-closing, and
-  /// the handler has to be able to tell them apart.
-  ///
-  /// [requestSink] calls this itself when its producer errors; a caller driving
-  /// [send] by hand owns the same duty.
+  /// the handler has to be able to tell them apart. A caller whose request
+  /// producer fails owns this duty.
   ///
   /// Never throws.
   Future<void> abort(String reason) => _processor.notifyPeerOfAbort(reason);
 
-  /// Response stream yielding payloads (zero-copy friendly).
-  Stream<TResponse> get payloadResponses async* {
-    await for (final response in responses) {
-      if (response.payload != null) {
-        if (_logger.isInternal) {
-          _logger.internal('Received response in bidirectional stream');
-        }
-        yield response.payload!;
-      }
-
-      // The status on the END_STREAM frame; one on an earlier frame is not a
-      // status yet.
-      if (response.metadata != null && response.isEndOfStream) {
-        final status = RpcCallerTrailer.statusOf(response.metadata!);
-        if (status != null && status != RpcStatus.ok) {
-          final error = RpcCallerTrailer.errorOf(
-            response.metadata!,
-            status,
-            context: _context,
-          );
-          if (RpcStatus.isFault(status)) {
-            _logger.error(
-              'Bidirectional stream ended with error: $status - '
-              '${error.message}',
-            );
-          } else if (_logger.isDebug) {
-            _logger.debug(
-              'Bidirectional stream ended with status $status: '
-              '${error.message}',
-            );
-          }
-          throw error;
-        }
-      }
-    }
-  }
-
-  /// Drives [requestSink]; null until something asks for the sink.
-  SinkPump<TRequest>? _requestPump;
-
-  /// Sink used to send requests to the server.
-  ///
-  /// [SinkPump] owns the discipline; what is chosen here is
-  /// [CallProcessor.done] as the end-of-life signal — every ending closes the
-  /// response controller, and `isActive` does not, which is why a producer
-  /// could not tell that its call had finished (round 390).
-  StreamSink<TRequest> get requestSink => (_requestPump ??= SinkPump<TRequest>(
-    what: 'requestSink',
-    send: send,
-    halfClose: finishSending,
-    // Tell the peer and END the call, the way ClientStreamCaller does on the
-    // same path. Without the notice the handler sits in `await for (requests)`
-    // forever holding its stream state, responder and admission slot; without
-    // the close the call stays half-alive and the peer keeps answering a stream
-    // this side has already reset -- which on HTTP/2 destroys the whole
-    // connection, every other call on it included. Half-closing instead of
-    // aborting would be wrong either way: the handler would see a request
-    // stream that ended successfully.
-    onSourceFailed: (error, _) => unawaited(
-      abort('request stream failed: $error').whenComplete(close).catchError((
-        Object e,
-        StackTrace st,
-      ) {
-        _logger.error(
-          'Teardown after a failed request stream',
-          error: e,
-          stackTrace: st,
-        );
-      }),
-    ),
-    ended: _processor.done,
-    logger: _logger,
-  )).sink;
-
   /// Closes the stream and releases resources.
   Future<void> close() async {
     _logger.internal('Closing BidirectionalStreamCaller');
-    // Cancel BEFORE closing the sink: `StreamController.close()` THROWS while
-    // an `addStream` is still running, and that throw escapes this method
-    // synchronously, leaving `_processor.close()` below unreachable.
-    //
-    // NOT awaited, for the reason ClientStreamCaller and ServerStreamResponder
-    // both give: cancelling a stalled producer can block for ever. An `async*`
-    // suspended at an `await` never completes its cancellation future, so
-    // awaiting here traded the throw for a hang on the commonest bidi shape of
-    // all -- a chat pumping an idle input stream. Dropping the await is safe
-    // because `_recordCancel` clears the add-stream state SYNCHRONOUSLY, before
-    // the future it returns.
-    _requestPump?.close();
     await _processor.close();
   }
 }

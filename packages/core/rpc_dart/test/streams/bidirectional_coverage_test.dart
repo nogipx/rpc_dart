@@ -14,7 +14,13 @@ void main() {
   group('Bidirectional streams: extra coverage', () {
     final codec = RpcCodec(RpcString.fromJson);
 
-    test('requestSink forwards requests and finishes on close', () async {
+    /// A responder on stream id 1 running [handler], and a caller for it.
+    (
+      BidirectionalStreamResponder<RpcString, RpcString>,
+      BidirectionalStreamCaller<RpcString, RpcString>,
+      Future<void> Function(),
+    )
+    pair(Stream<RpcString> Function(Stream<RpcString> requests) handler) {
       final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
       final clientTransport = NoZeroCopyTransport(rawClient);
       final serverTransport = NoZeroCopyTransport(rawServer);
@@ -26,14 +32,11 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
+        handler: handler,
       );
       server.bindToMessageStream(
         serverTransport.incomingMessages.where((m) => m.streamId == 1),
       );
-
-      final received = <RpcString>[];
-      final done = Completer<void>();
-      server.requests.listen(received.add, onDone: done.complete);
 
       final client = BidirectionalStreamCaller<RpcString, RpcString>(
         transport: clientTransport,
@@ -43,45 +46,43 @@ void main() {
         responseCodec: codec,
       );
 
-      client.requestSink.add('a'.rpc);
-      client.requestSink.add('b'.rpc);
-      await client.requestSink.close();
+      Future<void> teardown() async {
+        await client.close();
+        await server.close();
+        await rawClient.close();
+        await rawServer.close();
+      }
+
+      return (server, client, teardown);
+    }
+
+    test('requests reach the handler, and finishSending ends them', () async {
+      final received = <RpcString>[];
+      final done = Completer<void>();
+      final (_, client, teardown) = pair((requests) async* {
+        await for (final r in requests) {
+          received.add(r);
+        }
+        done.complete();
+      });
+
+      await client.send('a'.rpc);
+      await client.send('b'.rpc);
+      await client.finishSending();
 
       await done.future.timeout(const Duration(seconds: 2));
       expect(received, ['a'.rpc, 'b'.rpc]);
 
-      await client.close();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
+      await teardown();
     });
 
     test(
-      'responseSink forwards responses and finishReceiving completes done',
+      'the handler responses reach the caller and its end completes done',
       () async {
-        final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
-        final clientTransport = NoZeroCopyTransport(rawClient);
-        final serverTransport = NoZeroCopyTransport(rawServer);
-
-        final server = BidirectionalStreamResponder<RpcString, RpcString>(
-          id: 1,
-          transport: serverTransport,
-          serviceName: 'S',
-          methodName: 'M',
-          requestCodec: codec,
-          responseCodec: codec,
-        );
-        server.bindToMessageStream(
-          serverTransport.incomingMessages.where((m) => m.streamId == 1),
-        );
-
-        final client = BidirectionalStreamCaller<RpcString, RpcString>(
-          transport: clientTransport,
-          serviceName: 'S',
-          methodName: 'M',
-          requestCodec: codec,
-          responseCodec: codec,
-        );
+        final (server, client, teardown) = pair((requests) async* {
+          yield 'x'.rpc;
+          yield 'y'.rpc;
+        });
 
         final payloads = <RpcString>[];
         final sub = client.responses.listen((msg) {
@@ -93,61 +94,31 @@ void main() {
         // Start the stream.
         await client.send('start'.rpc);
 
-        server.responseSink.add('x'.rpc);
-        server.responseSink.add('y'.rpc);
-        await server.responseSink.close();
-
         await server.done.timeout(const Duration(seconds: 2));
         await Future<void>.delayed(const Duration(milliseconds: 10));
 
         expect(payloads, ['x'.rpc, 'y'.rpc]);
 
         await sub.cancel();
-        await client.close();
-        await server.close();
-        await rawClient.close();
-        await rawServer.close();
+        await teardown();
       },
     );
 
-    test('payloadResponses throws on non-OK gRPC trailer', () async {
-      final (rawClient, rawServer) = RpcChannelTransport.memoryPair();
-      final clientTransport = NoZeroCopyTransport(rawClient);
-      final serverTransport = NoZeroCopyTransport(rawServer);
+    test('responses throws on a non-OK gRPC trailer', () async {
+      final (_, client, teardown) = pair((requests) async* {
+        await requests.first;
+        throw RpcStatusException(RpcStatus.internal, 'boom');
+      });
 
-      final server = BidirectionalStreamResponder<RpcString, RpcString>(
-        id: 1,
-        transport: serverTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
-      server.bindToMessageStream(
-        serverTransport.incomingMessages.where((m) => m.streamId == 1),
-      );
-
-      final client = BidirectionalStreamCaller<RpcString, RpcString>(
-        transport: clientTransport,
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: codec,
-        responseCodec: codec,
-      );
-
-      // Start the stream so server has a stream id.
+      // Start the stream so the handler has a request to fail on.
       await client.send('start'.rpc);
-      await server.sendError(RpcStatus.internal, 'boom');
 
       await expectLater(
-        () => client.payloadResponses.toList(),
+        () => client.responses.toList(),
         throwsA(isA<RpcStatusException>()),
       );
 
-      await client.close();
-      await server.close();
-      await rawClient.close();
-      await rawServer.close();
+      await teardown();
     });
   });
 }

@@ -2,19 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-// The third implementation of the job rounds 370 and 371 fixed on the two
-// sinks: the endpoint's own `_pumpBidirectionalResponses`. It relays the
-// handler's stream through a controller so teardown can cancel it, and never
-// forwarded the relay's pause — so the `await for` that drives it paused the
-// relay while a send was in flight and the handler kept allocating regardless.
+// The bidi responder relays its handler's stream through a bridge, so teardown
+// can cancel it. The bridge must forward the relay's pause: the `await for`
+// that drives it pauses while a send is in flight, and a handler that is not
+// paused with it keeps allocating however slowly the consumer reads.
 //
-// This is the path an ORDINARY application takes: an async* bidi handler
-// registered on a contract. The sinks are reachable only on the caller and
-// responder classes directly.
-//
-// Measured against a consumer that does not read, a 1 MB window and 16 KiB
-// messages: 2000 of 2000 produced (31.3 MB), against 68 for the server-stream
-// sibling, whose relay does forward pause.
+// This is the path an ordinary application takes: an async* bidi handler
+// registered on a contract.
 
 import 'dart:async';
 
@@ -100,8 +94,8 @@ void main() {
           'the pump pulled $produced of $_offered messages '
           '(${(produced * _payload / (1024 * 1024)).toStringAsFixed(1)} MB) '
           'out of the handler while the consumer was not reading. '
-          '_pumpBidirectionalResponses must forward its relay pause to the '
-          'handler subscription, as ServerStreamResponder does',
+          'the responder must forward its relay pause to the handler '
+          'subscription',
     );
 
     sub.resume();

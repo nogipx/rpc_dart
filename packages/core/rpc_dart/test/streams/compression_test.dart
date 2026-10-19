@@ -242,6 +242,9 @@ void main() {
         RpcHeaders.grpcAcceptEncoding: 'identity,gzip',
       });
 
+      final receivedRequests = <RpcString>[];
+      final receivedResponses = <RpcString>[];
+
       final server = BidirectionalStreamResponder<RpcString, RpcString>(
         id: 1,
         transport: serverTransport,
@@ -249,6 +252,12 @@ void main() {
         methodName: 'TestMethod',
         requestCodec: codec,
         responseCodec: codec,
+        handler: (requests) async* {
+          await for (final request in requests) {
+            receivedRequests.add(request);
+            yield 'echo:${request.value}'.rpc;
+          }
+        },
         context: serverContext,
       );
 
@@ -269,14 +278,6 @@ void main() {
         responseCodec: codec,
         context: clientContext,
       );
-
-      final receivedRequests = <RpcString>[];
-      final receivedResponses = <RpcString>[];
-
-      server.requests.listen((request) async {
-        receivedRequests.add(request);
-        await server.send('echo:${request.value}'.rpc);
-      });
 
       client.responses.listen((message) {
         if (!message.isMetadataOnly && message.payload != null) {
@@ -317,6 +318,8 @@ void main() {
         methodName: 'TestMethod',
         requestCodec: codec,
         responseCodec: codec,
+        handler: (requests) =>
+            requests.map((request) => 'echo:${request.value}'.rpc),
       );
 
       server.bindToMessageStream(
@@ -332,10 +335,6 @@ void main() {
       );
 
       final receivedResponses = <RpcString>[];
-
-      server.requests.listen((request) async {
-        await server.send('echo:${request.value}'.rpc);
-      });
 
       client.responses.listen((message) {
         if (!message.isMetadataOnly && message.payload != null) {

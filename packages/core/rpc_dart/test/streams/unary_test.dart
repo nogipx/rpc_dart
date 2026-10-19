@@ -128,7 +128,7 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
-          context: RpcContext.withTimeout(const Duration(milliseconds: 1)),
+          context: RpcContext.withTimeout(const Duration(milliseconds: 100)),
           logger: LogScope.noop,
         );
 

@@ -7,9 +7,8 @@ part of '../_index.dart';
 
 /// Bidirectional stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles incoming requests and sends responses independently.
 ///
-/// With a [handler], the responder runs it once bound and relays its
-/// responses, as the other responders do. Without one, the call is driven
-/// through [requests] and [responseSink] or [send].
+/// Runs its [handler] once bound and relays its responses, as the other
+/// responders do.
 final class BidirectionalStreamResponder<
   TRequest extends Object,
   TResponse extends Object
@@ -23,7 +22,7 @@ final class BidirectionalStreamResponder<
     required super.methodName,
     super.requestCodec,
     super.responseCodec,
-    Stream<TResponse> Function(Stream<TRequest> requests)? handler,
+    required Stream<TResponse> Function(Stream<TRequest> requests) handler,
     super.context,
     super.logger,
   }) : _handler = handler,
@@ -32,47 +31,8 @@ final class BidirectionalStreamResponder<
          className: 'BidirectionalStreamResponder',
        );
 
-  /// Run once the responder is bound; null after that, or when driven by
-  /// hand.
+  /// Run once the responder is bound; null after that.
   Stream<TResponse> Function(Stream<TRequest> requests)? _handler;
-
-  /// Incoming requests from the client; completes when the client closes its side.
-  Stream<TRequest> get requests => _processor.requests;
-
-  /// Convenience sink to send responses (forwards to send()).
-  ///
-  /// [SinkPump] owns the discipline; what is chosen here is [done] as the
-  /// end-of-life signal. Without it a handler that ends the call itself — a
-  /// trailer through [finishReceiving], an error through [sendError] — left its
-  /// producer being drained into a finished stream, and silently: a send on a
-  /// finished processor returns rather than throwing, so there was not even a
-  /// log.
-  StreamSink<TResponse> get responseSink =>
-      (_responsePump ??= SinkPump<TResponse>(
-        what: 'responseSink [id: $id]',
-        // The processor directly, to avoid a cyclic dependency. A response
-        // that could not go out ends the call here: finishing answers the
-        // failure and completes [done], which stops the pump, so nothing
-        // behind it reads as the stream continuing past a gap.
-        send: (response) async {
-          await _processor.send(response);
-          if (_processor.isAnswered) await finishReceiving();
-        },
-        halfClose: finishReceiving,
-        // END the call, the way ServerStreamResponder does when its handler
-        // throws. `addStream` does NOT close the controller, so a source
-        // that fails never reaches onDone: without this the client keeps
-        // the payloads that did arrive and gets no ending at all --
-        // measured as `2 payloads, NEVER ENDED`.
-        onSourceFailed: (error, _) => unawaited(
-          sendWireError(error, sendError).catchError((Object _) {}),
-        ),
-        ended: done,
-        logger: _logger,
-      )).sink;
-
-  /// Drives [responseSink]; null until something asks for the sink.
-  SinkPump<TResponse>? _responsePump;
 
   @override
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
@@ -88,7 +48,7 @@ final class BidirectionalStreamResponder<
     Stream<TResponse> Function(Stream<TRequest> requests) handler,
   ) async {
     try {
-      await _relay(handler(requests));
+      await _relay(handler(_processor.requests));
       await finishReceiving();
     } catch (error, stackTrace) {
       if (RpcStatus.isFaultError(error)) {
@@ -100,22 +60,6 @@ final class BidirectionalStreamResponder<
       }
       await sendWireError(error, sendError);
     }
-  }
-
-  /// Whether the call has had, or is about to have, its last word; see
-  /// `StreamProcessor.isAnswered`.
-  bool get isAnswered => _processor.isAnswered;
-
-  /// Sends a response to the client.
-  Future<void> send(TResponse response) async {
-    if (!_isActive) {
-      _logger.warning(
-        'Attempted to send response on inactive responder [id: $id]',
-      );
-      return;
-    }
-
-    await _processor.send(response);
   }
 
   /// Sends an error to the client.
@@ -154,14 +98,5 @@ final class BidirectionalStreamResponder<
     } finally {
       _completeDone();
     }
-  }
-
-  @override
-  Future<void> _stopHandler() async {
-    // Cancels before closing and awaits neither: a handler's
-    // `responseSink.addStream(source)` whose source is an `async*` suspended at
-    // an `await` never completes its cancellation, and teardown must not hang
-    // on it.
-    _responsePump?.close();
   }
 }

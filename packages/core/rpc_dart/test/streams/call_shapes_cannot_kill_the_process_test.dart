@@ -68,35 +68,38 @@ Future<List<Object>> _collectingUncaught(Future<void> Function() body) async {
 
 void main() {
   group('a late request on a cancelled bidi call', () {
-    test('WITNESS: requestSink does not throw into the zone', () async {
+    test('WITNESS: the request pump does not throw into the zone', () async {
       final uncaught = await _collectingUncaught(() async {
         final (client, server) = RpcChannelTransport.pair();
         final responder = RpcResponderEndpoint(transport: server);
         responder.registerServiceContract(_Contract());
         responder.start();
+        final caller = RpcCallerEndpoint(transport: client);
 
         final token = RpcCancellationToken();
-        final caller = BidirectionalStreamCaller<RpcString, RpcString>(
-          transport: client,
-          serviceName: 'Svc',
-          methodName: 'echo',
-          requestCodec: _codec,
-          responseCodec: _codec,
-          context: RpcContext.withCancellation(token),
-        );
-        caller.responses.listen((_) {}, onError: (Object _) {});
+        final requests = StreamController<RpcString>();
+        caller
+            .bidirectionalStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'echo',
+              requests: requests.stream,
+              requestCodec: _codec,
+              responseCodec: _codec,
+              context: RpcContext.withCancellation(token),
+            )
+            .listen((_) {}, onError: (Object _) {});
 
-        final sink = caller.requestSink;
-        sink.add('a'.rpc);
+        requests.add('a'.rpc);
         await Future<void>.delayed(const Duration(milliseconds: 40));
 
         // The consumer leaves. The producer has not noticed and pushes once
-        // more — the sink is still open, so this is a legal call.
+        // more -- its stream is still open, so this is a legal call.
         token.cancel('consumer left');
         await Future<void>.delayed(const Duration(milliseconds: 30));
-        sink.add('b'.rpc);
+        requests.add('b'.rpc);
         await Future<void>.delayed(const Duration(milliseconds: 150));
 
+        await requests.close();
         await caller.close().catchError((_) {});
         await responder.close();
         await client.close();
@@ -107,42 +110,34 @@ void main() {
         uncaught,
         isEmpty,
         reason:
-            'requestSink let a send failure reach the zone. In a server '
+            'the request pump let a send failure reach the zone. In a server '
             'process that is exit(255), triggered by nothing worse than a '
             'cancelled call whose producer pushed once more: '
             '${uncaught.isEmpty ? '' : uncaught.first}',
       );
     });
 
-    test('GUARD: requestSink still delivers and half-closes', () async {
+    test('GUARD: the request pump still delivers and half-closes', () async {
       final (client, server) = RpcChannelTransport.pair();
       final responder = RpcResponderEndpoint(transport: server);
       responder.registerServiceContract(_Contract());
       responder.start();
+      final caller = RpcCallerEndpoint(transport: client);
 
-      final caller = BidirectionalStreamCaller<RpcString, RpcString>(
-        transport: client,
-        serviceName: 'Svc',
-        methodName: 'echo',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
-
-      final seen = <String>[];
-      final done = Completer<void>();
-      caller.payloadResponses.listen((r) {
-        seen.add(r.value);
-        if (seen.length == 2 && !done.isCompleted) done.complete();
-      }, onError: (Object _) {});
-
-      caller.requestSink.add('a'.rpc);
-      caller.requestSink.add('b'.rpc);
-      await caller.requestSink.close();
-
-      await done.future.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => fail('requestSink stopped delivering: got $seen'),
-      );
+      final seen = await caller
+          .bidirectionalStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'echo',
+            requests: Stream.fromIterable(['a'.rpc, 'b'.rpc]),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .map((r) => r.value)
+          .toList()
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => fail('the request pump stopped delivering'),
+          );
       expect(seen, ['a', 'b']);
 
       await caller.close();

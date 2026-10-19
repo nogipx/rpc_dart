@@ -16,6 +16,9 @@ void main() {
         final (clientTransport, serverTransport) =
             RpcChannelTransport.memoryPair();
 
+        final receivedRequests = <RpcString>[];
+        final receivedResponses = <RpcString>[];
+
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,
           transport: serverTransport,
@@ -23,6 +26,12 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
+          handler: (requests) async* {
+            await for (final request in requests) {
+              receivedRequests.add(request);
+              yield 'Echo: $request'.rpc;
+            }
+          },
         );
 
         // IMPORTANT: bind the server to the message stream for streamId = 1.
@@ -37,15 +46,6 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
         );
-
-        final receivedRequests = <RpcString>[];
-        final receivedResponses = <RpcString>[];
-
-        // Wire up the server side.
-        server.requests.listen((request) async {
-          receivedRequests.add(request);
-          await server.send('Echo: $request'.rpc);
-        });
 
         // Wire up the client side.
         client.responses.listen((message) {
@@ -84,6 +84,9 @@ void main() {
         final (clientTransport, serverTransport) =
             RpcChannelTransport.memoryPair();
 
+        final serverReceivedRequests = <RpcString>[];
+        final clientReceivedResponses = <RpcString>[];
+
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,
           transport: serverTransport,
@@ -91,6 +94,12 @@ void main() {
           methodName: 'TestMethod',
           requestCodec: serializer,
           responseCodec: serializer,
+          handler: (requests) async* {
+            await for (final request in requests) {
+              serverReceivedRequests.add(request);
+              yield 'Server processed: $request'.rpc;
+            }
+          },
         );
 
         // IMPORTANT: bind the server to the message stream for streamId = 1.
@@ -105,15 +114,6 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
         );
-
-        final serverReceivedRequests = <RpcString>[];
-        final clientReceivedResponses = <RpcString>[];
-
-        // The server's logic.
-        server.requests.listen((request) async {
-          serverReceivedRequests.add(request);
-          await server.send('Server processed: $request'.rpc);
-        });
 
         // The client's logic.
         client.responses.listen((message) {
@@ -165,14 +165,17 @@ void main() {
           methodName: 'SpecificMethod',
           requestCodec: serializer,
           responseCodec: serializer,
+          handler: (requests) async* {
+            await for (final _ in requests) {
+              handlerCallCount++;
+            }
+          },
         );
 
         // IMPORTANT: bind the server to the message stream for streamId = 1.
         server.bindToMessageStream(
           serverTransport.incomingMessages.where((msg) => msg.streamId == 1),
         );
-
-        server.requests.listen((_) => handlerCallCount++);
 
         final correctClient = BidirectionalStreamCaller<RpcString, RpcString>(
           transport: clientTransport,
@@ -218,6 +221,10 @@ void main() {
         final (clientTransport, serverTransport) =
             RpcChannelTransport.memoryPair();
 
+        final serverMessages = <RpcString>[];
+        final clientMessages = <RpcString>[];
+
+        // The server.
         final server = BidirectionalStreamResponder<RpcString, RpcString>(
           id: 1,
           transport: serverTransport,
@@ -225,6 +232,14 @@ void main() {
           methodName: 'Chat',
           requestCodec: serializer,
           responseCodec: serializer,
+          handler: (requests) async* {
+            await for (final request in requests) {
+              serverMessages.add(request);
+              yield request.value.startsWith('ping')
+                  ? 'pong'.rpc
+                  : 'echo: $request'.rpc;
+            }
+          },
         );
 
         // IMPORTANT: bind the server to the message stream for streamId = 1.
@@ -239,20 +254,6 @@ void main() {
           requestCodec: serializer,
           responseCodec: serializer,
         );
-
-        final serverMessages = <RpcString>[];
-        final clientMessages = <RpcString>[];
-
-        // The server.
-        server.requests.listen((request) async {
-          serverMessages.add(request);
-
-          if (request.value.startsWith('ping')) {
-            await server.send('pong'.rpc);
-          } else {
-            await server.send('echo: $request'.rpc);
-          }
-        });
 
         // The client.
         client.responses.listen((message) {
@@ -299,6 +300,8 @@ void main() {
           methodName: 'Process',
           requestCodec: serializer,
           responseCodec: serializer,
+          handler: (requests) =>
+              requests.map((request) => 'processed: $request'.rpc),
         );
 
         // IMPORTANT: bind the server to the message stream for streamId = 1.
@@ -315,10 +318,6 @@ void main() {
         );
 
         final receivedResponses = <RpcString>[];
-
-        server.requests.listen((request) async {
-          await server.send('processed: $request'.rpc);
-        });
 
         client.responses.listen((message) {
           if (!message.isMetadataOnly && message.payload != null) {
