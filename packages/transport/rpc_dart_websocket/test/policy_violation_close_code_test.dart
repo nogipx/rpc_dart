@@ -111,6 +111,7 @@ Future<int?> _closeCodeFor(int port, Uint8List bytes) async {
       if (!done.isCompleted) done.complete();
     },
   );
+  ws.add(RpcChannelFrame.preface);
   ws.add(bytes);
   await done.future.timeout(
     const Duration(seconds: 10),
@@ -200,6 +201,7 @@ void main() {
           if (!closed.isCompleted) closed.complete();
         },
       );
+      ws.add(RpcChannelFrame.preface);
       ws.add(valid);
 
       var wasClosed = true;

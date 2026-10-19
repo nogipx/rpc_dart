@@ -90,6 +90,7 @@ Future<_Rig> _serve({required int maxMessageBytes}) async {
 Future<int?> _push(_Rig rig, {required int bytes, int count = 1}) async {
   final socket = await WebSocket.connect('ws://127.0.0.1:${rig.http.port}');
   socket.listen((_) {}, onError: (Object _) {}, onDone: () {});
+  socket.add(RpcChannelFrame.preface);
   for (var i = 0; i < count; i++) {
     if (socket.readyState != WebSocket.open) break;
     socket.add(_framed(bytes));
@@ -140,6 +141,7 @@ void main() {
     final rig = await _serve(maxMessageBytes: 1024 * 1024);
     final socket = await WebSocket.connect('ws://127.0.0.1:${rig.http.port}');
     socket.listen((_) {}, onError: (Object _) {}, onDone: () {});
+    socket.add(RpcChannelFrame.preface);
     socket.add(_framed(8 * 1024 * 1024));
     await Future<void>.delayed(const Duration(milliseconds: 800));
 

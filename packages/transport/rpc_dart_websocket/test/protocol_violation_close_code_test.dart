@@ -122,6 +122,7 @@ void main() {
           ..setUint32(0, 1)
           ..setUint8(4, 0)
           ..setUint32(5, 64 * 1024 * 1024);
+        ws.sink.add(RpcChannelFrame.preface);
         ws.sink.add(header);
         await Future<void>.delayed(const Duration(seconds: 2));
       });

@@ -70,6 +70,7 @@ void main() {
     // Raw peer: no rpc_dart on this side, it only pushes ghost frames. EVEN ids
     // are the server-initiated parity, which a client's own manager never mints.
     http.transform(WebSocketTransformer()).listen((socket) {
+      socket.add(RpcChannelFrame.preface);
       for (var i = 1; i <= ghosts; i++) {
         socket.add(_frame(i * 2, const [0, 0, 0, 0, 0]));
       }
