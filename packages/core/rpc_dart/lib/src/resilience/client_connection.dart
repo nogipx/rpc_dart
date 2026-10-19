@@ -141,7 +141,8 @@ final class _ReconnectingTransportProxy
   /// that throws masks the error that got it there.
   final Set<int> _ownIds = {};
 
-  /// Stream ids the PEER opened on the live transport.
+  /// Stream ids the PEER opened on the live transport and the responder has
+  /// not released yet.
   ///
   /// In peer mode this side answers calls too, on ids the peer chose, and the
   /// peer numbers from the bottom again on every connection. So an answer
@@ -383,7 +384,6 @@ final class _ReconnectingTransportProxy
   }) async {
     final inner = _require();
     if (!_liveHere(streamId)) return;
-    _retirePeerStream(streamId, endStream);
     return inner.sendDirectObject(streamId, object, endStream: endStream);
   }
 
@@ -394,11 +394,13 @@ final class _ReconnectingTransportProxy
     return id;
   }
 
-  /// Retires the id here too, which keeps [_ownIds] tracking outstanding
-  /// calls rather than every call ever made.
+  /// Forwards the release of a stream live on this transport, in either
+  /// direction: the inner transport prunes a stream's state only here. An id
+  /// from a dropped connection is not forwarded, since the new one may have
+  /// handed the same number to another call.
   @override
   bool releaseStreamId(int streamId) {
-    if (!_ownIds.remove(streamId)) return false;
+    if (!_ownIds.remove(streamId) && !_peerIds.remove(streamId)) return false;
     return _inner?.releaseStreamId(streamId) ?? false;
   }
 
@@ -406,12 +408,6 @@ final class _ReconnectingTransportProxy
   Future<bool> resetStream(int streamId, {String? reason}) async {
     if (!_liveHere(streamId)) return false;
     return await _inner?.resetStream(streamId, reason: reason) ?? false;
-  }
-
-  /// Forgets a peer-initiated stream once this side has finished answering
-  /// it, so [_peerIds] does not grow one entry per inbound call.
-  void _retirePeerStream(int streamId, bool endStream) {
-    if (endStream) _peerIds.remove(streamId);
   }
 
   // Optional members ──────────────────────────────────────────────────────
@@ -478,7 +474,6 @@ final class _ReconnectingTransportProxy
     // notice is a sendMetadata with endStream, so a cancel racing a reconnect
     // would otherwise cancel whichever call now holds this id.
     if (!_liveHere(streamId)) return;
-    _retirePeerStream(streamId, endStream);
     return inner.sendMetadata(streamId, metadata, endStream: endStream);
   }
 
@@ -490,7 +485,6 @@ final class _ReconnectingTransportProxy
   }) async {
     final inner = _require();
     if (!_liveHere(streamId)) return;
-    _retirePeerStream(streamId, endStream);
     return inner.sendMessage(streamId, data, endStream: endStream);
   }
 
@@ -509,15 +503,21 @@ final class _ReconnectingTransportProxy
     if (!_msgCtl.isClosed) await _msgCtl.close();
   }
 
+  /// The live transport's health; without one, reconnecting while the
+  /// connect loop runs and unhealthy once it has stopped.
   @override
-  Future<RpcHealthStatus> health() =>
-      _inner?.health() ??
-      Future.value(
-        RpcHealthStatus.unhealthy(
-          component: 'transport',
-          message: 'not connected',
-        ),
-      );
+  Future<RpcHealthStatus> health() {
+    final inner = _inner;
+    if (inner != null) return inner.health();
+    return Future.value(
+      isReconnecting?.call() ?? false
+          ? RpcHealthStatus.reconnecting(component: 'transport')
+          : RpcHealthStatus.unhealthy(
+              component: 'transport',
+              message: 'not connected',
+            ),
+    );
+  }
 
   /// Waits for the outcome of the connection's next attempt, without starting
   /// one: the connection keeps its own backoff, and a caller asking to

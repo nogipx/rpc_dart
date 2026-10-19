@@ -101,11 +101,13 @@ final class SinkPump<T> {
         try {
           await _halfClose();
         } catch (error, stackTrace) {
-          _log.error(
-            '$_what: half-closing failed',
-            error: error,
-            stackTrace: stackTrace,
-          );
+          if (_logFailures) {
+            _log.error(
+              '$_what: half-closing failed',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
       },
       onError: (Object error, StackTrace stackTrace) {

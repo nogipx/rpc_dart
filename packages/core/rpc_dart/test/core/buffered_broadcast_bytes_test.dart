@@ -97,7 +97,15 @@ void main() {
         await done.future.timeout(const Duration(seconds: 5));
 
         expect(seen, hasLength(2), reason: 'the survivors are delivered first');
-        expect(error, isA<RpcStatusException>());
+        expect(
+          error,
+          isA<RpcStatusException>().having(
+            (e) => e.message,
+            'message',
+            contains('maxPendingBytes'),
+          ),
+          reason: 'the error names the bound that dropped the events',
+        );
         expect(ctl.isClosed, isTrue);
       },
     );

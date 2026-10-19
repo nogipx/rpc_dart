@@ -269,6 +269,10 @@ class ConsoleOutput extends LogOutput {
       buf.write('null');
     } else if (value is String) {
       _writeJsonString(buf, value);
+    } else if (value is num && !value.isFinite) {
+      // JSON has no NaN or Infinity; written bare they make the line
+      // unparseable, so they go as their names.
+      _writeJsonString(buf, value);
     } else if (value is num || value is bool) {
       buf.write(value);
     } else if (value is Map) {

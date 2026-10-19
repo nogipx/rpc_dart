@@ -103,6 +103,9 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   bool _overflowed = false;
   int _droppedCount = 0;
 
+  /// The bound the first dropped event exceeded, for the DATA_LOSS message.
+  String _overflowBound = '';
+
   /// The broadcast stream consumers listen to.
   Stream<T> get stream => _controller.stream;
 
@@ -190,11 +193,14 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
     final bytes = item.bytes;
     // EITHER bound. The count alone let 4096 events of up to
     // maxMessageLengthBytes through -- 64 GiB at the defaults.
-    if (_pending.length >= maxPendingEvents ||
-        (bytes > 0 && _pendingBytes + bytes > maxPendingBytes)) {
+    final overCount = _pending.length >= maxPendingEvents;
+    if (overCount || (bytes > 0 && _pendingBytes + bytes > maxPendingBytes)) {
       _droppedCount++;
       if (!_overflowed) {
         _overflowed = true;
+        _overflowBound = overCount
+            ? 'maxPendingEvents ($maxPendingEvents)'
+            : 'maxPendingBytes ($maxPendingBytes)';
         onOverflow?.call();
       }
       return; // bound memory: nobody is draining the queue
@@ -232,9 +238,9 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
       _controller.addError(
         RpcStatusException(
           RpcStatus.dataLoss,
-          'BufferedBroadcastController dropped $dropped event(s): more than '
-          'maxPendingEvents ($maxPendingEvents) buffered before any listener '
-          'attached. The stream is closed; re-establish the connection.',
+          'BufferedBroadcastController dropped $dropped event(s): over '
+          '$_overflowBound buffered with no listener attached. The stream is '
+          'closed; re-establish the connection.',
         ),
       );
       unawaited(close());

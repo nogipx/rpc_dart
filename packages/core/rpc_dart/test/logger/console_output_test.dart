@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -200,6 +201,20 @@ void main() {
       expect(lines, hasLength(1));
       expect(lines.first, contains('"scope":"app"'));
       expect(lines.first, contains('"message":"test"'));
+    });
+
+    test('a non-finite number still makes a JSON line', () {
+      final output = ConsoleOutput(format: ConsoleFormat.json);
+      final event = LogEvent(
+        scope: 'app',
+        level: RpcLogLevel.info,
+        message: 'ratio',
+        data: {'nan': double.nan, 'inf': double.infinity, 'n': 1.5},
+      );
+
+      final lines = capturePrints(() => output.write(event));
+      final decoded = jsonDecode(lines.single) as Map<String, Object?>;
+      expect(decoded['data'], {'nan': 'NaN', 'inf': 'Infinity', 'n': 1.5});
     });
 
     test('span start skipped in json', () {
