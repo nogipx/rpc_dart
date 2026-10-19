@@ -338,6 +338,9 @@ void main() {
 
       final result = reg.fileByFilename('echo.proto')!;
       expect(result, hasLength(1)); // partial set still returned
+      // A client asking again is not a new fact: still one warning.
+      reg.fileByFilename('echo.proto');
+      reg.fileContainingSymbol('echo.v1.EchoService');
 
       final warnings = output.events
           .where((e) => e.level == RpcLogLevel.warning)

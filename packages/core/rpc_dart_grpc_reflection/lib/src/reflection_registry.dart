@@ -209,8 +209,13 @@ class RpcReflectionRegistry {
     }
   }
 
+  /// Missing files already reported. Any reflection client can ask for the
+  /// same file again, so each missing set is a warning once.
+  final Set<String> _reportedMissing = {};
+
   void _warnMissing(String requested, Set<String> missing) {
     final sorted = missing.toList()..sort();
+    if (!_reportedMissing.add(sorted.join(','))) return;
     _log().warning(
       'Reflection response for "$requested" is INCOMPLETE: '
       '${sorted.length} declared dependency file(s) are not registered and '
