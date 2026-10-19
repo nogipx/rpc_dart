@@ -13,11 +13,11 @@ import 'package:isolate_manager/src/isolate_manager_controller/web.dart';
 import 'package:rpc_dart/transport.dart';
 import 'package:web/web.dart';
 
+import 'port_channel.dart';
 import 'web_bridge.dart';
 import 'worker_policy.dart';
 
-typedef RpcIsolateEntrypoint =
-    void Function(IRpcTransport transport, Map<String, dynamic> customParams);
+export 'port_channel.dart' show RpcIsolateEntrypoint;
 
 const bool _kIsWasm = bool.fromEnvironment('dart.tool.dart2wasm');
 const String _defaultWorkerName = 'rpcIsolateWorker';
@@ -57,7 +57,7 @@ abstract interface class RpcIsolateTransport {
     final _ = entrypoint;
 
     // The policy rides on the URL: a Worker has no argument list, and the VM
-    // sibling ships it as args[4]. See kWorkerPolicyQueryParam.
+    // sibling ships it as args[3]. See kWorkerPolicyQueryParam.
     final uri = withWorkerPolicy(_resolveWorkerUri(workerUri), policy);
     final workerOptions = _buildWorkerOptions(debugName);
     final worker = workerOptions == null
@@ -164,19 +164,23 @@ abstract interface class RpcIsolateTransport {
     // frames are allowed to flow.
     final ready = Completer<void>();
     final readySub = controller.onMessage.listen((raw) {
-      final msg = BridgeMessage.fromMap(raw);
-      if (msg != null && msg.type == BridgeType.ready && !ready.isCompleted) {
+      final frame = bridgeFrameOf(raw);
+      if (frame != null &&
+          frame.type == PortFrameType.ready &&
+          !ready.isCompleted) {
         ready.complete();
       }
     });
 
     // Deliver initial parameters to the worker.
     controller.sendIsolate(
-      BridgeMessage(
-        type: BridgeType.init,
-        streamId: 0,
-        payload: customParams ?? const <String, Object?>{},
-      ).toMap(),
+      bridgeMapOf(
+        PortFrame(
+          type: PortFrameType.init,
+          streamId: 0,
+          body: customParams ?? const <String, Object?>{},
+        ),
+      ),
     );
 
     // Wait for the worker responder to be ready. A MISSING ack is tolerated on
@@ -233,12 +237,10 @@ abstract interface class RpcIsolateTransport {
 }
 
 /// Called from inside the worker entrypoint to wire up the RPC transport.
-/// [policy] OVERRIDES what the spawner sent; omit it to inherit.
-///
-/// Inheriting is the fix: this used to default to `const RpcSecurityPolicy()`
-/// with no way for `spawn(policy:)` to reach it, so the host ran at the
-/// caller's limits and the worker at the stock ones, silently. The spawner's
-/// policy now arrives on the worker URL — see [kWorkerPolicyQueryParam].
+/// [policy] OVERRIDES what the spawner sent; null inherits it, so both ends run
+/// at the limits `spawn(policy:)` was given. The spawner's policy arrives on
+/// the worker URL — see [kWorkerPolicyQueryParam]. A worker spawned without
+/// one runs at `const RpcSecurityPolicy()`.
 void runRpcIsolateManagerWorker(
   RpcIsolateEntrypoint entrypoint, {
   RpcSecurityPolicy? policy,
@@ -282,7 +284,7 @@ void runRpcIsolateManagerWorker(
 
   void signalReady() {
     controller.sendResult(
-      BridgeMessage(type: BridgeType.ready, streamId: 0).toMap(),
+      bridgeMapOf(const PortFrame(type: PortFrameType.ready, streamId: 0)),
     );
   }
 
@@ -313,9 +315,11 @@ void runRpcIsolateManagerWorker(
 
   initSub = controller.onIsolateMessage.listen(
     (raw) {
-      final msg = BridgeMessage.fromMap(raw);
-      if (msg != null && msg.type == BridgeType.init && msg.payload is Map) {
-        start((msg.payload as Map).cast<String, dynamic>());
+      final frame = bridgeFrameOf(raw);
+      if (frame != null &&
+          frame.type == PortFrameType.init &&
+          frame.body is Map) {
+        start((frame.body as Map).cast<String, dynamic>());
       }
     },
     // No fallback on onDone: the stream ends only when the channel is gone,

@@ -16,96 +16,53 @@
 /// `isolate_transport_web.dart`, which IMPORTS this. Nothing here is public API.
 library;
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 
-// -- Bridge message format (Map-based, for structured-clone transfer) ---------
-
-/// Frame kinds the host and worker exchange.
-enum BridgeType { init, ready, metadata, data, finish, close }
+import 'port_channel.dart';
 
 /// Wire name to type. The wire name IS the enum name, so renaming a value
 /// changes the protocol.
-final Map<String, BridgeType> _bridgeTypes = BridgeType.values.asNameMap();
+final Map<String, PortFrameType> _frameTypes = PortFrameType.values.asNameMap();
 
-/// One frame, in the Map form structured clone accepts.
-class BridgeMessage {
-  /// What kind of frame this is.
-  final BridgeType type;
+/// [frame] in the Map form structured clone accepts.
+Map<String, Object?> bridgeMapOf(PortFrame frame) => {
+  'type': frame.type.name,
+  'streamId': frame.streamId,
+  if (frame.endStream) 'endStream': true,
+  if (frame.body != null)
+    frame.type == PortFrameType.metadata ? 'metadata' : 'payload': frame.body,
+  if (frame.methodPath != null) 'methodPath': frame.methodPath,
+};
 
-  /// The RPC stream this frame belongs to; 0 is the handshake.
-  final int streamId;
-
-  /// Whether this frame closes its stream.
-  final bool endStream;
-
-  /// Encoded [RpcMetadata], when [type] is [BridgeType.metadata].
-  final Map<String, Object?>? metadata;
-
-  /// The payload, when [type] is [BridgeType.data].
-  final Object? payload;
-
-  /// The method this stream calls, carried on the opening frame.
-  final String? methodPath;
-
-  /// Creates a frame.
-  const BridgeMessage({
-    required this.type,
-    required this.streamId,
-    this.endStream = false,
-    this.metadata,
-    this.payload,
-    this.methodPath,
-  });
-
-  /// The structured-clone form.
-  Map<String, Object?> toMap() => {
-    'type': type.name,
-    'streamId': streamId,
-    if (endStream) 'endStream': true,
-    if (metadata != null) 'metadata': metadata,
-    if (payload != null) 'payload': payload,
-    if (methodPath != null) 'methodPath': methodPath,
-  };
-
-  /// Parses [raw], returning null for anything that is not one of our frames.
-  static BridgeMessage? fromMap(dynamic raw) {
-    if (raw is! Map) return null;
-    final typeRaw = raw['type'];
-    final streamId = asInt(raw['streamId']);
-    if (typeRaw is! String || streamId == null) return null;
-    final type = _bridgeTypes[typeRaw];
-    if (type == null) return null;
-    final metadata = raw['metadata'];
-    return BridgeMessage(
-      type: type,
-      streamId: streamId,
-      endStream: raw['endStream'] == true,
-      metadata: metadata is Map ? metadata.cast<String, Object?>() : null,
-      payload: raw['payload'],
-      methodPath: raw['methodPath'] is String
-          ? raw['methodPath'] as String
-          : null,
-    );
-  }
+/// Parses [raw], returning null for anything that is not one of our frames.
+///
+/// A worker cannot share an object, so a `directObject` frame is not one.
+PortFrame? bridgeFrameOf(Object? raw) {
+  if (raw is! Map) return null;
+  final typeRaw = raw['type'];
+  final streamId = asInt(raw['streamId']);
+  if (typeRaw is! String || streamId == null) return null;
+  final type = _frameTypes[typeRaw];
+  if (type == null || type == PortFrameType.directObject) return null;
+  return PortFrame(
+    type: type,
+    streamId: streamId,
+    endStream: raw['endStream'] == true,
+    body: type == PortFrameType.metadata ? raw['metadata'] : raw['payload'],
+    methodPath: raw['methodPath'] is String
+        ? raw['methodPath'] as String
+        : null,
+  );
 }
 
-// -- Web multiplexed channel --------------------------------------------------
-
-/// [IRpcMultiplexedChannel] backed by isolate_manager controller (web workers).
+/// [PortChannel] over an isolate_manager worker controller.
 ///
-/// Does NOT support zero-copy -- bytes are serialized via structured clone.
+/// Does NOT support zero-copy -- frames cross by structured clone.
 ///
 /// Takes its transmit function as a parameter, so a test supplies a stub and
 /// never needs a Worker.
-class WebMultiplexedChannel implements IRpcMultiplexedChannel {
+final class WebMultiplexedChannel extends PortChannel {
   final void Function(Map<String, Object?> data) _send;
-  final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast(sync: true);
-  late final StreamSubscription<void> _messageSub;
-  bool _closed = false;
-  final void Function()? _onClose;
 
   /// Frames sent before [release], in order; null once released.
   List<Map<String, Object?>>? _held;
@@ -119,41 +76,36 @@ class WebMultiplexedChannel implements IRpcMultiplexedChannel {
   /// in Chrome, the worker's connection credit stayed null: host-to-worker flow
   /// control silently off.
   WebMultiplexedChannel({
-    required Stream<dynamic> messageStream,
+    required super.messageStream,
     required void Function(Map<String, Object?> data) send,
-    void Function()? onClose,
+    super.onClose,
     bool holdUntilReleased = false,
   }) : _send = send,
-       _onClose = onClose,
-       _held = holdUntilReleased ? <Map<String, Object?>>[] : null {
-    _messageSub = messageStream.listen(
-      (raw) {
-        final msg = BridgeMessage.fromMap(raw);
-        if (msg != null) _handleMessage(msg);
-      },
-      onError: (_) {
-        if (!_closed) close();
-      },
-      onDone: () {
-        if (!_closed) close();
-      },
-    );
-  }
+       _held = holdUntilReleased ? <Map<String, Object?>>[] : null;
 
   /// Sends what [holdUntilReleased] kept, in order, and stops holding.
   void release() {
     final held = _held;
     if (held == null) return;
     _held = null;
-    if (_closed) return;
+    if (isClosed) return;
     for (final frame in held) {
       _send(frame);
     }
   }
 
-  void _transmit(Map<String, Object?> frame) {
+  @override
+  bool get supportsZeroCopy => false;
+
+  @override
+  String get unsendable => 'cannot be structured-cloned to the worker';
+
+  /// The close frame skips the hold: the channel is closed by then.
+  @override
+  void post(Object message) {
+    final frame = message as Map<String, Object?>;
     final held = _held;
-    if (held != null) {
+    if (held != null && !isClosed) {
       held.add(frame);
     } else {
       _send(frame);
@@ -161,167 +113,50 @@ class WebMultiplexedChannel implements IRpcMultiplexedChannel {
   }
 
   @override
-  bool get isClosed => _closed;
+  Object encodeFrame(PortFrame frame) => bridgeMapOf(frame);
 
   @override
-  bool get supportsZeroCopy => false;
+  PortFrame? decodeFrame(Object? raw) => bridgeFrameOf(raw);
 
   @override
-  Stream<RpcTransportMessage> get incoming => _incomingCtl.stream;
+  Object encodeBytes(Uint8List bytes) => serializeBytes(bytes);
 
   @override
-  Future<void> send(RpcTransportMessage message) async {
-    if (_closed) return;
+  Uint8List decodeBytes(Object? body) => materializeBytes(body);
 
-    BridgeType type;
-    Map<String, Object?>? metadata;
-    Object? payload;
+  @override
+  Object encodeMetadata(RpcMetadata metadata) => {
+    'headers': metadata.headers
+        .map((header) => {'name': header.name, 'value': header.value})
+        .toList(),
+  };
 
-    if (message.payload != null) {
-      type = BridgeType.data;
-      payload = serializeBytes(message.payload!);
-    } else if (message.metadata != null) {
-      type = BridgeType.metadata;
-      metadata = encodeMetadata(message.metadata!);
-    } else if (message.isEndOfStream) {
-      type = BridgeType.finish;
-    } else {
-      return;
-    }
-
-    try {
-      _transmit(
-        BridgeMessage(
-          type: type,
-          streamId: message.streamId,
-          endStream: message.isEndOfStream,
-          metadata: metadata,
-          payload: payload,
-          methodPath: message.methodPath,
-        ).toMap(),
-      );
-    } catch (error, stack) {
-      // ONE message's problem, not the connection's -- the same rule the VM
-      // sibling states. `postMessage` throws here for one reason: the payload
-      // is not structured-cloneable. A dead worker is SILENT, so a throw is
-      // never how this side learns the peer is gone.
-      //
-      // Closing the channel would kill every other in-flight call over one bad
-      // payload, and swallowing the reason would report it as UNAVAILABLE.
-      Error.throwWithStackTrace(
-        ArgumentError(
-          'Isolate transport: the message on stream ${message.streamId} cannot '
-          'be structured-cloned to the worker. $error',
-        ),
-        stack,
+  @override
+  RpcMetadata decodeMetadata(Object? body) {
+    final headersRaw = body is Map ? body['headers'] : null;
+    if (headersRaw is! List) {
+      // The TYPE, not the payload: this decodes a message that crossed a worker
+      // boundary, and the status reaches a peer where a StateError would be
+      // redacted to INTERNAL.
+      throw RpcStatusException(
+        RpcStatus.invalidArgument,
+        'Invalid metadata headers: expected a list, got '
+        '${headersRaw.runtimeType}',
       );
     }
-  }
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-
-    try {
-      _send(BridgeMessage(type: BridgeType.close, streamId: 0).toMap());
-    } catch (_) {}
-
-    await _messageSub.cancel();
-    if (!_incomingCtl.isClosed) await _incomingCtl.close();
-    _onClose?.call();
-  }
-
-  void _handleMessage(BridgeMessage message) {
-    if (_closed || _incomingCtl.isClosed) return;
-    if (message.streamId < 0) return;
-    // A frame that does not decode is reported on the stream, where the
-    // transport fails the connection. Thrown here, in the data callback, it
-    // was an uncaught zone error: on a worker, the end of the worker.
-    try {
-      _dispatch(message);
-    } catch (error, stackTrace) {
-      if (!_incomingCtl.isClosed) _incomingCtl.addError(error, stackTrace);
-    }
-  }
-
-  void _dispatch(BridgeMessage message) {
-    switch (message.type) {
-      case BridgeType.init:
-      case BridgeType.ready:
-        break;
-      case BridgeType.metadata:
-        // Stream 0 is NOT filtered here, unlike the payload cases below.
-        //
-        // The init/ready/close handshake this bridge reserves stream 0 for uses
-        // distinct types, so a `metadata` frame on stream 0 is never a
-        // handshake message -- it is RpcChannelTransport's CONNECTION-level
-        // flow control. Drop it and the peer looks like one that does not
-        // participate, leaving the connection window off in BOTH directions.
-        _incomingCtl.add(
-          RpcTransportMessage(
-            metadata: decodeMetadata(
-              message.metadata ?? const <String, Object?>{},
+    return RpcMetadata(
+      headersRaw
+          .whereType<Map<Object?, Object?>>()
+          .map(
+            (header) => RpcHeader(
+              header['name']?.toString() ?? '',
+              header['value']?.toString() ?? '',
             ),
-            isEndOfStream: message.endStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-      case BridgeType.data:
-        if (message.streamId == 0) return;
-        _incomingCtl.add(
-          RpcTransportMessage(
-            payload: materializeBytes(message.payload),
-            isEndOfStream: message.endStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-      case BridgeType.finish:
-        if (message.streamId == 0) return;
-        _incomingCtl.add(
-          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
-        );
-      case BridgeType.close:
-        close();
-    }
-  }
-}
-
-// -- Helpers ------------------------------------------------------------------
-
-/// Decodes the metadata a peer sent over the worker boundary.
-RpcMetadata decodeMetadata(Map<String, Object?> raw) {
-  final headersRaw = raw['headers'];
-  if (headersRaw is! List) {
-    // The TYPE, not the payload: this decodes a message that crossed a worker
-    // boundary, and the status now reaches a peer where a StateError was
-    // redacted to INTERNAL.
-    throw RpcStatusException(
-      RpcStatus.invalidArgument,
-      'Invalid metadata headers: expected a list, got '
-      '${headersRaw.runtimeType}',
+          )
+          .toList(),
     );
   }
-  final headers = headersRaw
-      .whereType<Map<Object?, Object?>>()
-      .map(
-        (header) => RpcHeader(
-          header['name']?.toString() ?? '',
-          header['value']?.toString() ?? '',
-        ),
-      )
-      .toList();
-  return RpcMetadata(headers);
 }
-
-/// Encodes metadata into the structured-clone form.
-Map<String, Object?> encodeMetadata(RpcMetadata metadata) => {
-  'headers': metadata.headers
-      .map((header) => {'name': header.name, 'value': header.value})
-      .toList(),
-};
 
 /// Reads an int a structured clone may have widened to `num`.
 int? asInt(Object? value) {

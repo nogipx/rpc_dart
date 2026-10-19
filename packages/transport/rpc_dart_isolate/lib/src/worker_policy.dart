@@ -8,7 +8,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 /// Query parameter carrying the spawner's security policy to a web worker.
 ///
-/// The VM sibling passes `policy.toMap()` as `args[4]` of `Isolate.spawn` and
+/// The VM sibling passes `policy.toMap()` as `args[3]` of `Isolate.spawn` and
 /// the worker rebuilds it with `fromMap`. A `Worker` has no argument list, so
 /// the URL is the one channel it has at construction — and without it the
 /// worker silently ran at `const RpcSecurityPolicy()` while the host ran at the

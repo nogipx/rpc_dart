@@ -2,15 +2,10 @@
 //
 // SPDX-License-Identifier: MIT
 
-// B-31. Round 310 fixed a real defect in the web channel's send: a payload that
-// cannot be structured-cloned closed the WHOLE channel, killing every other
-// in-flight call, and `catch (_)` dropped the reason so the caller saw
-// UNAVAILABLE. The fix was analyser-verified and sibling-verified and had no
-// test, because the class lived in a file that opens with `dart:js_interop`:
-// unimportable on the VM, and needing a real Worker on the web.
-//
-// It lives in `web_bridge.dart` now, which imports no JS library, so a stub
-// `send` reaches the defect with no Worker at all.
+// A payload that cannot be structured-cloned is one call's problem: it must
+// not close the whole channel, killing every other in-flight call, and the
+// caller must hear why rather than UNAVAILABLE. `web_bridge.dart` imports no
+// JS library, so a stub `send` reaches this with no Worker at all.
 //
 // BOTH halves are asserted, because either alone passes on a wrong fix:
 //   - the failing send reports a NAMED error, not a swallowed one;
@@ -21,6 +16,7 @@
 import 'dart:async';
 
 import 'package:rpc_dart/transport.dart';
+import 'package:rpc_dart_isolate/src/port_channel.dart';
 import 'package:rpc_dart_isolate/src/web_bridge.dart';
 import 'package:test/test.dart';
 
@@ -112,11 +108,13 @@ void main() {
 
       await channel.send(_payloadOn(7)).catchError((Object _) {});
       inbound.add(
-        BridgeMessage(
-          type: BridgeType.data,
-          streamId: 9,
-          payload: const [1, 2, 3],
-        ).toMap(),
+        bridgeMapOf(
+          const PortFrame(
+            type: PortFrameType.data,
+            streamId: 9,
+            body: [1, 2, 3],
+          ),
+        ),
       );
       await Future<void>.delayed(Duration.zero);
 
@@ -133,7 +131,9 @@ void main() {
     // GUARD: the peer's close frame still closes it, which is the path that
     // must keep working for a worker that shuts down normally.
     test('GUARD: the peer closing still closes', () async {
-      inbound.add(BridgeMessage(type: BridgeType.close, streamId: 0).toMap());
+      inbound.add(
+        bridgeMapOf(const PortFrame(type: PortFrameType.close, streamId: 0)),
+      );
       await Future<void>.delayed(Duration.zero);
       expect(channel.isClosed, isTrue);
     });

@@ -576,6 +576,12 @@ As landed:
   - One base channel for VM and web, with encode/decode as the only difference.
   - One entrypoint typedef; `policy` non-null with the default on every
     platform.
+  - Done (2026-10-19). `PortChannel` in `port_channel.dart` carries send,
+    dispatch and close; the VM and web channels supply the frame, bytes and
+    metadata encoding. The web wire format is unchanged. `RpcIsolateEntrypoint`
+    is declared once. Owner: `runRpcIsolateManagerWorker`'s `policy` is
+    nullable on every platform instead, because on the web null means
+    "inherit the spawner's policy"; on the VM and the stub it is unused.
 
 ## Sequencing
 

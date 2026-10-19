@@ -14,7 +14,7 @@
 // does not match, and the fallback hands the entrypoint `const {}`.
 //
 // The real init message then arrives at the channel, whose handler treats
-// _BridgeType.init as a no-op. Nothing errors; the params are simply gone.
+// an init frame as a no-op. Nothing errors; the params are simply gone.
 //
 // The existing e2e test already passed `customParams: {'hello': 'worker'}` and
 // never asserted they arrived, which is why this survived — the same shape as

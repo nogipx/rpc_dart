@@ -604,6 +604,12 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
   - Один базовый канал для VM и web, единственное различие — encode/decode.
   - Один typedef точки входа; `policy` не-null со значением по умолчанию на
     каждой платформе.
+  - Сделано (2026-10-19). `PortChannel` в `port_channel.dart` содержит send,
+    dispatch и close; каналы VM и web задают только кодирование кадра, байтов
+    и метаданных. Формат на проводе web не изменился. `RpcIsolateEntrypoint`
+    объявлен один раз. Владелец: `policy` в `runRpcIsolateManagerWorker`
+    вместо этого nullable на всех платформах, потому что на web null значит
+    «унаследовать политику спаунера»; на VM и в stub параметр не используется.
 
 ## Порядок работ
 

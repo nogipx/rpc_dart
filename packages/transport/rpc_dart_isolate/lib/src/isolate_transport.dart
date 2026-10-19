@@ -8,249 +8,80 @@ import 'dart:isolate';
 
 import 'package:rpc_dart/transport.dart';
 
-// -- Internal message format --------------------------------------------------
+import 'port_channel.dart';
 
-enum _IsolateMessageType {
-  init,
-  ready,
-  metadata,
-  data,
-  directObject,
-  finish,
-  close,
-}
-
-class _IsolateMessage {
-  final _IsolateMessageType type;
-  final dynamic data;
-  final bool isEndOfStream;
-  final int streamId;
-  final String? methodPath;
-
-  _IsolateMessage({
-    required this.type,
-    required this.streamId,
-    this.data,
-    this.isEndOfStream = false,
-    this.methodPath,
-  });
-}
+export 'port_channel.dart' show RpcIsolateEntrypoint;
 
 // -- Multiplexed channel over SendPort/ReceivePort ----------------------------
 
 /// Payload size at or above which a frame is sent as [TransferableTypedData].
 ///
-/// Below it a plain `Uint8List` is faster: `fromList` copies while building and adds
-/// a native allocation and a finaliser, which small frames cannot amortise. 256 KiB
-/// is the first measured size at which the transfer wins — `103.71 us` against
-/// `160.67` per round trip, where 128 KiB reads `20.44` against `14.03` the other
-/// way. The band between the two is not measured.
+/// Below it a plain `Uint8List` is faster: `fromList` copies while building and
+/// adds a native allocation and a finaliser, which small frames -- grants and
+/// headers, most of this transport's traffic -- cannot amortise.
 const int _transferableThresholdBytes = 256 * 1024;
 
-/// [IRpcMultiplexedChannel] backed by Dart isolate [SendPort]/[ReceivePort].
+/// [PortChannel] over Dart isolate [SendPort]/[ReceivePort]. A [PortFrame]
+/// crosses as itself.
 ///
 /// Large payloads cross as [TransferableTypedData], small ones as a plain
-/// `Uint8List` — see [_transferableThresholdBytes], which carries the numbers.
-/// Neither is free: the transfer copies once while building, so "bytes cross without
-/// a copy" was never true of this path. Objects do not cross free either --
-/// `SendPort.send` deep-copies everything but deeply-immutable values (measured:
-/// a mutable instance arrives with a different identity, a const list with the
-/// same one). So `supportsZeroCopy` here means "sendDirectObject works", not
-/// "the peer sees the same instance", and every direct object must be SENDABLE.
-/// A message class annotated `@pragma('vm:deeply-immutable')` IS shared for
-/// real; the same class without it is copied.
+/// `Uint8List` -- see [_transferableThresholdBytes]. Neither is free: the
+/// transfer copies once while building. Objects do not cross free either:
+/// `SendPort.send` deep-copies everything but deeply-immutable values. So
+/// `supportsZeroCopy` here means "sendDirectObject works", not "the peer sees
+/// the same instance", and every direct object must be SENDABLE. A message
+/// class annotated `@pragma('vm:deeply-immutable')` IS shared for real; the
+/// same class without it is copied.
 ///
 /// Used internally by [RpcIsolateTransport.spawn] — not for direct use.
-class _IsolateMultiplexedChannel implements IRpcMultiplexedChannel {
+final class _IsolateMultiplexedChannel extends PortChannel {
   final SendPort _sendPort;
-  final StreamController<RpcTransportMessage> _incomingCtl =
-      StreamController<RpcTransportMessage>.broadcast(sync: true);
-  late final StreamSubscription<void> _messageSub;
-  bool _closed = false;
-  final void Function()? _onClose;
 
   _IsolateMultiplexedChannel({
     required SendPort sendPort,
-    required Stream<dynamic> messageStream,
-    void Function()? onClose,
-  }) : _sendPort = sendPort,
-       _onClose = onClose {
-    _messageSub = messageStream.listen(
-      _handleMessage,
-      onDone: () {
-        if (!_closed) close();
-      },
-    );
-  }
-
-  @override
-  bool get isClosed => _closed;
+    required super.messageStream,
+    super.onClose,
+  }) : _sendPort = sendPort;
 
   @override
   bool get supportsZeroCopy => true;
 
   @override
-  Stream<RpcTransportMessage> get incoming => _incomingCtl.stream;
+  String get unsendable => 'cannot cross an isolate boundary';
 
   @override
-  Future<void> send(RpcTransportMessage message) async {
-    if (_closed) return;
+  void post(Object message) => _sendPort.send(message);
 
-    _IsolateMessageType type;
-    dynamic data;
+  @override
+  Object encodeFrame(PortFrame frame) => frame;
 
-    if (message.directPayload != null) {
-      type = _IsolateMessageType.directObject;
-      data = message.directPayload;
-    } else if (message.payload != null) {
-      type = _IsolateMessageType.data;
-      final payload = message.payload!;
-      // BY SIZE. `TransferableTypedData.fromList` copies while building and adds a
-      // native allocation plus a finaliser, which costs more than it saves on the
-      // small frames this transport mostly carries -- grants and headers. Measured
-      // round-trip, us/frame, minimum of three runs each:
-      //
-      //        32 B    TTD   2.71   Uint8List   2.34
-      //      1 KiB     TTD   2.66   Uint8List   2.33
-      //     64 KiB     TTD  11.26   Uint8List   7.87
-      //    128 KiB     TTD  20.44   Uint8List  14.03
-      //    256 KiB     TTD 103.71   Uint8List 160.67
-      //      1 MiB     TTD 383.08   Uint8List 486.63
-      //
-      // So the doc's old flat claim was wrong in both directions. The receive side
-      // already accepts either -- see `_materializeBytes`.
-      data = payload.lengthInBytes >= _transferableThresholdBytes
-          ? TransferableTypedData.fromList([payload])
-          : payload;
-    } else if (message.metadata != null) {
-      type = _IsolateMessageType.metadata;
-      data = message.metadata;
-    } else if (message.isEndOfStream) {
-      // NOT REACHED through `RpcChannelTransport`, which is the only thing that uses
-      // this channel: its own half-close attaches `RpcMetadata([])`, so such a frame
-      // takes the metadata branch above. Kept rather than deleted because the branch
-      // below DROPS whatever falls through, so removing this one would turn a
-      // bare-end-of-stream message -- if anything ever sends one -- into a silent
-      // loss instead of a frame.
-      type = _IsolateMessageType.finish;
-      data = null;
-    } else {
-      return;
-    }
+  @override
+  PortFrame? decodeFrame(Object? raw) => raw is PortFrame ? raw : null;
 
-    try {
-      _sendPort.send(
-        _IsolateMessage(
-          type: type,
-          streamId: message.streamId,
-          data: data,
-          isEndOfStream: message.isEndOfStream,
-          methodPath: message.methodPath,
-        ),
-      );
-    } catch (error, stack) {
-      // SendPort.send throws for exactly one reason: the payload is unsendable.
-      // A dead peer is SILENT -- a closed ReceivePort and a killed isolate both
-      // accept the send and drop it. So this is one message's problem, and
-      // closing the channel here would make it the whole connection's, killing
-      // every other in-flight call over one bad payload.
-      Error.throwWithStackTrace(
-        ArgumentError(
-          'Isolate transport: the message on stream ${message.streamId} cannot '
-          'cross an isolate boundary. $error',
-        ),
-        stack,
-      );
-    }
+  @override
+  Object encodeBytes(Uint8List bytes) =>
+      bytes.lengthInBytes >= _transferableThresholdBytes
+      ? TransferableTypedData.fromList([bytes])
+      : bytes;
+
+  @override
+  Uint8List decodeBytes(Object? body) {
+    if (body is TransferableTypedData) return body.materialize().asUint8List();
+    if (body is Uint8List) return body;
+    throw RpcStatusException(
+      RpcStatus.invalidArgument,
+      'Unsupported data type for isolate message payload: ${body.runtimeType}',
+    );
   }
 
   @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
+  Object encodeMetadata(RpcMetadata metadata) => metadata;
 
-    try {
-      _sendPort.send(
-        _IsolateMessage(type: _IsolateMessageType.close, streamId: 0),
-      );
-    } catch (_) {}
-
-    await _messageSub.cancel();
-    if (!_incomingCtl.isClosed) await _incomingCtl.close();
-    _onClose?.call();
-  }
-
-  void _handleMessage(dynamic message) {
-    if (message is! _IsolateMessage || _closed || _incomingCtl.isClosed) return;
-    if (message.streamId < 0) return;
-    // A frame that does not decode is reported on the stream, where the
-    // transport fails the connection. Thrown here, in the data callback, it
-    // was an uncaught zone error -- fatal to an isolate spawned with
-    // errorsAreFatal.
-    try {
-      _dispatch(message);
-    } catch (error, stackTrace) {
-      if (!_incomingCtl.isClosed) _incomingCtl.addError(error, stackTrace);
-    }
-  }
-
-  void _dispatch(_IsolateMessage message) {
-    switch (message.type) {
-      case _IsolateMessageType.metadata:
-        // Stream 0 is NOT filtered here, unlike the payload cases below.
-        //
-        // The init/ready/close handshake this transport reserves stream 0 for
-        // uses distinct enum types, so a `metadata` frame on stream 0 is never
-        // a handshake message -- it is RpcChannelTransport's CONNECTION-level
-        // flow control (x-rpc-conn-window-update). Drop it and the peer looks
-        // like one that does not participate in flow control, leaving the
-        // connection window off in BOTH directions.
-        _incomingCtl.add(
-          RpcTransportMessage(
-            metadata: message.data as RpcMetadata,
-            isEndOfStream: message.isEndOfStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-      case _IsolateMessageType.data:
-        if (message.streamId == 0) return;
-        _incomingCtl.add(
-          RpcTransportMessage(
-            payload: _materializeBytes(message.data),
-            isEndOfStream: message.isEndOfStream,
-            streamId: message.streamId,
-            methodPath: message.methodPath,
-          ),
-        );
-      case _IsolateMessageType.directObject:
-        if (message.streamId == 0) return;
-        _incomingCtl.add(
-          RpcTransportMessage(
-            streamId: message.streamId,
-            isEndOfStream: message.isEndOfStream,
-            directPayload: message.data,
-          ),
-        );
-      case _IsolateMessageType.finish:
-        if (message.streamId == 0) return;
-        _incomingCtl.add(
-          RpcTransportMessage(isEndOfStream: true, streamId: message.streamId),
-        );
-      case _IsolateMessageType.close:
-        close();
-      case _IsolateMessageType.init:
-      case _IsolateMessageType.ready:
-        // Handshake-level control messages: consumed during spawn(), not data.
-        break;
-    }
-  }
+  @override
+  RpcMetadata decodeMetadata(Object? body) => body as RpcMetadata;
 }
 
 // -- Public API ---------------------------------------------------------------
-
-typedef RpcIsolateEntrypoint =
-    void Function(IRpcTransport transport, Map<String, dynamic> customParams);
 
 /// Factory for spawning an isolate with an [IRpcTransport] on each side.
 ///
@@ -294,8 +125,8 @@ abstract interface class RpcIsolateTransport {
         (message) {
           if (messageController.isClosed) return;
 
-          if (message is _IsolateMessage &&
-              message.type == _IsolateMessageType.close &&
+          if (message is PortFrame &&
+              message.type == PortFrameType.close &&
               message.streamId == 0) {
             messageController.add(message);
             receivePort.close();
@@ -317,12 +148,12 @@ abstract interface class RpcIsolateTransport {
           final initMessage =
               await messageController.stream.firstWhere(
                     (message) =>
-                        message is _IsolateMessage &&
-                        message.type == _IsolateMessageType.init,
+                        message is PortFrame &&
+                        message.type == PortFrameType.init,
                   )
-                  as _IsolateMessage;
+                  as PortFrame;
 
-          final mainHostSendPort = initMessage.data as SendPort;
+          final mainHostSendPort = initMessage.body as SendPort;
 
           final channel = _IsolateMultiplexedChannel(
             sendPort: mainHostSendPort,
@@ -345,7 +176,7 @@ abstract interface class RpcIsolateTransport {
           // startup makes spawn() throw (via onError/onExit) instead of
           // returning a silently-dead transport.
           mainHostSendPort.send(
-            _IsolateMessage(type: _IsolateMessageType.ready, streamId: 0),
+            const PortFrame(type: PortFrameType.ready, streamId: 0),
           );
         } catch (error, stack) {
           // Do not swallow worker-startup failures: rethrow so the isolate
@@ -507,18 +338,18 @@ abstract interface class RpcIsolateTransport {
     final hostReceivePort = ReceivePort();
 
     workerSendPort.send(
-      _IsolateMessage(
-        type: _IsolateMessageType.init,
+      PortFrame(
+        type: PortFrameType.init,
         streamId: 0,
-        data: hostReceivePort.sendPort,
+        body: hostReceivePort.sendPort,
       ),
     );
 
     final messageController = StreamController<dynamic>.broadcast();
     hostReceivePort.listen(
       (message) {
-        if (message is _IsolateMessage &&
-            message.type == _IsolateMessageType.ready &&
+        if (message is PortFrame &&
+            message.type == PortFrameType.ready &&
             message.streamId == 0) {
           if (!ready.isCompleted) ready.complete();
           return;
@@ -526,8 +357,8 @@ abstract interface class RpcIsolateTransport {
 
         if (messageController.isClosed) return;
 
-        if (message is _IsolateMessage &&
-            message.type == _IsolateMessageType.close &&
+        if (message is PortFrame &&
+            message.type == PortFrameType.close &&
             message.streamId == 0) {
           messageController.add(message);
           hostReceivePort.close();
@@ -653,26 +484,11 @@ abstract interface class RpcIsolateTransport {
   }
 }
 
-// -- Helpers ------------------------------------------------------------------
-
-Uint8List _materializeBytes(dynamic data) {
-  if (data is TransferableTypedData) {
-    return data.materialize().asUint8List();
-  }
-  if (data is Uint8List) {
-    return data;
-  }
-  throw RpcStatusException(
-    RpcStatus.invalidArgument,
-    'Unsupported data type for isolate message payload: ${data.runtimeType}',
-  );
-}
-
 /// No-op on the VM: there is no worker scope to wire up.
 ///
 /// Exists so the signature matches `isolate_transport_web.dart`, where it is
 /// the real entry point a Worker calls.
 void runRpcIsolateManagerWorker(
   RpcIsolateEntrypoint entrypoint, {
-  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  RpcSecurityPolicy? policy,
 }) {}

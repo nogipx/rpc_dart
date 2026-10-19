@@ -4,8 +4,9 @@
 
 import 'package:rpc_dart/transport.dart';
 
-typedef RpcIsolateEntrypoint =
-    void Function(IRpcTransport transport, Map<String, dynamic> customParams);
+import 'port_channel.dart';
+
+export 'port_channel.dart' show RpcIsolateEntrypoint;
 
 /// Fallback for a platform with NEITHER `dart:isolate` NOR `dart:js_interop`.
 ///
@@ -33,5 +34,5 @@ abstract interface class RpcIsolateTransport {
 
 void runRpcIsolateManagerWorker(
   RpcIsolateEntrypoint entrypoint, {
-  RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+  RpcSecurityPolicy? policy,
 }) {}
