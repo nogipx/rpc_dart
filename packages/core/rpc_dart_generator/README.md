@@ -177,7 +177,9 @@ class CalculatorContractCodecs {
 the codec references. `String`, `int`, `double`, `bool` and
 `Map<String, dynamic>` get a CBOR `RpcBinaryCodec` instead. A codec type given
 in `@RpcMethod(requestCodec: ..., responseCodec: ...)` is instantiated with its
-`const` constructor in place of the default.
+`const` constructor and belongs to that method alone: it gets a constant of its
+own, `requestOf<Method>` / `responseOf<Method>` (e.g. `responseOfPatches`), and
+another method with the same type keeps the default codec.
 
 ### `CalculatorContractCaller`
 
@@ -468,8 +470,10 @@ this setup end to end.
 
 ## gRPC Server Reflection
 
-With `@RpcService(grpcDescriptor: true)` the `Names` class gets a
-`FileDescriptorProto` that describes the service:
+With `@RpcService(grpcDescriptor: true)` the `Names` class gets a proto3
+`FileDescriptorProto` that describes the service, built with
+`rpc_dart_grpc_reflection`'s `RpcFileDescriptorBuilder` at generation time
+(generated code does not import that package):
 
 ```dart
 class CalculatorContractNames {

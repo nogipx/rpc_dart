@@ -535,6 +535,11 @@ As landed:
   - The copied writer goes; the descriptor gains `syntax = "proto3"`.
   - Codec overrides are per METHOD (constants keyed by method). Generated
     output changes, so users regenerate.
+  - Done (2026-10-19). An override is `requestOf<Method>` /
+    `responseOf<Method>`; types keep `codec<Type>`. P7: one codec-argument
+    helper and one registration emitter instead of two each, the dead
+    `_MethodMeta.kind` gone. `@RpcService(description:)` is parsed and never
+    emitted; left as found.
 - **Framework (D11, P2, P3, P4, P9).**
   - Health aggregates typed `RpcHealthStatus` and `endpoint.health()`; maps only
     in `toJson`.
@@ -604,7 +609,7 @@ Breaking changes are allowed throughout: this is a major release.
 | `RpcBool` / `RpcString` returning a default on bad input | `FormatException` |
 | `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
 | `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
-| a per-method codec override applied to every method with the same type | applied to its own method only; regenerate |
+| a per-method codec override applied to every method with the same type | applied to its own method only, as `<Base>Codecs.requestOf<Method>` / `responseOf<Method>`; regenerate |
 | `RpcConnectionLogger` | `LogScope` |
 | `logger:` on `RpcCallerEndpoint`, `RpcResponderEndpoint`, `RpcPeerEndpoint` | `logController:` |
 | `RpcConnectionHost(endpointLogger:)` | `logController:` |

@@ -10,12 +10,9 @@ import 'package:build_test/build_test.dart';
 import 'package:package_config/package_config.dart';
 import 'package:path/path.dart' as p;
 import 'package:rpc_dart_generator/builder.dart';
-// The reflection package owns the canonical proto wire writer/parser. These
-// tests validate that the descriptor bytes this generator emits are accepted
-// by the reflection server that serves them (proving the two byte-identical
-// proto writers stay in lockstep).
+// The descriptor bytes this generator emits must parse in the reflection
+// server that serves them.
 import 'package:rpc_dart_grpc_reflection/src/proto_parser.dart';
-import 'package:rpc_dart_grpc_reflection/src/proto_writer.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -102,6 +99,8 @@ class Item implements IRpcSerializable {
         expect(_messageHasFieldType(descriptor, 'Item', 9), isTrue);
         // And the explicit numbers must be present (7 for Query.term).
         expect(_messageHasFieldNumber(descriptor, 'Query', 7), isTrue);
+        // Without `syntax` (field 12) a descriptor reads as proto2.
+        expect(_readStringSubField(descriptor, 12), 'proto3');
       },
     );
 
@@ -317,50 +316,6 @@ class Order implements IRpcSerializable {
         expect(inputTypeName, '.shop.v1.Query');
       },
     );
-  });
-
-  group('proto writer parity (generator <-> reflection)', () {
-    // The generator uses a byte-identical private copy of reflection's
-    // ProtoWriter. We cannot import the private copy, but we can assert that
-    // reflection's writer produces the golden bytes the generator side is
-    // pinned to — both pin the same goldens in their respective parity tests.
-    test('reflection ProtoWriter produces the pinned golden bytes', () {
-      final w = ProtoWriter();
-      w.writeString(1, 'Msg');
-      w.writeInt32(3, 1);
-      w.writeInt32(4, 1);
-      w.writeInt32(5, 14);
-      w.writeString(6, '.foo.Status');
-      expect(
-        w.toBytes(),
-        Uint8List.fromList([
-          10,
-          3,
-          77,
-          115,
-          103,
-          24,
-          1,
-          32,
-          1,
-          40,
-          14,
-          50,
-          11,
-          46,
-          102,
-          111,
-          111,
-          46,
-          83,
-          116,
-          97,
-          116,
-          117,
-          115,
-        ]),
-      );
-    });
   });
 }
 

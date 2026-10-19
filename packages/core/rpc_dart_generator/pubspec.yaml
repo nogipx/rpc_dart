@@ -26,6 +26,9 @@ dependencies:
   pub_semver: ^2.2.0
   source_gen: ^4.2.0
   rpc_dart: '>=6.0.0 <7.0.0'
+  # Builds the gRPC file descriptors the generated code embeds. A generator
+  # dependency only: generated code does not import it.
+  rpc_dart_grpc_reflection: ^0.3.0
 
 dev_dependencies:
   build_runner: ^2.11.1
@@ -35,7 +38,3 @@ dev_dependencies:
   package_config: ^2.2.0
   path: ^1.9.1
   test: ^1.29.0
-  # Test-only: validates that the descriptor bytes emitted by this generator
-  # are parseable by the reflection server that serves them, and that the two
-  # byte-identical proto writers agree. Not a runtime dependency.
-  rpc_dart_grpc_reflection: ^0.3.0

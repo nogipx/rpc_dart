@@ -72,7 +72,7 @@ class Foo implements IRpcSerializable {
       },
     );
 
-    test('generates custom method codec overrides', () async {
+    test('a codec override belongs to its own method', () async {
       final packageConfig = await _loadPackageConfig();
       final readerWriter = TestReaderWriter(rootPackage: 'rpc_dart_generator');
       await readerWriter.testing.loadIsolateSources();
@@ -93,6 +93,10 @@ abstract class IRender {
     responseCodec: CustomPatchCodec,
   )
   Stream<CustomPatch> patches(PodStreamRequest request);
+
+  // Same response type, no override: it must keep the default codec.
+  @RpcMethod(name: 'latest')
+  Future<CustomPatch> latest(PodStreamRequest request);
 }
 
 class PodStreamRequest implements IRpcSerializable {
@@ -104,8 +108,12 @@ class PodStreamRequest implements IRpcSerializable {
 }
 
 class CustomPatch implements IRpcSerializable {
+  CustomPatch();
+
   @override
   Map<String, dynamic> toJson() => const {};
+
+  factory CustomPatch.fromJson(Map<String, dynamic> _) => CustomPatch();
 }
 
 class CustomPatchCodec implements IRpcCodec<CustomPatch> {
@@ -129,7 +137,12 @@ class CustomPatchCodec implements IRpcCodec<CustomPatch> {
           'rpc_dart_generator|lib/custom_codec.rpc_dart.g.part': decodedMatches(
             allOf([
               contains('class RenderCodecs'),
-              contains('static const codecCustomPatch = CustomPatchCodec();'),
+              contains('static const responseOfPatches = CustomPatchCodec();'),
+              contains(
+                'static const codecCustomPatch = '
+                'RpcCodec<CustomPatch>(CustomPatch.fromJson);',
+              ),
+              contains('responseCodec: RenderCodecs.responseOfPatches'),
               contains('responseCodec: RenderCodecs.codecCustomPatch'),
               contains('requestCodec: RenderCodecs.codecPodStreamRequest'),
             ]),

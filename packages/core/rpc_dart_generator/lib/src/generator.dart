@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:analyzer/dart/element/element.dart';
@@ -22,6 +21,14 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcRemoved,
         RpcService,
         RpcServiceKind;
+import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart'
+    show
+        RpcFieldDescriptor,
+        RpcFieldLabel,
+        RpcFieldType,
+        RpcFileDescriptorBuilder,
+        RpcMessageDescriptor,
+        RpcMethodDescriptor;
 import 'package:source_gen/source_gen.dart';
 
 import '../rpc_dart_generator.dart' show RpcProtoField;
@@ -206,7 +213,6 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     return _MethodMeta(
       methodName: name,
       declarationName: method.displayName,
-      kind: kind,
       description: reader.peek('description')?.literalValue as String?,
       signature: signature,
       requestCodecType: requestCodecType,
@@ -321,11 +327,6 @@ class _Emitter {
 
   String get _baseName => _baseNameForClass(classElement);
 
-  bool _shouldUseCodec(_MethodMeta meta, RpcDataTransferMode effectiveMode) {
-    final methodMode = meta.transferMode ?? effectiveMode;
-    return methodMode != RpcDataTransferMode.zeroCopy;
-  }
-
   String build() {
     final buffer = StringBuffer();
     buffer.writeln("// ignore_for_file: type=lint, unused_element");
@@ -334,9 +335,7 @@ class _Emitter {
     buffer.writeln(_buildNames());
     buffer.writeln();
 
-    final needsCodecs = methods.any(
-      (m) => _shouldUseCodec(m, service.transferMode),
-    );
+    final needsCodecs = methods.any((m) => _usesCodec(m, service.transferMode));
     if (needsCodecs) {
       buffer.writeln(_buildCodecs());
       buffer.writeln();
@@ -399,41 +398,35 @@ class _Emitter {
     b.writeln('class $className {');
     b.writeln('  const $className._();');
 
-    // Collect unique types with their codecs. The map is keyed by the codec
-    // identifier (which incorporates the declaring library), so two distinct
-    // types that share a simple name (e.g. `a.Foo` and `b.Foo`) get distinct
-    // codec constants instead of one silently overwriting the other.
+    // Keyed by constant name (see [_codecConstant]): one constant per type for
+    // the default codecs, one per method side for an override, so an override
+    // never reaches another method that uses the same type.
     final codecMap = <String, _CodecInfo>{};
 
+    void collect(_MethodMeta method, {required bool isResponse}) {
+      final type = isResponse
+          ? method.signature.responseType
+          : method.signature.requestType;
+      codecMap.putIfAbsent(
+        _codecConstant(
+          method,
+          isResponse: isResponse,
+          ambiguous: _ambiguousCodecs,
+        ),
+        () => _CodecInfo(
+          typeName: type.getDisplayString(),
+          type: type,
+          customCodecType: isResponse
+              ? method.responseCodecType
+              : method.requestCodecType,
+        ),
+      );
+    }
+
     for (final method in methods) {
-      final effectiveMode = method.transferMode ?? service.transferMode;
-      if (!_shouldUseCodec(method, effectiveMode)) {
-        continue;
-      }
-
-      final requestType = method.signature.requestType;
-      final responseType = method.signature.responseType;
-
-      final requestKey = _codecIdentifier(requestType, _ambiguousCodecs);
-      final responseKey = _codecIdentifier(responseType, _ambiguousCodecs);
-
-      // Add request codec if not already present.
-      if (!codecMap.containsKey(requestKey)) {
-        codecMap[requestKey] = _CodecInfo(
-          typeName: requestType.getDisplayString(),
-          type: requestType,
-          customCodecType: method.requestCodecType,
-        );
-      }
-
-      // Add response codec if not already present.
-      if (!codecMap.containsKey(responseKey)) {
-        codecMap[responseKey] = _CodecInfo(
-          typeName: responseType.getDisplayString(),
-          type: responseType,
-          customCodecType: method.responseCodecType,
-        );
-      }
+      if (!_usesCodec(method, service.transferMode)) continue;
+      collect(method, isResponse: false);
+      collect(method, isResponse: true);
     }
 
     // Generate constants in alphabetical order for stability.
@@ -614,7 +607,7 @@ class _Emitter {
     b.writeln('  void setup() {');
     for (final method in methods) {
       b.writeln(
-        '    ${method.signature.peerRegistration(method, service.transferMode, _ambiguousCodecs)};',
+        '    ${method.signature.registration(method, _peerHandlerName(method.declarationName), service.transferMode, _ambiguousCodecs)};',
       );
     }
     b.writeln('  }');
@@ -712,7 +705,7 @@ class _Emitter {
     b.writeln('  void setup() {');
     for (final method in methods) {
       b.writeln(
-        '    ${method.signature.addRegistration(method, service.transferMode, _ambiguousCodecs)};',
+        '    ${method.signature.registration(method, method.declarationName, service.transferMode, _ambiguousCodecs)};',
       );
     }
     b.writeln('  }');
@@ -722,7 +715,7 @@ class _Emitter {
     if (isVersioned) {
       b.writeln();
       for (final method in methods) {
-        b.writeln(method.signature.abstractMethodDecl(method));
+        b.writeln(method.signature.abstractMethodDecl());
       }
     }
 
@@ -1016,7 +1009,7 @@ class _Signature {
   final bool isRequestStream;
   final bool isResponseStream;
 
-  String abstractMethodDecl(_MethodMeta meta) {
+  String abstractMethodDecl() {
     final returnType = element.returnType.getDisplayString();
     final requestTypeStr = requestType.getDisplayString();
     return '  $returnType ${element.name}(${_buildParam(requestTypeStr)});';
@@ -1034,54 +1027,43 @@ class _Signature {
     return '  $returnType $handlerName($param);';
   }
 
-  /// `addXxxMethod(..., handler: onXxx, ...)` — registration in peer setup().
-  String peerRegistration(
+  /// `addXxxMethod(..., handler: [handlerName], ...)` — one registration in
+  /// `setup()`: the method itself in a responder, `onXxx` in a peer.
+  String registration(
     _MethodMeta meta,
+    String handlerName,
     RpcDataTransferMode serviceMode,
     Set<String> ambiguousCodecs,
   ) {
     final requestTypeStr = requestType.getDisplayString();
     final responseTypeStr = responseType.getDisplayString();
-    final handlerName = _peerHandlerName(meta.declarationName);
     final description = meta.description == null
         ? ''
-        : "description: '${_escape(meta.description!)}', ";
+        : "description: '${_escapeString(meta.description!)}', ";
 
-    final effectiveMode = meta.transferMode ?? serviceMode;
-    final useCodec = _shouldUseCodec(meta, effectiveMode);
-
-    final requestCodec = _codecString(
+    final useCodec = _usesCodec(meta, serviceMode);
+    final requestCodec = _codecArg(
+      'requestCodec',
+      meta,
       isResponse: false,
-      useDefault: useCodec,
-      providedCodecType: meta.requestCodecType,
-      targetType: requestType,
-      methodDeclarationName: meta.declarationName,
+      useCodec: useCodec,
       ambiguousCodecs: ambiguousCodecs,
     );
-    final responseCodec = _codecString(
+    final responseCodec = _codecArg(
+      'responseCodec',
+      meta,
       isResponse: true,
-      useDefault: useCodec,
-      providedCodecType: meta.responseCodecType,
-      targetType: responseType,
-      methodDeclarationName: meta.declarationName,
+      useCodec: useCodec,
       ambiguousCodecs: ambiguousCodecs,
     );
 
-    switch (kind) {
-      case RpcMethodType.unary:
-        return 'addUnaryMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-      case RpcMethodType.serverStream:
-        return 'addServerStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-      case RpcMethodType.clientStream:
-        return 'addClientStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-      case RpcMethodType.bidirectionalStream:
-        return 'addBidirectionalMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-    }
-  }
-
-  static String _peerHandlerName(String declarationName) {
-    if (declarationName.isEmpty) return 'onHandle';
-    return 'on${declarationName[0].toUpperCase()}${declarationName.substring(1)}';
+    final add = switch (kind) {
+      RpcMethodType.unary => 'addUnaryMethod',
+      RpcMethodType.serverStream => 'addServerStreamMethod',
+      RpcMethodType.clientStream => 'addClientStreamMethod',
+      RpcMethodType.bidirectionalStream => 'addBidirectionalMethod',
+    };
+    return '$add<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
   }
 
   String callerMethodImpl(
@@ -1123,22 +1105,18 @@ class _Signature {
   ) {
     final contextArg = hasContext ? ', context: context' : '';
     final requestVar = isRequestStream ? 'requests' : 'request';
-    final effectiveMode = meta.transferMode ?? serviceMode;
-    final useCodec = _shouldUseCodec(meta, effectiveMode);
-
+    final useCodec = _usesCodec(meta, serviceMode);
     final requestCodec = _codecArg(
-      label: 'requestCodec',
+      'requestCodec',
+      meta,
       isResponse: false,
-      meta: meta,
-      targetType: requestType,
       useCodec: useCodec,
       ambiguousCodecs: ambiguousCodecs,
     );
     final responseCodec = _codecArg(
-      label: 'responseCodec',
+      'responseCodec',
+      meta,
       isResponse: true,
-      meta: meta,
-      targetType: responseType,
       useCodec: useCodec,
       ambiguousCodecs: ambiguousCodecs,
     );
@@ -1169,84 +1147,22 @@ class _Signature {
     }
   }
 
-  String addRegistration(
-    _MethodMeta meta,
-    RpcDataTransferMode serviceMode,
-    Set<String> ambiguousCodecs,
-  ) {
-    final requestTypeStr = requestType.getDisplayString();
-    final responseTypeStr = responseType.getDisplayString();
-    final description = meta.description == null
-        ? ''
-        : "description: '${_escape(meta.description!)}', ";
-
-    final effectiveMode = meta.transferMode ?? serviceMode;
-    final useCodec = _shouldUseCodec(meta, effectiveMode);
-
-    final requestCodec = _codecString(
-      isResponse: false,
-      useDefault: useCodec,
-      providedCodecType: meta.requestCodecType,
-      targetType: requestType,
-      methodDeclarationName: meta.declarationName,
-      ambiguousCodecs: ambiguousCodecs,
-    );
-    final responseCodec = _codecString(
-      isResponse: true,
-      useDefault: useCodec,
-      providedCodecType: meta.responseCodecType,
-      targetType: responseType,
-      methodDeclarationName: meta.declarationName,
-      ambiguousCodecs: ambiguousCodecs,
-    );
-
-    switch (kind) {
-      case RpcMethodType.unary:
-        return "addUnaryMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-      case RpcMethodType.serverStream:
-        return "addServerStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-      case RpcMethodType.clientStream:
-        return "addClientStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-      case RpcMethodType.bidirectionalStream:
-        return "addBidirectionalMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-    }
-  }
-
-  bool _shouldUseCodec(_MethodMeta meta, RpcDataTransferMode effectiveMode) {
-    if (effectiveMode == RpcDataTransferMode.zeroCopy) return false;
-    if (meta.requestCodecType != null || meta.responseCodecType != null) {
-      return true;
-    }
-    // transferMode auto/codec — use default RpcCodec
-    return true;
-  }
-
-  String _codecString({
+  /// `label: <Base>Codecs.<constant>, `, or nothing without codecs.
+  String _codecArg(
+    String label,
+    _MethodMeta meta, {
     required bool isResponse,
-    required bool useDefault,
-    required DartType? providedCodecType,
-    required DartType targetType,
-    required String methodDeclarationName,
-    required Set<String> ambiguousCodecs,
-  }) {
-    final label = isResponse ? 'responseCodec' : 'requestCodec';
-    if (!useDefault) return '';
-    return '$label: ${baseName}Codecs.${_codecIdentifier(targetType, ambiguousCodecs)}, ';
-  }
-
-  String _codecArg({
-    required String label,
-    required bool isResponse,
-    required _MethodMeta meta,
-    required DartType targetType,
     required bool useCodec,
     required Set<String> ambiguousCodecs,
   }) {
     if (!useCodec) return '';
-    return '$label: ${baseName}Codecs.${_codecIdentifier(targetType, ambiguousCodecs)}, ';
+    final constant = _codecConstant(
+      meta,
+      isResponse: isResponse,
+      ambiguous: ambiguousCodecs,
+    );
+    return '$label: ${baseName}Codecs.$constant, ';
   }
-
-  String _escape(String value) => _escapeString(value);
 }
 
 class _ServiceMeta {
@@ -1269,7 +1185,6 @@ class _MethodMeta {
   _MethodMeta({
     required this.methodName,
     required this.declarationName,
-    required this.kind,
     required this.signature,
     this.description,
     this.requestCodecType,
@@ -1279,7 +1194,6 @@ class _MethodMeta {
 
   final String methodName;
   final String declarationName;
-  final RpcMethodType kind;
   final _Signature signature;
   final String? description;
   final DartType? requestCodecType;
@@ -1352,7 +1266,6 @@ class _GrpcDescriptorBuilder {
 
   Uint8List? _buildBytes() {
     final lastDot = service.name.lastIndexOf('.');
-    final package = _package;
     final serviceName = lastDot >= 0
         ? service.name.substring(lastDot + 1)
         : service.name;
@@ -1370,26 +1283,36 @@ class _GrpcDescriptorBuilder {
     }
     if (messageTypes.isEmpty) return null;
 
-    final messageBytesList = <Uint8List>[];
+    final file = RpcFileDescriptorBuilder(
+      name: '${service.name.replaceAll('.', '_')}.proto',
+      package: _package,
+    );
     for (final entry in messageTypes.entries) {
-      final bytes = _buildMessageDescriptor(entry.key, entry.value);
-      if (bytes == null) return null;
-      messageBytesList.add(bytes);
+      final message = _messageDescriptor(entry.key, entry.value);
+      if (message == null) return null;
+      file.addMessage(message);
     }
-
-    final serviceBytes = _buildServiceDescriptor(serviceName);
-
-    final w = _ProtoWriter();
-    w.writeString(1, '${service.name.replaceAll('.', '_')}.proto');
-    w.writeString(2, package);
-    for (final msg in messageBytesList) {
-      w.writeBytes(4, msg);
-    }
-    w.writeBytes(6, serviceBytes);
-    return w.toBytes();
+    file.addService(
+      name: serviceName,
+      methods: [
+        for (final method in methods)
+          RpcMethodDescriptor(
+            name: method.methodName,
+            inputType: _qualifiedTypeName(
+              _typeName(method.signature.requestType),
+            ),
+            outputType: _qualifiedTypeName(
+              _typeName(method.signature.responseType),
+            ),
+            clientStreaming: method.signature.isRequestStream,
+            serverStreaming: method.signature.isResponseStream,
+          ),
+      ],
+    );
+    return file.build();
   }
 
-  Uint8List? _buildMessageDescriptor(String name, DartType type) {
+  RpcMessageDescriptor? _messageDescriptor(String name, DartType type) {
     if (type is! InterfaceType) return null;
     // A bare primitive is not a message. Described as a wrapper with one
     // `value` field, the shape of google.protobuf.StringValue and its
@@ -1399,12 +1322,9 @@ class _GrpcDescriptorBuilder {
         type.isDartCoreInt ||
         type.isDartCoreDouble ||
         type.isDartCoreBool) {
-      final field = _buildFieldDescriptor('value', 1, type);
+      final field = _fieldDescriptor('value', 1, type);
       if (field == null) return null;
-      final w = _ProtoWriter();
-      w.writeString(1, name);
-      w.writeBytes(2, field);
-      return w.toBytes();
+      return RpcMessageDescriptor(name: name, fields: [field]);
     }
     final fields = _messageFields(type);
     if (fields.isEmpty) return null;
@@ -1416,8 +1336,7 @@ class _GrpcDescriptorBuilder {
     final usedNumbers = <int, String>{};
     final declarationOrderFields = <String>[];
 
-    final w = _ProtoWriter();
-    w.writeString(1, name);
+    final descriptors = <RpcFieldDescriptor>[];
     for (var i = 0; i < fields.length; i++) {
       final fieldName = fields[i].field.name;
       if (fieldName == null) continue;
@@ -1438,8 +1357,8 @@ class _GrpcDescriptorBuilder {
       }
       usedNumbers[number] = fieldName;
 
-      final fb = _buildFieldDescriptor(fieldName, number, fields[i].type);
-      if (fb != null) w.writeBytes(2, fb);
+      final descriptor = _fieldDescriptor(fieldName, number, fields[i].type);
+      if (descriptor != null) descriptors.add(descriptor);
     }
 
     if (declarationOrderFields.isNotEmpty) {
@@ -1453,7 +1372,7 @@ class _GrpcDescriptorBuilder {
       );
     }
 
-    return w.toBytes();
+    return RpcMessageDescriptor(name: name, fields: descriptors);
   }
 
   /// The stored instance fields of [type], inherited ones first.
@@ -1496,12 +1415,12 @@ class _GrpcDescriptorBuilder {
     return ConstantReader(anno).peek('number')?.intValue;
   }
 
-  Uint8List? _buildFieldDescriptor(String name, int number, DartType type) {
-    var label = 1; // LABEL_OPTIONAL
+  RpcFieldDescriptor? _fieldDescriptor(String name, int number, DartType type) {
+    var label = RpcFieldLabel.optional;
     var actual = type;
 
     if (actual is InterfaceType && actual.isDartCoreList) {
-      label = 3; // LABEL_REPEATED
+      label = RpcFieldLabel.repeated;
       actual = actual.typeArguments.isNotEmpty
           ? actual.typeArguments.first
           : actual;
@@ -1522,127 +1441,39 @@ class _GrpcDescriptorBuilder {
       return null;
     }
 
-    int fieldType;
+    final RpcFieldType fieldType;
     String? typeName;
 
     if (actual.isDartCoreString) {
-      fieldType = 9;
+      fieldType = RpcFieldType.typeString;
     } else if (actual.isDartCoreInt) {
-      // Dart `int` is 64-bit; map to proto TYPE_INT64 (3) to match the value
-      // range and the reflection descriptor docs (was TYPE_INT32 (5)).
-      fieldType = 3;
+      // Dart `int` is 64-bit.
+      fieldType = RpcFieldType.typeInt64;
     } else if (actual.isDartCoreDouble) {
-      fieldType = 1;
+      fieldType = RpcFieldType.typeDouble;
     } else if (actual.isDartCoreBool) {
-      fieldType = 8;
+      fieldType = RpcFieldType.typeBool;
     } else if (actual is InterfaceType && actual.element is EnumElement) {
-      // A Dart enum maps to proto TYPE_ENUM (14), not TYPE_MESSAGE.
-      fieldType = 14;
+      fieldType = RpcFieldType.typeEnum;
       typeName = _qualifiedTypeName(_typeName(actual));
     } else if (actual is InterfaceType) {
-      fieldType = 11; // TYPE_MESSAGE
+      fieldType = RpcFieldType.typeMessage;
       typeName = _qualifiedTypeName(_typeName(actual));
     } else {
       return null;
     }
 
-    final w = _ProtoWriter();
-    w.writeString(1, name);
-    w.writeInt32(3, number);
-    w.writeInt32(4, label);
-    w.writeInt32(5, fieldType);
-    if (typeName != null) w.writeString(6, typeName);
-    w.writeString(10, _toJsonName(name));
-    return w.toBytes();
-  }
-
-  Uint8List _buildServiceDescriptor(String serviceName) {
-    final w = _ProtoWriter();
-    w.writeString(1, serviceName);
-    for (final method in methods) {
-      final mw = _ProtoWriter();
-      mw.writeString(1, method.methodName);
-      mw.writeString(
-        2,
-        _qualifiedTypeName(_typeName(method.signature.requestType)),
-      );
-      mw.writeString(
-        3,
-        _qualifiedTypeName(_typeName(method.signature.responseType)),
-      );
-      if (method.signature.isRequestStream) mw.writeBool(5, true);
-      if (method.signature.isResponseStream) mw.writeBool(6, true);
-      w.writeBytes(2, mw.toBytes());
-    }
-    return w.toBytes();
+    return RpcFieldDescriptor(
+      name: name,
+      number: number,
+      type: fieldType,
+      label: label,
+      typeName: typeName,
+    );
   }
 
   static String _typeName(DartType t) =>
       t.getDisplayString().replaceAll('?', '');
-
-  static String _toJsonName(String name) => name.replaceAllMapped(
-    RegExp(r'_([a-z])'),
-    (m) => m.group(1)!.toUpperCase(),
-  );
-}
-
-// Protobuf wire types used by the descriptor encoder.
-const int _wireVarint = 0;
-const int _wireLen = 2;
-
-/// Minimal protobuf binary encoder (build-time only, not for runtime use).
-///
-/// This is a byte-for-byte copy of `ProtoWriter` in `rpc_dart_grpc_reflection`
-/// (lib/src/proto_writer.dart). The two cannot be merged into a single shared
-/// class because `rpc_dart_grpc_reflection` is `publish_to: none` and this
-/// generator is published — a published package may not depend on an
-/// unpublished one. Keep both implementations identical: any change here must
-/// be mirrored there (and is guarded by a parity test). The generator emits the
-/// descriptor bytes that the reflection server later serves, so they must agree
-/// on the wire format.
-class _ProtoWriter {
-  final _buf = <int>[];
-
-  void writeVarint(int value) {
-    assert(value >= 0);
-    while (value > 0x7F) {
-      _buf.add((value & 0x7F) | 0x80);
-      value >>= 7;
-    }
-    _buf.add(value & 0x7F);
-  }
-
-  void _writeTag(int fieldNumber, int wireType) {
-    writeVarint((fieldNumber << 3) | wireType);
-  }
-
-  void writeString(int fieldNumber, String value) {
-    if (value.isEmpty) return;
-    final encoded = utf8.encode(value);
-    _writeTag(fieldNumber, _wireLen);
-    writeVarint(encoded.length);
-    _buf.addAll(encoded);
-  }
-
-  void writeBytes(int fieldNumber, Uint8List value) {
-    if (value.isEmpty) return;
-    _writeTag(fieldNumber, _wireLen);
-    writeVarint(value.length);
-    _buf.addAll(value);
-  }
-
-  void writeBool(int fieldNumber, bool value) {
-    if (!value) return;
-    _writeTag(fieldNumber, _wireVarint);
-    writeVarint(1);
-  }
-
-  void writeInt32(int fieldNumber, int value) {
-    _writeTag(fieldNumber, _wireVarint);
-    writeVarint(value);
-  }
-
-  Uint8List toBytes() => Uint8List.fromList(_buf);
 }
 
 /// Escapes special characters for embedding in a single-quoted Dart string
@@ -1665,6 +1496,40 @@ String _baseNameForClass(ClassElement element) {
     return name.substring(1);
   }
   return name;
+}
+
+/// Whether [meta] is called with codecs: any mode but zero-copy, the method's
+/// own over the service's.
+bool _usesCodec(_MethodMeta meta, RpcDataTransferMode serviceMode) =>
+    (meta.transferMode ?? serviceMode) != RpcDataTransferMode.zeroCopy;
+
+/// The `<Base>Codecs` constant one side of [meta] uses.
+///
+/// A codec override belongs to its method, so it gets a constant of its own,
+/// `requestOf<Method>` / `responseOf<Method>`: a constant per type would hand
+/// the override to every method that uses the same type. Every other side
+/// shares the type's `codec<Type>` constant.
+String _codecConstant(
+  _MethodMeta meta, {
+  required bool isResponse,
+  required Set<String> ambiguous,
+}) {
+  final override = isResponse ? meta.responseCodecType : meta.requestCodecType;
+  if (override != null) {
+    final name = meta.declarationName;
+    final capitalized = '${name[0].toUpperCase()}${name.substring(1)}';
+    return isResponse ? 'responseOf$capitalized' : 'requestOf$capitalized';
+  }
+  final type = isResponse
+      ? meta.signature.responseType
+      : meta.signature.requestType;
+  return _codecIdentifier(type, ambiguous);
+}
+
+/// The peer handler for a method: `onXxx`.
+String _peerHandlerName(String declarationName) {
+  if (declarationName.isEmpty) return 'onHandle';
+  return 'on${declarationName[0].toUpperCase()}${declarationName.substring(1)}';
 }
 
 /// Builds a unique codec identifier for [type].

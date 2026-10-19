@@ -563,6 +563,11 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
   - Скопированный writer удаляется; дескриптор получает `syntax = "proto3"`.
   - Переопределения кодеков задаются на МЕТОД (константы с ключом по методу).
     Сгенерированный вывод меняется, поэтому пользователи перегенерируют код.
+  - Сделано (2026-10-19). Переопределение — `requestOf<Method>` /
+    `responseOf<Method>`; типы сохраняют `codec<Type>`. P7: один хелпер
+    аргумента кодека и один эмиттер регистрации вместо двух, мёртвое
+    `_MethodMeta.kind` удалено. `@RpcService(description:)` разбирается, но
+    нигде не выводится; оставлено как есть.
 - **Framework (D11, P2, P3, P4, P9).**
   - Health агрегирует типизированные `RpcHealthStatus` и `endpoint.health()`;
     map только в `toJson`.
@@ -633,7 +638,7 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | `RpcBool` / `RpcString` возвращают значение по умолчанию на некорректном вводе | `FormatException` |
 | `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
 | `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
-| переопределение кодека для метода действует на все методы с тем же типом | действует только на свой метод; перегенерировать код |
+| переопределение кодека для метода действует на все методы с тем же типом | действует только на свой метод, как `<Base>Codecs.requestOf<Method>` / `responseOf<Method>`; перегенерировать код |
 | `RpcConnectionLogger` | `LogScope` |
 | `logger:` у `RpcCallerEndpoint`, `RpcResponderEndpoint`, `RpcPeerEndpoint` | `logController:` |
 | `RpcConnectionHost(endpointLogger:)` | `logController:` |

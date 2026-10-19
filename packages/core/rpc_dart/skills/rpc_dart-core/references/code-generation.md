@@ -172,6 +172,9 @@ any transport without `supportsZeroCopy`: HTTP/2, HTTP/1.1, WebSocket, and
 
 To use a codec of your own, give its `Type` (with a `const` constructor):
 `@RpcMethod.unary(name: 'x', requestCodec: MyCodec, responseCodec: MyCodec)`.
+It applies to that method only, through its own constant
+`requestOf<Method>` / `responseOf<Method>` in `<Base>Codecs`; other methods with
+the same type keep the default `codec<Type>`.
 
 ## Peer services
 

@@ -182,6 +182,14 @@ class CalculatorSerializeContractNames {
     110,
     115,
     101,
+    98,
+    6,
+    112,
+    114,
+    111,
+    116,
+    111,
+    51,
   ]);
 }
 
