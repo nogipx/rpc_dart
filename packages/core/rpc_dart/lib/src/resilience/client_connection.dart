@@ -53,15 +53,6 @@ final class RpcClientDisconnected extends RpcClientConnectionState {
 }
 
 // ---------------------------------------------------------------------------
-// Logging callback
-// ---------------------------------------------------------------------------
-
-/// Callback for connection lifecycle events.
-///
-/// [level] is one of: `info`, `warning`, `error`.
-typedef RpcConnectionLogger = void Function(String level, String message);
-
-// ---------------------------------------------------------------------------
 // Proxy transport (internal)
 // ---------------------------------------------------------------------------
 
@@ -598,14 +589,14 @@ class RpcClientConnection {
     bool Function(Object? error)? shouldReconnect,
     int? maxAttempts,
     Duration? connectTimeout = const Duration(seconds: 30),
-    RpcConnectionLogger? logger,
+    LogScope? logger,
     void Function(RpcClientConnectionState state)? onStateChanged,
   }) : _factory = transportFactory,
        _backoff = backoff,
        _shouldReconnect = shouldReconnect,
        _maxAttempts = maxAttempts,
        _connectTimeout = connectTimeout,
-       _logger = logger,
+       _log = logger ?? LogScope.noop,
        _onStateChanged = onStateChanged {
     _proxy.onDropped = _onTransportDropped;
     _proxy.nextAttempt = _awaitNextAttempt;
@@ -618,7 +609,7 @@ class RpcClientConnection {
   final bool Function(Object? error)? _shouldReconnect;
   final int? _maxAttempts;
   final Duration? _connectTimeout;
-  final RpcConnectionLogger? _logger;
+  final LogScope _log;
   final void Function(RpcClientConnectionState state)? _onStateChanged;
 
   final _proxy = _ReconnectingTransportProxy();
@@ -770,12 +761,9 @@ class RpcClientConnection {
 
   void _onTransportDropped(Object? error) {
     if (_isStopped) return;
-    _logger?.call('warning', 'Transport dropped: $error');
+    _log.warning('Transport dropped', error: error);
     if (!_canReconnect(error)) {
-      _logger?.call(
-        'info',
-        'Will not reconnect (shouldReconnect returned false)',
-      );
+      _log.info('Will not reconnect (shouldReconnect returned false)');
       _emit(RpcClientDisconnected(reason: error));
       return;
     }
@@ -802,10 +790,7 @@ class RpcClientConnection {
     while (!_isStopped) {
       // Check max attempts.
       if (_maxAttempts != null && _reconnectAttempts >= _maxAttempts) {
-        _logger?.call(
-          'error',
-          'Max reconnect attempts ($_maxAttempts) exceeded',
-        );
+        _log.error('Max reconnect attempts ($_maxAttempts) exceeded');
         _emit(
           const RpcClientDisconnected(
             reason: 'max reconnect attempts exceeded',
@@ -819,9 +804,9 @@ class RpcClientConnection {
       _emit(RpcClientConnecting(attempt: _reconnectAttempts + 1));
       if (_reconnectAttempts > 0) {
         final delay = _backoff.delayFor(_reconnectAttempts - 1);
-        _logger?.call(
-          'info',
-          'Reconnect attempt ${_reconnectAttempts + 1}, waiting ${delay.inMilliseconds}ms',
+        _log.info(
+          'Reconnect attempt ${_reconnectAttempts + 1}, '
+          'waiting ${delay.inMilliseconds}ms',
         );
         await Future<void>.delayed(delay);
         if (_isStopped) break;
@@ -866,7 +851,7 @@ class RpcClientConnection {
         // The transport is ours from the moment the factory returns it, so
         // abandoning it means closing it.
         if (_isStopped || _proxy.isClosed) {
-          _logger?.call('info', 'Discarding transport: connection stopped');
+          _log.info('Discarding transport: connection stopped');
           unawaited(inner.close().catchError((_) {}));
           guard.complete();
           return;
@@ -894,14 +879,14 @@ class RpcClientConnection {
           rethrow;
         }
         if (_isStopped || _proxy.isClosed) {
-          _logger?.call('info', 'Discarding transport: connection stopped');
+          _log.info('Discarding transport: connection stopped');
           unawaited(inner.close().catchError((_) {}));
           guard.complete();
           return;
         }
 
         _proxy.attach(inner);
-        _logger?.call('info', 'Connected (attempt ${_reconnectAttempts + 1})');
+        _log.info('Connected (attempt ${_reconnectAttempts + 1})');
         // The count starts over when this connection drops after holding up,
         // not here; see [_stableConnection].
         _online = Stopwatch()..start();
@@ -909,15 +894,9 @@ class RpcClientConnection {
         guard.complete();
         return;
       } catch (e) {
-        _logger?.call(
-          'warning',
-          'Attempt ${_reconnectAttempts + 1} failed: $e',
-        );
+        _log.warning('Attempt ${_reconnectAttempts + 1} failed', error: e);
         if (!_canReconnect(e)) {
-          _logger?.call(
-            'info',
-            'Will not reconnect (shouldReconnect returned false)',
-          );
+          _log.info('Will not reconnect (shouldReconnect returned false)');
           _emit(RpcClientDisconnected(reason: e));
           guard.complete();
           return;
@@ -941,8 +920,7 @@ class RpcClientConnection {
     unawaited(
       pending
           .then((transport) async {
-            _logger?.call(
-              'info',
+            _log.info(
               'Closing a transport that arrived after its attempt timed out',
             );
             await transport.close();
@@ -961,7 +939,7 @@ class RpcClientConnection {
     try {
       _onStateChanged?.call(s);
     } catch (e) {
-      _logger?.call('warning', 'onStateChanged threw and was ignored: $e');
+      _log.warning('onStateChanged threw and was ignored', error: e);
     }
   }
 }

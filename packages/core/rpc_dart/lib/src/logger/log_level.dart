@@ -29,6 +29,14 @@ enum RpcLogLevel implements Comparable<RpcLogLevel> {
   /// Unrecoverable: endpoint cannot function.
   fatal;
 
+  /// The level named [name], or null when no level has that name.
+  static RpcLogLevel? fromName(String? name) {
+    for (final level in values) {
+      if (level.name == name) return level;
+    }
+    return null;
+  }
+
   /// Returns true if this level is at or above [other].
   bool operator >=(RpcLogLevel other) => index >= other.index;
 

@@ -14,6 +14,9 @@ sealed class LogRecord {
 
   /// Structured metadata.
   Map<String, Object>? get data;
+
+  /// Trace ID for distributed tracing correlation.
+  String? get traceId;
 }
 
 /// Marks the beginning of a span.
@@ -35,7 +38,7 @@ class LogSpanStart implements LogRecord {
   /// link nested spans without waiting for the parent's [LogSpan] end record.
   final String? parentSpanId;
 
-  /// Trace ID for distributed tracing correlation.
+  @override
   final String? traceId;
 
   /// Operation name.
@@ -78,7 +81,7 @@ class LogEvent implements LogRecord {
   /// Stack trace (for error/fatal levels).
   final StackTrace? stackTrace;
 
-  /// RPC trace correlation ID.
+  @override
   final String? traceId;
 
   /// RPC request correlation ID.
@@ -102,6 +105,33 @@ class LogEvent implements LogRecord {
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
+  /// A copy with the given fields replaced. A null argument keeps the field.
+  LogEvent copyWith({
+    String? scope,
+    RpcLogLevel? level,
+    String? message,
+    String? tag,
+    Object? error,
+    StackTrace? stackTrace,
+    String? traceId,
+    String? requestId,
+    String? spanId,
+    Map<String, Object>? data,
+    DateTime? timestamp,
+  }) => LogEvent(
+    scope: scope ?? this.scope,
+    level: level ?? this.level,
+    message: message ?? this.message,
+    tag: tag ?? this.tag,
+    error: error ?? this.error,
+    stackTrace: stackTrace ?? this.stackTrace,
+    traceId: traceId ?? this.traceId,
+    requestId: requestId ?? this.requestId,
+    spanId: spanId ?? this.spanId,
+    data: data ?? this.data,
+    timestamp: timestamp ?? this.timestamp,
+  );
+
   /// Serializes this event to a JSON-compatible map.
   Map<String, dynamic> toJson() => {
     'type': 'event',
@@ -121,10 +151,7 @@ class LogEvent implements LogRecord {
   /// Deserializes a [LogEvent] from a JSON-compatible map.
   factory LogEvent.fromJson(Map<String, dynamic> json) => LogEvent(
     scope: json['scope'] as String? ?? '',
-    level: RpcLogLevel.values.firstWhere(
-      (e) => e.name == json['level'],
-      orElse: () => RpcLogLevel.info,
-    ),
+    level: RpcLogLevel.fromName(json['level'] as String?) ?? RpcLogLevel.info,
     message: json['message'] as String? ?? '',
     tag: json['tag'] as String?,
     error: json['error'],
@@ -164,7 +191,7 @@ class LogSpan implements LogRecord {
   /// Parent span ID (for nested spans).
   final String? parentSpanId;
 
-  /// Trace ID for distributed tracing.
+  @override
   final String? traceId;
 
   /// Operation name.
@@ -206,6 +233,35 @@ class LogSpan implements LogRecord {
     this.data,
     this.events = const [],
   }) : timestamp = endTime;
+
+  /// A copy with the given fields replaced. A null argument keeps the field.
+  LogSpan copyWith({
+    String? spanId,
+    String? scope,
+    String? name,
+    DateTime? startTime,
+    DateTime? endTime,
+    SpanStatus? status,
+    String? parentSpanId,
+    String? traceId,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object>? data,
+    List<LogEvent>? events,
+  }) => LogSpan(
+    spanId: spanId ?? this.spanId,
+    scope: scope ?? this.scope,
+    name: name ?? this.name,
+    startTime: startTime ?? this.startTime,
+    endTime: endTime ?? this.endTime,
+    status: status ?? this.status,
+    parentSpanId: parentSpanId ?? this.parentSpanId,
+    traceId: traceId ?? this.traceId,
+    error: error ?? this.error,
+    stackTrace: stackTrace ?? this.stackTrace,
+    data: data ?? this.data,
+    events: events ?? this.events,
+  );
 
   /// Serializes this span to a JSON-compatible map.
   Map<String, dynamic> toJson() => {

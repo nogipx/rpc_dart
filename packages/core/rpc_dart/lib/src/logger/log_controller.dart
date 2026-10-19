@@ -290,37 +290,11 @@ class LogController {
     if (extra.isEmpty) return record;
 
     final merged = {...?record.data, ...extra};
-    if (record is LogEvent) {
-      return LogEvent(
-        scope: record.scope,
-        level: record.level,
-        message: record.message,
-        tag: record.tag,
-        error: record.error,
-        stackTrace: record.stackTrace,
-        traceId: record.traceId,
-        requestId: record.requestId,
-        spanId: record.spanId,
-        data: merged,
-        timestamp: record.timestamp,
-      );
-    } else if (record is LogSpan) {
-      return LogSpan(
-        spanId: record.spanId,
-        parentSpanId: record.parentSpanId,
-        traceId: record.traceId,
-        scope: record.scope,
-        name: record.name,
-        startTime: record.startTime,
-        endTime: record.endTime,
-        status: record.status,
-        error: record.error,
-        stackTrace: record.stackTrace,
-        data: merged,
-        events: record.events,
-      );
-    }
-    return record;
+    return switch (record) {
+      LogEvent() => record.copyWith(data: merged),
+      LogSpan() => record.copyWith(data: merged),
+      LogSpanStart() => record,
+    };
   }
 
   LogRecord _redact(LogRecord record) {
@@ -334,37 +308,19 @@ class LogController {
       return rs != s ? rs : error;
     }
 
-    if (record is LogEvent) {
-      return LogEvent(
-        scope: record.scope,
-        level: record.level,
+    return switch (record) {
+      LogEvent() => record.copyWith(
         message: _redactor!.redactString(record.message),
-        tag: record.tag,
         error: redactError(record.error),
-        stackTrace: record.stackTrace,
-        traceId: record.traceId,
-        requestId: record.requestId,
-        spanId: record.spanId,
         data: redacted,
-        timestamp: record.timestamp,
-      );
-    } else if (record is LogSpan) {
-      return LogSpan(
-        spanId: record.spanId,
-        parentSpanId: record.parentSpanId,
-        traceId: record.traceId,
-        scope: record.scope,
-        name: record.name,
-        startTime: record.startTime,
-        endTime: record.endTime,
-        status: record.status,
+      ),
+      LogSpan() => record.copyWith(
         error: redactError(record.error),
-        stackTrace: record.stackTrace,
         data: redacted,
         events: [for (final e in record.events) _redact(e) as LogEvent],
-      );
-    }
-    return record;
+      ),
+      LogSpanStart() => record,
+    };
   }
 }
 
@@ -397,31 +353,18 @@ class LogConfig {
 
   /// Deserializes a [LogConfig] from a JSON-compatible map.
   factory LogConfig.fromJson(Map<String, dynamic> json) => LogConfig(
-    minLevel: RpcLogLevel.values.firstWhere(
-      (e) => e.name == json['minLevel'],
-      orElse: () => RpcLogLevel.debug,
-    ),
-    scopeLevels:
-        (json['scopeLevels'] as Map<String, dynamic>?)?.map(
-          (k, v) => MapEntry(
-            k,
-            RpcLogLevel.values.firstWhere(
-              (e) => e.name == v,
-              orElse: () => RpcLogLevel.debug,
-            ),
-          ),
-        ) ??
-        const {},
-    tagLevels:
-        (json['tagLevels'] as Map<String, dynamic>?)?.map(
-          (k, v) => MapEntry(
-            k,
-            RpcLogLevel.values.firstWhere(
-              (e) => e.name == v,
-              orElse: () => RpcLogLevel.debug,
-            ),
-          ),
-        ) ??
-        const {},
+    minLevel:
+        RpcLogLevel.fromName(json['minLevel'] as String?) ?? RpcLogLevel.debug,
+    scopeLevels: _levelsFromJson(json['scopeLevels']),
+    tagLevels: _levelsFromJson(json['tagLevels']),
   );
+
+  static Map<String, RpcLogLevel> _levelsFromJson(Object? json) =>
+      (json as Map<String, dynamic>?)?.map(
+        (k, v) => MapEntry(
+          k,
+          RpcLogLevel.fromName(v is String ? v : null) ?? RpcLogLevel.debug,
+        ),
+      ) ??
+      const {};
 }

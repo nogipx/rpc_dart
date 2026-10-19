@@ -14,6 +14,19 @@ import 'package:test/test.dart';
 (IRpcTransport client, IRpcTransport server) _pair() =>
     RpcChannelTransport.memoryPair();
 
+/// A logger whose events land in the returned list as `[level] message`.
+(LogScope logger, List<String> logs) _capturingLogger() {
+  final controller = LogController();
+  addTearDown(controller.dispose);
+  final logs = <String>[];
+  controller.stream.listen((record) {
+    if (record is LogEvent) {
+      logs.add('[${record.level.name}] ${record.message}');
+    }
+  });
+  return (controller.scope('Connection'), logs);
+}
+
 class _TransportQueue {
   _TransportQueue(this._transports);
 
@@ -436,11 +449,11 @@ void main() {
 
     test('logger receives connection events', () async {
       final (client, _) = _pair();
-      final logs = <String>[];
+      final (logger, logs) = _capturingLogger();
 
       final connection = RpcClientConnection(
         transportFactory: () async => client,
-        logger: (level, message) => logs.add('[$level] $message'),
+        logger: logger,
       );
       addTearDown(connection.dispose);
 
@@ -453,7 +466,7 @@ void main() {
     test('logger captures failures', () async {
       var calls = 0;
       final (client, _) = _pair();
-      final logs = <String>[];
+      final (logger, logs) = _capturingLogger();
 
       final connection = RpcClientConnection(
         transportFactory: () async {
@@ -462,7 +475,7 @@ void main() {
           return client;
         },
         backoff: const FixedBackoff(Duration(milliseconds: 10)),
-        logger: (level, message) => logs.add('[$level] $message'),
+        logger: logger,
       );
       addTearDown(connection.dispose);
 

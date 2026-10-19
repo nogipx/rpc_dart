@@ -46,7 +46,8 @@ Pipeline order: level filter -> sampling -> enrich -> redact -> outputs ->
 
 `RpcLogLevel`, ascending: `internal`, `trace`, `debug`, `info`, `warning`,
 `error`, `fatal`. `internal` is the library's own frame-level chatter; it is
-below the default `minLevel`.
+below the default `minLevel`. `RpcLogLevel.fromName('warning')` parses a level
+name and returns null for an unknown one.
 
 Endpoint scope names: `rpc.caller`, `rpc.responder`, `rpc.peer`. Handler
 scopes are `<endpoint scope>.<Service>.<method>`, for example
@@ -126,7 +127,10 @@ Future<RpcString> echo(RpcString request, {RpcContext? context}) async {
   an in-app log viewer.
 - `scopeFilter` is a scope-name PREFIX; records outside it skip that output.
 - Records are a sealed `LogRecord`: `LogEvent` (level, message, tag, error,
-  traceId, requestId, data), `LogSpanStart`, `LogSpan` (duration, status).
+  requestId, data), `LogSpanStart`, `LogSpan` (duration, status). Every
+  record has `scope`, `timestamp`, `data` and `traceId`.
+- `LogEvent.copyWith` and `LogSpan.copyWith` replace the given fields; a null
+  argument keeps the field.
 
 ```dart
 final class ErrorCounter extends LogOutput {

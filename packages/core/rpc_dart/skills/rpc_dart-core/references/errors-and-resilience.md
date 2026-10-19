@@ -254,6 +254,8 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   `RpcClientOnline` fails with `RpcNoConnectionException` (UNAVAILABLE).
 - Other members: `state` (a broadcast stream), `currentState`, `forceReconnect()`, `disconnect()`
   (resume later with `connect()`), `dispose()` (permanent).
+- `logger:` takes a `LogScope` (e.g. `controller.scope('app.connection')`) and receives drops, attempts and
+  give-ups at info, warning and error.
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.
 - A connection that drops within 5 s of coming online counts as a failed attempt, so `maxAttempts` and the backoff
   still apply to a server that accepts and then refuses. One that held up longer starts the count over.

@@ -123,7 +123,6 @@ export 'src/_index.dart'
         RpcClientIdle,
         RpcClientOffline,
         RpcClientOnline,
-        RpcConnectionLogger,
         RpcRateLimiter,
         RateLimit,
         RpcRateLimitException,

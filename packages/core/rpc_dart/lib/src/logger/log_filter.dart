@@ -64,10 +64,7 @@ class LogFilter {
   /// Deserializes a filter from a JSON-compatible map.
   factory LogFilter.fromJson(Map<String, dynamic> json) => LogFilter(
     minLevel: json['minLevel'] != null
-        ? RpcLogLevel.values.firstWhere(
-            (e) => e.name == json['minLevel'],
-            orElse: () => RpcLogLevel.debug,
-          )
+        ? RpcLogLevel.fromName(json['minLevel'] as String?) ?? RpcLogLevel.debug
         : null,
     scopes: (json['scopes'] as List<dynamic>?)?.cast<String>().toSet(),
     tags: (json['tags'] as List<dynamic>?)?.cast<String>().toSet(),
