@@ -151,6 +151,8 @@ class LogCollectorMcpServer {
     if (request.method == 'POST') {
       final body = await request.readAsString();
       final result = _processJsonRpc(body);
+      // A notification is answered with nothing: accepted, no body.
+      if (result == null) return Response(202);
       return Response.ok(result, headers: {'content-type': 'application/json'});
     }
 
@@ -207,7 +209,9 @@ Investigation strategy:
 4. Use "collapse:true" when dealing with high-volume repetitive logs (retries, polling).
 5. TraceIds in sources are shown as 8-char prefixes -- pass prefix to traceId filter.''';
 
-  String _processJsonRpc(String body) {
+  /// The JSON-RPC response to [body], or null for a notification, which
+  /// JSON-RPC 2.0 forbids answering.
+  String? _processJsonRpc(String body) {
     final Object? decoded;
     try {
       decoded = jsonDecode(body);
@@ -221,6 +225,7 @@ Investigation strategy:
       return _rpcError(null, -32700, 'Parse error');
     }
     final json = decoded;
+    if (!json.containsKey('id')) return null;
     final id = json['id'];
     final method = json['method'] as String?;
 
@@ -231,7 +236,6 @@ Investigation strategy:
         'serverInfo': _serverInfo,
         'instructions': _mcpInstructions,
       }),
-      'notifications/initialized' => _rpcResult(id, {}),
       'tools/list' => _rpcResult(id, {
         'tools': [_sourcesTool, _getLogsTool],
       }),

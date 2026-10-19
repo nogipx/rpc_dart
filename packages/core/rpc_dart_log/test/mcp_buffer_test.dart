@@ -920,6 +920,27 @@ void main() {
       expect(out, contains('TraceIds (500)'));
       expect(out, isNot(contains('TraceIds (510)')));
     });
+
+    test('sources lists the newest trace ids', () {
+      final buf = LogCollectorMcpBuffer();
+      for (var i = 0; i < 30; i++) {
+        buf.addRecord(
+          _event(
+            'd',
+            scope: 'svc',
+            level: RpcLogLevel.info,
+            message: 'x',
+            traceId: 't$i',
+          ),
+        );
+      }
+      final line = buf
+          .sources([])
+          .split('\n')
+          .firstWhere((l) => l.startsWith('TraceIds'));
+      expect(line, contains('t29'));
+      expect(line, isNot(contains('t0,')));
+    });
   });
 
   group('LogCollectorMcpBuffer.getLogs -- collapse', () {

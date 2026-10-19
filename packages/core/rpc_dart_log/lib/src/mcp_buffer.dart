@@ -200,7 +200,8 @@ class LogCollectorMcpBuffer {
 
     if (_traceIdOrder.isNotEmpty) {
       const maxTrace = 10;
-      final shown = _traceIdOrder.take(maxTrace).toList();
+      // The newest, which are the ones still in the buffer.
+      final shown = _traceIdOrder.reversed.take(maxTrace).toList();
       final parts = shown
           .map((tid) {
             final prefix = _e(tid.length > 8 ? tid.substring(0, 8) : tid);
