@@ -134,6 +134,15 @@ class RpcHttpCallerTransport extends IRpcTransport {
   bool _isClosed = false;
   final LogScope _log;
 
+  /// Kinds of bad response already reported. A misbehaving server answers
+  /// every call that way, so each kind is a warning once per transport; every
+  /// call still fails with its status.
+  final Set<String> _reported = {};
+
+  void _warnOnce(String kind, String message) {
+    if (_reported.add(kind)) _log.warning(message);
+  }
+
   /// Creates an HTTP caller transport.
   ///
   /// Pass a custom [httpClient] to configure TLS, proxies, or other
@@ -240,9 +249,10 @@ class RpcHttpCallerTransport extends IRpcTransport {
       _policy.validateMetadata(metadata);
       return metadata;
     } on ArgumentError catch (error) {
-      _log.warning(
+      _warnOnce(
+        'metadata',
         'Response metadata on stream $streamId violates the policy '
-        '(${error.message}); dropping what cannot be kept',
+            '(${error.message}); dropping what cannot be kept',
       );
       if (!isTrailer) return const RpcMetadata([]);
       return _policy.statusOnly(metadata) ??
@@ -544,7 +554,8 @@ class RpcHttpCallerTransport extends IRpcTransport {
         RpcContentTypeValidation.lenient,
       )) {
         await _readErrorBody(streamedResponse);
-        _log.warning(
+        _warnOnce(
+          'content-type',
           'Non-gRPC content-type "$responseContentType" for [streamId: $streamId]',
         );
         _emit(

@@ -27,7 +27,16 @@ final class _BodyTooLarge implements Exception {
 }
 
 /// The pre-dispatch rejections, each reported once per transport.
-enum _Rejection { method, streams, contentType, path, metadataSize, metadata }
+enum _Rejection {
+  method,
+  streams,
+  contentType,
+  path,
+  metadataSize,
+  metadata,
+  body,
+  unanswered,
+}
 
 /// Pending outgoing HTTP response state.
 final class _PendingResponse {
@@ -476,13 +485,14 @@ class RpcHttpResponderTransport extends IRpcTransport {
       if (gone is Future<void>) {
         unawaited(gone.then((_) => _cancelForGonePeer(streamId, pending)));
       }
-    } catch (e, st) {
+    } catch (e) {
       _pending.remove(streamId);
       _idManager.releaseId(streamId);
-      _log.error(
-        'Failed to read request [streamId: $streamId]: $e',
-        error: e,
-        stackTrace: st,
+      // The client decides how its body arrives -- slow, oversized,
+      // malformed -- so this is a warning once, not an error per request.
+      _warnRejected(
+        _Rejection.body,
+        'Failed to read a request body [streamId: $streamId]: $e',
       );
       // 413, not 400, for a body over the ceiling. `grpcStatusFromHttpStatus`
       // maps 413 -> RESOURCE_EXHAUSTED and 400 -> INTERNAL, so a 400 here tells
@@ -557,7 +567,9 @@ class RpcHttpResponderTransport extends IRpcTransport {
     // On every ORDINARY ending `_flushResponse` has already removed the entry,
     // so this cannot answer twice.
     if (pending != null && !pending.completer.isCompleted) {
-      _log.warning(
+      // A client chooses its deadline, and with it how often this happens.
+      _warnRejected(
+        _Rejection.unanswered,
         'Stream $streamId was released before it answered; closing the HTTP '
         'request with CANCELLED.',
       );
