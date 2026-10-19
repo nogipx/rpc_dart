@@ -115,7 +115,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
 
   bool _isClosed = false;
 
-  final LogScope? _logger;
+  final LogScope _log;
 
   final RpcSecurityPolicy _policy;
 
@@ -132,7 +132,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     LogScope? logger,
   }) : _connection = connection,
-       _logger = logger?.child('Http2ServerTransport'),
+       _log = logger?.child('Http2ServerTransport') ?? LogScope.noop,
        _policy = policy {
     _setupConnectionListener();
   }
@@ -225,8 +225,8 @@ class RpcHttp2ResponderTransport extends IRpcTransport
     // even id is not a real http2 stream, so any send on it would silently lose
     // data; the id is handed back for API compatibility and sends fail fast via
     // [_requireIncomingStream].
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal('Created outgoing stream $streamId');
+    if (_log.isInternal) {
+      _log.internal('Created outgoing stream $streamId');
     }
     return streamId;
   }
@@ -262,8 +262,8 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   bool releaseStreamId(int streamId) {
     if (_isClosed) return false;
 
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal('Releasing stream $streamId');
+    if (_log.isInternal) {
+      _log.internal('Releasing stream $streamId');
     }
 
     final call = _calls.remove(streamId);
@@ -279,14 +279,12 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         } else {
           call.incoming.sendData(Uint8List(0), endStream: true);
         }
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal('Sent END_STREAM releasing stream $streamId');
+        if (_log.isInternal) {
+          _log.internal('Sent END_STREAM releasing stream $streamId');
         }
       } catch (e) {
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal(
-            'Falling back to terminate on stream $streamId: $e',
-          );
+        if (_log.isInternal) {
+          _log.internal('Falling back to terminate on stream $streamId: $e');
         }
         pump?.dispose();
         call.incoming.terminate();
@@ -350,11 +348,11 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         call,
       ).add(http2.HeadersStreamMessage(headers, endStream: endStream));
 
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal('Metadata sent for stream $streamId ($kind)');
+      if (_log.isInternal) {
+        _log.internal('Metadata sent for stream $streamId ($kind)');
       }
     } catch (e) {
-      _logger?.error('Error sending metadata for stream $streamId: $e');
+      _log.error('Error sending metadata for stream $streamId: $e');
       rethrow;
     }
   }
@@ -381,13 +379,13 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         call,
       ).add(http2.DataStreamMessage(data, endStream: endStream));
 
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'Sent ${data.length} response byte(s) for stream $streamId',
         );
       }
     } catch (e) {
-      _logger?.error('Error sending data for stream $streamId: $e');
+      _log.error('Error sending data for stream $streamId: $e');
       rethrow;
     }
   }
@@ -398,8 +396,8 @@ class RpcHttp2ResponderTransport extends IRpcTransport
 
     final call = _calls[streamId];
     if (call == null) {
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'Incoming stream $streamId not found, skipping finish sending',
         );
       }
@@ -412,11 +410,11 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         call,
       ).add(http2.DataStreamMessage(Uint8List(0), endStream: true));
 
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal('Finished sending the response for stream $streamId');
+      if (_log.isInternal) {
+        _log.internal('Finished sending the response for stream $streamId');
       }
     } catch (e) {
-      _logger?.warning('Error finishing the send for stream $streamId: $e');
+      _log.warning('Error finishing the send for stream $streamId: $e');
     }
   }
 
@@ -458,14 +456,14 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   Future<void> close() async {
     if (_isClosed) return;
 
-    _logger?.info('Closing the HTTP/2 responder transport');
+    _log.info('Closing the HTTP/2 responder transport');
     _isClosed = true;
 
     // A short grace period for streams still finishing.
     final totalStreams = _calls.length;
     if (totalStreams > 0) {
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal('Waiting on $totalStreams active stream(s)');
+      if (_log.isInternal) {
+        _log.internal('Waiting on $totalStreams active stream(s)');
       }
       await Future<void>.delayed(Duration(milliseconds: 50));
     }
@@ -483,19 +481,17 @@ class RpcHttp2ResponderTransport extends IRpcTransport
         } else {
           stream.sendData(Uint8List(0), endStream: true);
         }
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal('Sent END_STREAM for stream ${stream.id}');
+        if (_log.isInternal) {
+          _log.internal('Sent END_STREAM for stream ${stream.id}');
         }
       } catch (e) {
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal(
-            'Falling back to terminate on stream ${stream.id}: $e',
-          );
+        if (_log.isInternal) {
+          _log.internal('Falling back to terminate on stream ${stream.id}: $e');
         }
         try {
           stream.terminate();
         } catch (e2) {
-          _logger?.warning('Error terminating stream ${stream.id}: $e2');
+          _log.warning('Error terminating stream ${stream.id}: $e2');
         }
       }
     }
@@ -522,13 +518,13 @@ class RpcHttp2ResponderTransport extends IRpcTransport
     try {
       await _connection.finish().timeout(kGracefulCloseTimeout);
     } catch (e) {
-      _logger?.warning(
+      _log.warning(
         'Graceful HTTP/2 shutdown did not complete ($e); terminating',
       );
       try {
         unawaited(_connection.terminate());
       } catch (e2) {
-        _logger?.warning('Error closing the HTTP/2 connection: $e2');
+        _log.warning('Error closing the HTTP/2 connection: $e2');
       }
     }
 
@@ -536,7 +532,7 @@ class RpcHttp2ResponderTransport extends IRpcTransport
       await _messageController.close();
     }
 
-    _logger?.info('HTTP/2 responder transport closed');
+    _log.info('HTTP/2 responder transport closed');
   }
 
   @override

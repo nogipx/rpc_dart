@@ -20,7 +20,7 @@ extension _Http2CallerFlow on RpcHttp2CallerTransport {
   /// Fails a call whose consumer holds [outstanding] response bytes past the
   /// window.
   void _fcFailOverrun(int streamId, int outstanding) {
-    _logger?.warning(
+    _log.warning(
       'Stream $streamId holds $outstanding un-consumed response bytes '
       '(window: ${_fc.window}); failing the call',
     );

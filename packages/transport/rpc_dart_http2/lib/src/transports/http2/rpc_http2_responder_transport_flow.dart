@@ -36,7 +36,7 @@ part of 'rpc_http2_responder_transport.dart';
 extension _Http2ResponderFlow on RpcHttp2ResponderTransport {
   /// Ends a call whose consumer has stopped taking its request.
   void _fcRefuseOverrun(int streamId, int outstanding) {
-    _logger?.warning(
+    _log.warning(
       'Stream $streamId holds $outstanding un-consumed request bytes '
       '(window: ${_fc.window}); refusing the call',
     );

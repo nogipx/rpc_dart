@@ -65,7 +65,7 @@ extension _Http2CallerLifecycle on RpcHttp2CallerTransport {
       ping: connection.ping,
       isDead: () => _isClosed,
       onDead: (error) {
-        _logger?.warning(
+        _log.warning(
           'HTTP/2 keepalive failed for $_host:$_port ($error); the path is '
           'half-open, closing the transport so calls fail fast',
         );
@@ -111,7 +111,7 @@ extension _Http2CallerLifecycle on RpcHttp2CallerTransport {
     try {
       connection.terminate();
     } catch (e) {
-      _logger?.warning('Discarding abandoned connection failed: $e');
+      _log.warning('Discarding abandoned connection failed: $e');
     }
   }
 }

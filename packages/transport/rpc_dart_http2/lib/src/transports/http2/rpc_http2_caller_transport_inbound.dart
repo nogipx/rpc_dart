@@ -21,7 +21,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         _handleIncomingMessage(streamId, message, methodPath);
       },
       onError: (Object error, StackTrace stackTrace) {
-        _logger?.error(
+        _log.error(
           'Error on stream $streamId',
           error: error,
           stackTrace: stackTrace,
@@ -109,8 +109,8 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         );
       },
       onDone: () {
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal('Stream $streamId ended');
+        if (_log.isInternal) {
+          _log.internal('Stream $streamId ended');
         }
 
         final call = _calls[streamId];
@@ -147,7 +147,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
           final dying =
               _isClosed || _drainSignal.goawayReceived || !_connection.isOpen;
           final status = dying ? RpcStatus.unavailable : RpcStatus.internal;
-          _logger?.warning(
+          _log.warning(
             'Stream $streamId ended without a gRPC status; reporting $status '
             'rather than a clean end',
           );
@@ -188,10 +188,8 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
           try {
             ending.terminate();
           } catch (e) {
-            if (_logger?.isInternal ?? false) {
-              _logger?.internal(
-                'Could not reset finished stream $streamId: $e',
-              );
+            if (_log.isInternal) {
+              _log.internal('Could not reset finished stream $streamId: $e');
             }
           }
         }
@@ -224,7 +222,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         _handleDataMessage(streamId, call, message, methodPath);
       }
     } catch (e, stackTrace) {
-      _logger?.error(
+      _log.error(
         'Error handling a message on stream $streamId',
         error: e,
         stackTrace: stackTrace,
@@ -248,9 +246,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // narrowing on the responder.
       if (e is RpcMetadataViolation &&
           ++_policyViolations > _maxPolicyViolations) {
-        _logger?.warning(
-          'Peer sent $_policyViolations policy violations; closing',
-        );
+        _log.warning('Peer sent $_policyViolations policy violations; closing');
         unawaited(close());
       }
     }
@@ -294,7 +290,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // backs off and retries. See [grpcStatusFromHttpStatus].
       final errorMetadata = RpcTrailers.fromHttpStatus(httpStatus);
       call.statusReceived = true;
-      _logger?.warning(
+      _log.warning(
         'Non-200 HTTP status $httpStatus for stream $streamId '
         '-> gRPC status ${errorMetadata.getHeaderValue(RpcHeaders.grpcStatus)}',
       );
@@ -331,16 +327,14 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // model -- had FAILED_PRECONDITION replaced by our INVALID_ARGUMENT.
       final reduced = _peerStatusOnly(message.headers);
       if (reduced == null) rethrow;
-      _logger?.warning(
+      _log.warning(
         'Peer headers on stream $streamId violate the policy '
         '(${violation.message}); keeping their grpc-status and dropping the rest',
       );
       // Charged here because this path does not reach the catch that charges it,
       // and a peer that does this 256 times is not one rich error.
       if (++_policyViolations > _maxPolicyViolations) {
-        _logger?.warning(
-          'Peer sent $_policyViolations policy violations; closing',
-        );
+        _log.warning('Peer sent $_policyViolations policy violations; closing');
         unawaited(close());
       }
       call.statusReceived = true;
@@ -379,7 +373,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         contentType,
         RpcContentTypeValidation.lenient,
       )) {
-        _logger?.warning(
+        _log.warning(
           'Non-gRPC content-type "$contentType" for stream $streamId',
         );
         call.statusReceived = true;
@@ -441,7 +435,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         );
       }
       final parser = call.parser ??= RpcMessageParser(
-        logger: _logger?.child('Parser-$streamId'),
+        logger: _log.child('Parser-$streamId'),
         maxMessageLength: _policy.maxMessageLengthBytes,
         maxBufferedBytes: _policy.maxBufferedBytes,
         maxMessagesPerChunk: _policy.maxMessagesPerChunk,
@@ -508,13 +502,13 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
         return;
       }
 
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'Parsed ${messages.length} message(s) for stream $streamId',
         );
       }
     } catch (e, stackTrace) {
-      _logger?.error(
+      _log.error(
         'Error decoding gRPC data for stream $streamId',
         error: e,
         stackTrace: stackTrace,
@@ -569,10 +563,8 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     // would tell a consumer that deliberately cancelled that its own
     // cancellation was a transport failure.
     if (_resetStreams.contains(streamId)) {
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
-          'Suppressed an error for reset stream $streamId: $error',
-        );
+      if (_log.isInternal) {
+        _log.internal('Suppressed an error for reset stream $streamId: $error');
       }
       return;
     }

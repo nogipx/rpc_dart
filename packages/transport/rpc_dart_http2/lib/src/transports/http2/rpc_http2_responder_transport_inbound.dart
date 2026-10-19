@@ -19,10 +19,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
   void _handleIncomingStream(http2.ServerTransportStream stream) {
     final streamId = stream.id;
     final call = _calls[streamId] = _ResponderStream(stream, _parsers);
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal(
-        'New incoming stream $streamId (active: ${_calls.length})',
-      );
+    if (_log.isInternal) {
+      _log.internal('New incoming stream $streamId (active: ${_calls.length})');
     }
 
     call.subscription = stream.incomingMessages.listen(
@@ -37,16 +35,14 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         // a clean end-of-stream instead, which is also what lets the responder
         // tear the call down and stop the handler.
         if (error is http2.StreamTransportException) {
-          if (_logger?.isInternal ?? false) {
-            _logger?.internal(
-              'Stream $streamId reset by peer: ${error.message}',
-            );
+          if (_log.isInternal) {
+            _log.internal('Stream $streamId reset by peer: ${error.message}');
           }
           _emit(RpcTransportMessage(streamId: streamId, isEndOfStream: true));
           return;
         }
 
-        _logger?.error(
+        _log.error(
           'Error on stream $streamId',
           error: error,
           stackTrace: stackTrace,
@@ -60,8 +56,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         );
       },
       onDone: () {
-        if (_logger?.isInternal ?? false) {
-          _logger?.internal('Incoming stream $streamId ended');
+        if (_log.isInternal) {
+          _log.internal('Incoming stream $streamId ended');
         }
         // An empty END_STREAM DATA frame arrives as this, not as a message.
         // A refused request ends through the refusal's cancel alone: a clean
@@ -97,8 +93,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
     // Synthesising the same `x-client-cancelled` frame the websocket sibling
     // sends reuses that tested teardown path rather than adding a second one.
     stream.onTerminated = (errorCode) {
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'Stream $streamId reset by peer (errorCode: $errorCode), '
           'cancelling the call',
         );
@@ -127,13 +123,13 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
       // peer's doing and is answered with its status; logged as an error it
       // would let a peer write one line per request.
       if (RpcStatus.isFaultError(e)) {
-        _logger?.error(
+        _log.error(
           'Error handling a message on stream $streamId',
           error: e,
           stackTrace: stackTrace,
         );
-      } else if (_logger?.isInternal ?? false) {
-        _logger?.internal('Refused stream $streamId: $e');
+      } else if (_log.isInternal) {
+        _log.internal('Refused stream $streamId: $e');
       }
 
       _emitStreamError(streamId, e, stackTrace: stackTrace);
@@ -192,7 +188,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         //
         // The status survives and the text gives way, the same trade the
         // message trimming above already makes.
-        _logger?.warning(
+        _log.warning(
           'Refusal for stream $streamId does not fit the policy ($e); '
           'sending the status alone',
         );
@@ -203,10 +199,10 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
             endStream: true,
           );
         } catch (e2) {
-          _logger?.warning('Could not reject stream $streamId: $e2');
+          _log.warning('Could not reject stream $streamId: $e2');
         }
       } catch (e) {
-        _logger?.warning('Could not reject stream $streamId: $e');
+        _log.warning('Could not reject stream $streamId: $e');
       } finally {
         releaseStreamId(streamId);
         // `closeOnProtocolError` must be honoured HERE too, not only in
@@ -284,8 +280,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
       ),
     );
 
-    if (_logger?.isInternal ?? false) {
-      _logger?.internal('Headers received for stream $streamId: $methodPath');
+    if (_log.isInternal) {
+      _log.internal('Headers received for stream $streamId: $methodPath');
     }
   }
 
@@ -305,7 +301,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         );
       }
       final parser = call.parser ??= RpcMessageParser(
-        logger: _logger?.child('Parser-$streamId'),
+        logger: _log.child('Parser-$streamId'),
         maxMessageLength: _policy.maxMessageLengthBytes,
         maxBufferedBytes: _policy.maxBufferedBytes,
         // Frames upward, so the parser makes them. See the caller transport and
@@ -335,13 +331,13 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         _emit(transportMessage);
       }
 
-      if (_logger?.isInternal ?? false) {
-        _logger?.internal(
+      if (_log.isInternal) {
+        _log.internal(
           'Parsed ${messages.length} incoming message(s) for stream $streamId',
         );
       }
     } catch (e, stackTrace) {
-      _logger?.error(
+      _log.error(
         'Error decoding incoming gRPC data for stream $streamId',
         error: e,
         stackTrace: stackTrace,

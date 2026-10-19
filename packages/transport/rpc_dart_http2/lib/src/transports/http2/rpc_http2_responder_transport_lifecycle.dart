@@ -10,7 +10,7 @@ extension _Http2ResponderLifecycle on RpcHttp2ResponderTransport {
     _connection.incomingStreams.listen(
       _handleIncomingStream,
       onError: (Object error, StackTrace stackTrace) {
-        _logger?.error(
+        _log.error(
           'HTTP/2 connection error',
           error: error,
           stackTrace: stackTrace,
@@ -36,7 +36,7 @@ extension _Http2ResponderLifecycle on RpcHttp2ResponderTransport {
         // So: stop accepting, and close only once the last open stream is done.
         // A genuinely dead connection still closes promptly, because its
         // streams end too (and `socket.done` closes the endpoint regardless).
-        _logger?.internal(
+        _log.internal(
           'HTTP/2: no further incoming streams (GOAWAY or connection close)',
         );
         _acceptingStreams = false;
@@ -52,7 +52,7 @@ extension _Http2ResponderLifecycle on RpcHttp2ResponderTransport {
   void _closeIfDrained() {
     if (_acceptingStreams || _isClosed) return;
     if (_calls.isNotEmpty) return;
-    _logger?.internal('HTTP/2: last stream drained, closing transport');
+    _log.internal('HTTP/2: last stream drained, closing transport');
     close();
   }
 
@@ -62,7 +62,7 @@ extension _Http2ResponderLifecycle on RpcHttp2ResponderTransport {
     try {
       await _connection.terminate();
     } catch (e) {
-      _logger?.warning('Protocol-error close failed: $e');
+      _log.warning('Protocol-error close failed: $e');
     }
   }
 
