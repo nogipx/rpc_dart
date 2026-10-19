@@ -86,7 +86,8 @@ final class RpcWebSocketNonBinaryFrame extends RpcException
 /// that timer, and the write throws `Bad state: StreamSink is closed` there,
 /// where nothing here can catch it: an unhandled async error, which in the
 /// root zone takes the process with it. A peer close, or this channel's own
-/// [close], does not do this.
+/// [close], does not do this. A sink that refuses synchronously instead (an
+/// in-memory one over a `StreamController`) has the write dropped here.
 ///
 /// Neither `isClosed` nor `closeCode` can see it in that window, so this
 /// cannot be guarded here.
@@ -227,7 +228,7 @@ class RpcWebSocketChannel
   /// Frames of one event-loop turn go out as one WebSocket message. Each
   /// message costs a write and, from a client, a masking key drawn from the
   /// system entropy source; the frame decoder takes several frames a message.
-  late final RpcWriteCoalescer _writes = RpcWriteCoalescer(_ws.sink.add);
+  late final RpcWriteCoalescer _writes = RpcWriteCoalescer(_write);
 
   @override
   Future<void> send(Uint8List data) async {
@@ -235,15 +236,19 @@ class RpcWebSocketChannel
     _writes.add(data);
   }
 
-  /// Writes what is queued before a close. A sink someone else closed
-  /// refuses synchronously, and there is nothing left to deliver then.
-  void _flushBeforeClose() {
+  /// Hands one joined write to the socket. A sink someone else closed may
+  /// refuse synchronously, here or in the coalescer's timer, and there is
+  /// nothing left to deliver then.
+  void _write(Uint8List data) {
     try {
-      _writes.flush();
+      _ws.sink.add(data);
     } on StateError {
       _writes.discard();
     }
   }
+
+  /// Writes what is queued before a close.
+  void _flushBeforeClose() => _writes.flush();
 
   /// Close code for a framing violation by the peer.
   ///
