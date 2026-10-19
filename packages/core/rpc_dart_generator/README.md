@@ -299,7 +299,7 @@ overrides it for one method.
 
 | Effective mode | Codecs generated | Type check | Runtime |
 | --- | --- | --- | --- |
-| `auto` | yes | `IRpcSerializable` or primitive | serializes, except unary calls on a zero-copy transport, which pass objects |
+| `auto` | yes | `IRpcSerializable` or primitive | passes objects on a zero-copy transport, every call shape; serializes on any other |
 | `codec` | yes | `IRpcSerializable` or primitive | always serializes |
 | `zeroCopy` | no | none, any type | passes objects; works only on transports with `supportsZeroCopy` |
 

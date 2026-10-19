@@ -64,13 +64,8 @@ final _protoFieldChecker = const TypeChecker.typeNamed(
 
 /// Code generator for RPC Dart service contracts annotated with [RpcService].
 class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
-  /// Creates an [RpcDartGenerator] with optional [BuilderOptions].
-  RpcDartGenerator([BuilderOptions? options])
-    : _options = options ?? BuilderOptions({});
-
-  // BuilderOptions reserved for future config.
-  // ignore: unused_field
-  final BuilderOptions _options;
+  /// Creates the generator.
+  const RpcDartGenerator();
 
   @override
   FutureOr<String> generateForAnnotatedElement(
@@ -117,10 +112,16 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     }
 
     final transfer = reader.peek('transferMode')?.revive();
-    final transferMode = _transferFromAccessor(transfer?.accessor);
+    final transferMode = _enumFromAccessor(
+      RpcDataTransferMode.values,
+      transfer?.accessor,
+    );
 
     final kindRevive = reader.peek('kind')?.revive();
-    final serviceKind = _serviceKindFromAccessor(kindRevive?.accessor);
+    final serviceKind = _enumFromAccessor(
+      RpcServiceKind.values,
+      kindRevive?.accessor,
+    );
 
     return _ServiceMeta(
       name: name,
@@ -131,27 +132,11 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     );
   }
 
-  RpcServiceKind? _serviceKindFromAccessor(String? accessor) {
-    switch (accessor) {
-      case 'RpcServiceKind.unidirectional':
-        return RpcServiceKind.unidirectional;
-      case 'RpcServiceKind.peer':
-        return RpcServiceKind.peer;
-    }
-    return null;
-  }
-
-  RpcDataTransferMode? _transferFromAccessor(String? accessor) {
+  /// The value of [values] an accessor such as `RpcMethodType.serverStream`
+  /// names, matched by the value's name.
+  T? _enumFromAccessor<T extends Enum>(List<T> values, String? accessor) {
     if (accessor == null) return null;
-    switch (accessor) {
-      case 'RpcDataTransferMode.zeroCopy':
-        return RpcDataTransferMode.zeroCopy;
-      case 'RpcDataTransferMode.codec':
-        return RpcDataTransferMode.codec;
-      case 'RpcDataTransferMode.auto':
-        return RpcDataTransferMode.auto;
-    }
-    return null;
+    return values.asNameMap()[accessor.split('.').last];
   }
 
   // Delegates to the top-level helper.
@@ -195,11 +180,15 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     }
 
     final kindAccessor = reader.peek('kind')?.revive().accessor;
-    final kind = _kindFromAccessor(kindAccessor) ?? RpcMethodType.unary;
+    final kind =
+        _enumFromAccessor(RpcMethodType.values, kindAccessor) ??
+        RpcMethodType.unary;
 
-    final transferAccessor = reader.peek('transferMode')?.revive().accessor;
-    final effectiveMode =
-        _transferFromAccessor(transferAccessor) ?? serviceMode;
+    final transferMode = _enumFromAccessor(
+      RpcDataTransferMode.values,
+      reader.peek('transferMode')?.revive().accessor,
+    );
+    final effectiveMode = transferMode ?? serviceMode;
 
     final signature = _SignatureParser(
       method,
@@ -210,7 +199,6 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
 
     final requestCodecType = reader.peek('requestCodec')?.typeValue;
     final responseCodecType = reader.peek('responseCodec')?.typeValue;
-    final transferMode = _transferFromAccessor(transferAccessor);
 
     return _MethodMeta(
       methodName: name,
@@ -221,13 +209,6 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
       responseCodecType: responseCodecType,
       transferMode: transferMode,
     );
-  }
-
-  /// The [RpcMethodType] an accessor such as `RpcMethodType.serverStream`
-  /// names, matched by the value's name.
-  RpcMethodType? _kindFromAccessor(String? accessor) {
-    if (accessor == null) return null;
-    return RpcMethodType.values.asNameMap()[accessor.split('.').last];
   }
 
   _ParentInfo? _buildParentInfo(ClassElement element) {
@@ -475,7 +456,6 @@ class _Emitter {
   String _buildCaller() {
     final b = StringBuffer();
     final className = '${_baseName}Caller';
-    final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
     final isVersioned = parentInfo != null;
 
     b.writeln(
@@ -488,25 +468,16 @@ class _Emitter {
       b.writeln();
     }
 
-    b.writeln('  $className(');
-    b.writeln('    RpcCallerEndpoint endpoint, {');
-    b.writeln('    String? serviceNameOverride,');
-    b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
-
-    if (isVersioned) {
-      b.writeln('  }) : _parent = ${parentInfo!.callerClassName}(');
-      b.writeln('          endpoint,');
-      b.writeln('          dataTransferMode: dataTransferMode,');
-      b.writeln('        ),');
-      b.writeln('        super(');
-    } else {
-      b.writeln('  }) : super(');
-    }
-
-    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
-    b.writeln('          endpoint,');
-    b.writeln('          dataTransferMode: dataTransferMode,');
-    b.writeln('        );');
+    b.writeln(
+      _constructor(
+        className,
+        endpointType: 'RpcCallerEndpoint',
+        parentInit: isVersioned
+            ? '_parent = ${parentInfo!.callerClassName}('
+                  'endpoint, dataTransferMode: dataTransferMode)'
+            : null,
+      ),
+    );
     b.writeln();
 
     for (final method in methods) {
@@ -534,6 +505,34 @@ class _Emitter {
 
     b.writeln('}');
     return b.toString();
+  }
+
+  /// The constructor of a generated contract: the endpoint when
+  /// [endpointType] is given, then `serviceNameOverride` and
+  /// `dataTransferMode`, which goes to super as each of [modes].
+  String _constructor(
+    String className, {
+    String? endpointType,
+    String? parentInit,
+    List<String> modes = const ['dataTransferMode'],
+  }) {
+    final named =
+        'String? serviceNameOverride, '
+        'RpcDataTransferMode dataTransferMode = '
+        'RpcDataTransferMode.${service.transferMode.name},';
+    final params = endpointType == null
+        ? '{$named}'
+        : '$endpointType endpoint, {$named}';
+    final superArgs = [
+      'serviceNameOverride ?? ${_baseName}Names.service',
+      if (endpointType != null) 'endpoint',
+      for (final mode in modes) '$mode: dataTransferMode',
+    ].join(', ');
+    final initializers = [
+      ?parentInit,
+      'super($superArgs)',
+    ].join(', ');
+    return '  $className($params) : $initializers;';
   }
 
   String _buildRemovedMethod(_RemovedMethodInfo info) {
@@ -586,22 +585,18 @@ class _Emitter {
   String _buildPeer() {
     final b = StringBuffer();
     final className = '${_baseName}Peer';
-    final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
 
     b.writeln(
       'abstract class $className extends RpcPeerContract '
       'implements ${classElement.name} {',
     );
-    b.writeln('  $className(');
-    b.writeln('    RpcPeerEndpoint endpoint, {');
-    b.writeln('    String? serviceNameOverride,');
-    b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
-    b.writeln('  }) : super(');
-    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
-    b.writeln('          endpoint,');
-    b.writeln('          responderDataTransferMode: dataTransferMode,');
-    b.writeln('          callerDataTransferMode: dataTransferMode,');
-    b.writeln('        );');
+    b.writeln(
+      _constructor(
+        className,
+        endpointType: 'RpcPeerEndpoint',
+        modes: const ['responderDataTransferMode', 'callerDataTransferMode'],
+      ),
+    );
     b.writeln();
 
     // setup() — registers incoming handlers using onXxx names
@@ -640,22 +635,18 @@ class _Emitter {
   String _buildPeerCaller() {
     final b = StringBuffer();
     final className = '${_baseName}PeerCaller';
-    final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
 
     b.writeln(
       'class $className extends RpcPeerContract '
       'implements ${classElement.name} {',
     );
-    b.writeln('  $className(');
-    b.writeln('    RpcPeerEndpoint endpoint, {');
-    b.writeln('    String? serviceNameOverride,');
-    b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
-    b.writeln('  }) : super(');
-    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
-    b.writeln('          endpoint,');
-    b.writeln('          responderDataTransferMode: dataTransferMode,');
-    b.writeln('          callerDataTransferMode: dataTransferMode,');
-    b.writeln('        );');
+    b.writeln(
+      _constructor(
+        className,
+        endpointType: 'RpcPeerEndpoint',
+        modes: const ['responderDataTransferMode', 'callerDataTransferMode'],
+      ),
+    );
     b.writeln();
 
     b.writeln('  @override');
@@ -680,7 +671,6 @@ class _Emitter {
   String _buildResponder() {
     final b = StringBuffer();
     final className = '${_baseName}Responder';
-    final defaultTransfer = 'RpcDataTransferMode.${service.transferMode.name}';
     final isVersioned = parentInfo != null;
 
     // Versioned responders do not implement the full interface — they only
@@ -695,13 +685,7 @@ class _Emitter {
       'abstract class $className extends RpcResponderContract '
       '$implementsClause{',
     );
-    b.writeln('  $className({');
-    b.writeln('    String? serviceNameOverride,');
-    b.writeln('    RpcDataTransferMode dataTransferMode = $defaultTransfer,');
-    b.writeln('  }) : super(');
-    b.writeln('          serviceNameOverride ?? ${_baseName}Names.service,');
-    b.writeln('          dataTransferMode: dataTransferMode,');
-    b.writeln('        );');
+    b.writeln(_constructor(className));
     b.writeln();
     b.writeln('  @override');
     b.writeln('  void setup() {');
@@ -1236,8 +1220,8 @@ class _RemovedMethodInfo {
 /// Builds a FileDescriptorProto binary at generation time and returns
 /// it as a Dart list literal string, e.g. `[10, 5, 101, ...]`.
 ///
-/// Returns null if the descriptor cannot be built (e.g. zeroCopy mode,
-/// unrepresentable field types).
+/// Returns null if the service has no methods or a message type cannot be
+/// described.
 class _GrpcDescriptorBuilder {
   final _ServiceMeta service;
   final List<_MethodMeta> methods;
