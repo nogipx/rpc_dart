@@ -103,6 +103,16 @@ base class RpcStatusException extends RpcException {
     this.details = const [],
   }) : super(message);
 
+  /// Whether this is the server pushing back: an [RpcRateLimitException], or
+  /// RESOURCE_EXHAUSTED carrying an [RpcRetryInfo].
+  ///
+  /// A bare RESOURCE_EXHAUSTED is what a message over the server's size limit
+  /// gets: the caller's fault, and the same answer on every attempt.
+  bool get isPushback =>
+      this is RpcRateLimitException ||
+      (statusCode == RpcStatus.resourceExhausted &&
+          details.any((d) => d is RpcRetryInfo));
+
   /// RESOURCE_EXHAUSTED for a limit that frees up by itself -- a stream or
   /// handler ceiling -- with the [RpcRetryInfo] that marks it as such.
   ///

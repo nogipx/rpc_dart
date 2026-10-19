@@ -127,7 +127,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
         // A call cancelled during the backoff neither starts a reconnect nor
         // waits for one; the next attempt fails CANCELLED at once.
         if (call.context.cancellationToken?.isCancelled ?? false) continue;
-        await _reconnectIfConnectionIsGone(e, call);
+        await _awaitReconnectIfConnectionIsGone(e, call);
       }
     }
 
@@ -150,30 +150,24 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     ]).whenComplete(timer.cancel);
   }
 
-  /// Re-establishes the connection before an UNAVAILABLE retry.
+  /// Waits, before an UNAVAILABLE retry, for the connection to come back when
+  /// it is gone: an attempt on a dead transport can only fail the same way and
+  /// spend the caller's deadline doing it.
   ///
-  /// Without this the retry promise was hollow on a bare transport: UNAVAILABLE
-  /// is the framework's "the connection is gone", and every attempt went back
-  /// to the SAME dead transport, so the budget burned and no attempt could
-  /// possibly pass. A retry that cannot succeed is worse than no retry — it
-  /// spends the caller's deadline to reach the same failure.
+  /// UNAVAILABLE only. RESOURCE_EXHAUSTED means the peer is overloaded and its
+  /// connection is fine.
   ///
-  /// UNAVAILABLE only. RESOURCE_EXHAUSTED means the peer is overloaded, and its
-  /// connection is fine; reconnecting would drop a working one and add load to
-  /// a server already asking for less.
-  ///
-  /// **And UNAVAILABLE alone does not mean the connection is gone.** A handler
-  /// may throw it (a downstream is down), a draining server answers it, and one
-  /// truncated stream synthesises it — so the transport is asked, because its
-  /// answer is about the CONNECTION where the status is only about this call.
-  /// Reconnecting on the status alone closes a live socket and fails every
-  /// other call on it, each of those failures being UNAVAILABLE in turn.
+  /// UNAVAILABLE alone does not mean the connection is gone: a handler may
+  /// throw it, a draining server answers it, a truncated stream synthesises
+  /// it. So the transport's health is asked, which is about the connection
+  /// where the status is only about this call.
   ///
   /// Only [RpcClientConnection] reconnects, so only an endpoint built on its
   /// `transport` waits here; over a bare transport the retry goes back to the
   /// same one. The wait is for the connection's next attempt, which runs on
-  /// its own backoff. Either way the original error is what the caller sees.
-  Future<void> _reconnectIfConnectionIsGone(
+  /// its own backoff and is started by nothing here. Either way the original
+  /// error is what the caller sees.
+  Future<void> _awaitReconnectIfConnectionIsGone(
     Object error,
     RpcMiddlewareContext call,
   ) async {
@@ -188,21 +182,20 @@ class RpcRetryInterceptor extends IRpcInterceptor {
         call.context,
       );
     } catch (_) {
-      // Nothing to do: the attempt below will fail the same way and report it.
-      // A health() that throws tells us nothing, and tearing a possibly live
-      // connection down on no evidence is the defect this guard exists for.
+      // A health() or a wait that throws tells nothing: the attempt below runs
+      // and reports for itself.
     }
   }
+
+  /// How early a Timer may fire against the context's clock and still be
+  /// re-armed; see [_withinCall].
+  static const Duration _earlyFire = Duration(milliseconds: 50);
 
   /// Waits for [reconnect] no longer than the call has left: its deadline, or
   /// its cancellation. A reconnect can take seconds -- behind
   /// [RpcClientConnection] it waits up to 5 s for the next attempt -- and a
   /// call is not held past the deadline its caller set. The reconnect itself
   /// runs on; the attempt after it fails DEADLINE_EXCEEDED or CANCELLED.
-  /// How early a Timer may fire against the context's clock and still be
-  /// re-armed; see [_withinCall].
-  static const Duration _earlyFire = Duration(milliseconds: 50);
-
   static Future<void> _withinCall(
     Future<RpcHealthStatus> reconnect,
     RpcContext context,
@@ -258,24 +251,14 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// Default transient-only predicate (gRPC-aligned).
   ///
   /// Retries [RpcStatusException] with UNAVAILABLE (14), and RESOURCE_EXHAUSTED
-  /// (8) only with server pushback: an [RpcRateLimitException], or a status
-  /// carrying [RpcRetryInfo]. Everything else, including a generic
-  /// [RpcException], an INTERNAL or INVALID_* status and any non-RPC throw, is
-  /// not retried.
-  ///
-  /// A bare RESOURCE_EXHAUSTED is what a message over the server's size limit
-  /// gets, and that answer is the same on every attempt.
+  /// (8) only with server pushback ([RpcStatusException.isPushback]).
+  /// Everything else, including a generic [RpcException], an INTERNAL or
+  /// INVALID_* status and any non-RPC throw, is not retried.
   ///
   /// Does NOT make a non-idempotent call safe: UNAVAILABLE covers both "the
   /// server never saw it" and "the server committed it and the response was
   /// lost", and nothing on the wire tells them apart.
-  static bool _isTransient(Object error) {
-    if (error is RpcRateLimitException) return true;
-    if (error is RpcStatusException) {
-      return error.statusCode == RpcStatus.unavailable ||
-          (error.statusCode == RpcStatus.resourceExhausted &&
-              error.details.any((d) => d is RpcRetryInfo));
-    }
-    return false;
-  }
+  static bool _isTransient(Object error) =>
+      error is RpcStatusException &&
+      (error.statusCode == RpcStatus.unavailable || error.isPushback);
 }

@@ -71,7 +71,8 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   // State
   // ---------------------------------------------------------------------------
 
-  final RpcResponderMethodRegistry _respRegistry = RpcResponderMethodRegistry();
+  late final RpcResponderMethodRegistry _respRegistry =
+      RpcResponderMethodRegistry(() => _log);
   final RpcResponderStreamStore _respStreams = RpcResponderStreamStore();
   StreamSubscription<RpcTransportMessage>? _respIncomingSub;
   bool _respIsListening = false;
@@ -263,12 +264,12 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// that was disposing a shared repository took a production notify bus down
   /// with it, silently, on the first client that went away.
   void registerServiceContract(RpcResponderContract contract) {
-    _respRegistry.registerContract(contract, _log);
+    _respRegistry.registerContract(contract);
   }
 
   /// Removes the contract for [serviceName] and disposes its resources.
   void unregisterServiceContract(String serviceName) {
-    _respRegistry.unregisterContract(serviceName, _log);
+    _respRegistry.unregisterContract(serviceName);
   }
 
   /// All contracts registered with this endpoint, keyed by service name.
@@ -394,7 +395,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       await _cleanupStream(streamId);
     }
 
-    _respRegistry.disposeAll(_log);
+    _respRegistry.disposeAll();
   }
 
   /// Whether the endpoint is draining (rejecting new streams, finishing active ones).
@@ -494,6 +495,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     required String message,
     List<RpcHeader> extraHeaders = const [],
     bool atCapacity = false,
+    RpcResponderStreamState? only,
   }) async {
     // SYNCHRONOUSLY, before the first await, and that is the whole fix.
     //
@@ -538,7 +540,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
         stackTrace: stackTrace,
       );
     } finally {
-      await _cleanupStream(streamId);
+      await _cleanupStream(streamId, only: only);
     }
   }
 

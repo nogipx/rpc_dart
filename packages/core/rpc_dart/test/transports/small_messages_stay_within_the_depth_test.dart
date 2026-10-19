@@ -320,23 +320,6 @@ void main() {
       expect(fc.messageCreditFor(1), 6);
     });
 
-    test('a grant of bytes alone releases a sender parked on messages', () {
-      // A peer that paces bytes and predates message credit never returns it,
-      // so the seed would run out for good.
-      final fc = build();
-      for (var i = 0; i < 8; i++) {
-        fc.tryConsume(1, 1);
-      }
-      expect(fc.tryConsume(1, 1), isFalse);
-
-      fc.handleInbound(_grant(1, 1000));
-
-      expect(fc.messageCreditFor(1), isNull);
-      expect(fc.tryConsume(1, 1), isTrue);
-      expect(fc.tryConsume(2, 1), isTrue, reason: 'nor seeded for new streams');
-      expect(fc.messageCreditFor(2), isNull);
-    });
-
     test('a direct object takes message credit and no bytes', () {
       final fc = build(depth: 2);
       fc.handleInbound(_grant(1, 10, 2));

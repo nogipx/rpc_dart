@@ -206,13 +206,9 @@ final class ClientStreamCaller<
   /// Completes sending requests and waits for a single response.
   ///
   /// Returns the single server response. The wait is bounded by the context
-  /// deadline when one is set and is UNBOUNDED otherwise — the same rule
-  /// [UnaryCaller] applies, and the one the streaming shapes always had.
-  ///
-  /// There was a 60 s fallback here for a call with no deadline. A hidden limit
-  /// the server never hears about is worse than no limit: no `grpc-timeout` was
-  /// sent for it, so the caller gave up while the server still believed the call
-  /// was live. Set a deadline on the context to bound this.
+  /// deadline when one is set and is unbounded otherwise, as for every shape:
+  /// a limit the server never hears about would leave it running a call the
+  /// caller gave up on. Set a deadline on the context to bound this.
   Future<TResponse> finishSending() async {
     if (_sendingFinished) {
       throw RpcStatusException(
@@ -256,7 +252,9 @@ final class ClientStreamCaller<
       final wait = _context?.remainingTime;
 
       // No deadline, no bound. See the doc above.
-      if (wait == null) return await _responseCompleter.future;
+      if (deadline == null || wait == null) {
+        return await _responseCompleter.future;
+      }
 
       // RpcLongTimer.timeout, not Future.timeout: `wait` comes from a deadline,
       // which a peer can set, and a bare Timer past the JS ceiling fires at
@@ -267,35 +265,13 @@ final class ClientStreamCaller<
         onTimeout: () {
           _logger.error('Response wait timed out after $wait');
           // Tell the server before tearing down, which `close()` does not do:
-          // abandoning the wait leaves the handler running for a caller that is
-          // already gone. Measured with no deadline set, the handler saw
-          // `cancelled=0` after the caller gave up at 60 s.
-          //
-          // `notifyPeerOfAbort` exists for exactly this class of ending — its
-          // own doc says `_sendCancellationToServer` is otherwise reachable only
-          // through a cancellation token — and it never throws. Unawaited, as
-          // every streaming sibling sends it.
-          // With a deadline this timer races the call scope's own deadline
-          // notice; the reason is the deadline either way.
-          unawaited(
-            _notifyAbort(
-              deadline != null
-                  ? 'deadline exceeded'
-                  : 'Caller timed out after $wait',
-            ),
-          );
-          // Free resources on timeout.
+          // abandoning the wait would leave the handler running for a caller
+          // that is gone. This timer races the call scope's own deadline
+          // notice, so whichever wins, the server is told and the caller sees
+          // the deadline. `notifyPeerOfAbort` never throws.
+          unawaited(_notifyAbort('deadline exceeded'));
           unawaited(close());
-          // With a deadline set, two things race to end the call: the call
-          // scope pushes RpcDeadlineExceededException onto the response
-          // completer, and this timeout fires. Reporting a TimeoutException
-          // from here made the exception type depend on which won -- observed
-          // both ways for the same 500ms deadline across runs. Report the
-          // deadline as a deadline either way.
-          if (deadline != null) {
-            throw RpcDeadlineExceededException(deadline, wait);
-          }
-          throw TimeoutException('Response wait timeout from server', wait);
+          throw RpcDeadlineExceededException(deadline, wait);
         },
       );
     } catch (e, stackTrace) {

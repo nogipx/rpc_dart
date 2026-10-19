@@ -16,14 +16,13 @@ typedef RpcFlowStreamLiveness = bool Function(int streamId);
 
 /// Credit-based flow control for a multiplexed transport, at two levels.
 ///
-/// Credit rides on bare metadata frames ([RpcHeaders.xWindowUpdate],
-/// [RpcHeaders.xConnWindowUpdate]), which a peer that predates this ignores
-/// completely. No handshake and no wire-format change: before the peer's first
-/// grant proves it participates, this side is bounded only by
-/// [RpcSecurityPolicy.initialSendWindowBytes], and if that is spent with the
-/// peer still silent for [RpcSecurityPolicy.initialSendWindowGrace] the window
-/// is dropped — so a version mismatch degrades to unbounded rather than
-/// deadlocking.
+/// Credit rides on bare metadata frames: [RpcHeaders.xWindowUpdate] with
+/// [RpcHeaders.xWindowUpdateMessages] per stream, [RpcHeaders.xConnWindowUpdate]
+/// per connection. Before the peer's first grant proves it participates, this
+/// side is bounded only by [RpcSecurityPolicy.initialSendWindowBytes], and if
+/// that is spent with the peer still silent for
+/// [RpcSecurityPolicy.initialSendWindowGrace] the window is dropped, so a peer
+/// with flow control off degrades to unbounded rather than deadlocking.
 ///
 /// This bounds a producer only because the stages above the transport stop
 /// pulling for a consumer that has stopped reading. Break that and the metered
@@ -141,11 +140,6 @@ final class RpcFlowController {
   bool _connAssumedLegacy = false;
   bool _streamAssumedLegacy = false;
 
-  /// Set once the peer has granted per stream WITHOUT message credit: it
-  /// paces bytes and knows nothing of depth, so seeded message credit would
-  /// only ever run out. Cleared by a grant that carries it.
-  bool _messagesAssumedLegacy = false;
-
   Timer? _graceTimer;
   bool _closed = false;
 
@@ -261,7 +255,6 @@ final class RpcFlowController {
       final messageWindow = _messageWindow;
       if (messageWindow != null &&
           !_streamAssumedLegacy &&
-          !_messagesAssumedLegacy &&
           _messageCredit[streamId] == null &&
           _canTrack(_messageCredit, streamId)) {
         _messageCredit[streamId] = messageWindow;
@@ -729,24 +722,9 @@ final class RpcFlowController {
         RpcHeaders.xWindowUpdateMessages,
       );
       final messages = messagesRaw == null ? null : int.tryParse(messagesRaw);
-      if (messagesRaw == null) {
-        _noteMessagesLegacy();
-      } else {
-        _messagesAssumedLegacy = false;
-      }
       _onGrant(message.streamId, granted, messages);
     }
     return true;
-  }
-
-  /// A byte grant with no message credit: the peer paces bytes only, so what
-  /// was seeded for depth is dropped and the senders parked on it released.
-  void _noteMessagesLegacy() {
-    if (_messagesAssumedLegacy) return;
-    _messagesAssumedLegacy = true;
-    _messageCredit.clear();
-    _seededMessages.clear();
-    wakeAll();
   }
 
   // ── Deferred metering (IRpcFlowCredit) ─────────────────────────────────────

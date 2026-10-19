@@ -88,6 +88,7 @@ export 'src/_index.dart'
         RpcException,
         RpcStatusException,
         RpcClosedException,
+        RpcNoConnectionException,
         RpcStatus,
         RpcErrorDetail,
         RpcErrorInfo,

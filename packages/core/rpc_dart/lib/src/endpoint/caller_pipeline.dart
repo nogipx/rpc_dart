@@ -285,11 +285,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// registered a token the moment they were CALLED, while they only untrack
   /// once the returned stream is done or cancelled. A stream that is never
   /// listened to therefore leaked its token forever.
-  RpcContext _prepareCallerContext(
-    RpcContext? context,
-    String serviceName,
-    String methodName,
-  ) => _enhanceCallerContext(_ensureCallerContext(context), serviceName);
+  RpcContext _prepareCallerContext(RpcContext? context, String serviceName) =>
+      _enhanceCallerContext(_ensureCallerContext(context), serviceName);
 
   /// Registers [ctx]'s call so [cancelRequest]/`cancelMethod` can reach it.
   ///
@@ -477,7 +474,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // `.catchError` and every other non-`try` handler of the call.
     if (!isActive) return Future.error(RpcClosedException('Endpoint'));
 
-    final ctx = _prepareCallerContext(context, serviceName, methodName);
+    final ctx = _prepareCallerContext(context, serviceName);
     // Unary starts immediately, so tracking starts here.
     _trackCallerRequest(serviceName, methodName, ctx);
 
@@ -518,7 +515,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // Through the stream, for the same reason as unaryRequest's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
-    final ctx = _prepareCallerContext(context, serviceName, methodName);
+    final ctx = _prepareCallerContext(context, serviceName);
 
     final stream = handleServerStream<TRequest, TResponse>(
       direction: RpcCallDirection.outgoing,
@@ -570,7 +567,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       // DESCRIBED rather than when it was made.
       if (!isActive) throw RpcClosedException('Endpoint');
 
-      final ctx = _prepareCallerContext(context, serviceName, methodName);
+      final ctx = _prepareCallerContext(context, serviceName);
       // The builder is already lazy: this runs when the call is invoked.
       _trackCallerRequest(serviceName, methodName, ctx);
       try {
@@ -610,7 +607,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // Through the stream, for the same reason as unaryRequest's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
-    final ctx = _prepareCallerContext(context, serviceName, methodName);
+    final ctx = _prepareCallerContext(context, serviceName);
 
     final stream = handleBidirectionalStream<C, R>(
       direction: RpcCallDirection.outgoing,

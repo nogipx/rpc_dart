@@ -47,7 +47,6 @@ export 'src/_index.dart'
         RpcTrailers,
         requestEndedMidMessage,
         responseEndedMidMessage,
-        RpcNoConnectionException,
         grpcStatusFromHttpStatus,
         wireStatusFor,
         kInternalErrorWireMessage,

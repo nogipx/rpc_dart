@@ -344,11 +344,6 @@ final class RpcResponderStreamState {
   /// True when the responder is bound to the per-stream message broadcast.
   bool get isBoundToMessageStream => _boundToMessageStream;
 
-  /// Marks this stream as bound to its per-stream message broadcast.
-  void markBoundToMessageStream() {
-    _boundToMessageStream = true;
-  }
-
   /// Sets [methodKey] and clears the cached context if changed.
   void setMethodKey(String newMethodKey) {
     if (methodKey != newMethodKey) {
@@ -601,7 +596,4 @@ final class RpcResponderStreamStore {
 
   /// Number of active streams.
   int get length => _states.length;
-
-  /// Removes all active stream states.
-  void clear() => _states.clear();
 }

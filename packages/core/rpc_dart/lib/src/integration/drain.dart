@@ -7,13 +7,8 @@ import 'dart:async';
 import '../endpoint/_index.dart';
 import '../logger/_index.dart';
 
-/// Live responder streams across [endpoints], for a server's drain.
-///
-/// **The count [drainUntilIdle] polls, extracted for the same reason the loop
-/// was.** Both connection-per-endpoint servers wrote this out byte-identically
-/// and read it out of a stringly-typed metrics map — so `drainUntilIdle` was
-/// shared and the number feeding it was not, which is the half that decides
-/// whether a shutdown waits at all.
+/// Live responder streams across [endpoints]: the count a
+/// connection-per-endpoint server's [drainUntilIdle] polls.
 ///
 /// Peer endpoints are INCLUDED: `RpcPeerEndpoint` serves calls too, and
 /// counting only `RpcResponderEndpoint` drains a peer server instantly.
@@ -27,8 +22,7 @@ int inFlightResponderCalls(Iterable<RpcEndpointBase> endpoints) {
 
 /// Runs an observability callback without letting it take the process out.
 ///
-/// **Byte-identical in both connection-per-endpoint servers, and a
-/// process-death guard rather than a convenience.** These callbacks run on
+/// A process-death guard rather than a convenience: these callbacks run on
 /// DETACHED paths — off a connections stream, off a `sink.done` handler — so a
 /// throw has no handler above it and reaches the root zone, where an unhandled
 /// async error kills the isolate.
@@ -39,7 +33,7 @@ void notifyWithoutDying(String what, void Function() body, {LogScope? logger}) {
   try {
     body();
   } catch (error, stackTrace) {
-    logger?.error(
+    (logger ?? LogScope.noop).error(
       'User callback $what threw',
       error: error,
       stackTrace: stackTrace,
@@ -80,11 +74,12 @@ Future<void> drainUntilIdle({
   // wall-clock step — an NTP correction, an operator setting the clock — would
   // otherwise shorten or extend it arbitrarily, exactly when a deploy is in
   // progress. The same reason `RpcCircuitBreakerInterceptor` keeps one.
+  final log = logger ?? LogScope.noop;
   final elapsed = Stopwatch()..start();
   var remaining = await pending();
   if (remaining == 0) return;
 
-  logger?.info('Draining $remaining in-flight $unit(s) before shutdown');
+  log.info('Draining $remaining in-flight $unit(s) before shutdown');
 
   // Still polled, unlike the responder pipeline's drain: this helper is generic
   // over a `pending()` callback, so it has nothing to be signalled BY.
@@ -94,11 +89,11 @@ Future<void> drainUntilIdle({
   }
 
   if (remaining > 0) {
-    logger?.warning(
+    log.warning(
       'Drain budget $budget expired with $remaining $unit(s) still in flight; '
       'closing anyway',
     );
   } else {
-    logger?.info('Drain complete; no $unit is in flight');
+    log.info('Drain complete; no $unit is in flight');
   }
 }

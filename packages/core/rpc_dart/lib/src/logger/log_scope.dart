@@ -80,62 +80,40 @@ class LogScope {
 
   // --- Hierarchy ---
 
+  /// This scope with the given parts replaced; the controller, bound span
+  /// and clock carry over.
+  LogScope _copy({
+    String? name,
+    String? tag,
+    Map<String, Object>? boundData,
+    String? traceId,
+    String? requestId,
+  }) => LogScope(
+    _controller,
+    name ?? this.name,
+    tag: tag ?? this.tag,
+    boundData: boundData ?? _boundData,
+    traceId: traceId ?? _traceId,
+    requestId: requestId ?? _requestId,
+    parentSpanId: _parentSpanId,
+    clock: _clock,
+  );
+
   /// Create a child scope with a dot-separated name.
-  LogScope child(String childName, {String? tag}) {
-    return LogScope(
-      _controller,
-      '$name.$childName',
-      tag: tag ?? this.tag,
-      boundData: _boundData,
-      traceId: _traceId,
-      requestId: _requestId,
-      parentSpanId: _parentSpanId,
-      clock: _clock,
-    );
-  }
+  LogScope child(String childName, {String? tag}) =>
+      _copy(name: '$name.$childName', tag: tag);
 
   /// Create a new scope with a different tag.
-  LogScope withTag(String tag) {
-    return LogScope(
-      _controller,
-      name,
-      tag: tag,
-      boundData: _boundData,
-      traceId: _traceId,
-      requestId: _requestId,
-      parentSpanId: _parentSpanId,
-      clock: _clock,
-    );
-  }
+  LogScope withTag(String tag) => _copy(tag: tag);
 
   /// Create a new scope with additional bound data fields.
   /// These fields are automatically merged into every record.
-  LogScope withData(Map<String, Object> data) {
-    return LogScope(
-      _controller,
-      name,
-      tag: tag,
-      boundData: {...?_boundData, ...data},
-      traceId: _traceId,
-      requestId: _requestId,
-      parentSpanId: _parentSpanId,
-      clock: _clock,
-    );
-  }
+  LogScope withData(Map<String, Object> data) =>
+      _copy(boundData: {...?_boundData, ...data});
 
   /// Create a new scope with RPC context (traceId, requestId).
-  LogScope withContext({String? traceId, String? requestId}) {
-    return LogScope(
-      _controller,
-      name,
-      tag: tag,
-      boundData: _boundData,
-      traceId: traceId ?? _traceId,
-      requestId: requestId ?? _requestId,
-      parentSpanId: _parentSpanId,
-      clock: _clock,
-    );
-  }
+  LogScope withContext({String? traceId, String? requestId}) =>
+      _copy(traceId: traceId, requestId: requestId);
 
   // --- Event methods ---
 
@@ -305,6 +283,14 @@ class _NoopLogScope implements LogScope {
   String? get _parentSpanId => null;
   @override
   DateTime Function() get _clock => DateTime.now;
+  @override
+  LogScope _copy({
+    String? name,
+    String? tag,
+    Map<String, Object>? boundData,
+    String? traceId,
+    String? requestId,
+  }) => this;
 
   @override
   bool get isInternal => false;

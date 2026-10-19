@@ -35,7 +35,12 @@ final class RpcResponderMethodBinding {
 
 /// Stores and manages registered contracts and their method bindings.
 final class RpcResponderMethodRegistry {
-  LogScope _log = LogScope.noop;
+  /// Logs through [log], read on every use: the endpoint's scope can be
+  /// replaced after construction.
+  RpcResponderMethodRegistry(LogScope Function() log) : _logOf = log;
+
+  final LogScope Function() _logOf;
+  LogScope get _log => _logOf();
   final Map<String, RpcResponderContract> _contracts = {};
   final Map<String, RpcResponderMethodBinding> _methods = {};
 
@@ -62,8 +67,7 @@ final class RpcResponderMethodRegistry {
   /// the service was present, some of its methods were live and served requests,
   /// and the obvious recovery (catch, fix, register again) was refused with
   /// "already registered".
-  void registerContract(RpcResponderContract contract, LogScope? logger) {
-    if (logger != null) _log = logger;
+  void registerContract(RpcResponderContract contract) {
     final serviceName = contract.serviceName;
 
     if (_contracts.containsKey(serviceName)) {
@@ -160,8 +164,7 @@ final class RpcResponderMethodRegistry {
   }
 
   /// Removes the contract for [serviceName] and its method bindings.
-  void unregisterContract(String serviceName, LogScope? logger) {
-    if (logger != null) _log = logger;
+  void unregisterContract(String serviceName) {
     final contract = _contracts.remove(serviceName);
 
     if (contract == null) {
@@ -211,8 +214,7 @@ final class RpcResponderMethodRegistry {
   }
 
   /// Disposes all registered contracts and clears the registry.
-  void disposeAll(LogScope? logger) {
-    if (logger != null) _log = logger;
+  void disposeAll() {
     for (final entry in _contracts.entries) {
       final serviceName = entry.key;
       final contract = entry.value;
@@ -239,7 +241,4 @@ final class RpcResponderMethodRegistry {
 
   /// Returns the binding for [methodKey], or null if not registered.
   RpcResponderMethodBinding? lookup(String methodKey) => _methods[methodKey];
-
-  /// Returns true if [methodKey] is registered.
-  bool containsMethod(String methodKey) => _methods.containsKey(methodKey);
 }

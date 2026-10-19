@@ -52,7 +52,13 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
 
     final context = _ensureResponderContext(state);
     if (binding.isZeroCopy && !transport.supportsZeroCopy) {
-      await _handleUnsupportedZeroCopy(state, context, binding.methodKey);
+      await _sendGrpcErrorAndCleanup(
+        streamId: state.id,
+        status: RpcStatus.unimplemented,
+        message:
+            'Zero-copy method ${binding.methodKey} requires zero-copy transport',
+        only: state,
+      );
       return;
     }
 
@@ -234,37 +240,4 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
   // ---------------------------------------------------------------------------
   // Error handling helpers
   // ---------------------------------------------------------------------------
-
-  Future<void> _handleUnsupportedZeroCopy(
-    RpcResponderStreamState state,
-    RpcContext context,
-    String methodKey,
-  ) async {
-    // Before the await, as in [_sendGrpcErrorAndCleanup]: a frame of this call
-    // arriving during the send would otherwise find no responder, refuse the
-    // stream again and put a second trailer on it.
-    _rememberClosedStream(state.id);
-    try {
-      await transport.sendMetadata(
-        state.id,
-        // Through RpcTrailers.status, so the message is trimmed to the cap that will
-        // judge it. Built by hand it was invisible to round 175's sweep, and a
-        // long `methodKey` was enough to lose the whole answer.
-        RpcTrailers.status(
-          RpcStatus.unimplemented,
-          message: 'Zero-copy method $methodKey requires zero-copy transport',
-          maxMessageLength: _trailerMessageCap(transport),
-        ),
-        endStream: true,
-      );
-    } catch (error, stackTrace) {
-      _log.error(
-        'Failed to send zero-copy error for $methodKey',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    } finally {
-      await _cleanupStream(state.id, only: state);
-    }
-  }
 }

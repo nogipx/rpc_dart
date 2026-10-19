@@ -66,11 +66,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     if (error is RpcCancelledException) return false;
     if (error is RpcStatusException) {
       return error.statusCode == RpcStatus.unavailable ||
-          // Only with pushback, as the retry predicate reads it: a bare 8 is a
-          // message over the server's size limit, the caller's fault.
-          (error.statusCode == RpcStatus.resourceExhausted &&
-              (error is RpcRateLimitException ||
-                  error.details.any((d) => d is RpcRetryInfo))) ||
+          error.isPushback ||
           error.statusCode == RpcStatus.internal ||
           error.statusCode == RpcStatus.unknown ||
           error.statusCode == RpcStatus.deadlineExceeded;

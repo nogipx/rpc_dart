@@ -70,7 +70,7 @@ final class RpcEndpointPingExchange {
   final DateTime sentAt;
 
   /// Logger for ping lifecycle.
-  late final LogScope _log;
+  final LogScope _log;
 
   /// Creates an [RpcEndpointPingExchange] for the given transport.
   RpcEndpointPingExchange({
