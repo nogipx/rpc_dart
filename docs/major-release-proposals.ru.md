@@ -534,15 +534,23 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
   - Сделано (2026-10-19). Убран и `RpcCodec.withDecoder`: единственный
     конструктор — `const RpcCodec(fromJson)`, его и генерирует генератор.
 - **Health (D10).**
-  - `GrpcHealthCheckContract` переименовывается в `RpcHealthContract`
-    (собственный health rpc_dart, CBOR).
-  - Настоящий `grpc.health.v1` (protobuf) живёт в `rpc_dart_grpc_reflection`,
-    который уже пишет protobuf.
+  - Владелец, 2026-10-19: один контракт вместо двух. `GrpcHealthCheckContract`
+    сохраняет имя и говорит на настоящем protobuf: два сообщения —
+    `string service = 1` и `ServingStatus status = 1`, так что хватает
+    рукописного varint-кодека в core.
+  - Сделано (2026-10-19). `Check` неизвестного сервиса падает с NOT_FOUND,
+    как требует протокол. grpcurl с upstream `health.proto` читает SERVING,
+    NOT_SERVING, NOT_FOUND и поток `Watch` поверх rpc_dart_http2.
 - **Сжатие (D9, P5).**
   - `selectResponseEncoding` нормализует.
   - Один ограниченный gzip-распаковщик: сначала измерить однократное
     добавление против поблочного, оставить тот, который соблюдает ограничение,
     и экспортировать его из ядра для сопутствующего пакета.
+  - Сделано (2026-10-19). Ограничивают оба: gzip-бомба на 1 GiB при лимите
+    1 MiB останавливается за 2 мс при 165 MiB max RSS в обоих вариантах,
+    против 939 мс и 1597 MiB без лимита. Остался однократный вариант ядра,
+    он публичен как `RpcGrpcCompression.platformGzip`; `rpc_dart_compression`
+    делегирует ему, а его собственная копия удалена.
 
 ## 9. Сопутствующие пакеты
 
@@ -598,7 +606,8 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 3. Политика (T4): не-null, по умолчанию `const RpcSecurityPolicy()`, как у
    всех остальных транспортов.
 4. Health (D10): переименовать в `RpcHealthContract` и добавить настоящий
-   `grpc.health.v1`.
+   `grpc.health.v1`. Пересмотрено 2026-10-19: один protobuf-контракт с
+   прежним именем.
 5. Примитивы (C22): `RpcBool` и `RpcString` выбрасывают `FormatException` на
    некорректном вводе.
 6. Переопределения кодеков в генераторе (D8): на метод.
@@ -624,7 +633,7 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
 | переопределение кодека для метода действует на все методы с тем же типом | действует только на свой метод; перегенерировать код |
 | `RpcConnectionLogger` | `LogScope` |
-| `GrpcHealthCheckContract` | `RpcHealthContract` |
+| `GrpcHealthCheckContract` говорит на CBOR; `Check` неизвестного сервиса отвечает `serviceUnknown` | protobuf на проводе; `Check` падает с `NOT_FOUND`. У сообщений нет `toJson`/`fromJson`; используйте их `codec` |
 | `transferMode:` у `unaryRequest` | режим передачи контракта |
 | `RpcMethodKind` в `@RpcMethod` | `RpcMethodType` |
 | типы для авторов транспортов из `rpc_dart.dart` | `rpc_dart/transport.dart` |

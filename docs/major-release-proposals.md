@@ -507,14 +507,22 @@ As landed:
   - Done (2026-10-19). `RpcCodec.withDecoder` goes too: the only constructor
     is `const RpcCodec(fromJson)`, and the generator emits it.
 - **Health (D10).**
-  - `GrpcHealthCheckContract` is renamed `RpcHealthContract` (rpc_dart's own
-    health, CBOR).
-  - A real `grpc.health.v1` (protobuf) lives in `rpc_dart_grpc_reflection`,
-    which already writes protobuf.
+  - Owner, 2026-10-19: one contract instead of two. `GrpcHealthCheckContract`
+    keeps its name and speaks real protobuf: the two messages are
+    `string service = 1` and `ServingStatus status = 1`, so a hand-written
+    varint codec in core is enough.
+  - Done (2026-10-19). `Check` on an unknown service fails with NOT_FOUND, as
+    the protocol says. grpcurl with the upstream `health.proto` reads SERVING,
+    NOT_SERVING, NOT_FOUND and a `Watch` stream over rpc_dart_http2.
 - **Compression (D9, P5).**
   - `selectResponseEncoding` normalises.
   - One bounded gzip inflater: measure single-add against chunked first, keep
     the one that bounds, export it from core for the companion.
+  - Done (2026-10-19). Both bound: a 1 GiB gzip bomb against a 1 MiB limit
+    stopped in 2 ms at 165 MiB max RSS either way, against 939 ms and
+    1597 MiB without a limit. Core's single-add one stays and is public as
+    `RpcGrpcCompression.platformGzip`; `rpc_dart_compression` delegates to it
+    and its own copy is deleted.
 
 ## 9. Companions
 
@@ -569,7 +577,8 @@ Breaking changes are allowed throughout: this is a major release.
 3. Policy (T4): non-null, defaulting to `const RpcSecurityPolicy()` like every
    other transport.
 4. Health (D10): rename to `RpcHealthContract` and add a real
-   `grpc.health.v1`.
+   `grpc.health.v1`. Revised 2026-10-19: one protobuf contract, keeping the
+   name.
 5. Primitives (C22): `RpcBool` and `RpcString` throw `FormatException` on bad
    input.
 6. Generator codec overrides (D8): per method.
@@ -595,7 +604,7 @@ Breaking changes are allowed throughout: this is a major release.
 | `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
 | a per-method codec override applied to every method with the same type | applied to its own method only; regenerate |
 | `RpcConnectionLogger` | `LogScope` |
-| `GrpcHealthCheckContract` | `RpcHealthContract` |
+| `GrpcHealthCheckContract` speaking CBOR; `Check` on an unknown service answering `serviceUnknown` | protobuf on the wire; `Check` fails with `NOT_FOUND`. The messages lose `toJson`/`fromJson`; use their `codec` |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |
 | transport-authoring types from `rpc_dart.dart` | `rpc_dart/transport.dart` |

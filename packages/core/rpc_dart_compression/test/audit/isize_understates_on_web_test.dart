@@ -4,9 +4,10 @@
 
 // B-29. `RpcGzipCodec` pre-checks the gzip ISIZE trailer before allocating, and
 // ISIZE is the size MOD 2^32 -- so a payload that inflates to k*2^32 + small
-// declares `small` and clears the pre-check. `boundedInflate` is the fix, and on
-// web it is `=> null`: package:archive materialises the whole output and cannot
-// be halted, so the limit runs on `result.length`, AFTER the output exists.
+// declares `small` and clears the pre-check. `RpcGrpcCompression.platformGzip`
+// is the fix, and on web it is null: package:archive materialises the whole
+// output and cannot be halted, so the limit runs on `result.length`, AFTER the
+// output exists.
 //
 // `isize_wrap_bomb_test.dart` proves the VM half and is `@TestOn('vm')`, because
 // it builds a true 4 GiB wrap with dart:io's encoder. So the platform WITHOUT

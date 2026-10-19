@@ -23,7 +23,7 @@
 //
 // VM only: the fix is `dart:io`'s converter, which can be stopped mid-stream.
 // On web no incremental inflater exists and the whole-buffer path remains --
-// documented in bounded_inflate_stub.dart, not silently assumed away.
+// documented in gzip_codec.dart, not silently assumed away.
 @TestOn('vm')
 library;
 

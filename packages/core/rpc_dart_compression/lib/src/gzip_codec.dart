@@ -5,9 +5,6 @@
 import 'package:archive/archive.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
-import 'bounded_inflate_stub.dart'
-    if (dart.library.io) 'bounded_inflate_io.dart';
-
 /// Cross-platform gzip [RpcCompressionCodec] backed by [package:archive].
 ///
 /// Works on all platforms: native, web, JS, Wasm.
@@ -162,29 +159,24 @@ final class RpcGzipCodec implements RpcCompressionCodec {
     // damage. Measured with 4.0 MiB of compressed zeros declaring ISIZE 4096,
     // against a 16 MiB limit: RSS +1873 MiB and 17.5s before the throw.
     //
-    // On the VM `dart:io`'s decoder is a converter and aborts mid-stream, so
-    // the same payload now costs nothing. On web there is no incremental
-    // inflater available and [boundedInflate] returns null, leaving the
-    // whole-buffer path with its after-the-fact check -- documented, not fixed,
-    // because `Inflate.stream(input).getBytes()` gives nothing to interrupt.
+    // On native platforms core's `dart:io` codec stops mid-stream, so the same
+    // payload costs nothing. On web there is no incremental inflater and
+    // [RpcGrpcCompression.platformGzip] is null, leaving the whole-buffer path
+    // with its after-the-fact check -- documented, not fixed, because
+    // `Inflate.stream(input).getBytes()` gives nothing to interrupt.
+    final bounded = effectiveLimit == _unlimited
+        ? null
+        : RpcGrpcCompression.platformGzip;
     final List<int> result;
     try {
-      final bounded = effectiveLimit == _unlimited
-          ? null
-          : boundedInflate(data, effectiveLimit);
-      if (bounded != null) {
-        result = bounded;
-      } else {
-        // verify:true enforces the CRC32 + ISIZE trailer check on the VM.
-        // decodeBytes already returns a Uint8List, but the trailer re-check
-        // below works on any List<int>, so keep the declared type loose.
-        result = GZipDecoder().decodeBytes(data, verify: true);
-      }
-    } on InflateLimitExceeded {
-      throw RpcStatusException(
-        RpcStatus.resourceExhausted,
-        'Decompressed gzip output exceeds the limit $effectiveLimit',
-      );
+      // verify:true enforces the CRC32 + ISIZE trailer check on the VM.
+      // decodeBytes already returns a Uint8List, but the trailer re-check
+      // below works on any List<int>, so keep the declared type loose.
+      result =
+          bounded?.decompress(data, maxOutputBytes: effectiveLimit) ??
+          GZipDecoder().decodeBytes(data, verify: true);
+    } on RpcStatusException {
+      rethrow;
     } catch (e) {
       throw FormatException('Invalid gzip data: $e');
     }
