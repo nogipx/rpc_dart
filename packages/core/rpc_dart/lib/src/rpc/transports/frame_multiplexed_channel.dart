@@ -94,13 +94,30 @@ class RpcFrameMultiplexedChannel
   /// Completes when [_held] has been written, or dropped by a close.
   final Completer<void> _released = Completer<void>();
 
+  final Completer<void> _ready = Completer<void>();
+  Timer? _prefaceTimer;
+
+  /// Completes once the peer's preface has arrived and matched.
+  ///
+  /// Fails with an [RpcStatusException] when it never will: FAILED_PRECONDITION
+  /// for another protocol version, UNKNOWN for a peer that is not an rpc_dart
+  /// channel, UNAVAILABLE when the channel ended first or the wait outlasted
+  /// `prefaceTimeout`. A client knows from it that an rpc_dart server
+  /// answered; a server, that the peer is a client worth an endpoint.
+  Future<void> get ready => _ready.future;
+
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
   ///
   /// Each end writes [RpcChannelFrame.preface] once, before its first frame;
-  /// see [isClient] for the order. A peer of another
-  /// [RpcChannelFrame.protocolVersion] fails [incoming] with
-  /// FAILED_PRECONDITION, one that is not an rpc_dart channel with UNKNOWN,
-  /// and the channel closes.
+  /// see [isClient] for the order and [ready] for how a mismatch is reported.
+  /// On a mismatch [incoming] fails with the same status and the channel
+  /// closes.
+  ///
+  /// [prefaceTimeout] bounds the wait for the peer's preface; past it the
+  /// channel closes. Null waits for ever, which suits a peer that may take
+  /// long to start, such as a wasm guest. A server facing the network sets
+  /// it, so a peer that connects and stays silent costs a connection for that
+  /// long and no more.
   ///
   /// [policy] bounds the RECEIVE path: a declared frame payload larger than
   /// [_maxFramePayloadBytes] is rejected from the header without buffering, and
@@ -110,9 +127,24 @@ class RpcFrameMultiplexedChannel
     required this.isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     bool? closeOnOversizedFrame,
+    Duration? prefaceTimeout,
   }) : _channel = channel,
        _policy = policy,
        closeOnOversizedFrame = closeOnOversizedFrame ?? !isClient {
+    // Marked handled, or a failed handshake nobody awaited is an unhandled
+    // async error. Whoever awaits [ready] still sees it fail.
+    unawaited(_ready.future.catchError((Object _) {}));
+    if (prefaceTimeout != null) {
+      _prefaceTimer = Timer(
+        prefaceTimeout,
+        () => _failPreface(
+          RpcStatusException(
+            RpcStatus.unavailable,
+            'No rpc_dart preface from the peer within $prefaceTimeout',
+          ),
+        ),
+      );
+    }
     if (isClient) {
       // Before any frame: frames go out through the same channel, in call
       // order.
@@ -126,6 +158,10 @@ class RpcFrameMultiplexedChannel
     _channelSub = _channel.incoming.listen(
       _onData,
       onError: (Object e) {
+        // A transport failure before the preface is why the handshake failed.
+        if (!_ready.isCompleted && e is RpcStatusException) {
+          _ready.completeError(e);
+        }
         if (!_incomingCtl.isClosed) _incomingCtl.addError(e);
       },
       onDone: () {
@@ -243,6 +279,15 @@ class RpcFrameMultiplexedChannel
   /// the reassembly buffer and held frames, end [incoming].
   Future<void> _releaseAfterChannelClose() async {
     _dropHeld();
+    _prefaceTimer?.cancel();
+    if (!_ready.isCompleted) {
+      _ready.completeError(
+        RpcStatusException(
+          RpcStatus.unavailable,
+          'The channel closed before the peer sent its rpc_dart preface',
+        ),
+      );
+    }
     await _channelSub?.cancel();
     _channelSub = null;
     _buf = Uint8List(0);
@@ -455,15 +500,14 @@ class RpcFrameMultiplexedChannel
       if (_prefaceSeen < RpcChannelFrame.prefaceSize) return;
       final mismatch = _checkPreface();
       if (mismatch != null) {
-        _failed = true;
-        _dropHeld();
-        if (!_incomingCtl.isClosed) _incomingCtl.addError(mismatch);
-        unawaited(closeForProtocolError(mismatch.message));
+        _failPreface(mismatch, protocolError: true);
         return;
       }
+      _prefaceTimer?.cancel();
       if (!isClient) {
         _answerPreface(_peerPreface[RpcChannelFrame.prefaceSize - 1]);
       }
+      if (!_ready.isCompleted) _ready.complete();
       if (i == data.length) return;
       data = Uint8List.sublistView(data, i);
     }
@@ -554,6 +598,19 @@ class RpcFrameMultiplexedChannel
     }
 
     _decodeAndEmit(data);
+  }
+
+  /// Ends a handshake that will not complete: [error] goes to [ready] and to
+  /// [incoming], and the channel closes. A wrong preface is the peer's fault
+  /// and is closed as a protocol error.
+  void _failPreface(RpcStatusException error, {bool protocolError = false}) {
+    if (_closed || _failed) return;
+    _failed = true;
+    _prefaceTimer?.cancel();
+    _dropHeld();
+    if (!_ready.isCompleted) _ready.completeError(error);
+    if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
+    unawaited(protocolError ? closeForProtocolError(error.message) : close());
   }
 
   /// Null when the peer's preface matches ours, else the status to fail with.

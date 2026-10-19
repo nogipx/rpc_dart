@@ -156,8 +156,9 @@ class RpcChannelTransport extends IRpcTransport
   ///
   /// [ready] is the channel's own readiness, for a channel that is still
   /// connecting when the transport is built (a WebSocket whose upgrade has not
-  /// answered). It becomes this transport's [ready], and [health] reads
-  /// degraded until it completes. Omit it for a channel usable at once.
+  /// answered). Over an [RpcFrameMultiplexedChannel] this transport's [ready]
+  /// also waits for the peer's preface, see [RpcFrameMultiplexedChannel.ready],
+  /// and [health] reads degraded until both complete.
   RpcChannelTransport({
     required IRpcMultiplexedChannel channel,
     required bool isClient,
@@ -167,14 +168,14 @@ class RpcChannelTransport extends IRpcTransport
   }) : _channel = channel,
        _idManager = RpcStreamIdManager(isClient: isClient),
        _policy = policy,
-       _ready = ready ?? Future<void>.value(),
-       _isReady = ready == null,
+       _ready = _readyOf(channel, ready) ?? Future<void>.value(),
+       _isReady = channel is! RpcFrameMultiplexedChannel && ready == null,
        _log = logger?.child('ChannelTransport') ?? LogScope.noop {
-    if (ready != null) {
+    if (!_isReady) {
       // Observed here, so a channel that fails to connect is not an uncaught
       // error when nobody awaits [ready]; the failure also reaches the channel
       // stream, which is what closes the transport.
-      unawaited(ready.then((_) => _isReady = true, onError: (Object _) {}));
+      unawaited(_ready.then((_) => _isReady = true, onError: (Object _) {}));
     }
     _fc = RpcFlowController(
       policy: policy,
@@ -229,8 +230,21 @@ class RpcChannelTransport extends IRpcTransport
     );
   }
 
+  /// The channel's readiness and, over a frame channel, its preface.
+  static Future<void>? _readyOf(
+    IRpcMultiplexedChannel channel,
+    Future<void>? ready,
+  ) {
+    if (channel is! RpcFrameMultiplexedChannel) return ready;
+    if (ready == null) return channel.ready;
+    return Future.wait([ready, channel.ready], eagerError: true).then((_) {});
+  }
+
   /// Creates a transport from a raw [IRpcChannel] by wrapping it in a
   /// [RpcFrameMultiplexedChannel] first.
+  ///
+  /// [prefaceTimeout] bounds the wait for the peer's preface, see
+  /// [RpcFrameMultiplexedChannel.new].
   ///
   /// Generative, so a transport package can extend this class over its own
   /// byte channel instead of forwarding every member.
@@ -239,12 +253,14 @@ class RpcChannelTransport extends IRpcTransport
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     Future<void>? ready,
+    Duration? prefaceTimeout,
     LogScope? logger,
   }) : this(
          channel: RpcFrameMultiplexedChannel(
            channel: channel,
            isClient: isClient,
            policy: policy,
+           prefaceTimeout: prefaceTimeout,
          ),
          isClient: isClient,
          policy: policy,
