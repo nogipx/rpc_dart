@@ -20,11 +20,13 @@ abstract final class RpcWasmTransport {
     required RpcWasmBridge bridge,
     required bool isClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
+    LogScope? logger,
   }) {
     return RpcChannelTransport.fromChannel(
       channel: bridge,
       isClient: isClient,
       policy: policy,
+      logger: logger,
     );
   }
 }

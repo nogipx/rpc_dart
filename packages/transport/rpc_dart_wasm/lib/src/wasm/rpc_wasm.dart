@@ -133,6 +133,7 @@ abstract final class RpcWasm {
       bridge: bridge,
       isClient: isClient,
       policy: policy,
+      logger: logController?.scope('rpc.wasm'),
     );
     final endpoint = RpcPeerEndpoint(
       transport: transport,
