@@ -202,11 +202,15 @@ void main() {
     final rig = _connect(maxHandlers: 2);
     addTearDown(() => _teardown(rig));
 
+    // Long enough for both requests to reach their handlers under load: a
+    // request still in flight at its deadline is refused before dispatch, and
+    // then only one handler would hold a slot.
     final abandoned = [
-      _call(rig, deadline: const Duration(milliseconds: 50)),
-      _call(rig, deadline: const Duration(milliseconds: 50)),
+      _call(rig, deadline: const Duration(milliseconds: 500)),
+      _call(rig, deadline: const Duration(milliseconds: 500)),
     ];
     await Future.wait(abandoned);
+    expect(rig.svc.entered, 2, reason: 'both calls must reach their handlers');
     // Past the responder's reclaim grace: by now the streams really are gone.
     await Future<void>.delayed(const Duration(milliseconds: 2500));
 
