@@ -21,7 +21,7 @@ import 'protocol.dart';
 /// Each instance generates a unique session ID so multiple connections
 /// from the same app are distinguishable in the collector.
 ///
-/// ## Design (0.2.1)
+/// ## Design
 ///
 /// Reconnect is delegated to [RpcClientConnection], the canonical
 /// transport-agnostic auto-reconnect wrapper. It owns the backoff loop, rebuilds
@@ -33,7 +33,7 @@ import 'protocol.dart';
 /// while not online it buffers.
 ///
 /// Sends are pipelined: the pump issues the next `send` without awaiting the
-/// previous ack, so per-record round-trip latency no longer caps throughput,
+/// previous ack, so per-record round-trip latency does not cap throughput,
 /// and the logging hot path ([write]) never blocks. Records move
 /// buffer -> in-flight on send and are dropped only when their ack arrives, so
 /// nothing is lost across a reconnect (unacked in-flight records are requeued

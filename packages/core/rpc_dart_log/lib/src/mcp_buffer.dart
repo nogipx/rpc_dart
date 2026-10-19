@@ -13,8 +13,8 @@ import 'protocol.dart';
 /// Holds buffered log records and exposes MCP query methods.
 ///
 /// Maintains incremental stats (O(1) for [sources]) updated on each [addRecord].
-/// Extracted from [LogCollectorMcpServer] to enable unit testing without a live
-/// WebSocket server.
+/// Separate from [LogCollectorMcpServer] so it can be unit tested without a
+/// live WebSocket server.
 class LogCollectorMcpBuffer {
   /// Most records kept; the oldest is evicted first.
   final int maxRecords;
@@ -50,14 +50,11 @@ class LogCollectorMcpBuffer {
 
   /// Cap on tracked scopes.
   ///
-  /// Every other collection here is bounded -- records by [maxRecords], trace
-  /// ids by [_maxTraceIds], unique errors at 5 -- and _scopeStats was the one
-  /// that was not. Scope names come from the connected devices, and
-  /// applications routinely build them per request or per entity
-  /// (`LogScope.child(...)`), so cardinality is caller-controlled. Because the
-  /// stats are cumulative they also outlived the records they summarise: with
-  /// maxRecords = 100 and 5000 rotating scopes, the buffer held 100 records
-  /// and 5000 scope entries.
+  /// Scope names come from the connected devices, and applications routinely
+  /// build them per request or per entity (`LogScope.child(...)`), so
+  /// cardinality is caller-controlled. The stats are cumulative and outlive
+  /// the records they summarise, so without this cap they grow without bound
+  /// while the record buffer stays bounded.
   static const _maxScopes = 500;
 
   LogCollectorMcpBuffer({
