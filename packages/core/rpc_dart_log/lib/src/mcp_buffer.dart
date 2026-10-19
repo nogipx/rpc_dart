@@ -102,9 +102,7 @@ class LogCollectorMcpBuffer {
     }
     _scopeStats.putIfAbsent(r.scope, _ScopeStats.new).add(r);
 
-    String? tid;
-    if (r is LogEvent) tid = r.traceId;
-    if (r is LogSpan) tid = r.traceId;
+    final tid = r.traceId;
     if (tid != null) {
       if (!_traceErrorCounts.containsKey(tid)) {
         if (_traceIdOrder.length >= _maxTraceIds) {
@@ -234,9 +232,7 @@ class LogCollectorMcpBuffer {
     final noData = (args['no_data'] as bool?) ?? false;
     final contextLines = ((args['context'] as int?) ?? 0).clamp(0, 20);
 
-    final level = levelStr != null
-        ? RpcLogLevel.values.where((l) => l.name == levelStr).firstOrNull
-        : null;
+    final level = levelStr != null ? RpcLogLevel.fromName(levelStr) : null;
 
     final limit = count.clamp(1, 500);
 
@@ -642,7 +638,7 @@ class _Filter {
     if (type == 'event' && r is! LogEvent) return false;
 
     if (traceId != null) {
-      final tid = r is LogEvent ? r.traceId : (r is LogSpan ? r.traceId : null);
+      final tid = r.traceId;
       if (tid == null || !tid.startsWith(traceId!)) return false;
     }
 
