@@ -10,108 +10,32 @@ final class ClientStreamResponder<
   TRequest extends Object,
   TResponse extends Object
 >
-    implements IRpcResponder {
-  late final LogScope _logger;
-
-  @override
-  final int id;
-
-  final Completer<void> _doneCompleter = Completer<void>();
-
-  /// Completes when the client stream has fully finished.
-  Future<void> get done => _doneCompleter.future;
-
-  void _completeDone() {
-    if (_doneCompleter.isCompleted) return;
-    _doneCompleter.complete();
-  }
-
-  /// Stream processor.
-  late final StreamProcessor<TRequest, TResponse> _processor;
-
-  /// True when handler started.
-  bool _handlerStarted = false;
-
-  /// True until [close] runs. A handler that finishes after the call was torn
-  /// down (the peer cancelled, the deadline passed) has nobody to answer, and
-  /// sending anyway wrote a warning per call that the peer chose to cancel.
-  bool _isActive = true;
-
+    extends RpcResponderBase<TRequest, TResponse> {
   /// Creates a client-stream responder.
   ClientStreamResponder({
-    required this.id,
-    required IRpcTransport transport,
-    required String serviceName,
-    required String methodName,
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
+    required super.id,
+    required super.transport,
+    required super.serviceName,
+    required super.methodName,
+    super.requestCodec,
+    super.responseCodec,
     required Future<TResponse> Function(Stream<TRequest> requests) handler,
-    RpcContext? context,
-    LogScope? logger,
-  }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
-
-    // Zero-copy requires transport support.
-    if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError(
-        'Zero-copy mode requires a transport with zero-copy support. '
-        'Provide codecs for network transports.',
-      );
-    }
-
-    // Serialization requires codecs.
-    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError(
-        'Codecs are required for serialization mode. '
-        'For zero-copy leave codecs null.',
-      );
-    }
-
-    _logger = logger?.child('ClientResponder') ?? LogScope.noop;
-    if (_logger.isInternal) {
-      _logger.internal(
-        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ClientStreamResponder for $serviceName.$methodName [id: $id]',
-      );
-    }
-
-    _processor = StreamProcessor<TRequest, TResponse>(
-      transport: transport,
-      streamId: id,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: context,
-      logger: _logger,
-    );
-
-    _setupRequestHandler(handler);
+    super.context,
+    super.logger,
+  }) : super(logName: 'ClientResponder', className: 'ClientStreamResponder') {
+    _serve(handler);
   }
 
-  /// Binds the responder to the endpoint message stream.
-  void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    if (_logger.isInternal) {
-      _logger.internal('Binding to message stream [id: $id]');
-    }
-    _processor.bindToMessageStream(messageStream);
-  }
-
-  void _setupRequestHandler(
-    Future<TResponse> Function(Stream<TRequest> requests) handler,
-  ) {
-    if (_handlerStarted) {
-      _logger.warning('Request handler already started [id: $id]');
-      return;
-    }
-
-    _handlerStarted = true;
+  /// Runs [handler] on the request stream and answers its result. A handler
+  /// that finishes after the call was torn down (the peer cancelled, the
+  /// deadline passed) has nobody to answer.
+  void _serve(Future<TResponse> Function(Stream<TRequest> requests) handler) {
     if (_logger.isInternal) {
       _logger.internal(
         'Configuring request handler for client stream [id: $id]',
       );
     }
 
-    // Invoke handler directly with the request stream.
     handler(_processor.requests)
         .then((response) async {
           if (!_isActive) {
@@ -166,13 +90,5 @@ final class ClientStreamResponder<
             _completeDone();
           }
         });
-  }
-
-  /// Closes the stream and releases resources.
-  @override
-  Future<void> close() async {
-    _isActive = false;
-    await _processor.close();
-    _completeDone();
   }
 }

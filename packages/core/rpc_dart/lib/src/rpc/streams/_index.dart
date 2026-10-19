@@ -24,11 +24,18 @@ part 'server/responder.dart';
 
 part 'unary/caller.dart';
 part 'unary/responder.dart';
+part 'responder_base.dart';
 
 /// Contract for server-side responders that handle a single stream.
 abstract interface class IRpcResponder {
   /// The transport-level stream ID for this responder.
   int get id;
+
+  /// Completes when the call has fully finished, however it ended.
+  Future<void> get done;
+
+  /// Feeds the responder its stream's messages.
+  void bindToMessageStream(Stream<RpcTransportMessage> messageStream);
 
   /// Closes the responder and releases its resources.
   Future<void> close();

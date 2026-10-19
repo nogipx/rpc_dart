@@ -6,81 +6,38 @@
 part of '../_index.dart';
 
 /// Bidirectional stream responder: codecs → serialized; no codecs → zero-copy (zero-copy transport only). Handles incoming requests and sends responses independently.
+///
+/// With a [handler], the responder runs it once bound and relays its
+/// responses, as the other responders do. Without one, the call is driven
+/// through [requests] and [responseSink] or [send].
 final class BidirectionalStreamResponder<
   TRequest extends Object,
   TResponse extends Object
 >
-    implements IRpcResponder {
-  late final LogScope _logger;
-
-  @override
-  final int id;
-
-  final Completer<void> _doneCompleter = Completer<void>();
-
-  /// Completes when the bidirectional stream has fully finished.
-  Future<void> get done => _doneCompleter.future;
-
-  void _completeDone() {
-    if (_doneCompleter.isCompleted) return;
-    _doneCompleter.complete();
-  }
-
-  /// Stream processor.
-  late final StreamProcessor<TRequest, TResponse> _processor;
-
-  /// Responder activity flag.
-  bool _isActive = true;
-
+    extends RpcResponderBase<TRequest, TResponse> {
   /// Creates a bidirectional stream responder.
   BidirectionalStreamResponder({
-    required this.id,
-    required IRpcTransport transport,
-    required String serviceName,
-    required String methodName,
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
-    RpcContext? context,
-    LogScope? logger,
-  }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
+    required super.id,
+    required super.transport,
+    required super.serviceName,
+    required super.methodName,
+    super.requestCodec,
+    super.responseCodec,
+    Stream<TResponse> Function(Stream<TRequest> requests)? handler,
+    super.context,
+    super.logger,
+  }) : _handler = handler,
+       super(
+         logName: 'BidirectionalResponder',
+         className: 'BidirectionalStreamResponder',
+       );
 
-    // Zero-copy requires transport support.
-    if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError(
-        'Zero-copy mode requires a transport with zero-copy support. '
-        'Provide codecs for network transports.',
-      );
-    }
+  /// Run once the responder is bound; null after that, or when driven by
+  /// hand.
+  Stream<TResponse> Function(Stream<TRequest> requests)? _handler;
 
-    // Serialization mode: codecs required.
-    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError(
-        'Codecs are required for serialization mode. '
-        'For zero-copy leave codecs null.',
-      );
-    }
-
-    _logger = logger?.child('BidirectionalResponder') ?? LogScope.noop;
-    if (_logger.isInternal) {
-      _logger.internal(
-        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} BidirectionalStreamResponder for $serviceName.$methodName [id: $id]',
-      );
-    }
-
-    _processor = StreamProcessor<TRequest, TResponse>(
-      transport: transport,
-      streamId: id,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: context,
-      logger: _logger,
-    );
-
-    // Response forwarding is initialized only when needed.
-  }
+  /// The bridge over the handler's response stream, closed with the call.
+  StreamBridge<TResponse>? _handlerRelay;
 
   /// Incoming requests from the client; completes when the client closes its side.
   Stream<TRequest> get requests => _processor.requests;
@@ -120,12 +77,58 @@ final class BidirectionalStreamResponder<
   /// Drives [responseSink]; null until something asks for the sink.
   SinkPump<TResponse>? _responsePump;
 
-  /// Binds the responder to the endpoint message stream.
+  @override
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    if (_logger.isInternal) {
-      _logger.internal('Binding to message stream [id: $id]');
+    super.bindToMessageStream(messageStream);
+    final handler = _handler;
+    _handler = null;
+    if (handler != null) unawaited(_serve(handler));
+  }
+
+  /// Runs [handler] on the requests, relays its responses and finishes the
+  /// call; a handler failure answers it instead.
+  Future<void> _serve(
+    Stream<TResponse> Function(Stream<TRequest> requests) handler,
+  ) async {
+    try {
+      await _relay(handler(requests));
+      await finishReceiving();
+    } catch (error, stackTrace) {
+      if (RpcStatus.isFaultError(error)) {
+        _logger.error(
+          'Error in bidi handler [id: $id]',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      await sendWireError(error, sendError);
     }
-    _processor.bindToMessageStream(messageStream);
+  }
+
+  /// Forwards [responses], owning the subscription so the relay stops as
+  /// soon as the call ends.
+  ///
+  /// A bare `await for` over the handler's stream keeps an implicit
+  /// subscription that nothing can reach, and [send] returns silently once
+  /// the responder is inactive rather than throwing, so a long-lived handler
+  /// kept producing after the client cancelled. The bridge also hands the
+  /// loop's demand back to the handler: without it the relay is an unbounded
+  /// buffer, since an `async*` handler keeps allocating while a send is in
+  /// flight.
+  Future<void> _relay(Stream<TResponse> responses) async {
+    final relay = StreamBridge<TResponse>(source: responses);
+    _handlerRelay = relay;
+    unawaited(done.whenComplete(relay.close));
+    try {
+      await for (final response in relay.stream) {
+        await send(response);
+        // A response that could not go out ends the call; the handler must
+        // not keep producing behind it. The finish that follows answers it.
+        if (isAnswered) break;
+      }
+    } finally {
+      relay.close();
+    }
   }
 
   /// Whether the call has had, or is about to have, its last word; see
@@ -147,12 +150,7 @@ final class BidirectionalStreamResponder<
   /// Sends an error to the client.
   ///
   /// [statusDetailsBin] carries the encoded `google.rpc.Status` for an
-  /// [RpcStatusException]'s structured `details`. This parameter did not exist,
-  /// so a bidirectional handler's details were dropped on the floor while the
-  /// other three call shapes delivered them: measured with a handler throwing
-  /// NOT_FOUND plus an RpcErrorInfo and an RpcBadRequest, unary, server-stream
-  /// and client-stream all reported 2 details and bidirectional reported 0.
-  /// Status code and message came through, so the loss was silent.
+  /// [RpcStatusException]'s structured `details`, as on the other shapes.
   ///
   /// [fault] false: the status answers the peer's own invalid input; see
   /// `StreamProcessor.sendError`.
@@ -187,18 +185,15 @@ final class BidirectionalStreamResponder<
     }
   }
 
-  /// Closes the stream and releases resources.
   @override
-  Future<void> close() async {
-    if (!_isActive) return;
-
-    _isActive = false;
+  Future<void> _stopHandler() async {
     // Cancels before closing and awaits neither: a handler's
     // `responseSink.addStream(source)` whose source is an `async*` suspended at
     // an `await` never completes its cancellation, and teardown must not hang
     // on it.
     _responsePump?.close();
-    await _processor.close();
-    _completeDone();
+    final relay = _handlerRelay;
+    _handlerRelay = null;
+    relay?.close();
   }
 }

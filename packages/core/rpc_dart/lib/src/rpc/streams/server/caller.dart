@@ -30,24 +30,8 @@ final class ServerStreamCaller<
     RpcContext? context,
     LogScope? logger,
   }) : _context = context {
+    // The codecs-or-zero-copy rule is checked by the processor.
     final isZeroCopy = requestCodec == null && responseCodec == null;
-
-    // Zero-copy mode: requires in-memory transport.
-    if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError(
-        'Zero-copy mode requires a transport with zero-copy support. '
-        'Provide codecs for network transports.',
-      );
-    }
-
-    // Serialization mode: codecs required.
-    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError(
-        'Codecs are required for serialization mode. '
-        'For zero-copy leave codecs null.',
-      );
-    }
-
     _logger = logger?.child('ServerCaller') ?? LogScope.noop;
     if (_logger.isInternal) {
       _logger.internal(

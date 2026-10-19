@@ -10,25 +10,7 @@ final class ServerStreamResponder<
   TRequest extends Object,
   TResponse extends Object
 >
-    implements IRpcResponder {
-  late final LogScope _logger;
-
-  @override
-  final int id;
-
-  final Completer<void> _doneCompleter = Completer<void>();
-
-  /// Completes when the server stream has fully finished.
-  Future<void> get done => _doneCompleter.future;
-
-  void _completeDone() {
-    if (_doneCompleter.isCompleted) return;
-    _doneCompleter.complete();
-  }
-
-  /// Stream processor.
-  late final StreamProcessor<TRequest, TResponse> _processor;
-
+    extends RpcResponderBase<TRequest, TResponse> {
   /// Incoming request subscription.
   StreamSubscription<void>? _subscription;
 
@@ -44,9 +26,6 @@ final class ServerStreamResponder<
   /// it down and end the generator at its next suspension point.
   StreamBridge<TResponse>? _handlerRelay;
 
-  /// True until [close] runs; guards the response pump.
-  bool _isActive = true;
-
   /// True once the request is answered: served, refused or failed.
   bool _requestHandled = false;
 
@@ -59,105 +38,33 @@ final class ServerStreamResponder<
 
   /// Creates a server-stream responder.
   ServerStreamResponder({
-    required this.id,
-    required IRpcTransport transport,
-    required String serviceName,
-    required String methodName,
-    IRpcCodec<TRequest>? requestCodec,
-    IRpcCodec<TResponse>? responseCodec,
+    required super.id,
+    required super.transport,
+    required super.serviceName,
+    required super.methodName,
+    super.requestCodec,
+    super.responseCodec,
     required Stream<TResponse> Function(TRequest request) handler,
-    RpcContext? context,
-    LogScope? logger,
-  }) {
-    _init(
-      transport: transport,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: context,
-      logger: logger,
-    );
+    super.context,
+    super.logger,
+  }) : super(logName: 'ServerResponder', className: 'ServerStreamResponder') {
     _setupRequestHandler((request) => _serve(request, handler));
   }
 
   /// A server stream of exactly one response, [UnaryResponder]'s: the
   /// handler's future is answered directly, with no stream to relay.
   ServerStreamResponder._single({
-    required this.id,
-    required IRpcTransport transport,
-    required String serviceName,
-    required String methodName,
-    required IRpcCodec<TRequest>? requestCodec,
-    required IRpcCodec<TResponse>? responseCodec,
+    required super.id,
+    required super.transport,
+    required super.serviceName,
+    required super.methodName,
+    super.requestCodec,
+    super.responseCodec,
     required FutureOr<TResponse> Function(TRequest request) handler,
-    required RpcContext? context,
-    required LogScope? logger,
-  }) {
-    _init(
-      transport: transport,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: context,
-      logger: logger,
-    );
+    super.context,
+    super.logger,
+  }) : super(logName: 'ServerResponder', className: 'ServerStreamResponder') {
     _setupRequestHandler((request) => _serveOne(request, handler));
-  }
-
-  void _init({
-    required IRpcTransport transport,
-    required String serviceName,
-    required String methodName,
-    required IRpcCodec<TRequest>? requestCodec,
-    required IRpcCodec<TResponse>? responseCodec,
-    required RpcContext? context,
-    required LogScope? logger,
-  }) {
-    final isZeroCopy = requestCodec == null && responseCodec == null;
-
-    // Zero-copy requires transport support.
-    if (isZeroCopy && !transport.supportsZeroCopy) {
-      throw ArgumentError(
-        'Zero-copy mode requires a transport with zero-copy support. '
-        'Provide codecs for network transports.',
-      );
-    }
-
-    // Serialization mode: codecs required.
-    if (!isZeroCopy && (requestCodec == null || responseCodec == null)) {
-      throw ArgumentError(
-        'Codecs are required for serialization mode. '
-        'For zero-copy leave codecs null.',
-      );
-    }
-
-    _logger = logger?.child('ServerResponder') ?? LogScope.noop;
-    if (_logger.isInternal) {
-      _logger.internal(
-        'Creating ${isZeroCopy ? "Zero-copy" : "Serialized"} ServerStreamResponder for $serviceName.$methodName [id: $id]',
-      );
-    }
-
-    _processor = StreamProcessor<TRequest, TResponse>(
-      transport: transport,
-      streamId: id,
-      serviceName: serviceName,
-      methodName: methodName,
-      requestCodec: requestCodec,
-      responseCodec: responseCodec,
-      context: context,
-      logger: _logger,
-    );
-  }
-
-  /// Binds the responder to the endpoint message stream.
-  void bindToMessageStream(Stream<RpcTransportMessage> messageStream) {
-    if (_logger.isInternal) {
-      _logger.internal('Binding to message stream [id: $id]');
-    }
-    _processor.bindToMessageStream(messageStream);
   }
 
   /// Configures the server-stream request handler; [serve] answers the
@@ -376,10 +283,8 @@ final class ServerStreamResponder<
     }
   }
 
-  /// Closes the stream and releases resources.
   @override
-  Future<void> close() async {
-    _isActive = false;
+  Future<void> _stopHandler() async {
     await _subscription?.cancel();
 
     // Stop pulling from the user's handler. Cancelling ends its generator at
@@ -389,8 +294,5 @@ final class ServerStreamResponder<
     final relay = _handlerRelay;
     _handlerRelay = null;
     relay?.close();
-
-    await _processor.close();
-    _completeDone();
   }
 }

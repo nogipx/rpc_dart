@@ -70,10 +70,10 @@ final class UnaryResponder<TRequest extends Object, TResponse extends Object>
   @override
   final int id;
 
-  /// Completes when the call has fully finished.
+  @override
   Future<void> get done => _responder.done;
 
-  /// Binds the responder to the stream's messages.
+  @override
   void bindToMessageStream(Stream<RpcTransportMessage> messageStream) =>
       _responder.bindToMessageStream(messageStream);
 

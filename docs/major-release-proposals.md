@@ -264,11 +264,14 @@ Possible once section 1 makes the shape classes internal.
 - **One base class for the responders**: processor, `id`, `done`, bind, close.
   The bidi handler is driven by `BidirectionalStreamResponder` like the others,
   not by the pipeline. `IRpcResponder` gains `done`, so the pipeline needs no
-  casts.
+  casts. Done (2026-10-19): `RpcResponderBase`; `IRpcResponder` has `done`
+  and `bindToMessageStream`, and the pipeline installs every responder
+  through one `_install`. A second `close()` waits for the first.
 - **Pumps**: `SinkPump` gets a failure policy and replaces the two hand-rolled
   request pumps. One response relay serves server-stream and bidi.
 - **Small copies go with it**:
-  - The codec/zero-copy argument check: once, in the processor.
+  - The codec/zero-copy argument check: once, in the processor. Done
+    (2026-10-19).
   - The decompressor: built by the policy-bound parser.
   - One `policyOf` and one client-metadata builder.
 

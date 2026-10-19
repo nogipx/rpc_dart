@@ -103,14 +103,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         logger: contextLogger,
       );
 
-      state.responder = responder;
-      _detached(
-        responder.done.whenComplete(
-          () => _cleanupStream(streamId, only: state),
-        ),
-        'responder completion',
-      );
-      responder.bindToMessageStream(_pipelineFedPreBound(state));
+      _install(state, responder, _pipelineFedPreBound(state));
       return;
     }
 
@@ -140,12 +133,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       logger: contextLogger,
     );
 
-    state.responder = responder;
-    _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
-      'responder completion',
-    );
-    responder.bindToMessageStream(_pipelineFedPreBound(state));
+    _install(state, responder, _pipelineFedPreBound(state));
   }
 
   Future<void> _ensureClientStreamResponder(
@@ -183,18 +171,12 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         logger: contextLogger,
       );
 
-      state.responder = responder;
-      _detached(
-        responder.done.whenComplete(
-          () => _cleanupStream(streamId, only: state),
-        ),
-        'responder completion',
-      );
-
       // The responder starts on the first request frame, so the buffer holds a
       // mid-call prefix. _pipelineFedRequestStream replays the half-close when
       // the peer has already sent one, which covers the zero-message call.
-      responder.bindToMessageStream(
+      _install(
+        state,
+        responder,
         _pipelineFedRequestStream(
           state,
           initialMessages: state.takeClientBufferedMessages(),
@@ -232,15 +214,11 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       logger: contextLogger,
     );
 
-    state.responder = responder;
-    _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
-      'responder completion',
-    );
-
     // See the zero-copy branch above: the buffer is a mid-call prefix now, and
     // _pipelineFedRequestStream supplies the half-close when there is one.
-    responder.bindToMessageStream(
+    _install(
+      state,
+      responder,
       _pipelineFedRequestStream(
         state,
         initialMessages: state.takeClientBufferedMessages(),
@@ -283,14 +261,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         logger: contextLogger,
       );
 
-      state.responder = responder;
-      _detached(
-        responder.done.whenComplete(
-          () => _cleanupStream(streamId, only: state),
-        ),
-        'responder completion',
-      );
-      responder.bindToMessageStream(_pipelineFedPreBound(state));
+      _install(state, responder, _pipelineFedPreBound(state));
       return;
     }
 
@@ -318,12 +289,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
       logger: contextLogger,
     );
 
-    state.responder = responder;
-    _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
-      'responder completion',
-    );
-    responder.bindToMessageStream(_pipelineFedPreBound(state));
+    _install(state, responder, _pipelineFedPreBound(state));
   }
 
   Future<void> _ensureBidirectionalResponder(
@@ -340,82 +306,51 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         return;
       }
 
-      final responder = BidirectionalStreamResponder<Object, Object>(
-        id: streamId,
-        transport: transport,
-        serviceName: binding.serviceName,
-        methodName: binding.methodName,
-        context: context,
-        logger: contextLogger,
-      );
-
-      state.responder = responder;
-      _detached(
-        responder.done.whenComplete(
-          () => _cleanupStream(streamId, only: state),
-        ),
-        'responder completion',
-      );
-      responder.bindToMessageStream(_pipelineFedPreBound(state));
-
-      unawaited(() async {
-        try {
-          final responseStream = _withHandlerSlotStream(
+      _install(
+        state,
+        BidirectionalStreamResponder<Object, Object>(
+          id: streamId,
+          transport: transport,
+          serviceName: binding.serviceName,
+          methodName: binding.methodName,
+          handler: (requests) => _withHandlerSlotStream(
             streamId,
             () => handleBidirectionalStream<Object, Object>(
               direction: RpcCallDirection.incoming,
               serviceName: binding.serviceName,
               methodName: binding.methodName,
               context: context,
-              requests: responder.requests,
+              requests: requests,
               handler: (ctx, reqs) => binding.zeroCopyMethod
                   .callBidirectionalStreamHandler(ctx, reqs),
             ),
-          );
-          await _pumpBidirectionalResponses(responder, responseStream);
-          await responder.finishReceiving();
-        } catch (error, stackTrace) {
-          contextLogger.error(
-            'Error in zero-copy bidi handler',
-            error: error,
-            stackTrace: stackTrace,
-          );
-          await sendWireError(error, responder.sendError);
-        }
-      }());
+          ),
+          context: context,
+          logger: contextLogger,
+        ),
+        _pipelineFedPreBound(state),
+      );
       return;
     }
 
     final method = binding.codecMethod;
-    final responder =
-        BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
-          id: streamId,
-          transport: transport,
-          serviceName: binding.serviceName,
-          methodName: binding.methodName,
-          requestCodec: method.requestCodec,
-          responseCodec: method.responseCodec,
-          context: context,
-          logger: contextLogger,
-        );
-
-    state.responder = responder;
-    _detached(
-      responder.done.whenComplete(() => _cleanupStream(streamId, only: state)),
-      'responder completion',
-    );
-    responder.bindToMessageStream(_pipelineFedPreBound(state));
-
-    unawaited(() async {
-      try {
-        final responseStream = _withHandlerSlotStream(
+    _install(
+      state,
+      BidirectionalStreamResponder<IRpcSerializable, IRpcSerializable>(
+        id: streamId,
+        transport: transport,
+        serviceName: binding.serviceName,
+        methodName: binding.methodName,
+        requestCodec: method.requestCodec,
+        responseCodec: method.responseCodec,
+        handler: (requests) => _withHandlerSlotStream(
           streamId,
           () => handleBidirectionalStream<IRpcSerializable, IRpcSerializable>(
             direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
             context: context,
-            requests: responder.requests,
+            requests: requests,
             handler: (ctx, reqs) => method
                 .callBidirectionalStreamHandler(
                   ctx,
@@ -423,58 +358,27 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
                 )
                 .map(method.castResponse),
           ),
-        );
-        await _pumpBidirectionalResponses(responder, responseStream);
-        await responder.finishReceiving();
-      } catch (error, stackTrace) {
-        if (RpcStatus.isFaultError(error)) {
-          contextLogger.error(
-            'Error in bidi handler',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-        await sendWireError(error, responder.sendError);
-      }
-    }());
+        ),
+        context: context,
+        logger: contextLogger,
+      ),
+      _pipelineFedPreBound(state),
+    );
   }
 
-  /// Forwards [responses] to [responder], owning the subscription so the pump
-  /// stops as soon as the call ends.
-  ///
-  /// A bare `await for` over the handler's stream keeps an implicit
-  /// subscription that nothing can reach, and `responder.send()` returns
-  /// silently once the responder is inactive rather than throwing. A
-  /// long-lived handler therefore kept producing forever after the client
-  /// cancelled, burning CPU and pinning whatever the generator captured.
-  /// Relaying through a controller we own lets [IRpcResponder.done] tear the
-  /// upstream down.
-  Future<void> _pumpBidirectionalResponses<T extends Object>(
-    BidirectionalStreamResponder<T, T> responder,
-    Stream<T> responses,
-  ) async {
-    // The bridge hands the `await for` below's demand back to the handler:
-    // without that the relay is an unbounded buffer between the two, since the
-    // loop pauses it while a send is in flight and an `async*` handler keeps
-    // allocating regardless. ServerStreamResponder keeps the same bound the
-    // same way.
-    final relay = StreamBridge<T>(source: responses);
-
+  /// Makes [responder] the stream's, tears the stream down when it is done,
+  /// and feeds it [messages].
+  void _install(
+    RpcResponderStreamState state,
+    IRpcResponder responder,
+    Stream<RpcTransportMessage> messages,
+  ) {
+    state.responder = responder;
     _detached(
-      responder.done.whenComplete(relay.close),
-      'bidirectional teardown',
+      responder.done.whenComplete(() => _cleanupStream(state.id, only: state)),
+      'responder completion',
     );
-
-    try {
-      await for (final response in relay.stream) {
-        await responder.send(response);
-        // A response that could not go out ends the call; the handler must
-        // not keep producing behind it. The finish that follows answers it.
-        if (responder.isAnswered) break;
-      }
-    } finally {
-      relay.close();
-    }
+    responder.bindToMessageStream(messages);
   }
 
   // ---------------------------------------------------------------------------
