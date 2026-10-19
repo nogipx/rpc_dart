@@ -27,7 +27,6 @@ export 'src/_index.dart'
         RpcResponderContract,
         RpcPeerContract,
         RpcMethod,
-        RpcMethodKind,
         RpcMethodType,
         RpcService,
         RpcServiceKind,

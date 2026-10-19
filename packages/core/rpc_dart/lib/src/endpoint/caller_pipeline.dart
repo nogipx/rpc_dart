@@ -142,6 +142,57 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   int activeCallCount(String serviceName, String methodName) =>
       _callerTokens[_callerMethodKey(serviceName, methodName)]?.length ?? 0;
 
+  /// The method's cancellation tokens by requestId (empty map when none).
+  ///
+  /// Calls sharing a requestId (a reused context) appear once; count calls
+  /// with [activeCallCount].
+  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
+    String serviceName,
+    String methodName,
+  ) {
+    final key = _callerMethodKey(serviceName, methodName);
+    return Map.unmodifiable({
+      for (final MapEntry(key: ctx, value: token)
+          in (_callerTokens[key] ?? const {}).entries)
+        ctx.requestId: token,
+    });
+  }
+
+  /// Cancels every call of the method in flight; returns how many.
+  int cancelMethod(String serviceName, String methodName, [String? reason]) {
+    final key = _callerMethodKey(serviceName, methodName);
+    final tokens = _callerTokens.remove(key);
+    if (tokens == null) return 0;
+    for (final token in tokens.values) {
+      token.cancel(reason ?? 'Method cancelled by user');
+    }
+    if (_log.isInternal) {
+      _log.internal('Cancelled all calls for method: $key (${tokens.length})');
+    }
+    return tokens.length;
+  }
+
+  /// Cancels every call of [serviceName] in flight; returns how many.
+  int cancelServiceMethods(String serviceName, [String? reason]) {
+    final servicePrefix = '$serviceName/';
+    final methodKeys = _callerTokens.keys
+        .where((key) => key.startsWith(servicePrefix))
+        .toList();
+    var cancelled = 0;
+    for (final key in methodKeys) {
+      for (final token in _callerTokens.remove(key)!.values) {
+        token.cancel(reason ?? 'Service methods cancelled');
+        cancelled++;
+      }
+    }
+    if (_log.isInternal) {
+      _log.internal(
+        'Cancelled all methods of service $serviceName ($cancelled calls)',
+      );
+    }
+    return cancelled;
+  }
+
   /// Cancels all active calls.
   void cancelAllMethods([String? reason]) {
     for (final tokens in _callerTokens.values) {
@@ -158,7 +209,12 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       0,
       (sum, tokens) => sum + tokens.length,
     );
-    return {'pendingRequests': activeCalls};
+    return {
+      'pendingRequests': activeCalls,
+      'trackedMethods': _callerTokens.length,
+      if (_callerTokens.isNotEmpty)
+        'activeMethodKeys': List<String>.unmodifiable(_callerTokens.keys),
+    };
   }
 
   // ---------------------------------------------------------------------------

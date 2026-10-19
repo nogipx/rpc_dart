@@ -57,7 +57,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
     }
 
     switch (binding.type) {
-      case RpcMethodType.unaryRequest:
+      case RpcMethodType.unary:
         _ensureUnaryResponder(state, binding, context);
       case RpcMethodType.clientStream:
         _ensureClientStreamResponder(state, binding, context);

@@ -218,7 +218,7 @@ void main() {
       responderEndpoint.validateMethodExists(
         'TestService',
         'UnaryMethod',
-        RpcMethodType.unaryRequest,
+        RpcMethodType.unary,
       );
 
       // A method that does not.
@@ -226,7 +226,7 @@ void main() {
         () => responderEndpoint.validateMethodExists(
           'TestService',
           'NonExistentMethod',
-          RpcMethodType.unaryRequest,
+          RpcMethodType.unary,
         ),
         throwsA(isA<RpcException>()),
       );

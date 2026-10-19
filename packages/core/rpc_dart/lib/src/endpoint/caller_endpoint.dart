@@ -32,14 +32,6 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
     metrics.addAll(collectCallerMetrics());
-    metrics['trackedMethods'] = _callerTokens.length;
-
-    if (_callerTokens.isNotEmpty) {
-      metrics['activeMethodKeys'] = List<String>.unmodifiable(
-        _callerTokens.keys,
-      );
-    }
-
     return metrics;
   }
 
@@ -47,69 +39,6 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   Future<void> _closeResources() async {
     cancelAllMethods('Endpoint closed');
     await closeCallerResources();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Extra cancellation methods (beyond what the mixin provides)
-  // ---------------------------------------------------------------------------
-
-  /// Returns the method's cancellation tokens by requestId (empty map when
-  /// missing).
-  ///
-  /// Calls sharing a requestId (a reused context) appear once; count calls
-  /// with [activeCallCount].
-  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
-    String serviceName,
-    String methodName,
-  ) {
-    final key = _callerMethodKey(serviceName, methodName);
-    return Map.unmodifiable({
-      for (final MapEntry(key: ctx, value: token)
-          in (_callerTokens[key] ?? const {}).entries)
-        ctx.requestId: token,
-    });
-  }
-
-  /// Cancels all active calls for the given method; returns cancelled count.
-  int cancelMethod(String serviceName, String methodName, [String? reason]) {
-    final key = _callerMethodKey(serviceName, methodName);
-    final tokens = _callerTokens[key];
-    if (tokens != null) {
-      final count = tokens.length;
-      for (final token in tokens.values) {
-        token.cancel(reason ?? 'Method cancelled by user');
-      }
-      _callerTokens.remove(key);
-      if (_log.isInternal) {
-        _log.internal('Cancelled all calls for method: $key ($count)');
-      }
-      return count;
-    }
-    return 0;
-  }
-
-  /// Cancels all methods of the specified service.
-  void cancelServiceMethods(String serviceName, [String? reason]) {
-    final servicePrefix = '$serviceName/';
-    final methodKeys = _callerTokens.keys
-        .where((key) => key.startsWith(servicePrefix))
-        .toList();
-
-    int totalCancelled = 0;
-    for (final key in methodKeys) {
-      final tokens = _callerTokens[key]!;
-      for (final token in tokens.values) {
-        token.cancel(reason ?? 'Service methods cancelled');
-        totalCancelled++;
-      }
-      _callerTokens.remove(key);
-    }
-
-    if (_log.isInternal) {
-      _log.internal(
-        'Cancelled all methods of service $serviceName ($totalCancelled calls)',
-      );
-    }
   }
 
   // ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ import 'package:rpc_dart/rpc_dart.dart'
         RpcContext,
         RpcDataTransferMode,
         RpcMethod,
-        RpcMethodKind,
+        RpcMethodType,
         RpcRemoved,
         RpcService,
         RpcServiceKind;
@@ -186,7 +186,7 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     }
 
     final kindAccessor = reader.peek('kind')?.revive().accessor;
-    final kind = _kindFromAccessor(kindAccessor) ?? RpcMethodKind.unary;
+    final kind = _kindFromAccessor(kindAccessor) ?? RpcMethodType.unary;
 
     final transferAccessor = reader.peek('transferMode')?.revive().accessor;
     final effectiveMode =
@@ -215,18 +215,11 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
     );
   }
 
-  RpcMethodKind? _kindFromAccessor(String? accessor) {
-    switch (accessor) {
-      case 'RpcMethodKind.unary':
-        return RpcMethodKind.unary;
-      case 'RpcMethodKind.serverStream':
-        return RpcMethodKind.serverStream;
-      case 'RpcMethodKind.clientStream':
-        return RpcMethodKind.clientStream;
-      case 'RpcMethodKind.bidirectionalStream':
-        return RpcMethodKind.bidirectionalStream;
-    }
-    return null;
+  /// The [RpcMethodType] an accessor such as `RpcMethodType.serverStream`
+  /// names, matched by the value's name.
+  RpcMethodType? _kindFromAccessor(String? accessor) {
+    if (accessor == null) return null;
+    return RpcMethodType.values.asNameMap()[accessor.split('.').last];
   }
 
   _ParentInfo? _buildParentInfo(ClassElement element) {
@@ -742,7 +735,7 @@ class _SignatureParser {
   _SignatureParser(this.element, this.kind, this.baseName, this.effectiveMode);
 
   final MethodElement element;
-  final RpcMethodKind kind;
+  final RpcMethodType kind;
   final String baseName;
   final RpcDataTransferMode effectiveMode;
 
@@ -767,22 +760,22 @@ class _SignatureParser {
     final requestParam = parameters.isEmpty ? null : parameters.first;
 
     return switch (kind) {
-      RpcMethodKind.unary => _parseUnary(
+      RpcMethodType.unary => _parseUnary(
         requestParam,
         contextParam,
         element.returnType,
       ),
-      RpcMethodKind.serverStream => _parseServerStream(
+      RpcMethodType.serverStream => _parseServerStream(
         requestParam,
         contextParam,
         element.returnType,
       ),
-      RpcMethodKind.clientStream => _parseClientStream(
+      RpcMethodType.clientStream => _parseClientStream(
         requestParam,
         contextParam,
         element.returnType,
       ),
-      RpcMethodKind.bidirectionalStream => _parseBidi(
+      RpcMethodType.bidirectionalStream => _parseBidi(
         requestParam,
         contextParam,
         element.returnType,
@@ -849,7 +842,7 @@ class _SignatureParser {
     return _Signature(
       element: element,
       baseName: baseName,
-      kind: RpcMethodKind.unary,
+      kind: RpcMethodType.unary,
       requestType: requestType,
       responseType: responseType,
       hasContext: context != null,
@@ -876,7 +869,7 @@ class _SignatureParser {
     return _Signature(
       element: element,
       baseName: baseName,
-      kind: RpcMethodKind.serverStream,
+      kind: RpcMethodType.serverStream,
       requestType: requestType,
       responseType: responseType,
       hasContext: context != null,
@@ -898,7 +891,7 @@ class _SignatureParser {
     return _Signature(
       element: element,
       baseName: baseName,
-      kind: RpcMethodKind.clientStream,
+      kind: RpcMethodType.clientStream,
       requestType: innerRequest,
       responseType: responseType,
       hasContext: context != null,
@@ -922,7 +915,7 @@ class _SignatureParser {
     return _Signature(
       element: element,
       baseName: baseName,
-      kind: RpcMethodKind.bidirectionalStream,
+      kind: RpcMethodType.bidirectionalStream,
       requestType: innerRequest,
       responseType: innerResponse,
       hasContext: context != null,
@@ -1016,7 +1009,7 @@ class _Signature {
 
   final MethodElement element;
   final String baseName;
-  final RpcMethodKind kind;
+  final RpcMethodType kind;
   final DartType requestType;
   final DartType responseType;
   final bool hasContext;
@@ -1075,13 +1068,13 @@ class _Signature {
     );
 
     switch (kind) {
-      case RpcMethodKind.unary:
+      case RpcMethodType.unary:
         return 'addUnaryMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-      case RpcMethodKind.serverStream:
+      case RpcMethodType.serverStream:
         return 'addServerStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-      case RpcMethodKind.clientStream:
+      case RpcMethodType.clientStream:
         return 'addClientStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
-      case RpcMethodKind.bidirectionalStream:
+      case RpcMethodType.bidirectionalStream:
         return 'addBidirectionalMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: $handlerName, $description$requestCodec$responseCodec)';
     }
   }
@@ -1161,16 +1154,16 @@ class _Signature {
     }
 
     switch (kind) {
-      case RpcMethodKind.unary:
+      case RpcMethodType.unary:
         return 'callUnary<$requestTypeStr, $responseTypeStr>('
             "${args('request: $requestVar')})";
-      case RpcMethodKind.serverStream:
+      case RpcMethodType.serverStream:
         return 'callServerStream<$requestTypeStr, $responseTypeStr>('
             "${args('request: $requestVar')})";
-      case RpcMethodKind.clientStream:
+      case RpcMethodType.clientStream:
         return 'callClientStream<$requestTypeStr, $responseTypeStr>('
             "${args('requests: $requestVar')})";
-      case RpcMethodKind.bidirectionalStream:
+      case RpcMethodType.bidirectionalStream:
         return 'callBidirectionalStream<$requestTypeStr, $responseTypeStr>('
             "${args('requests: $requestVar')})";
     }
@@ -1208,13 +1201,13 @@ class _Signature {
     );
 
     switch (kind) {
-      case RpcMethodKind.unary:
+      case RpcMethodType.unary:
         return "addUnaryMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-      case RpcMethodKind.serverStream:
+      case RpcMethodType.serverStream:
         return "addServerStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-      case RpcMethodKind.clientStream:
+      case RpcMethodType.clientStream:
         return "addClientStreamMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
-      case RpcMethodKind.bidirectionalStream:
+      case RpcMethodType.bidirectionalStream:
         return "addBidirectionalMethod<$requestTypeStr, $responseTypeStr>(methodName: ${baseName}Names.${meta.declarationName}, handler: ${meta.declarationName}, $description$requestCodec$responseCodec)";
     }
   }
@@ -1286,7 +1279,7 @@ class _MethodMeta {
 
   final String methodName;
   final String declarationName;
-  final RpcMethodKind kind;
+  final RpcMethodType kind;
   final _Signature signature;
   final String? description;
   final DartType? requestCodecType;

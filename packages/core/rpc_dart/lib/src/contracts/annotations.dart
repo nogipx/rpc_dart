@@ -16,21 +16,6 @@ enum RpcServiceKind {
   peer,
 }
 
-/// RPC method kinds supported by the generator.
-enum RpcMethodKind {
-  /// Single request, single response.
-  unary,
-
-  /// Single request, stream of responses.
-  serverStream,
-
-  /// Stream of requests, single response.
-  clientStream,
-
-  /// Stream of requests and responses.
-  bidirectionalStream,
-}
-
 /// Marks a service interface to generate caller/responder wrappers.
 class RpcService {
   /// Creates an [RpcService] annotation with the given [name].
@@ -101,7 +86,7 @@ class RpcMethod {
     this.requestCodec,
     this.responseCodec,
     this.transferMode,
-  }) : kind = RpcMethodKind.unary;
+  }) : kind = RpcMethodType.unary;
 
   /// Creates a server-stream [RpcMethod] annotation.
   const RpcMethod.serverStream({
@@ -110,7 +95,7 @@ class RpcMethod {
     this.requestCodec,
     this.responseCodec,
     this.transferMode,
-  }) : kind = RpcMethodKind.serverStream;
+  }) : kind = RpcMethodType.serverStream;
 
   /// Creates a client-stream [RpcMethod] annotation.
   const RpcMethod.clientStream({
@@ -119,7 +104,7 @@ class RpcMethod {
     this.requestCodec,
     this.responseCodec,
     this.transferMode,
-  }) : kind = RpcMethodKind.clientStream;
+  }) : kind = RpcMethodType.clientStream;
 
   /// Creates a bidirectional-stream [RpcMethod] annotation.
   const RpcMethod.bidirectionalStream({
@@ -128,13 +113,13 @@ class RpcMethod {
     this.requestCodec,
     this.responseCodec,
     this.transferMode,
-  }) : kind = RpcMethodKind.bidirectionalStream;
+  }) : kind = RpcMethodType.bidirectionalStream;
 
   /// RPC method identifier used for registration.
   final String name;
 
-  /// RPC kind (unary, streams, bidi).
-  final RpcMethodKind kind;
+  /// The call shape.
+  final RpcMethodType kind;
 
   /// Optional docs that will be copied into generated code.
   final String? description;

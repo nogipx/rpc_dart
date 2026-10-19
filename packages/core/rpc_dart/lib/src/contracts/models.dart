@@ -25,10 +25,10 @@ enum RpcDataTransferMode {
   auto,
 }
 
-/// RPC method types.
+/// The four call shapes, for registration and for `@RpcMethod`.
 enum RpcMethodType {
   /// Single request, single response.
-  unaryRequest,
+  unary,
 
   /// Single request, stream of responses.
   serverStream,

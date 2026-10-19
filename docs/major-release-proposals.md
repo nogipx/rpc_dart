@@ -392,9 +392,13 @@ Closes C7, C8, C9, P12.
   (keep `RpcContextBuilder`'s, drop `RpcContextUtils`' copies). Done
   (2026-10-19).
 - **Call tracking** (`cancelMethod`, `trackedMethods`) moves to the caller
-  mixin, so `RpcPeerEndpoint` has it too (C21).
+  mixin, so `RpcPeerEndpoint` has it too (C21). Done (2026-10-19), with the
+  contract side in `_RpcOutgoingCalls`, so `RpcPeerContract` has it too.
 - **One enum for the four shapes**: `@RpcMethod` takes `RpcMethodType`;
-  `RpcMethodKind` goes. The generator maps enum values by name.
+  `RpcMethodKind` goes. The generator maps enum values by name. Done
+  (2026-10-19); `RpcMethodType.unaryRequest` is `unary`, so the names are
+  the old annotation's. The generator's 17 golden tests pass (run by the
+  manual procedure in MAINTAINING.md).
 
 ## 6. Reconnect: one strategy
 

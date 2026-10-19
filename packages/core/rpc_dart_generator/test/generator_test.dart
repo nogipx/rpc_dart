@@ -35,7 +35,7 @@ abstract class ICalc {
   @RpcMethod(name: 'sum')
   Future<Foo> sum(Foo request, {RpcContext? context});
 
-  @RpcMethod(name: 'numbers', kind: RpcMethodKind.serverStream)
+  @RpcMethod(name: 'numbers', kind: RpcMethodType.serverStream)
   Stream<Foo> numbers(Foo request);
 }
 
@@ -89,7 +89,7 @@ part 'custom_codec.g.dart';
 abstract class IRender {
   @RpcMethod(
     name: 'patches',
-    kind: RpcMethodKind.serverStream,
+    kind: RpcMethodType.serverStream,
     responseCodec: CustomPatchCodec,
   )
   Stream<CustomPatch> patches(PodStreamRequest request);
@@ -156,7 +156,7 @@ abstract class ICalc {
   @RpcMethod(name: 'sum')
   Future<Foo> sum(Foo request, {RpcContext? context});
 
-  @RpcMethod(name: 'numbers', kind: RpcMethodKind.serverStream)
+  @RpcMethod(name: 'numbers', kind: RpcMethodType.serverStream)
   Stream<Foo> numbers(Foo request, {RpcContext? context});
 }
 
@@ -232,7 +232,7 @@ abstract class ICalc {
   @RpcMethod(name: 'sum')
   Future<Foo> sum(Foo request, {RpcContext? context});
 
-  @RpcMethod(name: 'numbers', kind: RpcMethodKind.serverStream)
+  @RpcMethod(name: 'numbers', kind: RpcMethodType.serverStream)
   Stream<Foo> numbers(Foo request, {RpcContext? context});
 }
 
@@ -283,10 +283,10 @@ abstract class IChat {
   @RpcMethod(name: 'send')
   Future<Msg> send(Msg request, {RpcContext? context});
 
-  @RpcMethod(name: 'events', kind: RpcMethodKind.serverStream)
+  @RpcMethod(name: 'events', kind: RpcMethodType.serverStream)
   Stream<Msg> events(Msg request);
 
-  @RpcMethod(name: 'bidi', kind: RpcMethodKind.bidirectionalStream)
+  @RpcMethod(name: 'bidi', kind: RpcMethodType.bidirectionalStream)
   Stream<Msg> bidi(Stream<Msg> requests);
 }
 
@@ -349,7 +349,7 @@ abstract class INotify {
   @RpcMethod(name: 'push')
   Future<Ack> push(Evt request);
 
-  @RpcMethod(name: 'stream', kind: RpcMethodKind.serverStream)
+  @RpcMethod(name: 'stream', kind: RpcMethodType.serverStream)
   Stream<Ack> stream(Evt request);
 }
 

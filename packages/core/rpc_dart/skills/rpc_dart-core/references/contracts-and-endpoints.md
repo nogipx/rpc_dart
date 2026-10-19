@@ -94,7 +94,9 @@ final class GreeterResponder extends RpcResponderContract {
 Call helpers: `callUnary`, `callServerStream`, `callClientStream`,
 `callBidirectionalStream` (named: `methodName:`, `request:` or `requests:`,
 `requestCodec:`, `responseCodec:`, `context:`). Also `cancelMethod(name)`,
-`cancelAllMethods()`, `isMethodActive(name)`, `getActiveCallsCount(name)`.
+`cancelAllMethods()` (both return how many calls they cancelled),
+`isMethodActive(name)`, `getActiveCallsCount(name)`. `RpcPeerContract` has the
+same call helpers and tracking.
 
 ```dart
 final class GreeterCaller extends RpcCallerContract {
@@ -123,8 +125,8 @@ final class GreeterCaller extends RpcCallerContract {
 | Endpoint | Constructor | Own API |
 | --- | --- | --- |
 | `RpcResponderEndpoint` | `transport:` (required), `debugLabel:`, `logger:` (`LogController?`) | `registerServiceContract(c)`, `unregisterServiceContract(name)`, `start()`, `markDraining()`, `drain({timeout})` |
-| `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logger:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod`, `cancelServiceMethods`; `close()` cancels in-flight calls |
-| `RpcPeerEndpoint` | same as caller | union of both; needs `start()` |
+| `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logger:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod`, `cancelServiceMethods`, `cancelRequest`, `activeCallCount`; `close()` cancels in-flight calls |
+| `RpcPeerEndpoint` | same as caller | union of both, call tracking included; needs `start()` |
 
 All endpoints: `addMiddleware`, `addInterceptor`, `close()`, `health()`,
 `isActive`, `transport`. There are no `interceptors:` /

@@ -23,7 +23,7 @@ abstract class ICalculatorContract {
 
   @RpcMethod(
     name: 'numbers',
-    kind: RpcMethodKind.serverStream,
+    kind: RpcMethodType.serverStream,
     transferMode: RpcDataTransferMode.zeroCopy,
   )
   Stream<SumResponse> numbers(SumRequest request, {RpcContext? context});

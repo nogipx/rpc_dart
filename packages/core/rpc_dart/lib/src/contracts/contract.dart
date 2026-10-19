@@ -195,7 +195,7 @@ abstract class RpcResponderContract implements IRpcContract {
   }) {
     _register(
       methodName: methodName,
-      type: RpcMethodType.unaryRequest,
+      type: RpcMethodType.unary,
       handler: handler,
       description: description,
       requestCodec: requestCodec,
@@ -331,33 +331,6 @@ abstract class RpcCallerContract
   /// Endpoint used to send requests.
   RpcCallerEndpoint get endpoint => _endpoint;
 
-  /// All cancellation tokens for the given method (empty map if unknown).
-  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
-    String methodName,
-  ) {
-    return _endpoint.getCancellationTokensForMethod(serviceName, methodName);
-  }
-
-  /// Cancels all active calls of the method and returns cancelled count.
-  int cancelMethod(String methodName, [String? reason]) {
-    return _endpoint.cancelMethod(serviceName, methodName, reason);
-  }
-
-  /// Cancels all active calls for this service.
-  void cancelAllMethods([String? reason]) {
-    _endpoint.cancelServiceMethods(serviceName, reason);
-  }
-
-  /// Checks whether the method has active calls.
-  bool isMethodActive(String methodName) {
-    return getActiveCallsCount(methodName) > 0;
-  }
-
-  /// Number of active calls for the method.
-  int getActiveCallsCount(String methodName) {
-    return _endpoint.activeCallCount(serviceName, methodName);
-  }
-
   @override
   RpcCallerPipelineMixin get _outgoing => _endpoint;
 
@@ -365,8 +338,8 @@ abstract class RpcCallerContract
   RpcDataTransferMode get _outgoingMode => dataTransferMode;
 }
 
-/// The four outgoing call shapes, one implementation for [RpcCallerContract]
-/// and [RpcPeerContract].
+/// The four outgoing call shapes and the tracking of the calls in flight, one
+/// implementation for [RpcCallerContract] and [RpcPeerContract].
 ///
 /// Each call travels the way [_RpcCodecMode.callerCodecs] decides from the
 /// contract's transfer mode: objects under `zeroCopy`, bytes under `codec`,
@@ -378,6 +351,26 @@ mixin _RpcOutgoingCalls {
   RpcCallerPipelineMixin get _outgoing;
 
   RpcDataTransferMode get _outgoingMode;
+
+  /// All cancellation tokens for the given method (empty map if unknown).
+  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
+    String methodName,
+  ) => _outgoing.getCancellationTokensForMethod(serviceName, methodName);
+
+  /// Cancels all active calls of the method and returns cancelled count.
+  int cancelMethod(String methodName, [String? reason]) =>
+      _outgoing.cancelMethod(serviceName, methodName, reason);
+
+  /// Cancels all active calls for this service and returns cancelled count.
+  int cancelAllMethods([String? reason]) =>
+      _outgoing.cancelServiceMethods(serviceName, reason);
+
+  /// Checks whether the method has active calls.
+  bool isMethodActive(String methodName) => getActiveCallsCount(methodName) > 0;
+
+  /// Number of active calls for the method.
+  int getActiveCallsCount(String methodName) =>
+      _outgoing.activeCallCount(serviceName, methodName);
 
   (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _codecsFor<TRequest, TResponse>(
     IRpcCodec<TRequest>? requestCodec,
