@@ -119,8 +119,9 @@ class RpcApp {
     await starting;
   }
 
-  /// The [start] in progress, which [stop] waits out: stopping mid-start left
-  /// the server it went on to start running, and nothing could stop it.
+  /// The [start] in progress, which [stop] waits out. Otherwise stopping
+  /// mid-start leaves the server it goes on to start running, and nothing can
+  /// stop it.
   Future<void>? _starting;
 
   /// Set by [stop]: a [start] still running rolls back at its next step
@@ -208,8 +209,9 @@ class RpcApp {
     _log.info('RpcApp started');
   }
 
-  /// Concurrent calls share one stop: a second one ran every module's onStop
-  /// again, while the first was still draining handlers that use them.
+  /// Concurrent calls share one stop. Otherwise a second one runs every
+  /// module's onStop again while the first is still draining handlers that
+  /// use them.
   Future<void> stop() =>
       _stopping ??= _stop().whenComplete(() => _stopping = null);
 
@@ -237,14 +239,11 @@ class RpcApp {
     // The SERVER drains, and it goes first so handlers can still reach module
     // resources while they finish.
     //
-    // This used to call `ep.drain()` on each endpoint and then `stop()` with no
-    // argument, which got the order wrong twice: nothing had stopped the
-    // LISTENER, so a connection arriving mid-window got an already-draining
-    // endpoint; and `RpcEndpointBase.drain` CANCELS active contexts, which is
-    // the opposite of letting in-flight work finish. The servers' own
-    // `stop(drainTimeout:)` stops admitting and waits, and it could not be
-    // reached from here because `IRpcServer.stop()` did not declare the
-    // parameter.
+    // The server's `stop(drainTimeout:)` stops admitting and waits for
+    // in-flight work. Draining endpoints directly is wrong twice: the listener
+    // still hands new connections an already-draining endpoint, and
+    // `RpcEndpointBase.drain` CANCELS active contexts instead of letting them
+    // finish.
     _log.info('Stopping transport server');
     await _server?.stop(drainTimeout: _config.drainTimeout);
 

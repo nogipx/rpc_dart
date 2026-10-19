@@ -38,9 +38,8 @@ class RpcCallSpy extends CallEventInterceptor {
   /// Creates a spy.
   ///
   /// [maxEntries] caps retention: once that many entries are held, recording a
-  /// new one drops the oldest. `null` (the default) keeps everything, which
-  /// preserves the record-it-all behaviour tests rely on. Must be positive
-  /// when provided.
+  /// new one drops the oldest. `null` (the default) keeps everything. Must be
+  /// positive when provided.
   RpcCallSpy({this.maxEntries})
     : assert(
         maxEntries == null || maxEntries > 0,
