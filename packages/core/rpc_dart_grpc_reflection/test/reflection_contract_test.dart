@@ -4,17 +4,18 @@
 import 'dart:typed_data';
 
 import 'package:rpc_dart_grpc_reflection/rpc_dart_grpc_reflection.dart';
+import 'package:rpc_dart_grpc_reflection/src/reflection_request_handler.dart';
 import 'package:test/test.dart';
 
 import 'helpers.dart';
 
 void main() {
   late RpcReflectionRegistry registry;
-  late ServerReflectionContract contract;
+  late ReflectionRequestHandler answer;
 
   setUp(() {
     registry = RpcReflectionRegistry();
-    contract = ServerReflectionContract(registry);
+    answer = ReflectionRequestHandler(registry);
   });
 
   group('list_services', () {
@@ -27,20 +28,20 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(listServicesRequest());
+      final response = answer(listServicesRequest());
       final services = parseListServicesResponse(response);
 
       expect(services, containsAll(['svc.v1.Alpha', 'svc.v1.Beta']));
     });
 
     test('empty registry returns empty service list', () {
-      final response = contract.processRequestForTest(listServicesRequest());
+      final response = answer(listServicesRequest());
       expect(parseListServicesResponse(response), isEmpty);
     });
 
     test('response includes original_request field', () {
       final request = listServicesRequest();
-      final response = contract.processRequestForTest(request);
+      final response = answer(request);
       expect(hasOriginalRequest(response), isTrue);
     });
   });
@@ -55,17 +56,13 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
-        fileByFilenameRequest('echo.proto'),
-      );
+      final response = answer(fileByFilenameRequest('echo.proto'));
 
       expect(isFileDescriptorResponse(response), isTrue);
     });
 
     test('returns error_response for unknown file', () {
-      final response = contract.processRequestForTest(
-        fileByFilenameRequest('missing.proto'),
-      );
+      final response = answer(fileByFilenameRequest('missing.proto'));
       final err = parseErrorResponse(response);
 
       expect(err, isNotNull);
@@ -82,9 +79,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
-        fileByFilenameRequest('echo.proto'),
-      );
+      final response = answer(fileByFilenameRequest('echo.proto'));
 
       expect(extractAllFileDescriptorBytes(response), hasLength(1));
     });
@@ -106,9 +101,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
-        fileByFilenameRequest('echo.proto'),
-      );
+      final response = answer(fileByFilenameRequest('echo.proto'));
 
       expect(extractAllFileDescriptorBytes(response), hasLength(2));
     });
@@ -124,7 +117,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('echo.v1.EchoService'),
       );
 
@@ -140,7 +133,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('.echo.v1.EchoService'),
       );
 
@@ -157,7 +150,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('echo.v1.EchoRequest'),
       );
 
@@ -174,7 +167,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('nested.v1.Outer.Inner'),
       );
 
@@ -191,7 +184,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('nested.v1.Outer.Status'),
       );
 
@@ -215,7 +208,7 @@ void main() {
         ),
       );
 
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('echo.v1.EchoService'),
       );
 
@@ -223,7 +216,7 @@ void main() {
     });
 
     test('returns error_response for unknown symbol', () {
-      final response = contract.processRequestForTest(
+      final response = answer(
         fileContainingSymbolRequest('not.registered.Service'),
       );
       final err = parseErrorResponse(response);
@@ -237,9 +230,9 @@ void main() {
     test('malformed varint returns error_response, not crash', () {
       final malformed = Uint8List.fromList([0x80, 0x80, 0x80, 0x80]);
 
-      expect(() => contract.processRequestForTest(malformed), returnsNormally);
+      expect(() => answer(malformed), returnsNormally);
 
-      final err = parseErrorResponse(contract.processRequestForTest(malformed));
+      final err = parseErrorResponse(answer(malformed));
       expect(err, isNotNull);
       expect(err!.code, 2);
     });
@@ -248,14 +241,14 @@ void main() {
       final tag = 0x1A; // field 3, wire type 2
       final malformed = Uint8List.fromList([tag, ...encodeVarint(999999999)]);
 
-      expect(() => contract.processRequestForTest(malformed), returnsNormally);
+      expect(() => answer(malformed), returnsNormally);
 
-      final err = parseErrorResponse(contract.processRequestForTest(malformed));
+      final err = parseErrorResponse(answer(malformed));
       expect(err, isNotNull);
     });
 
     test('empty bytes returns unknown request type error', () {
-      final response = contract.processRequestForTest(Uint8List(0));
+      final response = answer(Uint8List(0));
       final err = parseErrorResponse(response);
 
       expect(err, isNotNull);
@@ -264,36 +257,11 @@ void main() {
 
     test('unknown wire type stops parsing gracefully', () {
       final bytes = Uint8List.fromList([0x03]); // field 0, wire type 3
-      expect(() => contract.processRequestForTest(bytes), returnsNormally);
+      expect(() => answer(bytes), returnsNormally);
     });
   });
 
   group('v1 and v1alpha', () {
-    test('both contracts return identical list_services response', () {
-      registry.addFileDescriptor(
-        buildMinimalFileDescriptor(
-          name: 'svc.proto',
-          package: 'svc.v1',
-          serviceNames: ['MyService'],
-        ),
-      );
-
-      final v1 = ServerReflectionContract(
-        registry,
-        serviceName: 'grpc.reflection.v1.ServerReflection',
-      );
-      final v1alpha = ServerReflectionContract(
-        registry,
-        serviceName: 'grpc.reflection.v1alpha.ServerReflection',
-      );
-
-      final req = listServicesRequest();
-      expect(
-        parseListServicesResponse(v1.processRequestForTest(req)),
-        equals(parseListServicesResponse(v1alpha.processRequestForTest(req))),
-      );
-    });
-
     test('ServerReflectionContract.both returns two contracts', () {
       final contracts = ServerReflectionContract.both(registry);
       expect(contracts.length, 2);

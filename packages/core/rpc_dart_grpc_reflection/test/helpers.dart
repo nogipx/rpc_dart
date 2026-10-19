@@ -134,23 +134,6 @@ Uint8List buildDescriptorWithNesting({
 
   return Uint8List.fromList(buf);
 }
-
-/// Builds a `FileDescriptorSet` containing multiple `FileDescriptorProto` entries.
-Uint8List buildMinimalFileDescriptorSet(
-  List<(String name, String package, List<String> services)> files,
-) {
-  final buf = <int>[];
-  for (final (name, package, services) in files) {
-    final fd = buildMinimalFileDescriptor(
-      name: name,
-      package: package,
-      serviceNames: services,
-    );
-    buf.addAll(_encodeBytes(1, fd));
-  }
-  return Uint8List.fromList(buf);
-}
-
 // ---------------------------------------------------------------------------
 // Request builders (ServerReflectionRequest wire format)
 // ---------------------------------------------------------------------------

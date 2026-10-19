@@ -25,8 +25,8 @@
 
 import 'dart:typed_data';
 
-import 'package:rpc_dart_grpc_reflection/src/reflection_contract.dart';
 import 'package:rpc_dart_grpc_reflection/src/reflection_registry.dart';
+import 'package:rpc_dart_grpc_reflection/src/reflection_request_handler.dart';
 import 'package:test/test.dart';
 
 import '../helpers.dart';
@@ -36,7 +36,7 @@ void main() {
     'B3: request with unknown wire type is rejected, not silently dispatched',
     () {
       final registry = RpcReflectionRegistry();
-      final contract = ServerReflectionContract(registry);
+      final answer = ReflectionRequestHandler(registry);
 
       // Valid file_by_filename (field 3) followed by a group-start tag (field 5,
       // wire type 3) which this parser does not support.
@@ -46,7 +46,7 @@ void main() {
       final request = Uint8List.fromList([...valid, groupStartTag]);
 
       // ignore: invalid_use_of_visible_for_testing_member
-      final response = contract.processRequestForTest(request);
+      final response = answer(request);
 
       final err = parseErrorResponse(response);
 

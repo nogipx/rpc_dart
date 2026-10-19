@@ -62,26 +62,6 @@ class ParsedFileDescriptor {
 ParsedFileDescriptor parseFileDescriptorProto(Uint8List bytes) =>
     _parseFileDescriptorProto(bytes);
 
-/// Parses a serialized FileDescriptorSet and returns all contained FileDescriptorProtos.
-List<ParsedFileDescriptor> parseFileDescriptorSet(Uint8List bytes) {
-  final reader = RpcProtoReader(bytes);
-  final result = <ParsedFileDescriptor>[];
-
-  while (!reader.atEnd) {
-    final (field: fieldNumber, :wireType) = reader.readTag();
-
-    if (fieldNumber == 1 && wireType == RpcProtoWireType.lengthDelimited) {
-      // repeated FileDescriptorProto file = 1
-      final fileBytes = reader.readBytes();
-      result.add(_parseFileDescriptorProto(fileBytes));
-    } else {
-      reader.skip(wireType);
-    }
-  }
-
-  return result;
-}
-
 ParsedFileDescriptor _parseFileDescriptorProto(Uint8List bytes) {
   final reader = RpcProtoReader(bytes);
   var name = '';

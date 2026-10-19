@@ -170,22 +170,4 @@ void main() {
       );
     });
   });
-
-  group('parseFileDescriptorSet', () {
-    test('returns all contained FileDescriptorProtos', () {
-      final set = buildMinimalFileDescriptorSet([
-        ('a.proto', 'a.v1', ['ServiceA']),
-        ('b.proto', 'b.v1', ['ServiceB']),
-      ]);
-      final parsed = parseFileDescriptorSet(set);
-
-      expect(parsed.length, 2);
-      expect(parsed.map((p) => p.name), containsAll(['a.proto', 'b.proto']));
-    });
-
-    test('empty set returns empty list', () {
-      final parsed = parseFileDescriptorSet(Uint8List(0));
-      expect(parsed, isEmpty);
-    });
-  });
 }

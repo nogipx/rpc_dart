@@ -23,8 +23,8 @@
 //   * lengths -> always bounded by the buffer (< 2^32), so they never reach the
 //                bit-32 corruption range before a bounds break.
 // The parser never decodes a >2^32 value as observable DATA (no int64 fields are
-// returned), so the bug cannot be surfaced via parseFileDescriptorProto /
-// parseFileDescriptorSet / the reflection contract.
+// returned), so the bug cannot be surfaced via parseFileDescriptorProto or
+// the reflection contract.
 //
 // The test below proves the primitive is broken by replicating the parser's exact
 // loop. It asserts CORRECT decoding -> FAILS under `-p node` for values > 2^32
