@@ -78,22 +78,7 @@ Stream<NotifyEvent> boundWhilePaused(
   return out.stream;
 }
 
-/// Approximate size of [event]: the UTF-16 code units of every string in its
-/// topic and payload, keys included, plus 8 for each other scalar.
+/// Approximate size of [event]: its topic and payload by [approxJsonBytes],
+/// plus 16.
 int approxEventBytes(NotifyEvent event) =>
-    event.topic.length + 16 + _approxJsonBytes(event.payload);
-
-int _approxJsonBytes(Object? value) => switch (value) {
-  null => 0,
-  final String s => s.length,
-  final Map<dynamic, dynamic> m => m.entries.fold(
-    0,
-    (sum, e) => sum + _approxJsonBytes(e.key) + _approxJsonBytes(e.value),
-  ),
-  final Iterable<dynamic> items => items.fold(
-    0,
-    (sum, item) => sum + _approxJsonBytes(item),
-  ),
-  final IRpcSerializable s => _approxJsonBytes(s.toJson()),
-  _ => 8,
-};
+    event.topic.length + 16 + approxJsonBytes(event.payload);
