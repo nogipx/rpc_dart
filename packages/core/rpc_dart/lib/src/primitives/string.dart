@@ -10,16 +10,15 @@ class RpcString extends RpcPrimitiveMessage<String> {
   /// Creates an [RpcString] wrapping [value].
   const RpcString(super.value);
 
-  /// Creates RpcString from JSON.
+  /// Creates RpcString from JSON: a string; no value is the empty string.
+  /// Anything else throws [FormatException] rather than being stringified.
   factory RpcString.fromJson(Map<String, dynamic> json) {
-    try {
-      final v = json['v'];
-      if (v == null) return const RpcString('');
-      if (v is String) return RpcString(v);
-      return RpcString(v.toString());
-    } catch (e) {
-      return const RpcString('');
-    }
+    final v = json['v'];
+    if (v == null) return const RpcString('');
+    if (v is String) return RpcString(v);
+    throw FormatException(
+      'RpcString.fromJson: cannot decode value of type ${v.runtimeType}: $v',
+    );
   }
 
   /// Default codec for [RpcString].

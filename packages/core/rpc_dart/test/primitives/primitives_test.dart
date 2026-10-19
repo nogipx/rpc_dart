@@ -27,15 +27,25 @@ void main() {
       expect(RpcBool.fromJson({'v': 0}), const RpcBool(false));
       expect(RpcBool.fromJson({'v': 'true'}), const RpcBool(true));
       expect(RpcBool.fromJson({'v': ' 0 '}), const RpcBool(false));
-      expect(RpcBool.fromJson({'v': '???'}), const RpcBool(false));
       expect(RpcBool.fromJson({}), const RpcBool(false));
+      // Malformed input must surface a decode error, not silently be false.
+      expect(() => RpcBool.fromJson({'v': '???'}), throwsFormatException);
+      expect(() => RpcBool.fromJson({'v': <int>[]}), throwsFormatException);
     });
 
-    test('RpcString.fromJson supports stringable values', () {
+    test('RpcString.fromJson takes a string and refuses anything else', () {
       expect(RpcString.fromJson({'v': 'x'}), const RpcString('x'));
-      expect(RpcString.fromJson({'v': 10}), const RpcString('10'));
       expect(RpcString.fromJson({}), const RpcString(''));
+      expect(() => RpcString.fromJson({'v': 10}), throwsFormatException);
     });
+
+    test('RpcNum.fromJson keeps an integer past 2^53 exact', () {
+      // 2^53 + 1: a double cannot hold it. Parsed, not a literal, because
+      // the web build compiles this file too and rejects such a literal.
+      const text = '9007199254740993';
+      expect(RpcNum.fromJson({'v': text}).value, int.parse(text));
+      expect(RpcNum.fromJson({'v': text}).value, isNot(9007199254740992));
+    }, testOn: 'vm');
 
     test('RpcNull codecs and factories ignore input', () {
       expect(RpcNull.fromJson({'v': 123}), isA<RpcNull>());

@@ -14,26 +14,25 @@ class RpcBool extends RpcPrimitiveMessage<bool> {
   /// Provides consistent serialization/deserialization for booleans in RPC.
   const RpcBool(super.value);
 
-  /// Creates RpcBool from JSON.
+  /// Creates RpcBool from JSON: a bool, a number (non-zero is true) or the
+  /// strings `true`, `false`, `1`, `0`; no value is false. Anything else
+  /// throws [FormatException] rather than reading as false.
   factory RpcBool.fromJson(Map<String, dynamic> json) {
-    try {
-      final v = json['v'];
-      if (v == null) return const RpcBool(false);
-      if (v is bool) return RpcBool(v);
-
-      // Convert numeric values.
-      if (v is num) return RpcBool(v != 0);
-
-      // Convert string values.
-      final vStr = v.toString().toLowerCase().trim();
-      if (vStr == 'true' || vStr == '1') return const RpcBool(true);
-      if (vStr == 'false' || vStr == '0') return const RpcBool(false);
-
-      // Fallback for anything else.
-      return const RpcBool(false);
-    } catch (e) {
-      return const RpcBool(false);
+    final v = json['v'];
+    if (v == null) return const RpcBool(false);
+    if (v is bool) return RpcBool(v);
+    if (v is num) return RpcBool(v != 0);
+    if (v is String) {
+      switch (v.toLowerCase().trim()) {
+        case 'true' || '1':
+          return const RpcBool(true);
+        case 'false' || '0':
+          return const RpcBool(false);
+      }
     }
+    throw FormatException(
+      'RpcBool.fromJson: cannot decode value of type ${v.runtimeType}: $v',
+    );
   }
 
   /// Default codec for [RpcBool].

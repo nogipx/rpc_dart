@@ -10,22 +10,21 @@ class RpcNum extends RpcPrimitiveMessage<num> {
   /// Creates an [RpcNum] wrapping [value].
   const RpcNum(super.value);
 
-  /// Creates RpcNum from JSON.
+  /// Creates RpcNum from JSON: a number or a numeric string; no value is 0.
+  /// Anything else throws [FormatException].
+  ///
+  /// A string is parsed as an int first: through a double, an integer past
+  /// 2^53 lost its low digits.
   factory RpcNum.fromJson(Map<String, dynamic> json) {
     final v = json['v'];
     if (v == null) return const RpcNum(0);
     if (v is num) return RpcNum(v);
 
     if (v is String) {
-      // Attempt to parse as number.
+      final asInt = int.tryParse(v);
+      if (asInt != null) return RpcNum(asInt);
       final asDouble = double.tryParse(v);
-      if (asDouble != null) {
-        // Convert to int when the value is whole.
-        if (asDouble == asDouble.toInt()) {
-          return RpcNum(asDouble.toInt());
-        }
-        return RpcNum(asDouble);
-      }
+      if (asDouble != null) return RpcNum(asDouble);
     }
 
     throw FormatException(
