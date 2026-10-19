@@ -114,25 +114,8 @@ final class ServerStreamCaller<
           yield response.payload!;
         }
 
-        // The status on the END_STREAM frame; see _grpcStatusErrorTransformer.
-        if (response.metadata != null && response.isEndOfStream) {
-          final status = RpcCallerTrailer.statusOf(response.metadata!);
-          if (status != null && status != RpcStatus.ok) {
-            final error = RpcCallerTrailer.errorOf(
-              response.metadata!,
-              status,
-              context: _context,
-            );
-            // Debug for every status; the catch below owns a fault's record.
-            if (_logger.isDebug) {
-              _logger.debug(
-                'Server stream ended with status $status: ${error.message}',
-              );
-            }
-            serverEnded = true;
-            throw error;
-          }
-        }
+        // A non-OK status on it arrives next, as the transformer's error.
+        if (response.isEndOfStream) serverEnded = true;
       }
       serverEnded = true;
 

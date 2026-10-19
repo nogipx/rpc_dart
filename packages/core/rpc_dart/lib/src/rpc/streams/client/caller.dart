@@ -240,40 +240,15 @@ final class ClientStreamCaller<
     }
   }
 
-  /// Runs [send], then waits for the response within the deadline.
+  /// Runs [send], then waits for the response.
   Future<TResponse> _awaitResponse(Future<void> Function() send) async {
     try {
       await send();
       _logger.internal('Send complete, waiting for response');
 
-      // Computed here, not at construction: requests may have taken a while to
-      // send, and remainingTime already accounts for that.
-      final deadline = _context?.deadline;
-      final wait = _context?.remainingTime;
-
-      // No deadline, no bound. See the doc above.
-      if (deadline == null || wait == null) {
-        return await _responseCompleter.future;
-      }
-
-      // RpcLongTimer.timeout, not Future.timeout: `wait` comes from a deadline,
-      // which a peer can set, and a bare Timer past the JS ceiling fires at
-      // once. See [RpcLongTimer].
-      return await RpcLongTimer.timeout(
-        _responseCompleter.future,
-        wait,
-        onTimeout: () {
-          _logger.error('Response wait timed out after $wait');
-          // Tell the server before tearing down, which `close()` does not do:
-          // abandoning the wait would leave the handler running for a caller
-          // that is gone. This timer races the call scope's own deadline
-          // notice, so whichever wins, the server is told and the caller sees
-          // the deadline. `notifyPeerOfAbort` never throws.
-          unawaited(_notifyAbort('deadline exceeded'));
-          unawaited(close());
-          throw RpcDeadlineExceededException(deadline, wait);
-        },
-      );
+      // The deadline reaches this as the processor's error on the response
+      // stream, which also tells the server.
+      return await _responseCompleter.future;
     } catch (e, stackTrace) {
       // Rethrown to the call, whose catch owns the record.
       if (_logger.isDebug) {
