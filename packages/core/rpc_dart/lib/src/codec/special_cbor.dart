@@ -147,9 +147,10 @@ abstract interface class CborCodec {
     return value;
   }
 
-  /// Unsafe encoding of any value into CBOR bytes.
-  /// Does not validate map key types; accepts any Map variant.
-  /// Intended for tests and special cases.
+  /// Encodes any value, not only a map, into CBOR bytes.
+  ///
+  /// A map at any depth must have String keys, as for [encode]: decoding
+  /// yields String keys, so another key could not round-trip.
   static Uint8List encodeUnsafe(dynamic value) {
     final writer = _FastCborWriter();
     writer.writeValue(value);
@@ -653,25 +654,9 @@ class _FastCborWriter {
   Uint8List toBytes() => _builder.toBytes();
 
   /// Encodes Map(String, dynamic) into CBOR bytes.
-  void writeMap(Map<String, dynamic> value) {
-    _writeLength(CborCodec._majorTypeMap, value.length);
-
-    // RFC 7049 recommends sorting keys for deterministic encoding.
-    // Encode each key's UTF-8 bytes exactly once, sort by the cached bytes,
-    // then write using those same bytes (no re-encoding).
-    final entries = <_CborSortKey>[
-      for (final key in value.keys)
-        _CborSortKey(utf8.encode(key.toString()), key),
-    ]..sort(_compareSortKeys);
-
-    for (final entry in entries) {
-      _writeStringBytes(entry.keyBytes);
-      _writeValue(value[entry.key]);
-    }
-  }
+  void writeMap(Map<String, dynamic> value) => _writeMap(value);
 
   /// Encodes any top-level value into CBOR bytes (backs encodeUnsafe).
-  /// Accepts any Map variant via lax key coercion (key.toString()).
   void writeValue(dynamic value) => _writeValue(value);
 
   /// Encodes a value into CBOR bytes.
@@ -784,101 +769,9 @@ class _FastCborWriter {
       );
     }
     if (value >= 0) {
-      _writePositiveInt(value);
+      _writeHead(CborCodec._majorTypeUnsignedInt, value);
     } else {
-      _writeNegativeInt(-value - 1);
-    }
-  }
-
-  /// Encodes a positive integer.
-  void _writePositiveInt(int value) {
-    if (value <= 23) {
-      _builder.addByte(
-        _getMajorTypeByte(CborCodec._majorTypeUnsignedInt, value),
-      );
-    } else if (value <= 0xFF) {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeUnsignedInt,
-          CborCodec._additionalInfoOneByteFollow,
-        ),
-      );
-      _builder.addByte(value & 0xFF);
-    } else if (value <= 0xFFFF) {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeUnsignedInt,
-          CborCodec._additionalInfoTwoByteFollow,
-        ),
-      );
-      _builder.addByte((value >> 8) & 0xFF);
-      _builder.addByte(value & 0xFF);
-    } else if (value <= 0xFFFFFFFF) {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeUnsignedInt,
-          CborCodec._additionalInfoFourByteFollow,
-        ),
-      );
-      _builder.addByte((value >> 24) & 0xFF);
-      _builder.addByte((value >> 16) & 0xFF);
-      _builder.addByte((value >> 8) & 0xFF);
-      _builder.addByte(value & 0xFF);
-    } else {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeUnsignedInt,
-          CborCodec._additionalInfoEightByteFollow,
-        ),
-      );
-
-      _writeUint64BigEndian(_builder, value);
-    }
-  }
-
-  /// Encodes a negative integer.
-  void _writeNegativeInt(int value) {
-    if (value <= 23) {
-      _builder.addByte(
-        _getMajorTypeByte(CborCodec._majorTypeNegativeInt, value),
-      );
-    } else if (value <= 0xFF) {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeNegativeInt,
-          CborCodec._additionalInfoOneByteFollow,
-        ),
-      );
-      _builder.addByte(value & 0xFF);
-    } else if (value <= 0xFFFF) {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeNegativeInt,
-          CborCodec._additionalInfoTwoByteFollow,
-        ),
-      );
-      _builder.addByte((value >> 8) & 0xFF);
-      _builder.addByte(value & 0xFF);
-    } else if (value <= 0xFFFFFFFF) {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeNegativeInt,
-          CborCodec._additionalInfoFourByteFollow,
-        ),
-      );
-      _builder.addByte((value >> 24) & 0xFF);
-      _builder.addByte((value >> 16) & 0xFF);
-      _builder.addByte((value >> 8) & 0xFF);
-      _builder.addByte(value & 0xFF);
-    } else {
-      _builder.addByte(
-        _getMajorTypeByte(
-          CborCodec._majorTypeNegativeInt,
-          CborCodec._additionalInfoEightByteFollow,
-        ),
-      );
-
-      _writeUint64BigEndian(_builder, value);
+      _writeHead(CborCodec._majorTypeNegativeInt, -value - 1);
     }
   }
 
@@ -916,31 +809,29 @@ class _FastCborWriter {
   /// [_writeString] for the same source string.
   void _writeStringBytes(List<int> utf8Bytes) {
     // Standard string encoding per RFC 7049.
-    _writeLength(CborCodec._majorTypeTextString, utf8Bytes.length);
+    _writeHead(CborCodec._majorTypeTextString, utf8Bytes.length);
     _builder.add(utf8Bytes);
   }
 
   /// Encodes a binary string.
   void _writeByteString(Uint8List bytes) {
-    _writeLength(CborCodec._majorTypeByteString, bytes.length);
+    _writeHead(CborCodec._majorTypeByteString, bytes.length);
     _builder.add(bytes);
   }
 
   /// Encodes a list.
   void _writeList(List<dynamic> list) {
-    _writeLength(CborCodec._majorTypeArray, list.length);
+    _writeHead(CborCodec._majorTypeArray, list.length);
     for (final item in list) {
       _writeValue(item);
     }
   }
 
-  /// Encodes a map. Keys MUST be strings.
+  /// Encodes a map, whose keys must be strings.
   ///
-  /// CBOR maps here use text-string keys and the decoder always yields `String`
-  /// keys, so a non-string key cannot round-trip. The old code coerced any key
-  /// via `key.toString()`, which loses the key's type and silently collapses
-  /// distinct keys that share a string form (e.g. int `1` and String `'1'`).
-  /// A non-string key is now rejected instead of corrupting data.
+  /// The decoder always yields `String` keys, so another key cannot
+  /// round-trip; coercing it with `toString()` would also merge distinct keys
+  /// such as `1` and `'1'`. It is rejected instead.
   void _writeMap(Map<dynamic, dynamic> map) {
     // RFC 7049 recommends sorting keys for deterministic encoding.
     // Encode each key's UTF-8 bytes exactly once, sort by the cached bytes,
@@ -950,7 +841,7 @@ class _FastCborWriter {
         _CborSortKey(utf8.encode(_requireStringKey(key)), key),
     ]..sort(_compareSortKeys);
 
-    _writeLength(CborCodec._majorTypeMap, map.length);
+    _writeHead(CborCodec._majorTypeMap, map.length);
     for (final entry in entries) {
       _writeStringBytes(entry.keyBytes);
       _writeValue(map[entry.key]);
@@ -967,34 +858,35 @@ class _FastCborWriter {
     );
   }
 
-  /// Encodes the length prefix.
-  void _writeLength(int majorType, int length) {
-    if (length <= 23) {
-      _builder.addByte(_getMajorTypeByte(majorType, length));
-    } else if (length <= 0xFF) {
+  /// Writes the head of an item: [majorType] and its [argument], a length or
+  /// an integer's value, in the shortest form.
+  void _writeHead(int majorType, int argument) {
+    if (argument <= 23) {
+      _builder.addByte(_getMajorTypeByte(majorType, argument));
+    } else if (argument <= 0xFF) {
       _builder.addByte(
         _getMajorTypeByte(majorType, CborCodec._additionalInfoOneByteFollow),
       );
-      _builder.addByte(length & 0xFF);
-    } else if (length <= 0xFFFF) {
+      _builder.addByte(argument & 0xFF);
+    } else if (argument <= 0xFFFF) {
       _builder.addByte(
         _getMajorTypeByte(majorType, CborCodec._additionalInfoTwoByteFollow),
       );
-      _builder.addByte((length >> 8) & 0xFF);
-      _builder.addByte(length & 0xFF);
-    } else if (length <= 0xFFFFFFFF) {
+      _builder.addByte((argument >> 8) & 0xFF);
+      _builder.addByte(argument & 0xFF);
+    } else if (argument <= 0xFFFFFFFF) {
       _builder.addByte(
         _getMajorTypeByte(majorType, CborCodec._additionalInfoFourByteFollow),
       );
-      _builder.addByte((length >> 24) & 0xFF);
-      _builder.addByte((length >> 16) & 0xFF);
-      _builder.addByte((length >> 8) & 0xFF);
-      _builder.addByte(length & 0xFF);
+      _builder.addByte((argument >> 24) & 0xFF);
+      _builder.addByte((argument >> 16) & 0xFF);
+      _builder.addByte((argument >> 8) & 0xFF);
+      _builder.addByte(argument & 0xFF);
     } else {
       _builder.addByte(
         _getMajorTypeByte(majorType, CborCodec._additionalInfoEightByteFollow),
       );
-      _writeUint64BigEndian(_builder, length);
+      _writeUint64BigEndian(_builder, argument);
     }
   }
 
