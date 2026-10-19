@@ -26,12 +26,14 @@ final class RpcPeerEndpoint extends RpcEndpointBase
   final LogScope _log;
 
   /// Creates an [RpcPeerEndpoint] bound to the given transport.
+  ///
+  /// With [logController] the endpoint logs under the `rpc.peer` scope.
   RpcPeerEndpoint({
     required super.transport,
     super.debugLabel,
-    LogController? logger,
+    LogController? logController,
     this.compressionEnabled = false,
-  }) : _log = logger?.scope('rpc.peer') ?? LogScope.noop;
+  }) : _log = logController?.scope('rpc.peer') ?? LogScope.noop;
 
   // ---------------------------------------------------------------------------
   // Lifecycle

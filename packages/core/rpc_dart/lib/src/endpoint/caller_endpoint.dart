@@ -15,12 +15,14 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   final bool compressionEnabled;
 
   /// Creates an [RpcCallerEndpoint] bound to the given transport.
+  ///
+  /// With [logController] the endpoint logs under the `rpc.caller` scope.
   RpcCallerEndpoint({
     required super.transport,
     super.debugLabel,
-    LogController? logger,
+    LogController? logController,
     this.compressionEnabled = false,
-  }) : _log = logger?.scope('rpc.caller') ?? LogScope.noop {
+  }) : _log = logController?.scope('rpc.caller') ?? LogScope.noop {
     _validateClientTransport();
     // Attached in the constructor rather than start(): a caller is usable
     // without ever calling start(), and an unsubscribed global stream both

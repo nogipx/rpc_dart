@@ -9,8 +9,9 @@ SPDX-License-Identifier: MIT
 ## Logging rules
 
 - Create one `LogController` per process (or per test) and pass it to every
-  endpoint as `logger:`. Endpoints take a `LogController`, NOT a `LogScope`.
-  Without `logger:` an endpoint logs nothing.
+  endpoint and server as `logController:`; they name their own `rpc.*`
+  scopes from it. Every other component takes `logger:`, a `LogScope`.
+  Without `logController:` an endpoint logs nothing.
 - `LogController` takes named parameters only. There is no `LogConfig`
   argument; `LogConfig` is a read-only snapshot from `controller.config`.
 - Inside your own classes hold a non-nullable `LogScope`, default it to
@@ -69,9 +70,12 @@ final logger = LogController(
   final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
   final responder = RpcResponderEndpoint(
     transport: serverTransport,
-    logger: logger,
+    logController: logger,
   );
-  final caller = RpcCallerEndpoint(transport: clientTransport, logger: logger);
+  final caller = RpcCallerEndpoint(
+    transport: clientTransport,
+    logController: logger,
+  );
   return (caller, responder);
 }
 ```
@@ -252,8 +256,7 @@ Other methods: `getStatus`, `clearStatus`, `clearAll`, `changes`.
 - `LogController(LogConfig(...))` does not compile. Use named parameters.
 - `RpcLogger`, `InMemoryLogger`, `RpcLogger.setLoggerFactory`,
   `RpcGrpcHealthService`, `RpcGrpcHealthClient`, `ServingStatus` do not exist.
-- Passing a `LogScope` as an endpoint's `logger:` is a type error; pass the
-  `LogController`.
+- Endpoints have no `logger:` parameter; it is `logController:`.
 - `RpcHealthLevel` has no `active`; `RpcEndpointHealth` has no `level`.
 - `log.warning(..., data: status.details)` is a type error:
   `Map<String, Object?>` is not `Map<String, Object>`.

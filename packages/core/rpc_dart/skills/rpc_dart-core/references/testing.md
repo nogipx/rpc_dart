@@ -135,13 +135,13 @@ void main() {
         RpcChannelTransport.memoryPair();
     responderEndpoint = RpcResponderEndpoint(
       transport: serverTransport,
-      logger: logger,
+      logController: logger,
     )
       ..registerServiceContract(EchoResponder())
       ..start();
     callerEndpoint = RpcCallerEndpoint(
       transport: clientTransport,
-      logger: logger,
+      logController: logger,
     );
     client = EchoCaller(callerEndpoint);
   });
@@ -268,8 +268,8 @@ caller contract `dataTransferMode: RpcDataTransferMode.codec`; see
 
 ## Capturing logs
 
-- `LogController(outputs: [RingBufferOutput(...)])`, passed as `logger:` to
-  the endpoints. Read `entries`, or `query(LogFilter(minLevel: ...,
+- `LogController(outputs: [RingBufferOutput(...)])`, passed as
+  `logController:` to the endpoints. Read `entries`, or `query(LogFilter(minLevel: ...,
   scopes: {...}, requestId: ...))`.
 - Use `minLevel: RpcLogLevel.internal` to see frame-level library logs when
   debugging a hang; set it back afterwards, it is very verbose.

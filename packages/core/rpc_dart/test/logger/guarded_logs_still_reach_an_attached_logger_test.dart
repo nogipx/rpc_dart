@@ -84,10 +84,11 @@ void main() {
     final pair = RpcChannelTransport.pair();
     clientT = pair.$1;
     serverT = pair.$2;
-    responder = RpcResponderEndpoint(transport: serverT, logger: controller)
-      ..registerServiceContract(_Svc())
-      ..start();
-    caller = RpcCallerEndpoint(transport: clientT, logger: controller);
+    responder =
+        RpcResponderEndpoint(transport: serverT, logController: controller)
+          ..registerServiceContract(_Svc())
+          ..start();
+    caller = RpcCallerEndpoint(transport: clientT, logController: controller);
   });
 
   tearDown(() async {

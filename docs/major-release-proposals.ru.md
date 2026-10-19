@@ -499,8 +499,10 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
     - `traceId` в базовом `LogRecord` (P8);
     - экранирование строк консоли общее с rpc_dart_log (D3).
   - Сделано (2026-10-19). Каждый компонент держит не-null `LogScope`;
-    nullable-поля убраны из http, http2 и framework. Эндпоинты оставляют
-    `LogController? logger`: это корни, которые дают имена скоупам `rpc.*`.
+    nullable-поля убраны из http, http2 и framework. Эндпоинты принимают
+    `LogController`, потому что это корни, которые дают имена скоупам `rpc.*`;
+    владелец, 2026-10-19: параметр называется `logController:`, как у
+    серверов, так что `logger:` всегда означает `LogScope`.
     Реестр рефлексии сохраняет ленивый консольный логгер, чтобы о
     недостающей зависимости сообщалось и без логгера.
 - **Ошибки (C15).**
@@ -633,6 +635,8 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
 | переопределение кодека для метода действует на все методы с тем же типом | действует только на свой метод; перегенерировать код |
 | `RpcConnectionLogger` | `LogScope` |
+| `logger:` у `RpcCallerEndpoint`, `RpcResponderEndpoint`, `RpcPeerEndpoint` | `logController:` |
+| `RpcConnectionHost(endpointLogger:)` | `logController:` |
 | `GrpcHealthCheckContract` говорит на CBOR; `Check` неизвестного сервиса отвечает `serviceUnknown` | protobuf на проводе; `Check` падает с `NOT_FOUND`. У сообщений нет `toJson`/`fromJson`; используйте их `codec` |
 | `transferMode:` у `unaryRequest` | режим передачи контракта |
 | `RpcMethodKind` в `@RpcMethod` | `RpcMethodType` |

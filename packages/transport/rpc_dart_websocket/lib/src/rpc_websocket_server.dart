@@ -53,7 +53,7 @@ class RpcWebSocketServer implements IRpcServer {
          mode: mode,
          maxConnections: maxConnections,
          logger: logger?.child('WebSocketServer'),
-         endpointLogger: logController,
+         logController: logController,
        ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,

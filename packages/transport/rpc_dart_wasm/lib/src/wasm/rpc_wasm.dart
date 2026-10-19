@@ -138,7 +138,7 @@ abstract final class RpcWasm {
       transport: transport,
       debugLabel: debugLabel,
       compressionEnabled: compressionEnabled,
-      logger: logController,
+      logController: logController,
     );
 
     try {

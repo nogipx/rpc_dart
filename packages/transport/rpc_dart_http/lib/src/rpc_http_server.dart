@@ -271,7 +271,7 @@ class RpcHttpServer implements IRpcServer {
   ) async {
     final endpoint = RpcResponderEndpoint(
       transport: transport,
-      logger: _logController,
+      logController: _logController,
     );
     _endpoint = endpoint;
     _mode.register(endpoint);

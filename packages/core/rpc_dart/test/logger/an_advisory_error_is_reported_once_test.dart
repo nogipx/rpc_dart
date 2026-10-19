@@ -80,8 +80,10 @@ void main() {
       channel: chan,
       isClient: false,
     );
-    final responder = RpcResponderEndpoint(transport: transport, logger: log)
-      ..start();
+    final responder = RpcResponderEndpoint(
+      transport: transport,
+      logController: log,
+    )..start();
     addTearDown(() async {
       await responder.close();
       await transport.close();
@@ -108,7 +110,7 @@ void main() {
       channel: chan,
       isClient: true,
     );
-    final caller = RpcCallerEndpoint(transport: transport, logger: log);
+    final caller = RpcCallerEndpoint(transport: transport, logController: log);
     addTearDown(() async {
       await caller.close();
       await transport.close();
@@ -134,8 +136,10 @@ void main() {
       channel: chan,
       isClient: false,
     );
-    final responder = RpcResponderEndpoint(transport: transport, logger: log)
-      ..start();
+    final responder = RpcResponderEndpoint(
+      transport: transport,
+      logController: log,
+    )..start();
     addTearDown(() async {
       await responder.close();
       await transport.close();

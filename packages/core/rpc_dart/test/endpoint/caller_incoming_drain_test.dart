@@ -105,7 +105,10 @@ void main() {
       isClient: false,
       policy: const RpcSecurityPolicy(maxHeaders: 64),
     );
-    final caller = RpcCallerEndpoint(transport: client, logger: controller);
+    final caller = RpcCallerEndpoint(
+      transport: client,
+      logController: controller,
+    );
 
     await server.sendMetadata(
       2,

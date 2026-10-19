@@ -64,7 +64,10 @@ void main() {
       port: server.port,
       logger: controller.scope('test.caller'),
     );
-    final caller = RpcCallerEndpoint(transport: client, logger: controller);
+    final caller = RpcCallerEndpoint(
+      transport: client,
+      logController: controller,
+    );
 
     final reply = await caller
         .unaryRequest<RpcString, RpcString>(

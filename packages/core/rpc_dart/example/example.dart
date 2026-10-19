@@ -212,8 +212,11 @@ void main() async {
   );
 
   final (client, server) = RpcChannelTransport.memoryPair();
-  final responder = RpcResponderEndpoint(transport: server, logger: rpcLog);
-  final caller = RpcCallerEndpoint(transport: client, logger: rpcLog);
+  final responder = RpcResponderEndpoint(
+    transport: server,
+    logController: rpcLog,
+  );
+  final caller = RpcCallerEndpoint(transport: client, logController: rpcLog);
 
   responder.registerServiceContract(CalculatorResponder());
   responder.start();

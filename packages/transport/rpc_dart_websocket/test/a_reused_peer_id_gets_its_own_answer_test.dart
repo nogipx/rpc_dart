@@ -166,7 +166,7 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
       final warnings = _Warnings();
       final clientPeer = RpcPeerEndpoint(
         transport: connection.transport,
-        logger: warnings,
+        logController: warnings,
       );
       final answering = _Answering(clientPeer);
       clientPeer.registerServiceContract(answering);

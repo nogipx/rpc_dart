@@ -112,7 +112,8 @@ not zero-copy, and a method without codecs fails on them.
    server.
 3. **Responder needs `start()`.** Without it calls never get an answer: they
    hang, they do not fail.
-4. **Endpoints take `logger:` as a `LogController`.** Not a `LogScope`. Inside
+4. **Endpoints take `logController:`, a `LogController`.** Other components
+   take `logger:`, a `LogScope`. Inside
    a handler, log through `context?.log`, which is already scoped to
    `rpc.responder.<Service>.<method>`.
 5. **There are no `interceptors:` or `middlewares:` constructor parameters.**

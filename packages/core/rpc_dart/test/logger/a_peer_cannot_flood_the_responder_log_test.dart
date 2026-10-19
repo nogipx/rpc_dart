@@ -69,7 +69,7 @@ _rig(RpcSecurityPolicy policy) {
     isClient: false,
     policy: policy,
   );
-  final responder = RpcResponderEndpoint(transport: server, logger: log)
+  final responder = RpcResponderEndpoint(transport: server, logController: log)
     ..registerServiceContract(_Svc(hold))
     ..start();
   return (

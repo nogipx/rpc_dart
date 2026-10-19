@@ -12,11 +12,13 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   LogScope _log;
 
   /// Creates an [RpcResponderEndpoint] bound to the given transport.
+  ///
+  /// With [logController] the endpoint logs under the `rpc.responder` scope.
   RpcResponderEndpoint({
     required super.transport,
     super.debugLabel,
-    LogController? logger,
-  }) : _log = logger?.scope('rpc.responder') ?? LogScope.noop {
+    LogController? logController,
+  }) : _log = logController?.scope('rpc.responder') ?? LogScope.noop {
     _validateServerTransport();
   }
 

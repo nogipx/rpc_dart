@@ -86,7 +86,7 @@ Future<_Run> _run(String method, Uint8List? payload, {int calls = 20}) async {
     isClient: false,
   );
   final responder =
-      RpcResponderEndpoint(transport: transport, logger: controller)
+      RpcResponderEndpoint(transport: transport, logController: controller)
         ..registerServiceContract(_Svc())
         ..start();
   addTearDown(() async {
@@ -179,7 +179,7 @@ void main() {
       });
       final (client, server) = RpcChannelTransport.memoryPair();
       final responder =
-          RpcResponderEndpoint(transport: server, logger: controller)
+          RpcResponderEndpoint(transport: server, logController: controller)
             ..registerServiceContract(_ZeroCopySvc())
             ..start();
       final caller = RpcCallerEndpoint(transport: client);

@@ -62,7 +62,7 @@ Future<List<LogEvent>> _serverStream(Uint8List first, Uint8List? after) async {
   final chan = _Chan();
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport.fromChannel(channel: chan, isClient: true),
-    logger: logs,
+    logController: logs,
   );
   addTearDown(caller.close);
   final done = Completer<void>();

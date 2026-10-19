@@ -102,7 +102,7 @@ class RpcHttp2Server implements IRpcServer {
        _connectionHost = RpcConnectionHost(
          mode: mode,
          logger: logger?.child('Http2Server'),
-         endpointLogger: logController,
+         logController: logController,
        ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,

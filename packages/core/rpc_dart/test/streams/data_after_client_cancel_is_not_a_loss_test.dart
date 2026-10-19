@@ -94,7 +94,7 @@ Future<({_Chan chan, List<String> errors})> _start() async {
     isClient: false,
   );
   final responder =
-      RpcResponderEndpoint(transport: transport, logger: controller)
+      RpcResponderEndpoint(transport: transport, logController: controller)
         ..registerServiceContract(_Svc())
         ..start();
   addTearDown(() async {

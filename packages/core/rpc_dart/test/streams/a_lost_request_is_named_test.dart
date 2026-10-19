@@ -102,7 +102,10 @@ void main() {
 
     final (client, server) = RpcChannelTransport.pair();
     final caller = RpcCallerEndpoint(transport: client);
-    final responder = RpcResponderEndpoint(transport: server, logger: logs);
+    final responder = RpcResponderEndpoint(
+      transport: server,
+      logController: logs,
+    );
     responder.registerServiceContract(_Upload());
     responder.start();
 
@@ -146,7 +149,10 @@ void main() {
 
     final (client, server) = RpcChannelTransport.pair();
     final caller = RpcCallerEndpoint(transport: client);
-    final responder = RpcResponderEndpoint(transport: server, logger: logs);
+    final responder = RpcResponderEndpoint(
+      transport: server,
+      logController: logs,
+    );
     responder.registerServiceContract(_Upload());
     responder.start();
 
@@ -186,7 +192,10 @@ void main() {
 
       final (client, server) = RpcChannelTransport.pair();
       final caller = RpcCallerEndpoint(transport: client);
-      final responder = RpcResponderEndpoint(transport: server, logger: logs);
+      final responder = RpcResponderEndpoint(
+        transport: server,
+        logController: logs,
+      );
       responder.registerServiceContract(_Upload());
       responder.start();
 

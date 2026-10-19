@@ -115,10 +115,10 @@ Future<_Loud> _stream(String shape, String outcome) async {
   final responderLog = _Counting();
   final (client, server) = RpcChannelTransport.pair();
   final responder =
-      RpcResponderEndpoint(transport: server, logger: responderLog)
+      RpcResponderEndpoint(transport: server, logController: responderLog)
         ..registerServiceContract(_Svc())
         ..start();
-  final caller = RpcCallerEndpoint(transport: client, logger: callerLog);
+  final caller = RpcCallerEndpoint(transport: client, logController: callerLog);
   addTearDown(() async {
     await caller.close();
     await responder.close();
@@ -173,10 +173,10 @@ Future<_Loud> _call(String method) async {
   final responderLog = _Counting();
   final (client, server) = RpcChannelTransport.pair();
   final responder =
-      RpcResponderEndpoint(transport: server, logger: responderLog)
+      RpcResponderEndpoint(transport: server, logController: responderLog)
         ..registerServiceContract(_Svc())
         ..start();
-  final caller = RpcCallerEndpoint(transport: client, logger: callerLog);
+  final caller = RpcCallerEndpoint(transport: client, logController: callerLog);
   addTearDown(() async {
     await caller.close();
     await responder.close();

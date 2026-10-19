@@ -71,7 +71,7 @@ class RpcSocketServer implements IRpcServer {
          mode: mode,
          maxConnections: maxConnections,
          logger: logger?.child('SocketServer'),
-         endpointLogger: logController,
+         logController: logController,
        ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,

@@ -474,8 +474,10 @@ As landed:
     - `traceId` on the `LogRecord` base (P8);
     - the console line escaper is shared with rpc_dart_log (D3).
   - Done (2026-10-19). Every component holds a non-null `LogScope`; the
-    nullable fields are gone from http, http2 and the framework. Endpoints keep
-    `LogController? logger`: they are the roots that name the `rpc.*` scopes.
+    nullable fields are gone from http, http2 and the framework. Endpoints
+    take a `LogController`, because they are the roots that name the `rpc.*`
+    scopes; owner, 2026-10-19: the parameter is `logController:`, as on the
+    servers, so `logger:` always means a `LogScope`.
     The reflection registry keeps its lazy console logger, so a missing
     dependency is reported even without one.
 - **Errors (C15).**
@@ -604,6 +606,8 @@ Breaking changes are allowed throughout: this is a major release.
 | `RpcMessage.endOfStream()` | `RpcMessage(isEndOfStream: true)` |
 | a per-method codec override applied to every method with the same type | applied to its own method only; regenerate |
 | `RpcConnectionLogger` | `LogScope` |
+| `logger:` on `RpcCallerEndpoint`, `RpcResponderEndpoint`, `RpcPeerEndpoint` | `logController:` |
+| `RpcConnectionHost(endpointLogger:)` | `logController:` |
 | `GrpcHealthCheckContract` speaking CBOR; `Check` on an unknown service answering `serviceUnknown` | protobuf on the wire; `Check` fails with `NOT_FOUND`. The messages lose `toJson`/`fromJson`; use their `codec` |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |

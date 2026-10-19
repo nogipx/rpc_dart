@@ -81,7 +81,7 @@ Future<_Run> _run({required bool late, int calls = 10}) async {
     isClient: false,
   );
   final responder =
-      RpcResponderEndpoint(transport: transport, logger: controller)
+      RpcResponderEndpoint(transport: transport, logController: controller)
         ..registerServiceContract(_Svc(counts))
         ..start();
   addTearDown(() async {

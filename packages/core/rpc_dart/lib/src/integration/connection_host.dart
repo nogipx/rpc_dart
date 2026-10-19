@@ -50,14 +50,14 @@ final class RpcPeerMode extends RpcServerMode {
 /// refused connection is told.
 final class RpcConnectionHost {
   /// [maxConnections] caps the connections [admit] lets in, or null for no
-  /// cap. [endpointLogger] is handed to every endpoint.
+  /// cap. [logController] is handed to every endpoint.
   RpcConnectionHost({
     required this.mode,
     this.maxConnections,
     LogScope? logger,
-    LogController? endpointLogger,
+    LogController? logController,
   }) : _log = logger ?? LogScope.noop,
-       _endpointLogger = endpointLogger;
+       _logController = logController;
 
   /// What each connection gets.
   final RpcServerMode mode;
@@ -66,7 +66,7 @@ final class RpcConnectionHost {
   final int? maxConnections;
 
   final LogScope _log;
-  final LogController? _endpointLogger;
+  final LogController? _logController;
 
   /// Every live endpoint, with what to run when it is released.
   final Map<RpcEndpointBase, void Function()?> _live = {};
@@ -120,7 +120,7 @@ final class RpcConnectionHost {
         final responder = RpcResponderEndpoint(
           transport: transport,
           debugLabel: debugLabel,
-          logger: _endpointLogger,
+          logController: _logController,
         );
         endpoint = responder;
         _live[endpoint] = onRelease;
@@ -134,7 +134,7 @@ final class RpcConnectionHost {
         final peer = RpcPeerEndpoint(
           transport: transport,
           debugLabel: debugLabel,
-          logger: _endpointLogger,
+          logController: _logController,
         );
         endpoint = peer;
         _live[endpoint] = onRelease;

@@ -58,7 +58,7 @@ void main() {
     final pair = RpcChannelTransport.pair();
     client = pair.$1;
     server = pair.$2;
-    endpoint = RpcResponderEndpoint(transport: server, logger: logs);
+    endpoint = RpcResponderEndpoint(transport: server, logController: logs);
   });
 
   tearDown(() async {
