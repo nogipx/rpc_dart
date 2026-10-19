@@ -22,7 +22,6 @@ import 'dart:io';
 
 import 'package:http2/http2.dart' as h2;
 import 'package:rpc_dart/transport.dart';
-import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 
 import 'calls.dart';
 import 'contract.dart';
@@ -245,7 +244,7 @@ Future<void> _framedAtServer(NetworkRig rig) async {
       await ws.close().catchError((Object _) {});
     case SocketMember():
       await _rawAtServer(rig.serverPort, [
-        ...RpcSocketChannel.preface,
+        ...RpcChannelFrame.preface,
         for (final f in framedRequest(1)) ...f,
         ...garbage(128, seed: 4),
       ], Garbage.framed);
@@ -378,7 +377,7 @@ Future<_Fake> _fakeServer(
       return (port: http.port, close: () => http.close(force: true));
     case SocketMember():
       final fake = await FakeServer.start((socket) async {
-        socket.add(RpcSocketChannel.preface);
+        socket.add(RpcChannelFrame.preface);
         var answered = false;
         socket.listen((_) {
           if (answered) return;

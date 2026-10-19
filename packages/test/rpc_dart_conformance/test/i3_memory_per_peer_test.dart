@@ -35,7 +35,6 @@ import 'dart:io';
 
 import 'package:http2/http2.dart' as h2;
 import 'package:rpc_dart/transport.dart';
-import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 import 'package:test/test.dart';
 
 import 'support/matrix.dart';
@@ -409,10 +408,7 @@ Future<({int written, void Function() hear})> _deafPeer(
       return _rawDeafPeer(
         rig,
         calls: calls,
-        preface: Uint8List.fromList([
-          ...RpcSocketChannel.preface,
-          ...RpcChannelFrame.preface,
-        ]),
+        preface: RpcChannelFrame.preface,
         batch: batch,
       );
     case Http2Member():
@@ -609,7 +605,7 @@ Future<void> _refusedWhileArriving(
       addTearDown(socket.destroy);
       final done = socket.drain<void>().catchError((Object _) {});
       socket
-        ..add(RpcSocketChannel.preface)
+        ..add(RpcChannelFrame.preface)
         ..add(
           RpcChannelFrame.encodeMetadata(
             streamId: 1,
