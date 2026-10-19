@@ -13,22 +13,62 @@ import 'rpc_module.dart';
 // Module ordering
 // ============================================================================
 
-/// The app level the module levels in [moduleHealth] add up to.
+/// The app level one component's [level] stands for.
 ///
-/// Each entry's `level` is an [RpcHealthLevel] name. A `closed` module cannot
-/// serve, so it counts as unhealthy; a `reconnecting` one is recovering, so it
-/// counts as degraded.
-RpcAppHealthLevel appLevelOf(Map<String, Map<String, Object?>> moduleHealth) {
-  var level = RpcAppHealthLevel.healthy;
-  for (final entry in moduleHealth.values) {
-    switch (entry['level']) {
-      case 'unhealthy' || 'closed':
-        return RpcAppHealthLevel.unhealthy;
-      case 'degraded' || 'reconnecting':
-        level = RpcAppHealthLevel.degraded;
+/// A `closed` component cannot serve, so it counts as unhealthy; a
+/// `reconnecting` one is recovering, so it counts as degraded.
+RpcAppHealthLevel appLevelOfStatus(RpcHealthLevel level) => switch (level) {
+  RpcHealthLevel.healthy => RpcAppHealthLevel.healthy,
+  RpcHealthLevel.degraded ||
+  RpcHealthLevel.reconnecting => RpcAppHealthLevel.degraded,
+  RpcHealthLevel.unhealthy ||
+  RpcHealthLevel.closed => RpcAppHealthLevel.unhealthy,
+};
+
+/// The health of every module of [modules] that reports one.
+///
+/// A module whose check throws reads as unhealthy, with the error as its
+/// message.
+Future<Map<String, RpcHealthStatus>> moduleHealthOf(
+  Iterable<RpcModule> modules,
+) async {
+  final health = <String, RpcHealthStatus>{};
+  for (final module in modules) {
+    try {
+      final status = await module.checkHealth();
+      if (status != null) health[module.name] = status;
+    } catch (e) {
+      health[module.name] = RpcHealthStatus.unhealthy(
+        component: module.name,
+        message: 'checkHealth() threw: $e',
+      );
     }
   }
-  return level;
+  return health;
+}
+
+/// The report for [modules] and [endpoints]: the level is the worst of all.
+Future<RpcAppHealth> appHealthOf(
+  Iterable<RpcModule> modules,
+  Iterable<RpcEndpointBase> endpoints,
+) async {
+  final moduleHealth = await moduleHealthOf(modules);
+  final endpointHealth = [
+    for (final endpoint in endpoints) await endpoint.health(),
+  ];
+  var level = RpcAppHealthLevel.healthy;
+  for (final candidate in [
+    for (final status in moduleHealth.values) appLevelOfStatus(status.level),
+    for (final report in endpointHealth) appLevelOfEndpoint(report),
+  ]) {
+    if (candidate.index > level.index) level = candidate;
+  }
+  return RpcAppHealth(
+    level: level,
+    modules: moduleHealth,
+    endpoints: endpointHealth,
+    checkedAt: DateTime.now(),
+  );
 }
 
 /// The app level one endpoint's [report] stands for.
@@ -40,18 +80,13 @@ RpcAppHealthLevel appLevelOfEndpoint(RpcEndpointHealth report) {
   if (report.transportStatus?.level == RpcHealthLevel.closed) {
     return RpcAppHealthLevel.unhealthy;
   }
-  return switch (report.endpointStatus.level) {
-    RpcHealthLevel.healthy => RpcAppHealthLevel.healthy,
-    RpcHealthLevel.degraded ||
-    RpcHealthLevel.reconnecting => RpcAppHealthLevel.degraded,
-    RpcHealthLevel.unhealthy ||
-    RpcHealthLevel.closed => RpcAppHealthLevel.unhealthy,
-  };
+  return appLevelOfStatus(report.endpointStatus.level);
 }
 
 /// Topological sort of [modules] by [RpcModule.dependencies] (Kahn's algorithm).
 ///
-/// Throws [StateError] on circular dependencies or missing dependency types.
+/// Throws [RpcStatusException] (FAILED_PRECONDITION) on circular dependencies
+/// or missing dependency types.
 List<RpcModule> sortModulesByDependencies(List<RpcModule> modules) {
   final byType = <Type, RpcModule>{};
   for (final m in modules) {

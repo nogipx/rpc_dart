@@ -54,13 +54,12 @@ void main() {
 
     final report = await app.health();
 
-    // Sanity: the endpoint metrics indeed reflect a dead endpoint.
+    // Sanity: the endpoint's report indeed reflects a dead endpoint.
     expect(report.endpoints, isNotEmpty);
-    final m = report.endpoints.first;
     expect(
-      m['isActive'] == false || m['transportClosed'] == true,
-      isTrue,
-      reason: 'endpoint metrics should show a closed/inactive endpoint',
+      report.endpoints.first.isHealthy,
+      isFalse,
+      reason: 'the endpoint report should show a closed endpoint',
     );
 
     // CORRECT behavior: a dead endpoint must not yield overall `healthy`.

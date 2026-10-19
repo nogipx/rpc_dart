@@ -439,15 +439,15 @@ health.isServing; // healthy or degraded
 health.checkedAt;
 
 // Per-module breakdown (only modules that returned non-null from checkHealth())
-health.modules;  // Map<String, Map<String, Object?>>: level, message, details
+health.modules;  // Map<String, RpcHealthStatus>
 
-// Endpoint metrics, one map per active server endpoint
-health.endpoints; // List<Map<String, Object?>>
+// One report per active server endpoint, from endpoint.health()
+health.endpoints; // List<RpcEndpointHealth>
 
 health.toJson(); // ready for an HTTP health-check response body
 ```
 
-Overall level is derived from the worst module level: any `unhealthy` or `closed` module → `unhealthy`; any `degraded` or `reconnecting` → `degraded`; all healthy → `healthy`. A module whose `checkHealth()` throws counts as `unhealthy`. Any server endpoint that is inactive or whose transport is closed makes the level `unhealthy`.
+Overall level is the worst over the modules and the endpoints: any `unhealthy` or `closed` → `unhealthy`; any `degraded` or `reconnecting` → `degraded`; all healthy → `healthy`. A module whose `checkHealth()` throws counts as `unhealthy`, with the error as its message. An endpoint whose transport is closed makes the level `unhealthy`.
 
 ---
 
@@ -455,7 +455,7 @@ Overall level is derived from the worst module level: any `unhealthy` or `closed
 
 ### RpcTestApp
 
-Runs the full module stack in-process over `RpcChannelTransport.memoryPair()` — no server, no network.
+Runs an `RpcApp` whose server is an in-process `RpcChannelTransport.memoryPair()` — no network. Startup, rollback, health and shutdown are `RpcApp`'s own.
 
 ```dart
 late RpcTestApp app;
@@ -477,7 +477,7 @@ test('getUser returns correct user', () async {
 });
 ```
 
-`RpcTestApp.start` takes `modules`, `interceptors`, `middlewares` (responder side), `callerInterceptors`, `callerMiddlewares` (caller side), `config`, and `env` (overrides `config.env`). `app.health()` returns an `RpcAppHealth`. `dispose()` closes both endpoints, then stops modules and terminates isolates; it is safe to call twice. A `start` that fails partway undoes the same steps before it rethrows.
+`RpcTestApp.start` takes `modules`, `interceptors`, `middlewares` (responder side), `callerInterceptors`, `callerMiddlewares` (caller side), `config`, and `env` (overrides `config.env`). `app.health()` returns the app's `RpcAppHealth`. `dispose()` closes `app.caller`, then stops the app as `RpcApp.stop()` does: the server drains (within `config.drainTimeout`), modules stop in reverse order (each within `config.shutdownTimeout`, errors logged to `config.logger`), isolates terminate. It is safe to call twice. A `start` that fails partway rolls back as `RpcApp.start()` does and rethrows.
 
 `RpcTestApp` supports all module types (`RpcModule`, `RpcServerModule`, `RpcIsolateModule`), `RpcAppConfig` hooks, env overrides, and topological module ordering.
 

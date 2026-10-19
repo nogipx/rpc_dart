@@ -63,7 +63,8 @@ class RpcContainer {
   /// Resolves [T] from the container.
   ///
   /// Singletons take priority over factories.
-  /// Throws [StateError] if [T] is not registered.
+  /// Throws [RpcStatusException] (FAILED_PRECONDITION) if [T] is not
+  /// registered.
   T get<T extends Object>() {
     final singleton = _singletons[T];
     if (singleton != null) return singleton as T;
@@ -81,7 +82,7 @@ class RpcContainer {
   /// Resolves [T] from the container, returning null if not registered.
   ///
   /// Only the "not registered" case yields null. If [T] is registered but its
-  /// factory throws (including [StateError]), the error propagates — a failing
+  /// factory throws, the error propagates — a failing
   /// factory is not conflated with a missing registration.
   T? tryGet<T extends Object>() {
     if (!has<T>()) return null;

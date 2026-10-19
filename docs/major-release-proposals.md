@@ -555,6 +555,13 @@ As landed:
     outcome. OTel's `rpc.call_type` attribute values are unchanged.
   - `RpcTestApp` runs through `RpcApp` over an in-memory server.
   - Docs fixed.
+  - Done (2026-10-19). `RpcAppHealth.modules` is `Map<String,
+    RpcHealthStatus>`, `endpoints` is `List<RpcEndpointHealth>`; one
+    `appHealthOf` serves `RpcApp` and `RpcTestApp`. `RpcTestApp` is an
+    `RpcApp` over an in-memory `IRpcServer` built on `RpcConnectionHost`, so
+    the duplicated module loop and its silent teardown go. P9: six "throws
+    StateError" now name `RpcStatusException`, `RpcClientModule` is gone from
+    the docs, `onStart`/`onStop` describe the real order.
 - **rpc_dart_log (P10, P11).**
   - Its contract is generated.
   - The fake `sessionId` and the hard-coded MCP version go.
@@ -622,6 +629,7 @@ Breaking changes are allowed throughout: this is a major release.
 | `RpcCallEvent.callType` / `RpcSpyEntry.callType` strings (`'serverStream'`, ...) | `RpcMethodType`; `RpcSpyEntry` is `RpcCallEvent`, with `outcome` (`calledAt` is gone) |
 | `OtelRpcInterceptorBase.startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)`; `callTypeAttribute(type)` gives the attribute value |
 | a hand-written observer of the four `intercept*` methods | `RpcCallObserverInterceptor` |
+| `RpcAppHealth.modules['X']['level']`, `endpoints[i]['isActive']` | `modules['X'].level` (`RpcHealthStatus`), `endpoints[i]` (`RpcEndpointHealth`); maps only in `toJson()` |
 | `GrpcHealthCheckContract` speaking CBOR; `Check` on an unknown service answering `serviceUnknown` | protobuf on the wire; `Check` fails with `NOT_FOUND`. The messages lose `toJson`/`fromJson`; use their `codec` |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |

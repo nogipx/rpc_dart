@@ -309,43 +309,10 @@ class RpcApp {
   }
 
   /// Returns an aggregated health report from all modules and active endpoints.
-  Future<RpcAppHealth> health() async {
-    final moduleHealth = <String, Map<String, Object?>>{};
-
-    for (final module in _modules) {
-      try {
-        final status = await module.checkHealth();
-        if (status != null) {
-          moduleHealth[module.name] = {
-            'level': status.level.name,
-            'message': status.message,
-            if (status.details.isNotEmpty) 'details': status.details,
-          };
-        }
-      } catch (e) {
-        moduleHealth[module.name] = {
-          'level': 'unhealthy',
-          'message': 'checkHealth() threw: $e',
-        };
-      }
-    }
-
-    final endpointHealth = <Map<String, Object?>>[];
-    var level = appLevelOf(moduleHealth);
-    for (final endpoint
-        in _server?.endpoints ?? const <RpcResponderEndpoint>[]) {
-      endpointHealth.add(endpoint.collectEndpointMetrics());
-      final endpointLevel = appLevelOfEndpoint(await endpoint.health());
-      if (endpointLevel.index > level.index) level = endpointLevel;
-    }
-
-    return RpcAppHealth(
-      level: level,
-      modules: moduleHealth,
-      endpoints: endpointHealth,
-      checkedAt: DateTime.now(),
-    );
-  }
+  Future<RpcAppHealth> health() => appHealthOf(
+    _modules,
+    _server?.endpoints ?? const <RpcResponderEndpoint>[],
+  );
 
   // -------------------------------------------------------------------------
   // Private helpers

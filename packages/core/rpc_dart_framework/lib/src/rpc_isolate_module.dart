@@ -71,7 +71,7 @@ abstract class RpcIsolateModule extends RpcServerModule {
   /// The caller endpoint connected to the running isolate.
   ///
   /// Only available after [RpcApp] has called [initIsolate]. Throws
-  /// [StateError] if accessed before startup.
+  /// [RpcStatusException] (FAILED_PRECONDITION) if accessed before startup.
   RpcCallerEndpoint get isolateCaller {
     final c = _isolateCaller;
     if (c == null) {

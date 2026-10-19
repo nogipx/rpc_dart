@@ -583,6 +583,13 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
     исход. Значения атрибута `rpc.call_type` в OTel не изменились.
   - `RpcTestApp` работает через `RpcApp` поверх сервера в памяти.
   - Документация исправлена.
+  - Сделано (2026-10-19). `RpcAppHealth.modules` — `Map<String,
+    RpcHealthStatus>`, `endpoints` — `List<RpcEndpointHealth>`; один
+    `appHealthOf` обслуживает `RpcApp` и `RpcTestApp`. `RpcTestApp` — это
+    `RpcApp` поверх in-memory `IRpcServer` на `RpcConnectionHost`, поэтому
+    скопированный цикл модулей и его молчаливый teardown удалены. P9: шесть
+    «throws StateError» теперь называют `RpcStatusException`, `RpcClientModule`
+    убран из документации, `onStart`/`onStop` описывают реальный порядок.
 - **rpc&#95;dart&#95;log (P10, P11).**
   - Его контракт генерируется.
   - Фиктивный `sessionId` и зашитая версия MCP удаляются.
@@ -651,6 +658,7 @@ advertiseStream`, `peerFinished`). Каждая сторона слала окн
 | строки `RpcCallEvent.callType` / `RpcSpyEntry.callType` (`'serverStream'`, ...) | `RpcMethodType`; `RpcSpyEntry` — это `RpcCallEvent`, с `outcome` (`calledAt` удалён) |
 | `OtelRpcInterceptorBase.startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)`; значение атрибута даёт `callTypeAttribute(type)` |
 | рукописный наблюдатель четырёх методов `intercept*` | `RpcCallObserverInterceptor` |
+| `RpcAppHealth.modules['X']['level']`, `endpoints[i]['isActive']` | `modules['X'].level` (`RpcHealthStatus`), `endpoints[i]` (`RpcEndpointHealth`); map только в `toJson()` |
 | `GrpcHealthCheckContract` говорит на CBOR; `Check` неизвестного сервиса отвечает `serviceUnknown` | protobuf на проводе; `Check` падает с `NOT_FOUND`. У сообщений нет `toJson`/`fromJson`; используйте их `codec` |
 | `transferMode:` у `unaryRequest` | режим передачи контракта |
 | `RpcMethodKind` в `@RpcMethod` | `RpcMethodType` |

@@ -5,30 +5,21 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart' show RpcConnectionHost;
 
-import '_app_internals.dart';
+import 'rpc_app.dart';
 import 'rpc_app_config.dart';
 import 'rpc_app_health.dart';
-import 'rpc_container.dart';
-import 'rpc_env_config.dart';
-import 'rpc_isolate_module.dart';
 import 'rpc_module.dart';
-import 'rpc_server_module.dart';
 
 /// In-process test harness for [RpcModule]s.
 ///
-/// Creates an [RpcInMemoryTransport] pair so the full RPC stack — contracts,
-/// interceptors, middleware, codecs, module lifecycle — runs in a single Dart
-/// process with no network or OS dependencies.
-///
-/// Supports:
-/// - [RpcServerModule]s (contracts registered on the in-process responder).
-/// - [RpcClientModule]s ([createTransport] is called normally; use stub modules
-///   or override transport via DI to avoid real network in tests).
-/// - [RpcAppConfig.onError] / [RpcAppConfig.onCall] hooks.
-/// - Environment variable overrides via [env].
-/// - [RpcIsolateModule]s.
-/// - Topological module ordering by [RpcModule.dependencies].
+/// Runs an [RpcApp] whose server is an in-memory channel pair, so the full RPC
+/// stack — contracts, interceptors, middleware, codecs, module lifecycle — runs
+/// in one Dart process with no network. Startup, rollback, health and shutdown
+/// are [RpcApp]'s own: modules are ordered by [RpcModule.dependencies], isolate
+/// modules are spawned, [RpcAppConfig.onError] / [RpcAppConfig.onCall] are
+/// wired, and `onStop` is bounded by [RpcAppConfig.shutdownTimeout].
 ///
 /// ```dart
 /// late RpcTestApp app;
@@ -50,24 +41,22 @@ class RpcTestApp {
   /// Pass to [RpcCallerContract] subclasses to make calls.
   final RpcCallerEndpoint caller;
 
-  final RpcResponderEndpoint _responder;
-  final List<RpcModule> _modules;
+  final RpcApp _app;
   bool _disposed = false;
 
-  RpcTestApp._({
-    required this.caller,
-    required RpcResponderEndpoint responder,
-    required List<RpcModule> modules,
-  }) : _responder = responder,
-       _modules = modules;
+  RpcTestApp._(this.caller, this._app);
 
-  /// Starts the test harness.
+  /// Starts the app and connects [caller] to it.
   ///
-  /// - [modules] — any mix of [RpcServerModule], [RpcClientModule], [RpcModule].
+  /// - [modules] — any mix of `RpcServerModule`s and plain [RpcModule]s.
   /// - [interceptors] / [middlewares] — applied to the in-process responder.
-  /// - [callerInterceptors] / [callerMiddlewares] — applied to the caller endpoint.
-  /// - [config] — [RpcAppConfig] for error/call hooks.
-  /// - [env] — custom env vars (shortcuts [RpcAppConfig.env]).
+  /// - [callerInterceptors] / [callerMiddlewares] — applied to [caller].
+  /// - [config] — the [RpcAppConfig] the app runs with.
+  /// - [env] — environment for env-based configuration; overrides
+  ///   [RpcAppConfig.env].
+  ///
+  /// A module that fails to start rolls back what started, as [RpcApp.start]
+  /// does, and the error is rethrown.
   static Future<RpcTestApp> start({
     required List<RpcModule> modules,
     List<IRpcInterceptor> interceptors = const [],
@@ -77,145 +66,84 @@ class RpcTestApp {
     RpcAppConfig config = const RpcAppConfig(),
     Map<String, String>? env,
   }) async {
-    final effectiveEnv = env ?? config.env;
-    final envConfig = effectiveEnv != null
-        ? RpcEnvConfig.from(effectiveEnv)
-        : RpcEnvConfig();
-
-    final sorted = sortModulesByDependencies(modules);
-
-    final container = RpcContainer();
-    for (final module in sorted) {
-      module.configure(container);
-      module.configureWithEnv(container, envConfig);
-    }
-
-    // In-memory transport pair for server modules.
     final (clientTransport, serverTransport) = RpcChannelTransport.memoryPair();
-    final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
-    final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
-
-    final autoInterceptors = <IRpcInterceptor>[
-      if (config.onError != null) ErrorReportingInterceptor(config.onError!),
-      if (config.onCall != null) CallMetricsInterceptor(config.onCall!),
-    ];
-
-    for (final i in [...autoInterceptors, ...interceptors]) {
-      responderEndpoint.addInterceptor(i);
+    final caller = RpcCallerEndpoint(transport: clientTransport);
+    for (final interceptor in callerInterceptors) {
+      caller.addInterceptor(interceptor);
     }
-    for (final mw in middlewares) {
-      responderEndpoint.addMiddleware(mw);
-    }
-    for (final i in callerInterceptors) {
-      callerEndpoint.addInterceptor(i);
-    }
-    for (final mw in callerMiddlewares) {
-      callerEndpoint.addMiddleware(mw);
+    for (final middleware in callerMiddlewares) {
+      caller.addMiddleware(middleware);
     }
 
-    // A failure partway leaves nothing running, as RpcApp's rollback does:
-    // endpoints, then started modules in reverse, then isolates.
-    final spawned = <RpcIsolateModule>[];
-    final started = <RpcModule>[];
+    final app = RpcApp.server(
+      modules: modules,
+      server: (mode) => _InMemoryServer(mode, serverTransport),
+      interceptors: interceptors,
+      middlewares: middlewares,
+      config: env == null
+          ? config
+          : RpcAppConfig(
+              shutdownTimeout: config.shutdownTimeout,
+              drainTimeout: config.drainTimeout,
+              logger: config.logger,
+              logController: config.logController,
+              onError: config.onError,
+              onCall: config.onCall,
+              env: env,
+            ),
+    );
     try {
-      for (final module in sorted) {
-        if (module is RpcIsolateModule) {
-          await module.initIsolate();
-          spawned.add(module);
-        }
-      }
-
-      // Modules start first, as in RpcApp: `buildContracts` resolves what
-      // `onStart` provides.
-      for (final module in sorted) {
-        await module.onStart(container);
-        started.add(module);
-      }
-
-      // Register contracts for server modules only.
-      for (final module in sorted) {
-        if (module is! RpcServerModule) continue;
-        for (final contract in module.buildContracts(container)) {
-          responderEndpoint.registerServiceContract(contract);
-        }
-      }
+      await app.start();
     } catch (_) {
-      await responderEndpoint.close();
-      await callerEndpoint.close();
-      for (final module in started.reversed) {
-        try {
-          await module.onStop();
-        } catch (_) {}
-      }
-      for (final module in spawned.reversed) {
-        try {
-          await module.terminateIsolate();
-        } catch (_) {}
-      }
+      await caller.close();
       rethrow;
     }
-
-    callerEndpoint.start();
-    responderEndpoint.start();
-
-    return RpcTestApp._(
-      caller: callerEndpoint,
-      responder: responderEndpoint,
-      modules: sorted,
-    );
+    caller.start();
+    return RpcTestApp._(caller, app);
   }
 
-  /// Returns an aggregated health report.
-  Future<RpcAppHealth> health() async {
-    final moduleHealth = <String, Map<String, Object?>>{};
-    for (final module in _modules) {
-      try {
-        final status = await module.checkHealth();
-        if (status != null) {
-          moduleHealth[module.name] = {
-            'level': status.level.name,
-            'message': status.message,
-            if (status.details.isNotEmpty) 'details': status.details,
-          };
-        }
-      } catch (e) {
-        moduleHealth[module.name] = {
-          'level': 'unhealthy',
-          'message': 'checkHealth() threw: $e',
-        };
-      }
-    }
+  /// The app's health report: its modules and the in-process responder.
+  Future<RpcAppHealth> health() => _app.health();
 
-    final level = appLevelOf(moduleHealth);
-
-    return RpcAppHealth(
-      level: level,
-      modules: moduleHealth,
-      endpoints: [_responder.collectEndpointMetrics()],
-      checkedAt: DateTime.now(),
-    );
-  }
-
-  /// Stops modules and closes all endpoints. Safe to call multiple times.
+  /// Closes [caller], then stops the app. Safe to call more than once.
+  ///
+  /// The caller goes first: its open calls end, so the app's drain has nothing
+  /// left to wait for.
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
-
-    // Endpoints first, as RpcApp.stop() stops its server first: a handler
-    // still running uses what the modules hold.
-    await _responder.close();
     await caller.close();
+    await _app.stop();
+  }
+}
 
-    for (final module in _modules.reversed) {
-      try {
-        await module.onStop();
-      } catch (_) {}
-    }
+/// The [IRpcServer] of an [RpcTestApp]: one connection, an in-memory
+/// transport.
+final class _InMemoryServer implements IRpcServer {
+  _InMemoryServer(RpcResponderMode mode, this._transport)
+    : _host = RpcConnectionHost(mode: mode);
 
-    for (final module in _modules.reversed) {
-      if (module is RpcIsolateModule) {
-        await module.terminateIsolate();
-      }
-    }
+  final IRpcTransport _transport;
+  final RpcConnectionHost _host;
+  bool _running = false;
+
+  @override
+  bool get isRunning => _running;
+
+  @override
+  List<RpcResponderEndpoint> get endpoints => _host.responders;
+
+  @override
+  Future<void> start() async {
+    if (_running) return;
+    _running = true;
+    // Released by stop(); the connection has no other end of its own.
+    _host.serve(_transport, done: Completer<void>().future);
+  }
+
+  @override
+  Future<void> stop({Duration? drainTimeout}) async {
+    _running = false;
+    await _host.stop(drainTimeout: drainTimeout);
   }
 }

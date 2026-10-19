@@ -217,8 +217,9 @@ error, so `onError` does not see it. All three, and `RpcCallSpy`, are
 modules and the server endpoints. A `closed` module or endpoint counts as
 `unhealthy` and a `reconnecting` one as `degraded`; each endpoint reads its
 `endpoint.health()`, so a degraded or reconnecting transport degrades the app,
-and a closed transport makes it `unhealthy`. Serve `toJson()` from a health
-check.
+and a closed transport makes it `unhealthy`. `modules` is a
+`Map<String, RpcHealthStatus>` and `endpoints` a `List<RpcEndpointHealth>`;
+serve `toJson()` from a health check.
 
 ## Isolate modules
 
@@ -278,11 +279,12 @@ final class IsolateGreeterModule extends RpcIsolateModule {
 
 ## Testing with `RpcTestApp`
 
-`RpcTestApp.start` runs the same modules over `RpcChannelTransport.memoryPair()`
-with no server. It takes `modules:`, `interceptors:`, `middlewares:`,
+`RpcTestApp.start` runs an `RpcApp` whose server is an in-process
+`RpcChannelTransport.memoryPair()`, so startup, rollback, health and shutdown
+behave as in production. It takes `modules:`, `interceptors:`, `middlewares:`,
 `callerInterceptors:`, `callerMiddlewares:`, `config:` and `env:` (overrides
-`config.env`). Call contracts on `app.caller`; `dispose()` closes both
-endpoints, then stops modules.
+`config.env`). Call contracts on `app.caller`; `dispose()` closes the caller,
+then stops the app as `RpcApp.stop()` does.
 
 ```dart
 import 'package:rpc_dart_framework/rpc_dart_framework.dart';

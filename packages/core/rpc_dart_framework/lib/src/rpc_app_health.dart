@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'package:rpc_dart/rpc_dart.dart';
+
 /// Overall health level of the application.
 enum RpcAppHealthLevel {
   /// All modules and endpoints report healthy.
@@ -14,24 +16,24 @@ enum RpcAppHealthLevel {
   unhealthy,
 }
 
-/// Aggregated health report returned by [RpcApp.health].
+/// Aggregated health report returned by `RpcApp.health` and
+/// `RpcTestApp.health`.
 ///
-/// Summarises the status of all registered modules (those that implement
-/// [checkHealth]) and all currently active transport endpoints.
+/// Summarises the status of the modules that implement
+/// [RpcModule.checkHealth] and of every active responder endpoint.
 class RpcAppHealth {
-  /// Overall derived health level.
+  /// Overall derived health level: the worst of [modules] and [endpoints].
   final RpcAppHealthLevel level;
 
-  /// Per-module health details.
+  /// Per-module health, keyed by module name.
   ///
-  /// Keys are module names. Only modules that returned a non-null value from
-  /// [RpcModule.checkHealth] appear here.
-  final Map<String, Map<String, Object?>> modules;
+  /// Only modules whose [RpcModule.checkHealth] returned a status appear. One
+  /// that threw reads as unhealthy, with the error as its message.
+  final Map<String, RpcHealthStatus> modules;
 
-  /// Per-endpoint health snapshots.
-  ///
-  /// Each entry is the raw metrics map from [RpcResponderEndpoint.collectEndpointMetrics].
-  final List<Map<String, Object?>> endpoints;
+  /// The health of each active responder endpoint, from
+  /// [RpcEndpointBase.health].
+  final List<RpcEndpointHealth> endpoints;
 
   /// When this report was generated.
   final DateTime checkedAt;
@@ -46,7 +48,8 @@ class RpcAppHealth {
   /// True when overall level is [RpcAppHealthLevel.healthy].
   bool get isHealthy => level == RpcAppHealthLevel.healthy;
 
-  /// Convenience: true when the app is [healthy] or [degraded] (still serving).
+  /// Convenience: true when the app is [RpcAppHealthLevel.healthy] or
+  /// [RpcAppHealthLevel.degraded] (still serving).
   bool get isServing =>
       level == RpcAppHealthLevel.healthy || level == RpcAppHealthLevel.degraded;
 
@@ -60,7 +63,25 @@ class RpcAppHealth {
   Map<String, Object?> toJson() => {
     'level': level.name,
     'checkedAt': checkedAt.toIso8601String(),
-    'modules': modules,
-    'endpoints': endpoints,
+    'modules': {
+      for (final entry in modules.entries) entry.key: _statusJson(entry.value),
+    },
+    'endpoints': [
+      for (final endpoint in endpoints)
+        {
+          ..._statusJson(endpoint.endpointStatus),
+          if (endpoint.dependencies.isNotEmpty)
+            'dependencies': {
+              for (final entry in endpoint.dependencies.entries)
+                entry.key: _statusJson(entry.value),
+            },
+        },
+    ],
+  };
+
+  static Map<String, Object?> _statusJson(RpcHealthStatus status) => {
+    'level': status.level.name,
+    if (status.message.isNotEmpty) 'message': status.message,
+    if (status.details.isNotEmpty) 'details': status.details,
   };
 }

@@ -36,7 +36,7 @@ class RpcEnvConfig {
 
   /// Returns the raw string value for [key].
   ///
-  /// Throws [StateError] if [key] is not set.
+  /// Throws [RpcStatusException] (FAILED_PRECONDITION) if [key] is not set.
   String require(String key) {
     final val = _env[key];
     if (val == null || val.isEmpty) {

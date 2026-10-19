@@ -9,16 +9,17 @@ import 'rpc_env_config.dart';
 
 /// Shared lifecycle base for all framework modules.
 ///
-/// Subclass [RpcServerModule] to expose RPC services, or [RpcClientModule]
-/// to connect to remote services. Use [RpcModule] directly only for
-/// infrastructure modules that register shared DI bindings without contracts
-/// (e.g. a database pool module depended on by other modules).
+/// Subclass `RpcServerModule` to expose RPC services. Use [RpcModule] directly
+/// for everything else: infrastructure that registers shared DI bindings (a
+/// database pool other modules depend on), or a client that connects to a
+/// remote service with `RpcClientConnection` in [onStart] and [onStop].
 ///
 /// ## Startup order
 ///
 /// Declare [dependencies] to guarantee ordering. If module B declares
 /// `List<Type> get dependencies => [A]`, the framework starts A before B
-/// and stops B before A. Circular dependencies throw [StateError].
+/// and stops B before A. Circular or missing dependencies throw
+/// [RpcStatusException] (FAILED_PRECONDITION).
 ///
 /// ## Example — infrastructure module
 ///
@@ -48,7 +49,8 @@ abstract class RpcModule {
   /// Module types that must be configured and started before this module.
   ///
   /// The framework performs a topological sort and stops modules in reverse
-  /// order. Circular dependencies are detected and reported as [StateError].
+  /// order. Circular dependencies are detected and reported as
+  /// [RpcStatusException] (FAILED_PRECONDITION).
   List<Type> get dependencies => const [];
 
   /// Register services into [container].
@@ -62,15 +64,16 @@ abstract class RpcModule {
   /// environment variables at startup.
   void configureWithEnv(RpcContainer container, RpcEnvConfig env) {}
 
-  /// Called after the transport has started and all modules are configured.
+  /// Called after every module is configured and before the server accepts a
+  /// connection, in dependency order.
   ///
   /// Use this to open background connections, start timers, subscribe to
-  /// message queues, etc.
+  /// message queues, etc. `RpcServerModule.buildContracts` runs per connection,
+  /// after every `onStart`, so it can use what this provides.
   Future<void> onStart(RpcContainer container) async {}
 
-  /// Called before the transport is shut down.
-  ///
-  /// Modules are stopped in reverse dependency order.
+  /// Called after the server has stopped and drained, in reverse dependency
+  /// order, so a handler still running could use what the module holds.
   Future<void> onStop() async {}
 
   /// Returns a health status for this module, or null to skip health reporting.

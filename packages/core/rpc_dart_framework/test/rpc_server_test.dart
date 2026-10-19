@@ -319,7 +319,7 @@ void main() {
       final health = await app.health();
       await app.dispose();
       expect(health.modules.containsKey('HealthyModule'), isTrue);
-      expect(health.modules['HealthyModule']!['level'], 'healthy');
+      expect(health.modules['HealthyModule']!.level, RpcHealthLevel.healthy);
     });
 
     test('null checkHealth is omitted', () async {

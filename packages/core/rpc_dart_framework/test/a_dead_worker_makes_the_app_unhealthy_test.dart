@@ -89,7 +89,7 @@ void main() {
           'every call to the worker now fails, and health() said '
           '${health.level.name}',
     );
-    expect(health.modules['Worker']?['level'], 'unhealthy');
+    expect(health.modules['Worker']?.level, RpcHealthLevel.unhealthy);
   });
 
   test('GUARD a live worker leaves the app healthy', () async {
