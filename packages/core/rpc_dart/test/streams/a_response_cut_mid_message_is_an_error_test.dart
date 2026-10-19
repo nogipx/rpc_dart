@@ -13,41 +13,14 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
-
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-  final sentStreamIds = <int>[];
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (data.length >= 4) {
-      sentStreamIds.add(
-        (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3],
-      );
-    }
-  }
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
-}
 
 /// Two whole frames, then a third cut after [cut] bytes (none if 0), then an
 /// OK trailer. Returns the items and the error the consumer saw.
 Future<(List<String>, Object?)> _serverStream(int cut) async {
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final transport = RpcChannelTransport.fromChannel(
     channel: chan,
     isClient: true,
@@ -99,7 +72,7 @@ Future<(List<String>, Object?)> _serverStream(int cut) async {
 /// A unary response of one whole frame and the first [cut] bytes of a second
 /// (none if 0), then an OK trailer. Returns what the call completed with.
 Future<Object?> _unary(int cut) async {
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final transport = RpcChannelTransport.fromChannel(
     channel: chan,
     isClient: true,

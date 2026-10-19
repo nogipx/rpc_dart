@@ -9,33 +9,13 @@
 // Fix: _onData appends into a geometric-growth buffer (amortized O(1) append)
 // instead of reallocating and recopying the whole buffer on every chunk.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-class _FakeChannel implements IRpcChannel {
-  final StreamController<Uint8List> _ctl = StreamController<Uint8List>(
-    sync: true,
-  );
-  bool _closed = false;
-  @override
-  bool get isClosed => _closed;
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-  @override
-  Future<void> send(Uint8List data) async {}
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _ctl.close();
-  }
-
-  void feed(Uint8List bytes) => _ctl.add(bytes);
-}
+import '../support/raw_channel.dart';
 
 Future<(int micros, int count)> dribble(int payloadSize) async {
-  final fake = _FakeChannel();
+  final fake = RawPeerChannel(sync: true);
   final ch = RpcFrameMultiplexedChannel(channel: fake);
   var count = 0;
   ch.incoming.listen((_) => count++);

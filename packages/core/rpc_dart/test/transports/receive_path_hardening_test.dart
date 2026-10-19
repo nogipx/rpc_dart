@@ -7,31 +7,7 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A raw byte channel whose incoming bytes are driven manually from a test.
-class _ManualChannel implements IRpcChannel {
-  final StreamController<Uint8List> _inCtl = StreamController<Uint8List>();
-  bool _closed = false;
-
-  void feed(Uint8List data) {
-    if (!_inCtl.isClosed) _inCtl.add(data);
-  }
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _inCtl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    if (!_inCtl.isClosed) await _inCtl.close();
-  }
-}
+import '../support/raw_channel.dart';
 
 /// Builds a raw frame header declaring [payloadLen] but carrying only [body].
 Uint8List _frameHeader({
@@ -73,7 +49,7 @@ void main() {
         // to let the peer repeat it is the only lever. A CLIENT answers the same
         // frame with RESOURCE_EXHAUSTED and stays connected -- see
         // transports/oversized_frame_is_per_call_test.dart.
-        final channel = _ManualChannel();
+        final channel = RawPeerChannel();
         final mux = RpcFrameMultiplexedChannel(
           channel: channel,
           policy: const RpcSecurityPolicy(
@@ -108,7 +84,7 @@ void main() {
     test(
       'buffer overflow cap fires before a full huge frame is assembled',
       () async {
-        final channel = _ManualChannel();
+        final channel = RawPeerChannel();
         final mux = RpcFrameMultiplexedChannel(
           channel: channel,
           // Small message limit but a larger buffer cap so we exercise the
@@ -209,7 +185,7 @@ void main() {
       test(
         'malformed metadata over the channel surfaces a clean typed error',
         () async {
-          final channel = _ManualChannel();
+          final channel = RawPeerChannel();
           final mux = RpcFrameMultiplexedChannel(channel: channel);
 
           final errors = <Object>[];
@@ -283,7 +259,7 @@ void main() {
       const bufferedBytes = 8 * 1024;
       final capBytes = bufferedBytes + RpcChannelFrame.headerSize;
 
-      final channel = _ManualChannel();
+      final channel = RawPeerChannel();
       final mux = RpcFrameMultiplexedChannel(
         channel: channel,
         policy: const RpcSecurityPolicy(
@@ -322,7 +298,7 @@ void main() {
       // The old message printed `_bufLen` AFTER appending; the new one prints
       // `_bufLen + chunk.length` before. Same number -- pinned so a future
       // refactor cannot quietly start reporting only the chunk.
-      final channel = _ManualChannel();
+      final channel = RawPeerChannel();
       final mux = RpcFrameMultiplexedChannel(
         channel: channel,
         policy: const RpcSecurityPolicy(

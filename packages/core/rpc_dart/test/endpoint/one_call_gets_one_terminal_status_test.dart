@@ -16,56 +16,22 @@
 //
 // The measurements are in `.claude/loop/rounds/510`.
 
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
-/// One direction of a byte pipe, recording the frames written into it.
-final class _Side implements IRpcChannel {
-  final _ctl = StreamController<Uint8List>();
-  late _Side peer;
-  final frames = <String>[];
+/// Terminal status frames [pipe] sent: what a peer keeping stream state would
+/// count.
+int _statusFrames(TapPipe pipe) => pipe.sentFrames
+    .where((f) => f.metadata?.getHeaderValue(RpcHeaders.grpcStatus) != null)
+    .length;
 
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    final view = ByteData.sublistView(data);
-    final flags = view.getUint8(4);
-    final len = view.getUint32(5);
-    if ((flags & RpcChannelFrame.flagMetadata) != 0 && len > 0) {
-      frames.add(
-        utf8.decode(
-          Uint8List.sublistView(
-            data,
-            RpcChannelFrame.headerSize,
-            RpcChannelFrame.headerSize + len,
-          ),
-          allowMalformed: true,
-        ),
-      );
-    } else {
-      frames.add(len == 0 ? 'EOS' : 'DATA');
-    }
-    if (!peer._ctl.isClosed) peer._ctl.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
-  }
-
-  /// Terminal status frames: what a peer keeping stream state would count.
-  int get statusFrames => frames.where((f) => f.contains('grpc-status')).length;
-}
+/// Whether [pipe] sent a DATA frame with a payload.
+bool _sentData(TapPipe pipe) =>
+    pipe.sentFrames.any((f) => !f.isMetadata && f.payload!.isNotEmpty);
 
 final class _Svc extends RpcResponderContract {
   _Svc() : super('Svc');
@@ -88,13 +54,10 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-typedef _Rig = ({_Side fromResponder, Future<String> Function(String) call});
+typedef _Rig = ({TapPipe fromResponder, Future<String> Function(String) call});
 
 _Rig _rig() {
-  final client = _Side();
-  final server = _Side();
-  client.peer = server;
-  server.peer = client;
+  final (client, server) = TapPipe.pair();
 
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport(
@@ -145,18 +108,18 @@ void main() {
       final rig = _rig();
       // One call first, so the connection's own setup frames are not counted.
       await rig.call('ok');
-      rig.fromResponder.frames.clear();
+      rig.fromResponder.sent.clear();
 
       expect(await rig.call('missing'), 'status ${RpcStatus.unimplemented}');
 
       expect(
-        rig.fromResponder.statusFrames,
+        _statusFrames(rig.fromResponder),
         1,
         reason:
             'three inbound frames each hit a separate binding==null site, so the '
             'responder sent three end-of-stream trailers on one stream — a '
             'protocol violation anywhere the peer keeps stream state. '
-            'Frames were: ${rig.fromResponder.frames}',
+            'Frames were: ${rig.fromResponder.sentFrames}',
       );
     },
     timeout: const Timeout(Duration(seconds: 30)),
@@ -168,11 +131,11 @@ void main() {
       () async {
         final rig = _rig();
         await rig.call('ok');
-        rig.fromResponder.frames.clear();
+        rig.fromResponder.sent.clear();
 
         expect(await rig.call('ok'), 'ok');
-        expect(rig.fromResponder.statusFrames, 1);
-        expect(rig.fromResponder.frames.any((f) => f == 'DATA'), isTrue);
+        expect(_statusFrames(rig.fromResponder), 1);
+        expect(_sentData(rig.fromResponder), isTrue);
       },
       timeout: const Timeout(Duration(seconds: 30)),
     );
@@ -182,10 +145,10 @@ void main() {
       () async {
         final rig = _rig();
         await rig.call('ok');
-        rig.fromResponder.frames.clear();
+        rig.fromResponder.sent.clear();
 
         expect(await rig.call('boom'), 'status ${RpcStatus.permissionDenied}');
-        expect(rig.fromResponder.statusFrames, 1);
+        expect(_statusFrames(rig.fromResponder), 1);
       },
       timeout: const Timeout(Duration(seconds: 30)),
     );

@@ -24,33 +24,7 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// One direction of a byte pipe, so each SIDE carries its own policy.
-///
-/// `RpcChannelTransport.pair(policy:)` gives both sides the same one, and then a
-/// refusal is ambiguous: this is about the CLIENT's accounting, and a server
-/// refusing at its own ceiling looks identical from the caller.
-final class _Side implements IRpcChannel {
-  final _ctl = StreamController<Uint8List>();
-  late _Side peer;
-  bool dropEverything = false;
-
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (dropEverything) return;
-    if (!peer._ctl.isClosed) peer._ctl.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
-  }
-}
+import '../support/raw_channel.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
@@ -86,14 +60,14 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-typedef _Rig = ({RpcCallerEndpoint caller, _Side serverSide});
+typedef _Rig = ({RpcCallerEndpoint caller, TapPipe serverSide});
 
-/// A caller whose ceiling is [ceiling] and a responder with none.
+/// A caller whose ceiling is [ceiling] and a responder with none, over a pipe
+/// so each side carries its own policy: `RpcChannelTransport.pair(policy:)`
+/// gives both the same one, and a server refusing at its own ceiling then
+/// looks identical from the caller.
 _Rig _rig(int ceiling, Future<void> release) {
-  final clientSide = _Side();
-  final serverSide = _Side();
-  clientSide.peer = serverSide;
-  serverSide.peer = clientSide;
+  final (clientSide, serverSide) = TapPipe.pair();
 
   final policy = RpcSecurityPolicy(maxActiveStreams: ceiling);
   final caller = RpcCallerEndpoint(

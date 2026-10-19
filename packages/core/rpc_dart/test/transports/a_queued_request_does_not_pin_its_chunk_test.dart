@@ -17,29 +17,9 @@ import 'dart:io';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
-
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
-}
 
 final class _Contract extends RpcResponderContract {
   _Contract(this.release) : super('Svc');
@@ -84,7 +64,7 @@ void main() {
   test(
     '300 one-byte requests packed with 1 MiB each hold no 300 MiB',
     () async {
-      final chan = _Chan();
+      final chan = RawPeerChannel();
       final transport = RpcChannelTransport.fromChannel(
         channel: chan,
         isClient: false,

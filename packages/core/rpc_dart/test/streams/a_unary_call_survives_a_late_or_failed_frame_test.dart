@@ -11,46 +11,16 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
-final class _Chan implements IRpcChannel {
-  _Chan({this.failDataSends = false});
-
-  /// Throws on every send that carries a DATA frame.
-  final bool failDataSends;
-
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-  final sentStreamIds = <int>[];
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (data.length >= 4) {
-      sentStreamIds.add(
-        (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3],
-      );
-    }
-    if (failDataSends) {
-      final (frames, _) = RpcChannelFrame.decodeAll(data);
-      if (frames.any((f) => !f.isMetadata && f.streamId != 0)) {
-        throw StateError('the wire is gone');
-      }
-    }
+/// Throws on every send that carries a DATA frame.
+void _failDataSends(Uint8List data) {
+  final (frames, _) = RpcChannelFrame.decodeAll(data);
+  if (frames.any((f) => !f.isMetadata && f.streamId != 0)) {
+    throw StateError('the wire is gone');
   }
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
 }
 
 Uint8List _data(int id, String s) => RpcChannelFrame.encodeData(
@@ -65,7 +35,7 @@ void main() {
     final uncaught = <Object>[];
     String? value;
     await runZonedGuarded(() async {
-      final chan = _Chan();
+      final chan = RawPeerChannel();
       final caller = RpcCallerEndpoint(
         transport: RpcChannelTransport.fromChannel(
           channel: chan,
@@ -112,7 +82,7 @@ void main() {
     await runZonedGuarded(() async {
       final caller = RpcCallerEndpoint(
         transport: RpcChannelTransport.fromChannel(
-          channel: _Chan(failDataSends: true),
+          channel: RawPeerChannel(onSend: _failDataSends),
           isClient: true,
         ),
       );

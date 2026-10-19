@@ -8,10 +8,10 @@
 // payload, then the trailer) each arrive within one turn, so neither side has
 // a window to send: a grant there is a frame nobody uses, on every call.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
+
+import '../support/raw_channel.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
 
@@ -51,49 +51,23 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-/// One end of a byte pipe that records the per-stream window frames it sends.
-final class _Pipe implements IRpcChannel {
-  _Pipe(this.grants);
-
-  final List<int> grants;
-  final StreamController<Uint8List> _in = StreamController<Uint8List>();
-  late _Pipe peer;
-  bool _closed = false;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    final (frames, _) = RpcChannelFrame.decodeAll(data);
-    for (final f in frames) {
-      final window = f.metadata?.getHeaderValue(RpcHeaders.xWindowUpdate);
-      if (f.streamId != 0 && window != null) grants.add(f.streamId);
-    }
-    peer._in.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-}
+/// The streams [pipe] sent a per-stream window frame for.
+List<int> _grants(TapPipe pipe) => [
+  for (final f in pipe.sentFrames)
+    if (f.streamId != 0 &&
+        f.metadata?.getHeaderValue(RpcHeaders.xWindowUpdate) != null)
+      f.streamId,
+];
 
 void main() {
-  late List<int> grants;
+  late TapPipe a;
+  late TapPipe b;
   late RpcCallerEndpoint caller;
   late RpcResponderEndpoint responder;
+  List<int> grants() => [..._grants(a), ..._grants(b)];
 
   setUp(() {
-    grants = [];
-    final a = _Pipe(grants);
-    final b = _Pipe(grants);
-    a.peer = b;
-    b.peer = a;
+    (a, b) = TapPipe.pair();
     final client = RpcChannelTransport(
       channel: RpcFrameMultiplexedChannel(channel: a),
       isClient: true,
@@ -126,7 +100,7 @@ void main() {
         expect(reply.value, 'hi');
       }
       await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(grants, isEmpty);
+      expect(grants(), isEmpty);
     });
   }
 
@@ -144,7 +118,7 @@ void main() {
           .toList();
       expect(replies, hasLength(3));
       expect(
-        grants,
+        grants(),
         isNotEmpty,
         reason: 'the caller receives a response stream over several turns',
       );

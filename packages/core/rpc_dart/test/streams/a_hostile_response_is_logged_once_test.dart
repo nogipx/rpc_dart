@@ -12,36 +12,9 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
-
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-  final sentStreamIds = <int>[];
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (data.length >= 4) {
-      sentStreamIds.add(
-        (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3],
-      );
-    }
-  }
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
-}
 
 Uint8List _frames(Uint8List frame, int n) {
   final b = BytesBuilder();
@@ -59,7 +32,7 @@ Future<List<LogEvent>> _serverStream(Uint8List first, Uint8List? after) async {
   logs.stream.listen((r) {
     if (r is LogEvent) records.add(r);
   });
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport.fromChannel(channel: chan, isClient: true),
     logController: logs,

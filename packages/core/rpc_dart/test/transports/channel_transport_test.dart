@@ -7,6 +7,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 void main() {
   group('RpcChannelFrame', () {
     test('encodes and decodes a data frame', () {
@@ -631,9 +633,7 @@ void main() {
       });
 
       test('auto-closes when underlying channel closes', () async {
-        final c2s = StreamController<Uint8List>();
-        final s2c = StreamController<Uint8List>();
-        final channel = _TestChannel(output: c2s, input: s2c.stream);
+        final channel = RawPeerChannel();
         final transport = RpcChannelTransport.fromChannel(
           channel: channel,
           isClient: true,
@@ -641,7 +641,6 @@ void main() {
 
         // Close the channel directly (simulating network drop)
         await channel.close();
-        await s2c.close();
         await Future<void>.delayed(Duration(milliseconds: 10));
 
         // Transport auto-closes when channel done fires
@@ -667,9 +666,7 @@ void main() {
 
     group('error propagation', () {
       test('channel errors are forwarded to incoming stream', () async {
-        final c2s = StreamController<Uint8List>();
-        final s2c = StreamController<Uint8List>();
-        final channel = _TestChannel(output: c2s, input: s2c.stream);
+        final channel = RawPeerChannel();
         final transport = RpcChannelTransport.fromChannel(
           channel: channel,
           isClient: true,
@@ -681,7 +678,7 @@ void main() {
           onError: errors.add,
         );
 
-        s2c.addError(StateError('network error'));
+        channel.fail(StateError('network error'));
         await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(errors.length, equals(1));
@@ -689,15 +686,12 @@ void main() {
 
         await sub.cancel();
         await transport.close();
-        await s2c.close();
       });
     });
 
     group('buffer reassembly', () {
       test('reassembles frames split across chunks', () async {
-        final c2s = StreamController<Uint8List>();
-        final s2c = StreamController<Uint8List>();
-        final channel = _TestChannel(output: c2s, input: s2c.stream);
+        final channel = RawPeerChannel();
         final transport = RpcChannelTransport.fromChannel(
           channel: channel,
           isClient: true,
@@ -712,11 +706,11 @@ void main() {
           payload: Uint8List.fromList([10, 20, 30]),
         );
         final mid = frame.length ~/ 2;
-        s2c.add(Uint8List.sublistView(frame, 0, mid));
+        channel.feed(Uint8List.sublistView(frame, 0, mid));
         await Future<void>.delayed(Duration(milliseconds: 5));
         expect(received, isEmpty);
 
-        s2c.add(Uint8List.sublistView(frame, mid));
+        channel.feed(Uint8List.sublistView(frame, mid));
         await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(1));
@@ -727,13 +721,10 @@ void main() {
 
         await sub.cancel();
         await transport.close();
-        await s2c.close();
       });
 
       test('handles multiple frames in a single chunk', () async {
-        final c2s = StreamController<Uint8List>();
-        final s2c = StreamController<Uint8List>();
-        final channel = _TestChannel(output: c2s, input: s2c.stream);
+        final channel = RawPeerChannel();
         final transport = RpcChannelTransport.fromChannel(
           channel: channel,
           isClient: true,
@@ -754,7 +745,7 @@ void main() {
         combined.setRange(0, frame1.length, frame1);
         combined.setRange(frame1.length, combined.length, frame2);
 
-        s2c.add(combined);
+        channel.feed(combined);
         await Future<void>.delayed(Duration(milliseconds: 10));
 
         expect(received.length, equals(2));
@@ -763,56 +754,7 @@ void main() {
 
         await sub.cancel();
         await transport.close();
-        await s2c.close();
       });
     });
   });
-}
-
-/// Minimal channel for testing that lets us control input/output directly.
-class _TestChannel implements IRpcChannel {
-  final StreamController<Uint8List> _output;
-  final StreamController<Uint8List> _inCtl = StreamController<Uint8List>();
-  late final StreamSubscription<Uint8List> _sub;
-  bool _closed = false;
-
-  _TestChannel({
-    required StreamController<Uint8List> output,
-    required Stream<Uint8List> input,
-  }) : _output = output {
-    _sub = input.listen(
-      (data) {
-        if (!_inCtl.isClosed) _inCtl.add(data);
-      },
-      onError: (Object e) {
-        if (!_inCtl.isClosed) _inCtl.addError(e);
-      },
-      onDone: () {
-        if (!_closed) close();
-      },
-    );
-  }
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _inCtl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (_closed || _output.isClosed) return;
-    _output.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    await _sub.cancel();
-    // Fire-and-forget: _output may never have had a subscriber,
-    // so its done future would never complete if awaited.
-    if (!_output.isClosed) unawaited(_output.close());
-    if (!_inCtl.isClosed) unawaited(_inCtl.close());
-  }
 }

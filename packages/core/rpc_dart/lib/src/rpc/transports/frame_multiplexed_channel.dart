@@ -74,7 +74,16 @@ class RpcFrameMultiplexedChannel
   ///   produces.
   final bool closeOnOversizedFrame;
 
+  /// The peer's [RpcChannelFrame.preface] as it arrives.
+  final Uint8List _peerPreface = Uint8List(RpcChannelFrame.prefaceSize);
+  int _prefaceSeen = 0;
+
   /// Creates a multiplexed channel that encodes/decodes frames over [channel].
+  ///
+  /// Writes [RpcChannelFrame.preface] at once, and expects the peer's before
+  /// its first frame. A peer of another [RpcChannelFrame.protocolVersion] fails
+  /// [incoming] with FAILED_PRECONDITION, one that is not an rpc_dart channel
+  /// with UNKNOWN, and the channel closes.
   ///
   /// [policy] bounds the RECEIVE path: a declared frame payload larger than
   /// [_maxFramePayloadBytes] is rejected from the header without buffering, and
@@ -85,6 +94,8 @@ class RpcFrameMultiplexedChannel
     this.closeOnOversizedFrame = true,
   }) : _channel = channel,
        _policy = policy {
+    // Before any frame: frames go out through the same channel, in call order.
+    unawaited(_channel.send(RpcChannelFrame.preface).catchError((Object _) {}));
     _channelSub = _channel.incoming.listen(
       _onData,
       onError: (Object e) {
@@ -381,6 +392,22 @@ class RpcFrameMultiplexedChannel
     if (_closed || _failed || chunk.isEmpty) return;
 
     var data = chunk;
+    if (_prefaceSeen < RpcChannelFrame.prefaceSize) {
+      var i = 0;
+      while (i < data.length && _prefaceSeen < RpcChannelFrame.prefaceSize) {
+        _peerPreface[_prefaceSeen++] = data[i++];
+      }
+      if (_prefaceSeen < RpcChannelFrame.prefaceSize) return;
+      final mismatch = _checkPreface();
+      if (mismatch != null) {
+        _failed = true;
+        if (!_incomingCtl.isClosed) _incomingCtl.addError(mismatch);
+        unawaited(closeForProtocolError(mismatch.message));
+        return;
+      }
+      if (i == data.length) return;
+      data = Uint8List.sublistView(data, i);
+    }
     while (true) {
       if (_skipRemaining > 0) {
         final drop = _skipRemaining < data.length
@@ -468,6 +495,28 @@ class RpcFrameMultiplexedChannel
     }
 
     _decodeAndEmit(data);
+  }
+
+  /// Null when the peer's preface matches ours, else the status to fail with.
+  RpcStatusException? _checkPreface() {
+    const magic = RpcChannelFrame.prefaceMagic;
+    for (var i = 0; i < magic.length; i++) {
+      if (_peerPreface[i] != magic.codeUnitAt(i)) {
+        return RpcStatusException(
+          RpcStatus.unknown,
+          'The peer is not an rpc_dart channel: unexpected preface',
+        );
+      }
+    }
+    final version = _peerPreface[magic.length];
+    if (version != RpcChannelFrame.protocolVersion) {
+      return RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'The peer speaks rpc_dart channel protocol $version, this side speaks '
+        '${RpcChannelFrame.protocolVersion}',
+      );
+    }
+    return null;
   }
 
   /// The offset in [data] where the frame begun at logical offset 0 ends, or

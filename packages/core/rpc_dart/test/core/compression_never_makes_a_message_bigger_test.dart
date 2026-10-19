@@ -34,6 +34,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 final class _Echo extends RpcResponderContract {
@@ -47,34 +49,6 @@ final class _Echo extends RpcResponderContract {
       responseCodec: _codec,
       handler: (req, {context}) async => req,
     );
-  }
-}
-
-/// Records the size of each DATA frame written into it.
-final class _Side implements IRpcChannel {
-  final _ctl = StreamController<Uint8List>();
-  late _Side peer;
-  final dataSizes = <int>[];
-
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    final view = ByteData.sublistView(data);
-    final len = view.getUint32(5);
-    if ((view.getUint8(4) & RpcChannelFrame.flagMetadata) == 0 && len > 0) {
-      dataSizes.add(len);
-    }
-    if (!peer._ctl.isClosed) peer._ctl.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
   }
 }
 
@@ -95,10 +69,7 @@ String _incompressible(int n) {
 
 /// Sends [text] and returns the request DATA frame size, asserting it round-trips.
 Future<int> _frameSize(String text, {required bool compress}) async {
-  final client = _Side();
-  final server = _Side();
-  client.peer = server;
-  server.peer = client;
+  final (client, server) = TapPipe.pair();
 
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport(
@@ -136,12 +107,16 @@ Future<int> _frameSize(String text, {required bool compress}) async {
   }
 
   await call(); // connection setup is not per-call cost
-  client.dataSizes.clear();
+  client.sent.clear();
   final echoed = await call();
 
   // Whatever the encoder decided, the bytes must survive it.
   expect(echoed, text, reason: 'the payload must round-trip unchanged');
-  return client.dataSizes.first;
+  return client.sentFrames
+      .where((f) => !f.isMetadata && f.payload!.isNotEmpty)
+      .first
+      .payload!
+      .length;
 }
 
 void main() {

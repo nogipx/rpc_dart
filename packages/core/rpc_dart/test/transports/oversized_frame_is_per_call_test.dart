@@ -23,6 +23,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 const _policy = RpcSecurityPolicy(
   maxMessageLengthBytes: 64 * 1024,
   maxMetadataBytes: 16 * 1024,
@@ -51,31 +53,6 @@ Uint8List _concat(List<Uint8List> parts) {
   return out;
 }
 
-final class _FeedChannel implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    if (!_in.isClosed) await _in.close();
-  }
-
-  void feed(Uint8List bytes) {
-    if (_in.isClosed) return;
-    _in.add(bytes);
-  }
-}
-
 /// A metadata frame carrying one header whose value is [valueBytes] long.
 Uint8List _metadataFrame(int streamId, int valueBytes) =>
     RpcChannelFrame.encodeMetadata(
@@ -84,7 +61,7 @@ Uint8List _metadataFrame(int streamId, int valueBytes) =>
     );
 
 typedef _Rig = ({
-  _FeedChannel feed,
+  RawPeerChannel feed,
   RpcFrameMultiplexedChannel channel,
   List<RpcTransportMessage> messages,
   List<Object> errors,
@@ -92,7 +69,7 @@ typedef _Rig = ({
 });
 
 _Rig _rig({RpcSecurityPolicy policy = _policy}) {
-  final feed = _FeedChannel();
+  final feed = RawPeerChannel();
   final channel = RpcFrameMultiplexedChannel(
     channel: feed,
     policy: policy,
@@ -399,7 +376,7 @@ void main() {
     // repeating it. Pinned in rpc_dart_websocket's
     // oversized_message_is_refused_test; pinned here too so the default cannot
     // drift.
-    final feed = _FeedChannel();
+    final feed = RawPeerChannel();
     final channel = RpcFrameMultiplexedChannel(channel: feed, policy: _policy);
     final errors = <Object>[];
     channel.incoming.listen((_) {}, onError: errors.add);

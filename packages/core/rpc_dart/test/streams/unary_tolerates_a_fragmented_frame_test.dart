@@ -23,99 +23,73 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
-/// Splits every DATA frame in two, which is what a transport forwarding raw
-/// chunks produces. No shipped transport does — http2 reassembles with a
-/// per-stream `RpcMessageParser`, the frame channel reassembles, and HTTP/1.1
-/// buffers the whole body — so this has to be built.
-final class _Fragmenting implements IRpcChannel {
-  _Fragmenting({
-    required this.split,
-    this.truncate = false,
-    this.lateEnd = false,
-  });
+/// A [TapPipe.transform] that splits every DATA frame in two, which is what a
+/// transport forwarding raw chunks produces. No shipped transport does — http2
+/// reassembles with a per-stream `RpcMessageParser`, the frame channel
+/// reassembles, and HTTP/1.1 buffers the whole body — so this has to be built.
+///
+/// [truncate] sends only the first half and half-closes: the peer that stops
+/// mid-frame.
+///
+/// [lateEnd] half-closes in a SEPARATE, LATER frame rather than on the fragment
+/// itself. A different ordering, and the two are answered by different code.
+/// With the half-close on the fragment, the pipeline already knows the peer has
+/// finished by the time it dispatches the responder. Arriving later, it has to
+/// reach a responder that is already waiting — which nothing else covers.
+void Function(Uint8List, void Function(Uint8List)) _fragment({
+  bool truncate = false,
+  bool lateEnd = false,
+}) => (data, deliver) {
+  final view = ByteData.sublistView(data);
+  final streamId = view.getUint32(0);
+  final flags = view.getUint8(4);
+  final len = view.getUint32(5);
+  final isData = (flags & RpcChannelFrame.flagMetadata) == 0 && len > 4;
 
-  final bool split;
+  if (!isData) {
+    deliver(data);
+    return;
+  }
 
-  /// Send only the first half and half-close: the peer that stops mid-frame.
-  final bool truncate;
-
-  /// Half-close in a SEPARATE, LATER frame rather than on the fragment itself.
-  ///
-  /// A different ordering, and the two are answered by different code. With the
-  /// half-close on the fragment, the pipeline already knows the peer has finished
-  /// by the time it dispatches the responder. Arriving later, it has to reach a
-  /// responder that is already waiting — which nothing else covers.
-  final bool lateEnd;
-
-  final _ctl = StreamController<Uint8List>();
-  late _Fragmenting peer;
-
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    final view = ByteData.sublistView(data);
-    final streamId = view.getUint32(0);
-    final flags = view.getUint8(4);
-    final len = view.getUint32(5);
-    final isData = (flags & RpcChannelFrame.flagMetadata) == 0 && len > 4;
-
-    if (!split || !isData) {
-      _deliver(data);
-      return;
+  final payload = Uint8List.sublistView(
+    data,
+    RpcChannelFrame.headerSize,
+    RpcChannelFrame.headerSize + len,
+  );
+  final cut = len ~/ 2;
+  final endOfStream = (flags & ~RpcChannelFrame.flagMetadata) != 0;
+  deliver(
+    RpcChannelFrame.encodeData(
+      streamId: streamId,
+      payload: Uint8List.sublistView(payload, 0, cut),
+      endOfStream: truncate && !lateEnd,
+    ),
+  );
+  if (truncate) {
+    if (lateEnd) {
+      // After the responder has had its turn to start waiting.
+      // A BARE half-close, carrying no data. A frame with an empty payload is
+      // still a data frame and reaches the fragment router, which answers it
+      // for its own reasons; this one can only be seen by the end-of-stream
+      // path.
+      Future<void>.delayed(const Duration(milliseconds: 50), () {
+        deliver(RpcChannelFrame.encodeEndOfStream(streamId));
+      });
     }
-
-    final payload = Uint8List.sublistView(
-      data,
-      RpcChannelFrame.headerSize,
-      RpcChannelFrame.headerSize + len,
-    );
-    final cut = len ~/ 2;
-    final endOfStream = (flags & ~RpcChannelFrame.flagMetadata) != 0;
-    _deliver(
-      RpcChannelFrame.encodeData(
-        streamId: streamId,
-        payload: Uint8List.sublistView(payload, 0, cut),
-        endOfStream: truncate && !lateEnd,
-      ),
-    );
-    if (truncate) {
-      if (lateEnd) {
-        // After the responder has had its turn to start waiting.
-        // A BARE half-close, carrying no data. A frame with an empty payload is
-        // still a data frame and reaches the fragment router, which answers it
-        // for its own reasons; this one can only be seen by the end-of-stream
-        // path.
-        Future<void>.delayed(const Duration(milliseconds: 50), () {
-          _deliver(RpcChannelFrame.encodeEndOfStream(streamId));
-        });
-      }
-      return;
-    }
-    _deliver(
-      RpcChannelFrame.encodeData(
-        streamId: streamId,
-        payload: Uint8List.sublistView(payload, cut),
-        endOfStream: endOfStream,
-      ),
-    );
+    return;
   }
-
-  void _deliver(Uint8List bytes) {
-    if (!peer._ctl.isClosed) peer._ctl.add(bytes);
-  }
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
-  }
-}
+  deliver(
+    RpcChannelFrame.encodeData(
+      streamId: streamId,
+      payload: Uint8List.sublistView(payload, cut),
+      endOfStream: endOfStream,
+    ),
+  );
+};
 
 final class _Svc extends RpcResponderContract {
   _Svc() : super('Svc');
@@ -171,14 +145,11 @@ RpcCallerEndpoint _rig({
   bool lateEnd = false,
   RpcSecurityPolicy? responderPolicy,
 }) {
-  final client = _Fragmenting(
-    split: split,
-    truncate: truncate,
-    lateEnd: lateEnd,
-  );
-  final server = _Fragmenting(split: split);
-  client.peer = server;
-  server.peer = client;
+  final (client, server) = TapPipe.pair();
+  if (split) {
+    client.transform = _fragment(truncate: truncate, lateEnd: lateEnd);
+    server.transform = _fragment();
+  }
 
   final responder =
       RpcResponderEndpoint(
@@ -476,10 +447,9 @@ void main() {
       // This is what makes the skipped witness a statement about UNARY: the same
       // rig, the same fragmenting channel, and the streaming shapes answer. Any
       // third attempt must keep this row passing.
-      final client = _Fragmenting(split: true);
-      final server = _Fragmenting(split: true);
-      client.peer = server;
-      server.peer = client;
+      final (client, server) = TapPipe.pair();
+      client.transform = _fragment();
+      server.transform = _fragment();
 
       final responder =
           RpcResponderEndpoint(

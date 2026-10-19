@@ -14,32 +14,10 @@
 //
 // The measurement behind the change is in `.claude/loop/rounds/507`.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-final class _Pipe implements IRpcChannel {
-  final _ctl = StreamController<Uint8List>();
-
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
-  }
-
-  void feed(Uint8List chunk) {
-    if (!_ctl.isClosed) _ctl.add(chunk);
-  }
-}
+import '../support/raw_channel.dart';
 
 /// A payload whose every byte is [tag], so a decoded frame says which frame it
 /// came from and a misaligned view is visible as content.
@@ -65,7 +43,7 @@ Uint8List _join(List<Uint8List> parts) {
 
 /// Feeds [chunks] and returns one `(tag, length)` per decoded frame.
 Future<List<(int, int)>> _decode(List<Uint8List> chunks) async {
-  final pipe = _Pipe();
+  final pipe = RawPeerChannel();
   final channel = RpcFrameMultiplexedChannel(channel: pipe);
   addTearDown(() async {
     await pipe.close();

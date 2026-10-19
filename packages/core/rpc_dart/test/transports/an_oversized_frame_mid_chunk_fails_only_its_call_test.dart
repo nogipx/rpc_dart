@@ -13,6 +13,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 const _policy = RpcSecurityPolicy(
   maxMessageLengthBytes: 64 * 1024,
   maxMetadataBytes: 16 * 1024,
@@ -33,30 +35,10 @@ Uint8List _concat(List<Uint8List> parts) =>
 Uint8List _data(int streamId, int length) =>
     RpcChannelFrame.encodeData(streamId: streamId, payload: Uint8List(length));
 
-final class _Feed implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    if (!_in.isClosed) await _in.close();
-  }
-}
-
 /// What a client multiplexer delivers for [chunks]: `data N` or `status S`
 /// per stream, and whether the connection survived.
 Future<(List<String>, bool)> _deliver(List<Uint8List> chunks) async {
-  final feed = _Feed();
+  final feed = RawPeerChannel();
   final mux = RpcFrameMultiplexedChannel(
     channel: feed,
     policy: _policy,
@@ -71,7 +53,7 @@ Future<(List<String>, bool)> _deliver(List<Uint8List> chunks) async {
     );
   }, onError: (Object e) => got.add('error'));
   for (final chunk in chunks) {
-    if (!feed._in.isClosed) feed._in.add(chunk);
+    feed.feed(chunk);
     await Future<void>.delayed(Duration.zero);
   }
   await Future<void>.delayed(const Duration(milliseconds: 20));

@@ -14,6 +14,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 final class _Svc extends RpcResponderContract {
@@ -36,32 +38,6 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  final sent = <Uint8List>[];
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async => sent.add(data);
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List b) {
-    if (!_closed) _in.add(b);
-  }
-}
-
 final _message = RpcMessageFrame.encode(_codec.serialize('hi'.rpc));
 
 Uint8List _open(int id) => RpcChannelFrame.encodeMetadata(
@@ -80,7 +56,7 @@ Uint8List _cancel(int id) => RpcChannelFrame.encodeMetadata(
   ]),
 );
 
-Future<({_Chan chan, List<String> errors})> _start() async {
+Future<({RawPeerChannel chan, List<String> errors})> _start() async {
   final controller = LogController(minLevel: RpcLogLevel.warning);
   final errors = <String>[];
   controller.stream.listen((r) {
@@ -88,7 +64,7 @@ Future<({_Chan chan, List<String> errors})> _start() async {
       errors.add(r.message);
     }
   });
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final transport = RpcChannelTransport.fromChannel(
     channel: chan,
     isClient: false,

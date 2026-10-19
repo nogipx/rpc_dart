@@ -13,27 +13,7 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
-}
+import '../support/raw_channel.dart';
 
 Uint8List _cat(Uint8List a, Uint8List b) => Uint8List(a.length + b.length)
   ..setRange(0, a.length, a)
@@ -51,7 +31,7 @@ Uint8List _packed(int id) => _cat(
 );
 
 Future<Uint8List> _payloadThroughTransport({required bool paused}) async {
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final transport = RpcChannelTransport.fromChannel(
     channel: chan,
     isClient: true,

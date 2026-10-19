@@ -23,31 +23,10 @@
 // covered through a channel nobody builds that way in production, while the
 // factory everything else uses set it the other way.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A byte channel that carries nothing: the GUARD only reads a flag.
-final class _NullChannel implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    if (!_in.isClosed) await _in.close();
-  }
-}
+import '../support/raw_channel.dart';
 
 void main() {
   test('pair() gives the client half the CLIENT policy', () {
@@ -85,7 +64,7 @@ void main() {
   // GUARD: the default is the server's, and it stays that way. A caller that
   // builds the channel directly and says nothing is a server.
   test('GUARD: the bare constructor still defaults to the server policy', () {
-    final bare = RpcFrameMultiplexedChannel(channel: _NullChannel());
+    final bare = RpcFrameMultiplexedChannel(channel: RawPeerChannel());
 
     expect(bare.closeOnOversizedFrame, isTrue);
 

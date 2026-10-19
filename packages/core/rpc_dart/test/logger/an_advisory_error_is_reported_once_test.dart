@@ -9,10 +9,10 @@
 // wrote. Measured over a real websocket, 100 frames each: text frames 100
 // errors, over-policy metadata 100 errors; a genuine framing failure 1.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
+
+import '../support/raw_channel.dart';
 
 final class _Counting extends LogController {
   _Counting() : super(minLevel: RpcLogLevel.debug);
@@ -27,35 +27,6 @@ final class _Counting extends LogController {
       if (record.level == RpcLogLevel.error) errors.add(record.message);
     }
     super.add(record);
-  }
-}
-
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List b) {
-    if (!_closed) _in.add(b);
-  }
-
-  void fail(Object error) {
-    if (!_closed) _in.addError(error);
   }
 }
 
@@ -75,7 +46,7 @@ void main() {
   test('the responder reports an advisory error once, not per frame', () async {
     // WITNESS. Before: 10 errors "Transport incoming error".
     final log = _Counting();
-    final chan = _Chan();
+    final chan = RawPeerChannel();
     final transport = RpcChannelTransport.fromChannel(
       channel: chan,
       isClient: false,
@@ -105,7 +76,7 @@ void main() {
   test('the caller reports an advisory error once, not per frame', () async {
     // WITNESS. A hostile SERVER does the same to a client.
     final log = _Counting();
-    final chan = _Chan();
+    final chan = RawPeerChannel();
     final transport = RpcChannelTransport.fromChannel(
       channel: chan,
       isClient: true,
@@ -131,7 +102,7 @@ void main() {
 
   test('GUARD: a genuine channel failure is still an error', () async {
     final log = _Counting();
-    final chan = _Chan();
+    final chan = RawPeerChannel();
     final transport = RpcChannelTransport.fromChannel(
       channel: chan,
       isClient: false,

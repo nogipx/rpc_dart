@@ -17,31 +17,7 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A raw byte channel whose incoming bytes are driven manually.
-class _ManualChannel implements IRpcChannel {
-  final StreamController<Uint8List> _inCtl = StreamController<Uint8List>();
-  bool _closed = false;
-
-  void feed(List<int> data) {
-    if (!_inCtl.isClosed) _inCtl.add(Uint8List.fromList(data));
-  }
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _inCtl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    if (!_inCtl.isClosed) await _inCtl.close();
-  }
-}
+import '../support/raw_channel.dart';
 
 const _limit = 64 * 1024;
 const _policy = RpcSecurityPolicy(maxMessageLengthBytes: _limit);
@@ -58,7 +34,7 @@ Future<({List<RpcTransportMessage> got, List<Object> errors})> _deliver(
   List<List<int>> chunks,
   int frames,
 ) async {
-  final channel = _ManualChannel();
+  final channel = RawPeerChannel();
   final mux = RpcFrameMultiplexedChannel(channel: channel, policy: _policy);
   final got = <RpcTransportMessage>[];
   final errors = <Object>[];

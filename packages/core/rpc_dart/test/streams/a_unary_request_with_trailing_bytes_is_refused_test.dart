@@ -12,30 +12,9 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
-
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  final sent = <Uint8List>[];
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async => sent.add(data);
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
-}
 
 final class _Echo extends RpcResponderContract {
   _Echo() : super('Svc');
@@ -57,7 +36,7 @@ final class _Echo extends RpcResponderContract {
 /// Sends a unary request whose single DATA chunk is [body], and returns the
 /// grpc-status the responder sent and how often the handler ran.
 Future<(String?, int)> _unary(List<int> body) async {
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final transport = RpcChannelTransport.fromChannel(
     channel: chan,
     isClient: false,

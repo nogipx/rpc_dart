@@ -19,33 +19,10 @@
 //
 // The measurements are in `.claude/loop/rounds/506`.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A channel whose inbound bytes the test writes by hand.
-final class _Pipe implements IRpcChannel {
-  final _ctl = StreamController<Uint8List>();
-
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
-  }
-
-  void feed(Uint8List chunk) {
-    if (!_ctl.isClosed) _ctl.add(chunk);
-  }
-}
+import '../support/raw_channel.dart';
 
 Uint8List _header({
   required int streamId,
@@ -68,7 +45,7 @@ const int _chunk = 64 * 1024;
 Future<({int accepted, String? refusal})> _dribble({
   required bool metadata,
 }) async {
-  final pipe = _Pipe();
+  final pipe = RawPeerChannel();
   final channel = RpcFrameMultiplexedChannel(channel: pipe);
   addTearDown(() async {
     await pipe.close();
@@ -139,7 +116,7 @@ void main() {
     () async {
       // Moving a limit check earlier is one edit from moving it to where it refuses
       // everything. This drives a real, legal metadata frame all the way through.
-      final pipe = _Pipe();
+      final pipe = RawPeerChannel();
       final channel = RpcFrameMultiplexedChannel(channel: pipe);
       addTearDown(() async {
         await pipe.close();

@@ -23,34 +23,10 @@
 // judgement: a peer we must keep talking to gets the CALL failed, a peer we do
 // not gets the connection closed.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A channel whose inbound bytes the test writes by hand.
-final class _FakeChannel implements IRpcChannel {
-  final StreamController<Uint8List> _in = StreamController<Uint8List>();
-  final List<Uint8List> sent = [];
-  bool _closed = false;
-
-  void feed(Uint8List bytes) => _in.add(bytes);
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Future<void> send(Uint8List data) async => sent.add(data);
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    if (!_in.isClosed) unawaited(_in.close());
-  }
-}
+import '../support/raw_channel.dart';
 
 /// A frame header with no payload; `flags` 2 is the metadata bit.
 Uint8List _header(int streamId, int flags, int payloadLen) {
@@ -69,7 +45,7 @@ Uint8List _concat(Uint8List a, Uint8List b) => Uint8List(a.length + b.length)
 void main() {
   test('an undecodable metadata frame fails only its own call', () async {
     // WITNESS. Pre-fix this closed the channel and every other call with it.
-    final fake = _FakeChannel();
+    final fake = RawPeerChannel();
     final channel = RpcFrameMultiplexedChannel(
       channel: fake,
       closeOnOversizedFrame: false,
@@ -96,7 +72,7 @@ void main() {
 
   test('the connection still works afterwards', () async {
     // The point of the fix: everything else on the connection carries on.
-    final fake = _FakeChannel();
+    final fake = RawPeerChannel();
     final channel = RpcFrameMultiplexedChannel(
       channel: fake,
       closeOnOversizedFrame: false,
@@ -140,7 +116,7 @@ void main() {
     //
     // A peer with a bug sends a handful; one sending hundreds is hostile, and
     // gets the connection its behaviour asked for.
-    final fake = _FakeChannel();
+    final fake = RawPeerChannel();
     final channel = RpcFrameMultiplexedChannel(
       channel: fake,
       closeOnOversizedFrame: false,
@@ -178,7 +154,7 @@ void main() {
     // is deliberately unchanged: a peer it does not have to keep talking to
     // gets the connection shut rather than an unlimited supply of malformed
     // frames.
-    final fake = _FakeChannel();
+    final fake = RawPeerChannel();
     final channel = RpcFrameMultiplexedChannel(channel: fake);
     final errors = <Object>[];
     final sub = channel.incoming.listen((_) {}, onError: errors.add);
@@ -196,7 +172,7 @@ void main() {
   test('GUARD: a size violation still tears the channel down', () async {
     // Nothing past an oversized header can be trusted, so that case must keep
     // failing the channel even for a client.
-    final fake = _FakeChannel();
+    final fake = RawPeerChannel();
     final channel = RpcFrameMultiplexedChannel(
       channel: fake,
       policy: const RpcSecurityPolicy(maxMetadataBytes: 16),

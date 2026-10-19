@@ -8,32 +8,10 @@
 // channel does -- but nothing read the field. Metadata was bounded only by
 // maxMessageLengthBytes, i.e. 16MB where the policy declared 64KB.
 
-import 'dart:async';
-
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
-/// A channel whose inbound bytes the test writes by hand: this library's own
-/// sender refuses the frames the receiver's limit is tested with.
-final class _Pipe implements IRpcChannel {
-  final _ctl = StreamController<Uint8List>();
-
-  @override
-  bool get isClosed => _ctl.isClosed;
-
-  @override
-  Stream<Uint8List> get incoming => _ctl.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {}
-
-  @override
-  Future<void> close() async {
-    if (!_ctl.isClosed) await _ctl.close();
-  }
-
-  void feed(Uint8List chunk) => _ctl.add(chunk);
-}
+import '../support/raw_channel.dart';
 
 // Metadata capped far below the data-payload cap, as the defaults are.
 const _policy = RpcSecurityPolicy(
@@ -50,7 +28,7 @@ final _oversized = RpcMetadata([
 
 void main() {
   test('an oversized metadata frame is rejected at its own limit', () async {
-    final pipe = _Pipe();
+    final pipe = RawPeerChannel();
     final server = RpcFrameMultiplexedChannel(channel: pipe, policy: _policy);
 
     final errors = <Object>[];

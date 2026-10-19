@@ -37,9 +37,29 @@ typedef _FrameHeader = ({int streamId, int flags, int payloadLen});
 ///   [varint] value length, [bytes] value
 /// ```
 /// Nothing may follow the last header.
+///
+/// Before its first frame each end writes [preface] once: `rpcdart` and
+/// [protocolVersion].
 abstract final class RpcChannelFrame {
   /// Total header size in bytes (4 streamId + 1 flags + 4 length).
   static const int headerSize = 9;
+
+  /// Revision of this wire format, raised with every incompatible change.
+  ///
+  /// Two ends of different revisions then refuse each other by name instead of
+  /// decoding each other's frames as garbage.
+  static const int protocolVersion = 1;
+
+  /// The magic that opens [preface].
+  static const String prefaceMagic = 'rpcdart';
+
+  /// Length of [preface] in bytes.
+  static const int prefaceSize = 8;
+
+  /// The bytes each end writes before its first frame: [prefaceMagic] and
+  /// [protocolVersion]. A fresh list on every read.
+  static Uint8List get preface =>
+      Uint8List.fromList([...prefaceMagic.codeUnits, protocolVersion]);
 
   static const int _flagEndOfStream = 1 << 0;
 

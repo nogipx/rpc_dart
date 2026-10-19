@@ -14,6 +14,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 final class _Svc extends RpcResponderContract {
@@ -30,40 +32,11 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  final sent = <Uint8List>[];
-  bool _closed = false;
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (_closed) throw StateError('closed');
-    sent.add(data);
-  }
-
-  @override
-  Future<void> close() async {
-    if (_closed) return;
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List b) {
-    if (!_closed) _in.add(b);
-  }
-}
-
 typedef _Outcome = ({String? status, String? message, int held});
 
 /// Opens one unary call on stream 1, sends [payload] (if any) and half-closes.
 Future<_Outcome> _call(Uint8List? payload) async {
-  final chan = _Chan();
+  final chan = RawPeerChannel(throwOnSendAfterClose: true);
   final transport = RpcChannelTransport.fromChannel(
     channel: chan,
     isClient: false,
@@ -132,7 +105,7 @@ void main() {
   test('GUARD: an empty chunk followed by the request still runs it', () async {
     // The wait after an empty chunk is deliberate; the fix must not turn it
     // into a refusal.
-    final chan = _Chan();
+    final chan = RawPeerChannel(throwOnSendAfterClose: true);
     final transport = RpcChannelTransport.fromChannel(
       channel: chan,
       isClient: false,

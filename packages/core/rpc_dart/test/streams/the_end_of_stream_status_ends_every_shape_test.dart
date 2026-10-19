@@ -13,36 +13,9 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../support/raw_channel.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
-
-final class _Chan implements IRpcChannel {
-  final _in = StreamController<Uint8List>();
-  bool _closed = false;
-  final sentStreamIds = <int>[];
-
-  @override
-  bool get isClosed => _closed;
-
-  @override
-  Stream<Uint8List> get incoming => _in.stream;
-
-  @override
-  Future<void> send(Uint8List data) async {
-    if (data.length >= 4) {
-      sentStreamIds.add(
-        (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3],
-      );
-    }
-  }
-
-  @override
-  Future<void> close() async {
-    _closed = true;
-    await _in.close();
-  }
-
-  void feed(Uint8List chunk) => _in.add(chunk);
-}
 
 Uint8List _frame(String s) => RpcMessageFrame.encode(_codec.serialize(s.rpc));
 Uint8List _head(int id) => RpcChannelFrame.encodeMetadata(
@@ -67,7 +40,7 @@ Future<String> _outcome(
   String shape,
   List<Uint8List> Function(int) frames,
 ) async {
-  final chan = _Chan();
+  final chan = RawPeerChannel();
   final caller = RpcCallerEndpoint(
     transport: RpcChannelTransport.fromChannel(channel: chan, isClient: true),
   );
