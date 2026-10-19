@@ -203,8 +203,7 @@ final class _MessageCeiling {
 
   /// The multiplexer's own reassembly cap: one WebSocket message carries
   /// exactly one channel frame.
-  static int _bytesFor(RpcSecurityPolicy policy) =>
-      policy.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
+  static int _bytesFor(RpcSecurityPolicy policy) => policy.maxChannelFrameBytes;
 }
 
 final class _PolicyAwareConnections extends StreamView<WebSocketChannel>

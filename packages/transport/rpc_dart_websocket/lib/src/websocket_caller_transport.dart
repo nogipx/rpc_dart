@@ -249,10 +249,8 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
   /// A whole message past a stricter policy must still reach the multiplexer,
   /// which fails that one call; the guard can only drop the connection.
   static int _guardCeiling(RpcSecurityPolicy policy) {
-    int capOf(RpcSecurityPolicy p) =>
-        p.effectiveMaxBufferedBytes + RpcChannelFrame.headerSize;
-    final own = capOf(policy);
-    final floor = capOf(const RpcSecurityPolicy());
+    final own = policy.maxChannelFrameBytes;
+    final floor = const RpcSecurityPolicy().maxChannelFrameBytes;
     return own > floor ? own : floor;
   }
 
