@@ -297,8 +297,8 @@ Possible once section 1 makes the shape classes internal.
 Behaviour changes (all deliberate):
 
 - Zero-copy unary refuses a second request.
-- `auto` unary on a zero-copy transport serializes when codecs are given, as
-  the other shapes do.
+- Under `auto` on a zero-copy transport every shape passes objects, codecs
+  given or not, as unary did.
 - A caller built without a context sends `x-request-id` on every shape.
 
 ### Per-call speed (owner, 2026-10-19: make the shared path cheaper)

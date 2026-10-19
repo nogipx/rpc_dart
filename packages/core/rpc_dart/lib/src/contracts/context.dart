@@ -86,15 +86,9 @@ final class RpcContext {
 
   /// Creates a copy of the context with additional headers.
   ///
-  /// The count and total-size caps apply to the MERGED result, not to
-  /// [additionalHeaders] alone. Sanitise only the additions and both counters
-  /// restart at zero per call, so the caps bound one call instead of the
-  /// context: a single `withHeaders` of 500 is capped correctly, while 500
-  /// `withHeader` calls — what [RpcContextBuilder] does, one header at a time —
-  /// pass all 500.
-  ///
-  /// Existing headers merge FIRST, so an over-cap addition is dropped rather
-  /// than displacing a header already in the context.
+  /// An addition replaces a header of the same name. A key that can never be
+  /// a header is dropped; sizes are not bounded here, since the transport's
+  /// [RpcSecurityPolicy] validates them when the call is sent.
   RpcContext withAdditionalHeaders(Map<String, String> additionalHeaders) =>
       _copy(
         headers: _sanitizeHeaders(
@@ -179,11 +173,7 @@ final class RpcContext {
   ///
   /// SIZE is [RpcSecurityPolicy]'s: it owns `maxHeaders`, `maxMetadataBytes`,
   /// `maxHeaderNameBytes` and `maxHeaderValueBytes`, and `validateMetadata`
-  /// THROWS on them. This class used to hold four private copies of those
-  /// numbers, equal to the policy's defaults and reachable from no policy —
-  /// so raising `maxHeaders` to 512 still truncated at 128, and the extra
-  /// headers went missing with no error on either side. The equality is what
-  /// hid it.
+  /// THROWS on them, so a configured limit is the only one.
   ///
   /// What stays is structural: a key that is empty, pseudo-header, off-pattern
   /// or carrying CR/LF/NUL is not a header at any size, so no limit is being
@@ -472,8 +462,6 @@ abstract final class RpcContextUtils {
   /// Merges several contexts (the right one takes precedence).
   static RpcContext merge(RpcContext left, RpcContext right) {
     return right._copy(
-      // Re-cap the union: both sides are individually within the header count
-      // and byte budgets, but their merge is not bounded by either.
       headers: RpcContext._sanitizeHeaders(
         Map<String, String>.from(left._headers)..addAll(right._headers),
       ),

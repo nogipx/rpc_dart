@@ -339,8 +339,8 @@ class _TokenBucketCounter extends _RateLimitCounter {
 ///   to cap a client-attributable firehose; the stream then errors
 ///   RESOURCE_EXHAUSTED and stops when the limit is reached.
 ///
-/// Enforced within a single Dart isolate, so no locking. Call [dispose] at
-/// shutdown to cancel the cleanup timer.
+/// Enforced within a single Dart isolate, so no locking. Idle counters are
+/// swept as calls arrive; [dispose] drops them all at shutdown.
 class RpcRateLimiter extends IRpcInterceptor {
   /// Creates a rate limiter.
   ///
@@ -454,9 +454,8 @@ class RpcRateLimiter extends IRpcInterceptor {
 
   /// Releases dynamic counter state and stops enforcing.
   ///
-  /// Optional: the limiter holds no timer, so forgetting to call this no
-  /// longer leaks anything — an unreferenced limiter is simply collected.
-  /// Calling it still frees the counter maps eagerly and turns [_check] into a
+  /// Optional: the limiter holds no timer, so an unreferenced one is simply
+  /// collected. Calling it frees the counter maps eagerly and turns [_check] into a
   /// no-op, which is worth doing when a limiter is retired while its endpoint
   /// keeps running.
   void dispose() {
@@ -545,8 +544,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// The same resolution is used for unary calls and for per-message accounting
   /// on streaming calls.
   _RateLimitCounter? _resolveSpecific(RpcMiddlewareContext call) {
-    // After dispose the cleanup timer is cancelled; creating new dynamic
-    // counters here would grow unbounded. No-op instead.
+    // After dispose nothing sweeps the counters, so none are created.
     if (_disposed) return null;
 
     final methodKey = '${call.serviceName}.${call.methodName}';
@@ -753,7 +751,3 @@ class RpcRateLimiter extends IRpcInterceptor {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Public exception type
-// ---------------------------------------------------------------------------

@@ -162,7 +162,7 @@ method.
 
 | Mode | Codecs | Types | Runtime |
 | --- | --- | --- | --- |
-| `auto` | generated | serializable or primitive | serializes, except unary calls on a zero-copy transport, which pass objects |
+| `auto` | generated | serializable or primitive | serializes, except on a zero-copy transport, where every call passes objects |
 | `codec` | generated | serializable or primitive | always serializes |
 | `zeroCopy` | none | any | passes objects; only on transports with `supportsZeroCopy` (`memoryPair()`, isolates) |
 

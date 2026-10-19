@@ -34,14 +34,14 @@ generating.
 
 | Mode | Codecs given | Codecs omitted |
 | --- | --- | --- |
-| `auto` (default) | serialize; but a **unary** call on a zero-copy transport still passes objects and skips the codecs | zero-copy |
+| `auto` (default) | serialize; but on a zero-copy transport every call passes objects and skips the codecs | zero-copy |
 | `codec` | always serialize, on every transport | `ArgumentError` |
 | `zeroCopy` | ignored, zero-copy | zero-copy |
 
 Use `codec` when the codec must run even in-process: to apply the field
 filtering in `toJson`, or to have `maxMessageLengthBytes` (see
-`security-and-flow-control.md`) measure real bytes. Under `auto`, a unary call
-over `memoryPair()` or an isolate transport has no bytes to measure.
+`security-and-flow-control.md`) measure real bytes. Under `auto`, a call over
+`memoryPair()` or an isolate transport has no bytes to measure.
 
 | Transport | `supportsZeroCopy` |
 | --- | --- |
@@ -236,8 +236,8 @@ the responder lacks gets `UNIMPLEMENTED` on every call.
 
 - Default mode is `auto`, not `zeroCopy`. Codecs omitted on a network transport
   fail at call time, not at registration.
-- Under `auto`, unary calls on in-process and VM isolate transports skip your
-  codecs. A `toJson` that drops secret fields does not protect them there; use
+- Under `auto`, calls of every shape on in-process and VM isolate transports
+  skip your codecs. A `toJson` that drops secret fields does not protect them there; use
   `RpcDataTransferMode.codec`.
 - `RpcCodec` writes integers only in the range -2^53..2^53-1 (exact on web
   too). Outside it, encoding throws `ArgumentError` on the VM. Send big ids as

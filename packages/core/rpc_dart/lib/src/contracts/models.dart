@@ -7,8 +7,9 @@ part of '_index.dart';
 
 /// Data transfer modes in RPC contracts.
 enum RpcDataTransferMode {
-  /// Zero-copy mode — direct object passing without serialization.
-  /// Works only with InMemoryTransport.
+  /// Zero-copy mode — objects passed by reference, without serialization.
+  /// Needs a transport that carries objects (`supportsZeroCopy`): the
+  /// in-memory pair and the isolate transports.
   zeroCopy,
 
   /// Codec mode — serialization via IRpcCodec.
@@ -17,11 +18,11 @@ enum RpcDataTransferMode {
 
   /// Auto mode, the default.
   ///
-  /// A UNARY call passes objects by reference whenever the transport supports
-  /// it (in-memory, isolate), codecs given or not: the codecs are not called
-  /// and `maxMessageLengthBytes` does not apply, because there are no bytes.
-  /// Elsewhere, and on every streaming shape that has codecs, it serializes.
-  /// Use [codec] to serialize everywhere.
+  /// Every call shape passes objects by reference whenever the transport
+  /// supports it (in-memory, isolate), codecs given or not: the codecs are
+  /// not called and `maxMessageLengthBytes` does not apply, because there are
+  /// no bytes. On any other transport it serializes. Use [codec] to serialize
+  /// everywhere.
   auto,
 }
 
