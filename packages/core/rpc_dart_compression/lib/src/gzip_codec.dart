@@ -136,29 +136,18 @@ final class RpcGzipCodec implements RpcCompressionCodec {
       }
     }
 
-    // Prefer an inflater that can be STOPPED. The pre-check above trusts ISIZE,
-    // and ISIZE is the size MOD 2^32: a payload that inflates to k*2^32 + small
-    // declares "small" and sails through it. `package:archive` cannot be
-    // stopped -- both of its paths materialise the whole output before any
-    // check can run -- so on such a payload the limit fired only after the
-    // damage. Measured with 4.0 MiB of compressed zeros declaring ISIZE 4096,
-    // against a 16 MiB limit: RSS +1873 MiB and 17.5s before the throw.
-    //
-    // On native platforms core's `dart:io` codec stops mid-stream, so the same
-    // payload costs nothing. On web there is no incremental inflater and
-    // [RpcGrpcCompression.platformGzip] is null, leaving the whole-buffer path
-    // with its after-the-fact check -- documented, not fixed, because
-    // `Inflate.stream(input).getBytes()` gives nothing to interrupt.
-    final bounded = effectiveLimit == null
-        ? null
-        : RpcGrpcCompression.platformGzip;
+    // Native platforms use core's `dart:io` codec, which stops mid-stream at
+    // the limit. That matters because the pre-check above trusts ISIZE, the
+    // size MOD 2^32: a payload that inflates to k*2^32 + small declares "small"
+    // and passes it. `package:archive` materialises the whole output before any
+    // check can run, so on web, where [RpcGrpcCompression.platformGzip] is
+    // null and there is no incremental inflater, the limit below fires only
+    // after the output exists.
+    final platform = RpcGrpcCompression.platformGzip;
     final List<int> result;
     try {
-      // verify:true enforces the CRC32 + ISIZE trailer check on the VM.
-      // decodeBytes already returns a Uint8List, but the trailer re-check
-      // below works on any List<int>, so keep the declared type loose.
       result =
-          bounded?.decompress(data, maxOutputBytes: effectiveLimit) ??
+          platform?.decompress(data, maxOutputBytes: effectiveLimit) ??
           GZipDecoder().decodeBytes(data, verify: true);
     } on RpcStatusException {
       rethrow;
@@ -179,15 +168,11 @@ final class RpcGzipCodec implements RpcCompressionCodec {
       );
     }
 
-    // The archive web decoder has its CRC/length verification commented out, so
-    // verify:true is a no-op there: corrupted or truncated payloads decode to
-    // garbage without throwing. Re-check the gzip trailer ourselves so the
-    // behaviour matches the VM on every platform.
+    // Needed on both paths. The archive web decoder skips its CRC and length
+    // verification, and `dart:io` checks an intact trailer but returns what it
+    // has for input cut off before or inside the trailer.
     _verifyTrailer(data, result, declaredSize);
 
-    // decodeBytes returns a Uint8List on every platform, so avoid the extra
-    // Uint8List.fromList copy. Cast defensively in case a future archive
-    // version changes the concrete type.
     return result is Uint8List ? result : Uint8List.fromList(result);
   }
 
