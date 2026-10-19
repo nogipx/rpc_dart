@@ -23,13 +23,18 @@ A 6.x peer and a 7.0 peer cannot talk over a channel transport (websocket,
 socket, wasm, in-memory). Upgrade client and server in one step. HTTP/2 and
 HTTP/1.1 speak gRPC on the wire and are not affected.
 
-**Channel transports now carry a protocol version.** Each end opens with an
-8-byte preface, `rpcdart` and `RpcChannelFrame.protocolVersion`, once per
-connection. A peer of another version fails every call with
-`FAILED_PRECONDITION` and a message naming both versions; a peer that is not
-an rpc_dart channel fails with `UNKNOWN`. Future format changes are refused by
-name instead of being decoded as garbage. A hand-written byte peer has to send
-`RpcChannelFrame.preface` before its first frame.
+**Channel transports now carry a protocol version.** The client opens each
+connection with an 8-byte preface, `rpcdart` and
+`RpcChannelFrame.protocolVersion`, and sends its calls right behind it. The
+server writes nothing until that preface arrives, then answers with the same
+version. A version the other side does not speak fails every call with
+`FAILED_PRECONDITION` and a message naming both versions; a peer that is not an
+rpc_dart channel fails with `UNKNOWN`. Because the server answers in the
+client's version, a later server can keep serving older clients. A
+hand-written byte peer has to send `RpcChannelFrame.preface` before its first
+frame. `RpcFrameMultiplexedChannel` takes a required `isClient`, and
+`closeOnOversizedFrame` defaults from it: true for a server, false for a
+client.
 
 ### Public API
 
