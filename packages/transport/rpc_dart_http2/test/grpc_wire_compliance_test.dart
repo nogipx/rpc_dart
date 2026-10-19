@@ -154,7 +154,10 @@ void main() {
         http2.Header.ascii('x-plain', 'hello'),
       ];
 
-      final metadata = http2HeadersToRpcMetadata(headers);
+      final metadata = http2HeadersToRpcMetadata(
+        headers,
+        policy: const RpcSecurityPolicy(),
+      );
 
       // Header value stays base64; the binary getter recovers the raw bytes.
       expect(
@@ -172,7 +175,10 @@ void main() {
       ]);
 
       final wire = rpcMetadataToHttp2Trailers(metadata);
-      final back = http2HeadersToRpcMetadata(wire);
+      final back = http2HeadersToRpcMetadata(
+        wire,
+        policy: const RpcSecurityPolicy(),
+      );
 
       expect(back.statusDetailsBin, equals(bytes));
     });
@@ -181,7 +187,10 @@ void main() {
       // A regular header that happens to look like base64
       final headers = [http2.Header.ascii('grpc-message', 'SGVsbG8=')];
 
-      final metadata = http2HeadersToRpcMetadata(headers);
+      final metadata = http2HeadersToRpcMetadata(
+        headers,
+        policy: const RpcSecurityPolicy(),
+      );
 
       // Should NOT be decoded — it's not a -bin header
       expect(metadata.getHeaderValue('grpc-message'), equals('SGVsbG8='));
@@ -267,7 +276,10 @@ void main() {
         http2.Header.ascii('grpc-status', '0'),
       ];
 
-      final metadata = http2HeadersToRpcMetadata(headers);
+      final metadata = http2HeadersToRpcMetadata(
+        headers,
+        policy: const RpcSecurityPolicy(),
+      );
 
       // No pseudo-headers should be in the metadata
       for (final header in metadata.headers) {

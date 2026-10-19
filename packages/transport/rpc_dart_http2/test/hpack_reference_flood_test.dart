@@ -154,13 +154,6 @@ void main() {
       );
     });
 
-    test('with no policy the conversion is unchanged', () {
-      // Every other caller of this function passes none, and must keep the
-      // previous behaviour rather than inheriting a limit by surprise.
-      final headers = _flood(500, valueBytes: 4);
-      expect(http2HeadersToRpcMetadata(headers).headers, hasLength(500));
-    });
-
     test('an ordinary request still converts', () {
       final headers = <http2.Header>[
         http2.Header.ascii(':path', '/Svc/Method'),

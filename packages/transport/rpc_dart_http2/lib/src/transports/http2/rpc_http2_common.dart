@@ -310,7 +310,7 @@ int unconsumedWindowFor(RpcSecurityPolicy policy) =>
 /// [wireStatusFor] rather than copied: the gate is default deny, so a FOREIGN
 /// inner error is still redacted, and one of rpc_dart's own keeps its status
 /// one layer out.
-class RpcHttp2StreamError extends RpcStatusException {
+base class RpcHttp2StreamError extends RpcStatusException {
   /// The stream the error belongs to.
   final int streamId;
 
@@ -337,7 +337,7 @@ class RpcHttp2StreamError extends RpcStatusException {
 /// Advisory, because the endpoints answer every active call on a broadcast
 /// error and `RpcClientConnection` retires the connection on one: without the
 /// marker one malformed frame failed every call in flight beside it.
-class RpcHttp2OneStreamError extends RpcHttp2StreamError
+final class RpcHttp2OneStreamError extends RpcHttp2StreamError
     implements IRpcAdvisoryChannelError {
   RpcHttp2OneStreamError(super.streamId, super.error, [super.stackTrace]);
 }
@@ -464,7 +464,7 @@ List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
 ///
 /// Pass the `:path` value extracted from the raw headers as [methodPath].
 ///
-/// [policy], when given, is enforced on the RAW list as it is walked, BEFORE
+/// [policy] is enforced on the RAW list as it is walked, BEFORE
 /// each value is copied, and that ordering is the whole point: HPACK hands back
 /// a list of REFERENCES — an indexed-header flood is thousands of pointers to
 /// one shared dynamic-table entry, costing the decoder almost nothing — and
@@ -477,10 +477,10 @@ List<http2.Header> rpcMetadataToHttp2TrailersOnly(RpcMetadata metadata) {
 RpcMetadata http2HeadersToRpcMetadata(
   List<http2.Header> headers, {
   String? methodPath,
-  RpcSecurityPolicy? policy,
+  required RpcSecurityPolicy policy,
 }) {
   final rpcHeaders = <RpcHeader>[];
-  final maxHeaders = policy?.maxHeaders;
+  final maxHeaders = policy.maxHeaders;
 
   for (final header in headers) {
     final name = String.fromCharCodes(header.name);
@@ -494,7 +494,7 @@ RpcMetadata http2HeadersToRpcMetadata(
     // `_headerValue`'s check below stays an ordinary ArgumentError on purpose:
     // its four callers all build OUTBOUND headers from our own metadata, where
     // a non-printable value is this side's programming mistake.
-    if (maxHeaders != null && rpcHeaders.length >= maxHeaders) {
+    if (rpcHeaders.length >= maxHeaders) {
       throw RpcMetadataViolation(
         'Too many metadata headers: more than $maxHeaders',
         name: 'metadata.headers',
