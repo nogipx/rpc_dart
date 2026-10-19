@@ -15,8 +15,6 @@
 ///                         and auto-wired error/metrics interceptors.
 ///                         Use [RpcApp.server].
 /// - [RpcTestApp]        — in-memory test harness (no network required).
-/// - [RpcRateLimiter]    — rate-limiting interceptor (global / per-service / per-method).
-/// - [RateLimit]         — rate-limit algorithm: [RateLimit.slidingWindow] or [RateLimit.tokenBucket].
 /// - [RpcAppHealth]      — aggregated health report from [RpcApp.health].
 /// - [RpcCallEvent]      — per-call metrics record emitted by [RpcAppConfig.onCall].
 /// - [RpcAppConfig]      — framework configuration (timeouts, hooks, env override).
