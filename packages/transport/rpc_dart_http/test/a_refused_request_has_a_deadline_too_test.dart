@@ -158,7 +158,12 @@ void main() {
       ]);
 
       expect(settled.where((s) => s == 'STILL DRAINING'), isEmpty);
-      expect(settled, everyElement(contains('408')));
+      // The 408 goes out with the request body still unread, so closing the
+      // connection may reset it before the client reads the status; under
+      // load some sockets see only the close. One 408 shows the path answers
+      // with a status rather than by hanging up.
+      expect(settled, everyElement(anyOf(contains('408'), 'closed')));
+      expect(settled, contains(contains('408')));
     },
     timeout: const Timeout(Duration(seconds: 60)),
   );
