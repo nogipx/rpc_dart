@@ -37,6 +37,16 @@ on `Version X already exists`, after the other packages have gone out.
    or a single-package test run misses — e.g. a behavior change in `rpc_dart`
    that breaks a transport's tests). If it finds anything: fix, commit, re-run.
    Do NOT proceed to publish until `prepare` exits 0.
+0b. **`rpc_dart`'s public API is frozen through 7.x, and `prepare` checks it.**
+   `melos run api:check` compares it with `docs/api/rpc_dart.txt`, a sorted
+   line per public declaration. A removed or changed line breaks someone and
+   is not allowed in 7.x; an added line is a minor release. After reviewing a
+   change, `melos run api:update` rewrites the snapshot: commit it with the
+   change. It needs `dart_apitool` once:
+   `fvm dart pub global activate dart_apitool 0.23.2`. The wire format is
+   pinned the same way by `test/core/the_wire_format_is_pinned_test.dart`: a
+   failure there needs a new `RpcChannelFrame.protocolVersion`, not a new
+   literal.
 1. **Manual versioning — do NOT use `melos version`.** For each changed public
    package: bump its `version:` in the pubspec (patch/minor/major per the commit
    types since the last release) and write the CHANGELOG entry by hand (newest

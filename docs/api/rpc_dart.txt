@@ -1,0 +1,1317 @@
+BackoffPolicy method delayFor(int attempt) -> Duration
+BackoffPolicy new new()
+BufferedBroadcastController field done: Future<void> (get)
+BufferedBroadcastController field hasListener: bool (get)
+BufferedBroadcastController field isClosed: bool (get)
+BufferedBroadcastController field maxPendingBytes: int (get)
+BufferedBroadcastController field maxPendingEvents: int (get)
+BufferedBroadcastController field onOverflow: void Function()? (get)
+BufferedBroadcastController field pendingCount: int (get)
+BufferedBroadcastController field sizeOf: int Function(T)? (get)
+BufferedBroadcastController field stream: Stream<T> (get)
+BufferedBroadcastController new new({int maxPendingEvents, int maxPendingBytes, int Function(T)? sizeOf, void Function()? onOverflow, bool sync})
+CborCodec new new()
+CborCodec static field defaultMaxItems: int (get)
+CborCodec static method decode(Uint8List bytes, {int? maxItems}) -> Map<String, dynamic>
+CborCodec static method decodeUnsafe(Uint8List bytes, {int? maxItems}) -> dynamic
+CborCodec static method encode(Map<String, dynamic> value) -> Uint8List
+CborCodec static method encodeUnsafe(dynamic value) -> Uint8List
+CircuitBreakerOpenException field details: List<RpcErrorDetail> (get)
+CircuitBreakerOpenException field isPushback: bool (get)
+CircuitBreakerOpenException field message: String (get)
+CircuitBreakerOpenException field retryAfter: Duration? (get)
+CircuitBreakerOpenException field statusCode: int (get)
+CircuitBreakerOpenException field statusDetailsBin: Uint8List? (get)
+CircuitBreakerOpenException new new({Duration? retryAfter})
+CircuitBreakerState static field closed: CircuitBreakerState (get)
+CircuitBreakerState static field halfOpen: CircuitBreakerState (get)
+CircuitBreakerState static field open: CircuitBreakerState (get)
+CircuitBreakerState static field values: List<CircuitBreakerState> (get)
+ConsoleFormat static field compact: ConsoleFormat (get)
+ConsoleFormat static field json: ConsoleFormat (get)
+ConsoleFormat static field pretty: ConsoleFormat (get)
+ConsoleFormat static field values: List<ConsoleFormat> (get)
+ConsoleOutput field colored: bool (get)
+ConsoleOutput field format: ConsoleFormat (get)
+ConsoleOutput field isAsync: bool (get)
+ConsoleOutput field scopeFilter: String? (get)
+ConsoleOutput method dispose() -> void
+ConsoleOutput method write(LogRecord record) -> void
+ConsoleOutput method writeAsync(LogRecord record) -> Future<void>
+ConsoleOutput new new({bool colored, ConsoleFormat format, String? scopeFilter})
+ConsoleOutput static method escapeLine(String text) -> String
+ExponentialBackoff field baseDelay: Duration (get)
+ExponentialBackoff field jitter: bool (get)
+ExponentialBackoff field maxDelay: Duration (get)
+ExponentialBackoff method delayFor(int attempt) -> Duration
+ExponentialBackoff new new({Duration baseDelay, Duration maxDelay, bool jitter})
+FixedBackoff field delay: Duration (get)
+FixedBackoff method delayFor(int attempt) -> Duration
+FixedBackoff new new(Duration delay)
+GrpcHealthCheckContract field dataTransferMode: RpcDataTransferMode (get)
+GrpcHealthCheckContract field serviceName: String (get)
+GrpcHealthCheckContract method addBidirectionalMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+GrpcHealthCheckContract method addClientStreamMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+GrpcHealthCheckContract method addServerStreamMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+GrpcHealthCheckContract method addUnaryMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+GrpcHealthCheckContract method dispose() -> void
+GrpcHealthCheckContract method setup() -> void
+GrpcHealthCheckContract new new(GrpcHealthServiceStatus _status)
+GrpcHealthCheckContract static field grpcServiceName: String (get)
+GrpcHealthCheckRequest field service: String (get)
+GrpcHealthCheckRequest new new({String service})
+GrpcHealthCheckRequest static field codec: IRpcCodec<GrpcHealthCheckRequest> (get)
+GrpcHealthCheckResponse field status: GrpcServingStatus (get)
+GrpcHealthCheckResponse new new({required GrpcServingStatus status})
+GrpcHealthCheckResponse static field codec: IRpcCodec<GrpcHealthCheckResponse> (get)
+GrpcHealthServiceStatus field changes: Stream<(String, GrpcServingStatus)> (get)
+GrpcHealthServiceStatus method clearAll() -> void
+GrpcHealthServiceStatus method clearStatus(String service) -> void
+GrpcHealthServiceStatus method dispose() -> void
+GrpcHealthServiceStatus method getStatus(String service) -> GrpcServingStatus?
+GrpcHealthServiceStatus method setStatus(String service, GrpcServingStatus status) -> void
+GrpcHealthServiceStatus new new()
+GrpcServingStatus field value: int (get)
+GrpcServingStatus static field notServing: GrpcServingStatus (get)
+GrpcServingStatus static field serviceUnknown: GrpcServingStatus (get)
+GrpcServingStatus static field serving: GrpcServingStatus (get)
+GrpcServingStatus static field unknown: GrpcServingStatus (get)
+GrpcServingStatus static field values: List<GrpcServingStatus> (get)
+GrpcServingStatus static method fromValue(int v) -> GrpcServingStatus
+IRpcAdvisoryChannelError new new()
+IRpcCallCheck method check(RpcMiddlewareContext call) -> FutureOr<void>
+IRpcCallCheck new new()
+IRpcChannel field incoming: Stream<Uint8List> (get)
+IRpcChannel field isClosed: bool (get)
+IRpcChannel method close() -> Future<void>
+IRpcChannel method send(Uint8List data) -> Future<void>
+IRpcChannel new new()
+IRpcChannelOversizeClose method closeForOversize(String reason) -> Future<void>
+IRpcChannelOversizeClose new new()
+IRpcChannelProtocolClose method closeForProtocolError(String reason) -> Future<void>
+IRpcChannelProtocolClose new new()
+IRpcCodec method deserialize(Uint8List bytes) -> T
+IRpcCodec method serialize(T message) -> Uint8List
+IRpcCodec new new()
+IRpcConnectionBuffer method chargeConnectionBuffer(int bytes) -> bool
+IRpcConnectionBuffer method releaseConnectionBuffer(int bytes) -> void
+IRpcConnectionBuffer new new()
+IRpcContract field serviceName: String (get)
+IRpcContract new new()
+IRpcFlowCredit method deferFlowCredit(int streamId) -> void
+IRpcFlowCredit method returnFlowCredit(int streamId, int bytes) -> void
+IRpcFlowCredit new new()
+IRpcInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+IRpcInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+IRpcInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+IRpcInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+IRpcInterceptor new new()
+IRpcMiddleware method processRequest<TRequest>(RpcMiddlewareContext call, TRequest request) -> FutureOr<TRequest>
+IRpcMiddleware method processResponse<TResponse>(RpcMiddlewareContext call, TResponse response) -> FutureOr<TResponse>
+IRpcMiddleware new new()
+IRpcMultiplexedChannel field incoming: Stream<RpcTransportMessage> (get)
+IRpcMultiplexedChannel field isClosed: bool (get)
+IRpcMultiplexedChannel field supportsZeroCopy: bool (get)
+IRpcMultiplexedChannel method close() -> Future<void>
+IRpcMultiplexedChannel method send(RpcTransportMessage message) -> Future<void>
+IRpcMultiplexedChannel new new()
+IRpcSerializable method toJson() -> Map<String, dynamic>
+IRpcSerializable new new()
+IRpcServer field endpoints: List<RpcResponderEndpoint> (get)
+IRpcServer field isRunning: bool (get)
+IRpcServer method start() -> Future<void>
+IRpcServer method stop({Duration? drainTimeout}) -> Future<void>
+IRpcServer new new()
+IRpcTransport field connectionBuffer: IRpcConnectionBuffer? (get)
+IRpcTransport field flowCredit: IRpcFlowCredit? (get)
+IRpcTransport field grantsMessageCredit: bool (get)
+IRpcTransport field incomingMessages: Stream<RpcTransportMessage> (get)
+IRpcTransport field isClient: bool (get)
+IRpcTransport field isClosed: bool (get)
+IRpcTransport field lastIssuedStreamId: int (get)
+IRpcTransport field ready: Future<void> (get)
+IRpcTransport field securityPolicy: RpcSecurityPolicy (get)
+IRpcTransport field supportsZeroCopy: bool (get)
+IRpcTransport method close() -> Future<void>
+IRpcTransport method createStream() -> int
+IRpcTransport method finishSending(int streamId) -> Future<void>
+IRpcTransport method getMessagesForStream(int streamId) -> Stream<RpcTransportMessage>
+IRpcTransport method health() -> Future<RpcHealthStatus>
+IRpcTransport method releaseStreamId(int streamId) -> bool
+IRpcTransport method resetStream(int streamId, {String? reason}) -> Future<bool>
+IRpcTransport method resumeStreamIdsAfter(int streamId) -> void
+IRpcTransport method sendDirectObject(int streamId, Object object, {bool endStream}) -> Future<void>
+IRpcTransport method sendMessage(int streamId, Uint8List data, {bool endStream}) -> Future<void>
+IRpcTransport method sendMetadata(int streamId, RpcMetadata metadata, {bool endStream}) -> Future<void>
+IRpcTransport new new()
+LogConfig field minLevel: RpcLogLevel (get)
+LogConfig field scopeLevels: Map<String, RpcLogLevel> (get)
+LogConfig field tagLevels: Map<String, RpcLogLevel> (get)
+LogConfig method toJson() -> Map<String, dynamic>
+LogConfig new fromJson(Map<String, dynamic> json)
+LogConfig new new({required RpcLogLevel minLevel, Map<String, RpcLogLevel> scopeLevels, Map<String, RpcLogLevel> tagLevels})
+LogController field clock: DateTime Function() (get)
+LogController field config: LogConfig (get)
+LogController field minLevel: RpcLogLevel (get/set)
+LogController field spansEnabled: bool (get/set)
+LogController field stream: Stream<LogRecord> (get)
+LogController method accepts(RpcLogLevel level, String scope, [String? tag]) -> bool
+LogController method add(LogRecord record) -> void
+LogController method addEnricher(LogEnricher enricher) -> void
+LogController method addOutput(LogOutput output) -> void
+LogController method clearScopeLevel(String scope) -> void
+LogController method clearTagLevel(String tag) -> void
+LogController method dispose() -> void
+LogController method removeEnricher(LogEnricher enricher) -> void
+LogController method removeOutput(LogOutput output) -> void
+LogController method scope(String name, {String? tag}) -> LogScope
+LogController method setRedactor(LogRedactor? redactor) -> void
+LogController method setScopeLevel(String scope, RpcLogLevel level) -> void
+LogController method setTagLevel(String tag, RpcLogLevel level) -> void
+LogController new new({RpcLogLevel minLevel, bool spansEnabled, DateTime Function()? clock, List<LogOutput> outputs, List<LogEnricher> enrichers, SamplingConfig? sampling, List<String> redactFields})
+LogEnricher method enrich(LogRecord record) -> Map<String, Object>
+LogEnricher new new()
+LogEvent field data: Map<String, Object>? (get)
+LogEvent field error: Object? (get)
+LogEvent field level: RpcLogLevel (get)
+LogEvent field message: String (get)
+LogEvent field requestId: String? (get)
+LogEvent field scope: String (get)
+LogEvent field spanId: String? (get)
+LogEvent field stackTrace: StackTrace? (get)
+LogEvent field tag: String? (get)
+LogEvent field timestamp: DateTime (get)
+LogEvent field traceId: String? (get)
+LogEvent method copyWith({String? scope, RpcLogLevel? level, String? message, String? tag, Object? error, StackTrace? stackTrace, String? traceId, String? requestId, String? spanId, Map<String, Object>? data, DateTime? timestamp}) -> LogEvent
+LogEvent method toJson() -> Map<String, dynamic>
+LogEvent new fromJson(Map<String, dynamic> json)
+LogEvent new new({required String scope, required RpcLogLevel level, required String message, String? tag, Object? error, StackTrace? stackTrace, String? traceId, String? requestId, String? spanId, Map<String, Object>? data, DateTime? timestamp})
+LogFilter field minLevel: RpcLogLevel? (get)
+LogFilter field requestId: String? (get)
+LogFilter field scopes: Set<String>? (get)
+LogFilter field tags: Set<String>? (get)
+LogFilter field traceId: String? (get)
+LogFilter method matches({required RpcLogLevel level, required String scope, String? tag, String? traceId, String? requestId}) -> bool
+LogFilter method toJson() -> Map<String, dynamic>
+LogFilter new fromJson(Map<String, dynamic> json)
+LogFilter new new({RpcLogLevel? minLevel, Set<String>? scopes, Set<String>? tags, String? traceId, String? requestId})
+LogOutput field isAsync: bool (get)
+LogOutput field scopeFilter: String? (get)
+LogOutput method dispose() -> void
+LogOutput method write(LogRecord record) -> void
+LogOutput method writeAsync(LogRecord record) -> Future<void>
+LogOutput new new()
+LogRecord field data: Map<String, Object>? (get)
+LogRecord field scope: String (get)
+LogRecord field timestamp: DateTime (get)
+LogRecord field traceId: String? (get)
+LogRecord new new()
+LogRedactor field isActive: bool (get)
+LogRedactor field replacement: String (get)
+LogRedactor method redact(Map<String, Object> data) -> Map<String, Object>
+LogRedactor method redactString(String input) -> String
+LogRedactor new new({required List<String> fields, String replacement})
+LogScope field isDebug: bool (get)
+LogScope field isInternal: bool (get)
+LogScope field isTrace: bool (get)
+LogScope field name: String (get)
+LogScope field tag: String? (get)
+LogScope method child(String childName, {String? tag}) -> LogScope
+LogScope method debug(String message, {Map<String, Object>? data}) -> void
+LogScope method error(String message, {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) -> void
+LogScope method fatal(String message, {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) -> void
+LogScope method info(String message, {Map<String, Object>? data}) -> void
+LogScope method internal(String message, {Map<String, Object>? data}) -> void
+LogScope method startSpan(String spanName, {Map<String, Object>? data, String? traceId}) -> LogSpanHandle
+LogScope method trace(String message, {Map<String, Object>? data}) -> void
+LogScope method warning(String message, {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) -> void
+LogScope method withContext({String? traceId, String? requestId}) -> LogScope
+LogScope method withData(Map<String, Object> data) -> LogScope
+LogScope method withSpan<T>(String spanName, Future<T> Function(LogSpanHandle) body, {Map<String, Object>? data}) -> Future<T>
+LogScope method withSpanSync<T>(String spanName, T Function(LogSpanHandle) body, {Map<String, Object>? data}) -> T
+LogScope method withTag(String tag) -> LogScope
+LogScope new new(LogController _controller, String name, {String? tag, Map<String, Object>? boundData, String? traceId, String? requestId, String? parentSpanId, DateTime Function()? clock})
+LogScope static field noop: LogScope (get)
+LogSpan field data: Map<String, Object>? (get)
+LogSpan field duration: Duration (get)
+LogSpan field endTime: DateTime (get)
+LogSpan field error: Object? (get)
+LogSpan field events: List<LogEvent> (get)
+LogSpan field name: String (get)
+LogSpan field parentSpanId: String? (get)
+LogSpan field scope: String (get)
+LogSpan field spanId: String (get)
+LogSpan field stackTrace: StackTrace? (get)
+LogSpan field startTime: DateTime (get)
+LogSpan field status: SpanStatus (get)
+LogSpan field timestamp: DateTime (get)
+LogSpan field traceId: String? (get)
+LogSpan method copyWith({String? spanId, String? scope, String? name, DateTime? startTime, DateTime? endTime, SpanStatus? status, String? parentSpanId, String? traceId, Object? error, StackTrace? stackTrace, Map<String, Object>? data, List<LogEvent>? events}) -> LogSpan
+LogSpan method toJson() -> Map<String, dynamic>
+LogSpan new fromJson(Map<String, dynamic> json)
+LogSpan new new({required String spanId, required String scope, required String name, required DateTime startTime, required DateTime endTime, required SpanStatus status, String? parentSpanId, String? traceId, Object? error, StackTrace? stackTrace, Map<String, Object>? data, List<LogEvent> events})
+LogSpanHandle field isEnded: bool (get)
+LogSpanHandle field name: String (get)
+LogSpanHandle field parentSpanId: String? (get)
+LogSpanHandle field scope: String (get)
+LogSpanHandle field spanId: String (get)
+LogSpanHandle field traceId: String? (get)
+LogSpanHandle method addData(Map<String, Object> data) -> void
+LogSpanHandle method end({SpanStatus status, Object? error, StackTrace? stackTrace}) -> void
+LogSpanHandle method event(String message, {RpcLogLevel level, Map<String, Object>? data}) -> void
+LogSpanHandle method startSpan(String childName, {Map<String, Object>? data}) -> LogSpanHandle
+LogSpanStart field data: Map<String, Object>? (get)
+LogSpanStart field name: String (get)
+LogSpanStart field parentSpanId: String? (get)
+LogSpanStart field scope: String (get)
+LogSpanStart field spanId: String (get)
+LogSpanStart field timestamp: DateTime (get)
+LogSpanStart field traceId: String? (get)
+LogSpanStart new new({required String spanId, required String scope, required String name, String? parentSpanId, String? traceId, DateTime? timestamp})
+RateLimit new new()
+RateLimit new slidingWindow({required int max, required Duration window})
+RateLimit new tokenBucket({required int max, required Duration window, int? burst})
+RingBufferOutput field entries: List<LogRecord> (get)
+RingBufferOutput field isAsync: bool (get)
+RingBufferOutput field length: int (get)
+RingBufferOutput field maxEntries: int (get)
+RingBufferOutput field scopeFilter: String? (get)
+RingBufferOutput method clear() -> void
+RingBufferOutput method dispose() -> void
+RingBufferOutput method query(LogFilter filter, {int? limit}) -> List<LogRecord>
+RingBufferOutput method write(LogRecord record) -> void
+RingBufferOutput method writeAsync(LogRecord record) -> Future<void>
+RingBufferOutput new new({int maxEntries, String? scopeFilter})
+RpcBadRequest field typeUrl: String (get)
+RpcBadRequest field violations: List<RpcFieldViolation> (get)
+RpcBadRequest method encode() -> Uint8List
+RpcBadRequest method encodeAsAny() -> Uint8List
+RpcBadRequest new new(List<RpcFieldViolation> violations)
+RpcBadRequest static field type: String (get)
+RpcBadRequest static method decodeAny(Uint8List data) -> RpcErrorDetail
+RpcBinaryCodec method deserialize(Uint8List bytes) -> T
+RpcBinaryCodec method serialize(T message) -> Uint8List
+RpcBinaryCodec new new({required Uint8List Function(T) toBytes, required T Function(Uint8List) fromBytes})
+RpcBool field hashCode: int (get)
+RpcBool field value: T (get)
+RpcBool method toJson() -> Map<String, dynamic>
+RpcBool new fromJson(Map<String, dynamic> json)
+RpcBool new new(bool value)
+RpcBool static field codec: RpcCodec<RpcBool> (get)
+RpcBoolX field rpc: RpcBool (get)
+RpcCallCancelled new new()
+RpcCallDirection static field incoming: RpcCallDirection (get)
+RpcCallDirection static field outgoing: RpcCallDirection (get)
+RpcCallDirection static field values: List<RpcCallDirection> (get)
+RpcCallFailed field error: Object (get)
+RpcCallFailed field stackTrace: StackTrace (get)
+RpcCallFailed new new(Object error, StackTrace stackTrace)
+RpcCallObserverInterceptor method contextFor(S state, RpcContext context) -> RpcContext
+RpcCallObserverInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcCallObserverInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcCallObserverInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcCallObserverInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcCallObserverInterceptor method onCallEnd(S state, RpcCallOutcome outcome, Duration duration) -> void
+RpcCallObserverInterceptor method onCallStart(RpcMiddlewareContext call, RpcMethodType type) -> S
+RpcCallObserverInterceptor method onResponseError(S state, Object error, StackTrace stackTrace) -> void
+RpcCallObserverInterceptor method onResponseMessage(S state) -> void
+RpcCallObserverInterceptor method runCall<T>(S state, Future<T> Function() body) -> Future<T>
+RpcCallObserverInterceptor new new()
+RpcCallOutcome new new()
+RpcCallScope field cancellationToken: RpcCancellationToken? (get)
+RpcCallScope field done: Future<void> (get)
+RpcCallScope field isClosed: bool (get)
+RpcCallScope field remaining: Duration? (get)
+RpcCallScope method close() -> Future<void>
+RpcCallScope method listen<T>(Stream<T> stream, void Function(T) onData, {Function? onError, void Function()? onDone, bool? cancelOnError}) -> StreamSubscription<T>
+RpcCallScope method onDispose(FutureOr<void> Function() callback) -> void
+RpcCallScope method track<T>(Stream<T> stream) -> Stream<T>
+RpcCallScope method use<T>(T resource, FutureOr<void> Function(T) dispose) -> T
+RpcCallScope new new({RpcContext? context})
+RpcCallScope static field disposerTimeout: Duration (get/set)
+RpcCallSucceeded new new()
+RpcCallerContract field dataTransferMode: RpcDataTransferMode (get)
+RpcCallerContract field endpoint: RpcCallerEndpoint (get)
+RpcCallerContract field serviceName: String (get)
+RpcCallerContract method callBidirectionalStream<TRequest, TResponse>({required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcCallerContract method callClientStream<TRequest, TResponse>({required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcCallerContract method callServerStream<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcCallerContract method callUnary<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcCallerContract method cancelAllMethods([String? reason]) -> int
+RpcCallerContract method cancelMethod(String methodName, [String? reason]) -> int
+RpcCallerContract method getActiveCallsCount(String methodName) -> int
+RpcCallerContract method getCancellationTokensForMethod(String methodName) -> Map<String, RpcCancellationToken>
+RpcCallerContract method isMethodActive(String methodName) -> bool
+RpcCallerContract new new(String serviceName, RpcCallerEndpoint _endpoint, {RpcDataTransferMode dataTransferMode})
+RpcCallerEndpoint field activeResponderCount: int (get)
+RpcCallerEndpoint field compressionEnabled: bool (get)
+RpcCallerEndpoint field debugLabel: String? (get)
+RpcCallerEndpoint field isActive: bool (get)
+RpcCallerEndpoint field transport: IRpcTransport (get)
+RpcCallerEndpoint method activeCallCount(String serviceName, String methodName) -> int
+RpcCallerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
+RpcCallerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
+RpcCallerEndpoint method bidirectionalStream<C, R>({required String serviceName, required String methodName, required Stream<C> requests, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Stream<R>
+RpcCallerEndpoint method cancelAllMethods([String? reason]) -> void
+RpcCallerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
+RpcCallerEndpoint method cancelRequest(String serviceName, String methodName, String requestId, [String? reason]) -> bool
+RpcCallerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
+RpcCallerEndpoint method clientStream<C, R>({required String serviceName, required String methodName, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Future<R> Function(Stream<C>)
+RpcCallerEndpoint method close() -> Future<void>
+RpcCallerEndpoint method collectEndpointMetrics() -> Map<String, Object?>
+RpcCallerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
+RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
+RpcCallerEndpoint method markDraining() -> void
+RpcCallerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
+RpcCallerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcCallerEndpoint method start() -> void
+RpcCallerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcCallerEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
+RpcCancellationToken field cancelled: Future<void> (get)
+RpcCancellationToken field isCancelled: bool (get)
+RpcCancellationToken field reason: String? (get)
+RpcCancellationToken method cancel([String? reason]) -> void
+RpcCancellationToken method throwIfCancelled() -> void
+RpcCancellationToken new cancelled([String? reason])
+RpcCancellationToken new new()
+RpcCancelledException field details: List<RpcErrorDetail> (get)
+RpcCancelledException field isPushback: bool (get)
+RpcCancelledException field message: String (get)
+RpcCancelledException field reason: String (get)
+RpcCancelledException field statusCode: int (get)
+RpcCancelledException field statusDetailsBin: Uint8List? (get)
+RpcCancelledException new new(String message)
+RpcChannelFrame new new()
+RpcChannelFrame static field flagMetadata: int (get)
+RpcChannelFrame static field headerSize: int (get)
+RpcChannelFrame static field preface: Uint8List (get)
+RpcChannelFrame static field prefaceMagic: String (get)
+RpcChannelFrame static field prefaceSize: int (get)
+RpcChannelFrame static field protocolVersion: int (get)
+RpcChannelFrame static method decode(Uint8List data, {int? maxPayloadLen, int? maxMetadataLen}) -> RpcDecodedFrame?
+RpcChannelFrame static method decodeAll(Uint8List data, {int? maxPayloadLen, int? maxMetadataLen, void Function(int)? onMalformedMetadata}) -> (List<RpcDecodedFrame>, int)
+RpcChannelFrame static method encodeData({required int streamId, required Uint8List payload, bool endOfStream}) -> Uint8List
+RpcChannelFrame static method encodeEndOfStream(int streamId) -> Uint8List
+RpcChannelFrame static method encodeMetadata({required int streamId, required RpcMetadata metadata, bool endOfStream}) -> Uint8List
+RpcChannelTransport field connectionBuffer: IRpcConnectionBuffer (get)
+RpcChannelTransport field flowControlConnectionCredit: int? (get)
+RpcChannelTransport field flowControlStateSizes: Map<String, int> (get)
+RpcChannelTransport field flowCredit: IRpcFlowCredit (get)
+RpcChannelTransport field grantsMessageCredit: bool (get)
+RpcChannelTransport field incomingMessages: Stream<RpcTransportMessage> (get)
+RpcChannelTransport field isClient: bool (get)
+RpcChannelTransport field isClosed: bool (get)
+RpcChannelTransport field lastIssuedStreamId: int (get)
+RpcChannelTransport field ready: Future<void> (get)
+RpcChannelTransport field securityPolicy: RpcSecurityPolicy (get)
+RpcChannelTransport field supportsZeroCopy: bool (get)
+RpcChannelTransport method chargeConnectionBuffer(int bytes) -> bool
+RpcChannelTransport method close() -> Future<void>
+RpcChannelTransport method createStream() -> int
+RpcChannelTransport method deferFlowCredit(int streamId) -> void
+RpcChannelTransport method finishSending(int streamId) -> Future<void>
+RpcChannelTransport method getMessagesForStream(int streamId) -> Stream<RpcTransportMessage>
+RpcChannelTransport method health() -> Future<RpcHealthStatus>
+RpcChannelTransport method releaseConnectionBuffer(int bytes) -> void
+RpcChannelTransport method releaseStreamId(int streamId) -> bool
+RpcChannelTransport method resetStream(int streamId, {String? reason}) -> Future<bool>
+RpcChannelTransport method resumeStreamIdsAfter(int streamId) -> void
+RpcChannelTransport method returnFlowCredit(int streamId, int bytes) -> void
+RpcChannelTransport method sendDirectObject(int streamId, Object object, {bool endStream}) -> Future<void>
+RpcChannelTransport method sendMessage(int streamId, Uint8List data, {bool endStream}) -> Future<void>
+RpcChannelTransport method sendMetadata(int streamId, RpcMetadata metadata, {bool endStream}) -> Future<void>
+RpcChannelTransport new fromChannel({required IRpcChannel channel, required bool isClient, RpcSecurityPolicy policy, Future<void>? ready, Duration? prefaceTimeout, LogScope? logger})
+RpcChannelTransport new new({required IRpcMultiplexedChannel channel, required bool isClient, RpcSecurityPolicy policy, Future<void>? ready, LogScope? logger})
+RpcChannelTransport static method memoryPair({RpcSecurityPolicy policy}) -> (RpcChannelTransport, RpcChannelTransport)
+RpcChannelTransport static method pair({RpcSecurityPolicy policy}) -> (RpcChannelTransport, RpcChannelTransport)
+RpcCircuitBreakerInterceptor field failureCount: int (get)
+RpcCircuitBreakerInterceptor field failureOn: bool Function(Object)? (get)
+RpcCircuitBreakerInterceptor field failureThreshold: int (get)
+RpcCircuitBreakerInterceptor field probeAbandonTimeout: Duration (get)
+RpcCircuitBreakerInterceptor field resetTimeout: Duration (get)
+RpcCircuitBreakerInterceptor field state: CircuitBreakerState (get)
+RpcCircuitBreakerInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcCircuitBreakerInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcCircuitBreakerInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcCircuitBreakerInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcCircuitBreakerInterceptor method reset() -> void
+RpcCircuitBreakerInterceptor new new({int failureThreshold, Duration resetTimeout, bool Function(Object)? failureOn, Duration probeAbandonTimeout})
+RpcClientConnecting field attempt: int (get)
+RpcClientConnecting new new({required int attempt})
+RpcClientConnection field currentState: RpcClientConnectionState (get)
+RpcClientConnection field state: Stream<RpcClientConnectionState> (get)
+RpcClientConnection field transport: IRpcTransport (get)
+RpcClientConnection method connect() -> void
+RpcClientConnection method disconnect() -> Future<void>
+RpcClientConnection method dispose() -> Future<void>
+RpcClientConnection method forceReconnect() -> void
+RpcClientConnection new new({required Future<IRpcTransport> Function() transportFactory, BackoffPolicy backoff, bool Function(Object?)? shouldReconnect, int? maxAttempts, Duration? connectTimeout, LogScope? logger, void Function(RpcClientConnectionState)? onStateChanged})
+RpcClientConnectionState new new()
+RpcClientDisconnected field reason: Object? (get)
+RpcClientDisconnected new new({Object? reason})
+RpcClientIdle new new()
+RpcClientOffline new new()
+RpcClientOnline new new()
+RpcClosedException field byPeer: bool (get)
+RpcClosedException field details: List<RpcErrorDetail> (get)
+RpcClosedException field isPushback: bool (get)
+RpcClosedException field message: String (get)
+RpcClosedException field statusCode: int (get)
+RpcClosedException field statusDetailsBin: Uint8List? (get)
+RpcClosedException field what: String (get)
+RpcClosedException new byPeer(String what)
+RpcClosedException new new(String what, {String? detail})
+RpcCodec method deserialize(Uint8List bytes) -> T
+RpcCodec method serialize(T message) -> Uint8List
+RpcCodec new new(T Function(Map<String, dynamic>) fromJson)
+RpcCompressionCodec method compress(Uint8List data) -> Uint8List
+RpcCompressionCodec method decompress(Uint8List data, {int? maxOutputBytes}) -> Uint8List
+RpcCompressionCodec new new()
+RpcConnectionHost field endpoints: Iterable<RpcEndpointBase> (get)
+RpcConnectionHost field length: int (get)
+RpcConnectionHost field maxConnections: int? (get)
+RpcConnectionHost field mode: RpcServerMode (get)
+RpcConnectionHost field responders: List<RpcResponderEndpoint> (get)
+RpcConnectionHost method admit({int pending}) -> bool
+RpcConnectionHost method release(RpcEndpointBase endpoint) -> void
+RpcConnectionHost method serve(IRpcTransport transport, {required Future<void> done, String? debugLabel, void Function()? onRelease}) -> RpcEndpointBase
+RpcConnectionHost method stop({Duration? drainTimeout}) -> Future<void>
+RpcConnectionHost new new({required RpcServerMode mode, int? maxConnections, LogScope? logger, LogController? logController})
+RpcConstants new new()
+RpcConstants static field compressed: int (get)
+RpcConstants static field compressionFlagIndex: int (get)
+RpcConstants static field messageLengthIndex: int (get)
+RpcConstants static field messagePrefixSize: int (get)
+RpcConstants static field noCompression: int (get)
+RpcContentTypeValidation static field lenient: RpcContentTypeValidation (get)
+RpcContentTypeValidation static field strict: RpcContentTypeValidation (get)
+RpcContentTypeValidation static field values: List<RpcContentTypeValidation> (get)
+RpcContext field callScope: RpcCallScope? (get)
+RpcContext field cancellationToken: RpcCancellationToken? (get)
+RpcContext field clock: DateTime Function() (get)
+RpcContext field deadline: DateTime? (get)
+RpcContext field headers: Map<String, String> (get)
+RpcContext field isCancelled: bool (get)
+RpcContext field isExpired: bool (get)
+RpcContext field log: LogScope (get)
+RpcContext field remainingTime: Duration? (get)
+RpcContext field requestId: String (get)
+RpcContext field traceId: String? (get)
+RpcContext field values: Map<Object, Object> (get)
+RpcContext method getHeader(String key) -> String?
+RpcContext method getValue<T>(Object key) -> T?
+RpcContext method requireCallScope() -> RpcCallScope
+RpcContext method withAdditionalHeaders(Map<String, String> additionalHeaders) -> RpcContext
+RpcContext method withCancellation(RpcCancellationToken token) -> RpcContext
+RpcContext method withClock(DateTime Function() clock) -> RpcContext
+RpcContext method withDeadline(DateTime newDeadline) -> RpcContext
+RpcContext method withLog(LogScope log) -> RpcContext
+RpcContext method withRequestId(String newRequestId) -> RpcContext
+RpcContext method withTimeout(Duration timeout) -> RpcContext
+RpcContext method withTraceId(String newTraceId) -> RpcContext
+RpcContext method withValue(Object key, Object value) -> RpcContext
+RpcContext new empty()
+RpcContext new withCancellation(RpcCancellationToken token)
+RpcContext new withDeadline(DateTime deadline)
+RpcContext new withHeaders(Map<String, String> headers, {String? requestId})
+RpcContext new withTimeout(Duration timeout)
+RpcContext new withTraceId(String traceId)
+RpcContext static method isContextValid(RpcContext? context) -> bool
+RpcContext static method sanitize(RpcContext context) -> RpcContext
+RpcContextBuilder method build() -> RpcContext
+RpcContextBuilder method withApiKey(String key, {String headerName}) -> RpcContextBuilder
+RpcContextBuilder method withBasicAuth(String username, String password) -> RpcContextBuilder
+RpcContextBuilder method withBearerAuth(String token) -> RpcContextBuilder
+RpcContextBuilder method withCancellation(RpcCancellationToken token) -> RpcContextBuilder
+RpcContextBuilder method withClock(DateTime Function() clock) -> RpcContextBuilder
+RpcContextBuilder method withDeadline(DateTime deadline) -> RpcContextBuilder
+RpcContextBuilder method withGeneratedRequestId() -> RpcContextBuilder
+RpcContextBuilder method withGeneratedTraceId() -> RpcContextBuilder
+RpcContextBuilder method withHeader(String key, String value) -> RpcContextBuilder
+RpcContextBuilder method withHeaders(Map<String, String> headers) -> RpcContextBuilder
+RpcContextBuilder method withTimeout(Duration timeout) -> RpcContextBuilder
+RpcContextBuilder method withTraceId(String traceId) -> RpcContextBuilder
+RpcContextBuilder method withValue(Object key, Object value) -> RpcContextBuilder
+RpcContextBuilder new from(RpcContext context)
+RpcContextBuilder new inheritFrom(RpcContext? parent)
+RpcContextBuilder new new()
+RpcContextExtensions method createChild() -> RpcContext
+RpcContextExtensions method createChildWith({Map<String, String>? headers, Duration? timeout}) -> RpcContext
+RpcContextExtensions method forward({Map<String, String>? headers, Duration? timeout}) -> RpcContext
+RpcContextUtils new new()
+RpcContextUtils static method generateTraceId() -> String
+RpcContextUtils static method merge(RpcContext left, RpcContext right) -> RpcContext
+RpcContextUtils static method traceIdFor(String requestId) -> String
+RpcContextUtils static method withTracing({String? traceId}) -> RpcContext
+RpcDataTransferMode static field auto: RpcDataTransferMode (get)
+RpcDataTransferMode static field codec: RpcDataTransferMode (get)
+RpcDataTransferMode static field values: List<RpcDataTransferMode> (get)
+RpcDataTransferMode static field zeroCopy: RpcDataTransferMode (get)
+RpcDeadlineExceededException field deadline: DateTime (get)
+RpcDeadlineExceededException field details: List<RpcErrorDetail> (get)
+RpcDeadlineExceededException field isPushback: bool (get)
+RpcDeadlineExceededException field message: String (get)
+RpcDeadlineExceededException field statusCode: int (get)
+RpcDeadlineExceededException field statusDetailsBin: Uint8List? (get)
+RpcDeadlineExceededException new new(DateTime deadline)
+RpcDebugInfo field detail: String (get)
+RpcDebugInfo field stackEntries: List<String> (get)
+RpcDebugInfo field typeUrl: String (get)
+RpcDebugInfo method encode() -> Uint8List
+RpcDebugInfo method encodeAsAny() -> Uint8List
+RpcDebugInfo new new({List<String> stackEntries, String detail})
+RpcDebugInfo static field type: String (get)
+RpcDebugInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
+RpcDecodedFrame field endOfStream: bool (get)
+RpcDecodedFrame field isMetadata: bool (get)
+RpcDecodedFrame field metadata: RpcMetadata? (get)
+RpcDecodedFrame field methodPath: String? (get)
+RpcDecodedFrame field payload: Uint8List? (get)
+RpcDecodedFrame field streamId: int (get)
+RpcDecodedFrame new new({required int streamId, required bool endOfStream, required bool isMetadata, Uint8List? payload, RpcMetadata? metadata, String? methodPath})
+RpcDouble field hashCode: int (get)
+RpcDouble field value: T (get)
+RpcDouble method binary%(Object other) -> RpcDouble
+RpcDouble method binary*(Object other) -> RpcDouble
+RpcDouble method binary+(Object other) -> RpcDouble
+RpcDouble method binary-(Object other) -> RpcDouble
+RpcDouble method binary/(Object other) -> RpcDouble
+RpcDouble method binary<(Object other) -> bool
+RpcDouble method binary<=(Object other) -> bool
+RpcDouble method binary>(Object other) -> bool
+RpcDouble method binary>=(Object other) -> bool
+RpcDouble method toJson() -> Map<String, dynamic>
+RpcDouble method unary-() -> RpcDouble
+RpcDouble new fromJson(Map<String, dynamic> json)
+RpcDouble new new(double value)
+RpcDouble static field codec: RpcCodec<RpcDouble> (get)
+RpcDoubleX field rpc: RpcDouble (get)
+RpcEndpointBase field activeResponderCount: int (get)
+RpcEndpointBase field debugLabel: String? (get)
+RpcEndpointBase field isActive: bool (get)
+RpcEndpointBase field transport: IRpcTransport (get)
+RpcEndpointBase method addInterceptor(IRpcInterceptor interceptor) -> void
+RpcEndpointBase method addMiddleware(IRpcMiddleware middleware) -> void
+RpcEndpointBase method close() -> Future<void>
+RpcEndpointBase method collectEndpointMetrics() -> Map<String, Object?>
+RpcEndpointBase method health() -> Future<RpcEndpointHealth>
+RpcEndpointBase method markDraining() -> void
+RpcEndpointBase method start() -> void
+RpcEndpointBase new new({required IRpcTransport transport, String? debugLabel})
+RpcEndpointHealth field dependencies: Map<String, RpcHealthStatus> (get)
+RpcEndpointHealth field endpointStatus: RpcHealthStatus (get)
+RpcEndpointHealth field isHealthy: bool (get)
+RpcEndpointHealth field timestamp: DateTime (get)
+RpcEndpointHealth field transportStatus: RpcHealthStatus? (get)
+RpcEndpointHealth new new({required RpcHealthStatus endpointStatus, Map<String, RpcHealthStatus>? dependencies, DateTime? timestamp})
+RpcEndpointPingExchange field sentAt: DateTime (get)
+RpcEndpointPingExchange field streamId: int (get)
+RpcEndpointPingExchange field transport: IRpcTransport (get)
+RpcEndpointPingExchange method execute({required RpcMetadata metadata, Duration? timeout, RpcCancellationToken? cancellationToken}) -> Future<RpcEndpointPingResult>
+RpcEndpointPingExchange new new({required IRpcTransport transport, LogScope? logger, required int streamId, required DateTime sentAt})
+RpcEndpointPingProtocol new new()
+RpcEndpointPingProtocol static field methodKey: String (get)
+RpcEndpointPingProtocol static field methodName: String (get)
+RpcEndpointPingProtocol static field methodPath: String (get)
+RpcEndpointPingProtocol static field responseDebugLabelHeader: String (get)
+RpcEndpointPingProtocol static field responseTimestampHeader: String (get)
+RpcEndpointPingProtocol static field serviceName: String (get)
+RpcEndpointPingResult field receivedAt: DateTime (get)
+RpcEndpointPingResult field responderDebugLabel: String? (get)
+RpcEndpointPingResult field responderTimestamp: DateTime? (get)
+RpcEndpointPingResult field responseHeaders: Map<String, String> (get)
+RpcEndpointPingResult field roundTrip: Duration (get)
+RpcEndpointPingResult field sentAt: DateTime (get)
+RpcEndpointPingResult new new({required DateTime sentAt, required DateTime receivedAt, required Duration roundTrip, DateTime? responderTimestamp, String? responderDebugLabel, Map<String, String>? responseHeaders})
+RpcErrorDetail field typeUrl: String (get)
+RpcErrorDetail method encode() -> Uint8List
+RpcErrorDetail method encodeAsAny() -> Uint8List
+RpcErrorDetail new new()
+RpcErrorDetail static method decodeAny(Uint8List data) -> RpcErrorDetail
+RpcErrorInfo field domain: String (get)
+RpcErrorInfo field metadata: Map<String, String> (get)
+RpcErrorInfo field reason: String (get)
+RpcErrorInfo field typeUrl: String (get)
+RpcErrorInfo method encode() -> Uint8List
+RpcErrorInfo method encodeAsAny() -> Uint8List
+RpcErrorInfo new new({required String reason, String domain, Map<String, String> metadata})
+RpcErrorInfo static field type: String (get)
+RpcErrorInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
+RpcException field message: String (get)
+RpcException new new(String message)
+RpcFieldViolation field description: String (get)
+RpcFieldViolation field field: String (get)
+RpcFieldViolation new new({required String field, required String description})
+RpcFrameException field details: List<RpcErrorDetail> (get)
+RpcFrameException field isPushback: bool (get)
+RpcFrameException field message: String (get)
+RpcFrameException field statusCode: int (get)
+RpcFrameException field statusDetailsBin: Uint8List? (get)
+RpcFrameException new limit(String message)
+RpcFrameException new new(String message)
+RpcFrameException new policy(String message)
+RpcFrameMultiplexedChannel field closeOnOversizedFrame: bool (get)
+RpcFrameMultiplexedChannel field incoming: Stream<RpcTransportMessage> (get)
+RpcFrameMultiplexedChannel field isClient: bool (get)
+RpcFrameMultiplexedChannel field isClosed: bool (get)
+RpcFrameMultiplexedChannel field onFrameDiscarded: void Function(int, int)? (get/set)
+RpcFrameMultiplexedChannel field peakReassemblyBytes: int (get)
+RpcFrameMultiplexedChannel field ready: Future<void> (get)
+RpcFrameMultiplexedChannel field supportsZeroCopy: bool (get)
+RpcFrameMultiplexedChannel method close() -> Future<void>
+RpcFrameMultiplexedChannel method closeForOversize(String reason) -> Future<void>
+RpcFrameMultiplexedChannel method closeForProtocolError(String reason) -> Future<void>
+RpcFrameMultiplexedChannel method send(RpcTransportMessage message) -> Future<void>
+RpcFrameMultiplexedChannel new new({required IRpcChannel channel, required bool isClient, RpcSecurityPolicy policy, bool? closeOnOversizedFrame, Duration? prefaceTimeout})
+RpcFrameMultiplexedChannel static method pair({RpcSecurityPolicy policy}) -> (RpcFrameMultiplexedChannel, RpcFrameMultiplexedChannel)
+RpcGrpcCompression new new()
+RpcGrpcCompression static field gzip: String (get)
+RpcGrpcCompression static field identity: String (get)
+RpcGrpcCompression static field platformGzip: RpcCompressionCodec? (get)
+RpcGrpcCompression static method acceptEncodingHeader() -> String
+RpcGrpcCompression static method compress(Uint8List data, {required String encoding}) -> Uint8List
+RpcGrpcCompression static method compressIfSmaller(Uint8List data, {required String? encoding}) -> (Uint8List, bool)
+RpcGrpcCompression static method decompress(Uint8List data, {required String encoding, int? maxOutputBytes}) -> Uint8List
+RpcGrpcCompression static method isIdentity(String? encoding) -> bool
+RpcGrpcCompression static method isSupported(String encoding) -> bool
+RpcGrpcCompression static method register(String encoding, RpcCompressionCodec codec) -> void
+RpcGrpcCompression static method requestEncoding() -> String?
+RpcGrpcCompression static method selectResponseEncoding(String? acceptEncoding) -> String?
+RpcGrpcCompression static method supportedEncodings() -> List<String>
+RpcGrpcCompression static method unregister(String encoding) -> void
+RpcHeader field name: String (get)
+RpcHeader field value: String (get)
+RpcHeader new new(String name, String value)
+RpcHeaderBoundedServerSocket field address: InternetAddress (get)
+RpcHeaderBoundedServerSocket field headerTimeout: Duration? (get)
+RpcHeaderBoundedServerSocket field maxConnections: int? (get)
+RpcHeaderBoundedServerSocket field maxHeaderBytes: int? (get)
+RpcHeaderBoundedServerSocket field port: int (get)
+RpcHeaderBoundedServerSocket method peerGone(HttpConnectionInfo info) -> Future<void>?
+RpcHeaderBoundedServerSocket method responseWritten(HttpConnectionInfo info) -> void
+RpcHeaderBoundedServerSocket new new(ServerSocket _server, {int? maxHeaderBytes, Duration? headerTimeout, int? maxConnections})
+RpcHeaderBoundedServerSocket static method defaultMaxHeaderBytes(RpcSecurityPolicy policy) -> int
+RpcHeaders new new()
+RpcHeaders static field connectionSpecific: Set<String> (get)
+RpcHeaders static field contentType: String (get)
+RpcHeaders static field contentTypeGrpc: String (get)
+RpcHeaders static field grpcAcceptEncoding: String (get)
+RpcHeaders static field grpcEncoding: String (get)
+RpcHeaders static field grpcMessage: String (get)
+RpcHeaders static field grpcStatus: String (get)
+RpcHeaders static field grpcStatusDetails: String (get)
+RpcHeaders static field grpcTimeout: String (get)
+RpcHeaders static field reserved: Set<String> (get)
+RpcHeaders static field reservedPrefix: String (get)
+RpcHeaders static field te: String (get)
+RpcHeaders static field userAgent: String (get)
+RpcHeaders static field xCancellationReason: String (get)
+RpcHeaders static field xClientCancelled: String (get)
+RpcHeaders static field xConnWindowUpdate: String (get)
+RpcHeaders static field xRequestId: String (get)
+RpcHeaders static field xTraceId: String (get)
+RpcHeaders static field xWindowUpdate: String (get)
+RpcHeaders static field xWindowUpdateMessages: String (get)
+RpcHeaders static method checkUserHeader(String name, String value) -> void
+RpcHeaders static method isHiddenFromHandler(String name) -> bool
+RpcHeaders static method isReserved(String name) -> bool
+RpcHealthLevel static field closed: RpcHealthLevel (get)
+RpcHealthLevel static field degraded: RpcHealthLevel (get)
+RpcHealthLevel static field healthy: RpcHealthLevel (get)
+RpcHealthLevel static field reconnecting: RpcHealthLevel (get)
+RpcHealthLevel static field unhealthy: RpcHealthLevel (get)
+RpcHealthLevel static field values: List<RpcHealthLevel> (get)
+RpcHealthLevelSeverity field severity: int (get)
+RpcHealthStatus field component: String (get)
+RpcHealthStatus field details: Map<String, Object?> (get)
+RpcHealthStatus field isHealthy: bool (get)
+RpcHealthStatus field level: RpcHealthLevel (get)
+RpcHealthStatus field message: String (get)
+RpcHealthStatus field timestamp: DateTime (get)
+RpcHealthStatus new closed({required String component, String message, Map<String, Object?>? details})
+RpcHealthStatus new degraded({required String component, String message, Map<String, Object?>? details})
+RpcHealthStatus new healthy({required String component, String message, Map<String, Object?>? details})
+RpcHealthStatus new new({required String component, required RpcHealthLevel level, String? message, Map<String, Object?>? details, DateTime? timestamp})
+RpcHealthStatus new reconnecting({required String component, String message, Map<String, Object?>? details})
+RpcHealthStatus new unhealthy({required String component, String message, Map<String, Object?>? details})
+RpcInt field hashCode: int (get)
+RpcInt field value: T (get)
+RpcInt method binary%(Object other) -> RpcInt
+RpcInt method binary*(Object other) -> RpcInt
+RpcInt method binary+(Object other) -> RpcInt
+RpcInt method binary-(Object other) -> RpcInt
+RpcInt method binary/(Object other) -> RpcDouble
+RpcInt method binary<(Object other) -> bool
+RpcInt method binary<=(Object other) -> bool
+RpcInt method binary>(Object other) -> bool
+RpcInt method binary>=(Object other) -> bool
+RpcInt method binary~/(Object other) -> RpcInt
+RpcInt method toJson() -> Map<String, dynamic>
+RpcInt method unary-() -> RpcInt
+RpcInt new fromJson(Map<String, dynamic> json)
+RpcInt new new(int value)
+RpcInt static field codec: RpcCodec<RpcInt> (get)
+RpcIntX field rpc: RpcInt (get)
+RpcList field iterator: Iterator<T> (get)
+RpcList field length: int (get)
+RpcList method add(T value) -> void
+RpcList method addAll(Iterable<T> items) -> void
+RpcList method binary[](int index) -> T
+RpcList method binary[]=(int index, T value) -> void
+RpcList method clear() -> void
+RpcList method insert(int index, T value) -> void
+RpcList method remove(T value) -> bool
+RpcList method removeAt(int index) -> T
+RpcList method sort([int Function(T, T)? compare]) -> void
+RpcList method toJson() -> Map<String, dynamic>
+RpcList new empty()
+RpcList new filled(int length, T fill)
+RpcList new from(List<T> items)
+RpcList new new()
+RpcList static method fromJson<T>(T Function(Map<String, dynamic>) fromJson) -> RpcList<T> Function(Map<String, dynamic>)
+RpcList static method fromJsonRaw<T>(List<dynamic> json, T Function(Map<String, dynamic>) fromJson) -> RpcList<T>
+RpcLogLevel method binary<(RpcLogLevel other) -> bool
+RpcLogLevel method binary>=(RpcLogLevel other) -> bool
+RpcLogLevel static field debug: RpcLogLevel (get)
+RpcLogLevel static field error: RpcLogLevel (get)
+RpcLogLevel static field fatal: RpcLogLevel (get)
+RpcLogLevel static field info: RpcLogLevel (get)
+RpcLogLevel static field internal: RpcLogLevel (get)
+RpcLogLevel static field trace: RpcLogLevel (get)
+RpcLogLevel static field values: List<RpcLogLevel> (get)
+RpcLogLevel static field warning: RpcLogLevel (get)
+RpcLogLevel static method fromName(String? name) -> RpcLogLevel?
+RpcMessageFrame new new()
+RpcMessageFrame static method encode(Uint8List messageBytes, {bool compressed}) -> Uint8List
+RpcMessageFrame static method parseHeader(Uint8List headerBytes) -> RpcMessageHeader
+RpcMessageHeader field isCompressed: bool (get)
+RpcMessageHeader field messageLength: int (get)
+RpcMessageHeader new new(bool isCompressed, int messageLength)
+RpcMessageParser field holdsPartialFrame: bool (get)
+RpcMessageParser method call(Uint8List data) -> List<Uint8List>
+RpcMessageParser new new({LogScope? logger, int maxMessageLength, int? maxBufferedBytes, Uint8List Function(Uint8List, {int? maxOutputBytes})? decompressor, int maxMessagesPerChunk, bool emitFramed})
+RpcMetadata field headers: List<RpcHeader> (get)
+RpcMetadata field methodPath: String? (get)
+RpcMetadata field statusDetailsBin: Uint8List? (get)
+RpcMetadata method getHeaderValue(String name) -> String?
+RpcMetadata new new(List<RpcHeader> headers, {String? methodPath})
+RpcMetadata static method decodeGrpcMessage(String encoded, {int maxLength}) -> String
+RpcMetadata static method encodeGrpcMessage(String message, {int? maxLength}) -> String
+RpcMetadata static method encodeGrpcTimeout(Duration timeout) -> String
+RpcMetadata static method forClientRequest(String serviceName, String methodName) -> RpcMetadata
+RpcMetadata static method forServerInitialResponse({String? encoding}) -> RpcMetadata
+RpcMetadata static method parseGrpcTimeout(String raw) -> Duration?
+RpcMetadataViolation field details: List<RpcErrorDetail> (get)
+RpcMetadataViolation field isPushback: bool (get)
+RpcMetadataViolation field message: String (get)
+RpcMetadataViolation field stackTrace: StackTrace? (get)
+RpcMetadataViolation field statusCode: int (get)
+RpcMetadataViolation field statusDetailsBin: Uint8List? (get)
+RpcMetadataViolation new new(String message, {dynamic invalidValue, String? name})
+RpcMethod field description: String? (get)
+RpcMethod field kind: RpcMethodType (get)
+RpcMethod field name: String (get)
+RpcMethod field requestCodec: Type? (get)
+RpcMethod field responseCodec: Type? (get)
+RpcMethod field transferMode: RpcDataTransferMode? (get)
+RpcMethod new bidirectionalStream({required String name, String? description, Type? requestCodec, Type? responseCodec, RpcDataTransferMode? transferMode})
+RpcMethod new clientStream({required String name, String? description, Type? requestCodec, Type? responseCodec, RpcDataTransferMode? transferMode})
+RpcMethod new new({required String name, required RpcMethodType kind, String? description, Type? requestCodec, Type? responseCodec, RpcDataTransferMode? transferMode})
+RpcMethod new serverStream({required String name, String? description, Type? requestCodec, Type? responseCodec, RpcDataTransferMode? transferMode})
+RpcMethod new unary({required String name, String? description, Type? requestCodec, Type? responseCodec, RpcDataTransferMode? transferMode})
+RpcMethodType static field bidirectionalStream: RpcMethodType (get)
+RpcMethodType static field clientStream: RpcMethodType (get)
+RpcMethodType static field serverStream: RpcMethodType (get)
+RpcMethodType static field unary: RpcMethodType (get)
+RpcMethodType static field values: List<RpcMethodType> (get)
+RpcMiddlewareContext field context: RpcContext (get/set)
+RpcMiddlewareContext field direction: RpcCallDirection? (get)
+RpcMiddlewareContext field endpoint: RpcEndpointBase (get)
+RpcMiddlewareContext field methodName: String (get)
+RpcMiddlewareContext field serviceName: String (get)
+RpcMiddlewareContext method copyWith({RpcEndpointBase? endpoint, String? serviceName, String? methodName, RpcContext? context, RpcCallDirection? direction}) -> RpcMiddlewareContext
+RpcMiddlewareContext method updateContext(RpcContext newContext) -> void
+RpcMiddlewareContext new new({required RpcEndpointBase endpoint, required String serviceName, required String methodName, required RpcContext context, RpcCallDirection? direction})
+RpcNoConnectionException field details: List<RpcErrorDetail> (get)
+RpcNoConnectionException field isPushback: bool (get)
+RpcNoConnectionException field message: String (get)
+RpcNoConnectionException field reconnecting: bool (get)
+RpcNoConnectionException field statusCode: int (get)
+RpcNoConnectionException field statusDetailsBin: Uint8List? (get)
+RpcNoConnectionException field what: String (get)
+RpcNoConnectionException new new(String what, {required bool reconnecting})
+RpcNull field hashCode: int (get)
+RpcNull field value: T (get)
+RpcNull method toJson() -> Map<String, dynamic>
+RpcNull new new()
+RpcNull static field codec: RpcCodec<RpcNull> (get)
+RpcNull static method fromJson(Map<String, dynamic> json) -> RpcNull
+RpcNullX field rpc: RpcNull (get)
+RpcNum field hashCode: int (get)
+RpcNum field value: T (get)
+RpcNum method binary%(Object other) -> RpcNum
+RpcNum method binary*(Object other) -> RpcNum
+RpcNum method binary+(Object other) -> RpcNum
+RpcNum method binary-(Object other) -> RpcNum
+RpcNum method binary/(Object other) -> RpcNum
+RpcNum method binary<(Object other) -> bool
+RpcNum method binary<=(Object other) -> bool
+RpcNum method binary>(Object other) -> bool
+RpcNum method binary>=(Object other) -> bool
+RpcNum method binary~/(Object other) -> RpcNum
+RpcNum method toJson() -> Map<String, dynamic>
+RpcNum method unary-() -> RpcNum
+RpcNum new fromJson(Map<String, dynamic> json)
+RpcNum new new(num value)
+RpcNum static field codec: RpcCodec<RpcNum> (get)
+RpcNumX field rpc: RpcNum (get)
+RpcPeerContract field callerDataTransferMode: RpcDataTransferMode (get)
+RpcPeerContract field dataTransferMode: RpcDataTransferMode (get)
+RpcPeerContract field endpoint: RpcPeerEndpoint (get)
+RpcPeerContract field serviceName: String (get)
+RpcPeerContract method addBidirectionalMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcPeerContract method addClientStreamMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcPeerContract method addServerStreamMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcPeerContract method addUnaryMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcPeerContract method callBidirectionalStream<TRequest, TResponse>({required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcPeerContract method callClientStream<TRequest, TResponse>({required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcPeerContract method callServerStream<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcPeerContract method callUnary<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcPeerContract method cancelAllMethods([String? reason]) -> int
+RpcPeerContract method cancelMethod(String methodName, [String? reason]) -> int
+RpcPeerContract method dispose() -> void
+RpcPeerContract method getActiveCallsCount(String methodName) -> int
+RpcPeerContract method getCancellationTokensForMethod(String methodName) -> Map<String, RpcCancellationToken>
+RpcPeerContract method isMethodActive(String methodName) -> bool
+RpcPeerContract method setup() -> void
+RpcPeerContract new new(String serviceName, RpcPeerEndpoint endpoint, {RpcDataTransferMode responderDataTransferMode, RpcDataTransferMode callerDataTransferMode})
+RpcPeerEndpoint field activeResponderCount: int (get)
+RpcPeerEndpoint field compressionEnabled: bool (get)
+RpcPeerEndpoint field debugLabel: String? (get)
+RpcPeerEndpoint field isActive: bool (get)
+RpcPeerEndpoint field isDraining: bool (get)
+RpcPeerEndpoint field registeredContracts: Map<String, RpcResponderContract> (get)
+RpcPeerEndpoint field transport: IRpcTransport (get)
+RpcPeerEndpoint method activeCallCount(String serviceName, String methodName) -> int
+RpcPeerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
+RpcPeerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
+RpcPeerEndpoint method bidirectionalStream<C, R>({required String serviceName, required String methodName, required Stream<C> requests, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Stream<R>
+RpcPeerEndpoint method cancelAllMethods([String? reason]) -> void
+RpcPeerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
+RpcPeerEndpoint method cancelRequest(String serviceName, String methodName, String requestId, [String? reason]) -> bool
+RpcPeerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
+RpcPeerEndpoint method clientStream<C, R>({required String serviceName, required String methodName, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Future<R> Function(Stream<C>)
+RpcPeerEndpoint method close() -> Future<void>
+RpcPeerEndpoint method collectEndpointMetrics() -> Map<String, Object?>
+RpcPeerEndpoint method drain({Duration timeout}) -> Future<void>
+RpcPeerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
+RpcPeerEndpoint method health() -> Future<RpcEndpointHealth>
+RpcPeerEndpoint method markDraining() -> void
+RpcPeerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
+RpcPeerEndpoint method registerServiceContract(RpcResponderContract contract) -> void
+RpcPeerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcPeerEndpoint method start() -> void
+RpcPeerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcPeerEndpoint method unregisterServiceContract(String serviceName) -> void
+RpcPeerEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
+RpcPeerMode field register: void Function(RpcPeerEndpoint) (get)
+RpcPeerMode new new(void Function(RpcPeerEndpoint) register)
+RpcPrimitiveMessage field hashCode: int (get)
+RpcPrimitiveMessage field value: T (get)
+RpcPrimitiveMessage method toJson() -> Map<String, dynamic>
+RpcPrimitiveMessage new new(T value)
+RpcProtoReader field atEnd: bool (get)
+RpcProtoReader method readBytes() -> Uint8List
+RpcProtoReader method readString() -> String
+RpcProtoReader method readTag() -> ({int field, int wireType})
+RpcProtoReader method readVarint() -> int
+RpcProtoReader method skip(int wireType) -> void
+RpcProtoReader new new(Uint8List _bytes)
+RpcProtoWireType new new()
+RpcProtoWireType static field fixed32: int (get)
+RpcProtoWireType static field fixed64: int (get)
+RpcProtoWireType static field lengthDelimited: int (get)
+RpcProtoWireType static field varint: int (get)
+RpcProtoWriter method toBytes() -> Uint8List
+RpcProtoWriter method writeBytesField(int field, List<int> value) -> void
+RpcProtoWriter method writeStringField(int field, String value) -> void
+RpcProtoWriter method writeTag(int field, int wireType) -> void
+RpcProtoWriter method writeVarint(int value) -> void
+RpcProtoWriter method writeVarintField(int field, int value) -> void
+RpcProtoWriter new new()
+RpcRateLimitException field details: List<RpcErrorDetail> (get)
+RpcRateLimitException field isPushback: bool (get)
+RpcRateLimitException field message: String (get)
+RpcRateLimitException field statusCode: int (get)
+RpcRateLimitException field statusDetailsBin: Uint8List? (get)
+RpcRateLimitException new new(String message, {Duration? retryAfter})
+RpcRateLimiter method dispose() -> void
+RpcRateLimiter method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcRateLimiter method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcRateLimiter method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcRateLimiter method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcRateLimiter new new({RateLimit? global, Map<String, RateLimit> perService, Map<String, RateLimit> perMethod, RateLimit? perKeyFallback, String? Function(RpcMiddlewareContext)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, int Function()? nowMicros})
+RpcRawErrorDetail field typeUrl: String (get)
+RpcRawErrorDetail field value: Uint8List (get)
+RpcRawErrorDetail method encode() -> Uint8List
+RpcRawErrorDetail method encodeAsAny() -> Uint8List
+RpcRawErrorDetail new new({required String typeUrl, required Uint8List value})
+RpcRawErrorDetail static method decodeAny(Uint8List data) -> RpcErrorDetail
+RpcRecentIds field capacity: int (get)
+RpcRecentIds field length: int (get)
+RpcRecentIds method add(int id) -> bool
+RpcRecentIds method clear() -> void
+RpcRecentIds method contains(int id) -> bool
+RpcRecentIds method remove(int id) -> void
+RpcRecentIds new new(int capacity)
+RpcRemoved field message: String (get)
+RpcRemoved new new([String message])
+RpcResponderContract field dataTransferMode: RpcDataTransferMode (get)
+RpcResponderContract field serviceName: String (get)
+RpcResponderContract method addBidirectionalMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcResponderContract method addClientStreamMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcResponderContract method addServerStreamMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcResponderContract method addUnaryMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
+RpcResponderContract method dispose() -> void
+RpcResponderContract method setup() -> void
+RpcResponderContract new new(String serviceName, {RpcDataTransferMode dataTransferMode})
+RpcResponderEndpoint field activeResponderCount: int (get)
+RpcResponderEndpoint field debugLabel: String? (get)
+RpcResponderEndpoint field isActive: bool (get)
+RpcResponderEndpoint field isDraining: bool (get)
+RpcResponderEndpoint field registeredContracts: Map<String, RpcResponderContract> (get)
+RpcResponderEndpoint field transport: IRpcTransport (get)
+RpcResponderEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
+RpcResponderEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
+RpcResponderEndpoint method close() -> Future<void>
+RpcResponderEndpoint method collectEndpointMetrics() -> Map<String, Object?>
+RpcResponderEndpoint method drain({Duration timeout}) -> Future<void>
+RpcResponderEndpoint method health() -> Future<RpcEndpointHealth>
+RpcResponderEndpoint method markDraining() -> void
+RpcResponderEndpoint method registerServiceContract(RpcResponderContract contract) -> void
+RpcResponderEndpoint method setLogController(LogController controller) -> void
+RpcResponderEndpoint method start() -> void
+RpcResponderEndpoint method unregisterServiceContract(String serviceName) -> void
+RpcResponderEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController})
+RpcResponderMode field register: void Function(RpcResponderEndpoint) (get)
+RpcResponderMode new contracts(List<RpcResponderContract> contracts)
+RpcResponderMode new new(void Function(RpcResponderEndpoint) register)
+RpcRetryInfo field retryDelay: Duration (get)
+RpcRetryInfo field typeUrl: String (get)
+RpcRetryInfo method encode() -> Uint8List
+RpcRetryInfo method encodeAsAny() -> Uint8List
+RpcRetryInfo new new(Duration retryDelay)
+RpcRetryInfo static field type: String (get)
+RpcRetryInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
+RpcRetryInterceptor field backoff: BackoffPolicy (get)
+RpcRetryInterceptor field maxAttempts: int (get)
+RpcRetryInterceptor field retryOn: bool Function(Object)? (get)
+RpcRetryInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcRetryInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcRetryInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcRetryInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcRetryInterceptor new new({int maxAttempts, BackoffPolicy backoff, bool Function(Object)? retryOn})
+RpcSecurityPolicy field advertisedWindowBytes: int? (get)
+RpcSecurityPolicy field closeOnProtocolError: bool (get)
+RpcSecurityPolicy field contentTypeValidation: RpcContentTypeValidation (get)
+RpcSecurityPolicy field effectiveConnectionBufferBytes: int? (get)
+RpcSecurityPolicy field effectiveMaxBufferedBytes: int (get)
+RpcSecurityPolicy field effectiveStreamBufferBytes: int (get)
+RpcSecurityPolicy field flowControlConnectionWindowBytes: int? (get)
+RpcSecurityPolicy field flowControlWindowBytes: int? (get)
+RpcSecurityPolicy field halfOpenStreamTimeout: Duration? (get)
+RpcSecurityPolicy field initialSendWindowBytes: int? (get)
+RpcSecurityPolicy field initialSendWindowGrace: Duration? (get)
+RpcSecurityPolicy field maxActiveStreams: int (get)
+RpcSecurityPolicy field maxBufferedBytes: int? (get)
+RpcSecurityPolicy field maxBufferedMessagesPerStream: int (get)
+RpcSecurityPolicy field maxChannelFrameBytes: int (get)
+RpcSecurityPolicy field maxConcurrentHandlers: int? (get)
+RpcSecurityPolicy field maxDecodedItems: int (get)
+RpcSecurityPolicy field maxFramedMessageBytes: int (get)
+RpcSecurityPolicy field maxHeaderNameBytes: int (get)
+RpcSecurityPolicy field maxHeaderValueBytes: int (get)
+RpcSecurityPolicy field maxHeaders: int (get)
+RpcSecurityPolicy field maxMessageLengthBytes: int (get)
+RpcSecurityPolicy field maxMessagesPerChunk: int (get)
+RpcSecurityPolicy field maxMetadataBytes: int (get)
+RpcSecurityPolicy field maxMethodPathLength: int (get)
+RpcSecurityPolicy method isValidHeaderName(String name) -> bool
+RpcSecurityPolicy method isValidHeaderValue(String value) -> bool
+RpcSecurityPolicy method isValidMethodPath(String? methodPath) -> bool
+RpcSecurityPolicy method parseMethodPath(String? methodPath) -> (String, String)?
+RpcSecurityPolicy method statusOnly(RpcMetadata metadata) -> RpcMetadata?
+RpcSecurityPolicy method toMap() -> Map<String, Object>
+RpcSecurityPolicy method validateMetadata(RpcMetadata metadata) -> void
+RpcSecurityPolicy new fromMap(Map<String, Object?> map)
+RpcSecurityPolicy new new({int maxMessageLengthBytes, int? maxBufferedBytes, int maxMessagesPerChunk, int maxDecodedItems, int maxBufferedMessagesPerStream, int maxActiveStreams, int? maxConcurrentHandlers, int maxMetadataBytes, int maxHeaders, int maxHeaderNameBytes, int maxHeaderValueBytes, int maxMethodPathLength, bool closeOnProtocolError, Duration? halfOpenStreamTimeout, int? flowControlWindowBytes, int? flowControlConnectionWindowBytes, int? initialSendWindowBytes, Duration? initialSendWindowGrace, RpcContentTypeValidation contentTypeValidation})
+RpcSecurityPolicy static field maxPolicyViolations: int (get)
+RpcSecurityPolicy static method isAcceptableContentType(String? value, RpcContentTypeValidation mode) -> bool
+RpcServerMode new new()
+RpcService field description: String? (get)
+RpcService field grpcDescriptor: bool (get)
+RpcService field kind: RpcServiceKind (get)
+RpcService field name: String (get)
+RpcService field transferMode: RpcDataTransferMode (get)
+RpcService new new({required String name, RpcServiceKind kind, RpcDataTransferMode transferMode, String? description, bool grpcDescriptor})
+RpcServiceKind static field peer: RpcServiceKind (get)
+RpcServiceKind static field unidirectional: RpcServiceKind (get)
+RpcServiceKind static field values: List<RpcServiceKind> (get)
+RpcStatus new new()
+RpcStatus static field aborted: int (get)
+RpcStatus static field alreadyExists: int (get)
+RpcStatus static field cancelled: int (get)
+RpcStatus static field dataLoss: int (get)
+RpcStatus static field deadlineExceeded: int (get)
+RpcStatus static field failedPrecondition: int (get)
+RpcStatus static field internal: int (get)
+RpcStatus static field invalidArgument: int (get)
+RpcStatus static field notFound: int (get)
+RpcStatus static field ok: int (get)
+RpcStatus static field outOfRange: int (get)
+RpcStatus static field permissionDenied: int (get)
+RpcStatus static field resourceExhausted: int (get)
+RpcStatus static field unauthenticated: int (get)
+RpcStatus static field unavailable: int (get)
+RpcStatus static field unimplemented: int (get)
+RpcStatus static field unknown: int (get)
+RpcStatus static method isFault(int status) -> bool
+RpcStatus static method isFaultError(Object error) -> bool
+RpcStatusException field details: List<RpcErrorDetail> (get)
+RpcStatusException field isPushback: bool (get)
+RpcStatusException field message: String (get)
+RpcStatusException field statusCode: int (get)
+RpcStatusException field statusDetailsBin: Uint8List? (get)
+RpcStatusException new atCapacity(String message)
+RpcStatusException new fromTrailer(int statusCode, String message, {Uint8List? detailsBin})
+RpcStatusException new new(int statusCode, String message, {List<RpcErrorDetail> details})
+RpcStreamIdManager field activeCount: int (get)
+RpcStreamIdManager field isClient: bool (get)
+RpcStreamIdManager field lastIssuedId: int (get)
+RpcStreamIdManager method generateId() -> int
+RpcStreamIdManager method isActive(int streamId) -> bool
+RpcStreamIdManager method releaseAll() -> void
+RpcStreamIdManager method releaseId(int streamId) -> bool
+RpcStreamIdManager method resumeAfter(int streamId) -> void
+RpcStreamIdManager new new({required bool isClient, int? customMaxId, int? resumeAfter})
+RpcStreamIdManager static field maxId: int (get)
+RpcStreamRouter field length: int (get)
+RpcStreamRouter method add(RpcTransportMessage message) -> void
+RpcStreamRouter method addError(int streamId, Object error, [StackTrace? stackTrace]) -> void
+RpcStreamRouter method binary[](int streamId) -> Stream<RpcTransportMessage>
+RpcStreamRouter method closeAll({Object? Function(int)? error}) -> void
+RpcStreamRouter method contains(int streamId) -> bool
+RpcStreamRouter method remove(int streamId) -> StreamController<RpcTransportMessage>?
+RpcStreamRouter new new()
+RpcString field hashCode: int (get)
+RpcString field value: T (get)
+RpcString method toJson() -> Map<String, dynamic>
+RpcString new fromJson(Map<String, dynamic> json)
+RpcString new new(String value)
+RpcString static field codec: RpcCodec<RpcString> (get)
+RpcStringX field rpc: RpcString (get)
+RpcTrailers new new()
+RpcTrailers static method cancelled(String reason) -> RpcMetadata
+RpcTrailers static method forError(Object error, {int? maxMessageLength}) -> RpcMetadata
+RpcTrailers static method fromHttpStatus(int httpStatus, {String? detail, int? maxMessageLength}) -> RpcMetadata
+RpcTrailers static method of(RpcStatusException error, {int? maxMessageLength}) -> RpcMetadata
+RpcTrailers static method status(int code, {String message, Uint8List? statusDetailsBin, int? maxMessageLength}) -> RpcMetadata
+RpcTrailers static method unexpectedContentType(String? contentType, {int? maxMessageLength}) -> RpcMetadata
+RpcTransportMessage field bufferedBytes: int (get)
+RpcTransportMessage field directPayload: Object? (get)
+RpcTransportMessage field isDirect: bool (get)
+RpcTransportMessage field isEndOfStream: bool (get)
+RpcTransportMessage field isMetadataOnly: bool (get)
+RpcTransportMessage field isSerialized: bool (get)
+RpcTransportMessage field metadata: RpcMetadata? (get)
+RpcTransportMessage field methodPath: String? (get)
+RpcTransportMessage field payload: Uint8List? (get)
+RpcTransportMessage field streamId: int (get)
+RpcTransportMessage new new({Uint8List? payload, Object? directPayload, RpcMetadata? metadata, bool isEndOfStream, String? methodPath, required int streamId})
+RpcTransportMessage new withDirectObject({required Object directPayload, RpcMetadata? metadata, bool isEndOfStream, String? methodPath, required int streamId})
+RpcTransportMessage new withMetadata({required RpcMetadata metadata, bool isEndOfStream, String? methodPath, required int streamId})
+RpcTransportMessage new withPayload({required Uint8List payload, RpcMetadata? metadata, bool isEndOfStream, String? methodPath, required int streamId})
+RpcWriteBacklog field maxUnsentBytes: int? (get)
+RpcWriteBacklog method attachReader(StreamSubscription<Object?> reader) -> void
+RpcWriteBacklog method pipe(Stream<List<int>> source, StreamConsumer<List<int>> sink) -> Future<void>
+RpcWriteBacklog method reads<T>(Stream<T> incoming, {bool Function(T)? admit}) -> Stream<T>
+RpcWriteBacklog new new({required int? maxUnsentBytes})
+RpcWriteBacklog static field defaultServerMax: int (get)
+RpcWriteCoalescer field directBytes: int (get)
+RpcWriteCoalescer field maxBytes: int (get)
+RpcWriteCoalescer method add(Uint8List data) -> void
+RpcWriteCoalescer method discard() -> void
+RpcWriteCoalescer method flush() -> void
+RpcWriteCoalescer new new(void Function(Uint8List) _write, {int maxBytes, int directBytes})
+SamplingConfig field interval: Duration (get)
+SamplingConfig field maxPerInterval: Map<RpcLogLevel, int> (get)
+SamplingConfig new new({Duration interval, Map<RpcLogLevel, int> maxPerInterval})
+SpanStatus static field error: SpanStatus (get)
+SpanStatus static field ok: SpanStatus (get)
+SpanStatus static field values: List<SpanStatus> (get)
+top static field kInternalErrorWireMessage: String (get) (transport.dart, transport_io.dart)
+top static method approxJsonBytes(Object? value) -> int (rpc_dart.dart, transport.dart, transport_io.dart)
+top static method drainUntilIdle({required FutureOr<int> Function() pending, required Duration budget, LogScope? logger, String unit}) -> Future<void> (transport.dart, transport_io.dart)
+top static method grpcStatusFromHttpStatus(int httpStatus) -> int (transport.dart, transport_io.dart)
+top static method notifyWithoutDying(String what, void Function() body, {LogScope? logger}) -> void (transport.dart, transport_io.dart)
+top static method requestEndedMidMessage() -> RpcStatusException (transport.dart, transport_io.dart)
+top static method responseEndedMidMessage() -> RpcStatusException (transport.dart, transport_io.dart)
+top static method rpcPeerText(String text, {bool asciiOnly, int? maxRunes}) -> String (transport.dart, transport_io.dart)
+top static method wireStatusFor(Object error) -> ({Uint8List? detailsBin, String message, int status}) (transport.dart, transport_io.dart)
+type BackoffPolicy [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type BufferedBroadcastController<T> : EventSink<T>, Object, Sink<T>, StreamConsumer<T>, StreamSink<T> (transport.dart, transport_io.dart)
+type CborCodec : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type CircuitBreakerOpenException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type CircuitBreakerState : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type ConsoleFormat : Enum, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type ConsoleOutput : LogOutput, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type ExponentialBackoff : BackoffPolicy, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type FixedBackoff : BackoffPolicy, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type GrpcHealthCheckContract : IRpcContract, Object, RpcResponderContract (rpc_dart.dart, transport.dart, transport_io.dart)
+type GrpcHealthCheckRequest : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type GrpcHealthCheckResponse : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type GrpcHealthServiceStatus : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type GrpcServingStatus : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcAdvisoryChannelError : Object (transport.dart, transport_io.dart)
+type IRpcCallCheck : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcChannel [required] : Object (transport.dart, transport_io.dart)
+type IRpcChannelOversizeClose : Object (transport.dart, transport_io.dart)
+type IRpcChannelProtocolClose : Object (transport.dart, transport_io.dart)
+type IRpcCodec<T> [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcConnectionBuffer [required] : Object (transport.dart, transport_io.dart)
+type IRpcContract : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcFlowCredit : Object (transport.dart, transport_io.dart)
+type IRpcInterceptor [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcMiddleware [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcMultiplexedChannel [required] : Object (transport.dart, transport_io.dart)
+type IRpcSerializable : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcServer : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type IRpcTransport [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type LogConfig : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogController : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogEnricher [required] : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogEvent : LogRecord, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogFilter : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogOutput [required] : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogRecord [required] : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogRedactor : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogScope : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogSpan : LogRecord, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogSpanHandle : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type LogSpanStart : LogRecord, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type RateLimit [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RingBufferOutput : LogOutput, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcBadRequest : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcBinaryCodec<T> : IRpcCodec<T>, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcBool : IRpcSerializable, Object, RpcPrimitiveMessage<bool> (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcBoolX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallCancelled : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallDirection : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallFailed : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallObserverInterceptor<S> : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallOutcome [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallScope : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallSucceeded : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallerContract : IRpcContract, Object, _RpcOutgoingCalls (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallerEndpoint : Object, RpcCallerPipelineMixin, RpcEndpointBase (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCancellationToken : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCancelledException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcChannelFrame : Object (transport.dart, transport_io.dart)
+type RpcChannelTransport : IRpcConnectionBuffer, IRpcFlowCredit, IRpcTransport, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCircuitBreakerInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientConnecting : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientConnection : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientConnectionState : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientDisconnected : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientIdle : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientOffline : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClientOnline : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcClosedException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCodec<T> : IRpcCodec<T>, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCompressionCodec [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcConnectionHost : Object (transport.dart, transport_io.dart)
+type RpcConstants : Object (transport.dart, transport_io.dart)
+type RpcContentTypeValidation : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcContextBuilder : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcContextExtensions :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcContextUtils : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcDataTransferMode : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcDeadlineExceededException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcDebugInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcDecodedFrame : Object (transport.dart, transport_io.dart)
+type RpcDouble : IRpcSerializable, Object, RpcPrimitiveMessage<double> (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcDoubleX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcEndpointBase [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcEndpointHealth : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcEndpointPingExchange : Object (transport.dart, transport_io.dart)
+type RpcEndpointPingProtocol : Object (transport.dart, transport_io.dart)
+type RpcEndpointPingResult : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcErrorDetail : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcErrorInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcException : Exception, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcFieldViolation : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcFrameException : Exception, Object, RpcException, RpcStatusException (transport.dart, transport_io.dart)
+type RpcFrameMultiplexedChannel : IRpcChannelOversizeClose, IRpcChannelProtocolClose, IRpcMultiplexedChannel, Object (transport.dart, transport_io.dart)
+type RpcGrpcCompression : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcHeader : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcHeaderBoundedServerSocket : Object, ServerSocket, ServerSocketBase<Socket>, Stream<Socket> (transport_io.dart)
+type RpcHeaders : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcHealthLevel : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcHealthLevelSeverity :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcHealthStatus : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcInt : IRpcSerializable, Object, RpcPrimitiveMessage<int> (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcIntX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcList<T> : IRpcSerializable, Iterable<T>, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcLogLevel : Comparable<RpcLogLevel>, Enum, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcMessageFrame : Object (transport.dart, transport_io.dart)
+type RpcMessageHeader : Object (transport.dart, transport_io.dart)
+type RpcMessageParser : Object (transport.dart, transport_io.dart)
+type RpcMetadata : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcMetadataViolation : ArgumentError, Error, Exception, Object, RpcException, RpcStatusException (transport.dart, transport_io.dart)
+type RpcMethod : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcMethodType : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcMiddlewareContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcNoConnectionException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcNull : IRpcSerializable, Object, RpcPrimitiveMessage<void> (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcNullX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcNum : IRpcSerializable, Object, RpcPrimitiveMessage<num> (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcNumX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcPeerContract : IRpcContract, Object, RpcResponderContract, _RpcOutgoingCalls (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcPeerEndpoint : Object, RpcCallerPipelineMixin, RpcEndpointBase, RpcResponderPipelineMixin (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcPeerMode : Object, RpcServerMode (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcPrimitiveMessage<T> : IRpcSerializable, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcProtoReader : Object (transport.dart, transport_io.dart)
+type RpcProtoWireType : Object (transport.dart, transport_io.dart)
+type RpcProtoWriter : Object (transport.dart, transport_io.dart)
+type RpcRateLimitException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcRateLimiter : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcRawErrorDetail : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcRecentIds : Object (transport.dart, transport_io.dart)
+type RpcRemoved : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcResponderContract [required] : IRpcContract, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcResponderEndpoint : Object, RpcEndpointBase, RpcResponderPipelineMixin (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcResponderMode : Object, RpcServerMode (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcRetryInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcRetryInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcSecurityPolicy : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcServerMode [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcService : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcServiceKind : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcStatus : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcStatusException : Exception, Object, RpcException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcStreamIdManager : Object (transport.dart, transport_io.dart)
+type RpcStreamRouter : Object (transport.dart, transport_io.dart)
+type RpcString : IRpcSerializable, Object, RpcPrimitiveMessage<String> (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcStringX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcTrailers : Object (transport.dart, transport_io.dart)
+type RpcTransportMessage : Object (transport.dart, transport_io.dart)
+type RpcWriteBacklog : Object (transport.dart, transport_io.dart)
+type RpcWriteCoalescer : Object (transport.dart, transport_io.dart)
+type SamplingConfig : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type SpanStatus : Enum, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+typedef RpcBidirectionalStreamNext = FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) (rpc_dart.dart, transport.dart, transport_io.dart)
+typedef RpcClientStreamNext = Future<TResponse> Function(RpcContext, Stream<TRequest>) (rpc_dart.dart, transport.dart, transport_io.dart)
+typedef RpcRetryPredicate = bool Function(Object) (rpc_dart.dart, transport.dart, transport_io.dart)
+typedef RpcServerStreamNext = FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) (rpc_dart.dart, transport.dart, transport_io.dart)
+typedef RpcUnaryNext = Future<TResponse> Function(RpcContext, TRequest) (rpc_dart.dart, transport.dart, transport_io.dart)

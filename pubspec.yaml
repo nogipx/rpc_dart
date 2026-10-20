@@ -437,6 +437,7 @@ melos:
         git ls-files -z --cached --others --exclude-standard
         -- ':!:.claude/*' ':!:*/SKILL.md'
         ':!:packages/transport/rpc_dart_wasm/example/*'
+        ':!:docs/api/*'
         ':!:LICENSE' ':!:*/LICENSE' ':!:LICENSES/*' ':!:*.license'
         ':!:REUSE.toml' ':!:*/REUSE.toml'
         | xargs -0 reuse annotate
@@ -473,6 +474,17 @@ melos:
       description: Usage of the mutation-testing tool (not a gate).
       run: fvm dart run tool/mutants/mutants.dart --help
 
+    # rpc_dart's public API against docs/api/rpc_dart.txt. A difference fails
+    # the check; review it, then `api:update` and commit the snapshot with the
+    # change. Needs dart_apitool: fvm dart pub global activate dart_apitool 0.23.2
+    api:check:
+      description: Compare rpc_dart's public API with its committed snapshot.
+      run: fvm dart run tool/api_snapshot.dart
+
+    api:update:
+      description: Rewrite rpc_dart's public API snapshot after a reviewed change.
+      run: fvm dart run tool/api_snapshot.dart --update
+
     bump:rpc_dart:
       description: Raise the rpc_dart dependency floor across all packages.
       run: fvm dart run tool/bump_dep.dart rpc_dart
@@ -497,6 +509,7 @@ melos:
         melos run format &&
         melos run analyze &&
         melos run check:skills &&
+        melos run api:check &&
         melos run license:check &&
         melos run test:unit
 

@@ -38,6 +38,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
 SPDX-License-Identifier = "MIT"
 
+# Public API snapshots written by tool/api_snapshot.dart. A header would be a
+# line of the snapshot, so `license:annotate` skips them and they are covered
+# here.
+[[annotations]]
+path = ["docs/api/**"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"
+SPDX-License-Identifier = "MIT"
+
 # Per-package LICENSE files (required by pub.dev) and the REUSE license store.
 [[annotations]]
 path = ["LICENSE", "**/LICENSE", "LICENSES/**"]

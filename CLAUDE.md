@@ -83,6 +83,7 @@ melos run test:wasm:device # RUNS that native code; needs a booted device
 melos run test:web       # dart2js/node web regression guard
 melos run format:check   # formatting gate
 melos run check:skills   # shipped Agent Skills: examples compile, frontmatter, links
+melos run api:check      # rpc_dart's public API vs docs/api/rpc_dart.txt (frozen in 7.x)
 melos run publish:dry    # validate publishable packages
 melos exec --scope=rpc_dart_http2 -- fvm dart test   # one package
 melos list --category transport                      # group filter
