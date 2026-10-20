@@ -41,6 +41,12 @@ jobs:
         run: pipx install reuse
       - name: License check (REUSE/SPDX)
         run: melos run license:check
+      # rpc_dart's public API is frozen through 7.x: a removed or changed
+      # declaration fails here. See MAINTAINING.md, step 0b.
+      - name: Install dart_apitool
+        run: fvm dart pub global activate dart_apitool 0.23.2
+      - name: Public API matches docs/api/rpc_dart.txt
+        run: melos run api:check
 
   # Workspace-wide tests. Excludes the generator (build_test vs workspace) and
   # service-dependent packages (postgres/minio/sqlcipher).
