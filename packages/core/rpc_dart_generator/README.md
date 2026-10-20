@@ -463,6 +463,11 @@ this setup end to end.
 | `requestCodec`, `responseCodec` | generated | Codec `Type` with a `const` constructor. |
 | `description` | `null` | Passed to the responder's `add*Method` registration. |
 
+The Dart method may not have the name of a member of the contract bases the
+generated classes extend (`dispose`, `setup`, `endpoint`, `serviceName`,
+`callUnary`, `cancelMethod` and the rest): the build fails with the name. The
+wire name in `name:` is free.
+
 ### `@RpcRemoved`
 
 `@RpcRemoved([message])` on an overridden method of a versioned contract. See

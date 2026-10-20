@@ -293,10 +293,6 @@ abstract class RpcResponderContract implements IRpcContract {
     );
   }
 
-  /// The registered methods by name, zero-copy and serialized alike.
-  Map<String, RpcMethodRegistration<Object, Object>> get registrations =>
-      Map.unmodifiable(_registrations);
-
   /// Releases contract resources during deregistration.
   void dispose() {
     // Default: no-op; override to dispose resources.
@@ -489,4 +485,15 @@ abstract class RpcPeerContract extends RpcResponderContract
 
   @override
   RpcDataTransferMode get _outgoingMode => callerDataTransferMode;
+}
+
+/// What an endpoint reads from a contract it registers.
+///
+/// An extension, not a member, and not exported from the public libraries: a
+/// member of a contract base shares the namespace of the generated class, so
+/// every public name there is one a service method cannot have.
+extension RpcResponderContractInternals on RpcResponderContract {
+  /// The registered methods by name, zero-copy and serialized alike.
+  Map<String, RpcMethodRegistration<Object, Object>> get registrations =>
+      Map.unmodifiable(_registrations);
 }

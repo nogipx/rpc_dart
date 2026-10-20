@@ -25,3 +25,4 @@ part 'ping.dart';
 part 'responder_registry.dart';
 part 'responder_streams.dart';
 part 'responder_ping_handler.dart';
+part 'endpoint_internals.dart';

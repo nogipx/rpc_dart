@@ -24,7 +24,7 @@
 // declared yet, which also makes registering one contract instance on two
 // endpoints work.
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);

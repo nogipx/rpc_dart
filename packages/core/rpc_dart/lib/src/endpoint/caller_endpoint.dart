@@ -26,21 +26,21 @@ final class RpcCallerEndpoint extends RpcEndpointBase
     _validateClientTransport();
     // Attached in the constructor rather than start(): a caller is usable
     // without ever calling start(), and an unsubscribed global stream both
-    // retains frames and hides transport errors. See startCallerListening.
-    startCallerListening();
+    // retains frames and hides transport errors. See _startCallerListening.
+    _startCallerListening();
   }
 
   @override
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
-    metrics.addAll(collectCallerMetrics());
+    metrics.addAll(_collectCallerMetrics());
     return metrics;
   }
 
   @override
   Future<void> _closeResources() async {
     cancelAllMethods('Endpoint closed');
-    await closeCallerResources();
+    await _closeCallerResources();
   }
 
   // ---------------------------------------------------------------------------

@@ -62,6 +62,33 @@ final _protoFieldChecker = const TypeChecker.typeNamed(
   inPackage: 'rpc_dart_generator',
 );
 
+/// The public members of the contract bases the generated classes extend.
+///
+/// A service method with one of these names cannot be generated. The bases
+/// gain no public member in rpc_dart 7.x (see its README), so this list holds
+/// for the whole line.
+const _contractBaseMembers = {
+  'serviceName',
+  'dataTransferMode',
+  'callerDataTransferMode',
+  'endpoint',
+  'setup',
+  'dispose',
+  'addUnaryMethod',
+  'addServerStreamMethod',
+  'addClientStreamMethod',
+  'addBidirectionalMethod',
+  'callUnary',
+  'callServerStream',
+  'callClientStream',
+  'callBidirectionalStream',
+  'cancelMethod',
+  'cancelAllMethods',
+  'isMethodActive',
+  'getActiveCallsCount',
+  'getCancellationTokensForMethod',
+};
+
 /// Code generator for RPC Dart service contracts annotated with [RpcService].
 class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
   /// Creates the generator.
@@ -149,6 +176,15 @@ class RpcDartGenerator extends GeneratorForAnnotation<RpcService> {
   ) {
     final methods = <_MethodMeta>[];
     for (final method in element.methods) {
+      if (_contractBaseMembers.contains(method.displayName)) {
+        throw InvalidGenerationSourceError(
+          'Method ${method.displayName} has the name of a member of '
+          'RpcCallerContract / RpcResponderContract / RpcPeerContract, which '
+          'the generated classes extend. Rename the Dart method; the wire '
+          'name in @RpcMethod(name:) can stay as it is.',
+          element: method,
+        );
+      }
       final rpcAnno = _rpcMethodChecker.firstAnnotationOf(method);
       if (rpcAnno == null) continue;
 

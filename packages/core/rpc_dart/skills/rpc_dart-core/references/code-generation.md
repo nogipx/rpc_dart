@@ -219,6 +219,10 @@ abstract class IGreeterContractV2 implements IGreeterContract {
 - Two methods with the same `name:` in one service: the build fails. A method
   `name` with a dot builds, then throws when the responder is registered
   (method names allow letters, digits, `_` and `-`).
+- A Dart method named like a member of the contract bases (`dispose`,
+  `setup`, `endpoint`, `serviceName`, `callUnary`, `cancelMethod`, ...): the
+  build fails, because the generated classes extend those bases. Rename the
+  Dart method; `@RpcMethod(name:)` can keep the wire name.
 - A model without a `fromJson` factory in `auto`/`codec` mode: the generated
   codec does not compile.
 - `...Responder` is abstract: subclass it, implement every method, and

@@ -42,20 +42,20 @@ final class RpcPeerEndpoint extends RpcEndpointBase
   @override
   void start() {
     super.start();
-    startResponderListening(messageFilter: _isRemoteInitiated);
+    _startResponderListening(messageFilter: _isRemoteInitiated);
   }
 
   @override
   Future<void> _closeResources() async {
     cancelAllMethods('Endpoint closed');
-    await closeResponderResources();
+    await _closeResponderResources();
   }
 
   @override
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
-    metrics.addAll(collectResponderMetrics());
-    metrics.addAll(collectCallerMetrics());
+    metrics.addAll(_collectResponderMetrics());
+    metrics.addAll(_collectCallerMetrics());
     return metrics;
   }
 

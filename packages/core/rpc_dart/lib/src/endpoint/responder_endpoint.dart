@@ -31,27 +31,27 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   }
 
   /// All method registrations exported from all contracts.
-  Map<String, RpcMethodRegistration<Object, Object>> get registeredMethods =>
+  Map<String, RpcMethodRegistration<Object, Object>> get _registeredMethods =>
       _respRegistry.exportMethodRegistrations();
 
   @override
   Map<String, Object?> collectEndpointMetrics() {
     final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
-    metrics.addAll(collectResponderMetrics());
+    metrics.addAll(_collectResponderMetrics());
     return metrics;
   }
 
   @override
   void start() {
     super.start();
-    startResponderListening();
+    _startResponderListening();
   }
 
   @override
-  Future<void> _closeResources() => closeResponderResources();
+  Future<void> _closeResources() => _closeResponderResources();
 
   /// Throws if [serviceName].[methodName] is not registered with [expectedType].
-  void validateMethodExists(
+  void _validateMethodExists(
     String serviceName,
     String methodName,
     RpcMethodType expectedType,

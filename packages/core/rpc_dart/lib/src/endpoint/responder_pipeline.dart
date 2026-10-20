@@ -233,9 +233,6 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   void _rememberClosedStream(int streamId) => _respClosedStreams.add(streamId);
 
-  /// Whether the responder pipeline is currently listening.
-  bool get responderIsListening => _respIsListening;
-
   /// Built per ping, which is rare, so it logs to the endpoint's CURRENT scope:
   /// `RpcResponderEndpoint.setLogController` replaces that scope after
   /// construction, and a handler built once kept the old one.
@@ -277,7 +274,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
       _respRegistry.contracts;
 
   /// All method bindings keyed by `serviceName.methodName`.
-  Map<String, RpcResponderMethodBinding> get registeredMethodBindings =>
+  Map<String, RpcResponderMethodBinding> get _registeredMethodBindings =>
       _respRegistry.methods;
 
   // ---------------------------------------------------------------------------
@@ -289,7 +286,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// When [messageFilter] is provided, only messages for which it returns true
   /// enter the responder pipeline. This is used by [RpcPeerEndpoint] to filter
   /// by stream ID parity.
-  Future<void> startResponderListening({
+  Future<void> _startResponderListening({
     bool Function(RpcTransportMessage)? messageFilter,
   }) async {
     if (_respIsListening) {
@@ -378,7 +375,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// its handler being told: a handler that polls `cancellationToken` or awaits
   /// `cancelled` kept running after `endpoint.close()` returned, against
   /// controllers that were already gone.
-  Future<void> closeResponderResources() async {
+  Future<void> _closeResponderResources() async {
     await _respIncomingSub?.cancel();
     _respIncomingSub = null;
     _respIsListening = false;
@@ -455,7 +452,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// to decide whether anything is still running. Published by the responder
   /// alone, that poll read null for a peer endpoint and shut the server down on
   /// top of live calls.
-  Map<String, Object?> collectResponderMetrics() {
+  Map<String, Object?> _collectResponderMetrics() {
     return {
       'registeredContracts': _respRegistry.contracts.length,
       'registeredMethods': _respRegistry.methods.length,

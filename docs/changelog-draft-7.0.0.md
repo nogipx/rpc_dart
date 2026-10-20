@@ -89,6 +89,7 @@ No error message is a contract: match on the type or the status.
 | `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans belong to `rpc_dart_opentelemetry` |
 | `RpcHeaders.xRouteService` | gone; routing uses the method path |
 | `LogSpanHandle(...)`, `SpanStartCallback` / `SpanEventCallback` / `SpanCompleteCallback` | `LogScope.startSpan` / `withSpan` |
+| endpoint pipeline members (`handleUnary` and the other three, `start*Listening`, `close*Resources`, `collect*Metrics`, `registeredMethods`, `registeredMethodBindings`, `validateMethodExists`, `getCancellationToken`, `responderIsListening`) and `RpcResponderContract.registrations` | not public; `collectEndpointMetrics()` for the metrics |
 
 **`grpc.health.v1` speaks protobuf.** `GrpcHealthCheckContract` was CBOR on the
 wire, so real gRPC health checkers could not read it. `Check` on an unknown
@@ -151,6 +152,9 @@ their `codec`.
   apply to every method with the same type.
 - Every type a gRPC descriptor names is described; stored fields are described;
   codecs compile for bare primitives.
+- A service method named like a member of the contract bases (`dispose`,
+  `setup`, `endpoint`, `callUnary`, ...) fails the build with that name,
+  instead of producing code that does not compile.
 - A bare `double` sent from a web peer decodes on the VM: dart2js writes 2.0
   as a CBOR integer, and the generated decoder now reads it through `num`.
 

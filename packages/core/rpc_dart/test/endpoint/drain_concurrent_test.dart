@@ -64,7 +64,7 @@ void main() {
   });
 
   int openStreams() =>
-      responder.collectResponderMetrics()['openStreams']! as int;
+      responder.collectEndpointMetrics()['openStreams']! as int;
 
   Future<StreamSubscription<RpcString>> openSlowStream() async {
     final sub = caller

@@ -98,7 +98,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         responseCodec: method.responseCodec,
         handler: (request) => _withHandlerSlot(
           streamId,
-          () => handleUnary<Object, Object>(
+          () => _handleUnary<Object, Object>(
             direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
@@ -135,7 +135,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         responseCodec: method.responseCodec,
         handler: (requests) => _withHandlerSlot(
           streamId,
-          () => handleClientStream<Object, Object>(
+          () => _handleClientStream<Object, Object>(
             direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
@@ -172,7 +172,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         responseCodec: method.responseCodec,
         handler: (request) => _withHandlerSlotStream(
           streamId,
-          () => handleServerStream<Object, Object>(
+          () => _handleServerStream<Object, Object>(
             direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,
@@ -206,7 +206,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         responseCodec: method.responseCodec,
         handler: (requests) => _withHandlerSlotStream(
           streamId,
-          () => handleBidirectionalStream<Object, Object>(
+          () => _handleBidirectionalStream<Object, Object>(
             direction: RpcCallDirection.incoming,
             serviceName: binding.serviceName,
             methodName: binding.methodName,

@@ -54,6 +54,7 @@ builds a transport, a channel or frames imports
 | `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans come from `rpc_dart_opentelemetry` |
 | `RpcHeaders.xRouteService` | gone; route on the method path |
 | `LogSpanHandle(...)` and the `Span*Callback` typedefs | `LogScope.startSpan` / `withSpan` |
+| endpoint pipeline members (`handleUnary`, `startResponderListening`, `collectResponderMetrics`, `registeredMethods`, ...) and `contract.registrations` | not public; `collectEndpointMetrics()` for metrics |
 | `implements IRpcServer` / `implements RpcCompressionCodec` | `extends` (both still compile; `extends` keeps compiling when a member is added) |
 | `RpcMessage`, `RpcDirectMultiplexedChannel` | not exported; `RpcTransportMessage`, `memoryPair()` |
 

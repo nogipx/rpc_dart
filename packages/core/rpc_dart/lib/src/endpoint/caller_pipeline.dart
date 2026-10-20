@@ -55,7 +55,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   ///
   /// Not wired into [RpcPeerEndpoint]: its responder half already subscribes, so
   /// the buffer stays drained and errors are logged once.
-  void startCallerListening() {
+  void _startCallerListening() {
     if (_callerIncomingSub != null) return;
     _callerIncomingSub = transport.incomingMessages.listen(
       (_) {
@@ -85,8 +85,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     );
   }
 
-  /// Detaches the observer attached by [startCallerListening].
-  Future<void> closeCallerResources() async {
+  /// Detaches the observer attached by [_startCallerListening].
+  Future<void> _closeCallerResources() async {
     await _callerIncomingSub?.cancel();
     _callerIncomingSub = null;
   }
@@ -94,24 +94,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
   // Cancellation management
   // ---------------------------------------------------------------------------
-
-  /// Returns the cancellation token for a method/requestId, or null if absent.
-  ///
-  /// Calls sharing a requestId (a reused context) are all cancelled by
-  /// [cancelRequest]; this returns one of their tokens.
-  RpcCancellationToken? getCancellationToken(
-    String serviceName,
-    String methodName,
-    String requestId,
-  ) {
-    final key = _callerMethodKey(serviceName, methodName);
-    final tokens = _callerTokens[key];
-    if (tokens == null) return null;
-    for (final MapEntry(key: ctx, value: token) in tokens.entries) {
-      if (ctx.requestId == requestId) return token;
-    }
-    return null;
-  }
 
   /// Cancels the calls with [requestId]; returns true if any was found.
   bool cancelRequest(
@@ -204,7 +186,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }
 
   /// Collects caller-specific metrics.
-  Map<String, Object?> collectCallerMetrics() {
+  Map<String, Object?> _collectCallerMetrics() {
     final activeCalls = _callerTokens.values.fold<int>(
       0,
       (sum, tokens) => sum + tokens.length,
@@ -465,7 +447,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     return () async {
       try {
-        return await handleUnary<TRequest, TResponse>(
+        return await _handleUnary<TRequest, TResponse>(
           direction: RpcCallDirection.outgoing,
           serviceName: serviceName,
           methodName: methodName,
@@ -502,7 +484,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     final ctx = _prepareCallerContext(context);
 
-    final stream = handleServerStream<TRequest, TResponse>(
+    final stream = _handleServerStream<TRequest, TResponse>(
       direction: RpcCallDirection.outgoing,
       serviceName: serviceName,
       methodName: methodName,
@@ -556,7 +538,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       // The builder is already lazy: this runs when the call is invoked.
       _trackCallerRequest(serviceName, methodName, ctx);
       try {
-        return await handleClientStream<C, R>(
+        return await _handleClientStream<C, R>(
           direction: RpcCallDirection.outgoing,
           serviceName: serviceName,
           methodName: methodName,
@@ -594,7 +576,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     final ctx = _prepareCallerContext(context);
 
-    final stream = handleBidirectionalStream<C, R>(
+    final stream = _handleBidirectionalStream<C, R>(
       direction: RpcCallDirection.outgoing,
       serviceName: serviceName,
       methodName: methodName,

@@ -514,7 +514,7 @@ abstract base class RpcEndpointBase {
   }
 
   /// Runs [handler] through middleware and interceptors for a unary call.
-  Future<TResponse> handleUnary<TRequest, TResponse>({
+  Future<TResponse> _handleUnary<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
@@ -551,7 +551,7 @@ abstract base class RpcEndpointBase {
   }
 
   /// Runs [handler] through middleware and interceptors for a server-stream call.
-  Stream<TResponse> handleServerStream<TRequest, TResponse>({
+  Stream<TResponse> _handleServerStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
@@ -590,7 +590,7 @@ abstract base class RpcEndpointBase {
   }
 
   /// Runs [handler] through middleware and interceptors for a client-stream call.
-  Future<TResponse> handleClientStream<TRequest, TResponse>({
+  Future<TResponse> _handleClientStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
@@ -628,7 +628,7 @@ abstract base class RpcEndpointBase {
   }
 
   /// Runs [handler] through middleware and interceptors for a bidirectional-stream call.
-  Stream<TResponse> handleBidirectionalStream<TRequest, TResponse>({
+  Stream<TResponse> _handleBidirectionalStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,

@@ -57,7 +57,7 @@ void main() {
   });
 
   int openStreams() =>
-      responder.collectResponderMetrics()['openStreams']! as int;
+      responder.collectEndpointMetrics()['openStreams']! as int;
 
   Future<void> settle() =>
       Future<void>.delayed(const Duration(milliseconds: 400));
