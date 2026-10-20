@@ -271,6 +271,11 @@ drops a silent peer after `prefaceTimeout`.
 - A frame that fails to decode does not kill the isolate. A web worker gets
   its window and dies cleanly.
 - One channel serves the VM and the web. Small payloads cross as bytes.
+- **Rebuild your worker script.** A web worker and its page exchange a bridge
+  protocol version. A worker of another version, or a stale copy from the
+  browser cache, fails `spawn` with `FAILED_PRECONDITION` naming both. A
+  worker that never answers `ready` fails after `startupTimeout` instead of
+  being let through after 5 seconds.
 
 ## rpc_dart_wasm (next version)
 

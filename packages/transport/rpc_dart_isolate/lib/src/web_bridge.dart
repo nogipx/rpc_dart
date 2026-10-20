@@ -34,6 +34,35 @@ Map<String, Object?> bridgeMapOf(PortFrame frame) => {
   if (frame.methodPath != null) 'methodPath': frame.methodPath,
 };
 
+/// Revision of the worker bridge's wire format, raised with every incompatible
+/// change.
+///
+/// A web worker is a separately compiled script that a browser may cache, so a
+/// page can start a worker built from another release. The host sends this in
+/// `init`, the worker answers with its own in `ready`, and a mismatch fails the
+/// spawn instead of the two decoding each other's frames as garbage.
+const int kWorkerProtocolVersion = 1;
+
+/// A [type] handshake frame on stream 0 carrying [kWorkerProtocolVersion].
+Map<String, Object?> bridgeHandshakeOf(PortFrameType type, {Object? body}) => {
+  ...bridgeMapOf(PortFrame(type: type, streamId: 0, body: body)),
+  'version': kWorkerProtocolVersion,
+};
+
+/// The protocol version a handshake [raw] carries; null when it has none.
+int? bridgeVersionOf(Object? raw) => raw is Map ? asInt(raw['version']) : null;
+
+/// Why a worker that answered with [version] cannot serve this page; null when
+/// it can.
+String? workerVersionMismatch(int? version) {
+  if (version == kWorkerProtocolVersion) return null;
+  final theirs = version == null ? 'no protocol version' : 'protocol $version';
+  return 'the worker speaks $theirs, this page speaks protocol '
+      '$kWorkerProtocolVersion: the worker script is stale or from another '
+      'release. Rebuild it, and make sure the browser does not serve a cached '
+      'copy';
+}
+
 /// Parses [raw], returning null for anything that is not one of our frames.
 ///
 /// A worker cannot share an object, so a `directObject` frame is not one.

@@ -22,15 +22,6 @@ export 'port_channel.dart' show RpcIsolateEntrypoint;
 const bool _kIsWasm = bool.fromEnvironment('dart.tool.dart2wasm');
 const String _defaultWorkerName = 'rpcIsolateWorker';
 
-/// How long to wait for the worker's post-entrypoint `ready` ack before
-/// assuming it is a worker built before that ack existed and proceeding anyway.
-///
-/// Deliberately NOT `startupTimeout`: this bound is a compatibility fallback
-/// whose expiry is a SUCCESS path, whereas `startupTimeout` bounds failures.
-/// Tying them together would mean a generous startup budget also made every
-/// legacy worker wait that long before its first call.
-const Duration _readyGracePeriod = Duration(seconds: 5);
-
 @JS('self')
 external DedicatedWorkerGlobalScope get _workerSelf;
 
@@ -162,51 +153,47 @@ abstract interface class RpcIsolateTransport {
     // connection-window grant -- goes out.
     channel.release();
 
-    // Listen for the worker's post-entrypoint readiness ack before any RPC
-    // frames are allowed to flow.
-    final ready = Completer<void>();
+    // Listen for the worker's post-entrypoint readiness ack, which carries its
+    // protocol version, before any RPC frames are allowed to flow.
+    final ready = Completer<int?>();
     final readySub = controller.onMessage.listen((raw) {
       final frame = bridgeFrameOf(raw);
       if (frame != null &&
           frame.type == PortFrameType.ready &&
           !ready.isCompleted) {
-        ready.complete();
+        ready.complete(bridgeVersionOf(raw));
       }
     });
 
-    // Deliver initial parameters to the worker.
+    // Deliver the protocol version and the initial parameters to the worker.
     controller.sendIsolate(
-      bridgeMapOf(
-        PortFrame(
-          type: PortFrameType.init,
-          streamId: 0,
-          body: customParams ?? const <String, Object?>{},
-        ),
+      bridgeHandshakeOf(
+        PortFrameType.init,
+        body: customParams ?? const <String, Object?>{},
       ),
     );
 
-    // Wait for the worker responder to be ready. A MISSING ack is tolerated on
-    // purpose -- a worker built before this protocol never sends one, and
-    // hanging those would be the worse regression. A worker that ERRORS while
-    // we wait is not a legacy worker, so that case fails rather than being
-    // swallowed along with it.
+    int? workerVersion;
     try {
-      await Future.any([
-        ready.future,
-        workerFailed.future.then(
-          (reason) => throw RpcStatusException(
-            RpcStatus.unavailable,
-            'RpcIsolateTransport.spawn: worker "$uri" failed before it was '
-            'ready: $reason',
-          ),
-        ),
-      ]).timeout(_readyGracePeriod, onTimeout: () {});
+      await awaitStartup(
+        ready.future.then((version) => workerVersion = version),
+        'its ready handshake',
+      );
     } catch (_) {
       await readySub.cancel();
       await abandon();
       rethrow;
     }
     await readySub.cancel();
+
+    final mismatch = workerVersionMismatch(workerVersion);
+    if (mismatch != null) {
+      await abandon();
+      throw RpcStatusException(
+        RpcStatus.failedPrecondition,
+        'RpcIsolateTransport.spawn: worker "$uri": $mismatch.',
+      );
+    }
 
     // Past startup the worker is the peer, and a peer that dies must not look
     // healthy. Without this swap `health()` answers "healthy / Transport ready"
@@ -285,9 +272,7 @@ void runRpcIsolateManagerWorker(
   controller.initialized();
 
   void signalReady() {
-    controller.sendResult(
-      bridgeMapOf(const PortFrame(type: PortFrameType.ready, streamId: 0)),
-    );
+    controller.sendResult(bridgeHandshakeOf(PortFrameType.ready));
   }
 
   // Wait for the INIT message specifically, NOT for the first message.
@@ -300,10 +285,16 @@ void runRpcIsolateManagerWorker(
   var started = false;
   late final StreamSubscription<dynamic> initSub;
 
-  void start(Map<String, dynamic> params) {
+  void start(Map<String, dynamic> params, int? hostVersion) {
     if (started) return;
     started = true;
     unawaited(initSub.cancel());
+    // A host of another release: answer with this worker's version, which the
+    // host refuses, and run no user code against frames neither side can read.
+    if (hostVersion != kWorkerProtocolVersion) {
+      signalReady();
+      return;
+    }
     try {
       entrypoint(transport, params);
       // Ack readiness only AFTER the entrypoint has wired its responder, so
@@ -321,7 +312,10 @@ void runRpcIsolateManagerWorker(
       if (frame != null &&
           frame.type == PortFrameType.init &&
           frame.body is Map) {
-        start((frame.body as Map).cast<String, dynamic>());
+        start(
+          (frame.body as Map).cast<String, dynamic>(),
+          bridgeVersionOf(raw),
+        );
       }
     },
     // No fallback on onDone: the stream ends only when the channel is gone,
