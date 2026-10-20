@@ -1,0 +1,128 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
+# Migrating from rpc_dart 6.x to 7.0
+
+Work in this order: deploy plan, compile errors, generated code, behaviour,
+tests. The compiler finds most of the work; the behaviour section lists what it
+cannot find.
+
+## 1. Plan the deploy
+
+- **Channel transports cannot mix 6.x and 7.0.** websocket, socket, wasm and
+  `RpcChannelTransport.fromChannel` changed their wire format. Upgrade client
+  and server in one release. HTTP/2 and HTTP/1.1 speak gRPC on the wire and
+  are not affected by this change.
+- From 7.0 on, a channel connection opens with a version preface. The server
+  answers in the client's version, so later releases upgrade **servers
+  first**. A peer of another version fails every call with
+  `FAILED_PRECONDITION`, and one that is not rpc_dart with `UNKNOWN`.
+- **Rebuild every web worker script** (`rpc_dart_isolate` on the web). The page
+  and the worker exchange a protocol version, and a stale worker, a cached copy
+  included, fails `spawn` with `FAILED_PRECONDITION`.
+- A hand-written byte peer of a channel transport writes
+  `RpcChannelFrame.preface` before its first frame.
+
+## 2. Fix compile errors
+
+Imports: application code keeps `package:rpc_dart/rpc_dart.dart`. Code that
+builds a transport, a channel or frames imports
+`package:rpc_dart/transport.dart`, which re-exports the first.
+
+| 6.x | 7.0 |
+| --- | --- |
+| `RpcInMemoryTransport.pair()` | `RpcChannelTransport.memoryPair()` |
+| `transport.reconnect()`, `endpoint.reconnect()` | wrap the transport factory in `RpcClientConnection`; `forceReconnect()` |
+| listening to `connectionLost` | the transport closes; `RpcClientConnection` reconnects |
+| `onEndpointCreated:` on a server | `mode: RpcResponderMode((endpoint) { ... })` |
+| `onPeerEndpointCreated:` | `mode: RpcPeerMode(...)` |
+| contracts list on a server | `mode: RpcResponderMode.contracts([...])` |
+| `logger:` on an endpoint, `RpcConnectionHost(endpointLogger:)` | `logController:` (a `LogController`) |
+| `RpcConnectionLogger` | `LogScope` |
+| `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
+| `UnaryCaller`, stream callers and responders built by hand | endpoint calls (`unaryRequest`, `serverStream`, ...) or a caller contract |
+| `transferMode:` on `unaryRequest` | the contract's transfer mode |
+| `kind: RpcMethodKind.x` in `@RpcMethod` | `RpcMethodType.x`, or the named constructors `@RpcMethod.unary(...)` |
+| one interceptor overriding the four `intercept*` methods to observe calls | `extends RpcCallObserverInterceptor<S>` |
+| `RpcEndpointPingResult.responderTransportType` | gone |
+| header count and size limits on `RpcContext` | `RpcSecurityPolicy` (`maxHeaders`, `maxHeaderNameBytes`, `maxHeaderValueBytes`) |
+| health detail `clientStreamBuffers` | `preBindBuffers` |
+| `implements IRpcServer` / `implements RpcCompressionCodec` | `extends` (both still compile; `extends` keeps compiling when a member is added) |
+| `RpcMessage`, `RpcDirectMultiplexedChannel` | not exported; `RpcTransportMessage`, `memoryPair()` |
+
+`RpcException` is abstract: throw `RpcStatusException(RpcStatus.x, '...')`.
+Match errors on the type or on `statusCode`, never on the message text.
+
+Reconnect, the 7.0 way. The factory runs once per connection, so per-connection
+values (an auth header, a fresh token) are built inside it:
+
+```dart
+import 'package:rpc_dart/rpc_dart.dart';
+
+Future<void> reconnecting(Future<IRpcTransport> Function() open) async {
+  final connection = RpcClientConnection(transportFactory: open);
+  final endpoint = RpcCallerEndpoint(transport: connection.transport);
+  connection.connect();
+
+  // Bind caller contracts to `endpoint` once; they survive reconnects.
+
+  await endpoint.close();
+  await connection.dispose();
+}
+```
+
+Companion packages:
+
+| Package | 6.x | 7.0 |
+| --- | --- | --- |
+| rpc_dart_framework | `RpcApp.server(server: (onEndpoint) => ...)` | `server: (mode) => ...(mode: mode)` |
+| rpc_dart_framework | `callType` strings on `RpcCallEvent` / `RpcSpyEntry` | `RpcMethodType`; `RpcSpyEntry` is `RpcCallEvent`, `calledAt` is gone |
+| rpc_dart_framework | typedef `RpcCallObserver` | `RpcCallEventHandler` |
+| rpc_dart_framework | app health as maps | typed: `modules['X'].level`, `endpoints[i]`; maps only in `toJson()` |
+| rpc_dart_compression | `maxDecompressedSize: -1` | `null` means no limit |
+| rpc_dart_grpc_reflection | `processRequestForTest`, `parseFileDescriptorSet` | gone |
+| rpc_dart_opentelemetry | `startSpan(call, String callType)` | `startSpan(call, RpcMethodType type)` |
+| rpc_dart_websocket | `headersProvider:`, `reconnectFactory:` | `RpcClientConnection` whose factory calls `connect(..., headers: ...)` |
+| rpc_dart_http, rpc_dart_http2 | security policy parameter | `policy:`; `policy: null` is gone |
+
+## 3. Regenerate
+
+Run `dart run build_runner build --delete-conflicting-outputs` in every package
+with generated contracts. A per-method codec override now applies to its own
+method only (`<Base>Codecs.requestOf<Method>` / `responseOf<Method>`); it used
+to apply to every method of the same type.
+
+## 4. Check behaviour the compiler cannot see
+
+- **No deadline means no timeout.** A call without a deadline waits until it
+  ends. Give every call a deadline or a cancellation token.
+- **Unexpected exceptions reach the caller as `INTERNAL` without their text.**
+  A handler that wants the caller to see a message throws
+  `RpcStatusException`.
+- **A response that ends without a status is `INTERNAL`**, not a success with
+  partial data, and it is not retried.
+- **`RESOURCE_EXHAUSTED` is retried only with server pushback.**
+- **A second message on a single-message side fails the call.**
+- **Registration is stricter.** A method name may not contain a dot.
+- **`RpcBool` / `RpcString` throw `FormatException` on bad input** instead of
+  returning a default.
+- **`x-rpc-*` metadata is reserved** and dropped when sending. Rename your own
+  headers that use the prefix.
+- **A derived context cannot outlive its parent's deadline.**
+- **`global` in the rate limiter is a ceiling**, not a fallback.
+- **`maxActiveStreams` counts a call until it ends**, and a peer that sends
+  without reading gets `RESOURCE_EXHAUSTED`. Raise the limits in
+  `RpcSecurityPolicy` if a legitimate workload hits them.
+- **A `switch` over `RpcHealthLevel`, `RpcClientConnectionState` or
+  `RpcCallOutcome` keeps a default branch**: minor releases may add values.
+
+## 5. Verify
+
+- Run the tests over `RpcChannelTransport.pair()` as well as `memoryPair()`:
+  only `pair()` runs the codecs and the byte limits.
+- Test one call through each production transport. A channel transport's
+  `ready` now completes only after the server answered the preface, so a
+  connection to the wrong port fails instead of reporting Online.

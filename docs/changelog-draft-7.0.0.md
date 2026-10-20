@@ -55,7 +55,7 @@ A custom transport adds the members, or `extends IRpcTransport`.
 **Reconnect lives in one layer, `RpcClientConnection`.** `transport.reconnect()`
 and `endpoint.reconnect()` are gone. Wrap the transport factory in
 `RpcClientConnection`; `forceReconnect()` replaces a manual reconnect.
-`transportFactory` must return an `IRpcReconnectableTransport`. The connection
+`transportFactory` opens a new transport for every connection. The connection
 waits for a transport to be ready and learns from the transport when the
 connection is lost.
 

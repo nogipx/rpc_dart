@@ -166,6 +166,7 @@ and a pitfalls list.
 | gRPC Server Reflection with `rpc_dart_grpc_reflection` (grpcurl, Postman) | [grpc-reflection.md](references/grpc-reflection.md) |
 | Shipping app logs to a remote collector with `rpc_dart_log` | [remote-logging.md](references/remote-logging.md) |
 | Traces, metrics and logs with `rpc_dart_opentelemetry` | [opentelemetry.md](references/opentelemetry.md) |
+| Upgrading a project from rpc_dart 6.x to 7.0 | [migrating-to-7.md](references/migrating-to-7.md) |
 
 ## Outside this skill
 
