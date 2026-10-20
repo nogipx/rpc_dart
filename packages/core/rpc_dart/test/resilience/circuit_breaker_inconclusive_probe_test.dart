@@ -56,7 +56,7 @@ void main() {
         cb.interceptUnary<String, String>(
           callContext,
           'req',
-          (ctx, req) async => throw const RpcCancelledException('cancelled'),
+          (ctx, req) async => throw RpcCancelledException('cancelled'),
         ),
         throwsA(isA<RpcCancelledException>()),
       );

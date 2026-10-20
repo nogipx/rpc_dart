@@ -14,6 +14,10 @@ final class RpcContext {
   final Map<String, String> _headers;
 
   /// Deadline for the operation (absolute time).
+  ///
+  /// Wall-clock time read from [clock]: a system clock that jumps moves
+  /// [isExpired] and [remainingTime] with it. On the wire the deadline travels
+  /// as a duration (`grpc-timeout`), so a peer's clock does not matter.
   final DateTime? deadline;
 
   /// Cancellation token.
@@ -60,6 +64,11 @@ final class RpcContext {
   factory RpcContext.empty() => RpcContext._();
 
   /// Creates a context with headers.
+  ///
+  /// A header that can never be one (an empty, pseudo or off-pattern name, or
+  /// CR/LF/NUL in the name or value) is dropped here, not thrown on. Size
+  /// limits are not checked here: `RpcSecurityPolicy.validateMetadata` throws
+  /// on them when the call is sent.
   ///
   /// [requestId] lets a responder adopt the id the caller sent WITHOUT minting
   /// one first.
@@ -152,9 +161,12 @@ final class RpcContext {
   );
 
   /// Returns the value of a header.
+  ///
+  /// In a handler's context, a header the peer sent more than once is one
+  /// value: its values joined with `,` in the order received.
   String? getHeader(String key) => _headers[_normalizeHeaderName(key)];
 
-  /// Returns all headers (read-only).
+  /// Returns all headers (read-only), repeated ones joined as in [getHeader].
   Map<String, String> get headers => Map.unmodifiable(_headers);
 
   static bool _containsInvalidHeaderChars(String value) {

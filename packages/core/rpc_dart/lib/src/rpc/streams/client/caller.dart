@@ -358,9 +358,7 @@ final class ClientStreamCaller<
       await _notifyAbort('Caller closed');
       if (!_responseCompleter.isCompleted) {
         _responseCompleter.completeError(
-          const RpcCancelledException(
-            'The call was closed before its response',
-          ),
+          RpcCancelledException('The call was closed before its response'),
         );
       }
     }

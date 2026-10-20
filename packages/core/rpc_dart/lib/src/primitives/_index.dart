@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:collection';
+
 import '../_internal.dart';
 
 part 'bool.dart';
@@ -33,24 +35,21 @@ abstract class RpcPrimitiveMessage<T> implements IRpcSerializable {
   @override
   Map<String, dynamic> toJson() => {'v': value};
 
-  // INTERNAL on both: these are caller mistakes in Dart code that never cross
-  // the wire, so the status is a formality — but the type has to pick one now,
-  // and picking says which.
-  RpcException _comparisonException({
-    required String type,
-    required String op,
-  }) => RpcStatusException(
-    RpcStatus.internal,
-    'Operation "$op" of $type with primitive type is prohibited. '
-    'Use value for comparison.',
-  );
+  // Programming errors, so Errors and not status exceptions: thrown inside a
+  // handler, a status exception's text would reach the peer.
+  Error _comparisonException({required String type, required String op}) =>
+      UnsupportedError(
+        'Operation "$op" of $type with primitive type is prohibited. '
+        'Use value for comparison.',
+      );
 
-  RpcException _unsupportedOperand({
+  Error _unsupportedOperand({
     required String type,
     required String op,
     required Object other,
-  }) => RpcStatusException(
-    RpcStatus.internal,
-    'Unsupported operand type for operation "$op" with $type: ${other.toString()}',
+  }) => ArgumentError.value(
+    other,
+    'other',
+    'Unsupported operand type for operation "$op" with $type',
   );
 }

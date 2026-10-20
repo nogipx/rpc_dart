@@ -88,6 +88,8 @@ No error message is a contract: match on the type or the status.
 | `RpcDeadlineExceededException(deadline, timeout)` and its `timeout` | `RpcDeadlineExceededException(deadline)` |
 | `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans belong to `rpc_dart_opentelemetry` |
 | `RpcHeaders.xRouteService` | gone; routing uses the method path |
+| `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | the same without `const` |
+| `RpcList.toMutableList()`, `where` returning `RpcList` | `RpcList` is an `Iterable`: `toList()` copies, `where` returns an `Iterable`, `for`-in works |
 | `LogSpanHandle(...)`, `SpanStartCallback` / `SpanEventCallback` / `SpanCompleteCallback` | `LogScope.startSpan` / `withSpan` |
 | endpoint pipeline members (`handleUnary` and the other three, `start*Listening`, `close*Resources`, `collect*Metrics`, `registeredMethods`, `registeredMethodBindings`, `validateMethodExists`, `getCancellationToken`, `responderIsListening`) and `RpcResponderContract.registrations` | not public; `collectEndpointMetrics()` for the metrics |
 
@@ -125,6 +127,9 @@ their `codec`.
   going out as its `toString()`. A `toJson()` that returns a number or a bool is
   encoded as that value, not as a string.
 - **`x-route-service` is no longer sent.**
+- **Misusing a primitive is a Dart error**: comparing an `RpcInt` with a raw
+  `int` throws `UnsupportedError`, a wrong operand `ArgumentError`, instead of
+  an `RpcStatusException` whose text would reach the peer from a handler.
 - **Every `x-rpc-*` header is reserved** (`RpcHeaders.reservedPrefix`): user
   metadata under that prefix is dropped when sending. The cancellation notice
   moved into it, as `x-rpc-client-cancelled` and `x-rpc-cancellation-reason`.

@@ -507,6 +507,20 @@ detail by `typeUrl` from a raw one also handles the typed class.
 The keys of `collectEndpointMetrics()` and of a health report's details are
 diagnostics, not API: read them for display, and do not build on a key.
 
+These defaults hold for all of 7.x, so tightening them is up to you:
+
+- No cap on connections (`maxConnections` on a server) or on concurrently
+  running handlers (`RpcSecurityPolicy.maxConcurrentHandlers`). Per-connection
+  stream, buffer and message limits are on by default. A server open to the
+  internet sets both caps for its own load.
+- `RpcSecurityPolicy.contentTypeValidation` is `lenient`: a request without a
+  `content-type` is served.
+- `RpcRetryInterceptor` retries a unary call that ends `UNAVAILABLE`, whether
+  or not the method is idempotent. A lost response is also `UNAVAILABLE`, so a
+  retried call may run twice on the server. Attach the interceptor to an
+  endpoint for idempotent methods only, pass `retryOn`, or deduplicate on
+  `RpcContext.requestId`.
+
 Every metadata name starting with `x-rpc-` is reserved
 (`RpcHeaders.reservedPrefix`), so a minor release can add a control header
 without taking a name your metadata uses.

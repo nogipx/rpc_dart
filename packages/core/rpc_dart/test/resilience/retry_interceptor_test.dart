@@ -194,7 +194,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw const RpcCancelledException('cancelled');
+            throw RpcCancelledException('cancelled');
           },
         );
         fail('Should have thrown');

@@ -7,9 +7,13 @@ part of '_index.dart';
 
 /// Specialized list for objects implementing IRpcSerializable.
 ///
-/// Provides serialization/deserialization while keeping type safety and RPC
-/// compatibility.
-class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
+/// An [Iterable], so `for`-in and every collection method work on it, with
+/// index access and in-place edits. Serialized as `{'items': [...]}`.
+///
+/// Not a [List] on purpose: a codec or `jsonEncode` writes a List as a bare
+/// array, and a nested RpcList would then lose its `items` envelope.
+class RpcList<T extends IRpcSerializable> extends IterableBase<T>
+    implements IRpcSerializable {
   /// Backing list.
   final List<T> _items;
 
@@ -87,70 +91,39 @@ class RpcList<T extends IRpcSerializable> implements IRpcSerializable {
     return {'items': _items.map((item) => item.toJson()).toList()};
   }
 
-  /// Length of the list.
-  int get length => _items.length;
-
-  /// True when the list is empty.
-  bool get isEmpty => _items.isEmpty;
-
-  /// True when the list is not empty.
-  bool get isNotEmpty => _items.isNotEmpty;
-
-  /// Indexer access.
-  T operator [](int index) => _items[index];
-
-  /// Sets a value by index.
-  void operator []=(int index, T value) {
-    _items[index] = value;
-  }
-
-  /// Adds an element to the end.
-  void add(T value) {
-    _items.add(value);
-  }
-
-  /// Adds all elements from another iterable.
-  void addAll(Iterable<T> items) {
-    _items.addAll(items);
-  }
-
-  /// Removes an element.
-  bool remove(T value) {
-    return _items.remove(value);
-  }
-
-  /// Removes by index.
-  T removeAt(int index) {
-    return _items.removeAt(index);
-  }
-
-  /// Clears the list.
-  void clear() {
-    _items.clear();
-  }
-
-  /// Returns an iterator.
+  @override
   Iterator<T> get iterator => _items.iterator;
 
-  /// Returns an unmodifiable copy.
-  List<T> toList() => List.unmodifiable(_items);
+  @override
+  int get length => _items.length;
 
-  /// Returns a mutable copy.
-  List<T> toMutableList() => List.from(_items);
+  @override
+  T elementAt(int index) => _items[index];
 
-  /// Maps items for convenient collection methods.
-  Iterable<R> map<R>(R Function(T) f) => _items.map(f);
+  /// The element at [index].
+  T operator [](int index) => _items[index];
 
-  /// Applies a function to each element.
-  void forEach(void Function(T) f) => _items.forEach(f);
+  /// Replaces the element at [index].
+  void operator []=(int index, T value) => _items[index] = value;
 
-  /// Filters elements.
-  RpcList<T> where(bool Function(T) test) {
-    return RpcList<T>.from(_items.where(test).toList());
-  }
+  /// Adds [value] to the end.
+  void add(T value) => _items.add(value);
 
-  /// Sorts items with an optional comparator.
-  void sort([int Function(T a, T b)? compare]) {
-    _items.sort(compare);
-  }
+  /// Adds every element of [items] to the end.
+  void addAll(Iterable<T> items) => _items.addAll(items);
+
+  /// Inserts [value] at [index].
+  void insert(int index, T value) => _items.insert(index, value);
+
+  /// Removes the first occurrence of [value]; true if there was one.
+  bool remove(T value) => _items.remove(value);
+
+  /// Removes and returns the element at [index].
+  T removeAt(int index) => _items.removeAt(index);
+
+  /// Removes every element.
+  void clear() => _items.clear();
+
+  /// Sorts in place with an optional comparator.
+  void sort([int Function(T a, T b)? compare]) => _items.sort(compare);
 }

@@ -310,13 +310,13 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
           }
           throw CircuitBreakerOpenException(retryAfter: resetTimeout - elapsed);
         }
-        throw const CircuitBreakerOpenException();
+        throw CircuitBreakerOpenException();
 
       case CircuitBreakerState.halfOpen:
         // Single-probe gate: only one probe may run at a time. Reject the
         // rest until the in-flight probe resolves (success or failure).
         if (_probeInFlight) {
-          throw const CircuitBreakerOpenException();
+          throw CircuitBreakerOpenException();
         }
         _probeInFlight = true;
         return _Admission(_generation, isProbe: true);

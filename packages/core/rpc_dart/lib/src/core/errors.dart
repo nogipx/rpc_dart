@@ -309,8 +309,7 @@ final class RpcMetadataViolation extends RpcStatusException
 /// it is indistinguishable from a foreign `StateError`.
 final class RpcCancelledException extends RpcStatusException {
   /// Creates an [RpcCancelledException] with the given [message].
-  const RpcCancelledException(String message)
-    : super(RpcStatus.cancelled, message);
+  RpcCancelledException(String message) : super(RpcStatus.cancelled, message);
 
   /// Reason the operation was cancelled.
   String get reason => message;
@@ -360,10 +359,7 @@ final class CircuitBreakerOpenException extends RpcStatusException {
   final Duration? retryAfter;
 
   /// Creates a [CircuitBreakerOpenException].
-  ///
-  /// `const`, which is why [retryAfter] is rendered in [toString] rather than
-  /// folded into the status message: a const constructor cannot interpolate.
-  const CircuitBreakerOpenException({this.retryAfter})
+  CircuitBreakerOpenException({this.retryAfter})
     : super(RpcStatus.unavailable, 'circuit is open');
 
   @override

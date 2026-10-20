@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:convert';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
@@ -97,7 +99,7 @@ void main() {
       expect(const RpcNum(7) ~/ const RpcNum(2), const RpcNum(3));
       expect(
         () => const RpcNum(7) ~/ const RpcDouble(2.0),
-        throwsA(isA<RpcException>()),
+        throwsA(isA<UnsupportedError>()),
       );
     });
 
@@ -135,6 +137,23 @@ void main() {
       expect(list.isEmpty, isTrue);
     });
 
+    test('a nested RpcList keeps its items envelope on the wire', () {
+      // A List would be written as a bare array by both encoders, and
+      // RpcList.fromJson would then read an absent "items" as empty.
+      final list = RpcList<RpcString>.from([const RpcString('a')]);
+      final expected = {
+        'items': [
+          {'v': 'a'},
+        ],
+      };
+
+      final cbor = CborCodec.decode(CborCodec.encode({'nested': list}));
+      expect(cbor['nested'], expected);
+
+      final json = jsonDecode(jsonEncode({'nested': list})) as Map;
+      expect(json['nested'], expected);
+    });
+
     test('RpcList decoding never silently loses elements', () {
       final decode = RpcList.fromJson<RpcString>(RpcString.fromJson);
 
@@ -169,9 +188,15 @@ void main() {
       expect(decode(<String, dynamic>{}).isEmpty, isTrue);
     });
 
-    test('ordering comparisons with raw num throw RpcException', () {
-      expect(() => const RpcInt(1) < 2, throwsA(isA<RpcException>()));
-      expect(() => const RpcDouble(1.0) > 2.0, throwsA(isA<RpcException>()));
+    // Errors, not status exceptions: a status exception thrown in a handler
+    // would send its text to the peer.
+    test('ordering comparisons with raw num throw UnsupportedError', () {
+      expect(() => const RpcInt(1) < 2, throwsA(isA<UnsupportedError>()));
+      expect(
+        () => const RpcDouble(1.0) > 2.0,
+        throwsA(isA<UnsupportedError>()),
+      );
+      expect(() => const RpcInt(1) < 2, throwsA(isNot(isA<RpcException>())));
     });
 
     test('operator == with raw num must not throw (returns false)', () {
@@ -181,10 +206,10 @@ void main() {
       expect((const RpcDouble(1.0) as dynamic) == 1.0, isFalse);
     });
 
-    test('unsupported operands throw RpcException', () {
-      expect(() => const RpcInt(1) + 'x', throwsA(isA<RpcException>()));
-      expect(() => const RpcDouble(1.0) * 'x', throwsA(isA<RpcException>()));
-      expect(() => const RpcNum(1) - Object(), throwsA(isA<RpcException>()));
+    test('unsupported operands throw ArgumentError', () {
+      expect(() => const RpcInt(1) + 'x', throwsA(isA<ArgumentError>()));
+      expect(() => const RpcDouble(1.0) * 'x', throwsA(isA<ArgumentError>()));
+      expect(() => const RpcNum(1) - Object(), throwsA(isA<ArgumentError>()));
     });
 
     test('RpcList basic operations and json round-trip', () {
@@ -205,9 +230,19 @@ void main() {
       final filtered = list.where((v) => v.value.toLowerCase() == 'b');
       expect(filtered.toList(), equals([const RpcString('b')]));
 
-      final mutable = list.toMutableList();
-      mutable.add(const RpcString('c'));
+      final copy = list.toList();
+      copy.add(const RpcString('c'));
       expect(list.length, 2);
+
+      // A List in full: for-in and an insert in the middle work.
+      final seen = <String>[];
+      for (final item in list) {
+        seen.add(item.value);
+      }
+      expect(seen, ['A', 'b']);
+      list.insert(1, const RpcString('m'));
+      expect(list.map((e) => e.value), ['A', 'm', 'b']);
+      list.removeAt(1);
 
       list.sort((a, b) => a.value.compareTo(b.value));
       expect(list.toList().map((e) => e.value).toList(), equals(['A', 'b']));

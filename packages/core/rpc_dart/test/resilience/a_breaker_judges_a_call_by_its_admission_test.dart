@@ -88,7 +88,7 @@ void main() {
 
     final outcomes = <String, Object>{
       'success': 'late',
-      'cancellation': const RpcCancelledException('caller left'),
+      'cancellation': RpcCancelledException('caller left'),
       'uncounted error': RpcStatusException(RpcStatus.notFound, 'nf'),
       'counted failure': RpcStatusException(RpcStatus.internal, 'boom'),
     };

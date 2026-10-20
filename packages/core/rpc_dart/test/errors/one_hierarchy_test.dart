@@ -33,9 +33,9 @@ void main() {
     // user would write to mean "an rpc_dart error" missed them.
     test('a single catch finds them all', () {
       final errors = <Object>[
-        const RpcCancelledException('cancelled'),
+        RpcCancelledException('cancelled'),
         RpcDeadlineExceededException(DateTime(2026)),
-        const CircuitBreakerOpenException(),
+        CircuitBreakerOpenException(),
         _LibraryAuthored('a subclass carrying no status of its own'),
         RpcStatusException(RpcStatus.notFound, 'missing'),
       ];
@@ -51,13 +51,13 @@ void main() {
 
     // WITNESS: the status is what reaches the peer, and it was INTERNAL.
     test('each carries the status gRPC has for it', () {
-      expect(const RpcCancelledException('x').statusCode, RpcStatus.cancelled);
+      expect(RpcCancelledException('x').statusCode, RpcStatus.cancelled);
       expect(
         RpcDeadlineExceededException(DateTime(2026)).statusCode,
         RpcStatus.deadlineExceeded,
       );
       expect(
-        const CircuitBreakerOpenException().statusCode,
+        CircuitBreakerOpenException().statusCode,
         RpcStatus.unavailable,
         reason: 'an open breaker is "try again later", which is UNAVAILABLE',
       );
@@ -66,7 +66,7 @@ void main() {
     // WITNESS: this is the behaviour the types buy. Before, all three of these
     // returned INTERNAL and the redacted message.
     test('wireStatusFor forwards them intact', () {
-      final cancelled = wireStatusFor(const RpcCancelledException('by peer'));
+      final cancelled = wireStatusFor(RpcCancelledException('by peer'));
       expect(cancelled.status, RpcStatus.cancelled);
       expect(cancelled.message, 'by peer');
 
@@ -96,7 +96,7 @@ void main() {
     test('the specific types are still selectable', () {
       Object? caught;
       try {
-        throw const RpcCancelledException('precise');
+        throw RpcCancelledException('precise');
       } on RpcDeadlineExceededException {
         caught = 'WRONG — caught the sibling';
       } on RpcCancelledException catch (e) {
@@ -105,13 +105,11 @@ void main() {
       expect(caught, isA<RpcCancelledException>());
     });
 
-    // GUARD: const-ness is public API and two call sites in the breaker use it.
-    test('the const constructors are still const', () {
-      const a = RpcCancelledException('x');
-      const b = CircuitBreakerOpenException();
+    // GUARD: a status exception of the caller's own stays const-constructible.
+    // The cancelled and breaker exceptions are not const, so they can gain
+    // computed details.
+    test('RpcStatusException is still const', () {
       const c = RpcStatusException(RpcStatus.notFound, 'y');
-      expect(identical(a, const RpcCancelledException('x')), isTrue);
-      expect(b.statusCode, RpcStatus.unavailable);
       expect(c.statusCode, RpcStatus.notFound);
     });
 
@@ -208,17 +206,17 @@ void main() {
     // move. The breaker keeps its retryAfter in toString() for this reason.
     test('toString is unchanged', () {
       expect(
-        const RpcCancelledException('why').toString(),
+        RpcCancelledException('why').toString(),
         'RpcCancelledException: why',
       );
       expect(
-        const CircuitBreakerOpenException(
+        CircuitBreakerOpenException(
           retryAfter: Duration(milliseconds: 250),
         ).toString(),
         'CircuitBreakerOpenException: circuit is open, retry after 250ms',
       );
       expect(
-        const CircuitBreakerOpenException().toString(),
+        CircuitBreakerOpenException().toString(),
         'CircuitBreakerOpenException: circuit is open',
       );
     });

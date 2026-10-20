@@ -110,6 +110,10 @@ abstract final class RpcGrpcCompression {
 
   /// Registers [codec] for [encoding], replacing any existing one.
   ///
+  /// Process-wide: every endpoint and transport in the isolate uses this
+  /// registry, and this will stay so. Should a per-endpoint set ever exist, it
+  /// will be added beside this one, not in place of it.
+  ///
   /// Call this once at application startup before any RPC calls are made.
   /// On web, register a gzip codec backed by `package:archive` (or similar)
   /// to enable gzip compression:

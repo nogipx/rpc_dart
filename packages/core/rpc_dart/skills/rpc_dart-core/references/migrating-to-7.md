@@ -53,6 +53,8 @@ builds a transport, a channel or frames imports
 | `RpcDeadlineExceededException(deadline, timeout)` | `RpcDeadlineExceededException(deadline)` |
 | `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans come from `rpc_dart_opentelemetry` |
 | `RpcHeaders.xRouteService` | gone; route on the method path |
+| `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | drop `const` |
+| `RpcList.toMutableList()` | `toList()`; `RpcList` is an `Iterable` and `where` returns an `Iterable` |
 | `LogSpanHandle(...)` and the `Span*Callback` typedefs | `LogScope.startSpan` / `withSpan` |
 | endpoint pipeline members (`handleUnary`, `startResponderListening`, `collectResponderMetrics`, `registeredMethods`, ...) and `contract.registrations` | not public; `collectEndpointMetrics()` for metrics |
 | `implements IRpcServer` / `implements RpcCompressionCodec` | `extends` (both still compile; `extends` keeps compiling when a member is added) |
