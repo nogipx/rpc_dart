@@ -85,6 +85,10 @@ No error message is a contract: match on the type or the status.
 | `RpcBool` / `RpcString` returning a default on bad input | `FormatException` |
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` |
 | health metric `clientStreamBuffers` | `preBindBuffers` |
+| `RpcDeadlineExceededException(deadline, timeout)` and its `timeout` | `RpcDeadlineExceededException(deadline)` |
+| `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans belong to `rpc_dart_opentelemetry` |
+| `RpcHeaders.xRouteService` | gone; routing uses the method path |
+| `LogSpanHandle(...)`, `SpanStartCallback` / `SpanEventCallback` / `SpanCompleteCallback` | `LogScope.startSpan` / `withSpan` |
 
 **`grpc.health.v1` speaks protobuf.** `GrpcHealthCheckContract` was CBOR on the
 wire, so real gRPC health checkers could not read it. `Check` on an unknown
@@ -115,6 +119,11 @@ their `codec`.
 - **`global` in the rate limiter is a ceiling**, not a fallback.
 - **A request encoding is declared only if a codec for it is registered.**
 - **A peer that repeats the same fault is logged once.**
+- **CBOR refuses a value it cannot encode.** A `DateTime`, enum, `Set`,
+  `BigInt` or `Duration` without a `toJson()` throws `ArgumentError` instead of
+  going out as its `toString()`. A `toJson()` that returns a number or a bool is
+  encoded as that value, not as a string.
+- **`x-route-service` is no longer sent.**
 - **Every `x-rpc-*` header is reserved** (`RpcHeaders.reservedPrefix`): user
   metadata under that prefix is dropped when sending. The cancellation notice
   moved into it, as `x-rpc-client-cancelled` and `x-rpc-cancellation-reason`.
@@ -142,6 +151,8 @@ their `codec`.
   apply to every method with the same type.
 - Every type a gRPC descriptor names is described; stored fields are described;
   codecs compile for bare primitives.
+- A bare `double` sent from a web peer decodes on the VM: dart2js writes 2.0
+  as a CBOR integer, and the generated decoder now reads it through `num`.
 
 ## rpc_dart_framework (next version)
 

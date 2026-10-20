@@ -424,16 +424,8 @@ abstract final class RpcContextUtils {
   /// source, still unique, still unpredictable — for half the cost. The two are
   /// then correlated, which costs nothing: they travel in the same request
   /// metadata anyway.
-  static RpcContext withTracing({
-    String? traceId,
-    String? spanId,
-    String? parentSpanId,
-  }) {
-    final headers = <String, String>{};
-
-    if (traceId != null) headers[RpcHeaders.xTraceId] = traceId;
-    if (spanId != null) headers['x-span-id'] = spanId;
-    if (parentSpanId != null) headers['x-parent-span-id'] = parentSpanId;
+  static RpcContext withTracing({String? traceId}) {
+    final headers = <String, String>{RpcHeaders.xTraceId: ?traceId};
 
     final token = RpcContext._uniqueToken();
     return RpcContext.withHeaders(

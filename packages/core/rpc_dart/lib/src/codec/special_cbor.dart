@@ -688,25 +688,21 @@ class _FastCborWriter {
       // For IRpcSerializable use toJson(), which returns Map(String, dynamic).
       _writeMap(value.toJson());
     } else {
-      // Unknown type. Try toJson(): a value that simply HAS no toJson()
-      // (DateTime, enums, ...) falls back to a string representation. But if
-      // toJson() EXISTS and throws, that is a real serialization bug — let it
-      // propagate instead of masking the object's toString() onto the wire as
-      // if it were the payload (silent data corruption).
+      // Unknown type: encoded through its toJson(). A value without one
+      // (DateTime, an enum, a Set, BigInt, Duration) is refused rather than
+      // sent as its toString(), which no decoder can turn back into the value.
       Object? json;
       try {
         json = (value as dynamic).toJson();
       } on NoSuchMethodError {
-        _writeString(value.toString());
-        return;
+        throw ArgumentError.value(
+          value,
+          'value',
+          'CBOR cannot encode a ${value.runtimeType}: convert it to a '
+              'supported value or give it a toJson()',
+        );
       }
-      if (json is Map) {
-        _writeMap(json);
-      } else if (json is List) {
-        _writeList(json);
-      } else {
-        _writeString(json.toString());
-      }
+      _writeValue(json);
     }
   }
 

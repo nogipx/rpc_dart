@@ -34,10 +34,7 @@ void main() {
     test('a single catch finds them all', () {
       final errors = <Object>[
         const RpcCancelledException('cancelled'),
-        RpcDeadlineExceededException(
-          DateTime(2026),
-          const Duration(seconds: 1),
-        ),
+        RpcDeadlineExceededException(DateTime(2026)),
         const CircuitBreakerOpenException(),
         _LibraryAuthored('a subclass carrying no status of its own'),
         RpcStatusException(RpcStatus.notFound, 'missing'),
@@ -56,10 +53,7 @@ void main() {
     test('each carries the status gRPC has for it', () {
       expect(const RpcCancelledException('x').statusCode, RpcStatus.cancelled);
       expect(
-        RpcDeadlineExceededException(
-          DateTime(2026),
-          const Duration(seconds: 1),
-        ).statusCode,
+        RpcDeadlineExceededException(DateTime(2026)).statusCode,
         RpcStatus.deadlineExceeded,
       );
       expect(
@@ -77,10 +71,7 @@ void main() {
       expect(cancelled.message, 'by peer');
 
       final deadline = wireStatusFor(
-        RpcDeadlineExceededException(
-          DateTime(2026),
-          const Duration(seconds: 1),
-        ),
+        RpcDeadlineExceededException(DateTime(2026)),
       );
       expect(deadline.status, RpcStatus.deadlineExceeded);
       expect(deadline.message, contains('Deadline'));

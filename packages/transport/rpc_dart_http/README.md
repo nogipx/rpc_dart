@@ -215,7 +215,7 @@ final transport = RpcHttpResponderTransport(
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `allowedOrigins` | `[]` | Origins allowed to call. Matched case-insensitively. Empty rejects every cross-origin preflight with `403`. |
-| `allowedHeaders` | `['authorization', 'x-requested-with']` | Extra request headers. `content-type`, `grpc-timeout`, `grpc-encoding`, `grpc-accept-encoding`, `x-route-service`, `x-request-id` and `x-trace-id` are always allowed. |
+| `allowedHeaders` | `['authorization', 'x-requested-with']` | Extra request headers. `content-type`, `grpc-timeout`, `grpc-encoding`, `grpc-accept-encoding`, `x-request-id` and `x-trace-id` are always allowed. |
 | `extraExposedHeaders` | `[]` | Extra response headers a page may read. `grpc-status`, `grpc-message`, `grpc-status-details-bin`, `grpc-encoding` and `grpc-accept-encoding` are always exposed. |
 | `allowCredentials` | `false` | Sends `Access-Control-Allow-Credentials: true`. |
 | `preflightMaxAge` | 10 minutes | `Access-Control-Max-Age`; `null` omits it. |

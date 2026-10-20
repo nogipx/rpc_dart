@@ -5,8 +5,8 @@
 // The CORS header lists were a hand-copy of "what core sends", and the copy had
 // fallen behind the original in both directions.
 //
-// ALLOW: `caller_pipeline.dart` puts `x-route-service` on every call and every
-// ping, and `x-request-id` on every call, while the required allow-list held
+// ALLOW: `caller_pipeline.dart` puts `x-request-id` on every call, while the
+// required allow-list held
 // only grpc-timeout, grpc-encoding and grpc-accept-encoding. A cross-origin
 // browser therefore sent a header the preflight did not name. `content-type`
 // was in the operator-facing DEFAULT rather than the required list, so an
@@ -65,16 +65,6 @@ void main() {
           RpcHeaders.grpcEncoding,
           RpcHeaders.grpcAcceptEncoding,
         ]),
-      );
-    });
-
-    test('x-route-service is allowed', () {
-      expect(
-        _allowed(policy),
-        contains(RpcHeaders.xRouteService),
-        reason:
-            'caller_pipeline sends it on every call and every ping, so a '
-            'preflight that omits it refuses traffic this library generates',
       );
     });
 

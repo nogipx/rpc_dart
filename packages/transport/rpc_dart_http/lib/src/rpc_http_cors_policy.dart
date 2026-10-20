@@ -30,15 +30,13 @@ const _requiredGrpcExposedHeaders = [
 /// configuring the policy.
 ///
 /// `content-type` is `application/grpc`, which is not CORS-safelisted;
-/// `x-route-service` and `x-request-id` go out on every call
-/// (`caller_pipeline.dart` sets both, and `x-route-service` on pings too);
+/// `x-request-id` goes out on every call (`caller_pipeline.dart` sets it);
 /// `x-trace-id` goes out whenever the context carries one.
 const _requiredGrpcAllowedHeaders = [
   RpcHeaders.contentType,
   RpcHeaders.grpcTimeout,
   RpcHeaders.grpcEncoding,
   RpcHeaders.grpcAcceptEncoding,
-  RpcHeaders.xRouteService,
   RpcHeaders.xRequestId,
   RpcHeaders.xTraceId,
 ];

@@ -327,15 +327,9 @@ final class RpcDeadlineExceededException extends RpcStatusException {
   /// The deadline that was exceeded.
   final DateTime deadline;
 
-  /// The timeout duration that was configured.
-  final Duration timeout;
-
-  /// Creates an [RpcDeadlineExceededException] with [deadline] and [timeout].
-  RpcDeadlineExceededException(this.deadline, this.timeout)
-    : super(
-        RpcStatus.deadlineExceeded,
-        'Deadline $deadline exceeded (timeout: $timeout)',
-      );
+  /// Creates an [RpcDeadlineExceededException] for [deadline].
+  RpcDeadlineExceededException(this.deadline)
+    : super(RpcStatus.deadlineExceeded, 'Deadline $deadline exceeded');
 
   @override
   String toString() => 'RpcDeadlineExceededException: $message';

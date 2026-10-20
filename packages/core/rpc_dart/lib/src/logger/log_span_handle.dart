@@ -2,19 +2,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'dart:math';
+part of 'log_scope.dart';
 
-import 'log_level.dart';
-import 'log_record.dart';
-
-/// Callback for when a span ends and should be emitted.
-typedef SpanCompleteCallback = void Function(LogSpan span);
-
-/// Callback for emitting live events from within a span.
-typedef SpanEventCallback = void Function(LogEvent event);
-
-/// Callback for emitting span start.
-typedef SpanStartCallback = void Function(LogSpanStart start);
+typedef _SpanCompleteCallback = void Function(LogSpan span);
+typedef _SpanEventCallback = void Function(LogEvent event);
+typedef _SpanStartCallback = void Function(LogSpanStart start);
 
 /// Handle to an active (in-progress) span.
 ///
@@ -37,21 +29,21 @@ class LogSpanHandle {
   final String? traceId;
 
   final DateTime _startTime;
-  final SpanCompleteCallback _onComplete;
-  final SpanEventCallback _onEvent;
-  final SpanStartCallback _onStart;
+  final _SpanCompleteCallback _onComplete;
+  final _SpanEventCallback _onEvent;
+  final _SpanStartCallback _onStart;
   final DateTime Function() _clock;
   final List<LogEvent> _events = [];
   Map<String, Object>? _data;
   bool _ended = false;
 
   /// Creates a [LogSpanHandle] and immediately emits a [LogSpanStart].
-  LogSpanHandle({
+  LogSpanHandle._({
     required this.name,
     required this.scope,
-    required SpanCompleteCallback onComplete,
-    required SpanEventCallback onEvent,
-    required SpanStartCallback onStart,
+    required _SpanCompleteCallback onComplete,
+    required _SpanEventCallback onEvent,
+    required _SpanStartCallback onStart,
     this.parentSpanId,
     this.traceId,
     Map<String, Object>? data,
@@ -74,6 +66,23 @@ class LogSpanHandle {
       ),
     );
   }
+
+  /// An already-ended span that emits nothing, for [LogScope.noop].
+  LogSpanHandle._noop()
+    : name = '',
+      scope = '',
+      spanId = '',
+      parentSpanId = null,
+      traceId = null,
+      _clock = DateTime.now,
+      _startTime = DateTime.fromMicrosecondsSinceEpoch(0),
+      _onComplete = _ignore,
+      _onEvent = _ignore,
+      _onStart = _ignore {
+    _ended = true;
+  }
+
+  static void _ignore(Object? _) {}
 
   /// Whether this span has been ended.
   bool get isEnded => _ended;
@@ -100,7 +109,7 @@ class LogSpanHandle {
 
   /// Create a child span (nested operation).
   LogSpanHandle startSpan(String childName, {Map<String, Object>? data}) {
-    return LogSpanHandle(
+    return LogSpanHandle._(
       name: childName,
       scope: scope,
       parentSpanId: spanId,

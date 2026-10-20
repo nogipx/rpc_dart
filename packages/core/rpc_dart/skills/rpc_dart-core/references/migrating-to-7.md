@@ -50,6 +50,10 @@ builds a transport, a channel or frames imports
 | `RpcEndpointPingResult.responderTransportType` | gone |
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` (`maxHeaders`, `maxHeaderNameBytes`, `maxHeaderValueBytes`) |
 | health detail `clientStreamBuffers` | `preBindBuffers` |
+| `RpcDeadlineExceededException(deadline, timeout)` | `RpcDeadlineExceededException(deadline)` |
+| `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans come from `rpc_dart_opentelemetry` |
+| `RpcHeaders.xRouteService` | gone; route on the method path |
+| `LogSpanHandle(...)` and the `Span*Callback` typedefs | `LogScope.startSpan` / `withSpan` |
 | `implements IRpcServer` / `implements RpcCompressionCodec` | `extends` (both still compile; `extends` keeps compiling when a member is added) |
 | `RpcMessage`, `RpcDirectMultiplexedChannel` | not exported; `RpcTransportMessage`, `memoryPair()` |
 
@@ -109,6 +113,9 @@ to apply to every method of the same type.
 - **Registration is stricter.** A method name may not contain a dot.
 - **`RpcBool` / `RpcString` throw `FormatException` on bad input** instead of
   returning a default.
+- **CBOR throws `ArgumentError` for a `DateTime`, enum, `Set`, `BigInt` or
+  `Duration` without `toJson()`.** Convert it in the message's `toJson`
+  (`toIso8601String()`, `name`, `toList()`), or the call fails at send time.
 - **`x-rpc-*` metadata is reserved** and dropped when sending. Rename your own
   headers that use the prefix.
 - **A derived context cannot outlive its parent's deadline.**

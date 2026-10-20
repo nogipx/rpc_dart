@@ -490,10 +490,17 @@ The small role interfaces never gain a member: `IRpcSerializable`,
 comes as a new interface.
 
 A minor release may add a value to an enum or a subtype to a sealed family,
-such as `RpcHealthLevel`, `RpcClientConnectionState` or `RpcCallOutcome`. A
-`switch` over one of them keeps a default branch. These are closed and stay
+such as `RpcHealthLevel`, `RpcClientConnectionState`, `RpcCallOutcome` or
+`LogRecord`. A `switch` over one of them keeps a default branch. These are closed and stay
 as they are: `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`,
 `GrpcServingStatus` and `RpcProtoWireType`.
+
+An error detail of a `google.rpc` type that arrives as `RpcRawErrorDetail`
+today may be decoded into its own type in a minor release. Code that reads a
+detail by `typeUrl` from a raw one also handles the typed class.
+
+The keys of `collectEndpointMetrics()` and of a health report's details are
+diagnostics, not API: read them for display, and do not build on a key.
 
 Every metadata name starting with `x-rpc-` is reserved
 (`RpcHeaders.reservedPrefix`), so a minor release can add a control header

@@ -57,9 +57,6 @@ abstract final class RpcHeaders {
   /// Unique identifier for a single RPC request.
   static const xRequestId = 'x-request-id';
 
-  /// Target service name used for internal transport routing.
-  static const xRouteService = 'x-route-service';
-
   /// Set to `'true'` when the client cancels an in-flight call.
   static const xClientCancelled = 'x-rpc-client-cancelled';
 

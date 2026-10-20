@@ -440,9 +440,12 @@ class _Emitter {
         // returns `dynamic` and does not fit `$typeName Function(Uint8List)`.
         final decoder =
             '_decode${codecName[0].toUpperCase()}${codecName.substring(1)}';
-        b.writeln(
-          '  static $typeName $decoder(Uint8List bytes) => CborCodec.decodeUnsafe(bytes) as $typeName;',
-        );
+        // A double goes through num: dart2js cannot tell 2.0 from 2, so a web
+        // peer writes an integral double as a CBOR integer.
+        final decoded = info.type.isDartCoreDouble
+            ? '(CborCodec.decodeUnsafe(bytes) as num).toDouble()'
+            : 'CborCodec.decodeUnsafe(bytes) as $typeName';
+        b.writeln('  static $typeName $decoder(Uint8List bytes) => $decoded;');
         b.writeln(
           '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: $decoder);',
         );

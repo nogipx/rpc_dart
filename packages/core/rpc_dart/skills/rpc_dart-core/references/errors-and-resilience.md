@@ -109,7 +109,7 @@ plain RESOURCE_EXHAUSTED means "too big" and is never retried.
 | Type | Status | Notes |
 | --- | --- | --- |
 | `RpcCancelledException(message)` | CANCELLED | `reason` == `message` |
-| `RpcDeadlineExceededException(deadline, timeout)` | DEADLINE_EXCEEDED | not const |
+| `RpcDeadlineExceededException(deadline)` | DEADLINE_EXCEEDED | not const |
 | `RpcClosedException(what, {detail})` | FAILED_PRECONDITION | this side closed it; `byPeer == false` |
 | `RpcClosedException.byPeer(what)` | UNAVAILABLE | peer went away; `byPeer == true` |
 | `RpcNoConnectionException(what, reconnecting:)` | UNAVAILABLE | no live connection |

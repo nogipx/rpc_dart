@@ -2,10 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:math';
+
 import 'log_controller.dart';
 import 'log_level.dart';
 import 'log_record.dart';
-import 'log_span_handle.dart';
+
+part 'log_span_handle.dart';
 
 /// Lightweight logging handle bound to a scope name and controller.
 ///
@@ -183,7 +186,7 @@ class LogScope {
     Map<String, Object>? data,
     String? traceId,
   }) {
-    return LogSpanHandle(
+    return LogSpanHandle._(
       name: spanName,
       scope: name,
       parentSpanId: _parentSpanId,
@@ -369,34 +372,10 @@ class _NoopLogScope implements LogScope {
   }) {}
 }
 
-class _NoopSpanHandle implements LogSpanHandle {
-  @override
-  String get spanId => '';
-  @override
-  String get name => '';
-  @override
-  String get scope => '';
-  @override
-  String? get parentSpanId => null;
-  @override
-  String? get traceId => null;
-  @override
-  bool get isEnded => true;
-  @override
-  void event(
-    String message, {
-    RpcLogLevel level = RpcLogLevel.info,
-    Map<String, Object>? data,
-  }) {}
+class _NoopSpanHandle extends LogSpanHandle {
+  _NoopSpanHandle() : super._noop();
+
   @override
   LogSpanHandle startSpan(String childName, {Map<String, Object>? data}) =>
       this;
-  @override
-  void addData(Map<String, Object> data) {}
-  @override
-  void end({
-    SpanStatus status = SpanStatus.ok,
-    Object? error,
-    StackTrace? stackTrace,
-  }) {}
 }

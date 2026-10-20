@@ -161,7 +161,6 @@ Credit-based, per stream and per connection, enforced by `RpcChannelTransport`
 | `grpcEncoding` / `grpcAcceptEncoding` | `grpc-encoding` / `grpc-accept-encoding` | Compression negotiation; passes through. |
 | `grpcStatus` / `grpcMessage` / `grpcStatusDetails` | `grpc-status` / `grpc-message` / `grpc-status-details-bin` | Trailers. |
 | `xTraceId` / `xRequestId` | `x-trace-id` / `x-request-id` | Correlation, from the context. |
-| `xRouteService` | `x-route-service` | Routing through a proxy. |
 | `xClientCancelled` / `xCancellationReason` | `x-rpc-client-cancelled` / `x-rpc-cancellation-reason` | Reserved. Cancellation notice on transports with no stream reset. |
 | `xWindowUpdate` / `xConnWindowUpdate` | `x-rpc-window-update` / `x-rpc-conn-window-update` | Reserved. Flow-control grants. |
 

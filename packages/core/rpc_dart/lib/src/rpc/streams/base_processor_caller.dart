@@ -367,7 +367,7 @@ extension _CallProcessorInternals<
       if (_logger.isInternal) {
         _logger.internal('Deadline exceeded [streamId: $_streamId]');
       }
-      final error = RpcDeadlineExceededException(deadline, Duration.zero);
+      final error = RpcDeadlineExceededException(deadline);
       // Single-subscription controllers buffer the error for a late
       // subscriber, so do not gate on hasListener.
       _responseController.addError(error);
@@ -464,7 +464,7 @@ extension _CallProcessorInternals<
     _context.cancellationToken?.throwIfCancelled();
 
     if (_context.isExpired) {
-      throw RpcDeadlineExceededException(_context.deadline!, Duration.zero);
+      throw RpcDeadlineExceededException(_context.deadline!);
     }
 
     if (_logger.isInternal) {

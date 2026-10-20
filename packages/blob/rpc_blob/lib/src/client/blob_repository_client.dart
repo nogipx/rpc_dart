@@ -582,9 +582,7 @@ class BlobRepositoryClient implements IBlobClient {
 
   void _ensureContext(RpcContext? context) {
     if (context?.isExpired ?? false) {
-      final deadline = context!.deadline!;
-      final timeout = deadline.difference(DateTime.now());
-      throw RpcDeadlineExceededException(deadline, timeout);
+      throw RpcDeadlineExceededException(context!.deadline!);
     }
   }
 

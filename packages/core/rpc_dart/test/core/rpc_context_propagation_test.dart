@@ -201,18 +201,10 @@ void main() {
 
     test('creates context with tracing headers', () {
       final traceId = 'trace-123';
-      final spanId = 'span-456';
-      final parentSpanId = 'parent-789';
 
-      final context = RpcContextUtils.withTracing(
-        traceId: traceId,
-        spanId: spanId,
-        parentSpanId: parentSpanId,
-      );
+      final context = RpcContextUtils.withTracing(traceId: traceId);
 
       expect(context.getHeader('x-trace-id'), equals(traceId));
-      expect(context.getHeader('x-span-id'), equals(spanId));
-      expect(context.getHeader('x-parent-span-id'), equals(parentSpanId));
       expect(context.traceId, equals(traceId));
     });
 

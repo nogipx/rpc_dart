@@ -268,21 +268,17 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     return result;
   }
 
-  /// Adds routing headers and a cancellation token to the context.
-  RpcContext _enhanceCallerContext(RpcContext context, String serviceName) {
-    final token = context.cancellationToken ?? RpcCancellationToken();
-
-    return context.withCancellation(token).withAdditionalHeaders({
-      RpcHeaders.xRouteService: serviceName,
-    });
-  }
-
-  /// Fully prepares context for an outgoing call.
+  /// Fully prepares context for an outgoing call: ids and a cancellation
+  /// token.
   ///
   /// Building the context does NOT start tracking it — see
   /// [_trackCallerRequest].
-  RpcContext _prepareCallerContext(RpcContext? context, String serviceName) =>
-      _enhanceCallerContext(_ensureCallerContext(context), serviceName);
+  RpcContext _prepareCallerContext(RpcContext? context) {
+    final ctx = _ensureCallerContext(context);
+    return ctx.withCancellation(
+      ctx.cancellationToken ?? RpcCancellationToken(),
+    );
+  }
 
   /// Registers [ctx]'s call so [cancelRequest]/`cancelMethod` can reach it.
   ///
@@ -400,17 +396,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     try {
       final sentAt = DateTime.now().toUtc();
 
-      final baseContext = _ensureCallerContext(context);
-      final routingContext = baseContext.withAdditionalHeaders({
-        RpcHeaders.xRouteService: RpcEndpointPingProtocol.serviceName,
-      });
+      final routingContext = _ensureCallerContext(context);
 
       routingContext.cancellationToken?.throwIfCancelled();
       if (routingContext.isExpired) {
-        throw RpcDeadlineExceededException(
-          routingContext.deadline!,
-          Duration.zero,
-        );
+        throw RpcDeadlineExceededException(routingContext.deadline!);
       }
 
       final metadata = callerRequestMetadata(
@@ -469,7 +459,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // `.catchError` and every other non-`try` handler of the call.
     if (!isActive) return Future.error(RpcClosedException('Endpoint'));
 
-    final ctx = _prepareCallerContext(context, serviceName);
+    final ctx = _prepareCallerContext(context);
     // Unary starts immediately, so tracking starts here.
     _trackCallerRequest(serviceName, methodName, ctx);
 
@@ -510,7 +500,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // Through the stream, for the same reason as unaryRequest's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
-    final ctx = _prepareCallerContext(context, serviceName);
+    final ctx = _prepareCallerContext(context);
 
     final stream = handleServerStream<TRequest, TResponse>(
       direction: RpcCallDirection.outgoing,
@@ -562,7 +552,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       // DESCRIBED rather than when it was made.
       if (!isActive) throw RpcClosedException('Endpoint');
 
-      final ctx = _prepareCallerContext(context, serviceName);
+      final ctx = _prepareCallerContext(context);
       // The builder is already lazy: this runs when the call is invoked.
       _trackCallerRequest(serviceName, methodName, ctx);
       try {
@@ -602,7 +592,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // Through the stream, for the same reason as unaryRequest's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
-    final ctx = _prepareCallerContext(context, serviceName);
+    final ctx = _prepareCallerContext(context);
 
     final stream = handleBidirectionalStream<C, R>(
       direction: RpcCallDirection.outgoing,

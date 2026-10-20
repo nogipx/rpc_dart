@@ -131,7 +131,7 @@ Future<(Object?, int)> _call(
       final left = c.remainingTime;
       onAttempt?.call(left);
       if (left != null && left <= Duration.zero) {
-        throw RpcDeadlineExceededException(c.deadline!, Duration.zero);
+        throw RpcDeadlineExceededException(c.deadline!);
       }
       throw RpcStatusException(RpcStatus.unavailable, 'gone');
     });

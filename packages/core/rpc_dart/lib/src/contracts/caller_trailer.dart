@@ -54,7 +54,7 @@ abstract final class RpcCallerTrailer {
   }) {
     final deadline = context?.deadline;
     if (status == RpcStatus.deadlineExceeded && deadline != null) {
-      return RpcDeadlineExceededException(deadline, Duration.zero);
+      return RpcDeadlineExceededException(deadline);
     }
     return RpcStatusException.fromTrailer(
       status,
@@ -84,7 +84,7 @@ abstract final class RpcCallerTrailer {
   static RpcStatusException closedWithoutStatus(RpcContext? context) {
     final deadline = context?.deadline;
     if (deadline != null && context?.remainingTime == Duration.zero) {
-      return RpcDeadlineExceededException(deadline, Duration.zero);
+      return RpcDeadlineExceededException(deadline);
     }
     return RpcStatusException(
       RpcStatus.unavailable,

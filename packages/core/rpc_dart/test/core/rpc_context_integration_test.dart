@@ -64,11 +64,7 @@ void main() {
         serverEndpoint.start();
 
         const traceId = 'integration-trace-12345';
-        final context = RpcContextUtils.withTracing(
-          traceId: traceId,
-          spanId: 'span-001',
-          parentSpanId: 'parent-span-001',
-        );
+        final context = RpcContextUtils.withTracing(traceId: traceId);
 
         // Act
         final response = await clientEndpoint
@@ -83,8 +79,6 @@ void main() {
 
         // Assert
         expect(response.value, contains(traceId));
-        expect(response.value, contains('span-001'));
-        expect(response.value, contains('parent-span-001'));
       });
 
       test('two contexts with different headers merge', () async {
@@ -510,12 +504,7 @@ final class _TracingServiceContract extends RpcResponderContract {
     RpcString request, {
     RpcContext? context,
   }) async {
-    final traceId = context?.traceId;
-    final spanId = context?.getHeader('x-span-id');
-    final parentSpanId = context?.getHeader('x-parent-span-id');
-
-    return 'Traced ${request.value} [trace=$traceId, span=$spanId, parent=$parentSpanId]'
-        .rpc;
+    return 'Traced ${request.value} [trace=${context?.traceId}]'.rpc;
   }
 }
 

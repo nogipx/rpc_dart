@@ -73,7 +73,7 @@ earlier: a derived context can shorten the deadline, never extend it.
 `ctx.forward({headers, timeout})` is the same with `authorization`, `x-api-key`
 and `cookie` dropped: the context for a downstream call.
 
-`RpcContextUtils`: `withTracing({traceId, spanId, parentSpanId})`,
+`RpcContextUtils`: `withTracing({traceId})`,
 `generateTraceId()`, `traceIdFor(requestId)`, `merge(left, right)` (on
 conflict, `right` wins). Credentials are set through `RpcContextBuilder`.
 

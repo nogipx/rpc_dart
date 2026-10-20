@@ -218,7 +218,7 @@ void main() {
           'request',
           (ctx, req) async {
             callCount++;
-            throw RpcDeadlineExceededException(DateTime.now(), Duration.zero);
+            throw RpcDeadlineExceededException(DateTime.now());
           },
         );
         fail('Should have thrown');

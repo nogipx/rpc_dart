@@ -20,7 +20,7 @@ typedef PrioritizedRoutingRule = ({
 });
 
 /// Proxy that routes RPC calls to transports using prioritized rules.
-/// Extracts `serviceName` from the `x-route-service` header set by caller endpoints.
+/// Takes `serviceName` from the method path of a stream's opening frame.
 final class RpcTransportRouter extends IRpcTransport {
   /// All routing rules sorted by priority (descending).
   final List<PrioritizedRoutingRule> _routingRules = [];
@@ -267,9 +267,7 @@ final class RpcTransportRouter extends IRpcTransport {
   IRpcTransport _selectTransport(RpcTransportMessage message) {
     final context = _extractContextFromMessage(message);
     final methodPath = message.methodPath;
-    final serviceName =
-        _serviceNameFromMethodPath(methodPath) ??
-        context?.getHeader('x-route-service');
+    final serviceName = _serviceNameFromMethodPath(methodPath);
 
     // Guarded, and it is not a formality here: `_truncateForLog` and
     // `_summarizeHeadersForLog` are real calls that ran on every routed

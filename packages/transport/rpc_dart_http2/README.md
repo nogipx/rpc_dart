@@ -327,8 +327,8 @@ What this means for real gRPC peers:
   (`RpcBinaryCodec` over `protoc`-generated messages), not the default.
 - `grpcurl` and similar tools need server reflection to discover services:
   register `ServerReflectionContract` from `rpc_dart_grpc_reflection`.
-- rpc_dart adds a few metadata headers of its own (`x-trace-id`,
-  `x-request-id`, `x-route-service`). gRPC peers ignore them, and a proxy that
+- rpc_dart adds two metadata headers of its own (`x-trace-id`,
+  `x-request-id`). gRPC peers ignore them, and a proxy that
   strips them costs only tracing. The `x-rpc-*` flow-control headers that
   rpc_dart uses on other transports are not used over HTTP/2.
 - A non-200 `:status`, such as a proxy's error page, is mapped to a gRPC status

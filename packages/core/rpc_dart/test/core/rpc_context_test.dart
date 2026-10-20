@@ -617,27 +617,7 @@ void main() {
     });
 
     group('tracing', () {
-      test('a full trace: trace id, span id, parent span id', () {
-        // Arrange
-        const traceId = 'trace-123';
-        const spanId = 'span-456';
-        const parentSpanId = 'parent-789';
-
-        // Act
-        final sut = RpcContextUtils.withTracing(
-          traceId: traceId,
-          spanId: spanId,
-          parentSpanId: parentSpanId,
-        );
-
-        // Assert
-        expect(sut.getHeader('x-trace-id'), equals(traceId));
-        expect(sut.getHeader('x-span-id'), equals(spanId));
-        expect(sut.getHeader('x-parent-span-id'), equals(parentSpanId));
-        expect(sut.traceId, equals(traceId));
-      });
-
-      test('a trace id on its own', () {
+      test('a trace id', () {
         // Arrange
         const traceId = 'trace-only';
 
@@ -646,8 +626,6 @@ void main() {
 
         // Assert
         expect(sut.getHeader('x-trace-id'), equals(traceId));
-        expect(sut.getHeader('x-span-id'), isNull);
-        expect(sut.getHeader('x-parent-span-id'), isNull);
         expect(sut.traceId, equals(traceId));
       });
 
@@ -778,19 +756,16 @@ void main() {
       expect(sut.toString(), equals('RpcCancelledException: $message'));
     });
 
-    test('RpcDeadlineExceededException carries deadline and timeout', () {
+    test('RpcDeadlineExceededException carries its deadline', () {
       // Arrange
       final deadline = DateTime.now().add(Duration(minutes: 5));
-      final timeout = Duration(minutes: 5);
 
       // Act
-      final sut = RpcDeadlineExceededException(deadline, timeout);
+      final sut = RpcDeadlineExceededException(deadline);
 
       // Assert
       expect(sut.deadline, equals(deadline));
-      expect(sut.timeout, equals(timeout));
       expect(sut.toString(), contains('Deadline $deadline exceeded'));
-      expect(sut.toString(), contains('timeout: $timeout'));
     });
   });
 }
