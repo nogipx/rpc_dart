@@ -3,7 +3,7 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320, 327, 349, 734, 757, 775, 818, 869]
+applied: [216, 243, 320, 327, 349, 734, 757, 775, 818, 869, 893]
 status: swept here (round 869, 7ee9fab3)
 rank: 2
 ---
@@ -113,6 +113,17 @@ read.
   answers status 3, and with that cap ablated it answers no status at all
   (`grpc=null`). P-08 re-run unchanged.
   `../rounds/869-the-refusal-trailers-re-swept-a-third-time.md`.
+
+- **Round 893** — the detector had moved: `0ac48621` removed
+  `RpcMetadata.forTrailer`, and every trailer is now built by `RpcTrailers`
+  (`status`, `of`, `forError`, `fromHttpStatus`, `unexpectedContentType`,
+  `cancelled`). Sweep those. All that carry a message cap it through
+  `status`'s `maxMessageLength`; `cancelled(reason)` did not, and its reason
+  is the APPLICATION's text: a non-ASCII or long cancel reason got the notice
+  refused and the server never saw the cancel, on every member without a
+  stream reset. FIXED: percent-encoded, decoded on read, and a short fixed
+  reason when even the encoded one does not fit.
+  `../rounds/893-a-cancel-reason-in-any-language-reaches-the-server.md`.
 
 Beware the knob itself: below about 40, `maxHeaderValueBytes` refuses rpc_dart's
 own request headers and every call fails with INVALID_ARGUMENT, which reads like
