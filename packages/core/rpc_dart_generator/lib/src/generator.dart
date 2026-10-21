@@ -82,11 +82,6 @@ const _contractBaseMembers = {
   'callServerStream',
   'callClientStream',
   'callBidirectionalStream',
-  'cancelMethod',
-  'cancelAllMethods',
-  'isMethodActive',
-  'getActiveCallsCount',
-  'getCancellationTokensForMethod',
 };
 
 /// Code generator for RPC Dart service contracts annotated with [RpcService].
