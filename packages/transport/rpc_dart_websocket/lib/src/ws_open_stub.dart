@@ -48,8 +48,9 @@ const bool platformHonoursPingInterval = false;
 /// message itself, before the page sees a byte.
 ///
 /// [connectTimeout] IS honoured here: the bound is around `ready`, which needs
-/// no platform API. Every parameter exists so the signature matches the dart:io
-/// implementation; which of them bite differs, and is stated per parameter.
+/// no platform API. [cancelled] is honoured the same way. Every parameter exists
+/// so the signature matches the dart:io implementation; which of them bite
+/// differs, and is stated per parameter.
 Future<WebSocketChannel> openWebSocket(
   Uri uri, {
   Iterable<String>? protocols,
@@ -58,27 +59,43 @@ Future<WebSocketChannel> openWebSocket(
   Map<String, Object>? headers,
   Duration? connectTimeout,
   int? maxMessageBytes,
+  Future<void>? cancelled,
 }) async {
   // Referenced so the analyzer does not flag them, and so a reader sees the
   // platform cannot honour them rather than that somebody forgot. pingInterval
   // belongs here too: it is the one whose absence actually costs something.
   final _ = (pingInterval, enableCompression, headers, maxMessageBytes);
   final channel = WebSocketChannel.connect(uri, protocols: protocols);
-  final ready = connectTimeout == null
-      ? channel.ready
-      : channel.ready.timeout(
+  // Nothing to leak on the way out: unlike dart:io there is no raw socket held
+  // apart from the channel, so closing it is the whole cleanup.
+  void abandon() => unawaited(channel.sink.close().catchError((_) {}));
+  var ready = channel.ready;
+  if (connectTimeout != null) {
+    ready = ready.timeout(
+      connectTimeout,
+      onTimeout: () {
+        abandon();
+        throw TimeoutException(
+          'WebSocket connect to $uri timed out',
           connectTimeout,
-          onTimeout: () {
-            // Nothing to leak on the way out: unlike dart:io there is no raw
-            // socket held apart from the channel, so closing it is the whole
-            // cleanup.
-            unawaited(channel.sink.close().catchError((_) {}));
-            throw TimeoutException(
-              'WebSocket connect to $uri timed out',
-              connectTimeout,
-            );
-          },
         );
+      },
+    );
+  }
+  var opened = false;
+  if (cancelled != null) {
+    ready = Future.any([
+      ready,
+      cancelled.then<void>((_) {
+        // A cancel after the open belongs to nobody here: the channel is the
+        // caller's by then.
+        if (opened) return;
+        abandon();
+        throw StateError('WebSocket connect cancelled');
+      }),
+    ]);
+  }
   await ready;
+  opened = true;
   return channel;
 }

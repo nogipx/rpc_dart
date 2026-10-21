@@ -193,6 +193,12 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
   /// the upgrade and [connectTimeout] are UNAVAILABLE. An [Error] (a malformed
   /// [uri]) passes through unchanged.
   ///
+  /// [cancellationToken] abandons the open: when it is cancelled before the
+  /// open completes, the pending connect is closed at once and this throws an
+  /// [RpcCancelledException]. `RpcClientConnection.cancellable` hands one to
+  /// its factory per attempt, so a dispose does not leave the socket open until
+  /// [connectTimeout] -- or for good, with none.
+  ///
   /// [enableCompression] is false so the client does not OFFER
   /// permessage-deflate, which a hostile or compromised server could otherwise
   /// negotiate and flood it through: dart:io inflates an incoming message with
@@ -208,7 +214,11 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
     Map<String, Object>? headers,
     Duration? connectTimeout = const Duration(seconds: 30),
     LogScope? logger,
+    RpcCancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken != null && cancellationToken.isCancelled) {
+      throw _cancelled(cancellationToken);
+    }
     final WebSocketChannel channel;
     try {
       channel = await openWebSocket(
@@ -219,8 +229,13 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
         headers: headers,
         connectTimeout: connectTimeout,
         maxMessageBytes: _guardCeiling(policy),
+        cancelled: cancellationToken?.cancelled,
       );
     } catch (e, st) {
+      // Whatever the abandoned open failed with, the cause is the cancel.
+      if (cancellationToken?.isCancelled ?? false) {
+        Error.throwWithStackTrace(_cancelled(cancellationToken!), st);
+      }
       Error.throwWithStackTrace(_connectFailure(e, uri), st);
     }
     return RpcWebSocketCallerTransport(
@@ -248,6 +263,14 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
     final floor = const RpcSecurityPolicy().maxChannelFrameBytes;
     return own > floor ? own : floor;
   }
+
+  /// The failure of an open [token] abandoned. No uri in the text: a web
+  /// client's token sits in its query, and this one is not redacted.
+  static RpcCancelledException _cancelled(
+    RpcCancellationToken token,
+  ) => RpcCancelledException(
+    'WebSocket connect cancelled${token.reason == null ? '' : ': ${token.reason}'}',
+  );
 
   /// A failed open as a gRPC status. See [connect].
   ///

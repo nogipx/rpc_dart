@@ -89,6 +89,10 @@ Future<ConnectionTask<Socket>> Function(Uri, String?, int?) _sameOriginOnly(
 /// alone assembles a message with no ceiling, so a server that never sends a
 /// final fragment grows the client for as long as it writes. Not applied with
 /// compression on, where dart:io's own handshake is used.
+///
+/// [cancelled] abandons the open the way [connectTimeout] does, when it
+/// completes first: the attempt's own client is force-closed, which takes the
+/// pending connect and its descriptor with it.
 Future<WebSocketChannel> openWebSocket(
   Uri uri, {
   Iterable<String>? protocols,
@@ -97,6 +101,7 @@ Future<WebSocketChannel> openWebSocket(
   Map<String, Object>? headers,
   Duration? connectTimeout,
   int? maxMessageBytes,
+  Future<void>? cancelled,
 }) async {
   Future<WebSocketChannel> open(HttpClient? client) async {
     final ceiling = enableCompression ? null : maxMessageBytes;
@@ -142,13 +147,14 @@ Future<WebSocketChannel> openWebSocket(
   }
 
   // Null hands `WebSocket.connect` its own process-wide client, which is right:
-  // with no timeout there is nothing to cancel and nothing to own.
-  if (connectTimeout == null) return open(null);
+  // with no timeout and no cancel there is nothing to abandon and nothing to own.
+  if (connectTimeout == null && cancelled == null) return open(null);
 
-  // Its OWN client, so the timeout has something to CANCEL. Without one,
-  // `WebSocket.connect` uses a static shared client and the only thing a timeout
-  // can do is stop waiting -- see below.
-  final client = HttpClient()..connectionTimeout = connectTimeout;
+  // Its OWN client, so a timeout or a cancel has something to CANCEL. Without
+  // one, `WebSocket.connect` uses a static shared client and the only thing
+  // either can do is stop waiting -- see below.
+  final client = HttpClient();
+  if (connectTimeout != null) client.connectionTimeout = connectTimeout;
 
   // `Future.timeout` abandons the AWAIT, not the WORK, and that cuts two ways.
   //
@@ -166,26 +172,42 @@ Future<WebSocketChannel> openWebSocket(
   // waiting. `connectionTimeout` states the same bound inside the client; the
   // two cannot be told apart by measurement here, since both bounds are this
   // same duration.
-  var timedOut = false;
+  var abandoned = false;
   final opening = open(client);
   unawaited(
     opening
         .then((channel) {
-          if (timedOut) unawaited(channel.sink.close().catchError((_) {}));
+          if (abandoned) unawaited(channel.sink.close().catchError((_) {}));
         })
         .catchError((Object _) {}),
   );
   try {
-    final channel = await opening.timeout(
-      connectTimeout,
-      onTimeout: () {
-        timedOut = true;
-        throw TimeoutException(
-          'WebSocket connect to $uri timed out',
-          connectTimeout,
-        );
-      },
-    );
+    var waiting = opening;
+    if (connectTimeout != null) {
+      waiting = waiting.timeout(
+        connectTimeout,
+        onTimeout: () {
+          abandoned = true;
+          throw TimeoutException(
+            'WebSocket connect to $uri timed out',
+            connectTimeout,
+          );
+        },
+      );
+    }
+    var opened = false;
+    if (cancelled != null) {
+      waiting = Future.any([
+        waiting,
+        cancelled.then<WebSocketChannel>((_) {
+          // A cancel after the open is the caller's business, not this one's.
+          if (!opened) abandoned = true;
+          throw StateError('WebSocket connect cancelled');
+        }),
+      ]);
+    }
+    final channel = await waiting;
+    opened = true;
     // Not forced: this closes IDLE connections, and an upgraded WebSocket has
     // been detached from the client by `WebSocket.connect`, so the live socket is
     // unaffected. Skipping it would leak the client object itself, one per call.

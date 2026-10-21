@@ -79,6 +79,7 @@ Future<RpcWebSocketCallerTransport> connectWithOptions(
 | `enableCompression` | `false` | Offer permessage-deflate. See below. |
 | `headers` | none | Headers on the upgrade request. VM only. For a token that expires, read it in the `RpcClientConnection` factory, which calls `connect` once per attempt. |
 | `connectTimeout` | 30 s | Bounds the whole open, on both platforms. `null` waits without a bound: a server that accepts TCP and never completes the upgrade then holds `connect` forever. |
+| `cancellationToken` | none | Cancelling it abandons a pending open: the socket closes at once and `connect` throws `RpcCancelledException`. |
 
 **Keepalive.** A half-open connection (a NAT, load balancer or mobile network
 that stops forwarding without closing) is detected only by `pingInterval`.
@@ -121,7 +122,21 @@ One transport is one socket. When the socket drops the transport closes, and
 calls in flight on it fail. For reconnects with backoff, give
 `RpcClientConnection` from `rpc_dart` a factory that calls
 `RpcWebSocketCallerTransport.connect`; build endpoints once on
-`connection.transport`.
+`connection.transport`. Build it with `RpcClientConnection.cancellable` and
+pass the token through, so `dispose()` closes an upgrade still in flight
+instead of leaving its socket open until `connectTimeout`:
+
+```dart
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
+
+RpcClientConnection reconnecting(Uri uri) => RpcClientConnection.cancellable(
+  transportFactory: (cancellation) => RpcWebSocketCallerTransport.connect(
+    uri,
+    cancellationToken: cancellation,
+  ),
+);
+```
 
 A failed `connect` throws an `RpcStatusException`, as the http caller does:
 
