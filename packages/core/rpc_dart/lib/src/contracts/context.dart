@@ -45,6 +45,11 @@ final class RpcContext {
   /// and `withTimeout` testable without real time. Mirrors the logger's clock.
   final DateTime Function() clock;
 
+  /// Header names set as credentials under a name of the caller's choosing
+  /// ([RpcContextBuilder.withApiKey]); [sanitize] and
+  /// [RpcContextExtensions.forward] drop them with the built-in ones.
+  final Set<String> _credentialNames;
+
   RpcContext._({
     Map<String, String>? headers,
     this.deadline,
@@ -54,11 +59,13 @@ final class RpcContext {
     LogScope? log,
     Map<Object, Object>? values,
     DateTime Function()? clock,
+    Set<String>? credentialNames,
   }) : _headers = Map.from(headers ?? {}),
        requestId = requestId ?? _generateRequestId(),
        log = log ?? LogScope.noop,
        _values = Map.from(values ?? {}),
-       clock = clock ?? DateTime.now;
+       clock = clock ?? DateTime.now,
+       _credentialNames = credentialNames ?? const {};
 
   /// Creates a new empty context.
   factory RpcContext.empty() => RpcContext._();
@@ -149,6 +156,7 @@ final class RpcContext {
     LogScope? log,
     Map<Object, Object>? values,
     DateTime Function()? clock,
+    Set<String>? credentialNames,
   }) => RpcContext._(
     headers: headers ?? _headers,
     deadline: deadline ?? this.deadline,
@@ -158,6 +166,7 @@ final class RpcContext {
     log: log ?? this.log,
     values: values ?? _values,
     clock: clock ?? this.clock,
+    credentialNames: credentialNames ?? _credentialNames,
   );
 
   /// Returns the value of a header.
@@ -365,8 +374,17 @@ final class RpcContext {
     return !context.isExpired && !context.isCancelled;
   }
 
-  /// Headers [sanitize] and [RpcContextExtensions.forward] drop.
-  static const _credentialHeaders = {'authorization', 'x-api-key', 'cookie'};
+  /// Headers [sanitize] and [RpcContextExtensions.forward] drop, with any
+  /// name [RpcContextBuilder.withApiKey] was given.
+  static const _credentialHeaders = {
+    'authorization',
+    'proxy-authorization',
+    'x-api-key',
+    'cookie',
+  };
+
+  bool _isCredential(String name) =>
+      _credentialHeaders.contains(name) || _credentialNames.contains(name);
 
   /// Creates a copy of the context without sensitive data, for logging.
   ///
@@ -375,7 +393,7 @@ final class RpcContext {
   /// [RpcContextExtensions.forward].
   static RpcContext sanitize(RpcContext context) {
     final sanitizedHeaders = Map<String, String>.from(context.headers)
-      ..removeWhere((name, _) => _credentialHeaders.contains(name));
+      ..removeWhere((name, _) => context._isCredential(name));
 
     return RpcContextBuilder()
         .withHeaders(sanitizedHeaders)
@@ -473,6 +491,7 @@ abstract final class RpcContextUtils {
       cancellationToken: right.cancellationToken ?? left.cancellationToken,
       traceId: right.traceId ?? left.traceId,
       values: Map<Object, Object>.from(left._values)..addAll(right._values),
+      credentialNames: {...left._credentialNames, ...right._credentialNames},
     );
   }
 }
@@ -515,9 +534,8 @@ class RpcContextBuilder {
     return parent.traceId != null ? builder : builder.withGeneratedTraceId();
   }
 
-  /// Adds [headers] to the context, overriding any that already exist.
-  ///
-  /// Merges rather than replaces, despite the name.
+  /// Adds [headers] to the context; one already set under the same name is
+  /// replaced, and the rest are kept.
   RpcContextBuilder withHeaders(Map<String, String> headers) {
     _context = _context.withAdditionalHeaders(headers);
     return this;
@@ -593,9 +611,17 @@ class RpcContextBuilder {
     return withHeader('authorization', 'Basic $credentials');
   }
 
-  /// Sets the API key.
+  /// Sets the API key, under [headerName]; [RpcContext.sanitize] and
+  /// [RpcContextExtensions.forward] drop it whatever the name.
   RpcContextBuilder withApiKey(String key, {String headerName = 'x-api-key'}) {
-    return withHeader(headerName, key);
+    withHeader(headerName, key);
+    final name = RpcContext._normalizeHeaderName(headerName);
+    if (!_context._isCredential(name)) {
+      _context = _context._copy(
+        credentialNames: {..._context._credentialNames, name},
+      );
+    }
+    return this;
   }
 
   /// Returns the built context.
@@ -626,14 +652,18 @@ extension RpcContextExtensions on RpcContext {
   /// The context for a downstream call made on behalf of this one.
   ///
   /// Like [createChildWith]: the trace, deadline, cancellation token, values
-  /// and headers carry over, and a new request id is minted. The credentials
-  /// (`authorization`, `x-api-key`, `cookie`) do not.
+  /// and headers carry over, and a new request id is minted. This context's
+  /// credentials (`authorization`, `proxy-authorization`, `x-api-key`,
+  /// `cookie`, and a name given to [RpcContextBuilder.withApiKey]) do not;
+  /// [headers] are added after they are dropped, so the downstream call's own
+  /// credentials go through.
   RpcContext forward({Map<String, String>? headers, Duration? timeout}) {
-    final child = createChildWith(headers: headers, timeout: timeout);
+    final child = createChildWith(timeout: timeout);
+    final inherited = Map.of(child._headers)
+      ..removeWhere((name, _) => _isCredential(name));
     return child._copy(
-      headers: Map.of(
-        child._headers,
-      )..removeWhere((name, _) => RpcContext._credentialHeaders.contains(name)),
+      headers: RpcContext._sanitizeHeaders({...inherited, ...?headers}),
+      credentialNames: const {},
     );
   }
 }

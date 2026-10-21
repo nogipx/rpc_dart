@@ -70,8 +70,11 @@ token and values. It always generates a new `requestId`, and generates a `traceI
 Its `withDeadline` / `withTimeout` keep the parent's deadline when that is
 earlier: a derived context can shorten the deadline, never extend it.
 `ctx.createChild()` and `ctx.createChildWith({headers, timeout})` are shortcuts for it.
-`ctx.forward({headers, timeout})` is the same with `authorization`, `x-api-key`
-and `cookie` dropped: the context for a downstream call.
+`ctx.forward({headers, timeout})` is the same with this context's credentials
+dropped: `authorization`, `proxy-authorization`, `x-api-key`, `cookie`, and a
+header named by `withApiKey(headerName:)`. `headers` are added after that, so
+`forward(headers: {'authorization': 'Bearer <service token>'})` sends the
+downstream call's own credential. `RpcContext.sanitize(ctx)` drops the same set.
 
 `RpcContextUtils`: `withTracing({traceId})`,
 `generateTraceId()`, `traceIdFor(requestId)`, `merge(left, right)` (on

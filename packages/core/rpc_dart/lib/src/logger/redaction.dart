@@ -65,17 +65,21 @@ class LogRedactor {
 
   /// Redacts sensitive patterns in a free-text string.
   ///
-  /// Matches `field=value` and `field: value` patterns where [field] is one
-  /// of the configured sensitive field names (case-insensitive).
+  /// Matches `field=value` and `field: value` where `field` is one of the
+  /// configured names (case-insensitive), in the shapes a secret is usually
+  /// logged in: a query string (`?token=x&password=y`), JSON
+  /// (`"password":"x"`), and an authorization value with its scheme
+  /// (`authorization: Bearer x`), where the credential, not the scheme word,
+  /// is what must go.
   String redactString(String input) {
     if (_pattern == null) return input;
-    // Groups: 1 = leading boundary (start-of-string or a separator char,
-    // re-emitted verbatim), 2 = field name, 3 = the `=`/`:` separator with any
-    // surrounding whitespace. Only the value that follows is masked.
-    return input.replaceAllMapped(
-      _pattern,
-      (m) => '${m[1]}${m[2]}${m[3]}$replacement',
-    );
+    return input.replaceAllMapped(_pattern, (m) {
+      final value = m[5]!;
+      final quote = value.startsWith('"') || value.startsWith("'")
+          ? value[0]
+          : '';
+      return '${m[1]}${m[2]}${m[3]}${m[2]}${m[4]}$quote$replacement$quote';
+    });
   }
 
   late final RegExp? _pattern = _buildPattern();
@@ -83,14 +87,20 @@ class LogRedactor {
   RegExp? _buildPattern() {
     if (_fields.isEmpty) return null;
     final escaped = _fields.map(RegExp.escape).join('|');
-    // Matches: <boundary>field=value or field: value (value runs up to the next
-    // whitespace, comma, semicolon, or end). The leading boundary (start or a
-    // separator char) prevents matching a field name as a substring of a longer
-    // identifier (e.g. `mytoken=`), and `\s*` around the separator handles
-    // `password = value`. A captured boundary is used instead of a lookbehind
-    // so the behavior is identical on the VM and dart2js.
+    // Groups: 1 = the boundary before the name, re-emitted; 2 = an optional
+    // opening quote, which must close after the name; 3 = the name; 4 = the
+    // `=`/`:` separator with its whitespace; 5 = the value, masked.
+    //
+    // The boundary is start or any character that cannot continue an
+    // identifier, so `mytoken=` and `my-token=` do not match `token`. A
+    // captured boundary rather than a lookbehind keeps the VM and dart2js
+    // identical. An unquoted value ends at whitespace or at a character that
+    // ends a value in a query string or JSON; a scheme word before it is part
+    // of it.
     return RegExp(
-      '(^|[\\s,;])($escaped)(\\s*[=:]\\s*)[^\\s,;]+',
+      '(^|[^A-Za-z0-9_\\-])(["\']?)($escaped)\\2(\\s*[=:]\\s*)'
+      '("[^"]*"|\'[^\']*\'|'
+      '(?:(?:bearer|basic|digest|negotiate|token)\\s+)?[^\\s,;&"\'}\\]]+)',
       caseSensitive: false,
     );
   }

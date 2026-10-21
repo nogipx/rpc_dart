@@ -89,6 +89,43 @@ void main() {
     test('redacts a normal token=value', () {
       expect(redactor.redactString('token=abc123'), 'token=[REDACTED]');
     });
+
+    test('does not match a field name after a hyphen', () {
+      expect(redactor.redactString('my-token=keepme'), 'my-token=keepme');
+    });
+
+    test(
+      'redacts the credential of an authorization value, not the scheme',
+      () {
+        final auth = LogRedactor(fields: ['authorization']);
+        expect(
+          auth.redactString('authorization: Bearer eyJhbGciOi.secret next'),
+          'authorization: [REDACTED] next',
+        );
+        expect(
+          auth.redactString('Authorization=Basic dXNlcjpwYXNz'),
+          'Authorization=[REDACTED]',
+        );
+      },
+    );
+
+    test('redacts a value inside JSON text', () {
+      expect(
+        redactor.redactString('{"password":"hunter 2","user":"bob"}'),
+        '{"password":"[REDACTED]","user":"bob"}',
+      );
+      expect(
+        redactor.redactString("{'token': 'abc'}"),
+        "{'token': '[REDACTED]'}",
+      );
+    });
+
+    test('redacts every parameter of a query string', () {
+      expect(
+        redactor.redactString('GET /login?token=abc123&x=1&password=hunter2'),
+        'GET /login?token=[REDACTED]&x=1&password=[REDACTED]',
+      );
+    });
   });
 
   group('LogController isolates a throwing output', () {
