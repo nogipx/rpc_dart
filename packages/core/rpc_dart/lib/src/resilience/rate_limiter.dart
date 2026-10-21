@@ -233,8 +233,28 @@ class _SlidingWindowCounter extends _RateLimitCounter {
     if (_current > 0) _current--;
   }
 
+  /// How long until [_doAcquire] admits again, read right after it refused.
+  ///
+  /// The estimate is `current + floor(previous * (1 - t / window))`, so a slot
+  /// is back when the previous window's share has decayed below what is left,
+  /// or, with the current window full, that far into the next one, where the
+  /// current count becomes the previous.
   @override
-  Duration get retryAfter => Duration(microseconds: _windowUs ~/ max);
+  Duration get retryAfter {
+    final inWindowUs = _nowMicros() - _windowStartUs;
+    final int waitUs;
+    if (_current >= max) {
+      final intoNextUs = _windowUs * (1 - max / _current);
+      waitUs = _windowUs - inWindowUs + intoNextUs.ceil();
+    } else if (_previous > 0) {
+      final decayedAtUs = _windowUs * (1 - (max - _current) / _previous);
+      waitUs = decayedAtUs.ceil() - inWindowUs;
+    } else {
+      waitUs = 0;
+    }
+    // One past the boundary: the comparison it waits out is strict.
+    return Duration(microseconds: waitUs.clamp(0, _windowUs) + 1);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -279,8 +299,13 @@ class _TokenBucketCounter extends _RateLimitCounter {
     _tokens = (_tokens + 1.0).clamp(0.0, burst.toDouble());
   }
 
+  /// How long the missing part of one token takes to refill, read right after
+  /// a refusal, which refilled the bucket to now.
   @override
-  Duration get retryAfter => Duration(microseconds: _windowUs ~/ max);
+  Duration get retryAfter {
+    final missing = (1.0 - _tokens).clamp(0.0, 1.0);
+    return Duration(microseconds: (missing * _windowUs / max).ceil() + 1);
+  }
 }
 
 // ---------------------------------------------------------------------------

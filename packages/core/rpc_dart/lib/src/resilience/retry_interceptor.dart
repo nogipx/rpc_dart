@@ -28,10 +28,15 @@ typedef RpcRetryPredicate = bool Function(Object error);
 /// unless the server deduplicates by request id — [RpcContext] carries
 /// `requestId` for exactly that.
 ///
-/// The backoff never outlives the call's deadline: when the next delay would
+/// A server that pushes back names its own delay: an error carrying an
+/// [RpcRetryInfo] with a positive `retryDelay` waits that long instead of
+/// [backoff], as gRPC clients do. A zero `retryDelay` (a capacity limit that
+/// frees up by itself) waits [backoff].
+///
+/// The wait never outlives the call's deadline: when the next delay would
 /// not fit in [RpcContext.remainingTime], the retry is abandoned and the last
 /// error is rethrown immediately rather than after a sleep the caller did not
-/// budget for.
+/// budget for. A cancel cuts it short.
 ///
 /// Usage:
 /// ```dart
@@ -113,7 +118,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
           break;
         }
 
-        final delay = backoff.delayFor(attempt);
+        final delay = _pushbackDelay(e) ?? backoff.delayFor(attempt);
         final remaining = call.context.remainingTime;
         if (remaining != null && delay >= remaining) {
           // Sleeping the whole backoff would pass the caller's deadline, and
@@ -132,6 +137,17 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     }
 
     Error.throwWithStackTrace(lastError!, lastStack!);
+  }
+
+  /// The positive delay [error]'s [RpcRetryInfo] asks for, or null.
+  static Duration? _pushbackDelay(Object error) {
+    if (error is! RpcStatusException) return null;
+    for (final detail in error.details) {
+      if (detail is RpcRetryInfo && detail.retryDelay > Duration.zero) {
+        return detail.retryDelay;
+      }
+    }
+    return null;
   }
 
   /// Waits [delay], or less if [token] is cancelled first.
