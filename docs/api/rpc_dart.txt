@@ -341,7 +341,6 @@ RpcCallerContract method getActiveCallsCount(String methodName) -> int
 RpcCallerContract method getCancellationTokensForMethod(String methodName) -> Map<String, RpcCancellationToken>
 RpcCallerContract method isMethodActive(String methodName) -> bool
 RpcCallerContract new new(String serviceName, RpcCallerEndpoint endpoint, {RpcDataTransferMode dataTransferMode})
-RpcCallerEndpoint field activeResponderCount: int (get)
 RpcCallerEndpoint field compressionEnabled: bool (get)
 RpcCallerEndpoint field debugLabel: String? (get)
 RpcCallerEndpoint field isActive: bool (get)
@@ -359,7 +358,6 @@ RpcCallerEndpoint method close() -> Future<void>
 RpcCallerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcCallerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
 RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
-RpcCallerEndpoint method markDraining() -> void
 RpcCallerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcCallerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcCallerEndpoint method start() -> void
@@ -577,7 +575,6 @@ RpcDouble new fromJson(Map<String, dynamic> json)
 RpcDouble new new(double value)
 RpcDouble static field codec: RpcCodec<RpcDouble> (get)
 RpcDoubleX field rpc: RpcDouble (get)
-RpcEndpointBase field activeResponderCount: int (get)
 RpcEndpointBase field debugLabel: String? (get)
 RpcEndpointBase field isActive: bool (get)
 RpcEndpointBase field transport: IRpcTransport (get)
@@ -586,7 +583,6 @@ RpcEndpointBase method addMiddleware(IRpcMiddleware middleware) -> void
 RpcEndpointBase method close() -> Future<void>
 RpcEndpointBase method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcEndpointBase method health() -> Future<RpcEndpointHealth>
-RpcEndpointBase method markDraining() -> void
 RpcEndpointBase method start() -> void
 RpcEndpointBase new new({required IRpcTransport transport, String? debugLabel})
 RpcEndpointHealth field dependencies: Map<String, RpcHealthStatus> (get)

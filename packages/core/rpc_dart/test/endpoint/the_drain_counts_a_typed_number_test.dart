@@ -145,14 +145,6 @@ void main() {
     },
   );
 
-  // GUARD: an endpoint with no responder half counts zero rather than throwing.
-  // That is the honest default -- it is serving nothing -- and a server may
-  // hold both kinds.
-  test('GUARD: a caller-only endpoint counts zero', () {
-    expect(caller.activeResponderCount, 0);
-    expect(inFlightResponderCalls([caller]), 0);
-  });
-
   // GUARD: the count comes back down, or a drain would never converge.
   test('GUARD: the count returns to zero when the call finishes', () async {
     await startParkedCall();

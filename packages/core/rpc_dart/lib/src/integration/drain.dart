@@ -10,9 +10,9 @@ import '../logger/_index.dart';
 /// Live responder streams across [endpoints]: the count a
 /// connection-per-endpoint server's [drainUntilIdle] polls.
 ///
-/// Peer endpoints are INCLUDED: `RpcPeerEndpoint` serves calls too, and
-/// counting only `RpcResponderEndpoint` drains a peer server instantly.
-int inFlightResponderCalls(Iterable<RpcEndpointBase> endpoints) {
+/// Peer endpoints are included: an `RpcPeerEndpoint` is an
+/// [RpcResponderEndpoint].
+int inFlightResponderCalls(Iterable<RpcResponderEndpoint> endpoints) {
   var total = 0;
   for (final endpoint in endpoints) {
     total += endpoint.activeResponderCount;

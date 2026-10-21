@@ -22,26 +22,6 @@ abstract base class RpcEndpointBase {
   RpcEndpointBase({required IRpcTransport transport, this.debugLabel})
     : _transport = transport;
 
-  /// Stops admitting NEW streams, leaving the active ones alone.
-  ///
-  /// Declared here rather than on the responder mixin because a SERVER holds
-  /// its endpoints as [RpcEndpointBase] — peer-mode endpoints serve calls too
-  /// and are sibling subclasses, so narrowing the list drops them. The same
-  /// reason [collectEndpointMetrics] lives here.
-  ///
-  /// A no-op by default and that is the honest default: an endpoint with no
-  /// responder half has nothing to stop admitting. `RpcResponderPipelineMixin`
-  /// overrides it, and is deliberately hidden from the public surface, so a
-  /// type test against it is not available to a transport package.
-  void markDraining() {}
-
-  /// Live responder streams this endpoint is serving: what a graceful drain
-  /// polls. [RpcEndpointMetrics.activeResponders] reports the same number.
-  ///
-  /// Zero by default, for the same reason [markDraining] is a no-op: an
-  /// endpoint with no responder half is serving nothing.
-  int get activeResponderCount => 0;
-
   /// A snapshot of the endpoint's counters, for health reporting and tests.
   RpcEndpointMetrics collectEndpointMetrics() => _metrics();
 

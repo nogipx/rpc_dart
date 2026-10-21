@@ -407,23 +407,15 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// The half of [drain] a graceful shutdown actually wants. From here a new
   /// stream is answered `UNAVAILABLE` — retryable, which is what a draining
   /// server should say — while anything already running finishes on its own.
+  /// A server over a transport with no GOAWAY, such as WebSocket, has no other
+  /// way to stop an already-connected peer from opening streams.
   ///
-  /// It exists because the two halves had no separate switch, and a server that
-  /// wanted only this had no way to ask for it. `RpcWebSocketServer` is that
-  /// server: WebSocket has no GOAWAY, so without an admission stop its
-  /// `stop(drainTimeout:)` did not drain at all — it waited, serving everything
-  /// an already-connected peer asked for. Measured against http2, which does
-  /// send GOAWAY, with both budgets fully spent:
-  ///
-  ///     websocket  1347 calls admitted after shutdown began
-  ///     http2         4
-  ///
-  /// Not idempotent-sensitive and deliberately not a `Future`: it sets a flag.
-  /// Wait for the work with [drainUntilIdle] or [drain].
-  @override
+  /// Not a `Future`: it sets a flag. Wait for the work with [drainUntilIdle]
+  /// or [drain].
   void markDraining() => _respIsDraining = true;
 
-  @override
+  /// Live responder streams this endpoint is serving: what a graceful drain
+  /// polls. [RpcEndpointMetrics.activeResponders] reports the same number.
   int get activeResponderCount =>
       _respStreams.values.where((state) => state.hasResponder).length;
 
