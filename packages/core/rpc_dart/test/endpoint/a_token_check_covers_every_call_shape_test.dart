@@ -2,20 +2,17 @@
 //
 // SPDX-License-Identifier: MIT
 
-// `IRpcCallCheck.check` runs for every call shape, so a check put there
+// `IRpcInterceptor.check` runs for every call shape, so a check put there
 // cannot miss one. The skill's `RequireTokenInterceptor`
-// (contracts-and-endpoints.md) is copied here as written there; it used to
-// override `interceptUnary` only, and a caller without a token was refused a
-// unary call and served every streaming one. Keep this copy in step with the
-// skill's.
+// (contracts-and-endpoints.md) is copied here as written there. Keep this
+// copy in step with the skill's.
 
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
-final class RequireTokenInterceptor extends IRpcInterceptor
-    implements IRpcCallCheck {
+final class RequireTokenInterceptor extends IRpcInterceptor {
   const RequireTokenInterceptor();
 
   @override
@@ -27,8 +24,7 @@ final class RequireTokenInterceptor extends IRpcInterceptor
 }
 
 /// The same check, asynchronous: a token store that answers later.
-final class AsyncTokenInterceptor extends IRpcInterceptor
-    implements IRpcCallCheck {
+final class AsyncTokenInterceptor extends IRpcInterceptor {
   const AsyncTokenInterceptor();
 
   @override
@@ -41,7 +37,7 @@ final class AsyncTokenInterceptor extends IRpcInterceptor
 }
 
 /// Records the order hooks run in.
-final class _Order extends IRpcInterceptor implements IRpcCallCheck {
+final class _Order extends IRpcInterceptor {
   _Order(this.name, this.seen);
   final String name;
   final List<String> seen;

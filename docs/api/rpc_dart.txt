@@ -79,8 +79,6 @@ GrpcServingStatus static field unknown: GrpcServingStatus (get)
 GrpcServingStatus static field values: List<GrpcServingStatus> (get)
 GrpcServingStatus static method fromValue(int v) -> GrpcServingStatus
 IRpcAdvisoryChannelError new new()
-IRpcCallCheck method check(RpcMiddlewareContext call) -> FutureOr<void>
-IRpcCallCheck new new()
 IRpcChannel field incoming: Stream<Uint8List> (get)
 IRpcChannel field isClosed: bool (get)
 IRpcChannel method close() -> Future<void>
@@ -98,6 +96,7 @@ IRpcContract new new()
 IRpcFlowCredit method deferFlowCredit(int streamId) -> void
 IRpcFlowCredit method returnFlowCredit(int streamId, int bytes) -> void
 IRpcFlowCredit new new()
+IRpcInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
 IRpcInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
 IRpcInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
 IRpcInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
@@ -304,6 +303,7 @@ RpcCallDirection static field values: List<RpcCallDirection> (get)
 RpcCallFailed field error: Object (get)
 RpcCallFailed field stackTrace: StackTrace (get)
 RpcCallFailed new new(Object error, StackTrace stackTrace)
+RpcCallObserverInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
 RpcCallObserverInterceptor method contextFor(S state, RpcContext context) -> RpcContext
 RpcCallObserverInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
 RpcCallObserverInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
@@ -430,6 +430,7 @@ RpcCircuitBreakerInterceptor field failureThreshold: int (get)
 RpcCircuitBreakerInterceptor field probeAbandonTimeout: Duration (get)
 RpcCircuitBreakerInterceptor field resetTimeout: Duration (get)
 RpcCircuitBreakerInterceptor field state: CircuitBreakerState (get)
+RpcCircuitBreakerInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
 RpcCircuitBreakerInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
 RpcCircuitBreakerInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
 RpcCircuitBreakerInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
@@ -975,6 +976,7 @@ RpcRateLimitException field message: String (get)
 RpcRateLimitException field statusCode: int (get)
 RpcRateLimitException field statusDetailsBin: Uint8List? (get)
 RpcRateLimitException new new(String message, {Duration? retryAfter})
+RpcRateLimiter method check(RpcMiddlewareContext call) -> FutureOr<void>
 RpcRateLimiter method dispose() -> void
 RpcRateLimiter method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
 RpcRateLimiter method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
@@ -1036,6 +1038,7 @@ RpcRetryInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
 RpcRetryInterceptor field backoff: BackoffPolicy (get)
 RpcRetryInterceptor field maxAttempts: int (get)
 RpcRetryInterceptor field retryOn: bool Function(Object)? (get)
+RpcRetryInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
 RpcRetryInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
 RpcRetryInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
 RpcRetryInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
@@ -1203,7 +1206,6 @@ type GrpcHealthCheckResponse : Object (rpc_dart.dart, transport.dart, transport_
 type GrpcHealthServiceStatus : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type GrpcServingStatus : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcAdvisoryChannelError : Object (transport.dart, transport_io.dart)
-type IRpcCallCheck : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcChannel [required] : Object (transport.dart, transport_io.dart)
 type IRpcCodec<T> [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcConnectionBuffer [required] : Object (transport.dart, transport_io.dart)

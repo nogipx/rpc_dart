@@ -491,7 +491,7 @@ them, so each of their names is one a service method cannot have, and the
 generator refuses those names.
 
 The small role interfaces never gain a member: `IRpcSerializable`,
-`IRpcCallCheck`, `IRpcFlowCredit` and `IRpcConnectionBuffer`. A new capability
+`IRpcFlowCredit` and `IRpcConnectionBuffer`. A new capability
 comes as a new interface.
 
 A minor release may add a value to these enums or a subtype to these sealed

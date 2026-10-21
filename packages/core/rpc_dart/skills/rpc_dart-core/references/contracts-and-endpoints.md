@@ -219,7 +219,7 @@ set is fixed when a call starts.
 
 | | `IRpcMiddleware` | `IRpcInterceptor` |
 | --- | --- | --- |
-| Hooks | `processRequest<T>(RpcMiddlewareContext call, T request)`, `processResponse<T>(call, T response)`; return `FutureOr<T>` | `check(call)` for every shape when it also implements `IRpcCallCheck`, then one of `interceptUnary(call, request, next)`, `interceptServerStream(call, request, next)`, `interceptClientStream(call, requests, next)`, `interceptBidirectionalStream(call, requests, next)` |
+| Hooks | `processRequest<T>(RpcMiddlewareContext call, T request)`, `processResponse<T>(call, T response)`; return `FutureOr<T>` | `check(call)` for every shape, then one of `interceptUnary(call, request, next)`, `interceptServerStream(call, request, next)`, `interceptClientStream(call, requests, next)`, `interceptBidirectionalStream(call, requests, next)` |
 | On streams | runs per message | sees the whole stream |
 | Short-circuit | only by throwing | return without calling `next` |
 | Register | `endpoint.addMiddleware(m)` | `endpoint.addInterceptor(i)` |
@@ -228,8 +228,8 @@ set is fixed when a call starts.
 Per call: request middlewares, then interceptors, then the handler (on a caller
 endpoint: the wire), then response middlewares. Defaults pass through; override
 only what you need. A CHECK (authentication, authorization, a quota): the
-interceptor also implements `IRpcCallCheck`, whose `check(call)` runs before
-the interceptor's method for every call shape; throw an `RpcStatusException`
+interceptor overrides `check(call)`, which runs before the interceptor's
+method for every call shape; throw an `RpcStatusException`
 to refuse. A check written in `interceptUnary` alone leaves the three
 streaming shapes unchecked. `RpcMiddlewareContext` has `endpoint`, `serviceName`,
 `methodName`, `context`, and `direction`
@@ -264,8 +264,7 @@ final class TrimMiddleware extends IRpcMiddleware {
 
 /// Refuses every call without a token, whatever its shape: `check` runs for
 /// all four.
-final class RequireTokenInterceptor extends IRpcInterceptor
-    implements IRpcCallCheck {
+final class RequireTokenInterceptor extends IRpcInterceptor {
   const RequireTokenInterceptor();
 
   @override

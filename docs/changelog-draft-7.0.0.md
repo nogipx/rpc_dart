@@ -136,7 +136,7 @@ their `codec`.
 
 ### New
 
-- `IRpcCallCheck`: a check that runs for every call shape.
+- `IRpcInterceptor.check`: a check that runs for every call shape.
 - `RpcCallObserverInterceptor`: observe every call of every shape. Middleware
   can tell an outgoing call from an incoming one.
 - `IRpcServer.stop(drainTimeout:)` stops admitting and waits for in-flight

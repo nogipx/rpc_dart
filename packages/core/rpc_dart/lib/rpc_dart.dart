@@ -79,7 +79,6 @@ export 'src/_index.dart'
         RpcCallFailed,
         RpcCallCancelled,
         IRpcMiddleware,
-        IRpcCallCheck,
         RpcMiddlewareContext,
         RpcCallDirection,
         RpcUnaryNext,

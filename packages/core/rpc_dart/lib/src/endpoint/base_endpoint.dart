@@ -359,15 +359,14 @@ abstract base class RpcEndpointBase {
     return ctx;
   }
 
-  /// Runs [interceptor]'s [IRpcCallCheck.check], if it has one, and returns
-  /// its future, or null when there is none or it finished synchronously:
-  /// awaiting anyway would cost every call a turn per interceptor.
+  /// Runs [interceptor]'s [IRpcInterceptor.check] and returns its future, or
+  /// null when it finished synchronously: awaiting anyway would cost every
+  /// call a turn per interceptor.
   static Future<void>? _beforeCall(
     IRpcInterceptor interceptor,
     RpcMiddlewareContext call,
   ) {
-    if (interceptor is! IRpcCallCheck) return null;
-    final pending = (interceptor as IRpcCallCheck).check(call);
+    final pending = interceptor.check(call);
     return pending is Future<void> ? pending : null;
   }
 
