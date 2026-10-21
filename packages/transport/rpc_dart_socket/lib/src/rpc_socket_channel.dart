@@ -24,8 +24,10 @@ import 'package:rpc_dart/transport.dart';
 ///
 /// **A closing peer cannot say why.** A raw socket has no close code, so a
 /// connection closed for a protocol violation reaches the peer as an ordinary
-/// end of stream, which its caller reports as UNAVAILABLE.
-class RpcSocketChannel implements IRpcChannel {
+/// end of stream, which its caller reports as UNAVAILABLE. A message past the
+/// size limit is the exception: its RESOURCE_EXHAUSTED trailer is written
+/// before the close, and [closeForOversize] makes sure it arrives.
+class RpcSocketChannel implements IRpcChannel, IRpcChannelOversizeClose {
   /// Wraps [socket], which this channel then owns: [close] closes it.
   ///
   /// [closeTimeout] bounds the orderly close. Closing flushes what is still
@@ -162,6 +164,67 @@ class RpcSocketChannel implements IRpcChannel {
     } catch (_) {
       // Timed out or failed: the peer is not reading, or is gone.
     }
+    _socket.destroy();
+    if (!_done.isCompleted) _done.complete();
+  }
+
+  /// The most of a refused peer's remaining bytes [closeForOversize] reads
+  /// and drops: twice the default `maxMessageLengthBytes`, so the rest of
+  /// one message past the default limit fits.
+  static const int _maxOversizeDrainBytes = 32 * 1024 * 1024;
+
+  /// Closes because the peer's message was larger than the policy allows,
+  /// letting the answer already queued reach the peer.
+  ///
+  /// The peer may still be writing that message. Destroying the socket with
+  /// its bytes unread makes the kernel reset the connection, and a reset
+  /// discards what the peer has received but not read yet: the
+  /// RESOURCE_EXHAUSTED trailer written just before. The peer's caller is
+  /// left with its own failed write, UNAVAILABLE, which a retry repeats with
+  /// the same message.
+  ///
+  /// So the queued writes go out with FIN, as in [close], and the peer's
+  /// remaining bytes are read and dropped until it closes its side. Bounded
+  /// by [_maxOversizeDrainBytes] and by the close timeout, so a peer that
+  /// keeps sending is cut off as before.
+  @override
+  Future<void> closeForOversize(String reason) async {
+    if (_closed) return;
+    _writes.flush();
+    _closed = true;
+    if (!_incoming.isClosed) unawaited(_incoming.close());
+
+    final peerClosed = Completer<void>();
+    void stop() {
+      if (!peerClosed.isCompleted) peerClosed.complete();
+    }
+
+    var drained = 0;
+    _sub
+      ..onData((chunk) {
+        drained += chunk.length;
+        if (drained > _maxOversizeDrainBytes) stop();
+      })
+      ..onError((Object _) => stop())
+      ..onDone(stop);
+    // The reader may be paused by a full write backlog or by a consumer that
+    // stopped reading; a paused reader drains nothing.
+    while (_sub.isPaused) {
+      _sub.resume();
+    }
+
+    unawaited(_out.close());
+    try {
+      await _writing
+          .then((_) => _socket.close())
+          .then((_) => peerClosed.future)
+          .timeout(_closeTimeout);
+    } catch (_) {
+      // Timed out or failed: the peer is not reading, or is gone.
+    }
+    try {
+      await _sub.cancel();
+    } catch (_) {}
     _socket.destroy();
     if (!_done.isCompleted) _done.complete();
   }
