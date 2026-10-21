@@ -1,10 +1,10 @@
 ---
-status: open
-round: (not re-measured)
-commit: ab7e4b41
+status: closed (round 898)
+round: 898
+commit: 947f074c
 paths: [packages/test/rpc_dart_conformance/test/i7_one_failure_one_status_test.dart, packages/transport/rpc_dart_socket/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart]
-probe:
-reason: risk — one failure seen in major-release step 3 (section 7 work), not reproduced
+probe: P-350
+reason: closed — CONFIRMED in round 898 (P-350: 34% at 1 MiB, 88% at 8 MiB read UNAVAILABLE; the socket close reset the connection under the client's unfinished write and the reset discarded the trailer) and fixed there: RpcSocketChannel.closeForOversize drains the rest, bounded
 rank: 10
 ---
 
