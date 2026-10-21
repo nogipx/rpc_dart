@@ -74,7 +74,7 @@ void main() {
         );
         return r.value;
       } on RpcStatusException catch (e) {
-        return 'status ${e.statusCode}';
+        return 'status ${e.statusCode.code}';
       } on ArgumentError {
         return 'refused by the caller';
       }
@@ -111,7 +111,10 @@ void main() {
     test('GUARD: an absent method is still UNIMPLEMENTED, not malformed', () {
       // If everything came back INVALID_ARGUMENT the witnesses above would be
       // satisfied by a responder that refuses everything.
-      expect(call('a', 'c'), completion('status ${RpcStatus.unimplemented}'));
+      expect(
+        call('a', 'c'),
+        completion('status ${RpcStatus.unimplemented.code}'),
+      );
     });
   });
 
@@ -200,7 +203,7 @@ void main() {
       );
       expect(
         await rawSend('/a/b.secret'),
-        '${RpcStatus.invalidArgument}',
+        '${RpcStatus.invalidArgument.code}',
         reason:
             'before the fix this read "accepted" too — the responder could not '
             'tell the two paths apart',

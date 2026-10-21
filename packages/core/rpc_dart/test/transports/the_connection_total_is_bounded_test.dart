@@ -319,7 +319,7 @@ void main() {
       // INTERNAL since round 637: the first frame after the request is a second
       // request, refused at once, so the stream is torn down holding only the
       // request -- which is still what must come back.
-      expect(status, '${RpcStatus.internal}');
+      expect(status, '${RpcStatus.internal.code}');
       s.hold.complete();
 
       final fresh = StreamController<RpcString>();

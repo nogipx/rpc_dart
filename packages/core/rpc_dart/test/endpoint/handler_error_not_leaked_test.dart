@@ -236,7 +236,7 @@ void main() {
         ),
       );
       expect(text, contains('you may not do that'));
-      expect(text, contains('${RpcStatus.permissionDenied}'));
+      expect(text, contains('${RpcStatus.permissionDenied.code}'));
       expect(text, isNot(contains(kInternalErrorWireMessage)));
     },
   );

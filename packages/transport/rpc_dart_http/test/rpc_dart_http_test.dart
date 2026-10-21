@@ -757,7 +757,7 @@ void main() {
       final grpcStatus = trailer.metadata?.getHeaderValue(
         RpcHeaders.grpcStatus,
       );
-      expect(grpcStatus, '${RpcStatus.unimplemented}');
+      expect(grpcStatus, '${RpcStatus.unimplemented.code}');
 
       await clientTransport.close();
       await server.close(force: true);

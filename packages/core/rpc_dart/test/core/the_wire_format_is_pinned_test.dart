@@ -167,7 +167,7 @@ void main() {
     expect(_toHex(error.statusDetailsBin!), statusDetails);
 
     final read = RpcStatusException.fromTrailer(
-      RpcStatus.notFound,
+      RpcStatus.notFound.code,
       'missing',
       detailsBin: _hex(statusDetails),
     );

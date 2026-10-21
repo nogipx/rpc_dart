@@ -215,7 +215,7 @@ void main() {
     }
     expect(
       status,
-      '${RpcStatus.internal}',
+      '${RpcStatus.internal.code}',
       reason: 'the peer was never refused while the handler held its frames',
     );
     s.hold.complete();
@@ -260,11 +260,11 @@ void main() {
     }
 
     test('the request alone is answered', () async {
-      expect(await extraFrames(0), '${RpcStatus.ok}');
+      expect(await extraFrames(0), '${RpcStatus.ok.code}');
     });
 
     test('one more is refused', () async {
-      expect(await extraFrames(1), '${RpcStatus.internal}');
+      expect(await extraFrames(1), '${RpcStatus.internal.code}');
     });
   });
 
@@ -301,7 +301,7 @@ void main() {
       }
       expect(
         status,
-        '${RpcStatus.ok}',
+        '${RpcStatus.ok.code}',
         reason: '${(frame.length / piece).ceil()} fragments',
       );
       await sub.cancel();

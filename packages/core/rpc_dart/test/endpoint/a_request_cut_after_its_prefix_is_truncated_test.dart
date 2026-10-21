@@ -79,13 +79,13 @@ void main() {
     group(method == 'Up' ? 'client-stream' : 'bidi', () {
       test('a tail of only the prefix is truncated', () async {
         final seen = <String>[];
-        expect(await _call(method, 5, seen), '${RpcStatus.internal}');
+        expect(await _call(method, 5, seen), '${RpcStatus.internal.code}');
         expect(seen, isNot(contains('clean end')));
       });
 
       test('CONTROL a tail cut inside the body is truncated', () async {
         final seen = <String>[];
-        expect(await _call(method, 7, seen), '${RpcStatus.internal}');
+        expect(await _call(method, 7, seen), '${RpcStatus.internal.code}');
         expect(seen, isNot(contains('clean end')));
       });
     });

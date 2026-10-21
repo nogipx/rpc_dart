@@ -85,7 +85,7 @@ void main() {
           .timeout(const Duration(seconds: 10));
       return r.value;
     } on RpcStatusException catch (e) {
-      return 'status=${e.statusCode}';
+      return 'status=${e.statusCode.code}';
     }
   }
 

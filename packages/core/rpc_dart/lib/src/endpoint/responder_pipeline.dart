@@ -474,7 +474,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   Future<void> _sendGrpcErrorAndCleanup({
     required int streamId,
-    required int status,
+    required RpcStatus status,
     required String message,
     List<RpcHeader> extraHeaders = const [],
     bool atCapacity = false,

@@ -66,7 +66,7 @@ Future<void> main(List<String> args) async {
   } catch (e) {
     stdout.writeln(
       'CAUGHT ${e.runtimeType}'
-      '${e is RpcStatusException ? ' status=${e.statusCode}' : ''}',
+      '${e is RpcStatusException ? ' status=${e.statusCode.code}' : ''}',
     );
   }
   await caller.close();
@@ -165,7 +165,7 @@ void main() {
       expect(
         client.stdout.toString(),
         contains(
-          'CAUGHT RpcStatusException status=${RpcStatus.resourceExhausted}',
+          'CAUGHT RpcStatusException status=${RpcStatus.resourceExhausted.code}',
         ),
         reason:
             'the refusal is already on the stream; the call must read it '

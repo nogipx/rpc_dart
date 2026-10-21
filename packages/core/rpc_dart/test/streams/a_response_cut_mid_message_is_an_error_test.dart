@@ -61,7 +61,7 @@ Future<(List<String>, Object?)> _serverStream(int cut) async {
     ..feed(
       RpcChannelFrame.encodeMetadata(
         streamId: id,
-        metadata: RpcTrailers.status(0),
+        metadata: RpcTrailers.status(RpcStatus.ok),
         endOfStream: true,
       ),
     );
@@ -104,7 +104,7 @@ Future<Object?> _unary(int cut) async {
     ..feed(
       RpcChannelFrame.encodeMetadata(
         streamId: id,
-        metadata: RpcTrailers.status(0),
+        metadata: RpcTrailers.status(RpcStatus.ok),
         endOfStream: true,
       ),
     );

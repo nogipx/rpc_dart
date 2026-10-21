@@ -96,7 +96,7 @@ void main() {
   test('an unsupported encoding is refused WITH grpc-accept-encoding', () async {
     final headers = await _ask(server.port, 'br');
 
-    expect(headers['grpc-status'], RpcStatus.unimplemented.toString());
+    expect(headers['grpc-status'], RpcStatus.unimplemented.code.toString());
     expect(
       headers['grpc-accept-encoding'],
       isNotNull,

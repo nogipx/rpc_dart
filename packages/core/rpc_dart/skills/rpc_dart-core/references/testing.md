@@ -26,7 +26,7 @@ SPDX-License-Identifier: MIT
   `start()`.
 - Close both endpoints in `tearDown` / `addTearDown`. Closing the caller
   cancels its in-flight calls.
-- Assert errors on `statusCode` (an `RpcStatus` constant), not on the
+- Assert errors on `statusCode` (an `RpcStatus` value), not on the
   message text or a concrete subclass.
 - Bound every await on a call that could hang with a context deadline or
   `.timeout(...)`, so a bug fails the test instead of stalling the runner.
@@ -118,8 +118,8 @@ final class EchoCaller extends RpcCallerContract {
 ```
 
 ```dart
-Matcher throwsStatus(int code) => throwsA(
-  isA<RpcStatusException>().having((e) => e.statusCode, 'statusCode', code),
+Matcher throwsStatus(RpcStatus status) => throwsA(
+  isA<RpcStatusException>().having((e) => e.statusCode, 'statusCode', status),
 );
 
 void main() {
@@ -284,7 +284,8 @@ caller contract `dataTransferMode: RpcDataTransferMode.codec`; see
   requires a transport that supports zero-copy") at the caller.
 - A test passing over `memoryPair()` says nothing about codecs, size limits or
   compression.
-- `RpcStatusException.statusCode` is the field; there is no `code`.
+- `RpcStatusException.statusCode` is the field, an `RpcStatus`; its wire
+  number is `statusCode.code`. There is no `code` on the exception itself.
 - Forgetting `..start()` on the responder: the call never gets an answer.
 - Forgetting to close endpoints leaks timers and stream subscriptions into
   the next test.

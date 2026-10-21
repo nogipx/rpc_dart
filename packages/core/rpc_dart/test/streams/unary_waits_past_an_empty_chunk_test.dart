@@ -66,20 +66,20 @@ Uint8List _request(String s) => RpcMessageFrame.encode(_codec.serialize(s.rpc));
 void main() {
   test('an empty chunk before the request', () async {
     final (statuses, handled) = await _call([Uint8List(0), _request('a')]);
-    expect(statuses, ['${RpcStatus.ok}']);
+    expect(statuses, ['${RpcStatus.ok.code}']);
     expect(handled, ['a']);
   });
 
   test('CONTROL: the request alone', () async {
     final (statuses, handled) = await _call([_request('a')]);
-    expect(statuses, ['${RpcStatus.ok}']);
+    expect(statuses, ['${RpcStatus.ok.code}']);
     expect(handled, ['a']);
   });
 
   test('GUARD: only an empty chunk is still refused, once', () async {
     final (statuses, handled) = await _call([Uint8List(0)]);
     expect(statuses, hasLength(1));
-    expect(statuses.single, isNot('${RpcStatus.ok}'));
+    expect(statuses.single, isNot('${RpcStatus.ok.code}'));
     expect(handled, isEmpty);
   });
 }

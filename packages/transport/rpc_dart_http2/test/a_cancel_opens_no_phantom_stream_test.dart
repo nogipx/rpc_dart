@@ -74,7 +74,7 @@ Future<ServerSocket> _server({bool answer = true}) async {
 RpcMetadata _cancellationMetadata() => RpcMetadata([
   const RpcHeader(RpcHeaders.xClientCancelled, 'true'),
   const RpcHeader(RpcHeaders.xCancellationReason, 'test'),
-  RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
+  RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.code.toString()),
 ]);
 
 void main() {

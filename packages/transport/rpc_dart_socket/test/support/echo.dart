@@ -140,7 +140,7 @@ Future<String> statusOf(Future<Object?> Function() body) async {
     await body();
     return 'ok';
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode.code}';
   } catch (e) {
     return '${e.runtimeType}';
   }

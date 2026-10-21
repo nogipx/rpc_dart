@@ -158,7 +158,9 @@ void main() {
     } on TimeoutException {
       outcome = 'HUNG';
     } catch (e) {
-      outcome = e is RpcStatusException ? 'status ${e.statusCode}' : 'other';
+      outcome = e is RpcStatusException
+          ? 'status ${e.statusCode.code}'
+          : 'other';
     }
     watch.stop();
     return (outcome: outcome, ms: watch.elapsedMilliseconds);
@@ -179,7 +181,7 @@ void main() {
             'without ping/pong nothing discovers a half-open path: the call '
             'waits out its deadline while health() reports healthy',
       );
-      expect(r.outcome, 'status ${RpcStatus.unavailable}');
+      expect(r.outcome, 'status ${RpcStatus.unavailable.code}');
       // Detection costs about two ping intervals; assert an absolute bound
       // rather than comparing two timed runs, which would measure the machine.
       expect(

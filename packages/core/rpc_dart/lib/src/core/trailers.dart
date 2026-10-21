@@ -19,7 +19,7 @@ import 'rpc_headers.dart';
 /// given. A trailer that fails the policy's header check is never sent, and
 /// the caller then reports a call with no status at all.
 abstract final class RpcTrailers {
-  /// A status trailer: [code] (see [RpcStatus]), [message] and details.
+  /// A status trailer: [status], [message] and details.
   ///
   /// **Pass [maxMessageLength]**, which caps the ENCODED `grpc-message` -- the
   /// same thing `RpcSecurityPolicy.isValidHeaderValue` measures. A trailer that
@@ -28,12 +28,12 @@ abstract final class RpcTrailers {
   /// chose, destroyed by a length limit on its explanation. Trimming keeps the
   /// code and as much of the text as fits.
   static RpcMetadata status(
-    int code, {
+    RpcStatus status, {
     String message = '',
     Uint8List? statusDetailsBin,
     int? maxMessageLength,
   }) {
-    final headers = [RpcHeader(RpcHeaders.grpcStatus, code.toString())];
+    final headers = [RpcHeader(RpcHeaders.grpcStatus, '${status.code}')];
     if (message.isNotEmpty) {
       final encoded = RpcMetadata.encodeGrpcMessage(
         message,
@@ -94,7 +94,7 @@ abstract final class RpcTrailers {
       RpcHeaders.xCancellationReason,
       RpcMetadata.encodeGrpcMessage(reason),
     ),
-    RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
+    RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.cancelled.code}'),
   ]);
 
   /// What a caller reports for a response with HTTP status [httpStatus]

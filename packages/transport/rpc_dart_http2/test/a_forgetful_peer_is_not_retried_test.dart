@@ -100,7 +100,7 @@ Future<(String, int)> _call({
         .timeout(const Duration(seconds: 15));
     return ('returned ${r.value}', _requests);
   } on RpcStatusException catch (e) {
-    return ('status ${e.statusCode}', _requests);
+    return ('status ${e.statusCode.code}', _requests);
   }
 }
 
@@ -117,7 +117,7 @@ void main() {
           'work that may already have committed, which for a non-idempotent '
           'method is the whole of the damage',
     );
-    expect(what, 'status ${RpcStatus.internal}');
+    expect(what, 'status ${RpcStatus.internal.code}');
   });
 
   // CONTROL. The same peer without the interceptor: one run either way, so the
@@ -126,7 +126,7 @@ void main() {
     final (what, ran) = await _call(sendTrailers: false, retry: false);
 
     expect(ran, 1);
-    expect(what, 'status ${RpcStatus.internal}');
+    expect(what, 'status ${RpcStatus.internal.code}');
   });
 
   // CONTROL. A healthy response still succeeds with the interceptor attached, so

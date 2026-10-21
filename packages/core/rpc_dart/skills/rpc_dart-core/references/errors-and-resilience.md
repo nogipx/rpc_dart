@@ -74,13 +74,16 @@ Future<void> callIt(RpcCallerContract api) async {
 }
 ```
 
-## Status constants and helpers
+## Status values and helpers
 
-`RpcStatus` is a set of `int` constants: `ok` 0, `cancelled` 1, `unknown` 2,
-`invalidArgument` 3, `deadlineExceeded` 4, `notFound` 5, `alreadyExists` 6,
+`RpcStatus` is an enum; `statusCode` on an `RpcStatusException` is one of its
+values, so a `switch` over it is exhaustive. Each value has `code`, its number
+on the wire, and `grpcName` (`'NOT_FOUND'`): `ok` 0, `cancelled` 1, `unknown`
+2, `invalidArgument` 3, `deadlineExceeded` 4, `notFound` 5, `alreadyExists` 6,
 `permissionDenied` 7, `resourceExhausted` 8, `failedPrecondition` 9, `aborted`
 10, `outOfRange` 11, `unimplemented` 12, `internal` 13, `unavailable` 14,
-`dataLoss` 15, `unauthenticated` 16. `RpcStatus.isFault(code)` is true for
+`dataLoss` 15, `unauthenticated` 16. `RpcStatus.fromCode(n)` reads a wire
+number; one outside 0..16 is `unknown`. `status.isFault` is true for
 UNKNOWN, INTERNAL, UNAVAILABLE and DATA_LOSS. `RpcStatus.isFaultError(e)` is also true for any error that is not an
 `RpcStatusException`, and false for an error the library raises because the
 peer sent something invalid (a second request on a unary or server-stream

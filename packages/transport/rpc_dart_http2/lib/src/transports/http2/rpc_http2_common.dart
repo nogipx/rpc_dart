@@ -327,7 +327,7 @@ base class RpcHttp2StreamError extends RpcStatusException {
     this.streamId,
     this.error,
     this.stackTrace,
-    ({int status, String message, Uint8List? detailsBin}) wire,
+    ({RpcStatus status, String message, Uint8List? detailsBin}) wire,
   ) : super(wire.status, wire.message);
 }
 
@@ -540,7 +540,7 @@ String? extractMethodPath(List<http2.Header> headers) {
 /// Anything unrecognised is `internal`, deliberately: it is the spec's default
 /// for an unexpected stream termination AND the safe one, because it is not
 /// retried. Guessing `unavailable` here would retry aborts that must not be.
-int grpcStatusFromHttp2ErrorCode(int errorCode) => switch (errorCode) {
+RpcStatus grpcStatusFromHttp2ErrorCode(int errorCode) => switch (errorCode) {
   7 => RpcStatus.unavailable, // REFUSED_STREAM
   8 => RpcStatus.cancelled, // CANCEL
   11 => RpcStatus.resourceExhausted, // ENHANCE_YOUR_CALM

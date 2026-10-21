@@ -30,7 +30,7 @@ Future<String> _failureOf(
     await t.close();
     return 'connected';
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode.code}';
   } catch (e) {
     return '${e.runtimeType}';
   }
@@ -55,7 +55,7 @@ void main() {
     (503, RpcStatus.unavailable),
   ]) {
     test('WITNESS: an upgrade answered $http is status $grpc', () async {
-      expect(await _failureOf(await _answering(http)), 'status $grpc');
+      expect(await _failureOf(await _answering(http)), 'status ${grpc.code}');
     });
   }
 
@@ -73,7 +73,10 @@ void main() {
         await io.close(force: true);
       });
 
-      expect(await _failureOf(io.port), 'status ${RpcStatus.permissionDenied}');
+      expect(
+        await _failureOf(io.port),
+        'status ${RpcStatus.permissionDenied.code}',
+      );
     },
   );
 
@@ -84,7 +87,10 @@ void main() {
       addTearDown(closer.close);
       closer.listen((s) => s.listen((_) => s.destroy()));
 
-      expect(await _failureOf(closer.port), 'status ${RpcStatus.unavailable}');
+      expect(
+        await _failureOf(closer.port),
+        'status ${RpcStatus.unavailable.code}',
+      );
     },
   );
 
@@ -104,7 +110,7 @@ void main() {
         silent.port,
         connectTimeout: const Duration(milliseconds: 300),
       ),
-      'status ${RpcStatus.unavailable}',
+      'status ${RpcStatus.unavailable.code}',
     );
   });
 

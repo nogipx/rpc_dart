@@ -34,8 +34,8 @@ void main() {
   });
 
   test('status-name table maps codes on JS', () {
-    expect(rpcGrpcStatusName(RpcStatus.ok), 'OK');
-    expect(rpcGrpcStatusName(RpcStatus.notFound), 'NOT_FOUND');
+    expect(rpcGrpcStatusName(RpcStatus.ok.code), 'OK');
+    expect(rpcGrpcStatusName(RpcStatus.notFound.code), 'NOT_FOUND');
     expect(rpcGrpcStatusName(999), 'UNKNOWN');
   });
 

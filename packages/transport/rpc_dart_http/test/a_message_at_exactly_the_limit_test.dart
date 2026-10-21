@@ -79,7 +79,7 @@ void main() {
           .timeout(const Duration(seconds: 10));
       return 'ok';
     } on RpcStatusException catch (e) {
-      return 'status=${e.statusCode}';
+      return 'status=${e.statusCode.code}';
     }
   }
 
@@ -131,7 +131,7 @@ void main() {
           RpcSecurityPolicy(maxMessageLengthBytes: exact - 1),
           message,
         ),
-        'status=${RpcStatus.resourceExhausted}',
+        'status=${RpcStatus.resourceExhausted.code}',
         reason: 'a bound that refuses nothing is not a bound',
       );
     },

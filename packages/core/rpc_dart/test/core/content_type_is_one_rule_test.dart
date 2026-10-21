@@ -81,7 +81,7 @@ Future<String> _call(String? contentType, RpcContentTypeValidation mode) async {
     );
     return 'ok';
   } on RpcStatusException catch (e) {
-    return 'status=${e.statusCode} ${e.message}';
+    return 'status=${e.statusCode.code} ${e.message}';
   }
 }
 
@@ -142,7 +142,7 @@ void main() {
     test('strict refuses a request that carries no content-type', () async {
       expect(
         await _call(null, RpcContentTypeValidation.strict),
-        'status=${RpcStatus.invalidArgument} Missing content-type for gRPC',
+        'status=${RpcStatus.invalidArgument.code} Missing content-type for gRPC',
       );
     });
 
@@ -165,7 +165,7 @@ void main() {
         expect(await _call('application/grpc+proto', mode), 'ok');
         expect(
           await _call('text/plain', mode),
-          'status=${RpcStatus.invalidArgument} '
+          'status=${RpcStatus.invalidArgument.code} '
           'Invalid content-type for gRPC: "text/plain"',
         );
       }

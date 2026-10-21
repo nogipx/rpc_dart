@@ -105,13 +105,13 @@ void main() {
         .then(
           (_) => 'ok',
           onError: (Object e) =>
-              e is RpcStatusException ? 'status ${e.statusCode}' : '$e',
+              e is RpcStatusException ? 'status ${e.statusCode.code}' : '$e',
         );
 
     final innocent = [for (var i = 0; i < 3; i++) call('Slow')];
     await Future<void>.delayed(const Duration(milliseconds: 150));
 
-    expect(await call('Die'), 'status ${RpcStatus.unavailable}');
+    expect(await call('Die'), 'status ${RpcStatus.unavailable.code}');
     expect(await Future.wait(innocent), ['ok', 'ok', 'ok']);
   });
 }

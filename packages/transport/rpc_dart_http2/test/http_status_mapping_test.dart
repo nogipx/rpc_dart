@@ -62,7 +62,7 @@ class _StatusPeer {
 }
 
 /// Calls the peer once and returns the gRPC status the caller reported.
-Future<int?> _statusSeenBy(
+Future<RpcStatus?> _statusSeenBy(
   _StatusPeer peer, {
   RpcRetryInterceptor? retry,
 }) async {
@@ -73,7 +73,7 @@ Future<int?> _statusSeenBy(
   final caller = RpcCallerEndpoint(transport: client);
   if (retry != null) caller.addInterceptor(retry);
 
-  int? seen;
+  RpcStatus? seen;
   try {
     await caller
         .unaryRequest<RpcString, RpcString>(
@@ -111,7 +111,7 @@ void main() {
   });
 
   test('a caller reports the mapped status for a non-200 peer', () async {
-    const cases = <int, int>{
+    const cases = <int, RpcStatus>{
       503: RpcStatus.unavailable,
       404: RpcStatus.unimplemented,
       401: RpcStatus.unauthenticated,

@@ -146,14 +146,14 @@ void main() {
       () async {
         final r = await _run(method, oversized);
         expect(r.errors, isEmpty);
-        expect(r.statuses, {'${RpcStatus.resourceExhausted}'});
+        expect(r.statuses, {'${RpcStatus.resourceExhausted.code}'});
       },
     );
 
     test('$method: an undecodable payload is answered, not an error', () async {
       final r = await _run(method, badCbor);
       expect(r.errors, isEmpty);
-      expect(r.statuses, {'${RpcStatus.internal}'});
+      expect(r.statuses, {'${RpcStatus.internal.code}'});
     });
 
     test(
@@ -161,7 +161,7 @@ void main() {
       () async {
         final r = await _run(method, Uint8List.fromList([2, 0, 0, 0, 1, 0]));
         expect(r.errors, isEmpty);
-        expect(r.statuses, {'${RpcStatus.internal}'});
+        expect(r.statuses, {'${RpcStatus.internal.code}'});
       },
     );
 
@@ -170,7 +170,7 @@ void main() {
       () async {
         final r = await _run(method, Uint8List.fromList([1, 0, 0, 0, 1, 0]));
         expect(r.errors, isEmpty);
-        expect(r.statuses, {'${RpcStatus.internal}'});
+        expect(r.statuses, {'${RpcStatus.internal.code}'});
       },
     );
 
@@ -183,7 +183,7 @@ void main() {
           encoding: 'gzip',
         );
         expect(r.errors, isEmpty);
-        expect(r.statuses, {'${RpcStatus.internal}'});
+        expect(r.statuses, {'${RpcStatus.internal.code}'});
       },
       testOn: 'vm',
     );
@@ -191,7 +191,7 @@ void main() {
     test('GUARD $method: a handler that crashes is still an error', () async {
       final r = await _run(method, crash);
       expect(r.errors, isNotEmpty);
-      expect(r.statuses, {'${RpcStatus.internal}'});
+      expect(r.statuses, {'${RpcStatus.internal.code}'});
     });
   }
 
@@ -199,7 +199,7 @@ void main() {
     test('$method: a second request is answered, not an error', () async {
       final r = await _run(method, twoMessages);
       expect(r.errors, isEmpty);
-      expect(r.statuses, {'${RpcStatus.internal}'});
+      expect(r.statuses, {'${RpcStatus.internal.code}'});
     });
   }
 

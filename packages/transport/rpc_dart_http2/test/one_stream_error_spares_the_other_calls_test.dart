@@ -46,7 +46,7 @@ Future<String> _call(RpcCallerEndpoint caller, String method) => caller
     .then(
       (_) => 'ok',
       onError: (Object e) =>
-          e is RpcStatusException ? 'status ${e.statusCode}' : '$e',
+          e is RpcStatusException ? 'status ${e.statusCode.code}' : '$e',
     );
 
 void main() {
@@ -90,7 +90,7 @@ void main() {
 
     expect(
       await badStatus.future.timeout(const Duration(seconds: 5)),
-      RpcStatus.resourceExhausted.toString(),
+      RpcStatus.resourceExhausted.code.toString(),
       reason: 'the refused stream itself is still answered',
     );
     expect(await Future.wait(innocent), ['ok', 'ok', 'ok']);

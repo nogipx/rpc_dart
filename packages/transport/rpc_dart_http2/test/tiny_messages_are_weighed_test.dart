@@ -84,7 +84,7 @@ void main() {
         await server.stop();
       });
 
-      final refused = <int>[];
+      final refused = <RpcStatus>[];
       final calls = [
         for (var s = 0; s < _streams; s++)
           caller

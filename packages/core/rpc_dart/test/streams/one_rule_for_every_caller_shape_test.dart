@@ -103,7 +103,7 @@ void main() {
       _peer(
         rig.peer,
         payload: _framed('ignore me'),
-        status: '${RpcStatus.notFound}',
+        status: '${RpcStatus.notFound.code}',
         message: 'gone',
       );
 
@@ -126,7 +126,7 @@ void main() {
       _peer(
         rig.peer,
         payload: _framed('ignore me'),
-        status: '${RpcStatus.notFound}',
+        status: '${RpcStatus.notFound.code}',
         message: 'gone',
       );
 
@@ -158,7 +158,7 @@ void main() {
       _peer(
         rig.peer,
         directPayload: _Msg('ignore me'),
-        status: '${RpcStatus.notFound}',
+        status: '${RpcStatus.notFound.code}',
         message: 'gone',
       );
 
@@ -182,7 +182,7 @@ void main() {
     // retry reaches the same broken peer and spends the caller's deadline.
     test('unary', () async {
       final rig = _rig();
-      _peer(rig.peer, status: '${RpcStatus.ok}');
+      _peer(rig.peer, status: '${RpcStatus.ok.code}');
 
       final caught = await _catch(
         () => rig.caller
@@ -206,7 +206,7 @@ void main() {
 
     test('client-streaming', () async {
       final rig = _rig();
-      _peer(rig.peer, status: '${RpcStatus.ok}');
+      _peer(rig.peer, status: '${RpcStatus.ok.code}');
 
       Future<_Msg> call(Stream<_Msg> requests) =>
           rig.caller.clientStream<_Msg, _Msg>(
@@ -253,7 +253,7 @@ void main() {
   group('GUARD: an ordinary OK call still succeeds', () {
     test('unary', () async {
       final rig = _rig();
-      _peer(rig.peer, payload: _framed('ok'), status: '${RpcStatus.ok}');
+      _peer(rig.peer, payload: _framed('ok'), status: '${RpcStatus.ok.code}');
 
       final response = await rig.caller
           .unaryRequest<_Msg, _Msg>(
@@ -270,7 +270,7 @@ void main() {
 
     test('client-streaming', () async {
       final rig = _rig();
-      _peer(rig.peer, payload: _framed('ok'), status: '${RpcStatus.ok}');
+      _peer(rig.peer, payload: _framed('ok'), status: '${RpcStatus.ok.code}');
 
       Future<_Msg> call(Stream<_Msg> requests) =>
           rig.caller.clientStream<_Msg, _Msg>(

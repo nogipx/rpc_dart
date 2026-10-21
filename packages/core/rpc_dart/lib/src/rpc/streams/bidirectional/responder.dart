@@ -70,7 +70,7 @@ final class BidirectionalStreamResponder<
   /// [fault] false: the status answers the peer's own invalid input; see
   /// `StreamProcessor.sendError`.
   Future<void> sendError(
-    int statusCode,
+    RpcStatus statusCode,
     String message, {
     Uint8List? statusDetailsBin,
     bool fault = true,

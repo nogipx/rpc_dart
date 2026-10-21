@@ -428,7 +428,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// own invalid input (see `RpcStatus.isFaultError`), so it is not an
   /// incident here.
   Future<void> sendError(
-    int statusCode,
+    RpcStatus statusCode,
     String message, {
     Uint8List? statusDetailsBin,
     bool fault = true,
@@ -443,7 +443,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     // an incident.
     if (_logger.isDebug) {
       _logger.debug(
-        'Sending status to client: $statusCode - $message '
+        'Sending status to client: ${statusCode.code} - $message '
         '[streamId: $_streamId${fault ? '' : ', peer fault'}]',
       );
     }

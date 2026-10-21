@@ -49,7 +49,7 @@ void main() {
       );
       expect(
         result.responseHeaders[RpcHeaders.grpcStatus],
-        equals(RpcStatus.ok.toString()),
+        equals(RpcStatus.ok.code.toString()),
       );
       expect(
         result.responseHeaders.containsKey(

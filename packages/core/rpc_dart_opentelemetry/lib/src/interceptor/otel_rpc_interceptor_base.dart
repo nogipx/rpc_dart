@@ -116,9 +116,9 @@ abstract class OtelRpcInterceptorBase
     }
     switch (outcome) {
       case RpcCallSucceeded():
-        _finish(state, duration, statusCode: RpcStatus.ok);
+        _finish(state, duration, status: RpcStatus.ok);
       case RpcCallCancelled():
-        _finish(state, duration, statusCode: RpcStatus.cancelled);
+        _finish(state, duration, status: RpcStatus.cancelled);
       case RpcCallFailed(:final error, :final stackTrace):
         _finishWithError(state, duration, error, stackTrace);
     }
@@ -153,21 +153,20 @@ abstract class OtelRpcInterceptorBase
   void _finish(
     OtelRpcCall state,
     Duration duration, {
-    required int statusCode,
+    required RpcStatus status,
   }) {
     final span = state.span;
-    final statusName = rpcGrpcStatusName(statusCode);
     // semconv requires rpc.grpc.status_code as the numeric code (0..16);
     // the human-readable name goes under the non-semconv rpc.grpc.status key.
     span
-      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', statusCode))
-      ..setAttribute(Attribute.fromString('rpc.grpc.status', statusName));
-    if (statusCode == RpcStatus.ok) {
+      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', status.code))
+      ..setAttribute(Attribute.fromString('rpc.grpc.status', status.grpcName));
+    if (status == RpcStatus.ok) {
       span.setStatus(StatusCode.ok);
     } else {
-      span.setStatus(StatusCode.error, statusName);
+      span.setStatus(StatusCode.error, status.grpcName);
     }
-    _recordCall(state, duration, statusCode);
+    _recordCall(state, duration, status.code);
     span.end();
   }
 
@@ -180,19 +179,18 @@ abstract class OtelRpcInterceptorBase
     final span = state.span;
     // A server records the status its caller receives, which core's
     // translation decides; a client records what reached it.
-    final statusCode = metricSide == RpcMetricSide.server
+    final status = metricSide == RpcMetricSide.server
         ? wireStatusFor(error).status
         : rpcStatusCodeFromError(error);
-    final statusName = rpcGrpcStatusName(statusCode);
     // A stream's errors are already on the span, recorded as they arrived.
     if (!state._streamErrorRecorded) {
       span.recordException(error, stackTrace: stackTrace);
     }
     span
-      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', statusCode))
-      ..setAttribute(Attribute.fromString('rpc.grpc.status', statusName))
+      ..setAttribute(Attribute.fromInt('rpc.grpc.status_code', status.code))
+      ..setAttribute(Attribute.fromString('rpc.grpc.status', status.grpcName))
       ..setStatus(StatusCode.error, error.toString());
-    _recordCall(state, duration, statusCode);
+    _recordCall(state, duration, status.code);
     span.end();
   }
 

@@ -87,11 +87,11 @@ Future<List<String>> _statuses(String method) async {
 void main() {
   group('the server answers its deadline once, DEADLINE_EXCEEDED', () {
     test('unary', () async {
-      expect(await _statuses('u'), ['${RpcStatus.deadlineExceeded}']);
+      expect(await _statuses('u'), ['${RpcStatus.deadlineExceeded.code}']);
     });
 
     test('server-stream', () async {
-      expect(await _statuses('s'), ['${RpcStatus.deadlineExceeded}']);
+      expect(await _statuses('s'), ['${RpcStatus.deadlineExceeded.code}']);
     });
   });
 

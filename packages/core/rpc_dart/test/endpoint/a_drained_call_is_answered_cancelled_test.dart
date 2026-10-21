@@ -87,13 +87,13 @@ void main() {
       final value = await call.timeout(const Duration(seconds: 5));
       return 'value: $value';
     } on RpcStatusException catch (e) {
-      return 'status ${e.statusCode}';
+      return 'status ${e.statusCode.code}';
     } on TimeoutException {
       return 'no answer';
     }
   }
 
-  final cancelled = 'status ${RpcStatus.cancelled}';
+  final cancelled = 'status ${RpcStatus.cancelled.code}';
 
   test('a drained server stream is answered CANCELLED', () async {
     final call = caller

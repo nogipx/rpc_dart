@@ -39,7 +39,7 @@ RpcCallerEndpoint _answering(List<String> responses) {
       }
       await server.sendMetadata(
         m.streamId,
-        RpcTrailers.status(0),
+        RpcTrailers.status(RpcStatus.ok),
         endStream: true,
       );
     }());
@@ -145,21 +145,21 @@ void main() {
         await _sendRequests('/Svc/echo', [
           Uint8List.fromList([..._frame('a'), ..._frame('b')]),
         ]),
-        '${RpcStatus.internal}',
+        '${RpcStatus.internal.code}',
       );
     });
 
     test('unary, two requests in two frames', () async {
       expect(
         await _sendRequests('/Svc/echo', [_frame('a'), _frame('b')]),
-        '${RpcStatus.internal}',
+        '${RpcStatus.internal.code}',
       );
     });
 
     test('server-stream, two requests', () async {
       expect(
         await _sendRequests('/Svc/down', [_frame('a'), _frame('b')]),
-        '${RpcStatus.internal}',
+        '${RpcStatus.internal.code}',
       );
     });
 

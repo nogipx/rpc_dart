@@ -132,7 +132,7 @@ void main() {
       final got = await trailers;
 
       final refusal = got.where(
-        (m) => _status(m) == RpcStatus.resourceExhausted.toString(),
+        (m) => _status(m) == RpcStatus.resourceExhausted.code.toString(),
       );
       expect(
         refusal,
@@ -170,7 +170,9 @@ void main() {
     final got = await trailers;
 
     expect(
-      got.where((m) => _status(m) == RpcStatus.resourceExhausted.toString()),
+      got.where(
+        (m) => _status(m) == RpcStatus.resourceExhausted.code.toString(),
+      ),
       isNotEmpty,
       reason: 'each new stream id got a fresh buffer budget',
     );

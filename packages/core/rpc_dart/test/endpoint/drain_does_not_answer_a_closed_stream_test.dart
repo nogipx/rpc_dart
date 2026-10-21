@@ -152,7 +152,7 @@ void main() {
 
         expect(
           answers,
-          contains(RpcStatus.unavailable.toString()),
+          contains(RpcStatus.unavailable.code.toString()),
           reason: 'a drain that stops refusing new calls is not a drain',
         );
       },

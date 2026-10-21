@@ -46,7 +46,7 @@ void _worker(IRpcTransport transport, Map<String, dynamic> params) {
     ..start();
 }
 
-Future<int?> _echo(RpcCallerEndpoint caller) async {
+Future<RpcStatus?> _echo(RpcCallerEndpoint caller) async {
   try {
     await caller.unaryRequest<RpcString, RpcString>(
       serviceName: 'Svc',

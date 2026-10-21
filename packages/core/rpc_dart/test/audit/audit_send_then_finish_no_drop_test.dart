@@ -188,7 +188,7 @@ void main() {
           lessThan(errIdx),
           reason: 'message must be sent before the error trailer',
         );
-        expect(transport.events.last, 'trailer:${RpcStatus.internal}');
+        expect(transport.events.last, 'trailer:${RpcStatus.internal.code}');
 
         await processor.close();
         await transport.close();

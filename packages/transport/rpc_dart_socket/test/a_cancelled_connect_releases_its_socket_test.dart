@@ -90,7 +90,7 @@ void main() {
         cancellationToken: RpcCancellationToken(),
       ),
     );
-    expect(status, 'status ${RpcStatus.unavailable}');
+    expect(status, 'status ${RpcStatus.unavailable.code}');
   });
 
   test('GUARD: a connect with a token that is never cancelled works', () async {

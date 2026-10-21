@@ -85,7 +85,7 @@ void main() {
         .then((r) => 'returned ${r.value}')
         .catchError(
           (Object e) => e is RpcStatusException
-              ? 'status ${e.statusCode}'
+              ? 'status ${e.statusCode.code}'
               : e.runtimeType.toString(),
         );
 
@@ -136,7 +136,7 @@ void main() {
 
       expect(
         await call.timeout(const Duration(seconds: 20)),
-        'status ${RpcStatus.unavailable}',
+        'status ${RpcStatus.unavailable.code}',
       );
     },
     timeout: const Timeout(Duration(seconds: 90)),

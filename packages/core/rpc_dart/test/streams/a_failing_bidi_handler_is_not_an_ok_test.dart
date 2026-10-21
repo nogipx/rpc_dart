@@ -91,7 +91,7 @@ Future<String> _asClientSeesIt(String method) async {
         onDone: () => finish('ended OK'),
         onError: (Object e) => finish(
           e is RpcStatusException
-              ? 'status ${e.statusCode}'
+              ? 'status ${e.statusCode.code}'
               : '${e.runtimeType}',
         ),
       );
@@ -104,7 +104,7 @@ void main() {
     test('WITNESS: the client is not told OK', () async {
       expect(
         await _asClientSeesIt('fails'),
-        '2 payloads, status ${RpcStatus.internal}',
+        '2 payloads, status ${RpcStatus.internal.code}',
         reason:
             'the handler\'s source failed after 2 of its messages; the client '
             'must be told, not left waiting',
@@ -118,7 +118,7 @@ void main() {
     test('GUARD: an explicit status still reaches the client', () async {
       expect(
         await _asClientSeesIt('status'),
-        '2 payloads, status ${RpcStatus.notFound}',
+        '2 payloads, status ${RpcStatus.notFound.code}',
       );
     });
   });

@@ -226,7 +226,9 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
         } on TimeoutException {
           got = 'TIMEOUT';
         } catch (e) {
-          got = e is RpcStatusException ? 'status ${e.statusCode}' : 'error $e';
+          got = e is RpcStatusException
+              ? 'status ${e.statusCode.code}'
+              : 'error $e';
         }
         await firstCall.timeout(const Duration(seconds: 5));
       } finally {

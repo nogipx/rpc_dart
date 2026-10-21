@@ -126,7 +126,7 @@ Future<String> _call(
   } on RpcStatusException catch (e) {
     return e.statusCode == RpcStatus.resourceExhausted
         ? 'refused'
-        : 'status ${e.statusCode}';
+        : 'status ${e.statusCode.code}';
   }
 }
 

@@ -103,8 +103,8 @@ Future<_Run> _run(String method, Uint8List? payload, {int calls = 20}) async {
 void main() {
   final full = RpcMessageFrame.encode(_codec.serialize('hi'.rpc));
   final truncated = Uint8List.sublistView(full, 0, 5);
-  final invalid = '${RpcStatus.invalidArgument}';
-  final cut = '${RpcStatus.internal}';
+  final invalid = '${RpcStatus.invalidArgument.code}';
+  final cut = '${RpcStatus.internal.code}';
 
   test('unary: a request cut mid-frame writes no log line', () async {
     // WITNESS. Before: 20 warnings, "Client half-closed mid-frame".

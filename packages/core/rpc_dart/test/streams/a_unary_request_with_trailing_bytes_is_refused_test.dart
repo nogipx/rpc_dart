@@ -80,13 +80,13 @@ void main() {
 
   test('WITNESS one message and the start of a second is refused', () async {
     final (status, calls) = await _unary([...frame, 7]);
-    expect(status, '${RpcStatus.internal}');
+    expect(status, '${RpcStatus.internal.code}');
     expect(calls, 0);
   });
 
   test('GUARD one whole message is answered OK', () async {
     final (status, calls) = await _unary(frame);
-    expect(status, '${RpcStatus.ok}');
+    expect(status, '${RpcStatus.ok.code}');
     expect(calls, 1);
   });
 }

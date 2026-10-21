@@ -43,7 +43,7 @@ Future<String> _drain(RpcChannelTransport client, int id) async {
     return 'CLEAN END after $received';
   } catch (e) {
     return e is RpcStatusException
-        ? 'status ${e.statusCode} after $received'
+        ? 'status ${e.statusCode.code} after $received'
         : '${e.runtimeType} after $received';
   }
 }
@@ -69,7 +69,7 @@ void main() {
       // INTERNAL since round 571: the peer is alive and ended without a status, so
       // the work may have run and the call must not be retried. With UNAVAILABLE
       // and `maxAttempts: 3` the peer served one unary call THREE times.
-      'status ${RpcStatus.internal} after 2',
+      'status ${RpcStatus.internal.code} after 2',
       reason:
           'a clean end here hands the consumer partial data as if it were '
           'complete',
@@ -132,7 +132,7 @@ void main() {
     await server.sendMessage(id, _message('one'), endStream: true);
     await server.sendMetadata(id, RpcTrailers.status(RpcStatus.ok));
 
-    expect(await drained, 'status ${RpcStatus.internal} after 1');
+    expect(await drained, 'status ${RpcStatus.internal.code} after 1');
   });
 
   test(
@@ -162,7 +162,7 @@ void main() {
         seen.any(
           (m) =>
               m.metadata?.getHeaderValue(RpcHeaders.grpcStatus) ==
-              RpcStatus.permissionDenied.toString(),
+              RpcStatus.permissionDenied.code.toString(),
         ),
         isTrue,
         reason: 'the real status must reach the consumer, not UNAVAILABLE',

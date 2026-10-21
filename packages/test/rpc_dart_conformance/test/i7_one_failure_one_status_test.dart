@@ -45,7 +45,7 @@ enum _Failure {
   deadPeer(RpcStatus.unavailable);
 
   const _Failure(this.status);
-  final int status;
+  final RpcStatus status;
 
   bool get smallServer => this == oversizeRequest || this == oversizeRequestFar;
   bool get smallCaller =>

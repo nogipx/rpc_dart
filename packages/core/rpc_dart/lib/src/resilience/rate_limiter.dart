@@ -790,7 +790,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     return RpcRateLimitException(
       'Rate limit exceeded for $methodKey'
       '${userKey != null ? ' (key: $userKey)' : ''}'
-      ' (gRPC status ${RpcStatus.resourceExhausted}: RESOURCE_EXHAUSTED)',
+      ' (gRPC status ${RpcStatus.resourceExhausted.code}: RESOURCE_EXHAUSTED)',
       retryAfter: _lastRefusal?.retryAfter,
     );
   }

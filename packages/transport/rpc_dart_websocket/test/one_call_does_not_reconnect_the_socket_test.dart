@@ -30,7 +30,7 @@ final _codec = RpcCodec(RpcString.fromJson);
 final class _Svc extends RpcResponderContract {
   _Svc(this._boomStatus) : super('Svc');
 
-  final int _boomStatus;
+  final RpcStatus _boomStatus;
 
   @override
   void setup() {
@@ -72,7 +72,7 @@ typedef _Rig = ({
   Future<void> Function() killPath,
 });
 
-Future<_Rig> _rig(int boomStatus, {int maxAttempts = 2}) async {
+Future<_Rig> _rig(RpcStatus boomStatus, {int maxAttempts = 2}) async {
   var sockets = 0;
   final raw = <WebSocket>[];
   final connCtl = StreamController<WebSocketChannel>();

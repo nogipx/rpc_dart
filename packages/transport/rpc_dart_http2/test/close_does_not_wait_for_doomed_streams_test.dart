@@ -89,7 +89,7 @@ void main() {
           .then((r) => 'returned ${r.value}')
           .catchError(
             (Object e) => e is RpcStatusException
-                ? 'status ${e.statusCode}'
+                ? 'status ${e.statusCode.code}'
                 : e.runtimeType.toString(),
           );
 
@@ -111,7 +111,7 @@ void main() {
       // The call must still end, and end classifiably.
       expect(
         await call.timeout(const Duration(seconds: 10)),
-        'status ${RpcStatus.unavailable}',
+        'status ${RpcStatus.unavailable.code}',
         reason: 'a closed transport must fail its in-flight calls, not hang',
       );
     },

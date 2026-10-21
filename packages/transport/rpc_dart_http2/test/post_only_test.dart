@@ -108,7 +108,7 @@ void main() {
           'a cross-origin GET needs no preflight, so executing one turns every '
           'unary method into something an attacker page can trigger',
     );
-    expect(headers['grpc-status'], RpcStatus.invalidArgument.toString());
+    expect(headers['grpc-status'], RpcStatus.invalidArgument.code.toString());
     expect(
       Uri.decodeComponent(headers['grpc-message'] ?? ''),
       contains('POST'),
@@ -128,7 +128,7 @@ void main() {
       final headers = await _ask(server.port, method);
       expect(
         headers['grpc-status'],
-        RpcStatus.invalidArgument.toString(),
+        RpcStatus.invalidArgument.code.toString(),
         reason: '$method must be refused',
       );
     }

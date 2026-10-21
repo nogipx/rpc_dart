@@ -171,8 +171,9 @@ Future<void> _teardown(_Rig rig) async {
   await rig.server.close();
 }
 
-/// Calls `work` and returns the gRPC status it failed with, or null on success.
-Future<int?> _call(
+/// Calls `work` and returns the gRPC status it failed with, or null on success;
+/// a failure that is not a status comes back as itself.
+Future<Object?> _call(
   _Rig rig, {
   Duration? deadline,
   String method = 'work',
@@ -189,8 +190,8 @@ Future<int?> _call(
     return null;
   } on RpcStatusException catch (e) {
     return e.statusCode;
-  } catch (_) {
-    return -1;
+  } catch (e) {
+    return e;
   }
 }
 

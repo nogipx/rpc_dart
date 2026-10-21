@@ -86,8 +86,8 @@ abstract interface class IRpcAdvisoryChannelError {}
 /// }
 /// ```
 base class RpcStatusException extends RpcException {
-  /// gRPC status code (see [RpcStatus] constants).
-  final int statusCode;
+  /// The gRPC status; [RpcStatus.code] is its number on the wire.
+  final RpcStatus statusCode;
 
   /// Structured error details sent via `grpc-status-details-bin`.
   final List<RpcErrorDetail> details;
@@ -130,12 +130,13 @@ base class RpcStatusException extends RpcException {
   /// `grpc-status-details-bin` trailer. Returns null if no details.
   Uint8List? get statusDetailsBin {
     if (details.isEmpty) return null;
-    return encodeRpcStatus(statusCode, message, details);
+    return encodeRpcStatus(statusCode.code, message, details);
   }
 
   /// Reconstructs an [RpcStatusException] from wire data.
   ///
-  /// [statusCode] gRPC status code from trailer.
+  /// [code] is the trailer's number; one outside 0..16 is
+  /// [RpcStatus.unknown] ([RpcStatus.fromCode]).
   /// [message] Decoded grpc-message — pass it THROUGH, empty and all.
   /// [detailsBin] Raw bytes from grpc-status-details-bin (already base64-decoded).
   ///
@@ -147,10 +148,11 @@ base class RpcStatusException extends RpcException {
   /// detail in `google.rpc.Status` and omit `grpc-message`; that is what the
   /// field is for.
   factory RpcStatusException.fromTrailer(
-    int statusCode,
+    int code,
     String message, {
     Uint8List? detailsBin,
   }) {
+    final statusCode = RpcStatus.fromCode(code);
     if (detailsBin == null || detailsBin.isEmpty) {
       return RpcStatusException(statusCode, _orAbsent(message));
     }
@@ -173,7 +175,7 @@ base class RpcStatusException extends RpcException {
   @override
   String toString() {
     final detailStr = details.isNotEmpty ? ', details: $details' : '';
-    return 'RpcStatusException($statusCode): $message$detailStr';
+    return 'RpcStatusException(${statusCode.code}): $message$detailStr';
   }
 }
 

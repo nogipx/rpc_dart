@@ -35,13 +35,13 @@ Future<Object?> _statusOf(Object thrown) async {
 
 void main() {
   test('a plain exception is recorded as INTERNAL on the server', () async {
-    expect(await _statusOf(StateError('db down')), RpcStatus.internal);
+    expect(await _statusOf(StateError('db down')), RpcStatus.internal.code);
   });
 
   test('GUARD a status exception keeps its own code', () async {
     expect(
       await _statusOf(RpcStatusException(RpcStatus.notFound, 'missing')),
-      RpcStatus.notFound,
+      RpcStatus.notFound.code,
     );
   });
 }

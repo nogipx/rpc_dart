@@ -25,7 +25,7 @@ final class RpcResponderPingHandler {
 
   static final _okStatus = RpcHeader(
     RpcHeaders.grpcStatus,
-    RpcStatus.ok.toString(),
+    '${RpcStatus.ok.code}',
   );
 
   /// Sends a ping response for the given [streamId]: one trailer, with no

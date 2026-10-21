@@ -293,21 +293,21 @@ void main() {
     // Both classify statuses and they answer different questions, so they are
     // deliberately not the same set. Pinning it here stops a later edit
     // "unifying" them and making a slow server page someone.
-    expect(RpcStatus.isFault(RpcStatus.internal), isTrue);
-    expect(RpcStatus.isFault(RpcStatus.unknown), isTrue);
-    expect(RpcStatus.isFault(RpcStatus.unavailable), isTrue);
-    expect(RpcStatus.isFault(RpcStatus.dataLoss), isTrue);
+    expect(RpcStatus.internal.isFault, isTrue);
+    expect(RpcStatus.unknown.isFault, isTrue);
+    expect(RpcStatus.unavailable.isFault, isTrue);
+    expect(RpcStatus.dataLoss.isFault, isTrue);
 
-    expect(RpcStatus.isFault(RpcStatus.notFound), isFalse);
-    expect(RpcStatus.isFault(RpcStatus.permissionDenied), isFalse);
-    expect(RpcStatus.isFault(RpcStatus.invalidArgument), isFalse);
+    expect(RpcStatus.notFound.isFault, isFalse);
+    expect(RpcStatus.permissionDenied.isFault, isFalse);
+    expect(RpcStatus.invalidArgument.isFault, isFalse);
     expect(
-      RpcStatus.isFault(RpcStatus.deadlineExceeded),
+      RpcStatus.deadlineExceeded.isFault,
       isFalse,
       reason: 'a slow server is not a broken one',
     );
     expect(
-      RpcStatus.isFault(RpcStatus.resourceExhausted),
+      RpcStatus.resourceExhausted.isFault,
       isFalse,
       reason: 'a throttled server is not a broken one',
     );

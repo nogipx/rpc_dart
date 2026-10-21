@@ -83,7 +83,7 @@ void main() {
   group('an absent grpc-message', () {
     test('lets the details message through', () {
       final error = RpcStatusException.fromTrailer(
-        RpcStatus.notFound,
+        RpcStatus.notFound.code,
         '', // what every caller now passes for an absent header
         detailsBin: _detailsBin(message: 'user 42 not found'),
       );
@@ -94,7 +94,7 @@ void main() {
     });
 
     test('falls back to the placeholder when there are no details either', () {
-      final error = RpcStatusException.fromTrailer(RpcStatus.internal, '');
+      final error = RpcStatusException.fromTrailer(RpcStatus.internal.code, '');
 
       expect(
         error.message,
@@ -110,7 +110,7 @@ void main() {
     // details message is lost for good.
     test('a placeholder passed IN still suppresses the details message', () {
       final error = RpcStatusException.fromTrailer(
-        RpcStatus.notFound,
+        RpcStatus.notFound.code,
         kAbsentTrailerMessage,
         detailsBin: _detailsBin(message: 'user 42 not found'),
       );
@@ -129,7 +129,7 @@ void main() {
   // must not reverse the precedence, only make the fallback reachable.
   test('CONTROL: a present grpc-message wins over the details message', () {
     final error = RpcStatusException.fromTrailer(
-      RpcStatus.notFound,
+      RpcStatus.notFound.code,
       'what the trailer said',
       detailsBin: _detailsBin(message: 'what the details said'),
     );
@@ -180,7 +180,7 @@ void main() {
   // not lose the status, and must not produce an empty message either.
   test('GUARD: an undecodable details payload keeps code and message', () {
     final error = RpcStatusException.fromTrailer(
-      RpcStatus.internal,
+      RpcStatus.internal.code,
       '',
       detailsBin: Uint8List.fromList(const [0xFF, 0xFF, 0xFF]),
     );

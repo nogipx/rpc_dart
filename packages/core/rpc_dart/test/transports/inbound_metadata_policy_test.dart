@@ -239,7 +239,7 @@ void main() {
     );
     expect(
       answers.single.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
-      RpcStatus.invalidArgument.toString(),
+      RpcStatus.invalidArgument.code.toString(),
     );
     expect(answers.single.streamId, 1);
     expect(answers.single.isEndOfStream, isTrue);

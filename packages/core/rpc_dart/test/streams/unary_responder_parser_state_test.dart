@@ -65,7 +65,7 @@ void main() {
     // a half-close is what decides there will be no rest.
     expect(
       await statusA.future.timeout(const Duration(seconds: 5)),
-      RpcStatus.internal.toString(),
+      RpcStatus.internal.code.toString(),
     );
 
     // Stream B: a well-formed request sent only after A is fully resolved, so
@@ -100,7 +100,7 @@ void main() {
     // A parser shared with A would hand B A's leftovers and answer INTERNAL.
     expect(
       await statusB.future.timeout(const Duration(seconds: 5)),
-      RpcStatus.ok.toString(),
+      RpcStatus.ok.code.toString(),
     );
 
     final parser = RpcMessageParser(

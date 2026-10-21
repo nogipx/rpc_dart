@@ -153,7 +153,7 @@ Future<void> _expectRefused(String method) async {
 
   expect(
     meta.getHeaderValue(RpcHeaders.grpcStatus),
-    RpcStatus.invalidArgument.toString(),
+    RpcStatus.invalidArgument.code.toString(),
     reason: '$method must still reject a call with no request message',
   );
   expect(_trace, isEmpty, reason: 'the handler must not have run');

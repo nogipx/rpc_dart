@@ -51,7 +51,7 @@ void main() {
 
       expect(
         statuses,
-        everyElement('status ${RpcStatus.resourceExhausted}'),
+        everyElement('status ${RpcStatus.resourceExhausted.code}'),
         reason:
             'the server reset the connection with the request still arriving, '
             'which discarded the RESOURCE_EXHAUSTED trailer: the caller saw '

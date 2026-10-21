@@ -195,7 +195,7 @@ void main() {
 
     expect(
       headers['grpc-status'],
-      RpcStatus.resourceExhausted.toString(),
+      RpcStatus.resourceExhausted.code.toString(),
       reason: 'the arm has to reach the refusal it names',
     );
 
@@ -261,7 +261,7 @@ void main() {
       halfClose: true,
     );
 
-    expect(headers['grpc-status'], RpcStatus.resourceExhausted.toString());
+    expect(headers['grpc-status'], RpcStatus.resourceExhausted.code.toString());
 
     await Future<void>.delayed(const Duration(milliseconds: 300));
     expect(await counts(), {

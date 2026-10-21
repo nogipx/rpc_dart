@@ -87,7 +87,7 @@ Future<_Run> _call({required String? mountAt}) async {
         .timeout(const Duration(seconds: 10));
     outcome = 'ok: ${reply.value}';
   } on RpcStatusException catch (e) {
-    outcome = 'status ${e.statusCode}: ${e.message}';
+    outcome = 'status ${e.statusCode.code}: ${e.message}';
   } on TimeoutException {
     outcome = 'HUNG';
   }

@@ -31,13 +31,13 @@ final class Outcome {
 
   bool get ok => error == null;
 
-  /// 0 for success, the status code of an [RpcStatusException], or -1 for an
+  /// OK for success, the status of an [RpcStatusException], or null for an
   /// error that carries no status.
-  int get status {
+  RpcStatus? get status {
     final e = error;
     if (e == null) return RpcStatus.ok;
     if (e is RpcStatusException) return e.statusCode;
-    return -1;
+    return null;
   }
 
   @override

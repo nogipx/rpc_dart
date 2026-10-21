@@ -98,7 +98,7 @@ Future<(List<String>, int)> _run(String shape, {required bool bad}) async {
       }
     },
     onError: (Object e) {
-      seen.add('error ${e is RpcStatusException ? e.statusCode : e}');
+      seen.add('error ${e is RpcStatusException ? e.statusCode.code : e}');
       if (!done.isCompleted) done.complete();
     },
     onDone: () {
@@ -116,7 +116,7 @@ void main() {
     test('WITNESS $shape: a response that cannot be serialized ends the '
         'stream there', () async {
       final (seen, _) = await _run(shape, bad: true);
-      expect(seen, ['ok0', 'error ${RpcStatus.internal}']);
+      expect(seen, ['ok0', 'error ${RpcStatus.internal.code}']);
     });
 
     test('GUARD $shape: the handler stops producing behind it', () async {

@@ -135,7 +135,7 @@ void main() {
           '$end, is refused INTERNAL', () async {
         expect(
           await _status(server.port, method, frame.sublist(0, 7), end),
-          '${RpcStatus.internal}',
+          '${RpcStatus.internal.code}',
         );
       });
 
@@ -157,7 +157,7 @@ void main() {
         _completed.clear();
         expect(
           await _status(server.port, method, [...frame, 0, 0, 0], end),
-          '${RpcStatus.internal}',
+          '${RpcStatus.internal.code}',
         );
         await Future<void>.delayed(const Duration(milliseconds: 100));
         expect(_completed, isEmpty);
@@ -170,7 +170,7 @@ void main() {
         'refused INTERNAL', () async {
       expect(
         await _status(server.port, method, [...frame, 0, 0, 0], 'empty data'),
-        '${RpcStatus.internal}',
+        '${RpcStatus.internal.code}',
       );
     });
 

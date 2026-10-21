@@ -23,7 +23,7 @@ void main() {
     final address = RpcSocketAddress.unix(tempSocketPath());
     expect(
       await statusOf(() => connectRpcSocket(address)),
-      'status ${RpcStatus.unavailable}',
+      'status ${RpcStatus.unavailable.code}',
     );
   });
 
@@ -38,7 +38,7 @@ void main() {
           RpcSocketAddress.tcp(InternetAddress.loopbackIPv4, port),
         ),
       ),
-      'status ${RpcStatus.unavailable}',
+      'status ${RpcStatus.unavailable.code}',
     );
   });
 
@@ -51,7 +51,7 @@ void main() {
     expect(server.isRunning, isFalse);
     expect(
       await statusOf(() => connectRpcSocket(address)),
-      'status ${RpcStatus.unavailable}',
+      'status ${RpcStatus.unavailable.code}',
     );
 
     await server.start();
@@ -67,7 +67,7 @@ void main() {
       final call = statusOf(() => caller.unary('late', delayMs: 2000));
       await Future<void>.delayed(const Duration(milliseconds: 100));
       await server.stop();
-      expect(await call, 'status ${RpcStatus.unavailable}');
+      expect(await call, 'status ${RpcStatus.unavailable.code}');
     },
   );
 
@@ -93,7 +93,7 @@ void main() {
       final second = await dialEcho(address);
       expect(
         await statusOf(() => second.unary('over the cap')),
-        'status ${RpcStatus.unavailable}',
+        'status ${RpcStatus.unavailable.code}',
       );
 
       await first.endpoint.close();

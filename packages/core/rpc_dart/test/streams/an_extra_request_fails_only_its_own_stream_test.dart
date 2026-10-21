@@ -62,7 +62,7 @@ void main() {
       return result;
     }
 
-    expect(await call(extra: true), '${RpcStatus.internal}');
-    expect(await call(extra: false), '${RpcStatus.ok}');
+    expect(await call(extra: true), '${RpcStatus.internal.code}');
+    expect(await call(extra: false), '${RpcStatus.ok.code}');
   });
 }

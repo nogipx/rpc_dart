@@ -67,7 +67,7 @@ Future<String> _echo(RpcCallerEndpoint caller, String value) async {
       responseCodec: _codec,
     )).value;
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode.code}';
   }
 }
 
@@ -76,7 +76,7 @@ void main() {
     final caller = await _open();
     expect(
       await _echo(caller, 'a' * (_limit + 1024)),
-      'status ${RpcStatus.resourceExhausted}',
+      'status ${RpcStatus.resourceExhausted.code}',
     );
   });
 

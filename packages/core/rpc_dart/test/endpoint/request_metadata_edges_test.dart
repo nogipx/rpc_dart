@@ -49,7 +49,7 @@ Future<String> _call(Map<String, String> headers, String read) async {
     );
     return r.value;
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode.code}';
   }
 }
 
@@ -57,7 +57,7 @@ void main() {
   test('a value with edge whitespace is refused before it is sent', () async {
     expect(
       await _call({'x-pad': '  v  w  '}, 'x-pad'),
-      'status ${RpcStatus.invalidArgument}',
+      'status ${RpcStatus.invalidArgument.code}',
     );
   });
 
@@ -73,7 +73,7 @@ void main() {
       () async {
         expect(
           await _call({name: 'v'}, name),
-          'status ${RpcStatus.invalidArgument}',
+          'status ${RpcStatus.invalidArgument.code}',
         );
       },
     );

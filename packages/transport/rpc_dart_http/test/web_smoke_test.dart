@@ -43,7 +43,7 @@ http.Client _echoClient(String Function(String request) transform) {
       200,
       headers: {
         RpcHeaders.contentType: 'application/grpc+proto',
-        RpcHeaders.grpcStatus: '${RpcStatus.ok}',
+        RpcHeaders.grpcStatus: '${RpcStatus.ok.code}',
       },
       request: request,
     );
@@ -94,7 +94,7 @@ void main() {
           200,
           headers: {
             RpcHeaders.contentType: 'application/grpc+proto',
-            RpcHeaders.grpcStatus: '${RpcStatus.ok}',
+            RpcHeaders.grpcStatus: '${RpcStatus.ok.code}',
           },
           request: request,
         );

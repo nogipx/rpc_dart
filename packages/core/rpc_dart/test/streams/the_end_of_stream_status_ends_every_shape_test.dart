@@ -100,7 +100,7 @@ Future<String> _outcome(
   final settled = outcome.then<String>(
     (s) => s,
     onError: (Object e) =>
-        e is RpcStatusException ? 'ERROR ${e.statusCode}' : 'ERROR $e',
+        e is RpcStatusException ? 'ERROR ${e.statusCode.code}' : 'ERROR $e',
   );
   await Future<void>.delayed(const Duration(milliseconds: 50));
   final id = chan.sentStreamIds.firstWhere((s) => s != 0);

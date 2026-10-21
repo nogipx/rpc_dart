@@ -187,7 +187,7 @@ Future<String> _drain(int port) async {
   } catch (e) {
     await transport.close().catchError((Object _) {});
     return e is RpcStatusException
-        ? 'status ${e.statusCode} after $received'
+        ? 'status ${e.statusCode.code} after $received'
         : '${e.runtimeType} after $received';
   }
 }
@@ -205,7 +205,7 @@ void main() {
         // incidental: this peer is alive and forgot its trailers, so the work may
         // have run and the call must not be retried. A connection that DIED still
         // reads UNAVAILABLE -- see graceful_drain_on_stop_test, which requires it.
-        'status ${RpcStatus.internal} after 2',
+        'status ${RpcStatus.internal.code} after 2',
         reason:
             'reporting a clean end here hands the consumer partial data as if '
             'it were complete -- a client paging results believes it has all '
@@ -234,7 +234,7 @@ void main() {
         // incidental: this peer is alive and forgot its trailers, so the work may
         // have run and the call must not be retried. A connection that DIED still
         // reads UNAVAILABLE -- see graceful_drain_on_stop_test, which requires it.
-        'status ${RpcStatus.internal} after 2',
+        'status ${RpcStatus.internal.code} after 2',
         reason:
             'a trailers frame with no grpc-status ends the stream without ever '
             'saying how it went, so a clean end is the same silent data loss '

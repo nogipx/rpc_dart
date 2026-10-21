@@ -31,7 +31,7 @@ int _listFor(int total) => total - Doc.requestOverhead;
 int _replyFor(int total) => total - Doc.responseOverhead;
 
 /// Runs one CBOR call, returning its status and responses.
-Future<(int, List<Doc>)> _call(
+Future<(RpcStatus, List<Doc>)> _call(
   ConformanceCaller caller,
   CallShape shape,
   Doc request,

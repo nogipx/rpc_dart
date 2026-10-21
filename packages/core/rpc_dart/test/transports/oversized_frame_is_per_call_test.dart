@@ -95,9 +95,10 @@ _Rig _rig({RpcSecurityPolicy policy = _policy}) {
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 50));
 
-int? _statusOf(RpcTransportMessage m) {
+RpcStatus? _statusOf(RpcTransportMessage m) {
   final raw = m.metadata?.getHeaderValue(RpcHeaders.grpcStatus);
-  return raw == null ? null : int.tryParse(raw);
+  final code = raw == null ? null : int.tryParse(raw);
+  return code == null ? null : RpcStatus.fromCode(code);
 }
 
 void main() {

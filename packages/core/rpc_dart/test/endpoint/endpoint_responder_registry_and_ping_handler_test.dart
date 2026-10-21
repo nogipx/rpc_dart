@@ -110,7 +110,7 @@ void main() {
           .map((m) => m.getHeaderValue(RpcHeaders.grpcStatus))
           .whereType<String>()
           .toList();
-      expect(trailer, equals([RpcStatus.ok.toString()]));
+      expect(trailer, equals([RpcStatus.ok.code.toString()]));
 
       final debugLabel = metadata
           .expand((m) => m.headers)
@@ -160,7 +160,7 @@ void main() {
         );
         expect(
           trailer.getHeaderValue(RpcHeaders.grpcStatus),
-          equals(RpcStatus.internal.toString()),
+          equals(RpcStatus.internal.code.toString()),
         );
         final message = RpcMetadata.decodeGrpcMessage(
           trailer.getHeaderValue(RpcHeaders.grpcMessage) ?? '',

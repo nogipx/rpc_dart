@@ -88,7 +88,7 @@ void main() {
         await _settle();
         await p.client.sendMessage(p.id, Uint8List.sublistView(_whole, 0, 3));
         await p.client.finishSending(p.id);
-        expect(await p.status, '${RpcStatus.internal}');
+        expect(await p.status, '${RpcStatus.internal.code}');
         expect(p.ran, isEmpty);
       });
 
@@ -98,7 +98,7 @@ void main() {
         await _settle();
         await p.client.sendMessage(p.id, _whole);
         await p.client.finishSending(p.id);
-        expect(await p.status, '${RpcStatus.internal}');
+        expect(await p.status, '${RpcStatus.internal.code}');
         expect(p.ran, isEmpty);
       });
 

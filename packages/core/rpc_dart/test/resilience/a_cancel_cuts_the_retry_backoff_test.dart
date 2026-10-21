@@ -31,7 +31,7 @@ final class _Flaky extends RpcResponderContract {
 
 /// Status and elapsed milliseconds of one call with a fixed 3 s backoff,
 /// cancelled after [cancelAfter] when given.
-Future<(int, int)> _call({Duration? cancelAfter}) async {
+Future<(RpcStatus?, int)> _call({Duration? cancelAfter}) async {
   final (client, server) = RpcChannelTransport.pair();
   final responder = RpcResponderEndpoint(transport: server)
     ..registerServiceContract(_Flaky())
@@ -48,7 +48,7 @@ Future<(int, int)> _call({Duration? cancelAfter}) async {
   if (cancelAfter != null) {
     Timer(cancelAfter, () => token.cancel('not interested'));
   }
-  var status = -1;
+  RpcStatus? status;
   try {
     await caller.unaryRequest<RpcString, RpcString>(
       serviceName: 'Svc',
@@ -113,7 +113,7 @@ void main() {
       } on RpcCancelledException {
         outcome = 'cancelled';
       } on RpcStatusException catch (e) {
-        outcome = 'status ${e.statusCode}';
+        outcome = 'status ${e.statusCode.code}';
       }
       return (outcome, sw.elapsedMilliseconds, transport.waits);
     }
@@ -127,7 +127,7 @@ void main() {
 
     test('CONTROL: without a cancel the reconnect is waited for', () async {
       final (outcome, ms, waits) = await run(cancel: false);
-      expect(outcome, 'status ${RpcStatus.unavailable}');
+      expect(outcome, 'status ${RpcStatus.unavailable.code}');
       expect(waits, 1);
       expect(ms, greaterThanOrEqualTo(5000));
     });

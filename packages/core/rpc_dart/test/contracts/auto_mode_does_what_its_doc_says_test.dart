@@ -65,7 +65,7 @@ Future<String> _unary(RpcDataTransferMode mode) async {
     );
     return 'ok ${r.value}';
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode.code}';
   }
 }
 
@@ -81,7 +81,7 @@ Future<String> _serverStream(RpcDataTransferMode mode) async {
         .single;
     return 'ok ${r.value}';
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}';
+    return 'status ${e.statusCode.code}';
   }
 }
 
@@ -93,7 +93,7 @@ void main() {
   test('codec serializes it and enforces the limit', () async {
     expect(
       await _unary(RpcDataTransferMode.codec),
-      'status ${RpcStatus.resourceExhausted}',
+      'status ${RpcStatus.resourceExhausted.code}',
     );
   });
 
@@ -107,7 +107,7 @@ void main() {
   test('codec serializes the server-stream request', () async {
     expect(
       await _serverStream(RpcDataTransferMode.codec),
-      'status ${RpcStatus.resourceExhausted}',
+      'status ${RpcStatus.resourceExhausted.code}',
     );
   });
 }

@@ -96,7 +96,7 @@ void main() {
 
     expect(
       rig.answers,
-      [RpcStatus.unavailable.toString()],
+      [RpcStatus.unavailable.code.toString()],
       reason:
           'one call, one terminal status, however many frames it arrived in',
     );
@@ -119,7 +119,7 @@ void main() {
 
     await _openCall(rig.client);
 
-    expect(rig.answers, [RpcStatus.resourceExhausted.toString()]);
+    expect(rig.answers, [RpcStatus.resourceExhausted.code.toString()]);
   });
 
   // GUARD. Answering once must not become answering zero: both refusals are
@@ -154,7 +154,7 @@ void main() {
 
       await _openCall(rig.client);
 
-      expect(rig.answers, [RpcStatus.ok.toString()]);
+      expect(rig.answers, [RpcStatus.ok.code.toString()]);
     },
   );
 }

@@ -86,7 +86,7 @@ Future<({List<String> results, int ran, int attempts})> _run(
       .then(
         (_) => 'ok',
         onError: (Object e) =>
-            e is RpcStatusException ? 'status ${e.statusCode}' : '$e',
+            e is RpcStatusException ? 'status ${e.statusCode.code}' : '$e',
       );
 
   final results = <String>[];
@@ -107,7 +107,7 @@ void main() {
       request: 'x' * 4096,
       count: 1,
     );
-    expect(r.results, ['status ${RpcStatus.resourceExhausted}']);
+    expect(r.results, ['status ${RpcStatus.resourceExhausted.code}']);
     expect(r.attempts, 1, reason: 'a size refusal fails the same way again');
   });
 

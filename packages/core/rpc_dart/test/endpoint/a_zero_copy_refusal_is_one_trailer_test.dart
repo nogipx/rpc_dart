@@ -90,9 +90,9 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(statuses, {
-      'cs': ['${RpcStatus.unimplemented}'],
-      'bidi': ['${RpcStatus.unimplemented}'],
-      'ss': ['${RpcStatus.unimplemented}'],
+      'cs': ['${RpcStatus.unimplemented.code}'],
+      'bidi': ['${RpcStatus.unimplemented.code}'],
+      'ss': ['${RpcStatus.unimplemented.code}'],
     });
     expect(responder.activeResponderCount, 0);
   });

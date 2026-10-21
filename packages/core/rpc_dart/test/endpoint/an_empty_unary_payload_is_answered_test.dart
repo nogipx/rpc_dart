@@ -90,14 +90,14 @@ void main() {
   test('an empty payload then a half-close is answered and released', () async {
     // WITNESS. Before the fix: no status at all, and one responder held.
     final r = await _call(Uint8List(0));
-    expect(r.status, '${RpcStatus.invalidArgument}');
+    expect(r.status, '${RpcStatus.invalidArgument.code}');
     expect(r.message, contains('without a request message'));
     expect(r.held, 0);
   });
 
   test('GUARD: a frame cut mid-message keeps its own answer', () async {
     final r = await _call(Uint8List.sublistView(full, 0, 5));
-    expect(r.status, '${RpcStatus.internal}');
+    expect(r.status, '${RpcStatus.internal.code}');
     expect(r.message, contains('mid-message'));
     expect(r.held, 0);
   });

@@ -65,8 +65,9 @@ void main() {
             )
             .then(
               (_) => 'ok',
-              onError: (Object e) =>
-                  e is RpcStatusException ? 'status ${e.statusCode}' : '$e',
+              onError: (Object e) => e is RpcStatusException
+                  ? 'status ${e.statusCode.code}'
+                  : '$e',
             ),
     ];
     await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -86,7 +87,7 @@ void main() {
 
     expect(
       await badStatus.future.timeout(const Duration(seconds: 5)),
-      RpcStatus.invalidArgument.toString(),
+      RpcStatus.invalidArgument.code.toString(),
       reason: 'the refused request itself is still answered',
     );
     expect(await Future.wait(innocent), ['ok', 'ok', 'ok']);

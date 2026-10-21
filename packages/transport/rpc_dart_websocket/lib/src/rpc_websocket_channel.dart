@@ -36,16 +36,17 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 ///   `resourceExhausted`, as http1 and http2 answer the same request.
 /// - Every other 3000-4999 code is a library/application code with no fixed
 ///   meaning, so `unknown`. Same rule as `grpcStatusFromHttpStatus`.
-int grpcStatusFromWebSocketCloseCode(int? closeCode) => switch (closeCode) {
-  null => RpcStatus.unavailable,
-  1000 || 1001 || 1005 || 1006 => RpcStatus.unavailable,
-  1002 => RpcStatus.unavailable,
-  1012 || 1013 || 1014 => RpcStatus.unavailable,
-  1008 => RpcStatus.permissionDenied,
-  1009 || 4413 => RpcStatus.resourceExhausted,
-  1003 || 1007 || 1010 || 1011 => RpcStatus.internal,
-  _ => RpcStatus.unknown,
-};
+RpcStatus grpcStatusFromWebSocketCloseCode(int? closeCode) =>
+    switch (closeCode) {
+      null => RpcStatus.unavailable,
+      1000 || 1001 || 1005 || 1006 => RpcStatus.unavailable,
+      1002 => RpcStatus.unavailable,
+      1012 || 1013 || 1014 => RpcStatus.unavailable,
+      1008 => RpcStatus.permissionDenied,
+      1009 || 4413 => RpcStatus.resourceExhausted,
+      1003 || 1007 || 1010 || 1011 => RpcStatus.internal,
+      _ => RpcStatus.unknown,
+    };
 
 /// A non-binary frame on a binary-only protocol.
 ///

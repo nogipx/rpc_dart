@@ -106,7 +106,7 @@ void main() {
     RpcChannelFrame.encodeEndOfStream(5),
     RpcChannelFrame.encodeMetadata(
       streamId: 7,
-      metadata: RpcTrailers.status(13, message: 'Ж 100%'),
+      metadata: RpcTrailers.status(RpcStatus.internal, message: 'Ж 100%'),
     ),
   ];
 
@@ -162,12 +162,12 @@ void main() {
   test('status details refuse only with FormatException', () {
     final seeds = [
       RpcStatusException(
-        14,
+        RpcStatus.unavailable,
         'retry',
         details: [RpcRetryInfo(const Duration(milliseconds: 1500))],
       ).statusDetailsBin!,
       RpcStatusException(
-        3,
+        RpcStatus.invalidArgument,
         'bad',
         details: [
           RpcErrorInfo(reason: 'R', metadata: {'k': 'v'}),

@@ -31,7 +31,7 @@ LogEvent _event() => LogEvent(
   scope: 'rpc.caller',
   level: RpcLogLevel.debug,
   message: 'Call answered 7 - $_hostile',
-  error: RpcStatusException(7, _hostile),
+  error: RpcStatusException(RpcStatus.permissionDenied, _hostile),
   data: const {'reason': _hostile},
 );
 

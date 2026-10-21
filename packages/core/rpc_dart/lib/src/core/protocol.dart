@@ -26,60 +26,73 @@ abstract interface class RpcConstants {
   static const int compressed = 1;
 }
 
-/// Standard gRPC status codes, as they go on the wire.
-abstract interface class RpcStatus {
+/// The gRPC status codes. [code] is the number on the wire.
+enum RpcStatus {
   /// Successful completion.
-  static const int ok = 0;
+  ok(0, 'OK'),
 
   /// Operation cancelled.
-  static const int cancelled = 1;
+  cancelled(1, 'CANCELLED'),
 
   /// Unknown error.
-  static const int unknown = 2;
+  unknown(2, 'UNKNOWN'),
 
   /// Invalid argument.
-  static const int invalidArgument = 3;
+  invalidArgument(3, 'INVALID_ARGUMENT'),
 
   /// Deadline exceeded.
-  static const int deadlineExceeded = 4;
+  deadlineExceeded(4, 'DEADLINE_EXCEEDED'),
 
   /// Resource not found.
-  static const int notFound = 5;
+  notFound(5, 'NOT_FOUND'),
 
   /// Resource already exists.
-  static const int alreadyExists = 6;
+  alreadyExists(6, 'ALREADY_EXISTS'),
 
   /// Permission denied.
-  static const int permissionDenied = 7;
+  permissionDenied(7, 'PERMISSION_DENIED'),
 
   /// Resource exhausted.
-  static const int resourceExhausted = 8;
+  resourceExhausted(8, 'RESOURCE_EXHAUSTED'),
 
   /// Precondition failed.
-  static const int failedPrecondition = 9;
+  failedPrecondition(9, 'FAILED_PRECONDITION'),
 
   /// Operation aborted.
-  static const int aborted = 10;
+  aborted(10, 'ABORTED'),
 
   /// Out of range.
-  static const int outOfRange = 11;
+  outOfRange(11, 'OUT_OF_RANGE'),
 
   /// Not implemented.
-  static const int unimplemented = 12;
+  unimplemented(12, 'UNIMPLEMENTED'),
 
   /// Internal error.
-  static const int internal = 13;
+  internal(13, 'INTERNAL'),
 
   /// Service unavailable.
-  static const int unavailable = 14;
+  unavailable(14, 'UNAVAILABLE'),
 
   /// Data loss.
-  static const int dataLoss = 15;
+  dataLoss(15, 'DATA_LOSS'),
 
   /// Unauthenticated.
-  static const int unauthenticated = 16;
+  unauthenticated(16, 'UNAUTHENTICATED');
 
-  /// Whether [status] means something went WRONG, as opposed to a server
+  const RpcStatus(this.code, this.grpcName);
+
+  /// The status code on the wire.
+  final int code;
+
+  /// The canonical name, as gRPC spells it: `UNAVAILABLE`, `NOT_FOUND`.
+  final String grpcName;
+
+  /// The status for a wire [code]. A code outside 0..16 is [unknown], as the
+  /// gRPC spec has a receiver treat a code it does not know.
+  static RpcStatus fromCode(int code) =>
+      code >= 0 && code < values.length ? values[code] : unknown;
+
+  /// Whether this status means something went WRONG, as opposed to a server
   /// answering a request it understood.
   ///
   /// This is a LOGGING question, not a control-flow one: a handler returning
@@ -92,18 +105,17 @@ abstract interface class RpcStatus {
   /// set, which also counts DEADLINE_EXCEEDED and RESOURCE_EXHAUSTED: a breaker
   /// asks "is this endpoint in trouble", where this asks "did something break".
   /// A slow or throttled server is not broken, and a log line saying so is noise.
-  static bool isFault(int status) =>
-      status == unknown ||
-      status == internal ||
-      status == unavailable ||
-      status == dataLoss;
+  bool get isFault => switch (this) {
+    unknown || internal || unavailable || dataLoss => true,
+    _ => false,
+  };
 
   /// [isFault] for a caught [error]. A throw that carries no status is a fault:
   /// an unclassifiable failure is not an application answering. An
   /// [RpcPeerFaultException] is not, whatever its status: the peer sent it.
   static bool isFaultError(Object error) {
     if (error is RpcPeerFaultException) return false;
-    return error is! RpcStatusException || isFault(error.statusCode);
+    return error is! RpcStatusException || error.statusCode.isFault;
   }
 }
 
@@ -193,7 +205,7 @@ final class RpcMessageHeader {
 /// Sends a gRPC error trailer. The shape every responder's `sendError` has.
 typedef RpcErrorSender =
     Future<void> Function(
-      int status,
+      RpcStatus status,
       String message, {
       Uint8List? statusDetailsBin,
       bool fault,
@@ -257,7 +269,7 @@ Future<void> sendWireError(Object error, RpcErrorSender send) {
 /// makes them final, so a row for either would improve the diagnostic and change
 /// no behaviour. Whether a status belongs here at all is decided by
 /// RETRYABILITY: that is the only thing the absent-row default gets wrong.
-int grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
+RpcStatus grpcStatusFromHttpStatus(int httpStatus) => switch (httpStatus) {
   400 => RpcStatus.internal,
   401 => RpcStatus.unauthenticated,
   403 => RpcStatus.permissionDenied,
@@ -325,7 +337,7 @@ RpcStatusException requestEndedMidMessage() => RpcPeerFaultException(
 /// special-cased: they live in a `part` of the contracts library, which this
 /// file cannot import without a cycle, and the responder pipeline answers both
 /// with their own status long before an error is translated.
-({int status, String message, Uint8List? detailsBin}) wireStatusFor(
+({RpcStatus status, String message, Uint8List? detailsBin}) wireStatusFor(
   Object error,
 ) {
   if (error is RpcStatusException) {

@@ -85,7 +85,7 @@ Future<(List<String>, Object?, Object?, bool)> _threeInFlightThen(
         .listen(
           (_) {},
           onError: (Object e) => outcome[i] = e is RpcStatusException
-              ? 'status ${e.statusCode}'
+              ? 'status ${e.statusCode.code}'
               : e.runtimeType.toString(),
           onDone: () {
             if (outcome[i] == 'STILL WAITING') outcome[i] = 'CLEAN END';
@@ -131,7 +131,7 @@ void main() {
     expect(threw, isNull);
     expect(
       outcomes,
-      everyElement('status ${RpcStatus.unavailable}'),
+      everyElement('status ${RpcStatus.unavailable.code}'),
       reason:
           'a call in flight when its connection is lost must fail fast and '
           'retryably, not wait out its deadline or end as if it completed',
@@ -159,7 +159,7 @@ void main() {
     expect(closed, isTrue);
     expect(
       outcomes,
-      everyElement('status ${RpcStatus.unavailable}'),
+      everyElement('status ${RpcStatus.unavailable.code}'),
       reason:
           'this side hung up, so no call may be told its peer forgot a '
           'status -- and all three must be told the same thing',

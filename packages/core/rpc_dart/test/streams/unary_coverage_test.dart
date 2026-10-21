@@ -145,7 +145,7 @@ void main() {
         final trailer = received.lastWhere((m) => m.isMetadataOnly);
         expect(
           trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
-          '${RpcStatus.ok}',
+          '${RpcStatus.ok.code}',
         );
 
         await feed.close();

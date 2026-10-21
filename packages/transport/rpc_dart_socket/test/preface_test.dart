@@ -51,7 +51,7 @@ void main() {
     addTearDown(transport.close);
     expect(
       await statusOf(() => transport.ready),
-      'status ${RpcStatus.unavailable}',
+      'status ${RpcStatus.unavailable.code}',
     );
     expect((await transport.health()).isHealthy, isFalse);
   });
@@ -65,9 +65,9 @@ void main() {
     final call = statusOf(() => caller.unary('anyone?'));
     expect(
       await statusOf(() => transport.ready),
-      'status ${RpcStatus.unknown}',
+      'status ${RpcStatus.unknown.code}',
     );
-    expect(await call, 'status ${RpcStatus.unknown}');
+    expect(await call, 'status ${RpcStatus.unknown.code}');
   });
 
   test('WITNESS: another protocol version is FAILED_PRECONDITION', () async {
@@ -81,7 +81,7 @@ void main() {
     addTearDown(transport.close);
     expect(
       await statusOf(() => transport.ready),
-      'status ${RpcStatus.failedPrecondition}',
+      'status ${RpcStatus.failedPrecondition.code}',
     );
   });
 

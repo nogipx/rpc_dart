@@ -79,7 +79,7 @@ Future<({String outcome, int ms, bool cancelled})> _call({
           : RpcContext.empty().withTimeout(clientTimeout),
     )).value;
   } on RpcStatusException catch (e) {
-    outcome = 'status ${e.statusCode}';
+    outcome = 'status ${e.statusCode.code}';
   }
   return (
     outcome: outcome,
@@ -91,7 +91,7 @@ Future<({String outcome, int ms, bool cancelled})> _call({
 void main() {
   test('an earlier interceptor deadline ends the call', () async {
     final r = await _call(serverTimeout: const Duration(milliseconds: 200));
-    expect(r.outcome, 'status ${RpcStatus.deadlineExceeded}');
+    expect(r.outcome, 'status ${RpcStatus.deadlineExceeded.code}');
     expect(r.cancelled, isTrue);
     expect(r.ms, lessThan(1000), reason: 'took ${r.ms}ms');
   });
@@ -101,7 +101,7 @@ void main() {
       serverTimeout: const Duration(seconds: 10),
       clientTimeout: const Duration(milliseconds: 200),
     );
-    expect(r.outcome, 'status ${RpcStatus.deadlineExceeded}');
+    expect(r.outcome, 'status ${RpcStatus.deadlineExceeded.code}');
     expect(r.ms, lessThan(1000), reason: 'took ${r.ms}ms');
   });
 }

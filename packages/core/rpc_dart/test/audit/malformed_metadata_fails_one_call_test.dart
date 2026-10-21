@@ -59,7 +59,7 @@ void main() {
     expect(seen.single.isEndOfStream, isTrue);
     expect(
       seen.single.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
-      RpcStatus.internal.toString(),
+      RpcStatus.internal.code.toString(),
       reason: 'the call it named is what fails',
     );
 

@@ -51,7 +51,7 @@ class _StatusServer {
 
 /// The gRPC status a caller reports for [httpStatus], and how many requests the
 /// server saw with the DEFAULT retry predicate attached.
-Future<({int status, int requests})> _call(int httpStatus) async {
+Future<({RpcStatus status, int requests})> _call(int httpStatus) async {
   final server = await _StatusServer.start(httpStatus);
   final transport = RpcHttpCallerTransport(
     baseUrl: 'http://127.0.0.1:${server.port}',
@@ -69,7 +69,7 @@ Future<({int status, int requests})> _call(int httpStatus) async {
     await server.stop();
   });
 
-  var status = 0;
+  var status = RpcStatus.ok;
   try {
     await caller.unaryRequest<RpcString, RpcString>(
       serviceName: 'Svc',

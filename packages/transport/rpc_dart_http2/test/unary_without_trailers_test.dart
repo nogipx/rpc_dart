@@ -78,7 +78,7 @@ Future<String> _call(int port) async {
     return 'returned ${r.value}';
   } catch (e) {
     return e is RpcStatusException
-        ? 'status ${e.statusCode}'
+        ? 'status ${e.statusCode.code}'
         : '${e.runtimeType}';
   } finally {
     await transport.close().catchError((Object _) {});
@@ -98,7 +98,7 @@ void main() {
         // is alive and forgot its trailers, so the work may have run. With
         // UNAVAILABLE and `maxAttempts: 3` the server executed one call THREE
         // times. A connection that DIED still reads UNAVAILABLE.
-        'status ${RpcStatus.internal}',
+        'status ${RpcStatus.internal.code}',
         reason:
             'a response with no grpc-status is malformed; returning its value '
             'hands the caller possibly-truncated data as if it were complete',

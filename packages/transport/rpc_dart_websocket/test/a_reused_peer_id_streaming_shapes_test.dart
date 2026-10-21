@@ -257,7 +257,9 @@ Future<_Run> _run(
         } on TimeoutException {
           got = 'TIMEOUT';
         } catch (e) {
-          got = e is RpcStatusException ? 'status ${e.statusCode}' : 'error $e';
+          got = e is RpcStatusException
+              ? 'status ${e.statusCode.code}'
+              : 'error $e';
         }
         firstGot = await firstCall.timeout(
           const Duration(seconds: 5),

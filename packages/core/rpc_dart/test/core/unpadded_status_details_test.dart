@@ -25,7 +25,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 RpcMetadata _withDetails(String value) => RpcMetadata([
-  RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.invalidArgument}'),
+  RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.invalidArgument.code}'),
   RpcHeader(RpcHeaders.grpcStatusDetails, value),
 ]);
 
@@ -59,7 +59,7 @@ void main() {
 
   test('GUARD: an absent header stays absent', () {
     final metadata = RpcMetadata([
-      RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.ok}'),
+      RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.ok.code}'),
     ]);
     expect(metadata.statusDetailsBin, isNull);
   });

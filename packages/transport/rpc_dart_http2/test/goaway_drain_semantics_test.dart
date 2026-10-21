@@ -60,7 +60,7 @@ final class _Contract extends RpcResponderContract {
 }
 
 String _describe(Object e) => e is RpcStatusException
-    ? 'status ${e.statusCode}'
+    ? 'status ${e.statusCode.code}'
     : e.runtimeType.toString();
 
 void main() {

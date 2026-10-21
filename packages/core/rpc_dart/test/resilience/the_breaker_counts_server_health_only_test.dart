@@ -24,7 +24,7 @@ final _codec = RpcCodec(RpcString.fromJson);
 final class _Svc extends RpcResponderContract {
   _Svc(this._status, {this.pushback = false}) : super('Svc');
 
-  final int _status;
+  final RpcStatus _status;
 
   /// Answer with RpcRetryInfo: a limit that frees up, not a size refusal.
   final bool pushback;
@@ -69,7 +69,7 @@ final class _Healthy extends RpcResponderContract {
 typedef _Outcome = ({CircuitBreakerState state, int failures, String healthy});
 
 Future<_Outcome> _fiveFailuresThenHealthy(
-  int status, {
+  RpcStatus status, {
   bool pushback = false,
 }) async {
   final (client, server) = RpcChannelTransport.pair();

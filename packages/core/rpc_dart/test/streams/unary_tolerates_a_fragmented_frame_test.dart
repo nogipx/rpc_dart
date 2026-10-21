@@ -197,7 +197,7 @@ Future<String> _serverStream({
         .toList();
     return got.map((e) => e.value).join(',');
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}: ${e.message}';
+    return 'status ${e.statusCode.code}: ${e.message}';
   }
 }
 
@@ -219,7 +219,7 @@ Future<String> _clientStream({
     );
     return reply.value;
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}: ${e.message}';
+    return 'status ${e.statusCode.code}: ${e.message}';
   }
 }
 
@@ -243,7 +243,7 @@ Future<String> _bidi({
         .toList();
     return got.map((e) => e.value).join(',');
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}: ${e.message}';
+    return 'status ${e.statusCode.code}: ${e.message}';
   }
 }
 
@@ -274,7 +274,7 @@ Future<String> _unary({
     );
     return reply.value;
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}: ${e.message}';
+    return 'status ${e.statusCode.code}: ${e.message}';
   }
 }
 
@@ -302,7 +302,7 @@ void main() {
       // left waiting.
       expect(
         await _unary(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal}'),
+        startsWith('status ${RpcStatus.internal.code}'),
         reason: 'an incomplete frame that is merely awaited is a hang',
       );
     },
@@ -319,7 +319,7 @@ void main() {
       // see this one.
       expect(
         await _unary(split: true, truncate: true, lateEnd: true),
-        startsWith('status ${RpcStatus.internal}'),
+        startsWith('status ${RpcStatus.internal.code}'),
         reason: 'a request left incomplete must be answered, not awaited',
       );
     },
@@ -337,7 +337,7 @@ void main() {
     () async {
       expect(
         await _serverStream(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal}'),
+        startsWith('status ${RpcStatus.internal.code}'),
         reason:
             'a server stream carries exactly one request, so without this the '
             'handler never runs and the call waits out its deadline',
@@ -351,7 +351,7 @@ void main() {
     () async {
       expect(
         await _clientStream(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal}'),
+        startsWith('status ${RpcStatus.internal.code}'),
         reason:
             'got:0 tells the handler the peer sent nothing, where in fact it '
             'sent an incomplete something — and the call SUCCEEDS',
@@ -367,7 +367,7 @@ void main() {
       // construction; this is what measures it.
       expect(
         await _bidi(split: true, truncate: true),
-        startsWith('status ${RpcStatus.internal}'),
+        startsWith('status ${RpcStatus.internal.code}'),
         reason: 'an incomplete frame followed by a half-close must be answered',
       );
     },
@@ -417,7 +417,7 @@ void main() {
 
       expect(
         answer,
-        startsWith('status ${RpcStatus.resourceExhausted}'),
+        startsWith('status ${RpcStatus.resourceExhausted.code}'),
         reason:
             'the request is past maxMessageLengthBytes, which is a refusal and '
             'not a truncation',

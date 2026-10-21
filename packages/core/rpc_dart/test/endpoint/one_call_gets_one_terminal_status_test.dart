@@ -94,7 +94,7 @@ _Rig _rig() {
       );
       return r.value;
     } on RpcStatusException catch (e) {
-      return 'status ${e.statusCode}';
+      return 'status ${e.statusCode.code}';
     }
   }
 
@@ -110,7 +110,10 @@ void main() {
       await rig.call('ok');
       rig.fromResponder.sent.clear();
 
-      expect(await rig.call('missing'), 'status ${RpcStatus.unimplemented}');
+      expect(
+        await rig.call('missing'),
+        'status ${RpcStatus.unimplemented.code}',
+      );
 
       expect(
         _statusFrames(rig.fromResponder),
@@ -147,7 +150,10 @@ void main() {
         await rig.call('ok');
         rig.fromResponder.sent.clear();
 
-        expect(await rig.call('boom'), 'status ${RpcStatus.permissionDenied}');
+        expect(
+          await rig.call('boom'),
+          'status ${RpcStatus.permissionDenied.code}',
+        );
         expect(_statusFrames(rig.fromResponder), 1);
       },
       timeout: const Timeout(Duration(seconds: 30)),
@@ -176,9 +182,15 @@ void main() {
         // closed-set entry were never cleared, the next call would be ignored and
         // hang to its deadline.
         final rig = _rig();
-        expect(await rig.call('missing'), 'status ${RpcStatus.unimplemented}');
+        expect(
+          await rig.call('missing'),
+          'status ${RpcStatus.unimplemented.code}',
+        );
         expect(await rig.call('ok'), 'ok');
-        expect(await rig.call('missing'), 'status ${RpcStatus.unimplemented}');
+        expect(
+          await rig.call('missing'),
+          'status ${RpcStatus.unimplemented.code}',
+        );
         expect(await rig.call('ok'), 'ok');
       },
       timeout: const Timeout(Duration(seconds: 30)),

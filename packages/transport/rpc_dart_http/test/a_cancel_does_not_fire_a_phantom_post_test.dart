@@ -198,7 +198,7 @@ void main() {
         RpcMetadata([
           RpcHeader(RpcHeaders.xClientCancelled, 'true'),
           RpcHeader(RpcHeaders.xCancellationReason, 'user asked'),
-          RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.cancelled}'),
+          RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.cancelled.code}'),
         ]),
         endStream: true,
       );

@@ -68,7 +68,7 @@ Future<void> _run(Uint8List? payload) async {
 
   expect(
     await Future.wait(statuses),
-    everyElement('${RpcStatus.invalidArgument}'),
+    everyElement('${RpcStatus.invalidArgument.code}'),
     reason: 'a call with no request message must be refused, not left open',
   );
   final answer = await caller.unaryRequest<RpcString, RpcString>(

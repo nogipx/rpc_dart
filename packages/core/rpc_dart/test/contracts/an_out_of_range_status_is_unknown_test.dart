@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A peer's grpc-status outside 0..16 reached the caller as that number:
-// RpcStatusException(99), RpcStatusException(-1), while a non-numeric status
-// already read as UNKNOWN. A caller branching on the code matched nothing.
+// A peer's grpc-status outside 0..16 reads as UNKNOWN, as a non-numeric one
+// does: a caller branches on the status, and a peer's 99 or -1 matches nothing
+// it knows.
 
 import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
-int? _status(String raw) => RpcCallerTrailer.statusOf(
+RpcStatus? _status(String raw) => RpcCallerTrailer.statusOf(
   RpcMetadata([RpcHeader(RpcHeaders.grpcStatus, raw)]),
 );
 
@@ -21,9 +21,16 @@ void main() {
   });
 
   test('GUARD every code in 0..16 is kept', () {
-    for (var c = RpcStatus.ok; c <= RpcStatus.unauthenticated; c++) {
-      expect(_status('$c'), c);
+    for (final status in RpcStatus.values) {
+      expect(_status('${status.code}'), status);
     }
     expect(_status('x'), RpcStatus.unknown);
+  });
+
+  test('GUARD the enum is the wire table, in order', () {
+    expect(
+      [for (final s in RpcStatus.values) s.code],
+      [for (var c = 0; c <= 16; c++) c],
+    );
   });
 }

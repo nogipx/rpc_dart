@@ -90,7 +90,7 @@ Future<String> _call(RpcCallerEndpoint caller) async {
     );
     return 'ok';
   } on RpcStatusException catch (e) {
-    return 'status=${e.statusCode}';
+    return 'status=${e.statusCode.code}';
   }
 }
 
@@ -117,7 +117,7 @@ void main() {
     );
     expect(
       outcomes
-          .where((o) => o == 'status=${RpcStatus.resourceExhausted}')
+          .where((o) => o == 'status=${RpcStatus.resourceExhausted.code}')
           .length,
       8,
       reason:

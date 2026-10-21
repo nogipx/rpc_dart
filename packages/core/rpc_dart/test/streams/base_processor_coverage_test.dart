@@ -385,7 +385,7 @@ void main() {
           expect(message.isEndOfStream, isTrue);
           expect(
             message.metadata?.getHeaderValue(RpcHeaders.grpcStatus),
-            RpcStatus.internal.toString(),
+            RpcStatus.internal.code.toString(),
           );
           expect(
             message.metadata?.getHeaderValue(RpcHeaders.grpcMessage),

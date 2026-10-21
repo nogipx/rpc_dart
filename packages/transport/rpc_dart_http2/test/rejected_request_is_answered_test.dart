@@ -125,7 +125,7 @@ void main() {
     );
     expect(
       result.lastHeaders['grpc-status'],
-      RpcStatus.invalidArgument.toString(),
+      RpcStatus.invalidArgument.code.toString(),
     );
   });
 
@@ -159,7 +159,7 @@ void main() {
     expect(unknown.answered, 1);
     expect(
       unknown.lastHeaders['grpc-status'],
-      RpcStatus.unimplemented.toString(),
+      RpcStatus.unimplemented.code.toString(),
       reason: 'an unknown service is UNIMPLEMENTED, not INVALID_ARGUMENT',
     );
 
@@ -167,7 +167,7 @@ void main() {
     expect(oneSegment.answered, 1);
     expect(
       oneSegment.lastHeaders['grpc-status'],
-      RpcStatus.invalidArgument.toString(),
+      RpcStatus.invalidArgument.code.toString(),
     );
   });
 

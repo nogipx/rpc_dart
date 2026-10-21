@@ -24,16 +24,11 @@ abstract final class RpcCallerTrailer {
   /// Parsed, never compared as text: `!= '0'` reads a peer's `00` as an error.
   /// A code outside gRPC's 0..16 is UNKNOWN, as a non-number is: a caller
   /// branches on the code, and a peer's `99` or `-1` matches nothing it knows.
-  static int? statusOf(RpcMetadata metadata) {
+  static RpcStatus? statusOf(RpcMetadata metadata) {
     final raw = metadata.getHeaderValue(RpcHeaders.grpcStatus);
     if (raw == null) return null;
     final code = int.tryParse(raw);
-    if (code == null ||
-        code < RpcStatus.ok ||
-        code > RpcStatus.unauthenticated) {
-      return RpcStatus.unknown;
-    }
-    return code;
+    return code == null ? RpcStatus.unknown : RpcStatus.fromCode(code);
   }
 
   /// The exception a non-OK trailer means.
@@ -48,7 +43,7 @@ abstract final class RpcCallerTrailer {
   /// not decide the exception type.
   static RpcStatusException errorOf(
     RpcMetadata metadata,
-    int status, {
+    RpcStatus status, {
     RpcContext? context,
   }) {
     final deadline = context?.deadline;
@@ -56,7 +51,7 @@ abstract final class RpcCallerTrailer {
       return RpcDeadlineExceededException(deadline);
     }
     return RpcStatusException.fromTrailer(
-      status,
+      status.code,
       RpcMetadata.decodeGrpcMessage(
         metadata.getHeaderValue(RpcHeaders.grpcMessage) ?? '',
       ),

@@ -46,7 +46,9 @@ final class _Svc extends RpcResponderContract {
 
 /// One unary call against a server with [policy]. The caller stays generous, so
 /// the ceiling under test is always the server's.
-Future<({int? status, String? value})> call(RpcSecurityPolicy policy) async {
+Future<({RpcStatus? status, String? value})> call(
+  RpcSecurityPolicy policy,
+) async {
   final server = RpcHttp2Server(
     host: '127.0.0.1',
     port: 0,

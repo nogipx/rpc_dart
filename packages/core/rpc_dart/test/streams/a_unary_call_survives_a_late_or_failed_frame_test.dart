@@ -63,7 +63,7 @@ void main() {
         ..feed(
           RpcChannelFrame.encodeMetadata(
             streamId: id,
-            metadata: RpcTrailers.status(0),
+            metadata: RpcTrailers.status(RpcStatus.ok),
             endOfStream: true,
           ),
         )

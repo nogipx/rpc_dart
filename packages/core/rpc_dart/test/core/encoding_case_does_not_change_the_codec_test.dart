@@ -67,7 +67,7 @@ Future<String> _callWith(String? encoding) async {
     );
     return r.value;
   } on RpcStatusException catch (e) {
-    return 'status=${e.statusCode}';
+    return 'status=${e.statusCode.code}';
   }
 }
 

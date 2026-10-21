@@ -73,10 +73,13 @@ void main() {
                   .timeout(const Duration(seconds: 15)))
               .value;
     } on RpcStatusException catch (e) {
-      outcome = 'status ${e.statusCode}: ${e.message}';
+      outcome = 'status ${e.statusCode.code}: ${e.message}';
     } catch (e) {
       outcome = '${e.runtimeType}: $e';
     }
-    expect('$outcome', startsWith('status ${RpcStatus.resourceExhausted}'));
+    expect(
+      '$outcome',
+      startsWith('status ${RpcStatus.resourceExhausted.code}'),
+    );
   });
 }

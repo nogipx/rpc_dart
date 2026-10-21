@@ -100,7 +100,7 @@ class _Relay {
   Future<void> stop() => _server.close();
 }
 
-typedef _Ending = ({int? closeCode, int? status, String? message});
+typedef _Ending = ({int? closeCode, RpcStatus? status, String? message});
 
 Future<_Ending> _callThrough({
   required bool viaRelay,

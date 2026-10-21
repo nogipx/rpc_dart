@@ -171,7 +171,7 @@ void main() {
         final trailer = await response;
         expect(
           trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
-          equals(RpcStatus.invalidArgument.toString()),
+          equals(RpcStatus.invalidArgument.code.toString()),
         );
 
         await Future<void>.delayed(const Duration(milliseconds: 1));
@@ -198,7 +198,7 @@ void main() {
       final trailer = await response;
       expect(
         trailer.metadata!.getHeaderValue(RpcHeaders.grpcStatus),
-        equals(RpcStatus.unimplemented.toString()),
+        equals(RpcStatus.unimplemented.code.toString()),
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 1));

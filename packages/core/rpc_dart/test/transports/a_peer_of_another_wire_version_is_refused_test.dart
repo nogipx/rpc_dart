@@ -15,10 +15,10 @@ import '../support/raw_channel.dart';
 
 /// The status [incoming] fails with when the peer opens with [preface], and
 /// whether the channel closed.
-Future<(int?, bool)> _openWith(List<int> preface) async {
+Future<(RpcStatus?, bool)> _openWith(List<int> preface) async {
   final peer = RawPeerChannel(preface: preface);
   final channel = RpcFrameMultiplexedChannel(isClient: false, channel: peer);
-  int? status;
+  RpcStatus? status;
   final done = channel.incoming.handleError((Object e) {
     if (e is RpcStatusException) status = e.statusCode;
   }).drain<void>();
@@ -71,7 +71,7 @@ void main() {
       preface[preface.length - 1] = RpcChannelFrame.protocolVersion + 1;
       final peer = RawPeerChannel(preface: preface);
       final channel = RpcFrameMultiplexedChannel(isClient: true, channel: peer);
-      int? status;
+      RpcStatus? status;
       await channel.incoming
           .handleError((Object e) {
             if (e is RpcStatusException) status = e.statusCode;

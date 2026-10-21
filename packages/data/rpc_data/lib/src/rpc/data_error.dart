@@ -18,7 +18,7 @@ final class RpcDataError extends RpcException {
     this.cause,
   });
 
-  final int status;
+  final RpcStatus status;
   final String? code;
   final Map<String, dynamic>? details;
 

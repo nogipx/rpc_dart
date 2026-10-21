@@ -39,7 +39,7 @@ Future<String> _failure(Future<Object> Function() open) async {
     await open();
     return 'connected';
   } on RpcStatusException catch (e) {
-    return 'status ${e.statusCode}: ${e.message}';
+    return 'status ${e.statusCode.code}: ${e.message}';
   } catch (e) {
     return '${e.runtimeType}';
   }
@@ -52,7 +52,7 @@ void main() {
       await _failure(
         () => RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: port),
       ),
-      startsWith('status ${RpcStatus.unavailable}'),
+      startsWith('status ${RpcStatus.unavailable.code}'),
     );
   });
 
@@ -65,7 +65,7 @@ void main() {
           port: port,
         ),
       ),
-      startsWith('status ${RpcStatus.unavailable}'),
+      startsWith('status ${RpcStatus.unavailable.code}'),
     );
   });
 
@@ -80,7 +80,7 @@ void main() {
           connectTimeout: const Duration(seconds: 5),
         ),
       ),
-      startsWith('status ${RpcStatus.unavailable}'),
+      startsWith('status ${RpcStatus.unavailable.code}'),
     );
   });
 
@@ -97,7 +97,7 @@ void main() {
         proxyUri: Uri.parse('http://user:s3cret@127.0.0.1:${proxy.port}'),
       ),
     );
-    expect(outcome, startsWith('status ${RpcStatus.unavailable}'));
+    expect(outcome, startsWith('status ${RpcStatus.unavailable.code}'));
     expect(outcome, contains('CONNECT rejected'));
     expect(outcome, isNot(contains('s3cret')));
   });
@@ -112,7 +112,7 @@ void main() {
           proxyUri: Uri.parse('http://127.0.0.1:$port'),
         ),
       ),
-      startsWith('status ${RpcStatus.unavailable}'),
+      startsWith('status ${RpcStatus.unavailable.code}'),
     );
   });
 }

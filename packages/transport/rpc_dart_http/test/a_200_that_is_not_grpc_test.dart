@@ -71,7 +71,7 @@ Future<String> _call(HttpServer server) async {
     );
     return 'ok ${response.value}';
   } on RpcStatusException catch (e) {
-    return 'status=${e.statusCode} ${e.message}';
+    return 'status=${e.statusCode.code} ${e.message}';
   }
 }
 
@@ -88,7 +88,7 @@ void main() {
 
       expect(
         await _call(server),
-        'status=${RpcStatus.internal} '
+        'status=${RpcStatus.internal.code} '
         'Invalid content-type for gRPC: "text/html"',
         reason:
             'the sibling HTTP/2 caller names it; this one described the first '

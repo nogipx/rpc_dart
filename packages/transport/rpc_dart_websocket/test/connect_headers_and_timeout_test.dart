@@ -146,7 +146,7 @@ void main() {
               .onError<RpcStatusException>(
                 (e, _) => e.statusCode == RpcStatus.unavailable
                     ? 'bounded'
-                    : 'status ${e.statusCode}',
+                    : 'status ${e.statusCode.code}',
               )
               .timeout(
                 const Duration(seconds: 3),
@@ -186,7 +186,7 @@ void main() {
             .onError<RpcStatusException>(
               (e, _) => e.statusCode == RpcStatus.unavailable
                   ? 'bounded'
-                  : 'status ${e.statusCode}',
+                  : 'status ${e.statusCode.code}',
             )
             .timeout(
               const Duration(seconds: 40),

@@ -230,7 +230,7 @@ void main() {
     test('percent-encoded grpc-message (ASCII) still passes through', () {
       // The core metadata layer percent-encodes grpc-message to ASCII before
       // it reaches the transport, so a Unicode status message is fine.
-      final metadata = RpcTrailers.status(2, message: 'Ошибка');
+      final metadata = RpcTrailers.status(RpcStatus.unknown, message: 'Ошибка');
       final headers = rpcMetadataToHttp2Trailers(metadata);
       final wire = _toMap(headers)['grpc-message']!;
       // Already ASCII (percent-encoded) on the wire.

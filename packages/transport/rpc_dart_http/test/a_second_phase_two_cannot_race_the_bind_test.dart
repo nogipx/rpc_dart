@@ -90,7 +90,7 @@ Future<_Run> _start({required int phaseTwo}) async {
         .timeout(const Duration(seconds: 5));
     answer = 'ok:${reply.value}';
   } on RpcStatusException catch (e) {
-    answer = 'status ${e.statusCode}';
+    answer = 'status ${e.statusCode.code}';
   }
 
   return (

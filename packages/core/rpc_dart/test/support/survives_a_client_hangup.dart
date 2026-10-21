@@ -79,7 +79,7 @@ Future<void> main(List<String> argv) async {
       RpcMetadata([
         RpcHeader(RpcHeaders.xClientCancelled, 'true'),
         RpcHeader(RpcHeaders.xCancellationReason, 'client hung up'),
-        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
+        RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.code.toString()),
       ]),
       endStream: true,
     );

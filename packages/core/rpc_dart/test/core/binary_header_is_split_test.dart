@@ -24,7 +24,7 @@ import 'package:test/test.dart';
 
 /// Metadata carrying [raw] as the binary status-details header, verbatim.
 RpcMetadata _withDetails(String raw) => RpcMetadata([
-  RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.notFound}'),
+  RpcHeader(RpcHeaders.grpcStatus, '${RpcStatus.notFound.code}'),
   RpcHeader(RpcHeaders.grpcStatusDetails, raw),
 ]);
 

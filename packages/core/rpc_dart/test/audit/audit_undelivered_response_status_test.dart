@@ -342,26 +342,26 @@ void main() {
       () async {
         // Pre-fix this was ['5', '13'].
         expect(await drive(failASend: true, sendErrorFirst: true), [
-          '${RpcStatus.notFound}',
+          '${RpcStatus.notFound.code}',
         ]);
       },
     );
 
     test('GUARD: a clean finish sends OK once', () async {
       expect(await drive(failASend: false, sendErrorFirst: false), [
-        '${RpcStatus.ok}',
+        '${RpcStatus.ok.code}',
       ]);
     });
 
     test('GUARD: an explicit error alone is sent once', () async {
       expect(await drive(failASend: false, sendErrorFirst: true), [
-        '${RpcStatus.notFound}',
+        '${RpcStatus.notFound.code}',
       ]);
     });
 
     test('GUARD: a failed send alone still reports INTERNAL', () async {
       expect(await drive(failASend: true, sendErrorFirst: false), [
-        '${RpcStatus.internal}',
+        '${RpcStatus.internal.code}',
       ]);
     });
   });

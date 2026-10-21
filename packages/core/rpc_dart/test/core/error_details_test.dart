@@ -141,7 +141,7 @@ void main() {
       expect(bin, isNotNull);
 
       final decoded = decodeRpcStatus(bin!);
-      expect(decoded.code, RpcStatus.invalidArgument);
+      expect(decoded.code, RpcStatus.invalidArgument.code);
       expect(decoded.details.length, 1);
       expect(decoded.details[0], isA<RpcBadRequest>());
     });
@@ -162,7 +162,7 @@ void main() {
       );
 
       final reconstructed = RpcStatusException.fromTrailer(
-        original.statusCode,
+        original.statusCode.code,
         original.message,
         detailsBin: original.statusDetailsBin,
       );
@@ -181,7 +181,7 @@ void main() {
 
     test('fromTrailer with null detailsBin returns no details', () {
       final ex = RpcStatusException.fromTrailer(5, 'not found');
-      expect(ex.statusCode, 5);
+      expect(ex.statusCode, RpcStatus.notFound);
       expect(ex.message, 'not found');
       expect(ex.details, isEmpty);
     });
@@ -192,7 +192,7 @@ void main() {
         'error',
         detailsBin: Uint8List.fromList([0xFF, 0xFF, 0xFF]),
       );
-      expect(ex.statusCode, 13);
+      expect(ex.statusCode, RpcStatus.internal);
       expect(ex.message, 'error');
       expect(ex.details, isEmpty);
     });
