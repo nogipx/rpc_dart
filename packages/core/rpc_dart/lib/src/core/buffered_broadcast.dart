@@ -94,9 +94,9 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   final Queue<_BufferedItem<T>> _pending = Queue<_BufferedItem<T>>();
 
   /// In-flight [addStream] pipes, so [close] can cancel them and settle their
-  /// futures. Without this the subscription was dropped on the floor: the
-  /// caller had no handle to it, so a pipe outlived the sink and kept draining
-  /// its source forever into a closed (no-op) controller.
+  /// futures. The caller has no handle to the subscription, so without this a
+  /// pipe outlives the sink and keeps draining its source forever into a
+  /// closed (no-op) controller.
   final List<({StreamSubscription<T> sub, void Function() finish})> _pipes = [];
   final Completer<void> _doneCompleter = Completer<void>();
   bool _closed = false;

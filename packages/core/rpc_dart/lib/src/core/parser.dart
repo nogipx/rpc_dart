@@ -202,11 +202,10 @@ final class RpcMessageParser {
       final buffered = _state.available + data.length;
       _state.clear();
       _state.reset();
-      // RESOURCE_EXHAUSTED on the TYPE, not inferred downstream. The http2
-      // responder used to read `error is RpcException` to mean "a resource
-      // limit" and enumerate these four by hand in a comment — but that is the
+      // RESOURCE_EXHAUSTED on the TYPE, not inferred downstream: a consumer
+      // that reads `error is RpcException` as "a resource limit" matches the
       // BASE of the whole hierarchy, so malformed framing raised on the same
-      // path matched it too and a corrupt frame came back retryable.
+      // path would come back retryable too.
       throw RpcStatusException(
         RpcStatus.resourceExhausted,
         'gRPC frame buffer overflow: $buffered bytes (max: $_maxBufferedBytes)',
@@ -283,8 +282,8 @@ final class RpcMessageParser {
           : src.sublist(pos, bodyEnd);
       // Whether `payload` is already a complete frame rather than a bare body.
       // Only the compressed-without-a-decompressor branch makes it one, and
-      // [_emitFramed] needs to know so it does not wrap it twice -- which loses
-      // the compression bit and is what round 455 shipped.
+      // [_emitFramed] needs to know so it does not wrap it twice, which loses
+      // the compression bit.
       var alreadyFramed = false;
       if (_state.isCompressed) {
         final decompressor = _decompressor;

@@ -146,10 +146,8 @@ abstract interface class RpcMessageFrame {
   /// INTERNAL and not RESOURCE_EXHAUSTED, and the two are raised on the same
   /// path so the distinction has to live on the TYPE: these are MALFORMED
   /// framing, which no amount of sending less will fix, where the parser's
-  /// limits are a size the peer can correct. Both used to be a bare
-  /// `RpcException` and the http2 responder read that base class as "a resource
-  /// limit", so a corrupt frame came back retryable — measured, `grpc-status 8`
-  /// for a compression flag of 2.
+  /// limits are a size the peer can correct. Read as a resource limit, a
+  /// corrupt frame would come back retryable.
   static RpcMessageHeader parseHeader(Uint8List headerBytes) {
     // Both refusals are the PEER's malformed prefix (RpcPeerFaultException): INTERNAL
     // on the wire, as gRPC answers it, but not a fault of this side.
@@ -203,10 +201,9 @@ typedef RpcErrorSender =
 
 /// Reports [error] to the peer with the status [wireStatusFor] permits.
 ///
-/// **Four responders wrote this out, and one had already drifted** — its own
-/// comment records being repaired for it. The three lines matter more than they
+/// Every responder reports through this. The three lines matter more than they
 /// look: `wireStatusFor` is DEFAULT DENY, so it is the single place deciding
-/// what may leave the process. A fifth responder that reaches for `sendError`
+/// what may leave the process. A responder that reaches for `sendError`
 /// directly does not merely duplicate code, it bypasses the gate and puts a
 /// foreign error's text on the wire.
 Future<void> sendWireError(Object error, RpcErrorSender send) {
@@ -223,21 +220,19 @@ Future<void> sendWireError(Object error, RpcErrorSender send) {
 
 /// The gRPC status for a non-200 HTTP response, for every transport.
 ///
-/// **One table, because two disagreed on six rows and one of them was
-/// retryability.** `RpcRetryInterceptor` retries `unavailable` and
-/// `resourceExhausted` and nothing else, so a gateway timeout used to be
-/// retried over HTTP/2 and final over HTTP/1.1 — same deployment, same proxy,
-/// same application code, and swapping the transport silently swapped the
-/// retry policy.
+/// **One table, because the mapping decides retryability.**
+/// `RpcRetryInterceptor` retries `unavailable` and `resourceExhausted` and
+/// nothing else, so two tables that disagree make a gateway timeout retried
+/// over one transport and final over another: swapping the transport would
+/// silently swap the retry policy.
 ///
 /// The base is grpc-go's `HTTPStatusConvTab`, which is what a gRPC peer and
 /// every gRPC gateway already assume.
 ///
 /// **Anything not in the table is `unknown`, not `internal`**: the peer said
-/// something gRPC has no meaning for, and `unknown` is what that means. That
-/// rule is why the richer HTTP/1.1 table did not win wholesale — its `>=400 ->
-/// invalidArgument` default contradicted it, and rows like `409`, `410`, `412`
-/// and `501` map statuses no rpc_dart responder emits.
+/// something gRPC has no meaning for, and `unknown` is what that means. So
+/// there is no `>=400 -> invalidArgument` default, and no rows for statuses
+/// like `409`, `410`, `412` and `501` that no rpc_dart responder emits.
 ///
 /// Three rows are kept beyond grpc-go's, each because something really produces
 /// it:

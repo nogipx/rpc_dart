@@ -43,7 +43,7 @@ final class RpcCallScope {
   /// Reports a cancel that rejected, without letting it escape.
   ///
   /// Cancelling a stream runs user code, which may throw. Dropping that future
-  /// made it an unhandled async error, and an unhandled async error in the
+  /// makes it an unhandled async error, and an unhandled async error in the
   /// root zone terminates the isolate -- fatal for a server, from nothing more
   /// than a tracked stream whose cleanup failed.
   void _cancelFailed(Object error, StackTrace stackTrace) {
@@ -138,10 +138,9 @@ final class RpcCallScope {
       return c.stream;
     }
 
-    // Both cancel paths belong to the bridge: the consumer's, which used to
-    // RETURN the cancel Future from onCancel and so handed a handler doing
-    // `.first` or `.take(n)` the parked generator's own stall, and the scope's,
-    // here.
+    // Both cancel paths belong to the bridge: the consumer's and the scope's,
+    // here. An onCancel that RETURNED the source's cancel Future would hand a
+    // handler doing `.first` or `.take(n)` the parked generator's own stall.
     final bridge = StreamBridge<T>(
       source: stream,
       onCancelFailed: _cancelFailed,
@@ -166,10 +165,10 @@ final class RpcCallScope {
       cancelOnError: cancelOnError,
     );
     // NOT `onDispose(sub.cancel)`. Disposers are AWAITED, with
-    // [disposerTimeout] as the only bound — so a parked generator made closing
-    // a scope cost up to five seconds per subscription, and a rejected cancel
-    // became an unhandled async error. [track], thirty lines above, states both
-    // rules and the evidence for them; this one was written without either.
+    // [disposerTimeout] as the only bound — so a parked generator would make
+    // closing a scope cost up to five seconds per subscription, and a rejected
+    // cancel would become an unhandled async error. [track] follows the same
+    // two rules.
     onDispose(() {
       unawaited(sub.cancel().catchError(_cancelFailed));
     });
@@ -189,13 +188,12 @@ final class RpcCallScope {
   /// Closes the scope and runs all disposers in reverse order.
   ///
   /// Safe to call multiple times, and a second call JOINS the first rather than
-  /// returning early. Returning early is what "idempotent" used to mean here,
-  /// and it was a race: the scope self-closes on cancellation and on deadline,
-  /// so a teardown that cancelled the token first then found `_isClosed` set
-  /// and continued — leaving the disposers running detached behind it, and
-  /// `RpcResponderEndpoint.close()` returning before the handler's cleanup had
-  /// finished. The disposer loop is bounded per disposer, so joining cannot
-  /// hang: see [disposerTimeout].
+  /// returning early. Returning early is a race: the scope self-closes on
+  /// cancellation and on deadline, so a teardown that cancelled the token first
+  /// would find `_isClosed` set and continue — leaving the disposers running
+  /// detached behind it, and `RpcResponderEndpoint.close()` returning before
+  /// the handler's cleanup had finished. The disposer loop is bounded per
+  /// disposer, so joining cannot hang: see [disposerTimeout].
   Future<void> close() => _closing ??= _close();
 
   Future<void>? _closing;
@@ -225,7 +223,7 @@ final class RpcCallScope {
         // never shutting down, and reported rather than hidden.
         //
         // Only a disposer that returns a Future is bounded: a synchronous one
-        // cannot hang, and wrapping it armed a timer per disposer per call.
+        // cannot hang, and wrapping it would arm a timer per disposer per call.
         // The await stays for both: later disposers depend on the turn it
         // gives the earlier ones (the cancel notice must reach the peer).
         final result = _disposers[i]();
@@ -242,10 +240,9 @@ final class RpcCallScope {
         );
       } catch (error, stackTrace) {
         // Keep going so every disposer still runs -- one failing cleanup must
-        // not strand the rest. But do not make it vanish: this swallowed
-        // silently, so a handler's own cleanup failing (a database handle that
-        // would not release, a file that would not close) left no trace
-        // anywhere at all -- no log, no error, nothing to notice.
+        // not strand the rest. But do not make it vanish: a handler's own
+        // cleanup failing (a database handle that would not release, a file
+        // that would not close) has no other trace anywhere.
         _log.error(
           'Call-scope disposer failed',
           error: error,

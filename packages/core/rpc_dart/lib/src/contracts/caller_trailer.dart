@@ -14,11 +14,10 @@ const String kStreamClosedWithoutStatusMessage =
 
 /// The caller-side rule for reading a trailer, in one place.
 ///
-/// Every call shape used to re-implement this, and the copies drifted into
-/// different observable behaviour: one compared the status as TEXT, and "OK
-/// with no payload" was INTERNAL on one shape and UNAVAILABLE on another —
-/// so [RpcRetryInterceptor] retried the identical wire event on one and
-/// surfaced it on the other.
+/// Every call shape reads its trailer through this. A shape with its own copy
+/// can read the same wire event differently — "OK with no payload" INTERNAL
+/// on one and UNAVAILABLE on another — and [RpcRetryInterceptor] then retries
+/// it on one shape and surfaces it on the other.
 abstract final class RpcCallerTrailer {
   /// The gRPC status on [metadata], or null when it carries none.
   ///

@@ -711,8 +711,8 @@ class RpcFrameMultiplexedChannel
 
     // Decode against a view of the valid region. decodeAll is O(1) when no
     // frame is complete (it reads the 9-byte header and bails), so calling it
-    // on every chunk is cheap; the cost that used to be quadratic was the
-    // per-chunk buffer reallocation, now amortized O(1) via _appendToBuffer.
+    // on every chunk is cheap; what would make a dribbled frame quadratic is
+    // reallocating the buffer per chunk, which _appendToBuffer amortizes.
     final buffered = fastPath ? data : Uint8List.sublistView(_buf, 0, _bufLen);
     final List<RpcDecodedFrame> frames;
     final int consumed;

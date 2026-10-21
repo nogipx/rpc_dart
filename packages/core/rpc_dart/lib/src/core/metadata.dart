@@ -12,8 +12,8 @@ import 'rpc_headers.dart';
 /// Default bound on a `/Service/Method` path, in characters.
 ///
 /// One number. `RpcSecurityPolicy.maxMethodPathLength` defaults to it, and the
-/// outbound metadata constructors use it directly — they used to enforce 258
-/// while the responder pipeline enforced a hardcoded 512.
+/// outbound metadata constructors use it directly, so a path this side sends
+/// is one its own responder admits.
 const int kDefaultMaxMethodPathLength = 1024;
 
 /// Tokens allowed in a SERVICE name. A dot is legal, so a package-qualified
@@ -32,12 +32,10 @@ final RegExp kMethodTokenPattern = RegExp(r'^[A-Za-z0-9_-]+$');
 
 /// Splits a valid `/Service/Method` into its two names, or returns null.
 ///
-/// **The single implementation of the grammar.** It was written three times
-/// with three limits — a hardcoded 512 in the responder pipeline, the policy's
-/// 1024, and 258 here — and three different rules, so the layer an embedder
-/// could CONFIGURE was the loosest and the strictest had no configuration at
-/// all. Raising the policy's knob past 512 changed nothing, because the
-/// responder refused afterwards.
+/// **The single implementation of the grammar.** A second copy with its own
+/// limit or rules makes the layer an embedder can CONFIGURE one of several:
+/// raising the policy's knob changes nothing while another copy refuses the
+/// path afterwards.
 (String service, String method)? parseRpcMethodPath(
   String? methodPath, {
   int maxLength = kDefaultMaxMethodPathLength,

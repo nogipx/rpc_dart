@@ -349,10 +349,9 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
           stackTrace: stackTrace,
         );
 
-        // ANSWER it. This used to LOG ONLY, and the duty was carried instead by
-        // one subscription per live unary handler, each on this same
-        // connection-wide broadcast -- O(N) listeners invoked per frame to
-        // answer an error that arrives once. Done here it is one pass.
+        // ANSWER it, here and in one pass. A subscription per live unary
+        // handler on this same connection-wide broadcast would invoke O(N)
+        // listeners per frame to answer an error that arrives once.
         //
         // `onDone` is the other ending and stays separate: there the transport
         // is gone, so there is nothing to answer over and _abortActiveStreams

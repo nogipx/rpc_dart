@@ -84,14 +84,10 @@ final class RpcResponderMethodRegistry {
     }
 
     // Only if nothing has been declared yet. `setup()` is public and calling it
-    // before registering reads as the natural thing to do -- two transport
-    // packages' tests do exactly that -- and this used to run it a SECOND time,
-    // re-registering every method. That was harmless only because a repeated
-    // name silently replaced the earlier entry; now that a duplicate is
-    // refused, re-running it would throw on correct code.
-    //
-    // This also makes registering one contract instance on two endpoints work,
-    // which had the same double-setup problem.
+    // before registering reads as the natural thing to do; running it a second
+    // time re-registers every method, and since a duplicate name is refused,
+    // that would throw on correct code. The same guard lets one contract
+    // instance be registered on two endpoints.
     if (contract.registrations.isEmpty) {
       contract.setup();
     }

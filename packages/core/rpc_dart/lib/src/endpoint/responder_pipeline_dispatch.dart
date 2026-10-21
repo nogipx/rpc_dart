@@ -136,8 +136,8 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
 
     // A cancellation notice never opens a call: _notifyPeerOfCancellation
     // sends bare headers with no methodPath. Requiring that here means a
-    // call-OPENING frame can no longer cancel itself before dispatch -- which
-    // is not a coherent request in the first place, and which used to leave the
+    // call-OPENING frame cannot cancel itself before dispatch -- not a
+    // coherent request in the first place, and one that would leave the
     // caller with no status at all, hanging until its own timeout.
     if (message.isMetadataOnly &&
         message.metadata != null &&
@@ -345,7 +345,7 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     // opens). Now that the method is resolved they route normally.
     if (state.hasPreMethodBuffered || state.endOfStreamPending) {
       // These leave the pre-method buffer, so give the connection its budget
-      // back before replaying — the replay itself no longer buffers them.
+      // back before replaying — the replay itself does not buffer them.
       _releasePreMethodBytes(state);
       for (final buffered in state.takePreMethodBufferedMessages()) {
         _handleDataMessage(state, buffered);
@@ -581,10 +581,10 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
     }
 
     // Unary and server-stream require exactly one request message, so a stream
-    // that closed without one is a malformed call. Bidirectional used to fall
-    // in here too: a client that opened a bidi call and listened without
-    // sending anything first -- legal gRPC, and the natural shape for a
-    // server-push subscription -- was rejected with INVALID_ARGUMENT.
+    // that closed without one is a malformed call. Bidirectional must not
+    // reach here: a client that opens a bidi call and listens without sending
+    // anything first -- legal gRPC, and the natural shape for a server-push
+    // subscription -- would be rejected with INVALID_ARGUMENT.
     if (state.responder == null && state.lastPayloadMessage == null) {
       _detached(
         _sendGrpcErrorAndCleanup(

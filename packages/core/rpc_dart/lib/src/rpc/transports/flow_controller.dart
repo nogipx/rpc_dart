@@ -154,10 +154,10 @@ final class RpcFlowController {
 
   /// Whether flow control is on at EITHER level.
   ///
-  /// Every gate here used to read the per-stream window alone, so a policy with
-  /// only the connection pool configured charged each send against it and
-  /// credited nothing back: the pool wedged after exactly one window with a
-  /// receiver that consumed everything.
+  /// Every gate reads this, not the per-stream window alone: a policy with only
+  /// the connection pool configured would charge each send against the pool and
+  /// credit nothing back, and the pool would wedge after exactly one window
+  /// with a receiver that consumed everything.
   bool get enabled => _window != null || _connWindow != null;
 
   /// Connection-pool credit still available to send, or null when the peer has

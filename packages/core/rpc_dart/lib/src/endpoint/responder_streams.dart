@@ -93,8 +93,8 @@ final class RpcResponderStreamState {
   ///
   /// Covers the window from the opening metadata frame to handler dispatch,
   /// which is the only stretch nothing else bounds: `grpc-timeout` is optional
-  /// and peer-supplied, so a peer that sends one frame and stops used to park
-  /// this state forever. Armed once rather than re-armed per frame -- the
+  /// and peer-supplied, so without this a peer that sends one frame and stops
+  /// parks this state forever. Armed once rather than re-armed per frame -- the
   /// window is a single step for every shape, so re-arming would add timer
   /// churn to the hot path for no coverage.
   void armHalfOpen(Duration after, void Function() onExpired) {
@@ -244,9 +244,9 @@ final class RpcResponderStreamState {
   ///
   /// **Nothing reads it.** It is diagnostic only, and it does not make a call
   /// that was fed less than the peer sent fail — the peer is still told
-  /// `grpc-status 0`. Four paths were driven at it and none arrived (round 375);
-  /// what remains reachable is a peer that keeps sending after its own
-  /// half-close, which is a protocol violation rather than an ordinary call.
+  /// `grpc-status 0`. The one path known to reach it is a peer that keeps
+  /// sending after its own half-close, which is a protocol violation rather
+  /// than an ordinary call.
   int droppedRequests = 0;
 
   /// Forwards a request [message] to the bound responder, counting it as

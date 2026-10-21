@@ -628,7 +628,7 @@ class RpcChannelTransport extends IRpcTransport
 
       // CLIENT role only. A responder has its own answer to send and sends it
       // below; and a hostile CLIENT could otherwise put `grpc-status` on a
-      // request to get a frame delivered where this used to refuse it.
+      // request to get a frame delivered that this must refuse.
       final reduced = isClient ? _policy.statusOnly(metadata) : null;
       if (reduced == null) {
         final ctl = _streamControllers[streamId];

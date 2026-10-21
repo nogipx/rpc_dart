@@ -142,11 +142,8 @@ extension _ResponderPipelineContext on RpcResponderPipelineMixin {
   // Utility
   // ---------------------------------------------------------------------------
 
-  /// The transport's policy owns the grammar; this only asks it.
-  ///
-  /// It used to hold a fourth copy with a HARDCODED 512, which is what made
-  /// `maxMethodPathLength` monotone downward only: raise it past 512 and this
-  /// refused the path afterwards.
+  /// The transport's policy owns the grammar; this only asks it, so a raised
+  /// `maxMethodPathLength` is honoured here too.
   (String, String)? _parseMethodPath(String methodPath) =>
       transport.securityPolicy.parseMethodPath(methodPath);
 

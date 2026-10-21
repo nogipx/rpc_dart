@@ -54,9 +54,9 @@ class ExponentialBackoff extends BackoffPolicy {
 
   @override
   Duration delayFor(int attempt) {
-    // Microseconds: in milliseconds a base under 1 ms truncated to 0, which
-    // the overflow guard then read as "too large" and turned into maxDelay --
-    // so `baseDelay: Duration.zero` slept the maximum on every attempt.
+    // Microseconds: in milliseconds a base under 1 ms truncates to 0, which
+    // the overflow guard below would read as "too large" and turn into
+    // maxDelay.
     final baseUs = baseDelay.inMicroseconds;
     final maxUs = maxDelay.inMicroseconds;
     if (baseUs <= 0 || maxUs <= 0) return Duration.zero;
@@ -68,9 +68,9 @@ class ExponentialBackoff extends BackoffPolicy {
 
     if (!jitter) return Duration(microseconds: cappedUs);
 
-    // Uniform in [1, cap] whole milliseconds, as it always was; in
-    // microseconds only for a cap under one. nextDouble, not nextInt: nextInt
-    // takes at most 2^32 and threw past ~50 days.
+    // Uniform in [1, cap] whole milliseconds; in microseconds only for a cap
+    // under one. nextDouble, not nextInt: nextInt takes at most 2^32 and
+    // throws past ~50 days.
     final unit = cappedUs >= 1000 ? 1000 : 1;
     final units = cappedUs ~/ unit;
     final picked = (_random.nextDouble() * units).floor() + 1;

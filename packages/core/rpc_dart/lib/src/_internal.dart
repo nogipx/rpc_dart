@@ -4,13 +4,11 @@
 
 /// Everything the implementation may use, with no view on what is public.
 ///
-/// Eleven files under `lib/` used to import `package:rpc_dart/rpc_dart.dart` —
-/// the package's own public barrel — which made that barrel a dependency OF the
-/// implementation rather than a surface over it. A `hide` there then deleted
-/// names the library needed from itself: 78 analyzer errors, 7 inside `lib/`.
-///
 /// Internals import this; consumers import `package:rpc_dart/rpc_dart.dart`.
-/// That separation is what lets the public one be narrowed at all.
+/// That separation is what lets the public one be narrowed at all: a file
+/// under `lib/` that imports the public barrel makes it a dependency of the
+/// implementation, and a `hide` there then deletes names the library needs
+/// from itself.
 library;
 
 export 'dart:typed_data';

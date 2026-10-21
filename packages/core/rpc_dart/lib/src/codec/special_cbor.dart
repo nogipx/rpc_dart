@@ -349,7 +349,7 @@ class _FastCborReader {
         // RFC 7049 2.2: the chunks MUST be definite-length. Rejecting a nested
         // indefinite chunk is not just spec compliance — it is what bounds
         // this recursion. Each nested 0x7F consumes one byte and adds a frame,
-        // so a run of them used to blow the native stack (StackOverflowError,
+        // so a run of them would blow the native stack (StackOverflowError,
         // not the FormatException callers handle) on attacker-supplied bytes.
         if ((chunkByte & 0x1F) == CborCodec._additionalInfoIndefiniteLength) {
           throw FormatException(

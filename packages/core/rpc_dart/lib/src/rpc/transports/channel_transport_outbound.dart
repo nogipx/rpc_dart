@@ -7,17 +7,15 @@ part of 'channel_transport.dart';
 extension _ChannelTransportOutbound on RpcChannelTransport {
   /// Refuses a WRITE on a closed transport.
   ///
-  /// These three used to `return`, so a caller awaiting a send was told the
-  /// bytes went out while nothing reached the wire. On a client-stream that is
-  /// not a lost frame but a lost MESSAGE: the peer's handler is given a shorter
-  /// sequence than the caller sent and answers normally, so both sides report
-  /// success over different data.
+  /// A send that returned quietly instead would tell a caller awaiting it that
+  /// the bytes went out while nothing reached the wire. On a client-stream that
+  /// is not a lost frame but a lost MESSAGE: the peer's handler is given a
+  /// shorter sequence than the caller sent and answers normally, so both sides
+  /// report success over different data.
   ///
   /// [RpcClosedException] rather than a bare `StateError`: it is classifiable
-  /// by the caller and it survives the wire if it ever crosses one. This site
-  /// spelled it `RpcStatusException(unavailable, ...)` while ten siblings threw
-  /// `StateError`, and `_isTransportClosed` had to accept both by comparing
-  /// message text.
+  /// by the caller, by type rather than by message text, and it survives the
+  /// wire if it ever crosses one.
   ///
   /// READS and teardown stay lenient: [finishSending] and [releaseStreamId] run
   /// from `finally` blocks, where a throw masks the error that got there.
