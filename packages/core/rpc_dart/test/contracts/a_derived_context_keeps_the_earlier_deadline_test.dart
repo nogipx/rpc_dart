@@ -4,13 +4,12 @@
 
 // A context derived for a downstream call cannot outlive its parent.
 //
-// `createChildWith(timeout:)` and `RpcContextBuilder.inheritFrom(...)
-// .withTimeout` used to REPLACE the parent's deadline: with 200 ms left, the
-// downstream was told 2 s. They keep the earlier of the two now, as gRPC and
-// Go do on derivation. `forward()` is the helper for a downstream call: the
+// `forward(timeout:)` and `RpcContextBuilder.inheritFrom(...).withTimeout`
+// keep the earlier of the parent's deadline and the new one, as gRPC and Go
+// do on derivation. `forward()` is the helper for a downstream call: the
 // deadline, token and trace carry over and credentials do not.
-// `RpcContext.withTimeout` on a context still replaces: that is the explicit
-// way to set one.
+// `RpcContext.withTimeout` on a context replaces: that is the explicit way to
+// set one.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -23,9 +22,9 @@ RpcContext _parent({Duration left = const Duration(milliseconds: 200)}) =>
 
 void main() {
   group('WITNESS: a derived context keeps the earlier deadline', () {
-    test('createChildWith(timeout:) longer than what is left', () {
+    test('forward(timeout:) longer than what is left', () {
       final parent = _parent();
-      final child = parent.createChildWith(timeout: const Duration(seconds: 2));
+      final child = parent.forward(timeout: const Duration(seconds: 2));
       expect(child.deadline, parent.deadline);
     });
 
@@ -47,17 +46,15 @@ void main() {
   });
 
   group('GUARD: a shorter deadline still applies', () {
-    test('createChildWith(timeout:) shorter than what is left', () {
+    test('forward(timeout:) shorter than what is left', () {
       final parent = _parent(left: const Duration(seconds: 2));
-      final child = parent.createChildWith(
-        timeout: const Duration(milliseconds: 100),
-      );
+      final child = parent.forward(timeout: const Duration(milliseconds: 100));
       expect(child.deadline, _now.add(const Duration(milliseconds: 100)));
     });
 
     test('a parent with no deadline takes the child timeout', () {
       final parent = RpcContext.empty().withClock(_clock);
-      final child = parent.createChildWith(timeout: const Duration(seconds: 1));
+      final child = parent.forward(timeout: const Duration(seconds: 1));
       expect(child.deadline, _now.add(const Duration(seconds: 1)));
     });
   });

@@ -287,23 +287,23 @@ void main() {
   });
 
   group('RpcContextExtensions', () {
-    test('createChild inherits trace ID and generates new request ID', () {
+    test('forward inherits trace ID and generates new request ID', () {
       final parentTraceId = 'parent-trace-123';
       final parent = RpcContext.withTraceId(parentTraceId);
 
-      final child = parent.createChild();
+      final child = parent.forward();
 
       expect(child.traceId, equals(parentTraceId));
       expect(child.requestId, startsWith('req_'));
-      expect(parent.requestId, startsWith('req_'));
+      expect(child.requestId, isNot(parent.requestId));
     });
 
-    test('createChildWith applies headers and timeout', () {
+    test('forward applies headers and timeout', () {
       final parent = RpcContext.withTraceId('trace-123');
       final additionalHeaders = {'x-custom': 'value'};
       final timeout = Duration(seconds: 30);
 
-      final child = parent.createChildWith(
+      final child = parent.forward(
         headers: additionalHeaders,
         timeout: timeout,
       );
@@ -326,7 +326,7 @@ void main() {
           .withCancellation(cancellationToken)
           .build();
 
-      final childContext = context.createChild();
+      final childContext = context.forward();
 
       expect(childContext.traceId, equals(context.traceId));
       expect(childContext.deadline, equals(context.deadline));

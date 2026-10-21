@@ -69,9 +69,10 @@ receives one as its named `context` parameter.
 token and values. It always generates a new `requestId`, and generates a `traceId` only if the parent has none.
 Its `withDeadline` / `withTimeout` keep the parent's deadline when that is
 earlier: a derived context can shorten the deadline, never extend it.
-`ctx.createChild()` and `ctx.createChildWith({headers, timeout})` are shortcuts for it.
-`ctx.forward({headers, timeout})` is the same with this context's credentials
-dropped: `authorization`, `proxy-authorization`, `x-api-key`, `cookie`, and a
+It passes the parent's credentials on too; use it only when the next hop
+should receive them.
+`ctx.forward({headers, timeout})` is the shortcut for a downstream call: the
+same, with this context's credentials dropped: `authorization`, `proxy-authorization`, `x-api-key`, `cookie`, and a
 header named by `withApiKey(headerName:)`. `headers` are added after that, so
 `forward(headers: {'authorization': 'Bearer <service token>'})` sends the
 downstream call's own credential. `RpcContext.sanitize(ctx)` drops the same set.
@@ -97,10 +98,9 @@ RpcContext downstream(RpcContext incoming) =>
     incoming.forward(timeout: const Duration(seconds: 1));
 ```
 
-Pitfall when forwarding: `createChild` copies EVERY header of the incoming
-context, including `authorization` and the framework headers the server
-received. `forward` drops only the three credential headers; another secret,
-such as an API key under a custom header name, still travels. A context built
+Pitfall when forwarding: `forward` drops only the credential headers listed
+above. Another secret the server received, such as a key under a custom header
+name that did not come through `withApiKey`, still travels. A context built
 from scratch instead loses the deadline and the cancellation.
 
 ## Deadlines

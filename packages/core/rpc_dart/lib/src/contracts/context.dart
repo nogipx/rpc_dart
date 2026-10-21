@@ -683,35 +683,22 @@ class RpcContextBuilder {
 
 /// Extension for convenient propagation handling.
 extension RpcContextExtensions on RpcContext {
-  /// Creates a child context for a new call (inherits trace ID, new request ID).
-  RpcContext createChild() {
-    return RpcContextBuilder.inheritFrom(this).build();
-  }
-
-  /// Creates a child context with additional headers. A [timeout] that ends
-  /// after this context's deadline is ignored.
-  RpcContext createChildWith({
-    Map<String, String>? headers,
-    Duration? timeout,
-  }) {
-    var builder = RpcContextBuilder.inheritFrom(this);
-
-    if (headers != null) builder = builder.withHeaders(headers);
-    if (timeout != null) builder = builder.withTimeout(timeout);
-
-    return builder.build();
-  }
-
   /// The context for a downstream call made on behalf of this one.
   ///
-  /// Like [createChildWith]: the trace, deadline, cancellation token, values
-  /// and headers carry over, and a new request id is minted. This context's
-  /// credentials (`authorization`, `proxy-authorization`, `x-api-key`,
-  /// `cookie`, and a name given to [RpcContextBuilder.withApiKey]) do not;
+  /// The trace, deadline, cancellation token, values and headers carry over,
+  /// and a new request id is minted. A [timeout] that ends after this
+  /// context's deadline is ignored. This context's credentials
+  /// (`authorization`, `proxy-authorization`, `x-api-key`, `cookie`, and a
+  /// name given to [RpcContextBuilder.withApiKey]) do not carry over;
   /// [headers] are added after they are dropped, so the downstream call's own
   /// credentials go through.
+  ///
+  /// To pass the credentials on as well, build the context with
+  /// [RpcContextBuilder.inheritFrom].
   RpcContext forward({Map<String, String>? headers, Duration? timeout}) {
-    final child = createChildWith(timeout: timeout);
+    var builder = RpcContextBuilder.inheritFrom(this);
+    if (timeout != null) builder = builder.withTimeout(timeout);
+    final child = builder.build();
     final inherited = Map.of(child._headers)
       ..removeWhere((name, _) => _isCredential(name));
     return child._copy(
