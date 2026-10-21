@@ -592,18 +592,17 @@ class RpcHttpResponderTransport extends IRpcTransport {
     pending.bodyBuffer.add(data);
     // HTTP/1.1 cannot flush before the end, so a server stream's WHOLE output
     // is resident until the handler finishes -- and a method that streams until
-    // cancelled never does. Bounded by the same number the request side uses,
-    // and for a stronger reason than symmetry: the caller refuses any body over
-    // it, so every byte past this point is retained to be thrown away — the
-    // caller receives nothing either way, and the only difference is how much
-    // this side holds first.
+    // cancelled never does. THIS side's buffered-bytes bound is what limits it,
+    // whatever the caller would accept: a caller that raises its limit needs
+    // this one raised too. With the policies equal, the caller would refuse a
+    // body past it anyway.
     //
     // `maxBufferedBytes`, the same knob the two body reads use: this is a whole
     // STREAM, and bounding it by the per-message limit made raising the knob
     // whose name means "buffered bytes" do nothing.
     final limit = securityPolicy.effectiveMaxBufferedBytes;
     if (pending.bodyBuffer.length > limit) {
-      _answerOversizedResponse(streamId, pending);
+      _answerOversizedResponse(streamId, pending, limit);
       return;
     }
     if (endStream) {
@@ -616,20 +615,22 @@ class RpcHttpResponderTransport extends IRpcTransport {
   /// The status rides ordinary response headers, which is where this wire
   /// format carries it; a 413 would be translated from the HTTP status instead
   /// and reaches the caller as whatever `grpcStatusFromHttpStatus` says today.
-  void _answerOversizedResponse(int streamId, _PendingResponse pending) {
+  void _answerOversizedResponse(
+    int streamId,
+    _PendingResponse pending,
+    int limit,
+  ) {
     pending.answered = true;
     pending.bodyBuffer.clear();
     _log.warning(
-      'Response for [streamId: $streamId] exceeded '
-      '${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes} bytes and was ended early. '
-      'HTTP/1.1 buffers a whole server stream before sending it.',
+      'Response for [streamId: $streamId] exceeded $limit bytes and was '
+      'ended early. HTTP/1.1 buffers a whole server stream before sending it.',
     );
     pending.responseHeaders.addAll(
       RpcTrailers.status(
         RpcStatus.resourceExhausted,
         message:
-            'Response exceeds the ${securityPolicy.maxBufferedBytes ?? securityPolicy.maxMessageLengthBytes}-byte '
-            'limit; HTTP/1.1 cannot stream it',
+            'Response exceeds the $limit-byte limit; HTTP/1.1 cannot stream it',
       ).headers,
     );
     _completeResponse(streamId, pending);

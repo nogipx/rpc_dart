@@ -250,6 +250,12 @@ the response body (`maxBufferedBytes`, by default derived from
 `maxMessageLengthBytes`). It also caps concurrent calls with
 `maxActiveStreams`.
 
+The responder's `maxBufferedBytes` bounds the response too, because it holds
+the whole response before sending it: past it the call ends
+`RESOURCE_EXHAUSTED`, whatever the caller would accept. A caller that raises
+its limit needs the server's raised as well. The other transports stream, so
+there only the receiver's limit applies.
+
 The responder checks every request before the handler runs:
 
 | Request | HTTP status | Caller sees |
