@@ -254,14 +254,19 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
   /// that connection. Anything shared — a database pool, a notify repository,
   /// an application singleton from a container — is borrowed, and disposing it
   /// from a contract takes the resource away from every other connection.
+  /// The transport servers close a dropped connection's endpoint, so
+  /// `dispose()` runs on every disconnect.
   ///
-  /// This became load-bearing when the transport servers started closing a
-  /// dropped connection's endpoint instead of leaking it: `dispose()` went
-  /// from never running to running on every disconnect. The first contract
-  /// that was disposing a shared repository took a production notify bus down
-  /// with it, silently, on the first client that went away.
+  /// A zero-copy method (one without codecs) needs a transport that carries
+  /// objects. Where the transport cannot, registration throws, unless the
+  /// transport reconnects and may carry them once connected; that one answers
+  /// each such call UNIMPLEMENTED instead.
   void registerServiceContract(RpcResponderContract contract) {
-    _respRegistry.registerContract(contract);
+    _respRegistry.registerContract(
+      contract,
+      carriesObjects:
+          transport.supportsZeroCopy || transport is IRpcReconnectOutcome,
+    );
   }
 
   /// Removes the contract for [serviceName] and disposes its resources.

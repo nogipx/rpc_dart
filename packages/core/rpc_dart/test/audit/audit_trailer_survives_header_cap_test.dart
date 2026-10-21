@@ -24,6 +24,7 @@
 // all, because the caller's own `x-request-id` does not fit either. A cap that
 // blocks ordinary traffic is a configuration error, not this behaviour.
 
+import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
@@ -59,7 +60,8 @@ final class _Svc extends RpcResponderContract {
 const _longMethodName = 'ComputeDailyRollupWithBackfillAndReconciliation';
 
 /// Registered WITHOUT codecs, i.e. zero-copy, on a transport that reports no
-/// zero-copy support -- the `_handleUnsupportedZeroCopy` path.
+/// zero-copy support -- the `_handleUnsupportedZeroCopy` path. Registration
+/// admits it only because the transport may reconnect ([_MayReconnect]).
 final class _ZcSvc extends RpcResponderContract {
   _ZcSvc() : super('Zc', dataTransferMode: RpcDataTransferMode.zeroCopy);
 
@@ -72,12 +74,26 @@ final class _ZcSvc extends RpcResponderContract {
   }
 }
 
+/// A transport whose capabilities can change with a reconnect, so a zero-copy
+/// contract is admitted at registration and refused per call.
+final class _MayReconnect extends RpcChannelTransport
+    implements IRpcReconnectOutcome {
+  _MayReconnect({
+    required super.channel,
+    required super.isClient,
+    required super.policy,
+  });
+
+  @override
+  Future<RpcHealthStatus> awaitReconnect() => health();
+}
+
 RpcCallerEndpoint _rig(RpcSecurityPolicy policy) {
   final (clientChannel, serverChannel) = RpcFrameMultiplexedChannel.pair(
     policy: policy,
   );
   final responder = RpcResponderEndpoint(
-    transport: RpcChannelTransport(
+    transport: _MayReconnect(
       channel: serverChannel,
       isClient: false,
       policy: policy,

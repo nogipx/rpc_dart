@@ -67,7 +67,14 @@ final class RpcResponderMethodRegistry {
   /// the service was present, some of its methods were live and served requests,
   /// and the obvious recovery (catch, fix, register again) was refused with
   /// "already registered".
-  void registerContract(RpcResponderContract contract) {
+  ///
+  /// With [carriesObjects] false the transport cannot carry a zero-copy
+  /// method's objects, so a contract that has one is refused here rather than
+  /// answered UNIMPLEMENTED on every call.
+  void registerContract(
+    RpcResponderContract contract, {
+    bool carriesObjects = true,
+  }) {
     final serviceName = contract.serviceName;
 
     if (_contracts.containsKey(serviceName)) {
@@ -124,6 +131,14 @@ final class RpcResponderMethodRegistry {
         throw RpcStatusException(
           RpcStatus.internal,
           'Method $methodKey is already registered',
+        );
+      }
+      if (binding.isZeroCopy && !carriesObjects) {
+        throw RpcStatusException(
+          RpcStatus.internal,
+          'Method $methodKey is zero-copy (no codecs), and this endpoint\'s '
+          'transport cannot carry objects: give the method codecs, or use '
+          'RpcDataTransferMode.codec',
         );
       }
       pending[methodKey] = binding;

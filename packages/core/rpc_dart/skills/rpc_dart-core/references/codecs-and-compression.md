@@ -16,7 +16,10 @@ Compression is a separate, per-message step applied to the encoded bytes.
   the other throws `ArgumentError` (in `auto` and `codec` modes).
 - No codecs means zero-copy: objects are passed as-is. That requires a transport
   with `supportsZeroCopy == true`; on any other transport the call throws
-  `ArgumentError` and a zero-copy responder method answers `UNIMPLEMENTED`.
+  `ArgumentError`, and `registerServiceContract` throws `RpcStatusException`
+  for a contract with a zero-copy method. Behind `RpcClientConnection`, whose
+  transport is unknown until it connects, registration admits it and each
+  call is answered `UNIMPLEMENTED` instead.
 - Network transports (http, http2, websocket, wasm, `RpcChannelTransport.pair`)
   have `supportsZeroCopy == false`. Methods used over them need codecs.
 - Responder and caller must agree: same codec format for the same method.

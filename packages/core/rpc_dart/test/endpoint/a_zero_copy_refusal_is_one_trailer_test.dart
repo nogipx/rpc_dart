@@ -2,18 +2,31 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A zero-copy method (no codecs) registered on a transport that cannot carry
-// objects is refused UNIMPLEMENTED. A call whose frames arrive back to back
-// got that trailer twice: a frame landing while the first was being sent found
-// no responder and was refused again. Two terminal statuses on one stream is a
-// protocol violation for any peer that keeps stream state.
+// A zero-copy method (no codecs) on a transport that cannot carry objects is
+// refused UNIMPLEMENTED per call where registration could not refuse it: a
+// transport that reconnects may carry objects once connected. A call whose
+// frames arrive back to back must get that trailer once: a frame landing while
+// the first is being sent finds no responder, and refusing it again puts two
+// terminal statuses on one stream, a protocol violation for any peer that
+// keeps stream state.
 
 import 'dart:async';
 
+import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final _codec = RpcCodec(RpcString.fromJson);
+
+/// Reports no zero-copy support, and may reconnect, so registration admits a
+/// zero-copy contract and each call is refused instead.
+final class _MayReconnect extends RpcChannelTransport
+    implements IRpcReconnectOutcome {
+  _MayReconnect({required super.channel, required super.isClient});
+
+  @override
+  Future<RpcHealthStatus> awaitReconnect() => health();
+}
 
 final class _ZeroCopy extends RpcResponderContract {
   _ZeroCopy() : super('Z');
@@ -37,7 +50,9 @@ final class _ZeroCopy extends RpcResponderContract {
 
 void main() {
   test('each refused zero-copy call gets one trailer', () async {
-    final (client, server) = RpcChannelTransport.pair();
+    final (clientChannel, serverChannel) = RpcFrameMultiplexedChannel.pair();
+    final client = RpcChannelTransport(channel: clientChannel, isClient: true);
+    final server = _MayReconnect(channel: serverChannel, isClient: false);
     final responder = RpcResponderEndpoint(transport: server)
       ..registerServiceContract(_ZeroCopy())
       ..start();

@@ -118,8 +118,9 @@ RpcCallerEndpoint resilientCaller(
 
 ## Pitfalls
 
-- `RpcChannelTransport.pair()` is not zero-copy. Zero-copy methods (no codecs)
-  fail on it; use `memoryPair()` for those, or add codecs.
+- `RpcChannelTransport.pair()` is not zero-copy. A responder on it refuses to
+  register a contract with zero-copy methods (no codecs), and a caller's
+  zero-copy call throws; use `memoryPair()` for those, or add codecs.
 - Tests on `memoryPair()` alone hide codec bugs: unary calls there skip codecs
   under the default `auto` mode. Run at least one test on `pair()` or a real
   transport.

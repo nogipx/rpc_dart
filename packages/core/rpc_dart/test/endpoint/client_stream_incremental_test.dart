@@ -74,7 +74,11 @@ void _record(String value) {
 }
 
 final class _Contract extends RpcResponderContract {
-  _Contract() : super('Svc');
+  /// [direct] adds the zero-copy method, which only a transport that carries
+  /// objects accepts.
+  _Contract({required this.direct}) : super('Svc');
+
+  final bool direct;
 
   @override
   void setup() {
@@ -124,6 +128,7 @@ final class _Contract extends RpcResponderContract {
       responseCodec: _codec,
     );
     // No codecs -> zero-copy.
+    if (!direct) return;
     addClientStreamMethod<Chunk, Chunk>(
       methodName: 'collectDirect',
       handler: (reqs, {RpcContext? context}) async {
@@ -149,7 +154,7 @@ _Rig _connect({bool zeroCopy = false}) {
       : RpcChannelTransport.pair();
   final caller = RpcCallerEndpoint(transport: client);
   final responder = RpcResponderEndpoint(transport: server);
-  responder.registerServiceContract(_Contract());
+  responder.registerServiceContract(_Contract(direct: zeroCopy));
   responder.start();
   return (client: client, server: server, caller: caller, responder: responder);
 }
