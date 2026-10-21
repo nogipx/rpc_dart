@@ -125,10 +125,10 @@ class RpcSocketServer extends IRpcServer {
   /// port 0, once started. 0 for a Unix socket, and before [start].
   int get port => _listener?.port ?? _address.port;
 
-  /// Responder endpoints only, so empty in peer mode. See
+  /// The endpoint of every live connection, peer mode included. See
   /// [IRpcServer.endpoints].
   @override
-  List<RpcResponderEndpoint> get endpoints => _host.responders;
+  List<RpcResponderEndpoint> get endpoints => _host.endpoints;
 
   @override
   bool get isRunning => _isRunning;

@@ -81,10 +81,10 @@ class RpcWebSocketServer extends IRpcServer {
     );
   }
 
-  /// Responder endpoints only, so empty in peer mode. See
+  /// The endpoint of every live connection, peer mode included. See
   /// [IRpcServer.endpoints].
   @override
-  List<RpcResponderEndpoint> get endpoints => _host.responders;
+  List<RpcResponderEndpoint> get endpoints => _host.endpoints;
 
   @override
   bool get isRunning => _isRunning;

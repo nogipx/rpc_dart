@@ -69,19 +69,15 @@ final class RpcConnectionHost {
   final LogController? _logController;
 
   /// Every live endpoint, with what to run when it is released.
-  final Map<RpcEndpointBase, void Function()?> _live = {};
+  final Map<RpcResponderEndpoint, void Function()?> _live = {};
   bool _warnedAtCap = false;
 
   /// Live connections.
   int get length => _live.length;
 
-  /// Every live endpoint, peer-mode ones included.
-  Iterable<RpcEndpointBase> get endpoints => _live.keys;
-
-  /// The live responder endpoints, so empty in peer mode. What
-  /// `IRpcServer.endpoints` returns.
-  List<RpcResponderEndpoint> get responders =>
-      List.unmodifiable(_live.keys.whereType<RpcResponderEndpoint>());
+  /// Every live endpoint, peer-mode ones included. What `IRpcServer.endpoints`
+  /// returns.
+  List<RpcResponderEndpoint> get endpoints => List.unmodifiable(_live.keys);
 
   /// Whether one more connection fits under the cap, counting [pending]
   /// connections the server holds that have no endpoint yet (a handshake in
@@ -108,13 +104,13 @@ final class RpcConnectionHost {
   /// [onRelease] runs once, when the endpoint is released. If the mode's
   /// register throws, the endpoint is released at once and the error
   /// rethrown; the server closes its connection.
-  RpcEndpointBase serve(
+  RpcResponderEndpoint serve(
     IRpcTransport transport, {
     required Future<void> done,
     String? debugLabel,
     void Function()? onRelease,
   }) {
-    final RpcEndpointBase endpoint;
+    final RpcResponderEndpoint endpoint;
     switch (mode) {
       case RpcResponderMode(:final register):
         final responder = RpcResponderEndpoint(

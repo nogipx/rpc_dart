@@ -296,7 +296,9 @@ RpcWebSocketServer buildServer(
 | `onConnectionOpened` / `onConnectionClosed` / `onConnectionError` | Notifications. An exception thrown in one is logged and does not stop the server. Every opened connection is reported closed once. |
 | `logger` / `logController` | Logging, see `rpc_dart_log`. |
 
-`server.endpoints` lists responder endpoints only; it is empty in peer mode.
+`server.endpoints` lists the endpoint of every live connection. In peer mode
+they are `RpcPeerEndpoint`s, which are `RpcResponderEndpoint`s that can also
+call the client.
 
 ### Stopping
 

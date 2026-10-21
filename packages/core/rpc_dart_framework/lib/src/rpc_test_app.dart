@@ -121,7 +121,7 @@ final class _InMemoryServer extends IRpcServer {
   bool get isRunning => _running;
 
   @override
-  List<RpcResponderEndpoint> get endpoints => _host.responders;
+  List<RpcResponderEndpoint> get endpoints => _host.endpoints;
 
   @override
   Future<void> start() async {

@@ -22,10 +22,9 @@
 //   endpoints held      : 3   (want 0)
 //   contracts disposed  : 0   (want 3)
 //
-// The PEER branch leaked identically. It merely LOOKED clean, because
-// `endpoints` filters to RpcResponderEndpoint and the leaked RpcPeerEndpoints
-// were invisible to that getter -- the disposed count is what exposed them,
-// which is why this test asserts on disposal and not only on the list.
+// The PEER branch leaked identically. Each branch is asserted on disposal as
+// well as on the list: the list says what the server holds, the disposal that
+// the contracts were let go.
 //
 // A throwing register callback is ordinary rather than exotic: that callback is
 // where the application registers its contracts, so a DI failure, a duplicate
@@ -121,9 +120,6 @@ void main() {
   );
 
   test('the PEER branch releases too', () async {
-    // This one looked clean before the fix because `endpoints` filters to
-    // RpcResponderEndpoint, so leaked RpcPeerEndpoints never showed up there.
-    // Only the disposal count reveals it.
     http = await HttpServer.bind('127.0.0.1', 0);
     server = RpcWebSocketServer(
       connections: rpcWebSocketConnections(http),
@@ -137,7 +133,8 @@ void main() {
 
     await connectAndDrop(3);
 
-    expect(_disposed, 3, reason: 'peer endpoints leaked invisibly');
+    expect(server.endpoints, isEmpty);
+    expect(_disposed, 3, reason: 'peer endpoints leaked');
   }, timeout: const Timeout(Duration(seconds: 90)));
 
   test(

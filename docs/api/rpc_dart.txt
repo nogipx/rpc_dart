@@ -472,14 +472,13 @@ RpcCodec new new(T Function(Map<String, dynamic>) fromJson)
 RpcCompressionCodec method compress(Uint8List data) -> Uint8List
 RpcCompressionCodec method decompress(Uint8List data, {int? maxOutputBytes}) -> Uint8List
 RpcCompressionCodec new new()
-RpcConnectionHost field endpoints: Iterable<RpcEndpointBase> (get)
+RpcConnectionHost field endpoints: List<RpcResponderEndpoint> (get)
 RpcConnectionHost field length: int (get)
 RpcConnectionHost field maxConnections: int? (get)
 RpcConnectionHost field mode: RpcServerMode (get)
-RpcConnectionHost field responders: List<RpcResponderEndpoint> (get)
 RpcConnectionHost method admit({int pending}) -> bool
 RpcConnectionHost method release(RpcEndpointBase endpoint) -> void
-RpcConnectionHost method serve(IRpcTransport transport, {required Future<void> done, String? debugLabel, void Function()? onRelease}) -> RpcEndpointBase
+RpcConnectionHost method serve(IRpcTransport transport, {required Future<void> done, String? debugLabel, void Function()? onRelease}) -> RpcResponderEndpoint
 RpcConnectionHost method stop({Duration? drainTimeout}) -> Future<void>
 RpcConnectionHost new new({required RpcServerMode mode, int? maxConnections, LogScope? logger, LogController? logController})
 RpcConstants new new()
@@ -940,6 +939,7 @@ RpcPeerEndpoint method markDraining() -> void
 RpcPeerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcPeerEndpoint method registerServiceContract(RpcResponderContract contract) -> void
 RpcPeerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcPeerEndpoint method setLogController(LogController controller) -> void
 RpcPeerEndpoint method start() -> void
 RpcPeerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerEndpoint method unregisterServiceContract(String serviceName) -> void
@@ -1311,7 +1311,7 @@ type RpcNullX :  (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcNum : IRpcSerializable, Object, RpcPrimitiveMessage<num> (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcNumX :  (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcPeerContract : IRpcContract, Object, RpcResponderContract, _RpcOutgoingCalls (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcPeerEndpoint : Object, RpcCallerPipelineMixin, RpcEndpointBase, RpcResponderPipelineMixin (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcPeerEndpoint : Object, RpcCallerPipelineMixin, RpcEndpointBase, RpcResponderEndpoint, RpcResponderPipelineMixin (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcPeerMode : Object, RpcServerMode (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcPrimitiveMessage<T> : IRpcSerializable, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcProtoReader : Object (transport.dart, transport_io.dart)

@@ -224,7 +224,7 @@ class RpcHttp2Server extends IRpcServer {
 
   /// The live endpoints, one per connection.
   @override
-  List<RpcResponderEndpoint> get endpoints => _connectionHost.responders;
+  List<RpcResponderEndpoint> get endpoints => _connectionHost.endpoints;
 
   /// Sends GOAWAY on every live connection, the start of a drain.
   ///

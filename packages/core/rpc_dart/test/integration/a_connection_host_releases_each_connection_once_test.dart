@@ -25,8 +25,12 @@ void main() {
       peers.serve(b, done: Completer<void>().future),
       isA<RpcPeerEndpoint>(),
     );
-    expect(responders.responders, hasLength(1));
-    expect(peers.responders, isEmpty);
+    expect(responders.endpoints, hasLength(1));
+    expect(
+      peers.endpoints,
+      hasLength(1),
+      reason: 'a peer endpoint is a responder, so peer mode lists it too',
+    );
     expect(peers.length, 1);
 
     await responders.stop();

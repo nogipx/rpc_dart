@@ -6,10 +6,17 @@
 part of '_index.dart';
 
 /// Server-side RPC endpoint that handles incoming requests.
+///
+/// [RpcPeerEndpoint] is one too: it serves calls the same way and can also
+/// start them, so a server in peer mode lists its connections wherever a
+/// responder is expected.
 final class RpcResponderEndpoint extends RpcEndpointBase
     with RpcResponderPipelineMixin {
   @override
   LogScope _log;
+
+  /// The scope [setLogController] logs under.
+  final String _logScopeName;
 
   /// Creates an [RpcResponderEndpoint] bound to the given transport.
   ///
@@ -18,17 +25,29 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     required super.transport,
     super.debugLabel,
     LogController? logController,
-  }) : _log = logController?.scope('rpc.responder') ?? LogScope.noop {
+  }) : _logScopeName = 'rpc.responder',
+       _log = logController?.scope('rpc.responder') ?? LogScope.noop {
     _validateServerTransport();
   }
+
+  /// For [RpcPeerEndpoint]: a transport of either role, and its own scope.
+  RpcResponderEndpoint._peer({
+    required super.transport,
+    super.debugLabel,
+    LogController? logController,
+  }) : _logScopeName = 'rpc.peer',
+       _log = logController?.scope('rpc.peer') ?? LogScope.noop;
 
   /// Inject a [LogController] after construction.
   ///
   /// Used by the framework to wire [RpcAppConfig.logController] into
   /// endpoints that were created by transport servers without one.
   void setLogController(LogController controller) {
-    _log = controller.scope('rpc.responder');
+    _log = controller.scope(_logScopeName);
   }
+
+  /// Which inbound messages enter the responder pipeline; null for all.
+  bool Function(RpcTransportMessage message)? get _inboundFilter => null;
 
   /// All method registrations exported from all contracts.
   Map<String, RpcMethodRegistration<Object, Object>> get _registeredMethods =>
@@ -41,7 +60,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   @override
   void start() {
     super.start();
-    _startResponderListening();
+    _startResponderListening(messageFilter: _inboundFilter);
   }
 
   @override
