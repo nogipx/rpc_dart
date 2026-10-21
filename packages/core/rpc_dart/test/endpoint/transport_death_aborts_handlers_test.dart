@@ -274,7 +274,7 @@ void main() {
           );
 
           expect(
-            rig.responder.collectEndpointMetrics()['openStreams'],
+            rig.responder.collectEndpointMetrics().openStreams,
             0,
             reason: 'the stream state should be reclaimed',
           );
@@ -313,7 +313,7 @@ void main() {
       final rig = _connect();
       await rig.server.close();
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(rig.responder.collectEndpointMetrics()['openStreams'], 0);
+      expect(rig.responder.collectEndpointMetrics().openStreams, 0);
       await _teardown(rig);
     });
 
@@ -377,7 +377,7 @@ void main() {
         await _started_('server').future.timeout(const Duration(seconds: 5));
         await rig.server.close();
         await _cancelled_('server').future.timeout(const Duration(seconds: 5));
-        expect(rig.responder.collectEndpointMetrics()['openStreams'], 0);
+        expect(rig.responder.collectEndpointMetrics().openStreams, 0);
         await _teardown(rig);
       }
     });

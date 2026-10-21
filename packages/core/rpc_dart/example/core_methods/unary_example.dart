@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
 
+const _requestType = RpcContextKey<String>('request-type');
+
 void main() async {
   await UnaryRpcExample.run();
 }
@@ -51,7 +53,7 @@ class UnaryRpcExample {
       print('\n--- 3: a call with a timeout ---');
       final timeoutContext = RpcContext.withTimeout(
         Duration(milliseconds: 500),
-      ).withValue('request-type', 'health-check');
+      ).withValue(_requestType, 'health-check');
       final response3 = await client.checkHealth(
         'Status'.rpc,
         context: timeoutContext,
@@ -177,7 +179,7 @@ final class MultiServiceResponder extends RpcResponderContract
     final logger = LogScope.noop;
     logger.info('health check: ${message.value}');
     logger.info('context: $context');
-    final requestType = context?.getValue<String>('request-type');
+    final requestType = context?.getValue(_requestType);
     context?.cancellationToken?.throwIfCancelled();
     await Future<void>.delayed(Duration(milliseconds: 30));
     return 'All systems nominal [$requestType]'.rpc;

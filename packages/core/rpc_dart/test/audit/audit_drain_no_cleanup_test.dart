@@ -81,7 +81,7 @@ void main() {
     // Wait until the responder has materialized the open stream.
     var before = 0;
     for (var i = 0; i < 50; i++) {
-      before = responder.collectEndpointMetrics()['openStreams'] as int;
+      before = responder.collectEndpointMetrics().openStreams!;
       if (before > 0) break;
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
@@ -97,7 +97,7 @@ void main() {
     await responder.drain(timeout: const Duration(milliseconds: 200));
     sw.stop();
 
-    final after = responder.collectEndpointMetrics()['openStreams'] as int;
+    final after = responder.collectEndpointMetrics().openStreams!;
 
     expect(
       after,

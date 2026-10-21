@@ -75,7 +75,7 @@ void main() {
       final b = call('2000', next());
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(caller.collectEndpointMetrics()['pendingRequests'], 2);
+      expect(caller.collectEndpointMetrics().pendingRequests, 2);
       expect(caller.cancelMethod('S', 'slow'), 2);
       expect(await Future.wait([a, b]), [
         'RpcCancelledException',
@@ -89,7 +89,7 @@ void main() {
       final long = call('2000', next());
       expect(await short, 'ok');
 
-      expect(caller.collectEndpointMetrics()['pendingRequests'], 1);
+      expect(caller.collectEndpointMetrics().pendingRequests, 1);
       expect(caller.cancelMethod('S', 'slow'), 1);
       expect(await long, 'RpcCancelledException');
     });

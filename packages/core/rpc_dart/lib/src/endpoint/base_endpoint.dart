@@ -35,37 +35,45 @@ abstract base class RpcEndpointBase {
   /// type test against it is not available to a transport package.
   void markDraining() {}
 
-  /// Live responder streams this endpoint is serving.
-  ///
-  /// **Typed, because a graceful drain polls it.** Read out of
-  /// `collectEndpointMetrics()` instead, renaming an observability key would
-  /// make every endpoint count ZERO and every drain complete instantly, and
-  /// the failure would look exactly like success. A metrics map is for
-  /// reading; a shutdown decision needs something the compiler checks.
+  /// Live responder streams this endpoint is serving: what a graceful drain
+  /// polls. [RpcEndpointMetrics.activeResponders] reports the same number.
   ///
   /// Zero by default, for the same reason [markDraining] is a no-op: an
   /// endpoint with no responder half is serving nothing.
   int get activeResponderCount => 0;
 
-  /// Collects endpoint metrics for health reporting; subclasses may extend.
-  Map<String, Object?> collectEndpointMetrics() {
-    final metrics = <String, Object?>{
-      'isActive': _isActive,
-      'middlewareCount': _middlewares.length,
-      'interceptorCount': _interceptors.length,
-      'transportClosed': _transport.isClosed,
-      'transportType': _transport.runtimeType.toString(),
-    };
+  /// A snapshot of the endpoint's counters, for health reporting and tests.
+  RpcEndpointMetrics collectEndpointMetrics() => _metrics();
 
-    if (debugLabel != null) {
-      metrics['debugLabel'] = debugLabel;
-    }
-
-    return metrics;
-  }
+  /// The snapshot with the halves this endpoint has.
+  RpcEndpointMetrics _metrics({
+    _ResponderCounts? responder,
+    _CallerCounts? caller,
+  }) => RpcEndpointMetrics(
+    isActive: _isActive,
+    middlewareCount: _middlewares.length,
+    interceptorCount: _interceptors.length,
+    transportClosed: _transport.isClosed,
+    transportType: _transport.runtimeType.toString(),
+    debugLabel: debugLabel,
+    registeredContracts: responder?.registeredContracts,
+    registeredMethods: responder?.registeredMethods,
+    isListening: responder?.isListening,
+    isDraining: responder?.isDraining,
+    openStreams: responder?.openStreams,
+    preMethodBufferedBytes: responder?.preMethodBufferedBytes,
+    metadataStreams: responder?.metadataStreams,
+    bufferedMessages: responder?.bufferedMessages,
+    preBindBuffers: responder?.preBindBuffers,
+    activeResponders: responder?.activeResponders,
+    contractKeys: responder?.contractKeys,
+    pendingRequests: caller?.pendingRequests,
+    trackedMethods: caller?.trackedMethods,
+    activeMethodKeys: caller?.activeMethodKeys,
+  );
 
   RpcHealthStatus _createEndpointStatus(RpcHealthStatus transportStatus) {
-    final metrics = collectEndpointMetrics();
+    final metrics = collectEndpointMetrics().toJson();
     final componentName = _log.name;
 
     if (!_isActive) {

@@ -235,8 +235,8 @@ every span still open.
 
 ## Pitfalls
 
-- `OtelRpcKeys.span` is a `Symbol` key. Read it with
-  `context?.getValue<Span>(OtelRpcKeys.span)`. It is set only on the
+- `OtelRpcKeys.span` is an `RpcContextKey<Span>`. Read it with
+  `context?.getValue(OtelRpcKeys.span)`. It is set only on the
   responder side; on the caller side it is `null`.
 - Only the server interceptor without the client one gives disconnected
   traces: every server span becomes a root.

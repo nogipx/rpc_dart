@@ -5,6 +5,34 @@
 
 part of '_index.dart';
 
+/// A typed key for a value an [RpcContext] carries.
+///
+/// The type parameter types the value: `getValue(key)` returns a `T?`, and
+/// `withValue(key, value)` accepts only a `T`. Keys compare by identity, so
+/// a library's key cannot collide with an application's; declare one as a
+/// top-level constant and share it. [name] is for diagnostics only.
+///
+/// ```dart
+/// const tenantKey = RpcContextKey<String>('tenant');
+/// ```
+final class RpcContextKey<T extends Object> {
+  /// Creates a key described by [name].
+  const RpcContextKey(this.name);
+
+  /// What the key is for, as shown by [toString].
+  final String name;
+
+  @override
+  String toString() => 'RpcContextKey<$T>($name)';
+}
+
+/// Package-internal access the endpoint needs to the context.
+extension RpcContextInternals on RpcContext {
+  /// This context carrying [scope] as its [RpcContext.callScope].
+  RpcContext withCallScope(RpcCallScope scope) =>
+      withValue(RpcContext._callScopeKey, scope);
+}
+
 /// gRPC-style RPC context - holds call metadata, timeouts, cancellation
 /// tokens, and other contextual information.
 final class RpcContext {
@@ -41,7 +69,7 @@ final class RpcContext {
   final LogScope log;
 
   /// Additional context values (analogous to gRPC Context.Value).
-  final Map<Object, Object> _values;
+  final Map<RpcContextKey<Object>, Object> _values;
 
   /// Clock used for deadline/timeout computations.
   ///
@@ -74,7 +102,7 @@ final class RpcContext {
     this.traceId,
     String? requestId,
     LogScope? log,
-    Map<Object, Object>? values,
+    Map<RpcContextKey<Object>, Object>? values,
     DateTime Function()? clock,
     Set<String>? credentialNames,
   }) : _headers = Map.from(headers ?? {}),
@@ -151,9 +179,11 @@ final class RpcContext {
   RpcContext withRequestId(String newRequestId) =>
       _copy(requestId: newRequestId);
 
-  /// Creates a copy of the context with an additional value.
-  RpcContext withValue(Object key, Object value) =>
-      _copy(values: Map<Object, Object>.from(_values)..[key] = value);
+  /// Creates a copy of the context with [value] stored under [key].
+  RpcContext withValue<T extends Object>(RpcContextKey<T> key, T value) =>
+      _copy(
+        values: Map<RpcContextKey<Object>, Object>.from(_values)..[key] = value,
+      );
 
   /// Creates a copy of the context with the given logger.
   RpcContext withLog(LogScope log) => _copy(log: log);
@@ -171,7 +201,7 @@ final class RpcContext {
     String? requestId,
     bool newRequestId = false,
     LogScope? log,
-    Map<Object, Object>? values,
+    Map<RpcContextKey<Object>, Object>? values,
     DateTime Function()? clock,
     Set<String>? credentialNames,
   }) => RpcContext._(
@@ -237,21 +267,26 @@ final class RpcContext {
     return sanitized;
   }
 
-  /// Returns a value from the context.
-  T? getValue<T>(Object key) => _values[key] as T?;
+  /// The value stored under [key], or null.
+  ///
+  /// Typed by the key, so the value cannot come back as the wrong type.
+  T? getValue<T extends Object>(RpcContextKey<T> key) => _values[key] as T?;
 
   /// Returns all user context values (read-only).
   ///
-  /// The framework's per-call [RpcCallScope] (injected server-side, keyed by its
-  /// type) is internal plumbing rather than user data, so it is excluded here;
-  /// retrieve it with `getValue<RpcCallScope>(RpcCallScope)`.
-  Map<Object, Object> get values {
-    if (!_values.containsKey(RpcCallScope)) return Map.unmodifiable(_values);
+  /// The framework's per-call [RpcCallScope] (injected server-side) is internal
+  /// plumbing rather than user data, so it is excluded here; read it with
+  /// [callScope].
+  Map<RpcContextKey<Object>, Object> get values {
+    if (!_values.containsKey(_callScopeKey)) return Map.unmodifiable(_values);
     return Map.unmodifiable({
       for (final e in _values.entries)
-        if (e.key != RpcCallScope) e.key: e.value,
+        if (!identical(e.key, _callScopeKey)) e.key: e.value,
     });
   }
+
+  /// Where the server keeps a call's [RpcCallScope].
+  static const _callScopeKey = RpcContextKey<RpcCallScope>('rpc.callScope');
 
   /// The per-call [RpcCallScope] for handler resource cleanup.
   ///
@@ -259,7 +294,7 @@ final class RpcContext {
   /// incoming call); null for a client/caller context or a manually-built one.
   /// Use it to register cleanup that runs when the call ends:
   /// `context.callScope?.onDispose(() => release());`
-  RpcCallScope? get callScope => getValue<RpcCallScope>(RpcCallScope);
+  RpcCallScope? get callScope => getValue(_callScopeKey);
 
   /// The per-call [RpcCallScope], or throws if there is none.
   ///
@@ -507,7 +542,8 @@ abstract final class RpcContextUtils {
       deadline: right.deadline ?? left.deadline,
       cancellationToken: right.cancellationToken ?? left.cancellationToken,
       traceId: right.traceId ?? left.traceId,
-      values: Map<Object, Object>.from(left._values)..addAll(right._values),
+      values: Map<RpcContextKey<Object>, Object>.from(left._values)
+        ..addAll(right._values),
       credentialNames: {...left._credentialNames, ...right._credentialNames},
     );
   }
@@ -611,8 +647,8 @@ class RpcContextBuilder {
     return this;
   }
 
-  /// Adds a value to the context.
-  RpcContextBuilder withValue(Object key, Object value) {
+  /// Stores [value] under [key].
+  RpcContextBuilder withValue<T extends Object>(RpcContextKey<T> key, T value) {
     _context = _context.withValue(key, value);
     return this;
   }

@@ -91,7 +91,7 @@ Future<_Rig> _serve() async {
 }
 
 int _openStreams(RpcResponderEndpoint e) =>
-    e.collectEndpointMetrics()['openStreams']! as int;
+    e.collectEndpointMetrics().openStreams!;
 
 Future<int> _pendingRequests(RpcHttpResponderTransport t) async =>
     (await t.health()).details['pendingRequests']! as int;

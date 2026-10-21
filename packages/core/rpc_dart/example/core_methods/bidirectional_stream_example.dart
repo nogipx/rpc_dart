@@ -4,6 +4,10 @@
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
 
+const _userId = RpcContextKey<String>('user-id');
+const _sessionId = RpcContextKey<String>('session-id');
+const _chatType = RpcContextKey<String>('chat-type');
+
 void main() async {
   await BidirectionalStreamExample.run();
 }
@@ -34,8 +38,8 @@ class BidirectionalStreamExample {
       print('\n--- 1: a plain chat ---');
       final context1 = RpcContext.empty()
           .withTraceId('chat-trace-123')
-          .withValue('user-id', 'user-456')
-          .withValue('session-id', 'session-789');
+          .withValue(_userId, 'user-456')
+          .withValue(_sessionId, 'session-789');
       final messagesToSend = [
         'ping',
         'time',
@@ -75,7 +79,7 @@ class BidirectionalStreamExample {
       final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(
         cancellationToken,
-      ).withValue('chat-type', 'long-running');
+      ).withValue(_chatType, 'long-running');
       // Cancel after 300ms.
       Future<void>.delayed(Duration(milliseconds: 300), () {
         print('CLIENT: cancelling the chat');
@@ -134,8 +138,8 @@ final class ChatServiceResponder extends RpcResponderContract
     final logger = LogScope.noop;
     logger.info('starting a chat session');
     logger.info('context: $context');
-    final userId = context?.getValue<String>('user-id');
-    final sessionId = context?.getValue<String>('session-id');
+    final userId = context?.getValue(_userId);
+    final sessionId = context?.getValue(_sessionId);
     final userRole = context?.getHeader('user-role');
     final authToken = context?.getHeader('authorization');
     logger.info('user: $userId, session: $sessionId, role: $userRole');

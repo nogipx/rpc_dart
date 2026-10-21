@@ -6,6 +6,8 @@
 part of '_index.dart';
 
 /// Data transfer modes in RPC contracts.
+///
+/// Open: a minor release may add a value, so a `switch` keeps a default.
 enum RpcDataTransferMode {
   /// Zero-copy mode — objects passed by reference, without serialization.
   /// Needs a transport that carries objects (`supportsZeroCopy`): the

@@ -94,10 +94,9 @@ Future<void> _teardown(_Rig r) async {
   await r.server.close();
 }
 
-int _open(_Rig r) =>
-    r.responder.collectEndpointMetrics()['openStreams']! as int;
+int _open(_Rig r) => r.responder.collectEndpointMetrics().openStreams!;
 int _responders(_Rig r) =>
-    r.responder.collectEndpointMetrics()['activeResponders']! as int;
+    r.responder.collectEndpointMetrics().activeResponders!;
 
 void main() {
   setUp(_sawCancel.clear);

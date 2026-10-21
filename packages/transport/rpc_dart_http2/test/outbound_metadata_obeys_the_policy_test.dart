@@ -86,7 +86,7 @@ void main() {
     for (final entry in violations.entries) {
       await expectLater(
         t.sendMetadata(t.createStream(), entry.value),
-        throwsArgumentError,
+        throwsA(isA<RpcMetadataViolation>()),
         reason: '${entry.key} was put on the wire',
       );
     }
@@ -130,7 +130,7 @@ void main() {
         1,
         RpcMetadata([for (var i = 0; i < 64; i++) RpcHeader('x-h$i', 'v')]),
       ),
-      throwsArgumentError,
+      throwsA(isA<RpcMetadataViolation>()),
       reason: 'the responder put 64 headers on the wire against a cap of 32',
     );
   });

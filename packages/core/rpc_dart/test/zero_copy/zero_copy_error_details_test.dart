@@ -224,8 +224,8 @@ void main() {
         );
       }
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      expect(rig.caller.collectEndpointMetrics()['pendingRequests'], 0);
-      expect(rig.responder.collectEndpointMetrics()['openStreams'], 0);
+      expect(rig.caller.collectEndpointMetrics().pendingRequests, 0);
+      expect(rig.responder.collectEndpointMetrics().openStreams, 0);
       await _teardown(rig);
     });
   });

@@ -11,6 +11,8 @@ import '../_internal.dart';
 // ---------------------------------------------------------------------------
 
 /// Observable state emitted by [RpcClientConnection].
+///
+/// Open: a minor release may add a state, so a `switch` keeps a default.
 sealed class RpcClientConnectionState {
   const RpcClientConnectionState();
 }

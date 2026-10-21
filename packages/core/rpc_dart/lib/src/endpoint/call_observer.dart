@@ -5,6 +5,8 @@
 part of '_index.dart';
 
 /// How an observed call ended. See [RpcCallObserverInterceptor].
+///
+/// Open: a minor release may add an outcome, so a `switch` keeps a default.
 sealed class RpcCallOutcome {
   const RpcCallOutcome();
 }

@@ -139,7 +139,7 @@ void main() {
 
       // After drain, open streams should be 0.
       final metrics = responder.collectEndpointMetrics();
-      expect(metrics['openStreams'], 0);
+      expect(metrics.openStreams, 0);
     });
 
     test('isDraining is true after drain() is called', () async {

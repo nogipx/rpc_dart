@@ -203,7 +203,7 @@ void main() {
       for (var i = 0; i < 20; i++) {
         expect((await _call(rig, 'echo')).value, 'a');
       }
-      expect(rig.caller.collectEndpointMetrics()['pendingRequests'], 0);
+      expect(rig.caller.collectEndpointMetrics().pendingRequests, 0);
       await rig.caller.close();
       await rig.responder.close();
       await rig.client.close();

@@ -152,7 +152,7 @@ void main() {
             'client cancelled; the reset never reached it',
       );
       expect(
-        run.endpoint?.collectEndpointMetrics()['openStreams'],
+        run.endpoint?.collectEndpointMetrics().openStreams,
         0,
         reason: 'the cancelled stream was never released',
       );
@@ -231,9 +231,7 @@ void main() {
       final deadline = DateTime.now().add(const Duration(seconds: 20));
       var open = -1;
       while (DateTime.now().isBefore(deadline)) {
-        open =
-            (run.endpoint?.collectEndpointMetrics()['openStreams'] ?? -1)
-                as int;
+        open = run.endpoint?.collectEndpointMetrics().openStreams ?? -1;
         if (open == 0) break;
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }

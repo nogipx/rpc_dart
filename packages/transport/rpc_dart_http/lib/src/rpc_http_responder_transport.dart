@@ -349,7 +349,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
       // Bounds the total as well as each header.
       try {
         policy.validateMetadata(RpcMetadata(requestHeaders));
-      } on ArgumentError catch (e) {
+      } on RpcMetadataViolation catch (e) {
         _warnRejected(
           _Rejection.metadata,
           'Rejected request: metadata violation — $e [streamId: $streamId]',
@@ -358,15 +358,8 @@ class RpcHttpResponderTransport extends IRpcTransport {
         _idManager.releaseId(streamId);
         // The reason travels: the caller repeats a bounded, single-line prefix
         // of this body in `grpc-message`, so a peer learns WHICH limit it hit
-        // instead of only "HTTP 400 from /Svc/echo". Only the policy's own
-        // diagnostic does; any other ArgumentError's text stays here.
-        return _reject(
-          400,
-          request,
-          body: e is RpcMetadataViolation
-              ? 'Metadata violation: ${e.message}'
-              : 'Metadata violation',
-        );
+        // instead of only "HTTP 400 from /Svc/echo".
+        return _reject(400, request, body: 'Metadata violation: ${e.message}');
       }
 
       // Read request body.

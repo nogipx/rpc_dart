@@ -13,11 +13,12 @@ import 'otel_rpc_interceptor_base.dart';
 ///
 /// Business-layer code can access the current span to add custom attributes:
 /// ```dart
-/// final span = context.getValue(OtelRpcKeys.span) as Span?;
+/// final span = context.getValue(OtelRpcKeys.span);
 /// span?.setAttribute(Attribute.fromString('user.id', userId));
 /// ```
 abstract final class OtelRpcKeys {
-  static const span = #otel_rpc_span;
+  /// The span of the call this context belongs to.
+  static const span = RpcContextKey<Span>('otel.span');
 }
 
 /// OpenTelemetry interceptor for rpc_dart.

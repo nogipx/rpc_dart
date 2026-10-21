@@ -19,6 +19,7 @@ part 'responder_endpoint.dart';
 part 'caller_endpoint.dart';
 part 'peer_endpoint.dart';
 part 'diagnostics.dart';
+part 'metrics.dart';
 part 'middleware.dart';
 part 'call_observer.dart';
 part 'ping.dart';

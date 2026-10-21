@@ -271,24 +271,20 @@ base class RpcFrameException extends RpcStatusException {
     : super(RpcStatus.invalidArgument, message);
 }
 
-/// A peer's metadata failed `RpcSecurityPolicy.validateMetadata`.
+/// Metadata failed `RpcSecurityPolicy.validateMetadata`.
 ///
-/// **Implements [ArgumentError] on purpose.** That is what `validateMetadata`
-/// throws, and decision points read `is ArgumentError` to mean "the peer is at
-/// fault" — including whether to charge the violation backstop that ends a
-/// connection. Narrowing a site to `is RpcMetadataViolation` tells a hostile
-/// peer from an ordinary bug raised anywhere else on the same path.
+/// Its own type, NOT an [ArgumentError]: decision points catch it to mean
+/// "this metadata is at fault" — including whether to charge the violation
+/// backstop that ends a connection — and an ordinary [ArgumentError] raised
+/// anywhere else on the same path must not be taken for a hostile peer.
 ///
-/// And it is in the hierarchy, so a peer is told INVALID_ARGUMENT with the
+/// It is in the hierarchy, so a peer is told INVALID_ARGUMENT with the
 /// diagnostic rather than a redacted INTERNAL.
-final class RpcMetadataViolation extends RpcStatusException
-    implements ArgumentError {
+final class RpcMetadataViolation extends RpcStatusException {
   /// The offending value, when there is a single one worth naming.
-  @override
-  final dynamic invalidValue;
+  final Object? invalidValue;
 
-  /// The parameter-style name of what was rejected, e.g. `metadata.headers`.
-  @override
+  /// What was rejected, e.g. `metadata.headers`.
   final String? name;
 
   /// Creates a violation describing [message].
@@ -296,10 +292,7 @@ final class RpcMetadataViolation extends RpcStatusException
     : super(RpcStatus.invalidArgument, message);
 
   @override
-  StackTrace? get stackTrace => null;
-
-  @override
-  String toString() => 'Invalid argument: $message';
+  String toString() => 'Invalid metadata: $message';
 }
 
 /// Operation cancellation exception, carrying CANCELLED.

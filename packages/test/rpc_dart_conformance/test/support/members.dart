@@ -130,7 +130,7 @@ Future<void> _bounded(Future<Object?> f, String what) => f
 /// Integer gauges of [endpoint] and its transport.
 Future<Map<String, int>> endpointGauges(RpcEndpointBase endpoint) async {
   final out = <String, int>{};
-  for (final e in endpoint.collectEndpointMetrics().entries) {
+  for (final e in endpoint.collectEndpointMetrics().toJson().entries) {
     if (e.value is int) out[e.key] = e.value! as int;
   }
   out.addAll(await transportGauges(endpoint.transport));

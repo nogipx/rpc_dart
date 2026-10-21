@@ -93,7 +93,7 @@ void main() {
           );
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      expect(caller.collectEndpointMetrics()['pendingRequests'], 1);
+      expect(caller.collectEndpointMetrics().pendingRequests, 1);
       caller.cancelAllMethods('user cancel');
 
       expect(

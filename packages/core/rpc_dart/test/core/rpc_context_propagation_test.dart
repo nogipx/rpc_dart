@@ -6,6 +6,8 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+const _customData = RpcContextKey<String>('custom-data');
+
 void main() {
   group('RpcContext', () {
     test('creates empty context with unique request ID', () {
@@ -73,18 +75,21 @@ void main() {
     });
 
     test('stores and retrieves typed values', () {
-      final key1 = 'user';
-      final key2 = 42;
-      final value1 = 'John Doe';
-      final value2 = Duration(minutes: 5);
+      const key1 = RpcContextKey<String>('user');
+      const key2 = RpcContextKey<Duration>('ttl');
+      const value1 = 'John Doe';
+      const value2 = Duration(minutes: 5);
 
       final context = RpcContext.empty()
           .withValue(key1, value1)
           .withValue(key2, value2);
 
-      expect(context.getValue<String>(key1), equals(value1));
-      expect(context.getValue<Duration>(key2), equals(value2));
-      expect(context.getValue<String>('nonexistent'), isNull);
+      expect(context.getValue(key1), equals(value1));
+      expect(context.getValue(key2), equals(value2));
+      expect(
+        context.getValue(const RpcContextKey<String>('nonexistent')),
+        isNull,
+      );
     });
 
     test('isContextValid detects expired and cancelled contexts', () {
@@ -216,19 +221,20 @@ void main() {
     });
 
     test('merges contexts with right having priority', () {
+      const shared = RpcContextKey<String>('shared-key');
       final leftContext = RpcContext.withHeaders({
         'x-left': 'left-value',
-      }).withTraceId('left-trace').withValue('shared-key', 'left-shared');
+      }).withTraceId('left-trace').withValue(shared, 'left-shared');
 
       final rightContext = RpcContext.withHeaders({
         'x-right': 'right-value',
-      }).withTraceId('right-trace').withValue('shared-key', 'right-shared');
+      }).withTraceId('right-trace').withValue(shared, 'right-shared');
 
       final merged = RpcContextUtils.merge(leftContext, rightContext);
 
       expect(merged.traceId, equals('right-trace'));
       expect(merged.requestId, equals(rightContext.requestId));
-      expect(merged.getValue<String>('shared-key'), equals('right-shared'));
+      expect(merged.getValue(shared), equals('right-shared'));
       expect(merged.getHeader('x-left'), equals('left-value'));
       expect(merged.getHeader('x-right'), equals('right-value'));
     });
@@ -244,14 +250,14 @@ void main() {
           .withTimeout(timeout)
           .withHeader('x-user-id', '123')
           .withBearerAuth('token-abc')
-          .withValue('custom-data', 'test-value')
+          .withValue(_customData, 'test-value')
           .build();
 
       expect(context.traceId, equals(traceId));
       expect(context.deadline, isNotNull);
       expect(context.getHeader('x-user-id'), equals('123'));
       expect(context.getHeader('authorization'), equals('Bearer token-abc'));
-      expect(context.getValue<String>('custom-data'), equals('test-value'));
+      expect(context.getValue(_customData), equals('test-value'));
     });
 
     test('inherits from parent context', () {

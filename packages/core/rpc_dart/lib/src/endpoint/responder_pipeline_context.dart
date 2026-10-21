@@ -25,11 +25,10 @@ extension _ResponderPipelineContext on RpcResponderPipelineMixin {
 
     // Provide a per-call RpcCallScope so handlers can register cleanup that
     // auto-disposes when the call ends (success, error, cancellation, deadline).
-    // Keyed by the RpcCallScope type to match the documented access pattern
-    // `context.getValue<RpcCallScope>(RpcCallScope)`. Closed in _cleanupStream;
-    // it also self-closes on the context's cancellation token / deadline.
+    // Read through `context.callScope`. Closed in _cleanupStream; it also
+    // self-closes on the context's cancellation token / deadline.
     final callScope = RpcCallScope(context: context);
-    context = context.withValue(RpcCallScope, callScope);
+    context = context.withCallScope(callScope);
     state.cacheContext(context);
 
     // Enforce the client deadline (grpc-timeout) on the server: arm a timer

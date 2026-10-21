@@ -80,7 +80,7 @@ void main() {
   late RpcCallerEndpoint caller;
   late RpcResponderEndpoint responder;
 
-  int pending() => caller.collectEndpointMetrics()['pendingRequests'] as int;
+  int pending() => caller.collectEndpointMetrics().pendingRequests!;
 
   setUp(() {
     final pair = RpcChannelTransport.pair();

@@ -5,6 +5,9 @@
 import 'log_level.dart';
 
 /// Base type for all log records flowing through the pipeline.
+///
+/// Open: a minor release may add a record type, so a `switch` keeps a
+/// default.
 sealed class LogRecord {
   /// Scope name (e.g. 'rpc.transport.router').
   String get scope;
@@ -166,6 +169,8 @@ class LogEvent implements LogRecord {
 }
 
 /// Status of a completed span.
+///
+/// Open: a minor release may add a value, so a `switch` keeps a default.
 enum SpanStatus {
   /// Span completed successfully.
   ok,

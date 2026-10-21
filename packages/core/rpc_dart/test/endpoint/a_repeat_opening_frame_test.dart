@@ -38,7 +38,7 @@ final class _Svc extends RpcResponderContract {
       requestCodec: _codec,
       responseCodec: _codec,
       handler: (requests, {context}) async* {
-        context?.getValue<RpcCallScope>(RpcCallScope)?.onDispose(onDisposerRun);
+        context?.callScope?.onDispose(onDisposerRun);
         // Cooperative: it waits for the cancel it was promised.
         await context?.cancellationToken?.cancelled;
         onCancelSeen();

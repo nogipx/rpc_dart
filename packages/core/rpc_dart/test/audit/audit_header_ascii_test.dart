@@ -38,7 +38,7 @@ void main() {
       final metadata = RpcMetadata([RpcHeader('x-name', 'Müller')]);
       expect(
         () => policy.validateMetadata(metadata),
-        throwsA(isA<ArgumentError>()),
+        throwsA(isA<RpcMetadataViolation>()),
       );
     });
 

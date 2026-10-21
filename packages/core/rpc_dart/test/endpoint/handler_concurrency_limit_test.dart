@@ -281,7 +281,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(
-      rig.responder.collectEndpointMetrics()['openStreams'],
+      rig.responder.collectEndpointMetrics().openStreams,
       4,
       reason: 'the streams must really be parked, or this proves nothing',
     );

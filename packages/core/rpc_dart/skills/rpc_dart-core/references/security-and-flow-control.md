@@ -106,7 +106,7 @@ Status codes are `RpcStatus` constants; the caller sees an
 | `maxBufferedBytes` / `maxBufferedMessagesPerStream` | either side | That stream fails RESOURCE_EXHAUSTED. Connection stays. |
 | `maxMessagesPerChunk` | parser | RESOURCE_EXHAUSTED. |
 | `maxDecodedItems` | either side, at decode | That call fails RESOURCE_EXHAUSTED before the handler (or the caller) sees the message. Connection stays. |
-| Metadata (`maxHeaders`, name/value, `maxMetadataBytes`, path), OUTBOUND | sender | `RpcMetadataViolation` thrown locally: INVALID_ARGUMENT. It also `implements ArgumentError`. |
+| Metadata (`maxHeaders`, name/value, `maxMetadataBytes`, path), OUTBOUND | sender | `RpcMetadataViolation` thrown locally: INVALID_ARGUMENT. |
 | Metadata, INBOUND, `closeOnProtocolError: false` | either side | Responder answers that stream INVALID_ARGUMENT (bare status, no message); a client fails that call INVALID_ARGUMENT. After 256 violations on one connection it is closed anyway. |
 | Metadata, INBOUND, `closeOnProtocolError: true` | either side | Connection closed. |
 | Peer response trailers violate policy | client | `grpc-status` (and a valid `grpc-message`) are kept; the rest dropped. The server's status wins. |
@@ -188,5 +188,5 @@ context's headers are silently skipped when the call is sent.
 - `halfOpenStreamTimeout` covers only "opened, never dispatched". A dispatched
   handler waiting on a request stream that never ends is not reclaimed; bound
   it with a deadline.
-- `RpcMetadataViolation` is both an `RpcStatusException` and an
-  `ArgumentError`; a `catch (ArgumentError)` will catch it.
+- `RpcMetadataViolation` is an `RpcStatusException`, NOT an `ArgumentError`;
+  catch it by its own type or as `RpcException`.

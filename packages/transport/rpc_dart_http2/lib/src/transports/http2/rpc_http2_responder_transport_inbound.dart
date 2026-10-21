@@ -167,7 +167,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
           ),
           endStream: true,
         );
-      } on ArgumentError catch (e) {
+      } on RpcMetadataViolation catch (e) {
         // The REFUSAL ITSELF violated the policy that produced it. Trimming the
         // message covers `maxHeaderValueBytes` and not `maxHeaders`: this
         // trailer carries grpc-status AND grpc-message, so a cap below 2
@@ -206,10 +206,8 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         //
         // `RpcMetadataViolation`, not `ArgumentError`. This decides whether to
         // END A CONNECTION, and `ArgumentError` means "a caller passed a bad
-        // argument" — a programming mistake. Any such error raised anywhere on
-        // this path was being charged to the peer's 256-strike budget as if it
-        // were hostile. The narrower type is the one `validateMetadata` throws,
-        // and it still IS an ArgumentError, so nothing else had to change.
+        // argument" — a programming mistake, which must not be charged to the
+        // peer's 256-strike budget. `validateMetadata` throws only this type.
         if (error is RpcMetadataViolation &&
             (_policy.closeOnProtocolError ||
                 ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations)) {

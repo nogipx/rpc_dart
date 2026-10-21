@@ -113,14 +113,12 @@ void main() {
       expect(c.statusCode, RpcStatus.notFound);
     });
 
-    // WITNESS: validateMetadata threw a bare ArgumentError for UNTRUSTED PEER
-    // input, and five decision points read `is ArgumentError` to mean "the peer
-    // is at fault" — two of them deciding whether to END A CONNECTION. So any
-    // ArgumentError raised anywhere on that path was charged to the peer's
-    // 256-strike budget as if it were hostile.
-    //
-    // The type must keep BOTH properties, and the pair is the whole point.
-    test('a metadata violation is an ArgumentError AND an RpcException', () {
+    // validateMetadata judges UNTRUSTED PEER input, and the decision points that
+    // catch it -- two of them deciding whether to END A CONNECTION -- read it as
+    // "the peer is at fault". So it is its own type, in the hierarchy, and NOT
+    // an ArgumentError: an ArgumentError is a programming mistake, and one
+    // raised on that path must not be charged to the peer's 256-strike budget.
+    test('a metadata violation is an RpcException, not an ArgumentError', () {
       const policy = RpcSecurityPolicy(maxHeaders: 2);
       Object? thrown;
       try {
@@ -138,10 +136,10 @@ void main() {
       expect(thrown, isA<RpcMetadataViolation>());
       expect(
         thrown,
-        isA<ArgumentError>(),
+        isNot(isA<ArgumentError>()),
         reason:
-            'five sites discriminate on `is ArgumentError`; dropping the '
-            'interface silently disarms two connection-closing backstops',
+            'a catch of ArgumentError on the connection-closing paths would '
+            'take a programming mistake for a hostile peer',
       );
       expect(
         thrown,

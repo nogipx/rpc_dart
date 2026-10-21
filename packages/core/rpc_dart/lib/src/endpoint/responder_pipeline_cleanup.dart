@@ -224,7 +224,7 @@ extension _ResponderPipelineCleanup on RpcResponderPipelineMixin {
 
     // Dispose the per-call scope: runs any handler-registered cleanup. Idempotent
     // (it may have already self-closed on cancellation/deadline).
-    final callScope = state.cachedContext?.getValue<RpcCallScope>(RpcCallScope);
+    final callScope = state.cachedContext?.callScope;
     if (callScope != null) await callScope.close();
 
     try {

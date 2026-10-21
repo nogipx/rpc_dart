@@ -11,6 +11,8 @@
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+const _userId = RpcContextKey<String>('userId');
+
 void main() {
   test('R2: dynamic key map is capped with LRU eviction', () async {
     const fixedNow = 1000000;
@@ -21,7 +23,7 @@ void main() {
           window: const Duration(minutes: 1),
         ),
       },
-      keyExtractor: (c) => c.context.getValue<String>('userId'),
+      keyExtractor: (c) => c.context.getValue(_userId),
       nowMicros: () => fixedNow,
       maxTrackedKeys: 1000, // small cap so eviction is observable
     );
@@ -35,7 +37,7 @@ void main() {
         endpoint: endpoint,
         serviceName: 'S',
         methodName: 'M',
-        context: RpcContext.empty().withValue('userId', key),
+        context: RpcContext.empty().withValue(_userId, key),
       );
       return limiter.interceptUnary<String, String>(
         c,

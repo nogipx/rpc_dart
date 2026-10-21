@@ -342,7 +342,8 @@ final limiter = RpcRateLimiter(
   // Extract a per-caller key from the call.
   // When set, perService and perMethod create independent counters per key.
   // A null key charges global alone.
-  keyExtractor: (call) => call.context.getValue<String>('userId'),
+  keyExtractor: (call) =>
+      call.context.getValue(const RpcContextKey<String>('userId')),
 
   // Catch-all: applies per (key, method) for any call no other spec matches.
   perKeyFallback: RateLimit.slidingWindow(max: 50, window: Duration(seconds: 1)),

@@ -302,7 +302,7 @@ void main() {
     expect(answered.value, '5');
     // The stream is gone by now, which is itself the assertion that the
     // comparison ran and found nothing to say.
-    expect(responder.collectEndpointMetrics()['openStreams'], 0);
+    expect(responder.collectEndpointMetrics().openStreams, 0);
 
     await caller.close();
     await responder.close();

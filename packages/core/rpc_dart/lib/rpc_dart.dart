@@ -34,6 +34,7 @@ export 'src/_index.dart'
         RpcDataTransferMode,
         // Context and cancellation
         RpcContext,
+        RpcContextKey,
         RpcContextBuilder,
         RpcContextExtensions,
         RpcContextUtils,
@@ -69,6 +70,7 @@ export 'src/_index.dart'
         RpcResponderEndpoint,
         RpcPeerEndpoint,
         RpcEndpointHealth,
+        RpcEndpointMetrics,
         RpcEndpointPingResult,
         IRpcInterceptor,
         RpcCallObserverInterceptor,
@@ -89,6 +91,7 @@ export 'src/_index.dart'
         RpcStatusException,
         RpcClosedException,
         RpcNoConnectionException,
+        RpcMetadataViolation,
         RpcStatus,
         RpcErrorDetail,
         RpcErrorInfo,

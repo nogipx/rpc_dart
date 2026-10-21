@@ -61,6 +61,9 @@ builds a transport, a channel or frames imports
 | `RpcMessage`, `RpcDirectMultiplexedChannel` | not exported; `RpcTransportMessage`, `memoryPair()` |
 | `endpoint.clientStream(...)(requests)` | `endpoint.clientStream(..., requests: requests)`, as `callClientStream` |
 | `call.updateContext(ctx)` / `call.context = ctx` in an interceptor | pass `ctx` to `next(ctx, request)` |
+| `ctx.withValue('key', v)`, `ctx.getValue<T>('key')` | a typed key: `const key = RpcContextKey<T>('key')`, then `withValue(key, v)` / `getValue(key)` |
+| `getValue<RpcCallScope>(RpcCallScope)` | `ctx.callScope` |
+| `endpoint.collectEndpointMetrics()['openStreams']` | `endpoint.collectEndpointMetrics().openStreams` (`RpcEndpointMetrics`; `toJson()` for the map) |
 
 `RpcException` is abstract: throw `RpcStatusException(RpcStatus.x, '...')`.
 Match errors on the type or on `statusCode`, never on the message text.
@@ -123,6 +126,11 @@ to apply to every method of the same type.
   exact `x`.
 - **A retry waits the delay the server's `RpcRetryInfo` asks for**, not its
   own backoff, when the delay is positive.
+- **A metadata violation is not an `ArgumentError`.** A header the security
+  policy refuses throws `RpcMetadataViolation` (INVALID_ARGUMENT, exported
+  from `rpc_dart.dart`); a `catch (ArgumentError)` no longer catches it.
+- **A zero-copy contract on a byte-only transport fails at registration**,
+  not on every call.
 - **CBOR throws `ArgumentError` for a `DateTime`, enum, `Set`, `BigInt` or
   `Duration` without `toJson()`.** Convert it in the message's `toJson`
   (`toIso8601String()`, `name`, `toList()`), or the call fails at send time.
@@ -133,8 +141,12 @@ to apply to every method of the same type.
 - **`maxActiveStreams` counts a call until it ends**, and a peer that sends
   without reading gets `RESOURCE_EXHAUSTED`. Raise the limits in
   `RpcSecurityPolicy` if a legitimate workload hits them.
-- **A `switch` over `RpcHealthLevel`, `RpcClientConnectionState` or
-  `RpcCallOutcome` keeps a default branch**: minor releases may add values.
+- **A `switch` over an open type keeps a default branch**: minor releases may
+  add values to `RpcHealthLevel`, `RpcClientConnectionState`,
+  `RpcCallOutcome`, `RpcDataTransferMode`, `RpcContentTypeValidation`,
+  `ConsoleFormat`, `SpanStatus`, `GrpcServingStatus`, `RateLimit` and
+  `LogRecord`. `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`,
+  `RpcServiceKind`, `RpcServerMode` and `RpcLogLevel` are closed.
 
 ## 5. Verify
 

@@ -235,7 +235,7 @@ void main() {
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
-    expect(rig.caller.collectEndpointMetrics()['pendingRequests'], 0);
+    expect(rig.caller.collectEndpointMetrics().pendingRequests, 0);
 
     await rig.caller.close();
     await rig.responder.close();

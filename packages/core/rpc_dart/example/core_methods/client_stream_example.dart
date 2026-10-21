@@ -4,6 +4,9 @@
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
 
+const _aggregationType = RpcContextKey<String>('aggregation-type');
+const _batchSize = RpcContextKey<int>('batch-size');
+
 void main() async {
   await ClientStreamingExample.run();
 }
@@ -39,7 +42,7 @@ class ClientStreamingExample {
       print('\n--- 1: aggregating text messages ---');
       final context1 = RpcContextUtils.withTracing(
         traceId: 'client-stream-123',
-      ).withValue('aggregation-type', 'text');
+      ).withValue(_aggregationType, 'text');
       final messages = [
         'Message 1: Hello',
         'Message 2: How are you?',
@@ -92,7 +95,7 @@ class ClientStreamingExample {
       final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(
         cancellationToken,
-      ).withValue('batch-size', 100).withTraceId('cancel-aggregate-789');
+      ).withValue(_batchSize, 100).withTraceId('cancel-aggregate-789');
       // Cancel after 150ms.
       Future<void>.delayed(Duration(milliseconds: 150), () {
         print('CLIENT: cancelling the aggregation');
@@ -169,8 +172,8 @@ final class DataAggregatorResponder extends RpcResponderContract
     final logger = LogScope.noop;
     logger.info('starting the aggregation');
     logger.info('context: $context');
-    final aggregationType = context?.getValue<String>('aggregation-type');
-    final batchSize = context?.getValue<int>('batch-size');
+    final aggregationType = context?.getValue(_aggregationType);
+    final batchSize = context?.getValue(_batchSize);
     final format = context?.getHeader('aggregation-format');
     final operation = context?.getHeader('operation');
     final authToken = context?.getHeader('authorization');

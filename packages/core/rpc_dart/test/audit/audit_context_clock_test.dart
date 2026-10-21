@@ -32,7 +32,7 @@ void main() {
           .withClock(() => now)
           .withTimeout(const Duration(seconds: 5))
           .withTraceId('t')
-          .withValue('k', 'v');
+          .withValue(const RpcContextKey<String>('k'), 'v');
 
       expect(ctx.isExpired, isFalse);
       now = now.add(const Duration(seconds: 6));

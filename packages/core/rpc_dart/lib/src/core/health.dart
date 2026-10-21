@@ -6,6 +6,8 @@
 /// Health level of an RPC component.
 ///
 /// Listed in ascending severity for easy comparison.
+///
+/// Open: a minor release may add a value, so a `switch` keeps a default.
 enum RpcHealthLevel {
   /// Component is fully operational.
   healthy,

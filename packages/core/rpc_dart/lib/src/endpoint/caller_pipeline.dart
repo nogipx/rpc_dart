@@ -188,19 +188,15 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     return cancelled;
   }
 
-  /// Collects caller-specific metrics.
-  Map<String, Object?> _collectCallerMetrics() {
-    final activeCalls = _callerTokens.values.fold<int>(
+  /// The caller half of [RpcEndpointMetrics].
+  _CallerCounts _collectCallerMetrics() => (
+    pendingRequests: _callerTokens.values.fold<int>(
       0,
       (sum, tokens) => sum + tokens.length,
-    );
-    return {
-      'pendingRequests': activeCalls,
-      'trackedMethods': _callerTokens.length,
-      if (_callerTokens.isNotEmpty)
-        'activeMethodKeys': List<String>.unmodifiable(_callerTokens.keys),
-    };
-  }
+    ),
+    trackedMethods: _callerTokens.length,
+    activeMethodKeys: List<String>.unmodifiable(_callerTokens.keys),
+  );
 
   // ---------------------------------------------------------------------------
   // Context preparation

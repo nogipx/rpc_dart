@@ -91,8 +91,8 @@ Future<void> _call(_Rig rig, Stream<RpcString> requests) => rig.caller
 /// Nothing the server holds for a call that is over.
 String _residue(_Rig rig) {
   final m = rig.responder.collectEndpointMetrics();
-  return 'openStreams=${m['openStreams']} '
-      'activeResponders=${m['activeResponders']} '
+  return 'openStreams=${m.openStreams} '
+      'activeResponders=${m.activeResponders} '
       'liveHandlers=${rig.counters.live}';
 }
 
@@ -109,8 +109,8 @@ Future<void> _expectNothingHeld(
   final deadline = DateTime.now().add(bound);
   while (DateTime.now().isBefore(deadline)) {
     final m = rig.responder.collectEndpointMetrics();
-    if (m['openStreams'] == 0 &&
-        m['activeResponders'] == 0 &&
+    if (m.openStreams == 0 &&
+        m.activeResponders == 0 &&
         rig.counters.live == 0) {
       return;
     }

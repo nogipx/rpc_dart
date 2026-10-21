@@ -102,7 +102,7 @@ Future<Map<String, int>> _metrics(
 ) async {
   final out = <String, int>{};
   if (endpoint != null) {
-    for (final e in endpoint.collectEndpointMetrics().entries) {
+    for (final e in endpoint.collectEndpointMetrics().toJson().entries) {
       if (e.value is int) out[e.key] = e.value! as int;
     }
   }

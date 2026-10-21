@@ -84,7 +84,7 @@ void main() {
             request: 'test'.rpc,
             context: context,
           ),
-          throwsA(isA<ArgumentError>()),
+          throwsA(isA<RpcMetadataViolation>()),
         );
       });
 
@@ -318,9 +318,13 @@ void main() {
     group('context values, which are local', () {
       test('context values do not go over the wire', () async {
         // Arrange
-        final context = RpcContext.withHeaders({
-          'visible-header': 'should-appear',
-        }).withValue('secret-value', 'should-not-appear');
+        final context =
+            RpcContext.withHeaders({
+              'visible-header': 'should-appear',
+            }).withValue(
+              const RpcContextKey<String>('secret-value'),
+              'should-not-appear',
+            );
 
         // Act
         final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(

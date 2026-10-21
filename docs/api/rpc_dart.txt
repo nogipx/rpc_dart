@@ -358,7 +358,7 @@ RpcCallerEndpoint method cancelRequest(String serviceName, String methodName, St
 RpcCallerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
 RpcCallerEndpoint method clientStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerEndpoint method close() -> Future<void>
-RpcCallerEndpoint method collectEndpointMetrics() -> Map<String, Object?>
+RpcCallerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcCallerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
 RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
 RpcCallerEndpoint method markDraining() -> void
@@ -497,9 +497,9 @@ RpcContext field log: LogScope (get)
 RpcContext field remainingTime: Duration? (get)
 RpcContext field requestId: String (get)
 RpcContext field traceId: String? (get)
-RpcContext field values: Map<Object, Object> (get)
+RpcContext field values: Map<RpcContextKey<Object>, Object> (get)
 RpcContext method getHeader(String key) -> String?
-RpcContext method getValue<T>(Object key) -> T?
+RpcContext method getValue<T>(RpcContextKey<T> key) -> T?
 RpcContext method requireCallScope() -> RpcCallScope
 RpcContext method withAdditionalHeaders(Map<String, String> additionalHeaders) -> RpcContext
 RpcContext method withCancellation(RpcCancellationToken token) -> RpcContext
@@ -509,7 +509,7 @@ RpcContext method withLog(LogScope log) -> RpcContext
 RpcContext method withRequestId(String newRequestId) -> RpcContext
 RpcContext method withTimeout(Duration timeout) -> RpcContext
 RpcContext method withTraceId(String newTraceId) -> RpcContext
-RpcContext method withValue(Object key, Object value) -> RpcContext
+RpcContext method withValue<T>(RpcContextKey<T> key, T value) -> RpcContext
 RpcContext new empty()
 RpcContext new withCancellation(RpcCancellationToken token)
 RpcContext new withDeadline(DateTime deadline)
@@ -532,13 +532,15 @@ RpcContextBuilder method withHeader(String key, String value) -> RpcContextBuild
 RpcContextBuilder method withHeaders(Map<String, String> headers) -> RpcContextBuilder
 RpcContextBuilder method withTimeout(Duration timeout) -> RpcContextBuilder
 RpcContextBuilder method withTraceId(String traceId) -> RpcContextBuilder
-RpcContextBuilder method withValue(Object key, Object value) -> RpcContextBuilder
+RpcContextBuilder method withValue<T>(RpcContextKey<T> key, T value) -> RpcContextBuilder
 RpcContextBuilder new from(RpcContext context)
 RpcContextBuilder new inheritFrom(RpcContext? parent)
 RpcContextBuilder new new()
 RpcContextExtensions method createChild() -> RpcContext
 RpcContextExtensions method createChildWith({Map<String, String>? headers, Duration? timeout}) -> RpcContext
 RpcContextExtensions method forward({Map<String, String>? headers, Duration? timeout}) -> RpcContext
+RpcContextKey field name: String (get)
+RpcContextKey new new(String name)
 RpcContextUtils new new()
 RpcContextUtils static method generateTraceId() -> String
 RpcContextUtils static method merge(RpcContext left, RpcContext right) -> RpcContext
@@ -594,7 +596,7 @@ RpcEndpointBase field transport: IRpcTransport (get)
 RpcEndpointBase method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcEndpointBase method addMiddleware(IRpcMiddleware middleware) -> void
 RpcEndpointBase method close() -> Future<void>
-RpcEndpointBase method collectEndpointMetrics() -> Map<String, Object?>
+RpcEndpointBase method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcEndpointBase method health() -> Future<RpcEndpointHealth>
 RpcEndpointBase method markDraining() -> void
 RpcEndpointBase method start() -> void
@@ -605,6 +607,28 @@ RpcEndpointHealth field isHealthy: bool (get)
 RpcEndpointHealth field timestamp: DateTime (get)
 RpcEndpointHealth field transportStatus: RpcHealthStatus? (get)
 RpcEndpointHealth new new({required RpcHealthStatus endpointStatus, Map<String, RpcHealthStatus>? dependencies, DateTime? timestamp})
+RpcEndpointMetrics field activeMethodKeys: List<String>? (get)
+RpcEndpointMetrics field activeResponders: int? (get)
+RpcEndpointMetrics field bufferedMessages: int? (get)
+RpcEndpointMetrics field contractKeys: List<String>? (get)
+RpcEndpointMetrics field debugLabel: String? (get)
+RpcEndpointMetrics field interceptorCount: int (get)
+RpcEndpointMetrics field isActive: bool (get)
+RpcEndpointMetrics field isDraining: bool? (get)
+RpcEndpointMetrics field isListening: bool? (get)
+RpcEndpointMetrics field metadataStreams: int? (get)
+RpcEndpointMetrics field middlewareCount: int (get)
+RpcEndpointMetrics field openStreams: int? (get)
+RpcEndpointMetrics field pendingRequests: int? (get)
+RpcEndpointMetrics field preBindBuffers: int? (get)
+RpcEndpointMetrics field preMethodBufferedBytes: int? (get)
+RpcEndpointMetrics field registeredContracts: int? (get)
+RpcEndpointMetrics field registeredMethods: int? (get)
+RpcEndpointMetrics field trackedMethods: int? (get)
+RpcEndpointMetrics field transportClosed: bool (get)
+RpcEndpointMetrics field transportType: String (get)
+RpcEndpointMetrics method toJson() -> Map<String, Object?>
+RpcEndpointMetrics new new({required bool isActive, required int middlewareCount, required int interceptorCount, required bool transportClosed, required String transportType, String? debugLabel, int? registeredContracts, int? registeredMethods, bool? isListening, bool? isDraining, int? openStreams, int? preMethodBufferedBytes, int? metadataStreams, int? bufferedMessages, int? preBindBuffers, int? activeResponders, List<String>? contractKeys, int? pendingRequests, int? trackedMethods, List<String>? activeMethodKeys})
 RpcEndpointPingExchange field sentAt: DateTime (get)
 RpcEndpointPingExchange field streamId: int (get)
 RpcEndpointPingExchange field transport: IRpcTransport (get)
@@ -804,12 +828,13 @@ RpcMetadata static method forClientRequest(String serviceName, String methodName
 RpcMetadata static method forServerInitialResponse({String? encoding}) -> RpcMetadata
 RpcMetadata static method parseGrpcTimeout(String raw) -> Duration?
 RpcMetadataViolation field details: List<RpcErrorDetail> (get)
+RpcMetadataViolation field invalidValue: Object? (get)
 RpcMetadataViolation field isPushback: bool (get)
 RpcMetadataViolation field message: String (get)
-RpcMetadataViolation field stackTrace: StackTrace? (get)
+RpcMetadataViolation field name: String? (get)
 RpcMetadataViolation field statusCode: int (get)
 RpcMetadataViolation field statusDetailsBin: Uint8List? (get)
-RpcMetadataViolation new new(String message, {dynamic invalidValue, String? name})
+RpcMetadataViolation new new(String message, {Object? invalidValue, String? name})
 RpcMethod field description: String? (get)
 RpcMethod field kind: RpcMethodType (get)
 RpcMethod field name: String (get)
@@ -903,7 +928,7 @@ RpcPeerEndpoint method cancelRequest(String serviceName, String methodName, Stri
 RpcPeerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
 RpcPeerEndpoint method clientStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerEndpoint method close() -> Future<void>
-RpcPeerEndpoint method collectEndpointMetrics() -> Map<String, Object?>
+RpcPeerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcPeerEndpoint method drain({Duration timeout}) -> Future<void>
 RpcPeerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
 RpcPeerEndpoint method health() -> Future<RpcEndpointHealth>
@@ -985,7 +1010,7 @@ RpcResponderEndpoint field transport: IRpcTransport (get)
 RpcResponderEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcResponderEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
 RpcResponderEndpoint method close() -> Future<void>
-RpcResponderEndpoint method collectEndpointMetrics() -> Map<String, Object?>
+RpcResponderEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcResponderEndpoint method drain({Duration timeout}) -> Future<void>
 RpcResponderEndpoint method health() -> Future<RpcEndpointHealth>
 RpcResponderEndpoint method markDraining() -> void
@@ -1236,6 +1261,7 @@ type RpcContentTypeValidation : Enum, Object (rpc_dart.dart, transport.dart, tra
 type RpcContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContextBuilder : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContextExtensions :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcContextKey<T> : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContextUtils : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcDataTransferMode : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcDeadlineExceededException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1245,6 +1271,7 @@ type RpcDouble : IRpcSerializable, Object, RpcPrimitiveMessage<double> (rpc_dart
 type RpcDoubleX :  (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcEndpointBase [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcEndpointHealth : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcEndpointMetrics : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcEndpointPingExchange : Object (transport.dart, transport_io.dart)
 type RpcEndpointPingProtocol : Object (transport.dart, transport_io.dart)
 type RpcEndpointPingResult : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1269,7 +1296,7 @@ type RpcMessageFrame : Object (transport.dart, transport_io.dart)
 type RpcMessageHeader : Object (transport.dart, transport_io.dart)
 type RpcMessageParser : Object (transport.dart, transport_io.dart)
 type RpcMetadata : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcMetadataViolation : ArgumentError, Error, Exception, Object, RpcException, RpcStatusException (transport.dart, transport_io.dart)
+type RpcMetadataViolation : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcMethod : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcMethodType : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcMiddlewareContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)

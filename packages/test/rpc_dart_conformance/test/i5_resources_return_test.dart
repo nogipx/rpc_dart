@@ -54,7 +54,7 @@ final _knownFailing = <String, String>{
 
 Future<Map<String, int>> _client(ConformanceCaller caller) async {
   final out = <String, int>{};
-  for (final e in caller.endpoint.collectEndpointMetrics().entries) {
+  for (final e in caller.endpoint.collectEndpointMetrics().toJson().entries) {
     if (e.value is int) out[e.key] = e.value! as int;
   }
   out.addAll(await transportGauges(caller.endpoint.transport));

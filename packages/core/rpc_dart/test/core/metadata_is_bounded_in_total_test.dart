@@ -28,7 +28,7 @@ void main() {
     expect(
       () => _policy.validateMetadata(_pad(8, _policy.maxHeaderValueBytes)),
       throwsA(
-        isA<ArgumentError>().having(
+        isA<RpcMetadataViolation>().having(
           (e) => e.message,
           'message',
           contains('Metadata too large'),
@@ -41,7 +41,7 @@ void main() {
 
     expect(
       () => _policy.validateMetadata(_pad(64, _policy.maxHeaderValueBytes)),
-      throwsA(isA<ArgumentError>()),
+      throwsA(isA<RpcMetadataViolation>()),
     );
   });
 
@@ -68,7 +68,7 @@ void main() {
           ]),
         ),
         throwsA(
-          isA<ArgumentError>().having(
+          isA<RpcMetadataViolation>().having(
             (e) => e.message,
             'message',
             contains('Invalid metadata header value'),
@@ -83,7 +83,7 @@ void main() {
       expect(
         () => _policy.validateMetadata(_pad(_policy.maxHeaders + 1, 1)),
         throwsA(
-          isA<ArgumentError>().having(
+          isA<RpcMetadataViolation>().having(
             (e) => e.message,
             'message',
             contains('Too many metadata headers'),

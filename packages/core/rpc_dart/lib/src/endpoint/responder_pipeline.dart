@@ -448,41 +448,31 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     return _respDrainInFlight ??= _runDrain(timeout);
   }
 
-  /// Collects responder-specific metrics.
+  /// The responder half of [RpcEndpointMetrics].
   ///
-  /// Everything about responder streams belongs HERE, not in one endpoint
-  /// subclass: both [RpcResponderEndpoint] and [RpcPeerEndpoint] serve calls
-  /// through this mixin, and a server's graceful drain polls `activeResponders`
-  /// to decide whether anything is still running. Published by the responder
-  /// alone, that poll read null for a peer endpoint and shut the server down on
-  /// top of live calls.
-  Map<String, Object?> _collectResponderMetrics() {
-    return {
-      'registeredContracts': _respRegistry.contracts.length,
-      'registeredMethods': _respRegistry.methods.length,
-      'isListening': _respIsListening,
-      'isDraining': _respIsDraining,
-      'openStreams': _respStreams.length,
-      // Un-attributed payload parked on this connection. Should sit at 0
-      // between calls; a number that only ever climbs means the budget is not
-      // being released and legitimate calls will start being refused.
-      'preMethodBufferedBytes': _respPreMethodBytes,
-      'metadataStreams': _respStreams.values
-          .where((state) => state.hasMetadata)
-          .length,
-      'bufferedMessages': _respStreams.values
-          .where((state) => state.lastPayloadMessage != null)
-          .length,
-      'preBindBuffers': _respStreams.values
-          .where((state) => state.hasPreBindBuffered)
-          .length,
-      // The metrics key and the drain now read ONE source. The key is
-      // observability and free to rename; the count is a shutdown decision.
-      'activeResponders': activeResponderCount,
-      if (_respRegistry.contracts.isNotEmpty)
-        'contractKeys': List<String>.unmodifiable(_respRegistry.contracts.keys),
-    };
-  }
+  /// HERE, not in one endpoint subclass: both [RpcResponderEndpoint] and
+  /// [RpcPeerEndpoint] serve calls through this mixin, and the peer's counts
+  /// must not read null.
+  _ResponderCounts _collectResponderMetrics() => (
+    registeredContracts: _respRegistry.contracts.length,
+    registeredMethods: _respRegistry.methods.length,
+    isListening: _respIsListening,
+    isDraining: _respIsDraining,
+    openStreams: _respStreams.length,
+    preMethodBufferedBytes: _respPreMethodBytes,
+    metadataStreams: _respStreams.values
+        .where((state) => state.hasMetadata)
+        .length,
+    bufferedMessages: _respStreams.values
+        .where((state) => state.lastPayloadMessage != null)
+        .length,
+    preBindBuffers: _respStreams.values
+        .where((state) => state.hasPreBindBuffered)
+        .length,
+    // The same source as the drain's count.
+    activeResponders: activeResponderCount,
+    contractKeys: List<String>.unmodifiable(_respRegistry.contracts.keys),
+  );
 
   /// The [RpcRetryInfo] a capacity refusal carries, so a caller's retry policy
   /// can tell it from a size refusal with the same status.

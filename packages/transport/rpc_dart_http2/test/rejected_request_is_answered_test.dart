@@ -143,7 +143,7 @@ void main() {
           'the peer chooses the path, so streams it can strand are slots it '
           'controls -- 20 of these used to sit open forever',
     );
-    expect(endpoint!.collectEndpointMetrics()['openStreams'], 0);
+    expect(endpoint!.collectEndpointMetrics().openStreams, 0);
   });
 
   test('GUARD: a well-formed request still succeeds', () async {

@@ -98,7 +98,7 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 2));
 
     expect(
-      responder.collectEndpointMetrics()['openStreams'],
+      responder.collectEndpointMetrics().openStreams,
       lessThanOrEqualTo(3),
       reason:
           'the pipeline could not see the policy, so it fell back to the '

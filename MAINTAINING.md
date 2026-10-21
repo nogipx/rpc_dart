@@ -40,7 +40,11 @@ on `Version X already exists`, after the other packages have gone out.
 0b. **`rpc_dart`'s public API is frozen through 7.x, and `prepare` checks it.**
    `melos run api:check` compares it with `docs/api/rpc_dart.txt`, a sorted
    line per public declaration. A removed or changed line breaks someone and
-   is not allowed in 7.x; an added line is a minor release. After reviewing a
+   is not allowed in 7.x; an added line is a minor release. One exception, as
+   the package README states: a type exported ONLY from `transport.dart` (its
+   `type` line lists no `rpc_dart.dart`) may change in a minor release, with a
+   CHANGELOG entry naming it. `api:check` still fails on it, so the change is
+   a decision, made by running `api:update`. After reviewing a
    change, `melos run api:update` rewrites the snapshot: commit it with the
    change. It needs `dart_apitool` once:
    `fvm dart pub global activate dart_apitool 0.23.2`. The wire format is

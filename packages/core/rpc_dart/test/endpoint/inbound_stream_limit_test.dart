@@ -116,7 +116,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(
-      c.responder.collectEndpointMetrics()['openStreams'],
+      c.responder.collectEndpointMetrics().openStreams,
       lessThanOrEqualTo(3),
       reason: 'the peer opened more streams than the policy allows',
     );
@@ -154,7 +154,7 @@ void main() {
       );
     }
 
-    expect(c.responder.collectEndpointMetrics()['openStreams'], 0);
+    expect(c.responder.collectEndpointMetrics().openStreams, 0);
 
     await c.caller.close();
     await c.responder.close();

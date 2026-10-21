@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 import 'package:rpc_dart/rpc_dart.dart';
 
+const _streamType = RpcContextKey<String>('stream-type');
+
 void main() async {
   await ServerStreamingExample.run();
 }
@@ -35,7 +37,7 @@ class ServerStreamingExample {
       print('\n--- 1: a plain server stream ---');
       final context1 = RpcContext.empty()
           .withTraceId('server-stream-trace-123')
-          .withValue('stream-type', 'simple');
+          .withValue(_streamType, 'simple');
       await for (final response in client.getServerStream(
         'Send me data'.rpc,
         context: context1,
@@ -58,7 +60,7 @@ class ServerStreamingExample {
       final cancellationToken = RpcCancellationToken();
       final cancelContext = RpcContext.withCancellation(
         cancellationToken,
-      ).withValue('stream-type', 'long-running');
+      ).withValue(_streamType, 'long-running');
       // Cancel after 200ms.
       Future<void>.delayed(Duration(milliseconds: 200), () {
         print('CLIENT: cancelling the stream');
@@ -130,7 +132,7 @@ final class DataStreamServiceResponder extends RpcResponderContract
     final logger = LogScope.noop;
     logger.info('request: ${request.value}');
     logger.info('context: $context');
-    final streamType = context?.getValue<String>('stream-type');
+    final streamType = context?.getValue(_streamType);
     logger.info('stream type: $streamType');
     // A few responses, paced.
     for (int i = 1; i <= 5; i++) {

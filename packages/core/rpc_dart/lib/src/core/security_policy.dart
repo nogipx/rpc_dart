@@ -17,6 +17,8 @@ import 'rpc_headers.dart';
 ///
 /// Only the ABSENT case is a choice. A value that is present and not gRPC is
 /// refused either way.
+///
+/// Open: a minor release may add a value, so a `switch` keeps a default.
 enum RpcContentTypeValidation {
   /// Absent is accepted.
   lenient,
@@ -656,11 +658,10 @@ final class RpcSecurityPolicy {
 
   /// Best-effort metadata validation.
   ///
-  /// Throws [RpcMetadataViolation], which IS an [ArgumentError] — every
-  /// existing `is ArgumentError` check and `catch` keeps working. What changes
-  /// is that the thrown thing can now be told apart from an ordinary
-  /// programming mistake raised elsewhere on the same path, and that it carries
-  /// INVALID_ARGUMENT instead of being redacted to INTERNAL on the way out.
+  /// Throws [RpcMetadataViolation]: catch that, not [ArgumentError], so an
+  /// ordinary programming mistake raised elsewhere on the same path is not
+  /// taken for bad metadata. It carries INVALID_ARGUMENT instead of being
+  /// redacted to INTERNAL on the way out.
   void validateMetadata(RpcMetadata metadata) {
     if (metadata.headers.length > maxHeaders) {
       throw RpcMetadataViolation(

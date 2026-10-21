@@ -117,7 +117,7 @@ void main() {
       final (_, peer) = await startSlowPeerCall();
 
       expect(
-        peer.collectEndpointMetrics()['activeResponders'],
+        peer.collectEndpointMetrics().activeResponders,
         1,
         reason: 'this map IS what _inFlightCalls() reads',
       );

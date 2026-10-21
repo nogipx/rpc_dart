@@ -19,8 +19,8 @@ receives one as its named `context` parameter.
   value containing CR, LF or NUL. `getHeader` lower-cases its argument as well.
 - Header values must be printable ASCII (`0x20`-`0x7E`). The context keeps other
   values, but the transport refuses them when sending: the call fails with
-  `RpcMetadataViolation`, which is both an `ArgumentError` and an
-  `RpcStatusException(INVALID_ARGUMENT)`. To send binary or non-ASCII data, base64-encode it
+  `RpcMetadataViolation`, an `RpcStatusException(INVALID_ARGUMENT)` (not an
+  `ArgumentError`). To send binary or non-ASCII data, base64-encode it
   under a key ending in `-bin`.
 - A value that starts or ends with a space or tab is refused before sending,
   with the same `RpcMetadataViolation` (INVALID_ARGUMENT). Trim values yourself.
@@ -53,7 +53,7 @@ receives one as its named `context` parameter.
 | `ctx.withAdditionalHeaders(map)` | merge headers; existing keys are overwritten |
 | `ctx.withTimeout(d)` | deadline = `ctx.clock() + d` |
 | `ctx.withDeadline / withCancellation / withTraceId / withRequestId / withLog / withClock` | copy with that field replaced |
-| `ctx.withValue(key, value)` / `ctx.getValue<T>(key)` | local values; NEVER sent on the wire |
+| `ctx.withValue(key, value)` / `ctx.getValue(key)` | local values under a typed `RpcContextKey<T>` (e.g. `const userKey = RpcContextKey<User>('user')`); NEVER sent on the wire |
 | `ctx.getHeader(name)`, `ctx.headers` | read (unmodifiable map) |
 | `ctx.deadline`, `ctx.remainingTime`, `ctx.isExpired`, `ctx.isCancelled` | deadline / cancel state |
 | `ctx.traceId` (nullable), `ctx.requestId` (always set), `ctx.log` (`LogScope`) | correlation and logging |

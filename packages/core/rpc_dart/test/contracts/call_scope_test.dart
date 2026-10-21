@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart' show RpcContextInternals;
 import 'package:test/test.dart';
 
 void main() {
@@ -290,7 +291,7 @@ void main() {
 
       test('requireCallScope returns the scope when present', () {
         final scope = RpcCallScope(context: RpcContext.empty());
-        final ctx = RpcContext.empty().withValue(RpcCallScope, scope);
+        final ctx = RpcContext.empty().withCallScope(scope);
         expect(ctx.requireCallScope(), same(scope));
       });
 

@@ -237,7 +237,7 @@ void main() {
     // must come back to zero, or the ceiling ratchets down over a connection's
     // lifetime and the refusals show up much later, on innocent traffic.
     expect(
-      c.responder.collectEndpointMetrics()['preMethodBufferedBytes'],
+      c.responder.collectEndpointMetrics().preMethodBufferedBytes,
       0,
       reason: 'the pre-method budget was never returned',
     );

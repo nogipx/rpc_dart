@@ -494,18 +494,28 @@ The small role interfaces never gain a member: `IRpcSerializable`,
 `IRpcCallCheck`, `IRpcFlowCredit` and `IRpcConnectionBuffer`. A new capability
 comes as a new interface.
 
-A minor release may add a value to an enum or a subtype to a sealed family,
-such as `RpcHealthLevel`, `RpcClientConnectionState`, `RpcCallOutcome` or
-`LogRecord`. A `switch` over one of them keeps a default branch. These are closed and stay
-as they are: `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`,
-`GrpcServingStatus` and `RpcProtoWireType`.
+A minor release may add a value to these enums or a subtype to these sealed
+families, so a `switch` over one of them keeps a default branch:
+`RpcHealthLevel`, `RpcClientConnectionState`, `RpcCallOutcome`,
+`RpcDataTransferMode`, `RpcContentTypeValidation`, `ConsoleFormat`,
+`SpanStatus`, `GrpcServingStatus` (it mirrors a protobuf enum, which can
+grow), `RateLimit` and `LogRecord`. These are closed and stay as they are:
+`RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`, `RpcServiceKind`,
+`RpcServerMode`, `RpcLogLevel` and `RpcProtoWireType`.
 
 An error detail of a `google.rpc` type that arrives as `RpcRawErrorDetail`
 today may be decoded into its own type in a minor release. Code that reads a
 detail by `typeUrl` from a raw one also handles the typed class.
 
-The keys of `collectEndpointMetrics()` and of a health report's details are
+`collectEndpointMetrics()` returns a typed `RpcEndpointMetrics`; a minor
+release may add a field to it. The keys of a health report's `details` are
 diagnostics, not API: read them for display, and do not build on a key.
+
+`package:rpc_dart/transport.dart`, the library for transport authors, is
+looser than the rest: what it alone exports (channels and frames, the message
+parser and router, the stream-id and write helpers) may change in a minor
+release, and the CHANGELOG says so when it does. `package:rpc_dart/rpc_dart.dart`
+does not change incompatibly in 7.x.
 
 These defaults hold for all of 7.x, so tightening them is up to you:
 

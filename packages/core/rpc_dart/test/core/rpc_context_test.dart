@@ -9,6 +9,8 @@ import 'dart:convert';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+const _key = RpcContextKey<String>('key');
+
 void main() {
   group('RpcContext', () {
     group('creating a context', () {
@@ -215,15 +217,15 @@ void main() {
 
       test('adds a value to the context', () {
         // Arrange
-        const key = 'user-data';
+        const key = RpcContextKey<String>('user-data');
         const value = 'important-value';
 
         // Act
         final sut = baseSut.withValue(key, value);
 
         // Assert
-        expect(sut.getValue<String>(key), equals(value));
-        expect(sut.getValue<int>('non-existent'), isNull);
+        expect(sut.getValue(key), equals(value));
+        expect(sut.getValue(const RpcContextKey<int>('non-existent')), isNull);
         expect(
           sut.getHeader('existing'),
           equals('header'),
@@ -290,32 +292,35 @@ void main() {
 
       test('the values come back unmodifiable', () {
         // Arrange
-        final sut = RpcContext.empty().withValue('key', 'value');
+        final sut = RpcContext.empty().withValue(_key, 'value');
 
         // Act
         final values = sut.values;
 
         // Assert
-        expect(() => values['new'] = 'value', throwsUnsupportedError);
+        expect(
+          () => values[const RpcContextKey<String>('new')] = 'value',
+          throwsUnsupportedError,
+        );
       });
 
-      test('a value comes back at its declared type', () {
+      test('a value comes back at the type its key declares', () {
         // Arrange
+        const stringKey = RpcContextKey<String>('k');
+        const intKey = RpcContextKey<int>('k');
+        const listKey = RpcContextKey<List<int>>('list-key');
         final sut = RpcContext.empty()
-            .withValue('string-key', 'string-value')
-            .withValue('int-key', 42)
-            .withValue('list-key', [1, 2, 3]);
+            .withValue(stringKey, 'string-value')
+            .withValue(intKey, 42)
+            .withValue(listKey, [1, 2, 3]);
 
         // Act & Assert
-        expect(sut.getValue<String>('string-key'), equals('string-value'));
-        expect(sut.getValue<int>('int-key'), equals(42));
-        expect(sut.getValue<List<int>>('list-key'), equals([1, 2, 3]));
-
-        // Asking for the wrong type must throw on the cast.
-        expect(
-          () => sut.getValue<String>('int-key'),
-          throwsA(isA<TypeError>()),
-        );
+        expect(sut.getValue(stringKey), equals('string-value'));
+        expect(sut.getValue(intKey), equals(42));
+        expect(sut.getValue(listKey), equals([1, 2, 3]));
+        // The same name under another type is another key, so one value
+        // never comes back as the other's type.
+        expect(identical(stringKey, intKey), isFalse);
       });
     });
 
@@ -347,7 +352,7 @@ void main() {
         final modifiedSut = originalSut
             .withAdditionalHeaders({'test': 'header'})
             .withTimeout(Duration(minutes: 5))
-            .withValue('key', 'value');
+            .withValue(_key, 'value');
 
         // Assert
         expect(modifiedSut.requestId, equals(originalRequestId));
@@ -375,7 +380,7 @@ void main() {
             .withDeadline(deadline)
             .withCancellation(cancellationToken)
             .withTraceId('trace-123')
-            .withValue('key', 'value');
+            .withValue(_key, 'value');
 
         // Act
         final result = sut.toString();
@@ -678,21 +683,24 @@ void main() {
 
       test('values from both are kept', () {
         // Arrange
+        const leftKey = RpcContextKey<String>('left-key');
+        const rightKey = RpcContextKey<String>('right-key');
+        const commonKey = RpcContextKey<String>('common-key');
         final leftSut = RpcContext.empty()
-            .withValue('left-key', 'left-value')
-            .withValue('common-key', 'left');
+            .withValue(leftKey, 'left-value')
+            .withValue(commonKey, 'left');
         final rightSut = RpcContext.empty()
-            .withValue('right-key', 'right-value')
-            .withValue('common-key', 'right');
+            .withValue(rightKey, 'right-value')
+            .withValue(commonKey, 'right');
 
         // Act
         final merged = RpcContextUtils.merge(leftSut, rightSut);
 
         // Assert
-        expect(merged.getValue<String>('left-key'), equals('left-value'));
-        expect(merged.getValue<String>('right-key'), equals('right-value'));
+        expect(merged.getValue(leftKey), equals('left-value'));
+        expect(merged.getValue(rightKey), equals('right-value'));
         expect(
-          merged.getValue<String>('common-key'),
+          merged.getValue(commonKey),
           equals('right'),
         ); // The right-hand side wins.
       });

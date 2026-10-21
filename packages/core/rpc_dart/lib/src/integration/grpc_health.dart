@@ -17,6 +17,9 @@ import '../core/protocol.dart' show RpcStatus;
 // ---------------------------------------------------------------------------
 
 /// gRPC serving status per the health checking protocol.
+///
+/// Open: it mirrors a protobuf enum, which can grow, so a minor release may
+/// add a value and a `switch` keeps a default.
 enum GrpcServingStatus {
   /// Status is not known.
   unknown(0),

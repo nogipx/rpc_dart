@@ -101,8 +101,7 @@ Future<void> _teardown(_Rig r) async {
   await r.server.close();
 }
 
-int _open(_Rig rig) =>
-    rig.responder.collectEndpointMetrics()['openStreams']! as int;
+int _open(_Rig rig) => rig.responder.collectEndpointMetrics().openStreams!;
 
 Future<void> _waitUntil(
   bool Function() condition, {

@@ -52,12 +52,10 @@ final class RpcPeerEndpoint extends RpcEndpointBase
   }
 
   @override
-  Map<String, Object?> collectEndpointMetrics() {
-    final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
-    metrics.addAll(_collectResponderMetrics());
-    metrics.addAll(_collectCallerMetrics());
-    return metrics;
-  }
+  RpcEndpointMetrics collectEndpointMetrics() => _metrics(
+    responder: _collectResponderMetrics(),
+    caller: _collectCallerMetrics(),
+  );
 
   // ---------------------------------------------------------------------------
   // Parity filter

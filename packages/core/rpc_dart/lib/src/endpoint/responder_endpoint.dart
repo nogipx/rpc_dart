@@ -35,11 +35,8 @@ final class RpcResponderEndpoint extends RpcEndpointBase
       _respRegistry.exportMethodRegistrations();
 
   @override
-  Map<String, Object?> collectEndpointMetrics() {
-    final metrics = Map<String, Object?>.from(super.collectEndpointMetrics());
-    metrics.addAll(_collectResponderMetrics());
-    return metrics;
-  }
+  RpcEndpointMetrics collectEndpointMetrics() =>
+      _metrics(responder: _collectResponderMetrics());
 
   @override
   void start() {

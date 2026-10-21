@@ -34,7 +34,7 @@ final class _Contract extends RpcResponderContract {
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'stuck',
       handler: (r, {RpcContext? context}) async* {
-        context?.getValue<RpcCallScope>(RpcCallScope)?.onDispose(() async {
+        context?.callScope?.onDispose(() async {
           _ran.add('stuck-start');
           await Completer<void>().future; // never completes
         });
@@ -48,7 +48,7 @@ final class _Contract extends RpcResponderContract {
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'ordered',
       handler: (r, {RpcContext? context}) async* {
-        final scope = context?.getValue<RpcCallScope>(RpcCallScope);
+        final scope = context?.callScope;
         // LIFO: 'second' must run before 'first'. The middle one hangs, and
         // must not strand the one registered before it.
         scope?.onDispose(() => _ran.add('first'));
@@ -67,7 +67,7 @@ final class _Contract extends RpcResponderContract {
     addServerStreamMethod<RpcString, RpcString>(
       methodName: 'clean',
       handler: (r, {RpcContext? context}) async* {
-        context?.getValue<RpcCallScope>(RpcCallScope)?.onDispose(() {
+        context?.callScope?.onDispose(() {
           _ran.add('clean');
         });
         if (!_started.isCompleted) _started.complete();

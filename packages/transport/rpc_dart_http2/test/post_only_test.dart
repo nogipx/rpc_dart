@@ -152,7 +152,7 @@ void main() {
 
     final details = (await endpoint!.transport.health()).details;
     expect(details['incomingStreams'], 0);
-    expect(endpoint!.collectEndpointMetrics()['openStreams'], 0);
+    expect(endpoint!.collectEndpointMetrics().openStreams, 0);
   });
 
   test('GUARD: the connection still serves POST after a refusal', () async {

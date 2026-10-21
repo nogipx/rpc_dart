@@ -22,7 +22,6 @@ export 'src/_index.dart'
         RpcChannelFrame,
         RpcDecodedFrame,
         RpcFrameException,
-        RpcMetadataViolation,
         RpcFrameMultiplexedChannel,
         // Messages and streams
         BufferedBroadcastController,

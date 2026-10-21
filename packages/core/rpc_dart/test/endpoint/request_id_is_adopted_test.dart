@@ -204,6 +204,9 @@ void main() {
     final first = context.requestId;
     expect(context.requestId, first);
     expect(context.withTraceId('t').requestId, first);
-    expect(context.withValue('k', 'v').requestId, first);
+    expect(
+      context.withValue(const RpcContextKey<String>('k'), 'v').requestId,
+      first,
+    );
   });
 }

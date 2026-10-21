@@ -21,6 +21,8 @@ import '../_internal.dart';
 ///   fixed-window buckets. Strict: no burst allowance.
 /// - [RateLimit.tokenBucket] — token-bucket with configurable burst capacity.
 ///   Allows short bursts above the average rate.
+///
+/// Open: a minor release may add an algorithm.
 sealed class RateLimit {
   const RateLimit();
 
@@ -320,7 +322,7 @@ class _TokenBucketCounter extends _RateLimitCounter {
 ///   perService: {'Heavy': RateLimit.slidingWindow(max: 10, window: second)},
 ///   perMethod: {'Sync.push': RateLimit.tokenBucket(max: 10, window: second)},
 ///   perKeyFallback: RateLimit.slidingWindow(max: 50, window: second),
-///   keyExtractor: (call) => call.context.getValue<String>('userId'),
+///   keyExtractor: (call) => call.context.getValue(userIdKey),
 /// )
 /// ```
 ///

@@ -135,7 +135,7 @@ Future<_Reading> _run(_Ending ending) async {
   // it has let the call go.
   await _until(() {
     final m = responder.collectEndpointMetrics();
-    return m['openStreams'] == 0 && m['activeResponders'] == 0;
+    return m.openStreams == 0 && m.activeResponders == 0;
   });
   final atEnd = produced;
   await Future<void>.delayed(const Duration(milliseconds: _settleMs));

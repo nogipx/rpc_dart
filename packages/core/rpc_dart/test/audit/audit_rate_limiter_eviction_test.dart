@@ -24,6 +24,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+const _userId = RpcContextKey<String>('userId');
+
 void main() {
   group('RateLimiter eviction vs in-flight metered stream', () {
     RpcMiddlewareContext makeContext() {
@@ -34,7 +36,7 @@ void main() {
         serviceName: 'SyncService',
         methodName: 'push',
         // userId drives the dynamic per-key counter.
-        context: RpcContext.empty().withValue('userId', 'user-1'),
+        context: RpcContext.empty().withValue(_userId, 'user-1'),
       );
     }
 
@@ -50,7 +52,7 @@ void main() {
           perMethod: {
             'SyncService.push': RateLimit.slidingWindow(max: 4, window: window),
           },
-          keyExtractor: (ctx) => ctx.context.getValue<String>('userId'),
+          keyExtractor: (ctx) => ctx.context.getValue(_userId),
           // This test drives per-element metering through a server-stream to
           // exercise the counter re-resolution path, so opt into per-response
           // accounting (default meters establishment only).

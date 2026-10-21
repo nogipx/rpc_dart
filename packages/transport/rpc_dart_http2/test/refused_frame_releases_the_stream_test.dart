@@ -240,7 +240,7 @@ void main() {
     );
 
     await Future<void>.delayed(const Duration(milliseconds: 300));
-    expect(endpoint!.collectEndpointMetrics()['activeResponders'], 0);
+    expect(endpoint!.collectEndpointMetrics().activeResponders, 0);
     expect(await counts(), {
       'incomingStreams': 0,
       'streamSubscriptions': 0,

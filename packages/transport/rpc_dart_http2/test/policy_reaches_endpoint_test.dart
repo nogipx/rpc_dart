@@ -91,7 +91,7 @@ void main() {
     await Future<void>.delayed(const Duration(seconds: 2));
 
     expect(
-      serverEndpoint?.collectEndpointMetrics()['openStreams'],
+      serverEndpoint?.collectEndpointMetrics().openStreams,
       lessThanOrEqualTo(3),
       reason:
           'the pipeline could not see the policy, so it fell back to the '
@@ -174,7 +174,7 @@ void main() {
     // Stream state is NOT the limit here: 1000 streams are allowed, so anything
     // refused was refused by the handler ceiling.
     expect(
-      serverEndpoint?.collectEndpointMetrics()['openStreams'],
+      serverEndpoint?.collectEndpointMetrics().openStreams,
       lessThanOrEqualTo(3),
     );
 

@@ -122,7 +122,7 @@ void main() {
     await startParkedCall();
 
     expect(
-      responder.collectEndpointMetrics()['activeResponders'],
+      responder.collectEndpointMetrics().activeResponders,
       responder.activeResponderCount,
       reason:
           'two independent computations of one number is how the map key and '

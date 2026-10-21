@@ -8,6 +8,8 @@ import '../log_output.dart';
 import '../log_record.dart';
 
 /// Console output format.
+///
+/// Open: a minor release may add a value, so a `switch` keeps a default.
 enum ConsoleFormat {
   /// Human-readable with structure and indentation.
   pretty,
