@@ -102,24 +102,28 @@ is what tells an rpc_dart server apart from any other process listening there.
 
 `connectTimeout` (30 s by default) bounds the whole open: the connect and the
 server's preface. A failed connect throws an `RpcStatusException` with
-UNAVAILABLE.
+UNAVAILABLE. `cancellationToken` abandons the connect: the pending socket is
+closed at once and the call throws an `RpcCancelledException`.
 
 ### Reconnect
 
 The transport does not reconnect itself: a dropped socket closes it. For a
-client that comes back, give `RpcClientConnection` from `rpc_dart` a factory
-that calls `connectRpcSocket`. It builds a fresh transport per connection,
-carries the stream id cursor across, and waits for `ready` before it reports
-Online.
+client that comes back, give `RpcClientConnection.cancellable` from `rpc_dart`
+a factory that calls `connectRpcSocket` with the token it is handed. It builds
+a fresh transport per connection, carries the stream id cursor across, and
+waits for `ready` before it reports Online. The token lets `dispose()` end a
+connect still in progress, which against a host that never answers would
+otherwise run until `connectTimeout`.
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 
 RpcCallerEndpoint reconnectingCaller() {
-  final connection = RpcClientConnection(
-    transportFactory: () => connectRpcSocket(
+  final connection = RpcClientConnection.cancellable(
+    transportFactory: (cancellation) => connectRpcSocket(
       const RpcSocketAddress.unix('/tmp/app/rpc.sock'),
+      cancellationToken: cancellation,
     ),
   );
   connection.connect();

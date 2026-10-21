@@ -25,9 +25,10 @@ import 'rpc_socket_channel.dart';
 /// cursor across, and waits for `ready` before it reports Online.
 ///
 /// ```dart
-/// final connection = RpcClientConnection(
-///   transportFactory: () => connectRpcSocket(
+/// final connection = RpcClientConnection.cancellable(
+///   transportFactory: (cancellation) => connectRpcSocket(
 ///     const RpcSocketAddress.unix('/tmp/app/rpc.sock'),
+///     cancellationToken: cancellation,
 ///   ),
 /// );
 /// final caller = RpcCallerEndpoint(transport: connection.transport);
@@ -42,6 +43,13 @@ import 'rpc_socket_channel.dart';
 /// preface that fails later fails `ready` and every call; see
 /// `RpcFrameMultiplexedChannel.ready`. An [Error] passes through unchanged.
 ///
+/// [cancellationToken] abandons the socket connect: when it is cancelled
+/// first, the pending socket is closed at once and this throws an
+/// [RpcCancelledException]. `RpcClientConnection.cancellable` hands one to its
+/// factory per attempt, so a dispose during a connect to an address that
+/// never answers does not keep the process alive until [connectTimeout] or the
+/// OS gives up.
+///
 /// TCP sockets get `TCP_NODELAY`: rpc_dart writes one frame per send, and
 /// Nagle's algorithm would hold a small unary request back for a round trip.
 ///
@@ -53,17 +61,21 @@ Future<RpcSocketCallerTransport> connectRpcSocket(
   RpcSecurityPolicy policy = const RpcSecurityPolicy(),
   Duration? connectTimeout = const Duration(seconds: 30),
   LogScope? logger,
+  RpcCancellationToken? cancellationToken,
 }) async {
+  if (cancellationToken != null && cancellationToken.isCancelled) {
+    throw _cancelled(cancellationToken);
+  }
   final clock = Stopwatch()..start();
   final Socket socket;
   try {
-    socket = await Socket.connect(
-      address.host,
-      address.port,
-      timeout: connectTimeout,
-    );
+    socket = await _connect(address, connectTimeout, cancellationToken);
   } catch (e, st) {
     if (e is Error) rethrow;
+    // Whatever the abandoned connect failed with, the cause is the cancel.
+    if (cancellationToken?.isCancelled ?? false) {
+      Error.throwWithStackTrace(_cancelled(cancellationToken!), st);
+    }
     Error.throwWithStackTrace(
       RpcStatusException(
         RpcStatus.unavailable,
@@ -81,6 +93,35 @@ Future<RpcSocketCallerTransport> connectRpcSocket(
     logger: logger,
   );
 }
+
+/// `Socket.connect`, abandoned at once when [token] is cancelled.
+///
+/// `Socket.connect` cannot be stopped: a connect to an address that never
+/// answers the SYN runs until [timeout] or the OS gives up. A
+/// `ConnectionTask` can be cancelled, which closes the pending socket.
+Future<Socket> _connect(
+  RpcSocketAddress address,
+  Duration? timeout,
+  RpcCancellationToken? token,
+) async {
+  final task = await Socket.startConnect(address.host, address.port);
+  if (token != null) unawaited(token.cancelled.then((_) => task.cancel()));
+  if (timeout == null) return task.socket;
+  return task.socket.timeout(
+    timeout,
+    onTimeout: () {
+      task.cancel();
+      throw SocketException('Connection timed out after $timeout');
+    },
+  );
+}
+
+/// The failure of a connect [token] abandoned.
+RpcCancelledException _cancelled(RpcCancellationToken token) =>
+    RpcCancelledException(
+      'Socket connect cancelled'
+      '${token.reason == null ? '' : ': ${token.reason}'}',
+    );
 
 /// Socket options both ends apply. Internal to this package.
 void configureRpcSocket(Socket socket, RpcSocketAddress address) {
