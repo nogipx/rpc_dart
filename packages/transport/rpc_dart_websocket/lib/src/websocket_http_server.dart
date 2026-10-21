@@ -61,9 +61,11 @@ Future<HttpServer> bindRpcWebSocketHttpServer(
   return _BoundedHttpServer(HttpServer.listenOn(bounded), bounded);
 }
 
-/// An [HttpServer] over an [RpcHeaderBoundedServerSocket] whose [close]
-/// releases the socket too: `HttpServer.listenOn` leaves a socket it was given
-/// open.
+/// An [HttpServer] over an [RpcHeaderBoundedServerSocket] that releases the
+/// socket whenever it stops serving -- on [close], and when its subscription is
+/// cancelled, which is how `RpcWebSocketServer.dispose` lets go of it: an
+/// `HttpServer.bind` server closes its port then, and `HttpServer.listenOn`
+/// leaves a socket it was given open.
 final class _BoundedHttpServer extends Stream<HttpRequest>
     implements HttpServer {
   _BoundedHttpServer(this._server, this._socket);
@@ -77,12 +79,30 @@ final class _BoundedHttpServer extends Stream<HttpRequest>
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) => _server.listen(
-    onData,
-    onError: onError,
-    onDone: onDone,
-    cancelOnError: cancelOnError,
-  );
+  }) {
+    late final StreamSubscription<HttpRequest> inner;
+    final controller = StreamController<HttpRequest>(sync: true);
+    controller
+      ..onListen = () {
+        inner = _server.listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+      }
+      ..onPause = (() => inner.pause())
+      ..onResume = (() => inner.resume())
+      ..onCancel = () async {
+        await inner.cancel();
+        await _socket.close();
+      };
+    return controller.stream.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
 
   @override
   Future<void> close({bool force = false}) async {
