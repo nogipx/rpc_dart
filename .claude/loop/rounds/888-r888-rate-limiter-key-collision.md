@@ -44,8 +44,9 @@ chain is as long as the store, bounded only by `maxTrackedKeys` (default
 100000, 5x this). It is persistent — paid on every call while the store holds
 the colliding keys — on the component meant to absorb floods. Reachable from
 any `keyExtractor` that returns a client-controlled value, which is its normal
-per-client use. The B-308 distinct-key walk is real but minor at this cap
-(2.6x), and is the rotation's own cost of a fresh counter, not a chain.
+per-client use. The distinct arm's 2.6x is NOT the B-308 walk: it is unchanged
+after the fix (2.63 us), so it is the cost of a new key and counter. At this
+cap the walk does not show.
 
 ## Mechanism
 
@@ -105,8 +106,8 @@ must keep serving.
 
 ## Not fixed
 
-- B-308's `keys.first` walk is subsumed here (the LRU no longer walks), so it
-  closes with this round.
+- B-308 closes because its code is gone (the LRU no longer has a `keys.first`),
+  not because a walk was measured: P-340 never saw one at cap 20000.
 - Web: the salt works on dart2js, but the collision cost was never measured
   there (dart2js hashes strings differently); a lead if it matters.
 

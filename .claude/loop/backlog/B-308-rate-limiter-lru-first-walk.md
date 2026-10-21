@@ -4,7 +4,7 @@ round: 888
 commit: 43d2d3a8
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
 probe: P-340
-reason: closed — measured in round 888 (P-340): the distinct-key walk is 2.6x at cap 20000, minor beside the 222x the hash collisions caused. Both gone: the store is now an O(1) intrusive-list LRU keyed by a salted hash, no keys.first walk.
+reason: closed — round 888 removed the code: the store is now an O(1) intrusive-list LRU with no keys.first. The walk itself was never seen: P-340's distinct-key arm is 2.66 us before and 2.63 us after at cap 20000, so its 2.6x over the control is the cost of a new key, not the walk.
 rank: 7
 ---
 
