@@ -14,11 +14,7 @@ import '../../core/_index.dart';
 /// via an internal read buffer.
 ///
 /// Use [pair] for testing without a real byte transport.
-class RpcFrameMultiplexedChannel
-    implements
-        IRpcMultiplexedChannel,
-        IRpcChannelProtocolClose,
-        IRpcChannelOversizeClose {
+class RpcFrameMultiplexedChannel extends IRpcMultiplexedChannel {
   final IRpcChannel _channel;
   final RpcSecurityPolicy _policy;
 
@@ -610,7 +606,11 @@ class RpcFrameMultiplexedChannel
     _dropHeld();
     if (!_ready.isCompleted) _ready.completeError(error);
     if (!_incomingCtl.isClosed) _incomingCtl.addError(error);
-    unawaited(protocolError ? closeForProtocolError(error.message) : close());
+    unawaited(
+      protocolError
+          ? closeFor(RpcCloseForProtocolError(error.message))
+          : close(),
+    );
   }
 
   /// Null when the peer's preface matches ours, else the status to fail with.
@@ -830,7 +830,7 @@ class RpcFrameMultiplexedChannel
       unawaited(
         answer
             .catchError((Object _) {})
-            .then((_) => closeForOversize(error.message)),
+            .then((_) => closeFor(RpcCloseForOversize(error.message))),
       );
       return;
     }
@@ -841,49 +841,31 @@ class RpcFrameMultiplexedChannel
     // silently is exactly that invitation: a WebSocket peer sees 1005 "no status
     // received", indistinguishable from an ordinary server shutdown, which maps
     // to UNAVAILABLE and is retried.
-    //
-    // Channels with no close code on the wire fall through to the ordinary
-    // close, so this changes nothing for them.
     unawaited(
-      oversize
-          ? closeForOversize(error.message)
-          : closeForProtocolError(error.message),
+      closeFor(
+        oversize
+            ? RpcCloseForOversize(error.message)
+            : RpcCloseForProtocolError(error.message),
+      ),
     );
   }
 
-  /// Forwarded for the same reason as [closeForProtocolError]; a byte channel
-  /// without the capability gets the protocol close instead.
-  @override
-  Future<void> closeForOversize(String reason) async {
-    final channel = _channel;
-    if (channel is! IRpcChannelOversizeClose) {
-      await closeForProtocolError(reason);
-      return;
-    }
-    if (_closed) return;
-    _closed = true;
-    await (channel as IRpcChannelOversizeClose).closeForOversize(reason);
-    await _releaseAfterChannelClose();
-  }
-
-  /// Forwarded so layers ABOVE this channel can report a peer fault too.
+  /// Forwarded to the byte channel, so layers ABOVE this channel can report a
+  /// peer fault too.
   ///
   /// The transport validates inbound metadata against the security policy, and
-  /// that violation is as deterministic as a framing one. Hide the capability
-  /// here and the transport can only reach `close()`, so a policy violation
-  /// reads to the peer as retryable while a framing one does not.
+  /// that violation is as deterministic as a framing one. Not forwarded, the
+  /// transport could only reach `close()`, so a policy violation would read to
+  /// the peer as retryable while a framing one does not.
   @override
-  Future<void> closeForProtocolError(String reason) async {
-    final channel = _channel;
-    if (channel is! IRpcChannelProtocolClose) {
-      await close();
-      return;
-    }
+  Future<void> closeFor(RpcChannelCloseReason reason) async {
     if (_closed) return;
     // Flagged BEFORE the await, so nothing can be sent or decoded in the gap
     // while the byte channel is closing.
     _closed = true;
-    await (channel as IRpcChannelProtocolClose).closeForProtocolError(reason);
+    try {
+      await _channel.closeFor(reason);
+    } catch (_) {}
     await _releaseAfterChannelClose();
   }
 
@@ -913,7 +895,7 @@ class RpcFrameMultiplexedChannel
 }
 
 /// Simple paired in-memory byte channel for [RpcFrameMultiplexedChannel.pair].
-class _PairedByteChannel implements IRpcChannel {
+class _PairedByteChannel extends IRpcChannel {
   final StreamController<Uint8List> _output;
   final StreamController<Uint8List> _inCtl = StreamController<Uint8List>();
   late final StreamSubscription<Uint8List> _sub;

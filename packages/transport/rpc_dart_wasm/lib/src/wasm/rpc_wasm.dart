@@ -165,7 +165,7 @@ abstract final class RpcWasm {
   }
 }
 
-final class _RpcWasmBridge implements RpcWasmBridge {
+final class _RpcWasmBridge extends RpcWasmBridge {
   /// SINGLE-SUBSCRIPTION on purpose: it BUFFERS until the transport binds.
   ///
   /// Broadcast DROPS whatever arrives before someone listens, and the window is

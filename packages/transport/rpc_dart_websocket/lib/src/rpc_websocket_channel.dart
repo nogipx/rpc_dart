@@ -100,8 +100,7 @@ final class RpcWebSocketNonBinaryFrame extends RpcException
 /// `RpcWebSocketCallerTransport.connect` and the server's accept path build the
 /// socket themselves and never hand it out, so a caller using those cannot
 /// reach this at all.
-class RpcWebSocketChannel
-    implements IRpcChannel, IRpcChannelProtocolClose, IRpcChannelOversizeClose {
+class RpcWebSocketChannel extends IRpcChannel {
   final WebSocketChannel _ws;
   final StreamController<Uint8List> _incoming = StreamController<Uint8List>();
   late final StreamSubscription<void> _sub;
@@ -290,12 +289,11 @@ class RpcWebSocketChannel
   static const int _tooLargeCloseCode = 4413;
 
   @override
-  Future<void> closeForProtocolError(String reason) =>
-      _closeWithCode(_protocolErrorCloseCode, reason);
-
-  @override
-  Future<void> closeForOversize(String reason) =>
-      _closeWithCode(_tooLargeCloseCode, reason);
+  Future<void> closeFor(RpcChannelCloseReason reason) =>
+      _closeWithCode(switch (reason) {
+        RpcCloseForProtocolError() => _protocolErrorCloseCode,
+        RpcCloseForOversize() => _tooLargeCloseCode,
+      }, reason.message);
 
   Future<void> _closeWithCode(int code, String reason) async {
     if (_closed) return;

@@ -13,7 +13,10 @@ import 'package:rpc_dart/transport.dart';
 ///
 /// The bridge is byte-only. Higher-level framing is provided by rpc_dart's
 /// existing [RpcChannelFrame] through [RpcChannelTransport.fromChannel].
-abstract interface class RpcWasmBridge implements IRpcChannel {
+///
+/// Extend it to get [IRpcChannel.closeFor]'s default, the ordinary close: a
+/// bridge has no way to tell the guest why it is closing.
+abstract class RpcWasmBridge extends IRpcChannel {
   /// Runtime-to-host byte frames.
   ///
   /// This stream is also how a DEAD runtime is reported: when the sandbox goes

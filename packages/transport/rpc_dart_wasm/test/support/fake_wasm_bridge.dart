@@ -13,7 +13,7 @@ import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 /// This is the test double for the real JS/WASM sandbox bridge: it is
 /// byte-only and forwards each [send] to the peer's [incoming] stream, exactly
 /// like the native host pipes bytes between the Dart side and the sandbox.
-final class FakeWasmBridge implements RpcWasmBridge {
+final class FakeWasmBridge extends RpcWasmBridge {
   /// Mirrors the real bridges: SINGLE-SUBSCRIPTION, so it BUFFERS whatever
   /// arrives before the transport binds.
   ///

@@ -19,7 +19,7 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 import 'package:test/test.dart';
 
@@ -61,7 +61,7 @@ void main() {
   );
 
   test('GUARD: a peer that sends fast is cut off by the byte bound', () async {
-    final elapsed = await _closeForOversizeAgainst(
+    final elapsed = await _closeOversizeAgainst(
       chunk: 64 * 1024,
       pause: Duration.zero,
       closeTimeout: const Duration(seconds: 10),
@@ -70,7 +70,7 @@ void main() {
   });
 
   test('GUARD: a peer that trickles is cut off by the close timeout', () async {
-    final elapsed = await _closeForOversizeAgainst(
+    final elapsed = await _closeOversizeAgainst(
       chunk: 1024,
       pause: const Duration(milliseconds: 20),
       closeTimeout: const Duration(milliseconds: 300),
@@ -79,9 +79,9 @@ void main() {
   });
 }
 
-/// How long [RpcSocketChannel.closeForOversize] takes against a peer that
+/// How long [RpcSocketChannel.closeFor] an oversize takes against a peer that
 /// writes [chunk] bytes every [pause] and never closes.
-Future<Duration> _closeForOversizeAgainst({
+Future<Duration> _closeOversizeAgainst({
   required int chunk,
   required Duration pause,
   required Duration closeTimeout,
@@ -117,7 +117,7 @@ Future<Duration> _closeForOversizeAgainst({
 
   final sw = Stopwatch()..start();
   await channel
-      .closeForOversize('too large')
+      .closeFor(const RpcCloseForOversize('too large'))
       .timeout(
         const Duration(seconds: 5),
         onTimeout: () => fail(

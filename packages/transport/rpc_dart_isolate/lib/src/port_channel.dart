@@ -55,7 +55,7 @@ final class PortFrame {
 ///
 /// A subclass supplies the encoding: how a [PortFrame] becomes a port message
 /// and back, and how bytes and metadata ride in its body.
-abstract base class PortChannel implements IRpcMultiplexedChannel {
+abstract base class PortChannel extends IRpcMultiplexedChannel {
   final StreamController<RpcTransportMessage> _incomingCtl =
       StreamController<RpcTransportMessage>.broadcast(sync: true);
   late final StreamSubscription<void> _messageSub;

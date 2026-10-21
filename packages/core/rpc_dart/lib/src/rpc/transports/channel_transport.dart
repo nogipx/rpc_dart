@@ -658,14 +658,9 @@ class RpcChannelTransport extends IRpcTransport
         // Order matters: the protocol close marks the channel closed
         // synchronously, so close()'s own `_channel.close()` is a no-op and
         // cannot overwrite the protocol code with an ordinary one.
-        final channel = _channel;
-        if (channel is IRpcChannelProtocolClose) {
-          unawaited(
-            (channel as IRpcChannelProtocolClose).closeForProtocolError(
-              violation.message,
-            ),
-          );
-        }
+        unawaited(
+          _channel.closeFor(RpcCloseForProtocolError(violation.message)),
+        );
         unawaited(close());
       } else if (!isClient &&
           streamId != RpcFlowController.connectionStreamId) {

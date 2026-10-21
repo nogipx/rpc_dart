@@ -49,7 +49,7 @@ final class RpcWasmSupportInfo {
 ///
 /// Native code owns the JavaScript/WASM runtime. This class only exposes a
 /// byte pipe to [RpcWasmTransport].
-final class RpcFlutterWasmBridge implements RpcWasmBridge {
+final class RpcFlutterWasmBridge extends RpcWasmBridge {
   static const MethodChannel _channel = MethodChannel('rpc_dart_wasm');
 
   final String runtimeId;

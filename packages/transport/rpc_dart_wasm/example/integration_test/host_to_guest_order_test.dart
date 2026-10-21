@@ -38,7 +38,7 @@ const _codec = RpcCodec(RpcString.fromJson);
 /// library serialises here — neither `RpcFrameMultiplexedChannel.send` nor
 /// `RpcFlutterWasmBridge.send` holds a lock — so the number is the bench's own
 /// precondition, not a property of the code under test.
-final class _CountingBridge implements RpcWasmBridge {
+final class _CountingBridge extends RpcWasmBridge {
   _CountingBridge(this._inner);
 
   final RpcWasmBridge _inner;

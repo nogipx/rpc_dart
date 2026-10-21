@@ -84,12 +84,9 @@ IRpcCallCheck new new()
 IRpcChannel field incoming: Stream<Uint8List> (get)
 IRpcChannel field isClosed: bool (get)
 IRpcChannel method close() -> Future<void>
+IRpcChannel method closeFor(RpcChannelCloseReason reason) -> Future<void>
 IRpcChannel method send(Uint8List data) -> Future<void>
 IRpcChannel new new()
-IRpcChannelOversizeClose method closeForOversize(String reason) -> Future<void>
-IRpcChannelOversizeClose new new()
-IRpcChannelProtocolClose method closeForProtocolError(String reason) -> Future<void>
-IRpcChannelProtocolClose new new()
 IRpcCodec method deserialize(Uint8List bytes) -> T
 IRpcCodec method serialize(T message) -> Uint8List
 IRpcCodec new new()
@@ -113,6 +110,7 @@ IRpcMultiplexedChannel field incoming: Stream<RpcTransportMessage> (get)
 IRpcMultiplexedChannel field isClosed: bool (get)
 IRpcMultiplexedChannel field supportsZeroCopy: bool (get)
 IRpcMultiplexedChannel method close() -> Future<void>
+IRpcMultiplexedChannel method closeFor(RpcChannelCloseReason reason) -> Future<void>
 IRpcMultiplexedChannel method send(RpcTransportMessage message) -> Future<void>
 IRpcMultiplexedChannel new new()
 IRpcSerializable method toJson() -> Map<String, dynamic>
@@ -381,6 +379,8 @@ RpcCancelledException field reason: String (get)
 RpcCancelledException field statusCode: int (get)
 RpcCancelledException field statusDetailsBin: Uint8List? (get)
 RpcCancelledException new new(String message)
+RpcChannelCloseReason field message: String (get)
+RpcChannelCloseReason new new(String message)
 RpcChannelFrame new new()
 RpcChannelFrame static field flagMetadata: int (get)
 RpcChannelFrame static field headerSize: int (get)
@@ -453,6 +453,10 @@ RpcClientDisconnected new new({Object? reason})
 RpcClientIdle new new()
 RpcClientOffline new new()
 RpcClientOnline new new()
+RpcCloseForOversize field message: String (get)
+RpcCloseForOversize new new(String message)
+RpcCloseForProtocolError field message: String (get)
+RpcCloseForProtocolError new new(String message)
 RpcClosedException field byPeer: bool (get)
 RpcClosedException field details: List<RpcErrorDetail> (get)
 RpcClosedException field isPushback: bool (get)
@@ -685,8 +689,7 @@ RpcFrameMultiplexedChannel field peakReassemblyBytes: int (get)
 RpcFrameMultiplexedChannel field ready: Future<void> (get)
 RpcFrameMultiplexedChannel field supportsZeroCopy: bool (get)
 RpcFrameMultiplexedChannel method close() -> Future<void>
-RpcFrameMultiplexedChannel method closeForOversize(String reason) -> Future<void>
-RpcFrameMultiplexedChannel method closeForProtocolError(String reason) -> Future<void>
+RpcFrameMultiplexedChannel method closeFor(RpcChannelCloseReason reason) -> Future<void>
 RpcFrameMultiplexedChannel method send(RpcTransportMessage message) -> Future<void>
 RpcFrameMultiplexedChannel new new({required IRpcChannel channel, required bool isClient, RpcSecurityPolicy policy, bool? closeOnOversizedFrame, Duration? prefaceTimeout})
 RpcFrameMultiplexedChannel static method pair({RpcSecurityPolicy policy}) -> (RpcFrameMultiplexedChannel, RpcFrameMultiplexedChannel)
@@ -1202,8 +1205,6 @@ type GrpcServingStatus : Enum, Object (rpc_dart.dart, transport.dart, transport_
 type IRpcAdvisoryChannelError : Object (transport.dart, transport_io.dart)
 type IRpcCallCheck : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcChannel [required] : Object (transport.dart, transport_io.dart)
-type IRpcChannelOversizeClose : Object (transport.dart, transport_io.dart)
-type IRpcChannelProtocolClose : Object (transport.dart, transport_io.dart)
 type IRpcCodec<T> [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcConnectionBuffer [required] : Object (transport.dart, transport_io.dart)
 type IRpcContract : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1243,6 +1244,7 @@ type RpcCallerContract : IRpcContract, Object, _RpcOutgoingCalls (rpc_dart.dart,
 type RpcCallerEndpoint : Object, RpcCallerPipelineMixin, RpcEndpointBase (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCancellationToken : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCancelledException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcChannelCloseReason [required] : Object (transport.dart, transport_io.dart)
 type RpcChannelFrame : Object (transport.dart, transport_io.dart)
 type RpcChannelTransport : IRpcConnectionBuffer, IRpcFlowCredit, IRpcTransport, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCircuitBreakerInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1253,6 +1255,8 @@ type RpcClientDisconnected : Object, RpcClientConnectionState (rpc_dart.dart, tr
 type RpcClientIdle : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientOffline : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientOnline : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCloseForOversize : Object, RpcChannelCloseReason (transport.dart, transport_io.dart)
+type RpcCloseForProtocolError : Object, RpcChannelCloseReason (transport.dart, transport_io.dart)
 type RpcClosedException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCodec<T> : IRpcCodec<T>, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCompressionCodec [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1281,7 +1285,7 @@ type RpcErrorInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, trans
 type RpcException : Exception, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcFieldViolation : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcFrameException : Exception, Object, RpcException, RpcStatusException (transport.dart, transport_io.dart)
-type RpcFrameMultiplexedChannel : IRpcChannelOversizeClose, IRpcChannelProtocolClose, IRpcMultiplexedChannel, Object (transport.dart, transport_io.dart)
+type RpcFrameMultiplexedChannel : IRpcMultiplexedChannel, Object (transport.dart, transport_io.dart)
 type RpcGrpcCompression : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcHeader : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcHeaderBoundedServerSocket : Object, ServerSocket, ServerSocketBase<Socket>, Stream<Socket> (transport_io.dart)

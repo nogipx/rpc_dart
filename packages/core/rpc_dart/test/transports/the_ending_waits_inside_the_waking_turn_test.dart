@@ -28,7 +28,7 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 /// A channel the test drives, with SYNCHRONOUS delivery inbound.
-final class _SyncChannel implements IRpcMultiplexedChannel {
+final class _SyncChannel extends IRpcMultiplexedChannel {
   final _in = StreamController<RpcTransportMessage>.broadcast(sync: true);
 
   /// Every frame the transport handed down, in order.

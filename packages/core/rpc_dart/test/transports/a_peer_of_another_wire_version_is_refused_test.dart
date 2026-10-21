@@ -126,7 +126,7 @@ void main() {
 }
 
 /// Records every send, the preface included.
-final class _Recording implements IRpcChannel {
+final class _Recording extends IRpcChannel {
   _Recording(this.sent, {List<int>? preface})
     : _peer = RawPeerChannel(preface: preface);
 

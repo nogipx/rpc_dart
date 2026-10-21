@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 // A WebSocket close frame caps its reason at 123 BYTES of UTF-8, and
-// `closeForProtocolError` trimmed by `reason.length` — UTF-16 code units. The
+// the protocol-error close trimmed by `reason.length` — UTF-16 code units. The
 // comment three lines above the cut said "123 BYTES" while the code counted
 // characters.
 //
@@ -27,6 +27,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:rpc_dart/transport.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 import 'package:test/test.dart';
 import 'package:web_socket_channel/io.dart';
@@ -91,7 +92,7 @@ void main() {
       },
     );
 
-    await channel.closeForProtocolError(reason);
+    await channel.closeFor(RpcCloseForProtocolError(reason));
     await closed.future.timeout(const Duration(seconds: 5));
 
     expect(
@@ -133,7 +134,7 @@ void main() {
       },
     );
 
-    await channel.closeForProtocolError(reason);
+    await channel.closeFor(RpcCloseForProtocolError(reason));
     await closed.future.timeout(const Duration(seconds: 5));
 
     expect(client.closeCode, 4400);

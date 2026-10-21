@@ -13,9 +13,9 @@
 //   before  policy violation : 1005      framing violation : 4400
 //   after   policy violation : 4400      framing violation : 4400
 //
-// The capability was hidden by a wrapper: RpcWebSocketChannel implements
-// IRpcChannelProtocolClose, RpcFrameMultiplexedChannel wraps it and did not
-// forward it, so RpcChannelTransport could only reach close().
+// The reason crosses a wrapper: RpcWebSocketChannel overrides `closeFor`, and
+// RpcFrameMultiplexedChannel, which RpcChannelTransport holds, must forward it
+// or the transport reaches only close().
 
 @TestOn('vm')
 library;

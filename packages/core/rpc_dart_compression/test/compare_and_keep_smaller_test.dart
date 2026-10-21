@@ -31,7 +31,7 @@ final class _Echo extends RpcResponderContract {
 }
 
 /// Records the size of each DATA frame written into it.
-final class _Side implements IRpcChannel {
+final class _Side extends IRpcChannel {
   final _ctl = StreamController<Uint8List>();
   late _Side peer;
   final dataSizes = <int>[];

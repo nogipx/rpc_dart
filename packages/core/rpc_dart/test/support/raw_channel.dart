@@ -34,7 +34,7 @@ int frameStreamId(Uint8List frame) =>
 /// The peer's preface is queued at construction, so what the test feeds is
 /// read as frames. What the frame channel above sends is recorded in [sent],
 /// without its preface.
-final class RawPeerChannel implements IRpcChannel {
+final class RawPeerChannel extends IRpcChannel {
   /// [sync] makes inbound delivery synchronous. [throwOnSendAfterClose] makes
   /// a send after [close] throw, as a real socket does. [onSend] sees every
   /// frame after it is recorded; a throw from it fails that send. [preface]
@@ -111,7 +111,7 @@ final class RawPeerChannel implements IRpcChannel {
 ///
 /// Each frame one end sends is recorded in its [sent] and delivered to the
 /// other end, through [transform] when set. The preface crosses untouched.
-final class TapPipe implements IRpcChannel {
+final class TapPipe extends IRpcChannel {
   TapPipe._();
 
   /// Two connected ends.

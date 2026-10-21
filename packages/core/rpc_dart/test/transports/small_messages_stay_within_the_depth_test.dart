@@ -75,7 +75,7 @@ final class _Svc extends RpcResponderContract {
 
 /// One end of a byte pipe that flushes what has been sent once per event-loop
 /// task, as one chunk of up to [_chunkBytes].
-final class _ChunkedChannel implements IRpcChannel {
+final class _ChunkedChannel extends IRpcChannel {
   static const _chunkBytes = 64 * 1024;
 
   late _ChunkedChannel peer;

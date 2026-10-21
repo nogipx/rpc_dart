@@ -10,7 +10,7 @@ WASM runtime bridge transport for `rpc_dart`.
 
 This package is intentionally runtime-agnostic. It does not load `.wasm`
 modules by itself. Instead, a runtime backend
-implements the byte-only `RpcWasmBridge`, and `RpcWasmTransport.fromBridge`
+extends the byte-only `RpcWasmBridge`, and `RpcWasmTransport.fromBridge`
 turns it into a normal `IRpcTransport`.
 
 ```dart
@@ -101,13 +101,16 @@ _rpcWasmSendBytes(bytes); // bytes is Uint8Array
 `RpcWasmBridge` exchanges only `Uint8List` frames:
 
 ```dart
-abstract interface class RpcWasmBridge {
+abstract class RpcWasmBridge extends IRpcChannel {
   Stream<Uint8List> get incoming;
   Future<void> send(Uint8List data);
   bool get isClosed;
   Future<void> close();
 }
 ```
+
+`closeFor`, which `IRpcChannel` calls when the peer broke a rule, defaults to
+`close()`: a bridge has no way to tell the guest why.
 
 No RPC-level JSON and no WASM-specific envelope is added by this package.
 `RpcWasmTransport` adapts the bridge to `IRpcChannel` and reuses

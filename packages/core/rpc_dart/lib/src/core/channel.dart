@@ -11,10 +11,11 @@ import 'dart:typed_data';
 /// with [RpcChannelTransport] which adds stream-ID multiplexing, metadata
 /// encoding, and the full [IRpcTransport] contract automatically.
 ///
-/// Implementors only need ~50 lines of code:
+/// Extend it to get the default [closeFor]; a class that implements it
+/// writes every member. Implementors only need ~50 lines of code:
 ///
 /// ```dart
-/// class WebSocketChannel implements IRpcChannel {
+/// class WebSocketChannel extends IRpcChannel {
 ///   final WebSocket _ws;
 ///   final _ctl = StreamController<Uint8List>();
 ///   late final StreamSubscription<dynamic> _sub;
@@ -63,48 +64,47 @@ abstract class IRpcChannel {
 
   /// Close the channel and release all resources.
   Future<void> close();
+
+  /// Closes the channel because the peer broke a rule, telling the peer why
+  /// where the protocol underneath can say so.
+  ///
+  /// The default closes the ordinary way. A channel whose protocol carries a
+  /// reason -- WebSocket's close code -- or that must close in a particular
+  /// way for the peer to read the answer already sent overrides it for the
+  /// reasons it can serve and falls back to [close] for the rest.
+  ///
+  /// A wrapper around another channel forwards this, or the reason is lost
+  /// at the wrapper.
+  Future<void> closeFor(RpcChannelCloseReason reason) => close();
 }
 
-/// Optional capability: a channel whose underlying protocol can say WHY it is
-/// hanging up.
+/// Why a channel is closing on the peer's account; see
+/// [IRpcChannel.closeFor].
 ///
-/// Implemented by transports with a close code on the wire — WebSocket is the
-/// one that matters. A channel without it is closed the ordinary way, so this
-/// is opt-in and adding it breaks no existing implementer (every one of them
-/// uses `implements IRpcChannel`, so a new member on that interface would).
-///
-/// Why it exists: a frame-level protocol violation is DETERMINISTIC. The peer
-/// sent something malformed and will send it again if told to retry. When the
-/// channel is torn down without saying so, a WebSocket peer sees close code
-/// 1005 "no status received", which maps to UNAVAILABLE — retryable. Measured
-/// against an rpc_dart server, with a client whose frame declared a payload
-/// past the policy:
-///
-///     server shutdown           : closeCode=1005 -> UNAVAILABLE (retryable)  correct
-///     client protocol violation : closeCode=1005 -> UNAVAILABLE (retryable)  WRONG
-///
-/// The first is right — a client should reconnect past a restart. The second
-/// invites the client to repeat the frame that just got it disconnected.
-abstract class IRpcChannelProtocolClose {
-  /// Closes the channel, telling the peer this was a protocol violation.
-  ///
-  /// [reason] is for a human reading a log; it must not be relied on
-  /// programmatically, and WebSocket caps it at 123 bytes.
-  Future<void> closeForProtocolError(String reason);
+/// Both reasons are deterministic: the peer will repeat the message if it
+/// reads the close as transient. Closed without saying so, a WebSocket peer
+/// sees close code 1005 "no status received", which maps to UNAVAILABLE and is
+/// retried.
+sealed class RpcChannelCloseReason {
+  const RpcChannelCloseReason(this.message);
+
+  /// For a human reading a log; nothing may key off it. WebSocket caps a close
+  /// reason at 123 bytes.
+  final String message;
 }
 
-/// Optional capability: a channel that can tell its peer it is hanging up
-/// because the peer's message was larger than the policy allows.
+/// The peer sent something malformed or broke the security policy.
+final class RpcCloseForProtocolError extends RpcChannelCloseReason {
+  /// A protocol violation described by [message].
+  const RpcCloseForProtocolError(super.message);
+}
+
+/// The peer's message was larger than the policy allows.
 ///
-/// A size violation is not a framing one. The peer can correct it by sending
-/// less, and http1 and http2 answer the same request with RESOURCE_EXHAUSTED,
-/// so a channel that closes for it should let the peer's caller say the same.
-/// A channel without this capability is closed through
-/// [IRpcChannelProtocolClose] instead.
-abstract class IRpcChannelOversizeClose {
-  /// Closes the channel, telling the peer its message was too large.
-  ///
-  /// [reason] is for a human reading a log, as in
-  /// [IRpcChannelProtocolClose.closeForProtocolError].
-  Future<void> closeForOversize(String reason);
+/// Not a framing violation: the peer can correct it by sending less, and http1
+/// and http2 answer the same request with RESOURCE_EXHAUSTED, so a channel
+/// that closes for it lets the peer's caller say the same.
+final class RpcCloseForOversize extends RpcChannelCloseReason {
+  /// An oversized message described by [message].
+  const RpcCloseForOversize(super.message);
 }

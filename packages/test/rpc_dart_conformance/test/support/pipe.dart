@@ -85,7 +85,7 @@ final class Pipe {
 }
 
 /// One end of a [Pipe].
-final class PipeEnd implements IRpcChannel {
+final class PipeEnd extends IRpcChannel {
   PipeEnd._(this._pipe, {required this.isClient});
 
   final Pipe _pipe;

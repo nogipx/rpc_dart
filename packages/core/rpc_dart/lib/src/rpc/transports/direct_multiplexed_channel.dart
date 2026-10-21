@@ -11,7 +11,7 @@ import '../../core/_index.dart';
 /// Use [pair] to create a connected client/server channel for in-process
 /// communication or testing. No serialization or frame encoding occurs --
 /// messages are passed by reference.
-class RpcDirectMultiplexedChannel implements IRpcMultiplexedChannel {
+class RpcDirectMultiplexedChannel extends IRpcMultiplexedChannel {
   final StreamController<RpcTransportMessage> _output;
 
   /// BUFFERED, like `RpcFrameMultiplexedChannel`'s, because this one is fed from

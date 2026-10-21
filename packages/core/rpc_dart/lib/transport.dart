@@ -15,8 +15,9 @@ export 'src/_index.dart'
     show
         // Channels and frames
         IRpcChannel,
-        IRpcChannelOversizeClose,
-        IRpcChannelProtocolClose,
+        RpcChannelCloseReason,
+        RpcCloseForOversize,
+        RpcCloseForProtocolError,
         IRpcAdvisoryChannelError,
         IRpcMultiplexedChannel,
         RpcChannelFrame,

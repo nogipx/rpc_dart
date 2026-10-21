@@ -64,6 +64,13 @@ parser, the flow-control interfaces, `RpcTrailers`, `RpcConnectionHost`,
 `dart:io`-only `RpcHeaderBoundedServerSocket` is in
 `package:rpc_dart/transport_io.dart`.
 
+A custom channel extends `IRpcChannel` and writes `isClosed`, `incoming`,
+`send` and `close`. `closeFor(RpcChannelCloseReason)` is called when the peer
+broke a rule (`RpcCloseForProtocolError`, `RpcCloseForOversize`); its default
+is `close()`. Override it only when the protocol underneath can tell the peer
+why, as WebSocket does with a close code. A class that implements
+`IRpcChannel` instead of extending it writes `closeFor` too.
+
 ```dart
 import 'package:rpc_dart/transport.dart';
 

@@ -26,8 +26,8 @@ import 'package:rpc_dart/transport.dart';
 /// connection closed for a protocol violation reaches the peer as an ordinary
 /// end of stream, which its caller reports as UNAVAILABLE. A message past the
 /// size limit is the exception: its RESOURCE_EXHAUSTED trailer is written
-/// before the close, and [closeForOversize] makes sure it arrives.
-class RpcSocketChannel implements IRpcChannel, IRpcChannelOversizeClose {
+/// before the close, and [closeFor] makes sure it arrives.
+class RpcSocketChannel extends IRpcChannel {
   /// Wraps [socket], which this channel then owns: [close] closes it.
   ///
   /// [closeTimeout] bounds the orderly close. Closing flushes what is still
@@ -168,13 +168,14 @@ class RpcSocketChannel implements IRpcChannel, IRpcChannelOversizeClose {
     if (!_done.isCompleted) _done.complete();
   }
 
-  /// The most of a refused peer's remaining bytes [closeForOversize] reads
+  /// The most of a refused peer's remaining bytes the oversize close reads
   /// and drops: twice the default `maxMessageLengthBytes`, so the rest of
   /// one message past the default limit fits.
   static const int _maxOversizeDrainBytes = 32 * 1024 * 1024;
 
-  /// Closes because the peer's message was larger than the policy allows,
-  /// letting the answer already queued reach the peer.
+  /// A raw socket has no close code, so a protocol error closes the ordinary
+  /// way. An oversized message closes so the answer already queued reaches
+  /// the peer.
   ///
   /// The peer may still be writing that message. Destroying the socket with
   /// its bytes unread makes the kernel reset the connection, and a reset
@@ -188,7 +189,12 @@ class RpcSocketChannel implements IRpcChannel, IRpcChannelOversizeClose {
   /// by [_maxOversizeDrainBytes] and by the close timeout, so a peer that
   /// keeps sending is cut off as before.
   @override
-  Future<void> closeForOversize(String reason) async {
+  Future<void> closeFor(RpcChannelCloseReason reason) => switch (reason) {
+    RpcCloseForProtocolError() => close(),
+    RpcCloseForOversize() => _closeDrainingThePeer(),
+  };
+
+  Future<void> _closeDrainingThePeer() async {
     if (_closed) return;
     _writes.flush();
     _closed = true;

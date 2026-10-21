@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'channel.dart';
 import 'transport.dart';
 
 /// Multiplexed message channel -- sits between a raw transport and [IRpcTransport].
@@ -53,4 +54,11 @@ abstract class IRpcMultiplexedChannel {
   /// Of the two losses that is the worse one. A side that wants the peer's last
   /// frames must read them before closing.
   Future<void> close();
+
+  /// Closes the channel because the peer broke a rule, telling the peer why
+  /// where the channel underneath can; see `IRpcChannel.closeFor`.
+  ///
+  /// The default closes the ordinary way. `RpcFrameMultiplexedChannel`
+  /// forwards it to the byte channel it wraps.
+  Future<void> closeFor(RpcChannelCloseReason reason) => close();
 }
