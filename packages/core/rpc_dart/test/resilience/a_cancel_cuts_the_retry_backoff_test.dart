@@ -9,9 +9,6 @@
 
 import 'dart:async';
 
-// The reconnect outcome the retry interceptor waits on is off the public
-// barrel; tests reach it here.
-import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
@@ -141,6 +138,9 @@ void main() {
 final class _SlowReconnect extends IRpcTransport
     implements IRpcReconnectOutcome {
   int waits = 0;
+
+  @override
+  IRpcReconnectOutcome get reconnectOutcome => this;
 
   @override
   int get lastIssuedStreamId => 0;

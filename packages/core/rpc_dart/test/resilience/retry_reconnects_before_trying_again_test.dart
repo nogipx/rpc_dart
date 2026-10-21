@@ -13,11 +13,8 @@
 // honestly or it is not the situation being measured.
 //
 // Only RpcClientConnection's proxy reconnects; the fake stands in for it by
-// implementing the same reconnect-outcome interface.
+// returning itself as its reconnectOutcome, as the proxy does.
 
-// The reconnect outcome the retry interceptor waits on is off the public
-// barrel; tests reach it here.
-import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
@@ -25,6 +22,9 @@ import 'package:test/test.dart';
 class _FlakyTransport extends IRpcTransport implements IRpcReconnectOutcome {
   int reconnects = 0;
   bool up = false;
+
+  @override
+  IRpcReconnectOutcome get reconnectOutcome => this;
 
   @override
   Future<RpcHealthStatus> awaitReconnect() async {

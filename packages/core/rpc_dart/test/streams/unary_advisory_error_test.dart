@@ -107,6 +107,8 @@ final class _InjectingTransport implements IRpcTransport {
   bool get grantsMessageCredit => _inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 /// Service `S`, unary `M`: echoes its request.

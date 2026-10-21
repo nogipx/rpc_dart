@@ -24,7 +24,6 @@
 // all, because the caller's own `x-request-id` does not fit either. A cap that
 // blocks ordinary traffic is a configuration error, not this behaviour.
 
-import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
@@ -83,6 +82,9 @@ final class _MayReconnect extends RpcChannelTransport
     required super.isClient,
     required super.policy,
   });
+
+  @override
+  IRpcReconnectOutcome get reconnectOutcome => this;
 
   @override
   Future<RpcHealthStatus> awaitReconnect() => health();

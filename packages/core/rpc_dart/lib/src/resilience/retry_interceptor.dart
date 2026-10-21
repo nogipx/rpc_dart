@@ -178,9 +178,9 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// it. So the transport's health is asked, which is about the connection
   /// where the status is only about this call.
   ///
-  /// Only [RpcClientConnection] reconnects, so only an endpoint built on its
-  /// `transport` waits here; over a bare transport the retry goes back to the
-  /// same one. The wait is for the connection's next attempt, which runs on
+  /// Only a transport with an [IRpcTransport.reconnectOutcome] waits here --
+  /// [RpcClientConnection]'s, or a decorator forwarding it; over a bare
+  /// transport the retry goes back to the same one. The wait is for the connection's next attempt, which runs on
   /// its own backoff and is started by nothing here. Either way the original
   /// error is what the caller sees.
   Future<void> _awaitReconnectIfConnectionIsGone(
@@ -190,13 +190,11 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     if (error is! RpcStatusException) return;
     if (error.statusCode != RpcStatus.unavailable) return;
     final transport = call.endpoint.transport;
-    if (transport is! IRpcReconnectOutcome) return;
+    final reconnect = transport.reconnectOutcome;
+    if (reconnect == null) return;
     try {
       if ((await transport.health()).isHealthy) return;
-      await _withinCall(
-        (transport as IRpcReconnectOutcome).awaitReconnect(),
-        call.context,
-      );
+      await _withinCall(reconnect.awaitReconnect(), call.context);
     } catch (_) {
       // A health() or a wait that throws tells nothing: the attempt below runs
       // and reports for itself.

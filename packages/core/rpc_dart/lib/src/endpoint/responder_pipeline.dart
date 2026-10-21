@@ -265,7 +265,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
     _respRegistry.registerContract(
       contract,
       carriesObjects:
-          transport.supportsZeroCopy || transport is IRpcReconnectOutcome,
+          transport.supportsZeroCopy || transport.reconnectOutcome != null,
     );
   }
 

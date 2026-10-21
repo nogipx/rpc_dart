@@ -70,6 +70,8 @@ final class _NeverReady implements IRpcTransport {
   bool get grantsMessageCredit => inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => inner.reconnectOutcome;
 }
 
 /// Whether [f] completes within [within].

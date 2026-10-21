@@ -48,9 +48,12 @@ flow-control interfaces, write backlog, connection host, `RpcTrailers`) moved to
 the library itself used are no longer exported.
 
 **Transport capabilities are members of `IRpcTransport`**, with defaults:
-`transport.securityPolicy`, `flowCredit`, `connectionBuffer`, `ready` and the
-rest. Replace `is IRpcSecurityPolicyAware` and similar checks with the member.
-A custom transport adds the members, or `extends IRpcTransport`.
+`transport.securityPolicy`, `flowCredit`, `connectionBuffer`, `ready`,
+`reconnectOutcome` and the rest. Replace `is IRpcSecurityPolicyAware` and
+similar checks with the member. A custom transport adds the members, or
+`extends IRpcTransport`. A decorator over `RpcClientConnection.transport`
+that forwards `reconnectOutcome` keeps `RpcRetryInterceptor` waiting for the
+reconnect.
 
 **Reconnect lives in one layer, `RpcClientConnection`.** `transport.reconnect()`
 and `endpoint.reconnect()` are gone. Wrap the transport factory in

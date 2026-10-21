@@ -112,6 +112,8 @@ IRpcMultiplexedChannel method close() -> Future<void>
 IRpcMultiplexedChannel method closeFor(RpcChannelCloseReason reason) -> Future<void>
 IRpcMultiplexedChannel method send(RpcTransportMessage message) -> Future<void>
 IRpcMultiplexedChannel new new()
+IRpcReconnectOutcome method awaitReconnect() -> Future<RpcHealthStatus>
+IRpcReconnectOutcome new new()
 IRpcSerializable method toJson() -> Map<String, dynamic>
 IRpcSerializable new new()
 IRpcServer field endpoints: List<RpcResponderEndpoint> (get)
@@ -127,6 +129,7 @@ IRpcTransport field isClient: bool (get)
 IRpcTransport field isClosed: bool (get)
 IRpcTransport field lastIssuedStreamId: int (get)
 IRpcTransport field ready: Future<void> (get)
+IRpcTransport field reconnectOutcome: IRpcReconnectOutcome? (get)
 IRpcTransport field securityPolicy: RpcSecurityPolicy (get)
 IRpcTransport field supportsZeroCopy: bool (get)
 IRpcTransport method close() -> Future<void>
@@ -395,6 +398,7 @@ RpcChannelTransport field isClient: bool (get)
 RpcChannelTransport field isClosed: bool (get)
 RpcChannelTransport field lastIssuedStreamId: int (get)
 RpcChannelTransport field ready: Future<void> (get)
+RpcChannelTransport field reconnectOutcome: IRpcReconnectOutcome? (get)
 RpcChannelTransport field securityPolicy: RpcSecurityPolicy (get)
 RpcChannelTransport field supportsZeroCopy: bool (get)
 RpcChannelTransport method chargeConnectionBuffer(int bytes) -> bool
@@ -1181,6 +1185,7 @@ type IRpcFlowCredit : Object (transport.dart, transport_io.dart)
 type IRpcInterceptor [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcMiddleware [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcMultiplexedChannel [required] : Object (transport.dart, transport_io.dart)
+type IRpcReconnectOutcome : Object (transport.dart, transport_io.dart)
 type IRpcSerializable : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcServer : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcTransport [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)

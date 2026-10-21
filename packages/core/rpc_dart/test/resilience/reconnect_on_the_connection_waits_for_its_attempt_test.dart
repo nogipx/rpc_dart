@@ -12,14 +12,11 @@
 
 import 'dart:async';
 
-// The reconnect outcome the retry interceptor waits on is off the public
-// barrel; tests reach it here.
-import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 Future<RpcHealthStatus> _awaitReconnect(RpcClientConnection connection) =>
-    (connection.transport as IRpcReconnectOutcome).awaitReconnect();
+    connection.transport.reconnectOutcome!.awaitReconnect();
 
 final class _T extends IRpcTransport {
   bool _closed = false;

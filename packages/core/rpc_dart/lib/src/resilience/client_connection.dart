@@ -58,14 +58,6 @@ final class RpcClientDisconnected extends RpcClientConnectionState {
 // Proxy transport (internal)
 // ---------------------------------------------------------------------------
 
-/// What the retry interceptor asks a reconnecting transport for: the outcome
-/// of the next reconnect attempt. Internal to the package.
-abstract interface class IRpcReconnectOutcome {
-  /// Waits for the outcome of the connection's next attempt, without starting
-  /// one.
-  Future<RpcHealthStatus> awaitReconnect();
-}
-
 /// Wraps an inner [IRpcTransport] and swaps it on reconnect.
 ///
 /// The [RpcCallerEndpoint] is created once with this proxy and survives
@@ -447,6 +439,10 @@ final class _ReconnectingTransportProxy
   /// reconnect. Without it the layers above bound what they hold on their own.
   @override
   IRpcConnectionBuffer? get connectionBuffer => null;
+
+  /// The proxy itself: it is what reconnects.
+  @override
+  IRpcReconnectOutcome get reconnectOutcome => this;
 
   /// The live transport's cursor, or the last one noted when there is none.
   ///

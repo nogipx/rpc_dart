@@ -109,6 +109,8 @@ final class _Plain implements IRpcTransport {
   bool get grantsMessageCredit => inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => inner.reconnectOutcome;
 }
 
 /// One in-memory connection: a fresh pair plus a responder behind it.

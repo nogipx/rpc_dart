@@ -12,7 +12,6 @@
 
 import 'dart:async';
 
-import 'package:rpc_dart/src/_internal.dart' show IRpcReconnectOutcome;
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
@@ -23,6 +22,9 @@ final _codec = RpcCodec(RpcString.fromJson);
 final class _MayReconnect extends RpcChannelTransport
     implements IRpcReconnectOutcome {
   _MayReconnect({required super.channel, required super.isClient});
+
+  @override
+  IRpcReconnectOutcome get reconnectOutcome => this;
 
   @override
   Future<RpcHealthStatus> awaitReconnect() => health();

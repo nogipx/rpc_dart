@@ -88,6 +88,8 @@ final class _SwallowsPing implements IRpcTransport {
   bool get grantsMessageCredit => _inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 typedef _Rig = ({RpcCallerEndpoint caller, RpcChannelTransport client});

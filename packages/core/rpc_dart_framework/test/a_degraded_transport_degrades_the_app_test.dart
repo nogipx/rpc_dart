@@ -79,6 +79,8 @@ final class _Reporting implements IRpcTransport {
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
   @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
+  @override
   int get lastIssuedStreamId => _inner.lastIssuedStreamId;
   @override
   void resumeStreamIdsAfter(int streamId) =>

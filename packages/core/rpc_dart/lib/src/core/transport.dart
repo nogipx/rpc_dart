@@ -362,6 +362,24 @@ abstract class IRpcTransport {
   /// The connection-wide total of request bytes held un-consumed, or null when
   /// the transport keeps none.
   IRpcConnectionBuffer? get connectionBuffer => null;
+
+  /// The outcome of this transport's next reconnect attempt, or null when it
+  /// does not reconnect.
+  ///
+  /// Non-null on `RpcClientConnection.transport`. `RpcRetryInterceptor` waits
+  /// on it before retrying an `UNAVAILABLE` call, so the retry does not go
+  /// back to a connection that is gone, and a zero-copy contract registers on
+  /// it even while it is offline. A decorator forwards it like every other
+  /// member.
+  IRpcReconnectOutcome? get reconnectOutcome => null;
+}
+
+/// The outcome of a reconnecting transport's next attempt; see
+/// [IRpcTransport.reconnectOutcome].
+abstract interface class IRpcReconnectOutcome {
+  /// Waits for the outcome of the connection's next attempt, without starting
+  /// one. Healthy at once when the connection is up.
+  Future<RpcHealthStatus> awaitReconnect();
 }
 
 /// Stream ID manager for HTTP/2 connections.

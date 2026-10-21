@@ -99,6 +99,8 @@ class _CountingTransport implements IRpcTransport {
   bool get grantsMessageCredit => inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => inner.reconnectOutcome;
 }
 
 /// A decorator that deliberately declares its own, different, policy. The

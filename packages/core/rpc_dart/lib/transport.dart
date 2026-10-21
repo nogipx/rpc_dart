@@ -41,6 +41,7 @@ export 'src/_index.dart'
         // What IRpcTransport's optional members return
         IRpcFlowCredit,
         IRpcConnectionBuffer,
+        IRpcReconnectOutcome,
         // Errors on the wire
         RpcTrailers,
         requestEndedMidMessage,

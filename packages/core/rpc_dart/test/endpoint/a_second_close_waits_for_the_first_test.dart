@@ -72,6 +72,8 @@ class _SlowClose implements IRpcTransport {
   bool get grantsMessageCredit => inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => inner.reconnectOutcome;
 }
 
 void main() {

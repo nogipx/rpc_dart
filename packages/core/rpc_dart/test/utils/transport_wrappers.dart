@@ -81,6 +81,8 @@ final class HangingEndOfStreamTransport implements IRpcTransport {
   bool get grantsMessageCredit => _inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 /// Rewrites `content-type` on every outbound metadata frame.
@@ -167,6 +169,8 @@ final class ContentTypeRewritingTransport implements IRpcTransport {
   bool get grantsMessageCredit => _inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 final class NoZeroCopyTransport implements IRpcTransport {
@@ -253,6 +257,8 @@ final class NoZeroCopyTransport implements IRpcTransport {
 
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 final class ThrowingTransport implements IRpcTransport {
@@ -355,4 +361,6 @@ final class ThrowingTransport implements IRpcTransport {
 
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }

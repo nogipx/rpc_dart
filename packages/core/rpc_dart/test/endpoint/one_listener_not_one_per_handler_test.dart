@@ -110,6 +110,8 @@ final class _CountingTransport implements IRpcTransport {
   bool get grantsMessageCredit => _inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 final class _Svc extends RpcResponderContract {

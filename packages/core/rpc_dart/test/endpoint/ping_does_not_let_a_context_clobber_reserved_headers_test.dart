@@ -97,6 +97,8 @@ final class _RecordingTransport implements IRpcTransport {
   bool get grantsMessageCredit => _inner.grantsMessageCredit;
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }
 
 void main() {

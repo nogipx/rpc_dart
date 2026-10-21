@@ -341,4 +341,6 @@ final class _ThrowOnceOnSendMetadata implements IRpcTransport {
 
   @override
   IRpcConnectionBuffer? get connectionBuffer => _inner.connectionBuffer;
+  @override
+  IRpcReconnectOutcome? get reconnectOutcome => _inner.reconnectOutcome;
 }

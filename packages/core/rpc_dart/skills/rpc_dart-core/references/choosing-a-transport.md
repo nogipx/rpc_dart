@@ -140,8 +140,11 @@ RpcCallerEndpoint resilientCaller(
   `RpcClientConnection`; its transport proxy is stable.
 - A transport decorator `implements IRpcTransport` and forwards every member,
   the optional ones included (`securityPolicy`, `ready`, `resetStream`,
-  `flowCredit`, `grantsMessageCredit`, `connectionBuffer`, the stream-id
-  cursor). The compiler insists; a decorator that `extends` instead silently
-  inherits the defaults for what it does not override.
+  `flowCredit`, `grantsMessageCredit`, `connectionBuffer`, `reconnectOutcome`,
+  the stream-id cursor). The compiler insists; a decorator that `extends`
+  instead silently inherits the defaults for what it does not override. Over
+  `RpcClientConnection.transport`, a decorator that drops `reconnectOutcome`
+  makes `RpcRetryInterceptor` retry on the dead connection instead of waiting
+  for the reconnect.
 - A custom transport must close when its connection is lost. One that stays
   open leaves `RpcClientConnection` online over a dead connection.
