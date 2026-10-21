@@ -124,22 +124,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   int activeCallCount(String serviceName, String methodName) =>
       _callerTokens[_callerMethodKey(serviceName, methodName)]?.length ?? 0;
 
-  /// The method's cancellation tokens by requestId (empty map when none).
-  ///
-  /// Calls sharing a requestId (a reused context) appear once; count calls
-  /// with [activeCallCount].
-  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
-    String serviceName,
-    String methodName,
-  ) {
-    final key = _callerMethodKey(serviceName, methodName);
-    return Map.unmodifiable({
-      for (final MapEntry(key: ctx, value: token)
-          in (_callerTokens[key] ?? const {}).entries)
-        ctx.requestId: token,
-    });
-  }
-
   /// Cancels every call of the method in flight; returns how many.
   int cancelMethod(String serviceName, String methodName, [String? reason]) {
     final key = _callerMethodKey(serviceName, methodName);
@@ -155,7 +139,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }
 
   /// Cancels every call of [serviceName] in flight; returns how many.
-  int cancelServiceMethods(String serviceName, [String? reason]) {
+  int cancelService(String serviceName, [String? reason]) {
     final servicePrefix = '$serviceName/';
     final methodKeys = _callerTokens.keys
         .where((key) => key.startsWith(servicePrefix))
@@ -163,7 +147,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     var cancelled = 0;
     for (final key in methodKeys) {
       for (final token in _callerTokens.remove(key)!.values) {
-        token.cancel(reason ?? 'Service methods cancelled');
+        token.cancel(reason ?? 'Service cancelled');
         cancelled++;
       }
     }
@@ -176,11 +160,11 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   }
 
   /// Cancels every call in flight; returns how many.
-  int cancelAllMethods([String? reason]) {
+  int cancelAll([String? reason]) {
     var cancelled = 0;
     for (final tokens in _callerTokens.values) {
       for (final token in tokens.values) {
-        token.cancel(reason ?? 'All methods cancelled');
+        token.cancel(reason ?? 'All calls cancelled');
         cancelled++;
       }
     }
@@ -270,8 +254,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// something subscribes there is no call on the wire to cancel.
   ///
   /// Track at hand-out time instead and every unlistened stream leaks a token
-  /// permanently, with `isMethodActive`, `getActiveCallsCount` and
-  /// `pendingRequests` all reporting a call that never happened.
+  /// permanently, with [activeCallCount] and `pendingRequests` both reporting
+  /// a call that never happened.
   void _trackCallerRequest(
     String serviceName,
     String methodName,

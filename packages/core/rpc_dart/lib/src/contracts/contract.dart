@@ -340,26 +340,6 @@ mixin _RpcOutgoingCalls {
 
   RpcDataTransferMode get _outgoingMode;
 
-  /// All cancellation tokens for the given method (empty map if unknown).
-  Map<String, RpcCancellationToken> getCancellationTokensForMethod(
-    String methodName,
-  ) => _outgoing.getCancellationTokensForMethod(serviceName, methodName);
-
-  /// Cancels all active calls of the method and returns cancelled count.
-  int cancelMethod(String methodName, [String? reason]) =>
-      _outgoing.cancelMethod(serviceName, methodName, reason);
-
-  /// Cancels all active calls for this service and returns cancelled count.
-  int cancelAllMethods([String? reason]) =>
-      _outgoing.cancelServiceMethods(serviceName, reason);
-
-  /// Checks whether the method has active calls.
-  bool isMethodActive(String methodName) => getActiveCallsCount(methodName) > 0;
-
-  /// Number of active calls for the method.
-  int getActiveCallsCount(String methodName) =>
-      _outgoing.activeCallCount(serviceName, methodName);
-
   (IRpcCodec<TRequest>?, IRpcCodec<TResponse>?) _codecsFor<TRequest, TResponse>(
     IRpcCodec<TRequest>? requestCodec,
     IRpcCodec<TResponse>? responseCodec,

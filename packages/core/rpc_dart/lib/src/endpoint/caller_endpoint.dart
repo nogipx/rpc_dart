@@ -36,7 +36,7 @@ final class RpcCallerEndpoint extends RpcEndpointBase
 
   @override
   Future<void> _closeResources() async {
-    cancelAllMethods('Endpoint closed');
+    cancelAll('Endpoint closed');
     await _closeCallerResources();
   }
 

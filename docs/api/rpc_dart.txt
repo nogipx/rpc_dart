@@ -335,11 +335,6 @@ RpcCallerContract method callBidirectionalStream<TRequest, TResponse>({required 
 RpcCallerContract method callClientStream<TRequest, TResponse>({required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerContract method callServerStream<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcCallerContract method callUnary<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
-RpcCallerContract method cancelAllMethods([String? reason]) -> int
-RpcCallerContract method cancelMethod(String methodName, [String? reason]) -> int
-RpcCallerContract method getActiveCallsCount(String methodName) -> int
-RpcCallerContract method getCancellationTokensForMethod(String methodName) -> Map<String, RpcCancellationToken>
-RpcCallerContract method isMethodActive(String methodName) -> bool
 RpcCallerContract new new(String serviceName, RpcCallerEndpoint endpoint, {RpcDataTransferMode dataTransferMode})
 RpcCallerEndpoint field compressionEnabled: bool (get)
 RpcCallerEndpoint field debugLabel: String? (get)
@@ -349,14 +344,13 @@ RpcCallerEndpoint method activeCallCount(String serviceName, String methodName) 
 RpcCallerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcCallerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
 RpcCallerEndpoint method bidirectionalStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
-RpcCallerEndpoint method cancelAllMethods([String? reason]) -> int
+RpcCallerEndpoint method cancelAll([String? reason]) -> int
 RpcCallerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
 RpcCallerEndpoint method cancelRequest(String serviceName, String methodName, String requestId, [String? reason]) -> bool
-RpcCallerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
+RpcCallerEndpoint method cancelService(String serviceName, [String? reason]) -> int
 RpcCallerEndpoint method clientStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerEndpoint method close() -> Future<void>
 RpcCallerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
-RpcCallerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
 RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
 RpcCallerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcCallerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
@@ -886,12 +880,7 @@ RpcPeerContract method callBidirectionalStream<TRequest, TResponse>({required St
 RpcPeerContract method callClientStream<TRequest, TResponse>({required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerContract method callServerStream<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcPeerContract method callUnary<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
-RpcPeerContract method cancelAllMethods([String? reason]) -> int
-RpcPeerContract method cancelMethod(String methodName, [String? reason]) -> int
 RpcPeerContract method dispose() -> void
-RpcPeerContract method getActiveCallsCount(String methodName) -> int
-RpcPeerContract method getCancellationTokensForMethod(String methodName) -> Map<String, RpcCancellationToken>
-RpcPeerContract method isMethodActive(String methodName) -> bool
 RpcPeerContract method setup() -> void
 RpcPeerContract new new(String serviceName, RpcPeerEndpoint endpoint, {RpcDataTransferMode responderDataTransferMode, RpcDataTransferMode callerDataTransferMode})
 RpcPeerEndpoint field activeResponderCount: int (get)
@@ -905,15 +894,14 @@ RpcPeerEndpoint method activeCallCount(String serviceName, String methodName) ->
 RpcPeerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcPeerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
 RpcPeerEndpoint method bidirectionalStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
-RpcPeerEndpoint method cancelAllMethods([String? reason]) -> int
+RpcPeerEndpoint method cancelAll([String? reason]) -> int
 RpcPeerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
 RpcPeerEndpoint method cancelRequest(String serviceName, String methodName, String requestId, [String? reason]) -> bool
-RpcPeerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
+RpcPeerEndpoint method cancelService(String serviceName, [String? reason]) -> int
 RpcPeerEndpoint method clientStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerEndpoint method close() -> Future<void>
 RpcPeerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcPeerEndpoint method drain({Duration timeout}) -> Future<void>
-RpcPeerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
 RpcPeerEndpoint method health() -> Future<RpcEndpointHealth>
 RpcPeerEndpoint method markDraining() -> void
 RpcPeerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>

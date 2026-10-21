@@ -2,23 +2,13 @@
 //
 // SPDX-License-Identifier: MIT
 
-// _prepareCallerContext used to register a call's cancellation token the moment
-// the entry point was CALLED. That is right for unary and client-stream, which
-// start immediately -- but serverStream() and bidirectionalStream() return COLD
-// streams. Nothing is on the wire until something subscribes, and the matching
-// untrack only runs from the stream's onDone/onCancel. A stream that was built
-// and then dropped therefore leaked its token forever:
-//
-//   baseline                          pending=0
-//   after 10 unlistened serverStream: pending=10
-//   after 10 unlistened bidi:         pending=20
-//
-// The cost is not only memory. _callerTokens backs the public
-// isMethodActive/getActiveCallsCount/cancelMethod API and the pendingRequests
-// health metric, so every one of them reported a call that never happened, with
-// no way to clear it short of cancelAllMethods().
-//
-// Tracking now starts when the call does: on first listen.
+// A call's cancellation token is tracked from the moment the call starts. For
+// unary and client-stream that is the call itself; serverStream() and
+// bidirectionalStream() return COLD streams, so nothing is on the wire until
+// something subscribes, and tracking starts on first listen. The untrack runs
+// from the stream's onDone/onCancel, so a stream built and then dropped must
+// track nothing, or activeCallCount, cancelMethod and the pendingRequests
+// health metric would all count a call that never happened.
 
 import 'dart:async';
 
@@ -112,7 +102,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
     expect(pending(), 0, reason: 'cold streams leaked their tokens');
-    expect(caller.getCancellationTokensForMethod('Svc', 'few'), isEmpty);
+    expect(caller.activeCallCount('Svc', 'few'), 0);
   });
 
   test('an unlistened bidirectional stream tracks nothing', () async {
@@ -130,16 +120,15 @@ void main() {
     expect(pending(), 0, reason: 'cold bidi streams leaked their tokens');
   });
 
-  test('isMethodActive does not lie about a stream nobody listened to', () {
+  test('a contract stream nobody listened to is not an active call', () {
     final contract = _CallerContract(caller);
     contract.buildButDropAServerStream();
 
     expect(
-      contract.isMethodActive('few'),
-      isFalse,
+      caller.activeCallCount('Svc', 'few'),
+      0,
       reason: 'a cold stream is not an active call',
     );
-    expect(contract.getActiveCallsCount('few'), 0);
   });
 
   test('a listened stream is still tracked while it runs', () async {
@@ -197,7 +186,7 @@ void main() {
   });
 }
 
-/// Exercises the public contract-level API that reads _callerTokens.
+/// Builds a server stream through a contract and drops it.
 final class _CallerContract extends RpcCallerContract {
   _CallerContract(RpcCallerEndpoint endpoint) : super('Svc', endpoint);
 

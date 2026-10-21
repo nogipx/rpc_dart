@@ -142,11 +142,11 @@ message on the response stream.
 | --- | --- |
 | `subscription.cancel()` / `take`, `first`, `timeout` | this call |
 | `RpcCancellationToken` in `RpcContext.withCancellation(token)`, then `token.cancel(reason)` | every call made with that context |
-| `contract.cancelMethod('count', reason)` -> `int` | all active calls of this method on this contract's service |
-| `contract.cancelAllMethods(reason)` -> `int` | all active calls of this contract's service |
-| `endpoint.cancelAllMethods(reason)` -> `int` | every active call on the endpoint |
+| `endpoint.cancelMethod(service, 'count', reason)` -> `int` | all active calls of this method |
+| `endpoint.cancelService(service, reason)` -> `int` | all active calls of this service |
+| `endpoint.cancelAll(reason)` -> `int` | every active call on the endpoint |
 | `endpoint.cancelRequest(service, method, requestId)` | the calls with that `requestId` |
-| `contract.getActiveCallsCount('count')`, `contract.isMethodActive('count')` | inspection only |
+| `endpoint.activeCallCount(service, 'count')` | inspection only |
 
 A cancelled call that is still being listened to fails with `RpcCancelledException`. Its
 `message` is the reason. `endpoint.close()` cancels every active call.

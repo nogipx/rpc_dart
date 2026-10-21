@@ -93,10 +93,8 @@ final class GreeterResponder extends RpcResponderContract {
 `RpcCallerContract(String serviceName, RpcCallerEndpoint endpoint, {RpcDataTransferMode dataTransferMode = RpcDataTransferMode.auto})`.
 Call helpers: `callUnary`, `callServerStream`, `callClientStream`,
 `callBidirectionalStream` (named: `methodName:`, `request:` or `requests:`,
-`requestCodec:`, `responseCodec:`, `context:`). Also `cancelMethod(name)`,
-`cancelAllMethods()` (both return how many calls they cancelled),
-`isMethodActive(name)`, `getActiveCallsCount(name)`. `RpcPeerContract` has the
-same call helpers and tracking.
+`requestCodec:`, `responseCodec:`, `context:`). `RpcPeerContract` has the
+same call helpers. Cancelling and counting calls is the endpoint's (see below).
 
 ```dart
 final class GreeterCaller extends RpcCallerContract {
@@ -125,7 +123,7 @@ final class GreeterCaller extends RpcCallerContract {
 | Endpoint | Constructor | Own API |
 | --- | --- | --- |
 | `RpcResponderEndpoint` | `transport:` (required), `debugLabel:`, `logController:` (`LogController?`) | `registerServiceContract(c)`, `unregisterServiceContract(name)`, `start()`, `markDraining()`, `drain({timeout})` |
-| `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logController:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod`, `cancelServiceMethods`, `cancelRequest`, `activeCallCount`; `close()` cancels in-flight calls |
+| `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logController:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod(service, method)`, `cancelService(service)`, `cancelAll()` (each returns how many calls it cancelled), `cancelRequest(service, method, requestId)`, `activeCallCount(service, method)`; `close()` cancels in-flight calls |
 | `RpcPeerEndpoint` | same as caller | union of both, call tracking included; needs `start()` |
 
 All endpoints: `addMiddleware`, `addInterceptor`, `close()`, `health()`,

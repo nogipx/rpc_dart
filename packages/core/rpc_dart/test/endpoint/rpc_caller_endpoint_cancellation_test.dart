@@ -156,7 +156,7 @@ void main() {
       await Future<void>.delayed(Duration(milliseconds: 50));
 
       // Cancel everything on the service.
-      callerEndpoint.cancelServiceMethods('TestService', 'Service shutdown');
+      callerEndpoint.cancelService('TestService', 'Service shutdown');
 
       // The first method saw the cancellation.
       await expectLater(
@@ -190,7 +190,7 @@ void main() {
       await Future<void>.delayed(Duration(milliseconds: 50));
 
       // Cancel everything.
-      callerEndpoint.cancelAllMethods('Global cancellation');
+      callerEndpoint.cancelAll('Global cancellation');
 
       // It was cancelled.
       await expectLater(
@@ -212,7 +212,7 @@ void main() {
       expect(cancelled, 0); // The return value is a count of cancelled tokens.
     });
 
-    test('getCancellationTokensForMethod reports the live tokens', () async {
+    test('activeCallCount reports the live calls', () async {
       // Start a method.
       final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
         serviceName: 'TestService',
@@ -223,10 +223,7 @@ void main() {
       );
 
       // How many calls are live.
-      final activeCallsCount = callerEndpoint
-          .getCancellationTokensForMethod('TestService', 'SlowMethod')
-          .length;
-      expect(activeCallsCount, 1);
+      expect(callerEndpoint.activeCallCount('TestService', 'SlowMethod'), 1);
 
       // Cancel every call of that method.
       final cancelledCount = callerEndpoint.cancelMethod(
@@ -236,10 +233,7 @@ void main() {
       expect(cancelledCount, 1);
 
       // No live calls remain.
-      final activeCallsCountAfter = callerEndpoint
-          .getCancellationTokensForMethod('TestService', 'SlowMethod')
-          .length;
-      expect(activeCallsCountAfter, 0);
+      expect(callerEndpoint.activeCallCount('TestService', 'SlowMethod'), 0);
 
       // And the call threw.
       await expectLater(
@@ -276,12 +270,8 @@ void main() {
       // Long enough for both requests to register.
       await Future<void>.delayed(Duration(milliseconds: 100));
 
-      // Two tokens for the one method.
-      final tokens = callerEndpoint.getCancellationTokensForMethod(
-        'TestService',
-        'SlowMethod',
-      );
-      expect(tokens.length, 2);
+      // Two live calls of the one method.
+      expect(callerEndpoint.activeCallCount('TestService', 'SlowMethod'), 2);
 
       // Cancel every call of that method.
       final cancelledCount = callerEndpoint.cancelMethod(

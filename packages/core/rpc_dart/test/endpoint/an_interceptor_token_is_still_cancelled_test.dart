@@ -2,15 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-// An interceptor that hands next() a context with its own cancellation token
-// -- the only way it can own cancellation -- cut the call off from every
-// cancel the endpoint tracks, which follows the token the call started with:
+// An interceptor may hand next() a context with its own cancellation token --
+// the only way it can own cancellation. Every cancel the endpoint tracks
+// follows the token the call started with, so that token cancels the
+// interceptor's:
 //
-//   - caller side: cancelAllMethods() reached nothing, the call hung, and
-//     pendingRequests no longer counted it;
-//   - responder side: a client cancel never reached the handler.
-//
-// The original token now cancels the interceptor's.
+//   - caller side: cancelAll() reaches the call, and pendingRequests counts
+//     it;
+//   - responder side: a client cancel reaches the handler.
 
 import 'dart:async';
 
@@ -66,7 +65,7 @@ void main() {
   for (final swap in [true, false]) {
     final arm = swap ? 'a swapped token' : 'CONTROL: the original token';
 
-    test('$arm: cancelAllMethods on the caller reaches the call', () async {
+    test('$arm: cancelAll on the caller reaches the call', () async {
       final handlerSaw = Completer<String>();
       final (client, server) = RpcChannelTransport.pair();
       final responder = RpcResponderEndpoint(transport: server)
@@ -94,7 +93,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       expect(caller.collectEndpointMetrics().pendingRequests, 1);
-      caller.cancelAllMethods('user cancel');
+      caller.cancelAll('user cancel');
 
       expect(
         await call.timeout(const Duration(seconds: 1), onTimeout: () => 'HUNG'),

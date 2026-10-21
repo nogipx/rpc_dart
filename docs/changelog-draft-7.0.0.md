@@ -92,6 +92,9 @@ No error message is a contract: match on the type or the status.
 | `RpcContextBuilder` | the `RpcContext` factories and `with...` copies; `withBearerAuth`, `withBasicAuth` and `withApiKey` are on `RpcContext` |
 | `RpcContextUtils.merge(left, right)` | gone; chain `with...` copies |
 | `RpcContextExtensions` | gone; `forward` is a method of `RpcContext` |
+| `cancelMethod`, `cancelAllMethods`, `isMethodActive`, `getActiveCallsCount`, `getCancellationTokensForMethod` on a contract | the endpoint's `cancelMethod(service, method)`, `cancelService(service)`, `activeCallCount(service, method)`; a service method may now have any of these names |
+| `endpoint.cancelAllMethods`, `endpoint.cancelServiceMethods` | `cancelAll`, `cancelService` |
+| `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
 | `RpcHeaders.xRouteService` | gone; routing uses the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | the same without `const` |
 | `RpcList.toMutableList()`, `where` returning `RpcList` | `RpcList` is an `Iterable`: `toList()` copies, `where` returns an `Iterable`, `for`-in works |

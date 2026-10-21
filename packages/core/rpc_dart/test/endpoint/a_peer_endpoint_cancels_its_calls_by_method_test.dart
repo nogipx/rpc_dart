@@ -4,7 +4,7 @@
 
 // A peer endpoint makes calls like a caller endpoint, so it tracks them the
 // same way: a call in flight is counted per method and cancelled by method or
-// by service, from the endpoint and from a peer contract.
+// by service, including one a peer contract made.
 
 import 'dart:async';
 
@@ -93,14 +93,14 @@ void main() {
     expect(client.activeCallCount('Slow', 'wait'), 0);
   });
 
-  test('a peer contract cancels its service calls', () async {
+  test('the endpoint cancels a peer contract\'s calls by service', () async {
     final contract = _SlowPeer(client);
     final call = outcome(contract.wait('x'));
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(contract.isMethodActive('wait'), isTrue);
+    expect(client.activeCallCount('Slow', 'wait'), 1);
 
-    expect(contract.cancelAllMethods('stop'), 1);
+    expect(client.cancelService('Slow', 'stop'), 1);
     expect(await call, isA<RpcCancelledException>());
-    expect(contract.getActiveCallsCount('wait'), 0);
+    expect(client.activeCallCount('Slow', 'wait'), 0);
   });
 }

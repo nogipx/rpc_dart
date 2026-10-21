@@ -94,11 +94,11 @@ void main() {
       expect(response.value, equals('ok'));
 
       expect(
-        callerEndpoint.getCancellationTokensForMethod(
+        callerEndpoint.activeCallCount(
           _EchoService.serviceId,
           _EchoService.unaryMethodId,
         ),
-        isEmpty,
+        0,
       );
 
       final health = await callerEndpoint.health();
@@ -120,11 +120,11 @@ void main() {
       expect(results, equals(['ok:1', 'ok:2']));
 
       expect(
-        callerEndpoint.getCancellationTokensForMethod(
+        callerEndpoint.activeCallCount(
           _EchoService.serviceId,
           _EchoService.serverStreamMethodId,
         ),
-        isEmpty,
+        0,
       );
 
       final health = await callerEndpoint.health();
