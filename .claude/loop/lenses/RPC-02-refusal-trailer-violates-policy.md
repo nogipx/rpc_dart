@@ -3,7 +3,7 @@ refines: U-09
 paths: [packages/core/rpc_dart/lib/**, packages/transport/rpc_dart_websocket/lib/**, packages/transport/rpc_dart_http2/lib/**, packages/transport/rpc_dart_isolate/lib/**, packages/transport/rpc_dart_http/lib/**]
 applies: outbound metadata is validated by the same policy as inbound
 breaks: "wrong result: the client gets the wrong status, and at worst the connection closes instead of one call being refused."
-applied: [216, 243, 320, 327, 349, 734, 757, 775, 818, 869, 893]
+applied: [216, 243, 320, 327, 349, 734, 757, 775, 818, 869, 893, 894]
 status: swept here (round 869, 7ee9fab3)
 rank: 2
 ---
