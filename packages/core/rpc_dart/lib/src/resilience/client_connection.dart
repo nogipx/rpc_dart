@@ -533,6 +533,12 @@ final class _ReconnectingTransportProxy
       );
 }
 
+/// An attempt given up because the connection was stopped; never escapes the
+/// connect loop.
+final class _AttemptStopped {
+  const _AttemptStopped();
+}
+
 // ---------------------------------------------------------------------------
 // RpcClientConnection
 // ---------------------------------------------------------------------------
@@ -582,8 +588,48 @@ class RpcClientConnection {
   /// accepted the socket and never answers -- the WebSocket upgrade in the
   /// example above -- keeps the connection in [RpcClientConnecting] for good,
   /// because nothing else ends that wait.
+  ///
+  /// [dispose] and [disconnect] stop waiting for an attempt in flight and close
+  /// the transport it delivers, but cannot stop the factory's own work: its
+  /// socket stays open until the factory gives up by itself. Use
+  /// [RpcClientConnection.cancellable] to end it at once.
   RpcClientConnection({
     required Future<IRpcTransport> Function() transportFactory,
+    BackoffPolicy backoff = const ExponentialBackoff(),
+    bool Function(Object? error)? shouldReconnect,
+    int? maxAttempts,
+    Duration? connectTimeout = const Duration(seconds: 30),
+    LogScope? logger,
+    void Function(RpcClientConnectionState state)? onStateChanged,
+  }) : this.cancellable(
+         transportFactory: (_) => transportFactory(),
+         backoff: backoff,
+         shouldReconnect: shouldReconnect,
+         maxAttempts: maxAttempts,
+         connectTimeout: connectTimeout,
+         logger: logger,
+         onStateChanged: onStateChanged,
+       );
+
+  /// Creates a connection whose factory is told when an attempt is given up.
+  ///
+  /// [transportFactory] gets a fresh [RpcCancellationToken] per attempt. It is
+  /// cancelled when [dispose] or [disconnect] runs during the attempt, and when
+  /// the attempt outlives [connectTimeout]. Pass it to the transport's connect
+  /// as `cancellationToken` and the socket of an abandoned attempt closes at
+  /// once, not when the transport's own timeout fires -- or never, with none.
+  ///
+  /// ```dart
+  /// final connection = RpcClientConnection.cancellable(
+  ///   transportFactory: (cancellation) => RpcWebSocketCallerTransport.connect(
+  ///     uri,
+  ///     cancellationToken: cancellation,
+  ///   ),
+  /// );
+  /// ```
+  RpcClientConnection.cancellable({
+    required Future<IRpcTransport> Function(RpcCancellationToken cancellation)
+    transportFactory,
     BackoffPolicy backoff = const ExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
     int? maxAttempts,
@@ -603,7 +649,7 @@ class RpcClientConnection {
         _connectingGuard != null && !_connectingGuard!.isCompleted;
   }
 
-  final Future<IRpcTransport> Function() _factory;
+  final Future<IRpcTransport> Function(RpcCancellationToken) _factory;
   final BackoffPolicy _backoff;
   final bool Function(Object? error)? _shouldReconnect;
   final int? _maxAttempts;
@@ -619,6 +665,13 @@ class RpcClientConnection {
   bool _disposed = false;
   Completer<void>? _connectingGuard;
   int _reconnectAttempts = 0;
+
+  /// The token of the attempt in flight, null between attempts.
+  RpcCancellationToken? _attempt;
+
+  /// Why an attempt's token was cancelled: a stop, or [_connectTimeout].
+  static const String _stoppedReason = 'connection stopped';
+  static const String _timedOutReason = 'connect timed out';
 
   /// How long the live transport has been attached; see [_stableConnection].
   Stopwatch? _online;
@@ -686,6 +739,7 @@ class RpcClientConnection {
   /// Does not dispose the connection — call [connect] to resume.
   Future<void> disconnect() async {
     _isStopped = true;
+    _attempt?.cancel(_stoppedReason);
     await _proxy.detach();
     _emit(const RpcClientIdle());
   }
@@ -696,6 +750,7 @@ class RpcClientConnection {
   Future<void> dispose() async {
     _isStopped = true;
     _disposed = true;
+    _attempt?.cancel(_stoppedReason);
     await _proxy.close();
     if (!_stateCtl.isClosed) await _stateCtl.close();
   }
@@ -811,31 +866,32 @@ class RpcClientConnection {
         if (_isStopped) break;
       }
 
+      // One token per attempt, cancelled by a stop or by connectTimeout, which
+      // covers the factory and `ready` together. The factory gets it so a
+      // transport can close its socket at once; the loop races it so a stop
+      // ends the wait even for a factory that ignores it.
+      final attempt = RpcCancellationToken();
+      _attempt = attempt;
+      final connectTimeout = _connectTimeout;
+      final deadline = connectTimeout == null
+          ? null
+          : Timer(connectTimeout, () => attempt.cancel(_timedOutReason));
       try {
-        final attemptClock = Stopwatch()..start();
-        final factoryFuture = _factory();
-        final IRpcTransport inner;
-        if (_connectTimeout != null) {
-          inner = await factoryFuture.timeout(
-            _connectTimeout,
-            onTimeout: () {
-              // Future.timeout abandons the AWAIT, not the WORK behind it. The
-              // factory keeps running, and a connect that is merely slow --
-              // the exact case connectTimeout exists for -- still completes and
-              // hands back a live transport this iteration has given up on,
-              // referenced by nothing and connected for the life of the
-              // process. One leaked socket per retry, on any client that sets
-              // connectTimeout and sits on a slow network.
-              //
-              // Adopt the abandoned attempt: whenever it settles, close what it
-              // produced.
-              _discardAbandonedAttempt(factoryFuture);
-              throw TimeoutException('Connect timed out', _connectTimeout);
-            },
-          );
-        } else {
-          inner = await factoryFuture;
-        }
+        final factoryFuture = _factory(attempt);
+        var delivered = false;
+        final IRpcTransport inner = await Future.any([
+          factoryFuture,
+          attempt.cancelled.then<IRpcTransport>((_) {
+            // Giving up the wait does not stop the work behind it: a connect
+            // that completes later hands back a live transport nothing holds,
+            // one leaked socket per abandoned attempt. Take delivery of it
+            // whenever it settles, and close it. A transport this loop already
+            // took is closed below, by the phase that holds it.
+            if (!delivered) _discardAbandonedAttempt(factoryFuture);
+            throw _abandonment(attempt);
+          }),
+        ]);
+        delivered = true;
 
         // Re-checked AFTER the await. A socket handshake takes tens to hundreds
         // of ms and disconnect()/dispose() can land anywhere in that window,
@@ -859,20 +915,11 @@ class RpcClientConnection {
         // A transport may be handed over before its channel has connected.
         // Online is reported once it can carry calls, within what is left of
         // the attempt's connectTimeout; a channel that fails or never answers
-        // fails the attempt like a factory that threw.
-        final readiness = inner.ready;
+        // fails the attempt like a factory that threw. The transport is already
+        // ours here, so an attempt given up while it waits closes it now.
         try {
-          final timeout = _connectTimeout;
-          if (timeout == null) {
-            await readiness;
-          } else {
-            final left = timeout - attemptClock.elapsed;
-            await readiness.timeout(
-              left.isNegative ? Duration.zero : left,
-              onTimeout: () =>
-                  throw TimeoutException('Connect timed out', timeout),
-            );
-          }
+          await Future.any<void>([inner.ready, attempt.cancelled]);
+          if (attempt.isCancelled) throw _abandonment(attempt);
         } catch (_) {
           unawaited(inner.close().catchError((_) {}));
           rethrow;
@@ -892,6 +939,15 @@ class RpcClientConnection {
         _emit(const RpcClientOnline());
         guard.complete();
         return;
+      } on _AttemptStopped {
+        // A stop gave this attempt up; it did not fail, so it is neither
+        // counted nor shown to shouldReconnect. Still stopped: leave. A
+        // connect() or forceReconnect() since then: start a fresh attempt.
+        if (_isStopped) {
+          _log.info('Attempt given up: connection stopped');
+          guard.complete();
+          return;
+        }
       } catch (e) {
         _log.warning('Attempt ${_reconnectAttempts + 1} failed', error: e);
         if (!_canReconnect(e)) {
@@ -901,11 +957,21 @@ class RpcClientConnection {
           return;
         }
         _reconnectAttempts++;
+      } finally {
+        deadline?.cancel();
+        if (identical(_attempt, attempt)) _attempt = null;
       }
     }
 
     guard.complete();
   }
+
+  /// What a given-up [attempt] fails with: a [TimeoutException] past
+  /// connectTimeout, which counts like any failed attempt, else a stop.
+  Object _abandonment(RpcCancellationToken attempt) =>
+      attempt.reason == _timedOutReason
+      ? TimeoutException('Connect timed out', _connectTimeout)
+      : const _AttemptStopped();
 
   bool _canReconnect(Object? error) => _shouldReconnect?.call(error) ?? true;
 

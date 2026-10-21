@@ -260,6 +260,12 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   `RpcClientOnline` fails with `RpcNoConnectionException` (UNAVAILABLE).
 - Other members: `state` (a broadcast stream), `currentState`, `forceReconnect()`, `disconnect()`
   (resume later with `connect()`), `dispose()` (permanent).
+- `dispose()` and `disconnect()` stop waiting for an attempt in flight and close a transport it
+  delivers, but cannot stop a factory's own work. Use `RpcClientConnection.cancellable(transportFactory:
+  (cancellation) => ...)` and pass the `RpcCancellationToken` to a transport connect that accepts
+  `cancellationToken:` (the WebSocket caller does): the token is cancelled on `dispose()`, on
+  `disconnect()` and past `connectTimeout`, and the pending socket closes at once. With the plain
+  constructor it stays open until the transport's own timeout, or for good with none.
 - `logger:` takes a `LogScope` (e.g. `controller.scope('app.connection')`) and receives drops, attempts and
   give-ups at info, warning and error.
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.
