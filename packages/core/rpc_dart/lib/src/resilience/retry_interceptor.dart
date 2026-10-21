@@ -223,12 +223,12 @@ class RpcRetryInterceptor extends IRpcInterceptor {
     final ends = <Future<void>>[reconnect];
     if (remaining != null) {
       final expired = Completer<void>();
-      // A Timer runs on a monotonic clock in whole milliseconds, the deadline
-      // on the context's clock, and the Timer can fire before the context sees
-      // the deadline pass; the next attempt would then find time left and fail
-      // UNAVAILABLE. So the wait re-arms for that sliver. A larger rest means
-      // the context's clock jumped back, and the wait ends on time anyway:
-      // re-armed for it, it ran to the reconnect's own 5 s limit.
+      // A Timer runs in whole milliseconds, the deadline on the context's
+      // clock, and the Timer can fire before the context sees the deadline
+      // pass; the next attempt would then find time left and fail UNAVAILABLE.
+      // So the wait re-arms for that sliver. A larger rest means an injected
+      // clock went back, and the wait ends on time anyway: re-armed for it, it
+      // would run to the reconnect's own 5 s limit.
       //
       // A deadline can be past the web's timer ceiling, where a plain Timer
       // fires at once and the reconnect would not be waited for.

@@ -115,8 +115,13 @@ from scratch instead loses the deadline and the cancellation.
 - A responder interceptor may shorten that: a context it passes to `next`
   with an earlier deadline (`call.context.withTimeout(d)`) is enforced the
   same way. A later deadline, or none, does not extend the caller's.
-- The `RpcContext.withTimeout(d)` factory always uses `DateTime.now()`. For a
-  fake clock, use `RpcContext.empty().withClock(fake).withTimeout(d)` or
+- Deadlines are measured on `RpcContext.monotonicNow`, the default `clock`:
+  the wall time read once, advanced by a stopwatch, so a system clock jump
+  neither expires a call early nor stretches it. Prefer `withTimeout(d)`; a
+  `withDeadline(DateTime.now().add(d))` is on the wall clock and drifts from
+  it after a jump. The `RpcContext.withTimeout(d)` factory always uses
+  `monotonicNow`. For a fake clock, use
+  `RpcContext.empty().withClock(fake).withTimeout(d)` or
   `RpcContextBuilder().withClock(fake).withTimeout(d)`.
 
 ## Cancellation

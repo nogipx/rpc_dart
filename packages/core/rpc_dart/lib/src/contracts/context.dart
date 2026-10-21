@@ -13,11 +13,14 @@ final class RpcContext {
   /// Request headers/metadata.
   final Map<String, String> _headers;
 
-  /// Deadline for the operation (absolute time).
+  /// Deadline for the operation, a time on [clock].
   ///
-  /// Wall-clock time read from [clock]: a system clock that jumps moves
-  /// [isExpired] and [remainingTime] with it. On the wire the deadline travels
-  /// as a duration (`grpc-timeout`), so a peer's clock does not matter.
+  /// The default [clock] is monotonic, so a system clock that jumps (NTP, a
+  /// manual change) moves neither [isExpired] nor [remainingTime]. A deadline
+  /// built from [DateTime.now] directly is on the wall clock instead, and
+  /// after such a jump differs from [clock] by it; [withTimeout] avoids that.
+  /// On the wire the deadline travels as a duration (`grpc-timeout`), so a
+  /// peer's clock does not matter.
   final DateTime? deadline;
 
   /// Cancellation token.
@@ -40,10 +43,24 @@ final class RpcContext {
   /// Additional context values (analogous to gRPC Context.Value).
   final Map<Object, Object> _values;
 
-  /// Clock used for deadline/timeout computations. Defaults to [DateTime.now];
-  /// inject a fake clock (via [withClock]) to make `isExpired`, `remainingTime`,
-  /// and `withTimeout` testable without real time. Mirrors the logger's clock.
+  /// Clock used for deadline/timeout computations.
+  ///
+  /// Defaults to [monotonicNow]: the wall time at its first read, advanced by a
+  /// monotonic stopwatch since. Inject a fake clock (via [withClock]) to make
+  /// `isExpired`, `remainingTime`, and `withTimeout` testable without real
+  /// time.
   final DateTime Function() clock;
+
+  /// The default [clock]: a time that only moves forward, at the rate of real
+  /// time, whatever the system clock does.
+  ///
+  /// The wall clock is read ONCE; a [Timer] runs on a monotonic clock, and a
+  /// deadline compared on the wall clock disagrees with it across any jump —
+  /// expiring a call early or stretching it by the jump.
+  static DateTime monotonicNow() => _origin.add(_sinceOrigin.elapsed);
+
+  static final DateTime _origin = DateTime.now();
+  static final Stopwatch _sinceOrigin = Stopwatch()..start();
 
   /// Header names set as credentials under a name of the caller's choosing
   /// ([RpcContextBuilder.withApiKey]); [sanitize] and
@@ -64,7 +81,7 @@ final class RpcContext {
        requestId = requestId ?? _generateRequestId(),
        log = log ?? LogScope.noop,
        _values = Map.from(values ?? {}),
-       clock = clock ?? DateTime.now,
+       clock = clock ?? monotonicNow,
        _credentialNames = credentialNames ?? const {};
 
   /// Creates a new empty context.
@@ -88,9 +105,9 @@ final class RpcContext {
   factory RpcContext.withDeadline(DateTime deadline) =>
       RpcContext._(deadline: deadline);
 
-  /// Creates a context with a timeout.
+  /// Creates a context with a timeout, measured on [monotonicNow].
   factory RpcContext.withTimeout(Duration timeout) =>
-      RpcContext._(deadline: DateTime.now().add(timeout));
+      RpcContext._(deadline: monotonicNow().add(timeout));
 
   /// Creates a context with a cancellation token.
   factory RpcContext.withCancellation(RpcCancellationToken token) =>

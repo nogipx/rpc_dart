@@ -517,6 +517,7 @@ RpcContext new withHeaders(Map<String, String> headers, {String? requestId})
 RpcContext new withTimeout(Duration timeout)
 RpcContext new withTraceId(String traceId)
 RpcContext static method isContextValid(RpcContext? context) -> bool
+RpcContext static method monotonicNow() -> DateTime
 RpcContext static method sanitize(RpcContext context) -> RpcContext
 RpcContextBuilder method build() -> RpcContext
 RpcContextBuilder method withApiKey(String key, {String headerName}) -> RpcContextBuilder
