@@ -4,12 +4,11 @@
 
 // A context derived for a downstream call cannot outlive its parent.
 //
-// `forward(timeout:)` and `RpcContextBuilder.inheritFrom(...).withTimeout`
-// keep the earlier of the parent's deadline and the new one, as gRPC and Go
-// do on derivation. `forward()` is the helper for a downstream call: the
-// deadline, token and trace carry over and credentials do not.
-// `RpcContext.withTimeout` on a context replaces: that is the explicit way to
-// set one.
+// `forward(timeout:)` keeps the earlier of the parent's deadline and the new
+// one, as gRPC and Go do on derivation. `forward()` is the helper for a
+// downstream call: the deadline, token and trace carry over and credentials do
+// not. `withTimeout` on a context replaces: that is the explicit way to set
+// one.
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
@@ -25,22 +24,6 @@ void main() {
     test('forward(timeout:) longer than what is left', () {
       final parent = _parent();
       final child = parent.forward(timeout: const Duration(seconds: 2));
-      expect(child.deadline, parent.deadline);
-    });
-
-    test('inheritFrom(...).withTimeout longer than what is left', () {
-      final parent = _parent();
-      final child = RpcContextBuilder.inheritFrom(
-        parent,
-      ).withTimeout(const Duration(seconds: 2)).build();
-      expect(child.deadline, parent.deadline);
-    });
-
-    test('inheritFrom(...).withDeadline later than the parent', () {
-      final parent = _parent();
-      final child = RpcContextBuilder.inheritFrom(
-        parent,
-      ).withDeadline(_now.add(const Duration(seconds: 2))).build();
       expect(child.deadline, parent.deadline);
     });
   });
@@ -60,15 +43,13 @@ void main() {
   });
 
   group('GUARD: setting a deadline explicitly still replaces it', () {
-    test('RpcContext.withTimeout', () {
+    test('withTimeout', () {
       final ctx = _parent().withTimeout(const Duration(seconds: 2));
       expect(ctx.deadline, _now.add(const Duration(seconds: 2)));
     });
 
-    test('RpcContextBuilder.from(...).withTimeout', () {
-      final ctx = RpcContextBuilder.from(
-        _parent(),
-      ).withTimeout(const Duration(seconds: 2)).build();
+    test('withDeadline', () {
+      final ctx = _parent().withDeadline(_now.add(const Duration(seconds: 2)));
       expect(ctx.deadline, _now.add(const Duration(seconds: 2)));
     });
   });

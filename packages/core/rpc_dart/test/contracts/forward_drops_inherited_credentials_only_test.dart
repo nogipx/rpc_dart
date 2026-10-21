@@ -8,12 +8,11 @@ import 'package:test/test.dart';
 /// `forward` drops the credentials of the call it is made on behalf of, and
 /// keeps the ones the downstream call is given.
 void main() {
-  final incoming = RpcContextBuilder()
+  final incoming = RpcContext.empty()
       .withBearerAuth('caller-token')
-      .withHeader('proxy-authorization', 'Basic cHJveHk=')
+      .withAdditionalHeaders({'proxy-authorization': 'Basic cHJveHk='})
       .withApiKey('caller-key', headerName: 'X-Service-Key')
-      .withHeader('x-tenant', 'acme')
-      .build();
+      .withAdditionalHeaders({'x-tenant': 'acme'});
 
   test('the inherited credentials do not go downstream', () {
     final downstream = incoming.forward();

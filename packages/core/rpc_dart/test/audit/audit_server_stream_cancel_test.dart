@@ -43,10 +43,9 @@ void main() {
       );
 
       final token = RpcCancellationToken();
-      final context = RpcContextBuilder()
-          .withGeneratedTraceId()
-          .withCancellation(token)
-          .build();
+      final context = RpcContext.withTraceId(
+        RpcContextUtils.generateTraceId(),
+      ).withCancellation(token);
 
       final client = ServerStreamCaller<RpcString, RpcString>(
         transport: clientTransport,

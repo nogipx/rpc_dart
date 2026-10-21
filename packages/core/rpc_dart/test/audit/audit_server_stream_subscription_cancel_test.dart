@@ -28,7 +28,7 @@ void main() {
       // Pass our own token so we can observe it. serverStream reuses an existing
       // context token rather than minting a new one.
       final token = RpcCancellationToken();
-      final context = RpcContextBuilder().withCancellation(token).build();
+      final context = RpcContext.withCancellation(token);
 
       // No server responder is bound, so the stream stays open (no responses)
       // until we cancel.

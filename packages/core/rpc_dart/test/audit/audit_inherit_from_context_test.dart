@@ -2,13 +2,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Audit finding: RpcContextBuilder.inheritFrom(parent) only inherited from the
-// parent when parent.traceId != null. A parent that carried a cancellation
-// token / deadline / headers but no trace ID was discarded entirely, returning
-// a fresh empty context — losing cancellation propagation and deadlines.
-//
-// CORRECT behavior: a non-null parent's state must be inherited regardless of
-// whether it has a trace ID; only a fresh trace ID is generated when missing.
+// `forward` keeps the parent's cancellation token, deadline and headers
+// whether or not the parent has a trace ID; it only generates a trace ID when
+// one is missing.
 //
 // fvm dart test test/audit/audit_inherit_from_context_test.dart
 
@@ -17,20 +13,18 @@ import 'package:test/test.dart';
 
 void main() {
   test(
-    'inheritFrom keeps cancellation token + deadline of a traceId-less parent',
+    'forward keeps cancellation token + deadline of a traceId-less parent',
     () {
       final token = RpcCancellationToken();
       final deadline = DateTime.now().add(const Duration(seconds: 30));
 
       // Parent has a token, deadline and a header but NO trace ID.
-      final parent = RpcContextBuilder()
-          .withCancellation(token)
-          .withDeadline(deadline)
-          .withHeader('x-custom', 'value')
-          .build();
+      final parent = RpcContext.withCancellation(
+        token,
+      ).withDeadline(deadline).withAdditionalHeaders({'x-custom': 'value'});
       expect(parent.traceId, isNull, reason: 'precondition: no trace ID');
 
-      final child = RpcContextBuilder.inheritFrom(parent).build();
+      final child = parent.forward();
 
       expect(
         identical(child.cancellationToken, token),
@@ -56,15 +50,9 @@ void main() {
     },
   );
 
-  test('inheritFrom inherits trace ID when parent has one', () {
-    final parent = RpcContextBuilder().withTraceId('trace_parent').build();
-    final child = RpcContextBuilder.inheritFrom(parent).build();
+  test('forward inherits trace ID when parent has one', () {
+    final parent = RpcContext.withTraceId('trace_parent');
+    final child = parent.forward();
     expect(child.traceId, 'trace_parent');
-  });
-
-  test('inheritFrom(null) generates fresh trace + request IDs', () {
-    final child = RpcContextBuilder.inheritFrom(null).build();
-    expect(child.traceId, isNotNull);
-    expect(child.requestId, isNotEmpty);
   });
 }

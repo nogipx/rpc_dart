@@ -60,11 +60,10 @@ class BidirectionalStreamExample {
       print('CLIENT: ${responses.length} responses in total');
       // 2: a chat with authentication.
       print('\n--- 2: a chat with authentication ---');
-      final authContext = RpcContextBuilder()
+      final authContext = RpcContext.empty()
           .withBearerAuth('secret-token-123')
-          .withHeader('user-role', 'admin')
-          .withTraceId('auth-chat-trace-456')
-          .build();
+          .withAdditionalHeaders({'user-role': 'admin'})
+          .withTraceId('auth-chat-trace-456');
       final secureMessages = ['admin:status', 'admin:users', 'admin:logout'];
       await client
           .chatWithServer(

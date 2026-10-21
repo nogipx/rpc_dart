@@ -88,7 +88,10 @@ No error message is a contract: match on the type or the status.
 | health metric `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` and its `timeout` | `RpcDeadlineExceededException(deadline)` |
 | `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans belong to `rpc_dart_opentelemetry` |
-| `ctx.createChild()`, `ctx.createChildWith(headers:, timeout:)` | `ctx.forward(headers:, timeout:)`, which drops this context's credentials; `RpcContextBuilder.inheritFrom(ctx)` to pass them on |
+| `ctx.createChild()`, `ctx.createChildWith(headers:, timeout:)`, `RpcContextBuilder.inheritFrom(ctx)` | `ctx.forward(headers:, timeout:)`, which drops this context's credentials; pass one on by naming it in `headers` |
+| `RpcContextBuilder` | the `RpcContext` factories and `with...` copies; `withBearerAuth`, `withBasicAuth` and `withApiKey` are on `RpcContext` |
+| `RpcContextUtils.merge(left, right)` | gone; chain `with...` copies |
+| `RpcContextExtensions` | gone; `forward` is a method of `RpcContext` |
 | `RpcHeaders.xRouteService` | gone; routing uses the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | the same without `const` |
 | `RpcList.toMutableList()`, `where` returning `RpcList` | `RpcList` is an `Iterable`: `toList()` copies, `where` returns an `Iterable`, `for`-in works |

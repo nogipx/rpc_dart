@@ -12,8 +12,8 @@ receives one as its named `context` parameter.
 
 ## Rules
 
-- `RpcContext` is immutable. Every `withX` returns a copy. Build one with the
-  factories, the `withX` chain, or `RpcContextBuilder`.
+- `RpcContext` is immutable. Every `withX` returns a copy. Build one with a
+  factory and the `withX` chain.
 - Header names are trimmed and lower-cased. A name that does not match
   `^[0-9a-z_.-]+$` after that, or starts with `:`, is DROPPED SILENTLY. So is a
   value containing CR, LF or NUL. `getHeader` lower-cases its argument as well.
@@ -51,6 +51,8 @@ receives one as its named `context` parameter.
 | `RpcContext.withCancellation(token)` | carries an `RpcCancellationToken` |
 | `RpcContext.withTraceId(id)` | trace id |
 | `ctx.withAdditionalHeaders(map)` | merge headers; existing keys are overwritten |
+| `ctx.withBearerAuth(token)` / `ctx.withBasicAuth(user, pass)` | `authorization` header |
+| `ctx.withApiKey(key, {headerName = 'x-api-key'})` | the key under `headerName`, treated as a credential whatever the name |
 | `ctx.withTimeout(d)` | deadline = `ctx.clock() + d` |
 | `ctx.withDeadline / withCancellation / withTraceId / withRequestId / withLog / withClock` | copy with that field replaced |
 | `ctx.withValue(key, value)` / `ctx.getValue(key)` | local values under a typed `RpcContextKey<T>` (e.g. `const userKey = RpcContextKey<User>('user')`); NEVER sent on the wire |
@@ -59,37 +61,28 @@ receives one as its named `context` parameter.
 | `ctx.traceId` (nullable), `ctx.requestId` (always set), `ctx.log` (`LogScope`) | correlation and logging |
 | `RpcContext.isContextValid(ctx)` | static: not null, not expired, not cancelled |
 
-`RpcContextBuilder()` / `RpcContextBuilder.from(ctx)` provide `withHeader`, `withHeaders`
-(this merges), `withTraceId`, `withGeneratedTraceId`, `withGeneratedRequestId`,
-`withDeadline`, `withTimeout`, `withCancellation`, `withClock`, `withValue`,
-`withBearerAuth(token)`, `withBasicAuth(user, pass)`,
-`withApiKey(key, {headerName = 'x-api-key'})`, and `build()`.
+`ctx.forward({headers, timeout})` builds the context for a downstream call.
+It keeps this context's headers, deadline, token and values, always generates
+a new `requestId`, and generates a `traceId` only if this context has none.
+`timeout` can shorten the deadline, never extend it. This context's
+credentials are dropped: `authorization`, `proxy-authorization`, `x-api-key`,
+`cookie`, and a header named by `withApiKey(headerName:)`. `headers` are added
+after that, so `forward(headers: {'authorization': 'Bearer <service token>'})`
+sends the downstream call's own credential, and passing the caller's on means
+naming it: `forward(headers: {'authorization': ctx.getHeader('authorization')!})`.
+`RpcContext.sanitize(ctx)` drops the same set.
 
-`RpcContextBuilder.inheritFrom(parent)` keeps the parent's headers, deadline,
-token and values. It always generates a new `requestId`, and generates a `traceId` only if the parent has none.
-Its `withDeadline` / `withTimeout` keep the parent's deadline when that is
-earlier: a derived context can shorten the deadline, never extend it.
-It passes the parent's credentials on too; use it only when the next hop
-should receive them.
-`ctx.forward({headers, timeout})` is the shortcut for a downstream call: the
-same, with this context's credentials dropped: `authorization`, `proxy-authorization`, `x-api-key`, `cookie`, and a
-header named by `withApiKey(headerName:)`. `headers` are added after that, so
-`forward(headers: {'authorization': 'Bearer <service token>'})` sends the
-downstream call's own credential. `RpcContext.sanitize(ctx)` drops the same set.
-
-`RpcContextUtils`: `withTracing({traceId})`,
-`generateTraceId()`, `traceIdFor(requestId)`, `merge(left, right)` (on
-conflict, `right` wins). Credentials are set through `RpcContextBuilder`.
+`RpcContextUtils`: `withTracing({traceId})`, `generateTraceId()`,
+`traceIdFor(requestId)`.
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
 
-RpcContext outgoing(String token) => RpcContextBuilder()
-    .withBearerAuth(token)
-    .withHeader('x-tenant', 'acme')
-    .withGeneratedTraceId()
-    .withTimeout(const Duration(seconds: 5))
-    .build();
+RpcContext outgoing(String token) =>
+    RpcContext.withTraceId(RpcContextUtils.generateTraceId())
+        .withBearerAuth(token)
+        .withAdditionalHeaders({'x-tenant': 'acme'})
+        .withTimeout(const Duration(seconds: 5));
 
 // Inside a handler: a downstream call keeps the trace, the deadline (at
 // most 1 s more of it) and the cancellation, without the caller's
@@ -121,8 +114,7 @@ from scratch instead loses the deadline and the cancellation.
   `withDeadline(DateTime.now().add(d))` is on the wall clock and drifts from
   it after a jump. The `RpcContext.withTimeout(d)` factory always uses
   `monotonicNow`. For a fake clock, use
-  `RpcContext.empty().withClock(fake).withTimeout(d)` or
-  `RpcContextBuilder().withClock(fake).withTimeout(d)`.
+  `RpcContext.empty().withClock(fake).withTimeout(d)`.
 
 ## Cancellation
 

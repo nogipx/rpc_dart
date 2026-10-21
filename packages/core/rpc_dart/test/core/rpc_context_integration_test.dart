@@ -37,9 +37,7 @@ void main() {
         serverEndpoint.registerServiceContract(testService);
         serverEndpoint.start();
 
-        final context = RpcContextBuilder()
-            .withBearerAuth('test-token-123')
-            .build();
+        final context = RpcContext.empty().withBearerAuth('test-token-123');
 
         // Act
         final response = await clientEndpoint
@@ -81,24 +79,16 @@ void main() {
         expect(response.value, contains(traceId));
       });
 
-      test('two contexts with different headers merge', () async {
+      test('auth, trace and user headers cross together', () async {
         // Arrange
         final combinedService = _CombinedContextServiceContract();
         serverEndpoint.registerServiceContract(combinedService);
         serverEndpoint.start();
 
-        final authContext = RpcContextBuilder()
-            .withBearerAuth('auth-token')
-            .build();
-        final tracingContext = RpcContextUtils.withTracing(
-          traceId: 'combined-trace',
-        );
-        final userContext = RpcContext.withHeaders({'user-id': 'user-456'});
-
-        final combinedContext = RpcContextUtils.merge(
-          RpcContextUtils.merge(authContext, tracingContext),
-          userContext,
-        );
+        final combinedContext =
+            RpcContextUtils.withTracing(traceId: 'combined-trace')
+                .withBearerAuth('auth-token')
+                .withAdditionalHeaders({'user-id': 'user-456'});
 
         // Act
         final response = await clientEndpoint
@@ -237,9 +227,8 @@ void main() {
         serverEndpoint.registerServiceContract(aggregationService);
         serverEndpoint.start();
 
-        final context = RpcContextBuilder()
+        final context = RpcContext.empty()
             .withBearerAuth('client-stream-token')
-            .build()
             .withAdditionalHeaders({
               'aggregation-type': 'authenticated',
               'user-id': 'auth-user-789',
@@ -338,9 +327,8 @@ void main() {
         serverEndpoint.registerServiceContract(echoService);
         serverEndpoint.start();
 
-        final context = RpcContextBuilder()
+        final context = RpcContext.empty()
             .withBearerAuth('bidi-token')
-            .build()
             .withTraceId('bidi-trace-123')
             .withAdditionalHeaders({
               'echo-prefix': 'SECURE:',
@@ -392,9 +380,7 @@ void main() {
         serverEndpoint.start();
 
         final callerContract = _TestServiceCallerContract(clientEndpoint);
-        final context = RpcContextBuilder()
-            .withBearerAuth('contract-token')
-            .build();
+        final context = RpcContext.empty().withBearerAuth('contract-token');
 
         // Act
         final response = await callerContract.getUserData(

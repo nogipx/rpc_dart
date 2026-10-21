@@ -572,9 +572,7 @@ void main() {
         );
 
         // Act
-        final sut = RpcContextBuilder()
-            .withBasicAuth(username, password)
-            .build();
+        final sut = RpcContext.empty().withBasicAuth(username, password);
 
         // Assert
         expect(
@@ -588,7 +586,7 @@ void main() {
         const token = 'abc123def456';
 
         // Act
-        final sut = RpcContextBuilder().withBearerAuth(token).build();
+        final sut = RpcContext.empty().withBearerAuth(token);
 
         // Assert
         expect(sut.getHeader('authorization'), equals('Bearer $token'));
@@ -599,7 +597,7 @@ void main() {
         const key = 'api-key-12345';
 
         // Act
-        final sut = RpcContextBuilder().withApiKey(key).build();
+        final sut = RpcContext.empty().withApiKey(key);
 
         // Assert
         expect(sut.getHeader('x-api-key'), equals(key));
@@ -611,9 +609,7 @@ void main() {
         const headerName = 'custom-auth-header';
 
         // Act
-        final sut = RpcContextBuilder()
-            .withApiKey(key, headerName: headerName)
-            .build();
+        final sut = RpcContext.empty().withApiKey(key, headerName: headerName);
 
         // Assert
         expect(sut.getHeader(headerName), equals(key));
@@ -654,99 +650,6 @@ void main() {
         }
         expect(ids.length, 10000, reason: 'all trace ids must be unique');
         expect(ids.every((id) => id.startsWith('trace_')), isTrue);
-      });
-    });
-
-    group('merging two contexts', () {
-      test('headers from both are kept', () {
-        // Arrange
-        final leftSut = RpcContext.withHeaders({
-          'left-header': 'left-value',
-          'common': 'left',
-        });
-        final rightSut = RpcContext.withHeaders({
-          'right-header': 'right-value',
-          'common': 'right',
-        });
-
-        // Act
-        final merged = RpcContextUtils.merge(leftSut, rightSut);
-
-        // Assert
-        expect(merged.getHeader('left-header'), equals('left-value'));
-        expect(merged.getHeader('right-header'), equals('right-value'));
-        expect(
-          merged.getHeader('common'),
-          equals('right'),
-        ); // The right-hand side wins.
-      });
-
-      test('values from both are kept', () {
-        // Arrange
-        const leftKey = RpcContextKey<String>('left-key');
-        const rightKey = RpcContextKey<String>('right-key');
-        const commonKey = RpcContextKey<String>('common-key');
-        final leftSut = RpcContext.empty()
-            .withValue(leftKey, 'left-value')
-            .withValue(commonKey, 'left');
-        final rightSut = RpcContext.empty()
-            .withValue(rightKey, 'right-value')
-            .withValue(commonKey, 'right');
-
-        // Act
-        final merged = RpcContextUtils.merge(leftSut, rightSut);
-
-        // Assert
-        expect(merged.getValue(leftKey), equals('left-value'));
-        expect(merged.getValue(rightKey), equals('right-value'));
-        expect(
-          merged.getValue(commonKey),
-          equals('right'),
-        ); // The right-hand side wins.
-      });
-
-      test('for the special fields the right-hand side wins', () {
-        // Arrange
-        final leftDeadline = DateTime.now().add(Duration(hours: 1));
-        final rightDeadline = DateTime.now().add(Duration(hours: 2));
-        final leftToken = RpcCancellationToken();
-        final rightToken = RpcCancellationToken();
-
-        final leftSut = RpcContext.withDeadline(
-          leftDeadline,
-        ).withCancellation(leftToken).withTraceId('left-trace');
-        final rightSut = RpcContext.withDeadline(
-          rightDeadline,
-        ).withCancellation(rightToken).withTraceId('right-trace');
-
-        // Act
-        final merged = RpcContextUtils.merge(leftSut, rightSut);
-
-        // Assert
-        expect(merged.deadline, equals(rightDeadline));
-        expect(merged.cancellationToken, equals(rightToken));
-        expect(merged.traceId, equals('right-trace'));
-        expect(merged.requestId, equals(rightSut.requestId));
-      });
-
-      test('the left-hand side is used where the right is null', () {
-        // Arrange
-        final deadline = DateTime.now().add(Duration(hours: 1));
-        final token = RpcCancellationToken();
-        const traceId = 'left-trace';
-
-        final leftSut = RpcContext.withDeadline(
-          deadline,
-        ).withCancellation(token).withTraceId(traceId);
-        final rightSut = RpcContext.empty();
-
-        // Act
-        final merged = RpcContextUtils.merge(leftSut, rightSut);
-
-        // Assert
-        expect(merged.deadline, equals(deadline));
-        expect(merged.cancellationToken, equals(token));
-        expect(merged.traceId, equals(traceId));
       });
     });
   });

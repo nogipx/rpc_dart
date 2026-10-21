@@ -14,7 +14,7 @@ void main() {
   test('every context measures its deadline on the monotonic clock', () {
     expect(RpcContext.empty().clock, same(RpcContext.monotonicNow));
     expect(
-      RpcContextBuilder().withTimeout(const Duration(seconds: 1)).build().clock,
+      RpcContext.empty().withTimeout(const Duration(seconds: 1)).clock,
       same(RpcContext.monotonicNow),
     );
   });

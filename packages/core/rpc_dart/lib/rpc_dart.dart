@@ -35,8 +35,6 @@ export 'src/_index.dart'
         // Context and cancellation
         RpcContext,
         RpcContextKey,
-        RpcContextBuilder,
-        RpcContextExtensions,
         RpcContextUtils,
         RpcCallScope,
         RpcCancellationToken,

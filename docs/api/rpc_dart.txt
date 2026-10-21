@@ -503,10 +503,14 @@ RpcContext field remainingTime: Duration? (get)
 RpcContext field requestId: String (get)
 RpcContext field traceId: String? (get)
 RpcContext field values: Map<RpcContextKey<Object>, Object> (get)
+RpcContext method forward({Map<String, String>? headers, Duration? timeout}) -> RpcContext
 RpcContext method getHeader(String key) -> String?
 RpcContext method getValue<T>(RpcContextKey<T> key) -> T?
 RpcContext method requireCallScope() -> RpcCallScope
 RpcContext method withAdditionalHeaders(Map<String, String> additionalHeaders) -> RpcContext
+RpcContext method withApiKey(String key, {String headerName}) -> RpcContext
+RpcContext method withBasicAuth(String username, String password) -> RpcContext
+RpcContext method withBearerAuth(String token) -> RpcContext
 RpcContext method withCancellation(RpcCancellationToken token) -> RpcContext
 RpcContext method withClock(DateTime Function() clock) -> RpcContext
 RpcContext method withDeadline(DateTime newDeadline) -> RpcContext
@@ -524,29 +528,10 @@ RpcContext new withTraceId(String traceId)
 RpcContext static method isContextValid(RpcContext? context) -> bool
 RpcContext static method monotonicNow() -> DateTime
 RpcContext static method sanitize(RpcContext context) -> RpcContext
-RpcContextBuilder method build() -> RpcContext
-RpcContextBuilder method withApiKey(String key, {String headerName}) -> RpcContextBuilder
-RpcContextBuilder method withBasicAuth(String username, String password) -> RpcContextBuilder
-RpcContextBuilder method withBearerAuth(String token) -> RpcContextBuilder
-RpcContextBuilder method withCancellation(RpcCancellationToken token) -> RpcContextBuilder
-RpcContextBuilder method withClock(DateTime Function() clock) -> RpcContextBuilder
-RpcContextBuilder method withDeadline(DateTime deadline) -> RpcContextBuilder
-RpcContextBuilder method withGeneratedRequestId() -> RpcContextBuilder
-RpcContextBuilder method withGeneratedTraceId() -> RpcContextBuilder
-RpcContextBuilder method withHeader(String key, String value) -> RpcContextBuilder
-RpcContextBuilder method withHeaders(Map<String, String> headers) -> RpcContextBuilder
-RpcContextBuilder method withTimeout(Duration timeout) -> RpcContextBuilder
-RpcContextBuilder method withTraceId(String traceId) -> RpcContextBuilder
-RpcContextBuilder method withValue<T>(RpcContextKey<T> key, T value) -> RpcContextBuilder
-RpcContextBuilder new from(RpcContext context)
-RpcContextBuilder new inheritFrom(RpcContext? parent)
-RpcContextBuilder new new()
-RpcContextExtensions method forward({Map<String, String>? headers, Duration? timeout}) -> RpcContext
 RpcContextKey field name: String (get)
 RpcContextKey new new(String name)
 RpcContextUtils new new()
 RpcContextUtils static method generateTraceId() -> String
-RpcContextUtils static method merge(RpcContext left, RpcContext right) -> RpcContext
 RpcContextUtils static method traceIdFor(String requestId) -> String
 RpcContextUtils static method withTracing({String? traceId}) -> RpcContext
 RpcDataTransferMode static field auto: RpcDataTransferMode (get)
@@ -1264,8 +1249,6 @@ type RpcConnectionHost : Object (transport.dart, transport_io.dart)
 type RpcConstants : Object (transport.dart, transport_io.dart)
 type RpcContentTypeValidation : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcContextBuilder : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcContextExtensions :  (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContextKey<T> : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContextUtils : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcDataTransferMode : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)

@@ -52,9 +52,7 @@ Future<Object?> _callWith(String? encoding) async {
           responseCodec: _codec,
           context: encoding == null
               ? null
-              : (RpcContextBuilder()
-                      ..withHeaders({RpcHeaders.grpcEncoding: encoding}))
-                    .build(),
+              : RpcContext.withHeaders({RpcHeaders.grpcEncoding: encoding}),
         )
         .timeout(const Duration(seconds: 5));
   } catch (e) {

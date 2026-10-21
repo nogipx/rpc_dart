@@ -168,9 +168,9 @@ void main() {
     });
   });
 
-  group('RpcContextUtils', () {
+  group('credentials', () {
     test('creates context with Basic auth', () {
-      final context = RpcContextBuilder().withBasicAuth('user', 'pass').build();
+      final context = RpcContext.empty().withBasicAuth('user', 'pass');
       final authHeader = context.getHeader('authorization');
 
       expect(authHeader, isNotNull);
@@ -180,7 +180,7 @@ void main() {
 
     test('creates context with Bearer token', () {
       final token = 'abc123token';
-      final context = RpcContextBuilder().withBearerAuth(token).build();
+      final context = RpcContext.empty().withBearerAuth(token);
       final authHeader = context.getHeader('authorization');
 
       expect(authHeader, equals('Bearer $token'));
@@ -188,7 +188,7 @@ void main() {
 
     test('creates context with API key', () {
       final apiKey = 'secret-key-123';
-      final context = RpcContextBuilder().withApiKey(apiKey).build();
+      final context = RpcContext.empty().withApiKey(apiKey);
 
       expect(context.getHeader('x-api-key'), equals(apiKey));
     });
@@ -196,14 +196,17 @@ void main() {
     test('creates context with custom API key header', () {
       final apiKey = 'secret-key-123';
       final headerName = 'x-custom-key';
-      final context = RpcContextBuilder()
-          .withApiKey(apiKey, headerName: headerName)
-          .build();
+      final context = RpcContext.empty().withApiKey(
+        apiKey,
+        headerName: headerName,
+      );
 
       expect(context.getHeader(headerName), equals(apiKey));
       expect(context.getHeader('x-api-key'), isNull);
     });
+  });
 
+  group('RpcContextUtils', () {
     test('creates context with tracing headers', () {
       final traceId = 'trace-123';
 
@@ -219,39 +222,18 @@ void main() {
       expect(context.traceId, isNotNull);
       expect(context.traceId, startsWith('trace_'));
     });
-
-    test('merges contexts with right having priority', () {
-      const shared = RpcContextKey<String>('shared-key');
-      final leftContext = RpcContext.withHeaders({
-        'x-left': 'left-value',
-      }).withTraceId('left-trace').withValue(shared, 'left-shared');
-
-      final rightContext = RpcContext.withHeaders({
-        'x-right': 'right-value',
-      }).withTraceId('right-trace').withValue(shared, 'right-shared');
-
-      final merged = RpcContextUtils.merge(leftContext, rightContext);
-
-      expect(merged.traceId, equals('right-trace'));
-      expect(merged.requestId, equals(rightContext.requestId));
-      expect(merged.getValue(shared), equals('right-shared'));
-      expect(merged.getHeader('x-left'), equals('left-value'));
-      expect(merged.getHeader('x-right'), equals('right-value'));
-    });
   });
 
-  group('RpcContextBuilder', () {
-    test('builds context with fluent API', () {
+  group('with... chain', () {
+    test('builds a context field by field', () {
       final timeout = Duration(minutes: 5);
       final traceId = 'trace-123';
 
-      final context = RpcContextBuilder()
-          .withTraceId(traceId)
+      final context = RpcContext.withTraceId(traceId)
           .withTimeout(timeout)
-          .withHeader('x-user-id', '123')
+          .withAdditionalHeaders({'x-user-id': '123'})
           .withBearerAuth('token-abc')
-          .withValue(_customData, 'test-value')
-          .build();
+          .withValue(_customData, 'test-value');
 
       expect(context.traceId, equals(traceId));
       expect(context.deadline, isNotNull);
@@ -259,17 +241,17 @@ void main() {
       expect(context.getHeader('authorization'), equals('Bearer token-abc'));
       expect(context.getValue(_customData), equals('test-value'));
     });
+  });
 
-    test('inherits from parent context', () {
+  group('forward', () {
+    test('keeps the parent headers and adds its own', () {
       final parentTraceId = 'parent-trace-123';
       final parentHeaders = {'x-session': 'parent-session'};
       final parent = RpcContext.withHeaders(
         parentHeaders,
       ).withTraceId(parentTraceId);
 
-      final child = RpcContextBuilder.inheritFrom(
-        parent,
-      ).withHeader('x-user-id', '456').build();
+      final child = parent.forward(headers: {'x-user-id': '456'});
 
       expect(child.traceId, equals(parentTraceId));
       expect(child.getHeader('x-session'), equals('parent-session'));
@@ -277,16 +259,14 @@ void main() {
       expect(child.requestId, startsWith('req_'));
     });
 
-    test('generates new trace ID when parent is null', () {
-      final child = RpcContextBuilder.inheritFrom(null).build();
+    test('generates a trace ID when the parent has none', () {
+      final child = RpcContext.empty().forward();
 
       expect(child.traceId, isNotNull);
       expect(child.traceId, startsWith('trace_'));
       expect(child.requestId, isNotEmpty);
     });
-  });
 
-  group('RpcContextExtensions', () {
     test('forward inherits trace ID and generates new request ID', () {
       final parentTraceId = 'parent-trace-123';
       final parent = RpcContext.withTraceId(parentTraceId);
@@ -320,11 +300,9 @@ void main() {
       final cancellationToken = RpcCancellationToken();
       final timeout = Duration(seconds: 30);
 
-      final context = RpcContextBuilder()
-          .withGeneratedTraceId()
-          .withTimeout(timeout)
-          .withCancellation(cancellationToken)
-          .build();
+      final context = RpcContext.withTraceId(
+        RpcContextUtils.generateTraceId(),
+      ).withTimeout(timeout).withCancellation(cancellationToken);
 
       final childContext = context.forward();
 

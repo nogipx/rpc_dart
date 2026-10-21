@@ -109,10 +109,9 @@ void main() {
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
       request: RpcString('ping'),
-      context: RpcContextBuilder()
-          .withBearerAuth('test-token')
-          .withHeader('x-tenant-id', 'tenant-42')
-          .build(),
+      context: RpcContext.withHeaders({
+        'x-tenant-id': 'tenant-42',
+      }).withBearerAuth('test-token'),
     );
 
     expect(response.value, 'seen ping');

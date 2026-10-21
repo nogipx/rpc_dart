@@ -108,10 +108,9 @@ void main() {
       'normal completion does NOT cancel the (reused) context token',
       () async {
         final token = RpcCancellationToken();
-        final context = RpcContextBuilder()
-            .withGeneratedTraceId()
-            .withCancellation(token)
-            .build();
+        final context = RpcContext.withTraceId(
+          RpcContextUtils.generateTraceId(),
+        ).withCancellation(token);
 
         final first = await finite(
           _Req('a'),
@@ -142,10 +141,9 @@ void main() {
       'real mid-stream cancellation still fires the token and surfaces it',
       () async {
         final token = RpcCancellationToken();
-        final context = RpcContextBuilder()
-            .withGeneratedTraceId()
-            .withCancellation(token)
-            .build();
+        final context = RpcContext.withTraceId(
+          RpcContextUtils.generateTraceId(),
+        ).withCancellation(token);
 
         final stream = caller.serverStream<_Req, _Res>(
           serviceName: _StreamService.serviceId,
