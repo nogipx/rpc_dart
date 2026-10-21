@@ -31,6 +31,10 @@ class RpcWebSocketServer extends IRpcServer {
 
   /// Set once a connection refused while stopped has been reported.
   bool _warnedStopped = false;
+
+  /// The frame ceiling a guard keeps when no policy reaches it.
+  static final int _defaultFrameBytes =
+      const RpcSecurityPolicy().maxChannelFrameBytes;
   int _connCounter = 0;
 
   /// A server over [connections].
@@ -132,6 +136,19 @@ class RpcWebSocketServer extends IRpcServer {
     final Object connections = _connections;
     if (connections is IRpcWebSocketServerPolicyTarget) {
       connections.adoptServerPolicy(_policy);
+    } else if (_policy.maxChannelFrameBytes > _defaultFrameBytes) {
+      // A stream wrapped with `.where` or `.map` is an ordinary Stream, so the
+      // policy cannot follow it. Not thrown: a source of another kind has no
+      // frame guard to raise, and is entitled to the larger limit. Once per
+      // server: a restart returns above, on the subscription it kept.
+      _log.warning(
+        'The connections stream does not take this server\'s policy, so a '
+        'frame guard in it keeps its own ceiling, and a message larger than '
+        '$_defaultFrameBytes bytes may be dropped as a broken connection. If '
+        'the stream came from rpcWebSocketConnections, pass `policy:` to it, '
+        'or filter with `allowUpgrade` and observe with `onConnectionOpened` '
+        'instead of wrapping it.',
+      );
     }
 
     final StreamSubscription<WebSocketChannel> subscription;

@@ -290,7 +290,7 @@ RpcWebSocketServer buildServer(
 | Parameter | Meaning |
 | --- | --- |
 | `connections` | Required. Upgraded sockets. The server listens to it once, on the first `start()`. |
-| `policy` | Limits for every connection. Also handed to `rpcWebSocketConnections`. |
+| `policy` | Limits for every connection. Also handed to `rpcWebSocketConnections`, but only to the stream it returned: one wrapped with `.where` or `.map` keeps the default frame ceiling, and the server logs a warning when its limit is higher. Filter with `allowUpgrade` and observe with `onConnectionOpened` instead of wrapping. |
 | `maxConnections` | Default `null` (no limit). At the limit a new socket is closed immediately. |
 | `mode` | Required. `RpcResponderMode(register)` gives each connection an `RpcResponderEndpoint`; `RpcPeerMode(register)` gives it an `RpcPeerEndpoint`, which can both serve and call the client. The register adds the contracts. |
 | `onConnectionOpened` / `onConnectionClosed` / `onConnectionError` | Notifications. An exception thrown in one is logged and does not stop the server. Every opened connection is reported closed once. |

@@ -63,6 +63,12 @@ import 'websocket_server_policy.dart';
 /// starts, and a limit raised there raises this one. [policy] overrides it for
 /// a stream consumed by something else.
 ///
+/// Hand the returned stream to the server as it is. A stream wrapped with
+/// `.where` or `.map` cannot take the server's policy, so a limit raised on the
+/// server alone does not reach the guard, and the server logs a warning. Filter
+/// connections with [allowUpgrade] and observe them with the server's
+/// `onConnectionOpened` instead, or pass the same [policy] here.
+///
 /// ```dart
 /// final http = await HttpServer.bind(host, port);
 /// final server = RpcWebSocketServer(
