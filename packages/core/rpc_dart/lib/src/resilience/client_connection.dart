@@ -669,6 +669,9 @@ class RpcClientConnection {
   /// The token of the attempt in flight, null between attempts.
   RpcCancellationToken? _attempt;
 
+  /// Ends the backoff sleep now; null when the loop is not sleeping.
+  void Function()? _wakeBackoff;
+
   /// Why an attempt's token was cancelled: a stop, or [_connectTimeout].
   static const String _stoppedReason = 'connection stopped';
   static const String _timedOutReason = 'connect timed out';
@@ -740,6 +743,7 @@ class RpcClientConnection {
   Future<void> disconnect() async {
     _isStopped = true;
     _attempt?.cancel(_stoppedReason);
+    _wakeBackoff?.call();
     await _proxy.detach();
     _emit(const RpcClientIdle());
   }
@@ -751,6 +755,7 @@ class RpcClientConnection {
     _isStopped = true;
     _disposed = true;
     _attempt?.cancel(_stoppedReason);
+    _wakeBackoff?.call();
     await _proxy.close();
     if (!_stateCtl.isClosed) await _stateCtl.close();
   }
@@ -862,7 +867,17 @@ class RpcClientConnection {
           'Reconnect attempt ${_reconnectAttempts + 1}, '
           'waiting ${delay.inMilliseconds}ms',
         );
-        await Future<void>.delayed(delay);
+        // A Timer a stop can cancel, not Future.delayed: a pending timer keeps
+        // the isolate alive, so dispose() during the sleep held the process
+        // open for the rest of the delay -- up to maxDelay.
+        final wake = Completer<void>();
+        final sleep = Timer(delay, wake.complete);
+        _wakeBackoff = () {
+          sleep.cancel();
+          if (!wake.isCompleted) wake.complete();
+        };
+        await wake.future;
+        _wakeBackoff = null;
         if (_isStopped) break;
       }
 
