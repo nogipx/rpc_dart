@@ -625,7 +625,7 @@ class _Emitter {
       _constructor(
         className,
         endpointType: 'RpcPeerEndpoint',
-        modes: const ['responderDataTransferMode', 'callerDataTransferMode'],
+        modes: const ['dataTransferMode', 'callerDataTransferMode'],
       ),
     );
     b.writeln();
@@ -675,7 +675,7 @@ class _Emitter {
       _constructor(
         className,
         endpointType: 'RpcPeerEndpoint',
-        modes: const ['responderDataTransferMode', 'callerDataTransferMode'],
+        modes: const ['dataTransferMode', 'callerDataTransferMode'],
       ),
     );
     b.writeln();
