@@ -179,7 +179,7 @@ see the defect does not prove its absence.
 
 probes: 5
 canaries: 5
-round cap: 900
+round cap: 950
 
 Stop after this many rounds in a row with no `severity: S1`. The owner set it
 after the round-798 review: rounds 787-798 were log levels while four S1 waited

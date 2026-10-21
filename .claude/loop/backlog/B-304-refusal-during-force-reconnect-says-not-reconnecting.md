@@ -1,10 +1,10 @@
 ---
-status: open
-round: (not re-measured)
-commit: acade03e
+status: closed (round 896)
+round: 896
+commit: 99126bfa
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-probe:
-reason: risk — seen while porting the websocket tests to RpcClientConnection in major-release step 2, not measured
+probe: P-348
+reason: closed — REFUTED in round 896 (P-348): the window is the old transport's close, under 10 ms over a dead path on websocket, socket and http2, shorter than the retry's first 200 ms backoff; only a third-party transport with a slow close would show it
 rank: 7
 ---
 
