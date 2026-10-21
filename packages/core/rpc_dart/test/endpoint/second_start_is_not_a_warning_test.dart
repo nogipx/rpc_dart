@@ -46,6 +46,14 @@ class _Capture implements LogOutput {
 }
 
 void main() {
+  // A peer endpoint starts through the responder's start(), with its parity
+  // filter: a tear-off, so each start passes a new object.
+  for (final peer in [false, true]) {
+    group(peer ? 'peer' : 'responder', () => _cases(peer: peer));
+  }
+}
+
+void _cases({required bool peer}) {
   late _Capture capture;
   late LogController logs;
   late RpcChannelTransport client;
@@ -58,7 +66,9 @@ void main() {
     final pair = RpcChannelTransport.pair();
     client = pair.$1;
     server = pair.$2;
-    endpoint = RpcResponderEndpoint(transport: server, logController: logs);
+    endpoint = peer
+        ? RpcPeerEndpoint(transport: server, logController: logs)
+        : RpcResponderEndpoint(transport: server, logController: logs);
   });
 
   tearDown(() async {
