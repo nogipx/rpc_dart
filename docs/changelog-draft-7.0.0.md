@@ -78,6 +78,7 @@ No error message is a contract: match on the type or the status.
 | `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
 | `RpcMessage` | not exported; a transport works with `RpcTransportMessage` |
 | `RpcDirectMultiplexedChannel` | not exported; `RpcChannelTransport.memoryPair()` |
+| `IRpcChannelProtocolClose.closeForProtocolError(reason)` | `IRpcChannel.closeFor(RpcCloseForProtocolError(reason))`, with a default; a channel `extends IRpcChannel` to inherit it |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `RpcMethodKind` in `@RpcMethod` | `RpcMethodType` |
 | a hand-written observer of the four `intercept*` methods | `RpcCallObserverInterceptor` |
@@ -120,6 +121,8 @@ their `codec`.
 - **One CBOR message has an item budget**, so a small message cannot decode to
   a huge object graph.
 - **A derived context cannot outlive its parent.**
+- **`IRpcServer.endpoints` lists peer-mode connections too.** An
+  `RpcPeerEndpoint` is an `RpcResponderEndpoint` that can also start calls.
 - **`global` in the rate limiter is a ceiling**, not a fallback.
 - **A request encoding is declared only if a codec for it is registered.**
 - **A peer that repeats the same fault is logged once.**
@@ -242,7 +245,8 @@ Unix domain socket and TCP transport over core's channel framing: a server with
 a lock file guarding a live socket path, frames of one turn written together,
 and reading stopped while a peer's answers go unsent. The connection opens with
 core's frame preface; the server builds no endpoint before it arrives and
-drops a silent peer after `prefaceTimeout`.
+drops a silent peer after `prefaceTimeout`. `connectRpcSocket` is bounded by a
+timeout and abandoned on a cancellation token.
 
 ## rpc_dart_http (next version)
 
