@@ -1,11 +1,11 @@
 ---
-status: open
-round: 901
-commit: 76aa894d
+status: closed (round 902)
+round: 902
+commit: 8ad7de87
 paths: [packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-probe: none
-reason: risk — a suspicion from round 901's sibling sweep, not measured: the server hands its policy to the connections stream only through an `is` check
-rank: 10
+probe: packages/transport/rpc_dart_websocket/test/the_server_policy_reaches_the_frame_guard_test.dart
+reason: "FIXED in round 902 as decided by the owner: confirmed 3 of 3 -- a 20 MiB message under a 32 MiB server limit, connections wrapped with `.where`, fails UNAVAILABLE (close 1002). The policy cannot follow a plain Stream, so the server warns once at start, and the docs send filtering to allowUpgrade. Previously: risk -- a suspicion from round 901's sibling sweep"
+release: changelog
 ---
 
 # B-312 — a wrapped websocket connections stream drops the server policy
