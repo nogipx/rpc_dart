@@ -165,7 +165,7 @@ One transport, calls in both directions. Stream-id parity separates them: the
 responder half handles only ids the remote opened. The two ends must therefore
 have opposite `isClient` values, as `memoryPair()` returns them.
 
-`RpcPeerContract(serviceName, RpcPeerEndpoint endpoint, {responderDataTransferMode, callerDataTransferMode})`
+`RpcPeerContract(serviceName, RpcPeerEndpoint endpoint, {dataTransferMode, callerDataTransferMode})`
 extends `RpcResponderContract`: register handlers in `setup()`, call the remote
 with `callUnary` / `callServerStream` / `callClientStream` /
 `callBidirectionalStream`.

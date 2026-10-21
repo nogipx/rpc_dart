@@ -449,13 +449,16 @@ abstract class RpcPeerContract extends RpcResponderContract
   final RpcDataTransferMode callerDataTransferMode;
 
   /// Creates a peer contract bound to [serviceName] and [endpoint].
+  ///
+  /// [dataTransferMode] is the mode of the calls it serves, as on
+  /// [RpcResponderContract]; [callerDataTransferMode] that of the calls it
+  /// makes.
   RpcPeerContract(
     super.serviceName,
     RpcPeerEndpoint endpoint, {
-    RpcDataTransferMode responderDataTransferMode = RpcDataTransferMode.auto,
+    super.dataTransferMode,
     this.callerDataTransferMode = RpcDataTransferMode.auto,
-  }) : _peerEndpoint = endpoint,
-       super(dataTransferMode: responderDataTransferMode);
+  }) : _peerEndpoint = endpoint;
 
   /// The peer endpoint this contract is bound to.
   RpcPeerEndpoint get endpoint => _peerEndpoint;

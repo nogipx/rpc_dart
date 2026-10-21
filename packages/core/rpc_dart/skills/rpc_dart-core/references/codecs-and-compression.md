@@ -31,7 +31,7 @@ Compression is a separate, per-message step applied to the encoded bytes.
 ## Transfer modes
 
 Set per contract (`dataTransferMode:` on `RpcResponderContract` /
-`RpcCallerContract`, `responderDataTransferMode:` / `callerDataTransferMode:` on
+`RpcCallerContract`, `dataTransferMode:` / `callerDataTransferMode:` on
 `RpcPeerContract`), or per method via `@RpcService` / `@RpcMethod` when
 generating.
 

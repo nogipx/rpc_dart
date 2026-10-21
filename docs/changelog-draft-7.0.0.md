@@ -100,6 +100,7 @@ No error message is a contract: match on the type or the status.
 | `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
 | `SpanStatus` | `LogSpanStatus`; it no longer clashes with OpenTelemetry's `SpanStatus` |
 | `RpcStatus` as `int` constants, `RpcStatusException.statusCode` an `int` | `RpcStatus` is an enum with `code` and `grpcName`, `statusCode` is one of its values, `RpcStatus.fromCode(n)` reads a wire number (outside 0..16 is `unknown`); `RpcStatus.isFault(code)` is `status.isFault` |
+| `RpcPeerContract(..., responderDataTransferMode: m)` | `dataTransferMode: m`, as on the other two contracts |
 | `RpcCallScope.disposerTimeout = d` (a static, for the whole isolate) | `RpcCallScope(disposerTimeout: d)`; `RpcCallScope.defaultDisposerTimeout` |
 | `RpcHeaders.xRouteService` | gone; routing uses the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | the same without `const` |

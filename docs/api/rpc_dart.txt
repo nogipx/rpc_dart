@@ -890,7 +890,7 @@ RpcPeerContract method callServerStream<TRequest, TResponse>({required String me
 RpcPeerContract method callUnary<TRequest, TResponse>({required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerContract method dispose() -> void
 RpcPeerContract method setup() -> void
-RpcPeerContract new new(String serviceName, RpcPeerEndpoint endpoint, {RpcDataTransferMode responderDataTransferMode, RpcDataTransferMode callerDataTransferMode})
+RpcPeerContract new new(String serviceName, RpcPeerEndpoint endpoint, {RpcDataTransferMode dataTransferMode, RpcDataTransferMode callerDataTransferMode})
 RpcPeerEndpoint field activeResponderCount: int (get)
 RpcPeerEndpoint field compressionEnabled: bool (get)
 RpcPeerEndpoint field debugLabel: String? (get)

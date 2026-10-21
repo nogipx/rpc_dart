@@ -73,6 +73,7 @@ builds a transport, a channel or frames imports
 | `SpanStatus` | `LogSpanStatus` |
 | `RpcStatus` `int` constants; `RpcStatusException(14, ...)`; `int status = e.statusCode` | `RpcStatus` is an enum and `statusCode` its value: `RpcStatus.unavailable`, `RpcStatus.fromCode(14)`; the wire number is `status.code` |
 | `RpcStatus.isFault(code)` | `status.isFault` |
+| `RpcPeerContract(..., responderDataTransferMode: m)` | `dataTransferMode: m`, as on the other two contracts |
 | `implements IRpcChannelProtocolClose` | `extends IRpcChannel` and override `closeFor(RpcChannelCloseReason)` |
 
 `RpcException` is abstract: throw `RpcStatusException(RpcStatus.x, '...')`.
