@@ -15,6 +15,11 @@
 // be the same.
 //
 // The paired "a message at the limit is accepted" is I-2.
+//
+// Each direction is tried just past the limit and far past it. Far past it,
+// the sender is still writing when the receiver refuses and closes; a close
+// that leaves those bytes unread resets the connection, and the reset can
+// discard the RESOURCE_EXHAUSTED answer already on its way.
 
 @TestOn('vm')
 library;
@@ -27,14 +32,24 @@ import 'support/matrix.dart';
 const _small = 64 * 1024;
 const _smallPolicy = RpcSecurityPolicy(maxMessageLengthBytes: _small);
 
+/// Far past [_small]: big enough that the sender is still writing when the
+/// receiver closes.
+const _far = 8 * 1024 * 1024;
+
 enum _Failure {
   deadline(RpcStatus.deadlineExceeded),
   oversizeRequest(RpcStatus.resourceExhausted),
+  oversizeRequestFar(RpcStatus.resourceExhausted),
   oversizeResponse(RpcStatus.resourceExhausted),
+  oversizeResponseFar(RpcStatus.resourceExhausted),
   deadPeer(RpcStatus.unavailable);
 
   const _Failure(this.status);
   final int status;
+
+  bool get smallServer => this == oversizeRequest || this == oversizeRequestFar;
+  bool get smallCaller =>
+      this == oversizeResponse || this == oversizeResponseFar;
 }
 
 const _knownFailing = <String, String>{};
@@ -50,13 +65,13 @@ void main() {
             knownFailing: _knownFailing,
             () async {
               final rig = await member.serve(
-                serverPolicy: failure == _Failure.oversizeRequest
+                serverPolicy: failure.smallServer
                     ? _smallPolicy
                     : const RpcSecurityPolicy(),
               );
               addTearDown(rig.close);
               final caller = await rig.caller(
-                policy: failure == _Failure.oversizeResponse
+                policy: failure.smallCaller
                     ? _smallPolicy
                     : const RpcSecurityPolicy(),
               );
@@ -69,9 +84,14 @@ void main() {
                   id: id,
                   size: _small + 1,
                 ),
+                _Failure.oversizeRequestFar => Blob.request(id: id, size: _far),
                 _Failure.oversizeResponse => Blob.request(
                   id: id,
                   responseSize: _small + 1,
+                ),
+                _Failure.oversizeResponseFar => Blob.request(
+                  id: id,
+                  responseSize: _far,
                 ),
               };
               final call = Call.start(
