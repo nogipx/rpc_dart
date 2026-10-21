@@ -1,10 +1,10 @@
 ---
-status: open
-round: (not re-measured)
+status: closed (round 888)
+round: 888
 commit: 43d2d3a8
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
-probe:
-reason: risk — seen while removing the same pattern from three per-call sets in major-release step 4, not measured on this file
+probe: P-340
+reason: closed — measured in round 888 (P-340): the distinct-key walk is 2.6x at cap 20000, minor beside the 222x the hash collisions caused. Both gone: the store is now an O(1) intrusive-list LRU keyed by a salted hash, no keys.first walk.
 rank: 7
 ---
 

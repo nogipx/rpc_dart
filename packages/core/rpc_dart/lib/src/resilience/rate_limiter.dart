@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: MIT
 
 import 'dart:async';
+import 'dart:collection';
+import 'dart:math';
 
 import '../_internal.dart';
 
@@ -314,6 +316,146 @@ class _TokenBucketCounter extends _RateLimitCounter {
 // Interceptor
 // ---------------------------------------------------------------------------
 
+/// One entry in a [_KeyedLruStore]: its value, the key it was filed under, the
+/// bucket hash, and the links that order it against the other entries.
+class _LruNode<V> {
+  _LruNode(this.hash, this.key, this.value);
+  final int hash;
+  final String key;
+  final V value;
+  _LruNode<V>? prev;
+  _LruNode<V>? next;
+}
+
+/// A capacity-bounded LRU map from an attacker-controlled String key to [V].
+///
+/// Keyed by a per-store SALTED hash of the string. Without the salt the hash is
+/// unpredictable, so a peer cannot precompute keys that share a bucket and
+/// collision chains stay at their honest length (about one). That is what turns
+/// the O(n) per-request walk a crafted same-hashCode key set caused into O(1):
+/// `maxTrackedKeys` bounds the key count, not the cost of reaching one.
+///
+/// Eviction is an O(1) LRU over an intrusive doubly-linked list, head
+/// most-recently-used. The insertion-ordered map it replaced used `keys.first`
+/// as the LRU end, which walks the slots its own removals leave behind.
+class _KeyedLruStore<V> {
+  _KeyedLruStore(this._capacity) : _salt = _newSalt();
+
+  final int _capacity;
+  final int _salt;
+  final Map<int, List<_LruNode<V>>> _buckets =
+      HashMap<int, List<_LruNode<V>>>();
+  _LruNode<V>? _head; // most-recently-used
+  _LruNode<V>? _tail; // least-recently-used
+  int _length = 0;
+
+  /// Number of keys tracked.
+  int get length => _length;
+
+  static int _newSalt() {
+    // 32 bits, in two 16-bit draws so no intermediate exceeds 2^53 (dart2js).
+    final r = Random.secure();
+    return (r.nextInt(1 << 16) << 16) | r.nextInt(1 << 16);
+  }
+
+  /// A one-at-a-time hash seeded with the secret salt. Same shape as the VM's
+  /// String.hashCode, but the salt makes it unpredictable to a remote peer, and
+  /// every shift stays under 2^53 so it holds on dart2js too.
+  int _hash(String key) {
+    var h = _salt & 0xFFFFFFFF;
+    for (final c in key.codeUnits) {
+      h = (h + c) & 0xFFFFFFFF;
+      h = (h + ((h << 10) & 0xFFFFFFFF)) & 0xFFFFFFFF;
+      h ^= h >> 6;
+    }
+    h = (h + ((h << 3) & 0xFFFFFFFF)) & 0xFFFFFFFF;
+    h ^= h >> 11;
+    h = (h + ((h << 15) & 0xFFFFFFFF)) & 0xFFFFFFFF;
+    return h;
+  }
+
+  /// The value for [key], created with [ifAbsent] if new, marked
+  /// most-recently-used. Past capacity the least-recently-used entry is evicted.
+  V putIfAbsent(String key, V Function() ifAbsent) {
+    final h = _hash(key);
+    final bucket = _buckets[h];
+    if (bucket != null) {
+      for (final node in bucket) {
+        if (node.key == key) {
+          _moveToHead(node);
+          return node.value;
+        }
+      }
+    }
+    final node = _LruNode<V>(h, key, ifAbsent());
+    (bucket ?? (_buckets[h] = <_LruNode<V>>[])).add(node);
+    _linkAtHead(node);
+    _length++;
+    if (_length > _capacity) _removeNode(_tail!);
+    return node.value;
+  }
+
+  /// Drops every entry whose value [shouldRemove] accepts.
+  void removeWhere(bool Function(V value) shouldRemove) {
+    var node = _tail;
+    while (node != null) {
+      final prev = node.prev;
+      if (shouldRemove(node.value)) _removeNode(node);
+      node = prev;
+    }
+  }
+
+  void clear() {
+    _buckets.clear();
+    _head = null;
+    _tail = null;
+    _length = 0;
+  }
+
+  void _moveToHead(_LruNode<V> node) {
+    if (identical(node, _head)) return;
+    _unlink(node);
+    _linkAtHead(node);
+  }
+
+  void _linkAtHead(_LruNode<V> node) {
+    node
+      ..prev = null
+      ..next = _head;
+    _head?.prev = node;
+    _head = node;
+    _tail ??= node;
+  }
+
+  void _unlink(_LruNode<V> node) {
+    final p = node.prev;
+    final n = node.next;
+    if (p != null) {
+      p.next = n;
+    } else {
+      _head = n;
+    }
+    if (n != null) {
+      n.prev = p;
+    } else {
+      _tail = p;
+    }
+    node
+      ..prev = null
+      ..next = null;
+  }
+
+  void _removeNode(_LruNode<V> node) {
+    _unlink(node);
+    final bucket = _buckets[node.hash];
+    if (bucket != null) {
+      bucket.remove(node); // honest bucket length is about one
+      if (bucket.isEmpty) _buckets.remove(node.hash);
+    }
+    _length--;
+  }
+}
+
 /// Rate-limiting interceptor for [RpcResponderEndpoint].
 ///
 /// ```dart
@@ -396,13 +538,12 @@ class RpcRateLimiter extends IRpcInterceptor {
        _perMethodSpec = Map.unmodifiable(perMethod),
        _perKeyFallbackSpec = perKeyFallback,
        _keyExtractor = keyExtractor,
-       _maxTrackedKeys = maxTrackedKeys,
        _meterServerStreamMessages = meterServerStreamMessages,
        _cleanupIntervalUs = cleanupInterval.inMicroseconds,
        _nowMicros = nowMicros ?? _defaultMonotonicMicros {
-    // A throw, not an assert, which vanishes in release. At 0, _getDynamic's
-    // `store.length >= _maxTrackedKeys` is true on an EMPTY map and
-    // `store.keys.first` throws, so every call reaches the client as INTERNAL.
+    // A throw, not an assert, which vanishes in release. At 0 the store evicts
+    // each key as it is inserted, so every call gets a fresh counter and no
+    // limit is ever enforced -- the opposite of what the operator asked for.
     if (maxTrackedKeys <= 0) {
       throw ArgumentError.value(
         maxTrackedKeys,
@@ -410,6 +551,10 @@ class RpcRateLimiter extends IRpcInterceptor {
         'must be > 0',
       );
     }
+
+    _dynamicServiceCounters = _KeyedLruStore(maxTrackedKeys);
+    _dynamicMethodCounters = _KeyedLruStore(maxTrackedKeys);
+    _dynamicFallbackCounters = _KeyedLruStore(maxTrackedKeys);
 
     // Validate EVERY spec up front, in every build mode. A spec that cannot
     // enforce anything must fail loudly at construction rather than at first
@@ -451,7 +596,6 @@ class RpcRateLimiter extends IRpcInterceptor {
   final Map<String, RateLimit> _perMethodSpec;
   final RateLimit? _perKeyFallbackSpec;
   final String? Function(RpcMiddlewareContext)? _keyExtractor;
-  final int _maxTrackedKeys;
   final bool _meterServerStreamMessages;
   final int Function() _nowMicros;
   bool _disposed = false;
@@ -460,12 +604,14 @@ class RpcRateLimiter extends IRpcInterceptor {
   late final Map<String, _RateLimitCounter> _staticServiceCounters;
   late final Map<String, _RateLimitCounter> _staticMethodCounters;
 
-  // Dynamic counters: userKey -> slotKey -> counter
-  final Map<String, Map<String, _RateLimitCounter>> _dynamicServiceCounters =
-      {};
-  final Map<String, Map<String, _RateLimitCounter>> _dynamicMethodCounters = {};
-  final Map<String, Map<String, _RateLimitCounter>> _dynamicFallbackCounters =
-      {};
+  // Dynamic counters: userKey -> slotKey -> counter. The outer store is keyed
+  // by a salted hash of the attacker-controlled userKey (see [_KeyedLruStore]).
+  late final _KeyedLruStore<Map<String, _RateLimitCounter>>
+  _dynamicServiceCounters;
+  late final _KeyedLruStore<Map<String, _RateLimitCounter>>
+  _dynamicMethodCounters;
+  late final _KeyedLruStore<Map<String, _RateLimitCounter>>
+  _dynamicFallbackCounters;
 
   /// How often stale per-key counters are swept, and when that last happened.
   ///
@@ -505,8 +651,8 @@ class RpcRateLimiter extends IRpcInterceptor {
     final nowUs = _nowMicros();
     final thresholdUs = _maxWindowUs() * 2;
 
-    void evict(Map<String, Map<String, _RateLimitCounter>> store) {
-      store.removeWhere((_, slots) {
+    void evict(_KeyedLruStore<Map<String, _RateLimitCounter>> store) {
+      store.removeWhere((slots) {
         slots.removeWhere((_, c) => (nowUs - c._lastUsedUs) > thresholdUs);
         return slots.isEmpty;
       });
@@ -533,30 +679,22 @@ class RpcRateLimiter extends IRpcInterceptor {
   }
 
   _RateLimitCounter? _getDynamic(
-    Map<String, Map<String, _RateLimitCounter>> store,
+    _KeyedLruStore<Map<String, _RateLimitCounter>> store,
     String userKey,
     String slotKey,
     RateLimit? spec,
   ) {
     if (spec == null) return null;
-    // Bound cardinality: the key is attacker-controlled (it comes from
-    // _keyExtractor, e.g. a client-supplied userId), so without a cap a client
-    // rotating keys would grow this map without limit between cleanup ticks —
-    // a memory-exhaustion DoS on the very component meant to prevent it. Evict
-    // the least-recently-used key when the cap is reached, and keep access
-    // order so hot keys survive (the map is insertion-ordered).
-    var slots = store[userKey];
-    if (slots == null) {
-      if (store.length >= _maxTrackedKeys) {
-        store.remove(store.keys.first); // least-recently-used
-      }
-      slots = <String, _RateLimitCounter>{};
-      store[userKey] = slots;
-    } else {
-      // Touch: move to the most-recently-used position.
-      store.remove(userKey);
-      store[userKey] = slots;
-    }
+    // The key is attacker-controlled (it comes from _keyExtractor, e.g. a
+    // client-supplied userId). [_KeyedLruStore] bounds the key count at
+    // _maxTrackedKeys with LRU eviction -- so a client rotating keys cannot
+    // grow it without limit (a memory DoS on the very component meant to
+    // prevent one) -- and salts the hash so a flood of colliding keys cannot
+    // make each lookup walk a long chain.
+    final slots = store.putIfAbsent(
+      userKey,
+      () => <String, _RateLimitCounter>{},
+    );
     return slots.putIfAbsent(slotKey, () => spec._createCounter(_nowMicros));
   }
 
