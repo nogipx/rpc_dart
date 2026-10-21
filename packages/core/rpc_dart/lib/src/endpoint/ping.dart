@@ -180,8 +180,11 @@ final class RpcEndpointPingExchange {
                       responderMicros,
                       isUtc: true,
                     ),
-              responderDebugLabel:
-                  headersMap[RpcEndpointPingProtocol.responseDebugLabelHeader],
+              responderDebugLabel: switch (headersMap[RpcEndpointPingProtocol
+                  .responseDebugLabelHeader]) {
+                null => null,
+                final encoded => RpcMetadata.decodeGrpcMessage(encoded),
+              },
               responseHeaders: headersMap,
             );
 

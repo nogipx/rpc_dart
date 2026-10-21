@@ -36,7 +36,19 @@ final class RpcResponderPingHandler {
     required Future<void> Function() onComplete,
   }) async {
     try {
-      final label = debugLabel;
+      // Percent-encoded like `grpc-message`: the label is the application's
+      // own text, and a header value the policy refuses fails the whole
+      // response. One that does not fit even encoded is left out -- the label
+      // is advisory, the pong is not.
+      final raw = debugLabel;
+      final encoded = raw == null || raw.isEmpty
+          ? ''
+          : RpcMetadata.encodeGrpcMessage(raw);
+      final label =
+          encoded.isNotEmpty &&
+              transport.securityPolicy.isValidHeaderValue(encoded)
+          ? encoded
+          : null;
       await transport.sendMetadata(
         streamId,
         RpcMetadata([
@@ -45,7 +57,7 @@ final class RpcResponderPingHandler {
             RpcEndpointPingProtocol.responseTimestampHeader,
             DateTime.now().microsecondsSinceEpoch.toString(),
           ),
-          if (label != null && label.isNotEmpty)
+          if (label != null)
             RpcHeader(RpcEndpointPingProtocol.responseDebugLabelHeader, label),
         ]),
         endStream: true,

@@ -209,7 +209,10 @@ automatically, with one trailer and without running middleware,
 interceptors or a handler, so it measures the transport and the endpoint's
 dispatch, not your services. Returns `RpcEndpointPingResult`: `sentAt`,
 `receivedAt`, `roundTrip` (monotonic), `responderTimestamp` (the responder's
-UTC clock), `responderDebugLabel`, `responseHeaders`.
+UTC clock), `responderDebugLabel`, `responseHeaders`. The responder's
+`debugLabel` travels percent-encoded and `responderDebugLabel` is decoded, so
+any name works; one too long for the header limit is left out
+(`responderDebugLabel` null) and the ping still answers.
 
 ```dart
 Future<Duration?> probe(RpcCallerEndpoint caller) async {
