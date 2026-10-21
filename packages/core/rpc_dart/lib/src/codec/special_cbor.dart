@@ -211,6 +211,19 @@ final class CborItemLimitException extends FormatException {
   final int maxItems;
 }
 
+/// A decode refused because one map carried more keys sharing a single
+/// `String.hashCode` than [maxCollisions]. A [FormatException], like
+/// [CborItemLimitException], so code that catches malformed input still does
+/// and the endpoints answer it RESOURCE_EXHAUSTED.
+final class CborKeyCollisionException extends FormatException {
+  /// Creates the refusal for a map bounded at [maxCollisions] keys per hash.
+  CborKeyCollisionException(this.maxCollisions)
+    : super('a CBOR map has more than $maxCollisions keys of one hashCode');
+
+  /// The per-map collision cap the decode exceeded.
+  final int maxCollisions;
+}
+
 /// OPTIMIZED: Fast CBOR reader.
 /// Avoids redundant checks and type conversions.
 ///
@@ -225,6 +238,22 @@ class _FastCborReader {
   /// the recursive decode overflows the native stack (DoS). 256 is well above
   /// any realistic message structure and far below the overflow threshold.
   static const int _maxDepth = 256;
+
+  /// Keys in one map that may share a single `String.hashCode` before the
+  /// decode is refused.
+  ///
+  /// Dart's `Map` compares a new key against every resident key of equal
+  /// hashCode, so a peer that sends many colliding keys -- `String.hashCode`
+  /// is an unseeded one-at-a-time hash, so the set is cheap to precompute --
+  /// turns one in-budget message into O(n^2) decode work, before any
+  /// interceptor runs. Capping the chain keeps the build within O(items).
+  /// Random collisions never approach this; reaching it means crafted keys.
+  static const int _maxKeyHashCollisions = 16;
+
+  /// Maps at or below this many entries skip collision tracking: the worst
+  /// case is [_collisionTrackingThreshold]^2 comparisons, which is cheap, so
+  /// the common small map pays neither the bookkeeping nor its allocation.
+  static const int _collisionTrackingThreshold = 64;
 
   /// Largest integer representable exactly on both the VM (signed 64-bit) and
   /// dart2js (IEEE-754 double). Decoded integers above this are rejected so the
@@ -293,16 +322,30 @@ class _FastCborReader {
     }
   }
 
+  /// Charges [key] against the per-map collision cap, counting keys that share
+  /// a `String.hashCode` in [keyHashes]. See [_maxKeyHashCollisions].
+  void _chargeKeyHash(String key, Map<int, int> keyHashes) {
+    final count = (keyHashes[key.hashCode] ?? 0) + 1;
+    if (count > _maxKeyHashCollisions) {
+      throw CborKeyCollisionException(_maxKeyHashCollisions);
+    }
+    keyHashes[key.hashCode] = count;
+  }
+
   /// Fast map reading with minimal overhead.
   Map<String, dynamic> _readMapFast(int additionalInfo, int depth) {
     _checkDepth(depth);
     final result = <String, dynamic>{};
 
     if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
-      // Indefinite-length map: read key/value pairs until a break marker.
+      // Length unknown, so track collisions from the first key: an
+      // indefinite-length map is the shape that can grow without a declared
+      // bound.
+      final keyHashes = <int, int>{};
       while (!_consumeBreakMarker('indefinite-length map')) {
         _countItem();
         final key = _readStringFast();
+        _chargeKeyHash(key, keyHashes);
         final value = _readValueFast(depth + 1);
         result[key] = value;
       }
@@ -311,10 +354,15 @@ class _FastCborReader {
 
     final length = _readLength(additionalInfo);
 
+    // Only a map large enough for the quadratic to bite carries the tracker.
+    final keyHashes = length > _collisionTrackingThreshold
+        ? <int, int>{}
+        : null;
     for (int i = 0; i < length; i++) {
       // Keys are always strings.
       _countItem();
       final key = _readStringFast();
+      if (keyHashes != null) _chargeKeyHash(key, keyHashes);
       // Then read the value.
       final value = _readValueFast(depth + 1);
       result[key] = value;

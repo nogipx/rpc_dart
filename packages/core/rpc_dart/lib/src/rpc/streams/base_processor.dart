@@ -111,6 +111,8 @@ T _decodePeerMessage<T>(
     );
   } on CborItemLimitException catch (e) {
     throw RpcPeerFaultException(RpcStatus.resourceExhausted, e.message);
+  } on CborKeyCollisionException catch (e) {
+    throw RpcPeerFaultException(RpcStatus.resourceExhausted, e.message);
   }
 }
 

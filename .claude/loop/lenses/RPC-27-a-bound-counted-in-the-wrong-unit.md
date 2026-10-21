@@ -3,7 +3,7 @@ refines: —
 paths: [packages/core/*/lib/**, packages/transport/*/lib/**, packages/notify/*/lib/**, packages/data/*/lib/**, packages/blob/*/lib/**]
 applies: a container is capped by how many items it holds, and what one item weighs is set by someone else — a peer, a caller, a logged payload
 breaks: memory exhaustion: the cap holds and the process still runs out.
-applied: [764, 765, 783, 785, 803, 836, 840, 841, 886]
+applied: [764, 765, 783, 785, 803, 836, 840, 841, 886, 887]
 status: confirmed (round 886)
 rank: 7
 ---
