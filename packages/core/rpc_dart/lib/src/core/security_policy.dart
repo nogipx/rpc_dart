@@ -161,10 +161,10 @@ final class RpcSecurityPolicy {
 
   /// Close the whole connection on a protocol violation, rather than the call.
   ///
-  /// False by default: one malformed metadata frame — 3000 headers, or a single
-  /// 32 KiB value, both inside [maxMetadataBytes] and so past every size check
-  /// — used to terminate the connection, which is too blunt for the common
-  /// case. Set true where the peer is not one you must keep talking to.
+  /// False by default: terminating the connection for one malformed metadata
+  /// frame — 3000 headers, or a single 32 KiB value, both inside
+  /// [maxMetadataBytes] and so past every size check — is too blunt for the
+  /// common case. Set true where the peer is not one you must keep talking to.
   ///
   /// Honoured by the channel transports and the HTTP/2 responder. NOT by
   /// `rpc_dart_http`, where HTTP/1.1 is request-scoped and there is no
@@ -357,13 +357,20 @@ final class RpcSecurityPolicy {
     // Explicit 0 for the four below, never an omitted key: absent means "use
     // the default", so omitting a disabled window would round-trip back to its
     // default and silently switch the limit back on.
-    'halfOpenStreamTimeoutMs': halfOpenStreamTimeout?.inMilliseconds ?? 0,
+    'halfOpenStreamTimeoutMs': _wholeMs(halfOpenStreamTimeout),
     'flowControlWindowBytes': flowControlWindowBytes ?? 0,
     'flowControlConnectionWindowBytes': flowControlConnectionWindowBytes ?? 0,
     'initialSendWindowBytes': initialSendWindowBytes ?? 0,
-    'initialSendWindowGraceMs': initialSendWindowGrace?.inMilliseconds ?? 0,
+    'initialSendWindowGraceMs': _wholeMs(initialSendWindowGrace),
     'contentTypeValidation': contentTypeValidation.name,
   };
+
+  /// [d] in whole milliseconds, rounded UP, so a positive duration under 1 ms
+  /// stays enabled: 0 in the map means disabled.
+  static int _wholeMs(Duration? d) {
+    final us = d?.inMicroseconds ?? 0;
+    return us <= 0 ? 0 : (us + 999) ~/ 1000;
+  }
 
   /// Creates an [RpcSecurityPolicy] from a plain map, using defaults for missing keys.
   factory RpcSecurityPolicy.fromMap(Map<String, Object?> map) {
@@ -607,9 +614,9 @@ final class RpcSecurityPolicy {
   /// Splits a valid `/Service/Method` into its two names, or null.
   ///
   /// The grammar lives in [parseRpcMethodPath]; this supplies the configured
-  /// length. [maxMethodPathLength] used to be monotone DOWNWARD only — raising
-  /// it past 512 changed nothing, because the responder pipeline held a fourth
-  /// copy with that number hardcoded and refused the path afterwards.
+  /// length. Every check of a method path goes through here, so raising
+  /// [maxMethodPathLength] raises it everywhere: a second copy with its own
+  /// number would refuse the longer path after this admitted it.
   (String service, String method)? parseMethodPath(String? methodPath) =>
       parseRpcMethodPath(methodPath, maxLength: maxMethodPathLength);
 

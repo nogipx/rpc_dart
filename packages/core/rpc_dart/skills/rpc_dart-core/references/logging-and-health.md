@@ -270,6 +270,12 @@ Other methods: `getStatus`, `clearStatus`, `clearAll`, `changes`.
 - `minLevel` defaults to `debug`, so a `LogController()` with a console output
   prints all debug traffic. Set `minLevel: RpcLogLevel.info` in production.
 - Spans ignore `minLevel`; disable them with `spansEnabled: false`.
-- `redactFields` only masks `data` keys and `key=value` / `key: value` text.
-  It does not see values inside free-form messages.
+- `redactFields` only masks `data` keys and `key=value` / `key: value` text:
+  plain, in a query string (`?token=x&password=y`), in JSON
+  (`"password":"x"`), and an authorization value with its scheme
+  (`authorization: Bearer x` becomes `authorization: [REDACTED]`). A secret
+  written into a message in any other shape is not seen.
 - `GrpcHealthServiceStatus` holds a broadcast controller; call `dispose()`.
+  Changes reach watchers asynchronously, so a listener may set a status
+  itself. After `dispose()` statuses can still be set and read, and nobody is
+  notified.

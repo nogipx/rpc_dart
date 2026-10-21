@@ -172,13 +172,17 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// Since [next] returns the stream synchronously (before any item flows),
   /// recording success eagerly would let stream errors bypass the breaker.
   ///
-  /// The source is subscribed to EAGERLY (independent of whether the returned
-  /// stream is ever listened) so the half-open probe gate is always released:
-  /// `_onSuccess`/`_onFailure` fire when the source terminates even if the
-  /// caller obtains the wrapped stream but abandons it. Without this, an
-  /// abandoned probe would pin `_probeInFlight = true` and the breaker would
-  /// reject every subsequent call forever. A safety timer additionally releases
-  /// the probe if the source never terminates and the stream is never listened.
+  /// A PROBE's source is subscribed to EAGERLY (independent of whether the
+  /// returned stream is ever listened) so the half-open probe gate is always
+  /// released: `_onSuccess`/`_onFailure` fire when the source terminates even
+  /// if the caller obtains the wrapped stream but abandons it. Otherwise an
+  /// abandoned probe pins `_probeInFlight = true` and the breaker rejects every
+  /// later call. A safety timer additionally releases the probe if the source
+  /// never terminates and the stream is never listened.
+  ///
+  /// Any other stream holds no gate, so it is subscribed when listened, as it
+  /// would be without the breaker, and has no timer: a stream listened late is
+  /// not failed for it.
   Stream<TResponse> _wrapStream<TResponse>(
     Stream<TResponse> source,
     _Admission admitted,
@@ -236,6 +240,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
 
     final bridge = StreamBridge<TResponse>(
       source: observed,
+      subscribeOnFirstListen: !admitted.isProbe,
       onFirstListen: () {
         listened = true;
         // Stream is being consumed; the abandon safety net is no longer needed.
@@ -258,6 +263,8 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       // where `resolved` makes it a no-op.
       onConsumerCancel: resolveInconclusive,
     );
+
+    if (!admitted.isProbe) return bridge.stream;
 
     // If the stream is never listened and the source never completes, release
     // the probe after a safety window so the breaker cannot stay stuck.
@@ -340,9 +347,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   void _onSuccess(_Admission admission) {
     // Stale: the call was admitted before the breaker last changed state. A
     // call that began while the breaker was closed and succeeded after it
-    // opened proves nothing about recovery -- and in half-open it used to be
-    // taken for the probe's result and CLOSE the breaker while the real probe
-    // was still in flight.
+    // opened proves nothing about recovery -- and in half-open, taken for the
+    // probe's result, it would CLOSE the breaker while the real probe was
+    // still in flight.
     if (admission.generation != _generation) return;
     _failureCount = 0;
     if (admission.isProbe) {
@@ -369,9 +376,9 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
       return;
     }
 
-    // Stale, as in [_onSuccess]. A failure from before the breaker opened
-    // reopened it from half-open and restarted the timer, so the real probe's
-    // success then landed in OPEN and was dropped.
+    // Stale, as in [_onSuccess]. Counted, a failure from before the breaker
+    // opened would reopen it from half-open and restart the timer, so the real
+    // probe's success would land in OPEN and be dropped.
     if (admission.generation != _generation) return;
 
     _failureCount++;

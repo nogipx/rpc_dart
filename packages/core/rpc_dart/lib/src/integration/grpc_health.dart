@@ -137,15 +137,19 @@ final class GrpcHealthCheckResponse {
 /// and the application code that updates statuses.
 final class GrpcHealthServiceStatus {
   final Map<String, GrpcServingStatus> _statuses = {};
+
+  /// Asynchronous, so a listener may set a status itself: a synchronous
+  /// broadcast controller throws on an event added while it delivers one.
   final StreamController<(String, GrpcServingStatus)> _changes =
-      StreamController<(String, GrpcServingStatus)>.broadcast(sync: true);
+      StreamController<(String, GrpcServingStatus)>.broadcast();
 
   /// Sets the serving status for [service].
   ///
-  /// Empty string means the overall server status.
+  /// Empty string means the overall server status. After [dispose] the store
+  /// still answers [getStatus], and nobody is notified.
   void setStatus(String service, GrpcServingStatus status) {
     _statuses[service] = status;
-    _changes.add((service, status));
+    _notify(service, status);
   }
 
   /// Returns the current status for [service], or null if not registered.
@@ -154,7 +158,7 @@ final class GrpcHealthServiceStatus {
   /// Clears the status for [service].
   void clearStatus(String service) {
     _statuses.remove(service);
-    _changes.add((service, GrpcServingStatus.serviceUnknown));
+    _notify(service, GrpcServingStatus.serviceUnknown);
   }
 
   /// Clears all statuses.
@@ -162,8 +166,12 @@ final class GrpcHealthServiceStatus {
     final keys = _statuses.keys.toList();
     _statuses.clear();
     for (final key in keys) {
-      _changes.add((key, GrpcServingStatus.serviceUnknown));
+      _notify(key, GrpcServingStatus.serviceUnknown);
     }
+  }
+
+  void _notify(String service, GrpcServingStatus status) {
+    if (!_changes.isClosed) _changes.add((service, status));
   }
 
   /// Stream of (service, status) changes for watchers.
@@ -204,8 +212,10 @@ final class GrpcHealthCheckContract extends RpcResponderContract {
 
   final GrpcHealthServiceStatus _status;
 
-  /// Creates a [GrpcHealthCheckContract] backed by the given [_status] store.
-  GrpcHealthCheckContract(this._status) : super(grpcServiceName);
+  /// Creates a [GrpcHealthCheckContract] backed by the given [status] store.
+  GrpcHealthCheckContract(GrpcHealthServiceStatus status)
+    : _status = status,
+      super(grpcServiceName);
 
   @override
   void setup() {

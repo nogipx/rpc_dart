@@ -135,10 +135,14 @@ void main() {
     },
   );
 
-  test('a stream nobody listened to in time ends with an error', () async {
+  test('a probe nobody listened to in time ends with an error', () async {
     final cb = RpcCircuitBreakerInterceptor(
+      failureThreshold: 1,
+      resetTimeout: const Duration(milliseconds: 20),
       probeAbandonTimeout: const Duration(milliseconds: 30),
     );
+    await fail(cb);
+    await Future<void>.delayed(const Duration(milliseconds: 40));
     final source = StreamController<String>();
     addTearDown(source.close);
     final stream = await cb.interceptServerStream<String, String>(
@@ -152,5 +156,25 @@ void main() {
       stream.toList().timeout(const Duration(seconds: 1)),
       throwsA(isA<RpcCancelledException>()),
     );
+    expect(await tryCall(cb), 'admitted', reason: 'the gate was released');
+  });
+
+  test('a stream of the closed breaker may be listened late', () async {
+    final cb = RpcCircuitBreakerInterceptor(
+      probeAbandonTimeout: const Duration(milliseconds: 30),
+    );
+    final source = StreamController<String>();
+    final stream = await cb.interceptServerStream<String, String>(
+      ctx,
+      'r',
+      (c, r) async => source.stream,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 60));
+
+    final received = stream.toList();
+    source.add('m1');
+    unawaited(source.close());
+    expect(await received.timeout(const Duration(seconds: 1)), ['m1']);
+    expect(source.hasListener, isFalse);
   });
 }

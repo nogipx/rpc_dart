@@ -78,6 +78,33 @@ void main() {
 
       await sub.cancel();
     });
+
+    test('a listener may set a status in response to a change', () async {
+      final events = <(String, GrpcServingStatus)>[];
+      final sub = status.changes.listen((change) {
+        events.add(change);
+        if (change.$1 == '') status.setStatus('Svc', change.$2);
+      });
+
+      status.setStatus('', GrpcServingStatus.notServing);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(events, [
+        ('', GrpcServingStatus.notServing),
+        ('Svc', GrpcServingStatus.notServing),
+      ]);
+      await sub.cancel();
+    });
+
+    test('a status set after dispose is kept and notifies nobody', () {
+      status.dispose();
+
+      status.setStatus('Svc', GrpcServingStatus.serving);
+      status.clearAll();
+      status.setStatus('Svc', GrpcServingStatus.notServing);
+
+      expect(status.getStatus('Svc'), GrpcServingStatus.notServing);
+    });
   });
 
   group('GrpcHealthCheckRequest/Response serialization', () {

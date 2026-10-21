@@ -146,6 +146,8 @@ void configure(RpcCallerEndpoint caller) {
   deadline exceeded, a context with no time left, INTERNAL, INVALID_ARGUMENT, a
   bare `RpcException`, non-RPC errors. `retryOn: (error) => ...` REPLACES the
   default predicate, but never overrides the cancellation and deadline rules.
+- An error carrying `RpcRetryInfo` with a positive `retryDelay` waits that delay instead of the backoff;
+  a zero `retryDelay` waits the backoff.
 - It never sleeps past the deadline. If the next delay is longer than `remainingTime`, the last error is
   rethrown immediately. A cancel during backoff ends the wait.
 - On an endpoint over `RpcClientConnection.transport`, an UNAVAILABLE whose transport reports unhealthy
@@ -173,6 +175,9 @@ failureOn, probeAbandonTimeout = 30 s})`. Covers all four call shapes.
   Streaming calls get it as a stream error.
 - After `resetTimeout`, the state is half-open: exactly one probe call is admitted, and other calls get
   `CircuitBreakerOpenException`. If the probe succeeds the circuit closes; if it fails, the circuit opens again.
+  A streaming probe succeeds at its first message. A probe stream not listened to within
+  `probeAbandonTimeout` ends with `RpcCancelledException` and frees the probe slot; other streams have no
+  such limit.
 - Failures counted by default: UNAVAILABLE, INTERNAL, UNKNOWN, DEADLINE_EXCEEDED,
   RESOURCE_EXHAUSTED with pushback, and any error that is not an `RpcStatusException`.
   Cancellation is never counted. `failureOn` replaces the default set.
@@ -211,7 +216,8 @@ void limit(RpcResponderEndpoint responder) {
   where the first message is already paid for. For server streams, charging per message is opt-in with
   `meterServerStreamMessages: true`.
 - A refusal throws `RpcRateLimitException` (RESOURCE_EXHAUSTED + `RpcRetryInfo`),
-  which the caller's default retry predicate treats as transient.
+  which the caller's default retry predicate treats as transient. Its `retryDelay` is the time until
+  the refusing limit admits a call again, and the retry interceptor waits exactly that.
 - Other parameters: `maxTrackedKeys` (100000, LRU), `cleanupInterval`, `nowMicros`
   (inject a fake clock in tests). Call `dispose()` at shutdown.
 
