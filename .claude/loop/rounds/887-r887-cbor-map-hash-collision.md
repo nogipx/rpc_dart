@@ -99,8 +99,11 @@ reproduces the VM hash):
   the 17th is refused — the per-hashCode boundary.
 - GUARDs: a 5000-key distinct map and an ordinary nested small map still decode.
 
-Reverting the `_chargeKeyHash` call makes the refusal tests time out / not
-throw; restored, all five green.
+The definite-map `_chargeKeyHash` call commented out: `a map past the cap is
+refused, and cheaply` and `16 keys of one hashCode are allowed, the 17th is
+not` go red, "Expected: throws <Instance of 'FormatException'> ... Actual:
+<Closure: () => Map<String, dynamic>>" (`+3 -2`). Restored: all five green.
+The indefinite-map branch has no witness of its own.
 
 ## Gate
 
