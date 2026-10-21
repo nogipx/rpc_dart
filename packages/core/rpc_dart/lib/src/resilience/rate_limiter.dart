@@ -353,8 +353,16 @@ class _KeyedLruStore<V> {
   int get length => _length;
 
   static int _newSalt() {
+    // A secure source where there is one. On any node runtime
+    // `Random.secure()` throws (as `RpcContext`'s token source records), and
+    // the salt only has to be unknown to a remote peer, which `Random()` is.
+    Random r;
+    try {
+      r = Random.secure();
+    } catch (_) {
+      r = Random();
+    }
     // 32 bits, in two 16-bit draws so no intermediate exceeds 2^53 (dart2js).
-    final r = Random.secure();
     return (r.nextInt(1 << 16) << 16) | r.nextInt(1 << 16);
   }
 
