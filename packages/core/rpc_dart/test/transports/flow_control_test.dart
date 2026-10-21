@@ -284,7 +284,8 @@ void main() {
         methodName: 'upload',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       for (var i = 0; i < 400; i++) {
         requests.add(_chunk);
       }

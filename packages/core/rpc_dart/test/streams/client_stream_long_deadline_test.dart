@@ -99,7 +99,8 @@ Future<RpcString> _call(_Rig rig, String method, RpcContext? ctx) {
     requestCodec: _codec,
     responseCodec: _codec,
     context: ctx,
-  )(requests.stream);
+    requests: requests.stream,
+  );
 }
 
 void main() {

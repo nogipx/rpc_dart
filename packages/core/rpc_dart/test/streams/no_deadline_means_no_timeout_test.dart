@@ -124,7 +124,8 @@ void main() {
         methodName: 'upload',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(Stream.value('x'.rpc));
+        requests: Stream.value('x'.rpc),
+      );
 
       expect(
         await call
@@ -186,7 +187,8 @@ void main() {
         context: RpcContext.empty().withTimeout(
           const Duration(milliseconds: 200),
         ),
-      )(Stream.value('x'.rpc));
+        requests: Stream.value('x'.rpc),
+      );
     } catch (e) {
       error = e;
     }

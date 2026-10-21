@@ -138,14 +138,13 @@ Future<void> _demonstrateClientStreamingRpc(RpcCallerEndpoint endpoint) async {
       });
     }
 
-    final getResponse = endpoint.clientStream<RpcString, RpcString>(
+    final response = await endpoint.clientStream<RpcString, RpcString>(
       serviceName: 'DemoService',
       methodName: 'AccumulateMessages',
+      requests: createRequestStream(),
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
     );
-
-    final response = await getResponse(createRequestStream());
     print('   final response: "${response.value}"');
   } catch (e) {
     print('   error: $e');

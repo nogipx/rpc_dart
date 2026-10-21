@@ -212,7 +212,8 @@ void main() {
               requestCodec: RpcString.codec,
               responseCodec: RpcString.codec,
               context: context,
-            )(requestsController.stream);
+              requests: requestsController.stream,
+            );
 
         // Send the data.
         final requests = ['data1', 'data2', 'data3'];
@@ -253,7 +254,8 @@ void main() {
               requestCodec: RpcString.codec,
               responseCodec: RpcString.codec,
               context: context,
-            )(requestsController.stream);
+              requests: requestsController.stream,
+            );
 
         // Send the data.
         final requests = ['auth-data1', 'auth-data2'];

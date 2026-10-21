@@ -102,7 +102,8 @@ Future<List<String?>> _offered({required bool compressionEnabled}) async {
     methodName: 'c',
     requestCodec: _codec,
     responseCodec: _codec,
-  )(Stream.value(q));
+    requests: Stream.value(q),
+  );
   await caller
       .bidirectionalStream<RpcString, RpcString>(
         serviceName: 'Svc',

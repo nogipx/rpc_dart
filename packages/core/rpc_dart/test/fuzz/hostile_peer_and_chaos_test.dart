@@ -244,7 +244,8 @@ void main() {
               requestCodec: _codec,
               responseCodec: _codec,
               context: ctx,
-            )(requests()),
+              requests: requests(),
+            ),
             2 =>
               caller
                   .serverStream<RpcString, RpcString>(

@@ -90,7 +90,8 @@ void main() {
             methodName: 'upload',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(upload())
+            requests: upload(),
+          )
           .timeout(const Duration(seconds: 10));
       expect(answer.value, 'enough');
       expect(
@@ -115,7 +116,8 @@ void main() {
             methodName: 'count',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(Stream.fromIterable(List.filled(300, ('y' * _kib).rpc)))
+            requests: Stream.fromIterable(List.filled(300, ('y' * _kib).rpc)),
+          )
           .timeout(const Duration(seconds: 10));
       expect(count.value, '300');
 

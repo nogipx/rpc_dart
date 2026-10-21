@@ -229,13 +229,17 @@ Future<int> _upload(IRpcTransport Function(IRpcTransport inner)? wrap) async {
     }
   }
 
-  final call = caller.clientStream<RpcString, RpcString>(
-    serviceName: 'Svc',
-    methodName: 'Upload',
-    requestCodec: _codec,
-    responseCodec: _codec,
+  unawaited(
+    caller
+        .clientStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'Upload',
+          requests: requests(),
+          requestCodec: _codec,
+          responseCodec: _codec,
+        )
+        .then((_) {}, onError: (Object _) {}),
   );
-  unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
 
   // A flat 8 s wait here cost this file 4 x ~8 s of every run. The budget is
   // still 8 s -- long enough that steady growth cannot be mistaken for a

@@ -83,15 +83,15 @@ _Harness _build({required int starts}) {
 }
 
 Future<String> _collect(RpcCallerEndpoint caller, List<String> items) {
-  final call = caller.clientStream<RpcString, RpcString>(
-    serviceName: 'Svc',
-    methodName: 'collect',
-    requestCodec: _codec,
-    responseCodec: _codec,
-  );
-  return call(
-    Stream.fromIterable(items.map((s) => s.rpc)),
-  ).then((r) => r.value);
+  return caller
+      .clientStream<RpcString, RpcString>(
+        serviceName: 'Svc',
+        methodName: 'collect',
+        requests: Stream.fromIterable(items.map((s) => s.rpc)),
+        requestCodec: _codec,
+        responseCodec: _codec,
+      )
+      .then((r) => r.value);
 }
 
 void main() {

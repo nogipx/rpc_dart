@@ -32,7 +32,7 @@ abstract final class RpcProtoWireType {
 /// same under dart2js as on the VM.
 final class RpcProtoReader {
   /// Reads from the start of [bytes].
-  RpcProtoReader(this._bytes);
+  RpcProtoReader(Uint8List bytes) : _bytes = bytes;
 
   final Uint8List _bytes;
   int _offset = 0;

@@ -66,8 +66,7 @@ void main() {
                     methodName: 'Ignore',
                     requestCodec: _codec,
                     responseCodec: _codec,
-                  )(
-                    Stream.fromIterable([
+                    requests: Stream.fromIterable([
                       for (var i = 0; i < 64; i++) chunk.rpc,
                     ]),
                   )

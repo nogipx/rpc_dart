@@ -104,7 +104,8 @@ Future<List<String>> _serverEnds(
           methodName: 'c',
           requestCodec: requestCodec,
           responseCodec: _codec,
-        )(_requests());
+          requests: _requests(),
+        );
   await call.then((_) {}, onError: (Object _) {});
   for (var i = 0; i < 50 && ends.isEmpty; i++) {
     await Future<void>.delayed(const Duration(milliseconds: 10));

@@ -191,7 +191,8 @@ void main() {
           methodName: 'collect',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(requests.stream);
+          requests: requests.stream,
+        );
 
         for (var i = 1; i <= 4; i++) {
           requests.add('c$i'.rpc);
@@ -215,7 +216,8 @@ void main() {
       final call = rig.caller.clientStream<Chunk, Chunk>(
         serviceName: 'Svc',
         methodName: 'collectDirect',
-      )(requests.stream);
+        requests: requests.stream,
+      );
 
       for (var i = 1; i <= 4; i++) {
         requests.add(Chunk('z$i'));
@@ -241,7 +243,8 @@ void main() {
                 methodName: 'collect',
                 requestCodec: _codec,
                 responseCodec: _codec,
-              )(requests.stream)
+                requests: requests.stream,
+              )
               .catchError((Object _) => ''.rpc),
         );
 
@@ -274,7 +277,8 @@ void main() {
         methodName: 'collect',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(empty.stream);
+        requests: empty.stream,
+      );
       await empty.close();
 
       expect((await call.timeout(const Duration(seconds: 5))).value, 'ok:0');
@@ -291,7 +295,8 @@ void main() {
         methodName: 'collect',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
 
       final sent = [for (var i = 0; i < 50; i++) 'm$i'];
       for (final m in sent) {
@@ -315,7 +320,8 @@ void main() {
           methodName: 'collect',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(requests.stream);
+          requests: requests.stream,
+        );
         unawaited(
           call.then<void>((_) => completed = true).catchError((Object _) {}),
         );
@@ -343,7 +349,8 @@ void main() {
         methodName: 'fails',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       requests.add('boom'.rpc);
       unawaited(requests.close());
 
@@ -369,7 +376,8 @@ void main() {
         methodName: 'returnsEarly',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       for (var i = 0; i < 10; i++) {
         requests.add('x$i'.rpc);
       }
@@ -389,7 +397,8 @@ void main() {
         methodName: 'slow',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
 
       for (var i = 0; i < 20; i++) {
         requests.add('s$i'.rpc);
@@ -412,7 +421,8 @@ void main() {
           methodName: 'collect',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(requests.stream);
+          requests: requests.stream,
+        );
         requests
           ..add('a'.rpc)
           ..add('b'.rpc);

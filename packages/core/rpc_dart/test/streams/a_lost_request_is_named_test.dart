@@ -114,7 +114,8 @@ void main() {
       methodName: 'put',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(_chunks(17));
+      requests: _chunks(17),
+    );
 
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
@@ -161,7 +162,8 @@ void main() {
       methodName: 'putShort',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(_chunks(17));
+      requests: _chunks(17),
+    );
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     expect(
@@ -225,7 +227,8 @@ void main() {
               requestCodec: _codec,
               responseCodec: _codec,
               context: context,
-            )(_chunks(17))
+              requests: _chunks(17),
+            )
             .timeout(const Duration(seconds: 5));
       } catch (_) {}
     }
@@ -292,7 +295,8 @@ void main() {
       methodName: 'put',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(_chunks(5));
+      requests: _chunks(5),
+    );
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
     expect(answered.value, '5');

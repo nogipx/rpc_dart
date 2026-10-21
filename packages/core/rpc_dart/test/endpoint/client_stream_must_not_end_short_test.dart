@@ -88,7 +88,8 @@ void main() {
         methodName: 'Upload',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
 
       for (var i = 0; i < count; i++) {
         requests.add(RpcString('frame$i:$filler'));
@@ -153,7 +154,8 @@ void main() {
         methodName: 'Upload',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       for (var i = 0; i < count; i++) {
         requests.add(RpcString('frame$i:$filler'));
       }

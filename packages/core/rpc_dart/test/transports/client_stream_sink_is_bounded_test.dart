@@ -128,7 +128,8 @@ Future<({int retained, Object? error})> _flood(
         methodName: 'stalls',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(_gen(s, 2000))
+        requests: _gen(s, 2000),
+      )
       .then<void>((_) {}, onError: (Object e) => error = e);
 
   // The flood is over when the producer stops being pulled.
@@ -321,7 +322,8 @@ void main() {
           methodName: 'counts',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(_gen(s, 2000))
+          requests: _gen(s, 2000),
+        )
         .timeout(const Duration(seconds: 30));
     expect(answer.value, '2000');
     await r.close();

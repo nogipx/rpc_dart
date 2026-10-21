@@ -177,13 +177,13 @@ void main() {
       final h = _build();
 
       for (var i = 0; i < 5; i++) {
-        final call = h.caller.clientStream<RpcString, RpcString>(
+        final res = await h.caller.clientStream<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'cs',
+          requests: Stream.fromIterable(['a'.rpc, 'b'.rpc]),
           requestCodec: _codec,
           responseCodec: _codec,
         );
-        final res = await call(Stream.fromIterable(['a'.rpc, 'b'.rpc]));
         expect(res.value, 'c2');
       }
       await Future<void>.delayed(const Duration(milliseconds: 300));

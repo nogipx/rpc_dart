@@ -95,7 +95,8 @@ Future<int> _flood(
           methodName: 'deaf',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(produce())
+          requests: produce(),
+        )
         .catchError((Object _) => 'x'.rpc),
   );
 
@@ -196,7 +197,8 @@ void main() {
             methodName: 'deaf',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(few())
+            requests: few(),
+          )
           .catchError((Object _) => 'x'.rpc),
     );
 

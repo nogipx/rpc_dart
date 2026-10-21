@@ -149,7 +149,8 @@ Future<({int retained, int errors, String after})> _flood({
                   methodName: 'upload',
                   requestCodec: _codec,
                   responseCodec: _codec,
-                )(requests)
+                  requests: requests,
+                )
                 .then<void>((_) {}, onError: (Object _) => errors++),
     );
   }
@@ -180,7 +181,8 @@ Future<({int retained, int errors, String after})> _flood({
       methodName: 'counts',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(fresh.stream);
+      requests: fresh.stream,
+    );
     for (var i = 0; i < 200; i++) {
       fresh.add(_chunk);
     }
@@ -326,7 +328,8 @@ void main() {
         methodName: 'counts',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(fresh.stream);
+        requests: fresh.stream,
+      );
       for (var i = 0; i < 64; i++) {
         fresh.add(_chunk);
       }

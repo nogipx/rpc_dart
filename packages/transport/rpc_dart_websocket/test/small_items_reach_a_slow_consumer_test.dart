@@ -126,12 +126,14 @@ void main() {
     'a slow handler gets every uploaded item',
     () async {
       final caller = await _connect();
-      final call = caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'collect',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<RpcString> call(Stream<RpcString> requests) =>
+          caller.clientStream<RpcString, RpcString>(
+            requests: requests,
+            serviceName: 'Svc',
+            methodName: 'collect',
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
 
       final response = await call(
         Stream.fromIterable([for (var i = 0; i < 3000; i++) 'i$i'.rpc]),

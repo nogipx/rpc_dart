@@ -81,7 +81,8 @@ void main() {
             methodName: 'Upload',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(_requests())
+            requests: _requests(),
+          )
           .timeout(const Duration(seconds: 60));
 
       expect(response.value, '$_count');

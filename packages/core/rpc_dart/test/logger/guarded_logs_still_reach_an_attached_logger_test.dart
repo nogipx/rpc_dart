@@ -152,7 +152,8 @@ void main() {
       methodName: 'clientStream',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(Stream.fromIterable(['a'.rpc]));
+      requests: Stream.fromIterable(['a'.rpc]),
+    );
 
     await caller
         .bidirectionalStream<RpcString, RpcString>(

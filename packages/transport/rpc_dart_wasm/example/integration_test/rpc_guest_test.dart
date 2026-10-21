@@ -326,7 +326,8 @@ void main() {
         methodName: 'Collect',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(Stream.fromIterable(['a'.rpc, 'b'.rpc, 'c'.rpc]));
+        requests: Stream.fromIterable(['a'.rpc, 'b'.rpc, 'c'.rpc]),
+      );
       expect(collected.value, '3:a,b,c');
 
       final mirrored = await c.caller

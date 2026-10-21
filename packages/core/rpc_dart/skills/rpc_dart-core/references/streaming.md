@@ -144,7 +144,7 @@ message on the response stream.
 | `RpcCancellationToken` in `RpcContext.withCancellation(token)`, then `token.cancel(reason)` | every call made with that context |
 | `contract.cancelMethod('count', reason)` -> `int` | all active calls of this method on this contract's service |
 | `contract.cancelAllMethods(reason)` -> `int` | all active calls of this contract's service |
-| `endpoint.cancelAllMethods(reason)` | every active call on the endpoint |
+| `endpoint.cancelAllMethods(reason)` -> `int` | every active call on the endpoint |
 | `endpoint.cancelRequest(service, method, requestId)` | the calls with that `requestId` |
 | `contract.getActiveCallsCount('count')`, `contract.isMethodActive('count')` | inspection only |
 

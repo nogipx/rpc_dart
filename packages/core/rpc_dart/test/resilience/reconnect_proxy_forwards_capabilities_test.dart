@@ -202,16 +202,16 @@ void main() {
         if (!gate.isCompleted) gate.complete();
       });
 
-      final call = remotePeer.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'Upload',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
       unawaited(
-        call(
-          Stream<RpcString>.fromIterable(['a'.rpc, 'b'.rpc]),
-        ).then((_) {}, onError: (Object _) {}),
+        remotePeer
+            .clientStream<RpcString, RpcString>(
+              serviceName: 'Svc',
+              methodName: 'Upload',
+              requests: Stream<RpcString>.fromIterable(['a'.rpc, 'b'.rpc]),
+              requestCodec: _codec,
+              responseCodec: _codec,
+            )
+            .then((_) {}, onError: (Object _) {}),
       );
 
       await started.future.timeout(const Duration(seconds: 10));

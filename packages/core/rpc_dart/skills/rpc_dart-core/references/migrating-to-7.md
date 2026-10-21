@@ -59,6 +59,8 @@ builds a transport, a channel or frames imports
 | endpoint pipeline members (`handleUnary`, `startResponderListening`, `collectResponderMetrics`, `registeredMethods`, ...) and `contract.registrations` | not public; `collectEndpointMetrics()` for metrics |
 | `implements IRpcServer` / `implements RpcCompressionCodec` | `extends` (both still compile; `extends` keeps compiling when a member is added) |
 | `RpcMessage`, `RpcDirectMultiplexedChannel` | not exported; `RpcTransportMessage`, `memoryPair()` |
+| `endpoint.clientStream(...)(requests)` | `endpoint.clientStream(..., requests: requests)`, as `callClientStream` |
+| `call.updateContext(ctx)` / `call.context = ctx` in an interceptor | pass `ctx` to `next(ctx, request)` |
 
 `RpcException` is abstract: throw `RpcStatusException(RpcStatus.x, '...')`.
 Match errors on the type or on `statusCode`, never on the message text.
@@ -115,7 +117,12 @@ to apply to every method of the same type.
 - **A second message on a single-message side fails the call.**
 - **Registration is stricter.** A method name may not contain a dot.
 - **`RpcBool` / `RpcString` throw `FormatException` on bad input** instead of
-  returning a default.
+  returning a default. `RpcInt.fromJson` throws on a fraction or a non-finite
+  number instead of truncating it, and `RpcInt` arithmetic with an int result
+  throws `ArgumentError` on a fractional operand; `RpcInt / x` divides by the
+  exact `x`.
+- **A retry waits the delay the server's `RpcRetryInfo` asks for**, not its
+  own backoff, when the delay is positive.
 - **CBOR throws `ArgumentError` for a `DateTime`, enum, `Set`, `BigInt` or
   `Duration` without `toJson()`.** Convert it in the message's `toJson`
   (`toIso8601String()`, `name`, `toList()`), or the call fails at send time.

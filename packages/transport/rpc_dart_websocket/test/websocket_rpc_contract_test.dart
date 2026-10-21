@@ -233,12 +233,14 @@ void main() {
     });
 
     test('client stream aggregates uploaded messages', () async {
-      final call = caller.clientStream<EchoRequest, EchoResponse>(
-        serviceName: serviceName,
-        methodName: 'ClientStream',
-        requestCodec: _reqCodec,
-        responseCodec: _resCodec,
-      );
+      Future<EchoResponse> call(Stream<EchoRequest> requests) =>
+          caller.clientStream<EchoRequest, EchoResponse>(
+            requests: requests,
+            serviceName: serviceName,
+            methodName: 'ClientStream',
+            requestCodec: _reqCodec,
+            responseCodec: _resCodec,
+          );
 
       final requests = Stream<EchoRequest>.fromIterable(const [
         EchoRequest('a'),

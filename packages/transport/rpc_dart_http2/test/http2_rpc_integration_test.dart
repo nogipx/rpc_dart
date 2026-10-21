@@ -164,20 +164,21 @@ void main() {
         return msg;
       });
 
-      final callFunction = callerEndpoint.clientStream<RpcString, RpcString>(
-        serviceName: 'TestService',
-        methodName: 'ClientStream',
-        requestCodec: RpcString.codec,
-        responseCodec: RpcString.codec,
-      );
-
       // Half-close and wait for the answer.
-      final response = await callFunction(requestStream).timeout(
-        Duration(seconds: 5),
-        onTimeout: () => throw TimeoutException(
-          'Timeout waiting for client streaming response',
-        ),
-      );
+      final response = await callerEndpoint
+          .clientStream<RpcString, RpcString>(
+            serviceName: 'TestService',
+            methodName: 'ClientStream',
+            requests: requestStream,
+            requestCodec: RpcString.codec,
+            responseCodec: RpcString.codec,
+          )
+          .timeout(
+            Duration(seconds: 5),
+            onTimeout: () => throw TimeoutException(
+              'Timeout waiting for client streaming response',
+            ),
+          );
 
       // Assert
       expect(response.value, contains('Received 3 client messages'));

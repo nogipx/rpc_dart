@@ -68,7 +68,8 @@ Future<({String answer, int seen, Object? error})> _run({
     methodName: 'Collect',
     requestCodec: _codec,
     responseCodec: _codec,
-  )(requests.stream);
+    requests: requests.stream,
+  );
 
   for (var i = 0; i < count; i++) {
     requests.add(RpcString('$i:$filler'));

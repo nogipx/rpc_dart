@@ -220,7 +220,8 @@ void main() {
             serviceName: 'StreamingTestService',
             methodName: 'ProcessItems',
             // No codecs passed -> zero-copy mode, automatically.
-          )(requestStream);
+            requests: requestStream,
+          );
 
       print('final answer: ${response.result}');
 

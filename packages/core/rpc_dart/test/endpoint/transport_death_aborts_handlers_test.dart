@@ -210,7 +210,8 @@ Future<void> _startCall(_Rig rig, String shape) {
             methodName: 'client',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(requests.stream)
+            requests: requests.stream,
+          )
           .then<void>((_) {})
           .catchError((Object _) {});
     default:

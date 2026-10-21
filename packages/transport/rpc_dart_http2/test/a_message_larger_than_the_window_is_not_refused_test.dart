@@ -107,7 +107,8 @@ void main() {
             methodName: 'upload',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(_uploads())
+            requests: _uploads(),
+          )
           .timeout(const Duration(seconds: 30));
       expect(answer.value, '3');
     },

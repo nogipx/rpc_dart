@@ -235,7 +235,8 @@ void main() {
         methodName: 'upload',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
 
       for (var i = 0; i < 3; i++) {
         requests.add('c$i'.rpc);

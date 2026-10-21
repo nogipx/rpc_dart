@@ -184,22 +184,21 @@ void main() {
         TestRequest('Message 3'),
       ]);
 
-      // Get the call function.
-      final getResponse = callerEndpoint
+      // Sends every message and waits for the answer.
+      final response = await callerEndpoint
           .clientStream<TestRequest, TestResponse>(
             serviceName: 'TestService',
             methodName: 'ClientStreamMethod',
+            requests: requestStream,
             requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
             responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          )
+          .timeout(
+            Duration(seconds: 10),
+            onTimeout: () {
+              throw TimeoutException('timed out waiting for the answer');
+            },
           );
-
-      // Call it: this sends every message and waits for the answer.
-      final response = await getResponse(requestStream).timeout(
-        Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('timed out waiting for the answer');
-        },
-      );
 
       // Check the result.
       expect(

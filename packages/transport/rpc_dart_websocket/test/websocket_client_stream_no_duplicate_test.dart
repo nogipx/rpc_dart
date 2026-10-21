@@ -40,7 +40,8 @@ void main() {
       methodName: 'Collect',
       requestCodec: RpcString.codec,
       responseCodec: RpcString.codec,
-    )(requests.stream);
+      requests: requests.stream,
+    );
 
     for (var i = 0; i < 8; i++) {
       requests.add('chunk-$i'.rpc);

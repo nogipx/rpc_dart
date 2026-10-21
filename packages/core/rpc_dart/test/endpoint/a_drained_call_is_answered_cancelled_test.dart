@@ -114,7 +114,8 @@ void main() {
       methodName: 'client',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(Stream.value('x'.rpc));
+      requests: Stream.value('x'.rpc),
+    );
     expect(await drainedOutcome(call), cancelled);
   });
 

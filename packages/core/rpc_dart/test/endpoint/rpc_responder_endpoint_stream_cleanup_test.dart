@@ -113,15 +113,12 @@ void main() {
     });
 
     test('cleans up after client stream completes', () async {
-      final call = callerEndpoint.clientStream<RpcString, RpcString>(
+      final res = await callerEndpoint.clientStream<RpcString, RpcString>(
         serviceName: _TestService.name,
         methodName: 'EchoClientStream',
+        requests: Stream.fromIterable(const [RpcString('a'), RpcString('b')]),
         requestCodec: RpcString.codec,
         responseCodec: RpcString.codec,
-      );
-
-      final res = await call(
-        Stream.fromIterable(const [RpcString('a'), RpcString('b')]),
       );
       expect(res.value, equals('a,b'));
 

@@ -49,9 +49,9 @@ class LogScope {
   /// Clock function for timestamps. Inherited from [LogController].
   final DateTime Function() _clock;
 
-  /// Creates a [LogScope] bound to [_controller] with the given [name].
+  /// Creates a [LogScope] bound to [controller] with the given [name].
   LogScope(
-    this._controller,
+    LogController controller,
     this.name, {
     this.tag,
     Map<String, Object>? boundData,
@@ -59,7 +59,8 @@ class LogScope {
     String? requestId,
     String? parentSpanId,
     DateTime Function()? clock,
-  }) : _boundData = boundData,
+  }) : _controller = controller,
+       _boundData = boundData,
        _traceId = traceId,
        _requestId = requestId,
        _parentSpanId = parentSpanId,

@@ -97,7 +97,8 @@ void main() {
           methodName: 'collect',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(requests.stream)
+          requests: requests.stream,
+        )
         .timeout(
           const Duration(seconds: 5),
           onTimeout: () =>
@@ -125,7 +126,8 @@ void main() {
             methodName: 'collect',
             requestCodec: _codec,
             responseCodec: _codec,
-          )(requests.stream)
+            requests: requests.stream,
+          )
           .timeout(const Duration(seconds: 5));
 
       expect(result.value, 'got:2');

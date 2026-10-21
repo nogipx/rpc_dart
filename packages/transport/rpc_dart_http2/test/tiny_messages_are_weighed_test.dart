@@ -93,7 +93,8 @@ void main() {
                 methodName: 'Upload',
                 requestCodec: _codec,
                 responseCodec: _codec,
-              )(_tiny())
+                requests: _tiny(),
+              )
               .then<void>(
                 (_) {},
                 onError: (Object e) {

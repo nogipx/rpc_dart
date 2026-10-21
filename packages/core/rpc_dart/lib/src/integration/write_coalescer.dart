@@ -24,10 +24,10 @@ import 'dart:typed_data';
 final class RpcWriteCoalescer {
   /// Creates a coalescer that hands each joined write to [write].
   RpcWriteCoalescer(
-    this._write, {
+    void Function(Uint8List data) write, {
     this.maxBytes = 64 * 1024,
     this.directBytes = 16 * 1024,
-  });
+  }) : _write = write;
 
   final void Function(Uint8List data) _write;
 

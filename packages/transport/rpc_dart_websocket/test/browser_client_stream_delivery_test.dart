@@ -109,12 +109,14 @@ class _Client {
   Future<({int count, List<String> heads, String raw})> collect(
     List<String> texts,
   ) async {
-    final call = _caller.clientStream<RpcString, RpcString>(
-      serviceName: 'Collecting',
-      methodName: 'Collect',
-      requestCodec: RpcString.codec,
-      responseCodec: RpcString.codec,
-    );
+    Future<RpcString> call(Stream<RpcString> requests) =>
+        _caller.clientStream<RpcString, RpcString>(
+          requests: requests,
+          serviceName: 'Collecting',
+          methodName: 'Collect',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+        );
     final requests = StreamController<RpcString>();
     final response = call(requests.stream);
     for (final t in texts) {

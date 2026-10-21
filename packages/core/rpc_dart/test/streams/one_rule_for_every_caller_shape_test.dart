@@ -130,12 +130,14 @@ void main() {
         message: 'gone',
       );
 
-      final call = rig.caller.clientStream<_Msg, _Msg>(
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<_Msg> call(Stream<_Msg> requests) =>
+          rig.caller.clientStream<_Msg, _Msg>(
+            serviceName: 'S',
+            methodName: 'M',
+            requests: requests,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
 
       final caught = await _catch(
         () => call(Stream.value(_Msg('x'))).timeout(const Duration(seconds: 5)),
@@ -206,12 +208,14 @@ void main() {
       final rig = _rig();
       _peer(rig.peer, status: '${RpcStatus.ok}');
 
-      final call = rig.caller.clientStream<_Msg, _Msg>(
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<_Msg> call(Stream<_Msg> requests) =>
+          rig.caller.clientStream<_Msg, _Msg>(
+            serviceName: 'S',
+            methodName: 'M',
+            requests: requests,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
 
       final caught = await _catch(
         () => call(Stream.value(_Msg('x'))).timeout(const Duration(seconds: 5)),
@@ -228,12 +232,14 @@ void main() {
     final rig = _rig();
     _peer(rig.peer, payload: _framed('fine'), status: '00');
 
-    final call = rig.caller.clientStream<_Msg, _Msg>(
-      serviceName: 'S',
-      methodName: 'M',
-      requestCodec: _codec,
-      responseCodec: _codec,
-    );
+    Future<_Msg> call(Stream<_Msg> requests) =>
+        rig.caller.clientStream<_Msg, _Msg>(
+          serviceName: 'S',
+          methodName: 'M',
+          requests: requests,
+          requestCodec: _codec,
+          responseCodec: _codec,
+        );
 
     final response = await call(
       Stream.value(_Msg('x')),
@@ -266,12 +272,14 @@ void main() {
       final rig = _rig();
       _peer(rig.peer, payload: _framed('ok'), status: '${RpcStatus.ok}');
 
-      final call = rig.caller.clientStream<_Msg, _Msg>(
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<_Msg> call(Stream<_Msg> requests) =>
+          rig.caller.clientStream<_Msg, _Msg>(
+            serviceName: 'S',
+            methodName: 'M',
+            requests: requests,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
 
       final response = await call(
         Stream.value(_Msg('x')),
@@ -306,12 +314,14 @@ void main() {
     });
 
     test('clientStream', () async {
-      final call = caller.clientStream<_Msg, _Msg>(
-        serviceName: 'S',
-        methodName: 'M',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<_Msg> call(Stream<_Msg> requests) =>
+          caller.clientStream<_Msg, _Msg>(
+            serviceName: 'S',
+            methodName: 'M',
+            requests: requests,
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
       await expectLater(call(Stream.value(_Msg('x'))), refusedByTheEndpoint());
     });
 

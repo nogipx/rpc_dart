@@ -224,7 +224,8 @@ void main() {
             .clientStream<TestRequest, TestResponse>(
               serviceName: 'ZeroCopyTestService',
               methodName: 'ProcessItems',
-            )(Stream.fromIterable(requests))
+              requests: Stream.fromIterable(requests),
+            )
             .timeout(Duration(seconds: 5));
 
         print('answer: ${response.result}');

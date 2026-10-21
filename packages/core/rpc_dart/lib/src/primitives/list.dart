@@ -25,11 +25,9 @@ class RpcList<T extends IRpcSerializable> extends IterableBase<T>
 
   /// Creates a list of [length] elements, each set to [fill].
   ///
-  /// Growable, like every other constructor here. It used to build a
-  /// fixed-length list, so [add], [addAll], [remove], [removeAt] and [clear]
-  /// — most of this wrapper's own API — threw `UnsupportedError` on the
-  /// result. Nothing about serialising a list needs a fixed length, and a
-  /// constructor that quietly returns a crippled instance is a trap.
+  /// Growable, like every other constructor here: on a fixed-length list
+  /// [add], [addAll], [remove], [removeAt] and [clear] — most of this
+  /// wrapper's own API — would throw `UnsupportedError`.
   RpcList.filled(int length, T fill)
     : _items = List<T>.filled(length, fill, growable: true);
 
@@ -39,9 +37,8 @@ class RpcList<T extends IRpcSerializable> extends IterableBase<T>
   /// Creates a list from a JSON representation.
   ///
   /// Every element must be a JSON object. An element that is not one is a
-  /// [FormatException] rather than a silent omission: this used to skip such
-  /// entries, so a decode could hand back a SHORTER list than was sent, with
-  /// nothing anywhere to say so.
+  /// [FormatException] rather than a silent omission, which would hand back a
+  /// SHORTER list than was sent with nothing anywhere to say so.
   static RpcList<T> fromJsonRaw<T extends IRpcSerializable>(
     List<dynamic> json,
     T Function(Map<String, dynamic>) fromJson,
@@ -55,9 +52,8 @@ class RpcList<T extends IRpcSerializable> extends IterableBase<T>
       }
       // Decoders other than this package's CBOR reader -- a custom IRpcCodec,
       // a protobuf bridge, anything building maps dynamically -- routinely
-      // produce Map<dynamic, dynamic>. That failed the check above, so EVERY
-      // element was dropped and a full list decoded to an empty one. Coerce
-      // the keys instead; they are strings by construction on this path.
+      // produce Map<dynamic, dynamic>, which fails the check above. Coerce the
+      // keys; they are strings by construction on this path.
       if (item is Map) {
         list.add(fromJson(item.map((k, v) => MapEntry(k.toString(), v))));
         continue;
@@ -126,4 +122,19 @@ class RpcList<T extends IRpcSerializable> extends IterableBase<T>
 
   /// Sorts in place with an optional comparator.
   void sort([int Function(T a, T b)? compare]) => _items.sort(compare);
+
+  /// Equal to another [RpcList] holding equal elements in the same order, as
+  /// the other primitives compare by value.
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    if (other is! RpcList || other.length != length) return false;
+    for (var i = 0; i < length; i++) {
+      if (_items[i] != other._items[i]) return false;
+    }
+    return true;
+  }
+
+  @override
+  int get hashCode => Object.hashAll(_items);
 }

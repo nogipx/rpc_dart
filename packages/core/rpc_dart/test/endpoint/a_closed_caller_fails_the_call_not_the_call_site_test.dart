@@ -80,7 +80,8 @@ void main() {
         methodName: 'M',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(const Stream.empty()),
+        requests: const Stream.empty(),
+      ),
       returnsNormally,
     );
     await expectLater(call, throwsA(isA<RpcClosedException>()));

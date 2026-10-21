@@ -101,7 +101,8 @@ void main() {
             methodName: 'put',
             requestCodec: _codec,
             responseCodec: _reply,
-          )(_blob(bytes))
+            requests: _blob(bytes),
+          )
           .timeout(const Duration(seconds: 20));
     } catch (_) {}
   }

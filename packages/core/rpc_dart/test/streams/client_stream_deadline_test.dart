@@ -81,7 +81,8 @@ Future<String> _call(_Rig rig, Stream<RpcString> requests, RpcContext? ctx) {
         requestCodec: _codec,
         responseCodec: _codec,
         context: ctx,
-      )(requests)
+        requests: requests,
+      )
       .then((r) => r.value);
 }
 

@@ -135,7 +135,8 @@ Future<Object?> _drive(_Rig rig, String shape) async {
         await rig.caller.clientStream<Msg, Msg>(
           serviceName: 'Svc',
           methodName: 'client',
-        )(_reqs());
+          requests: _reqs(),
+        );
       case 'bidi':
         await rig.caller
             .bidirectionalStream<Msg, Msg>(

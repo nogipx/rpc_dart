@@ -209,14 +209,14 @@ Future<String> _clientStream({
 }) async {
   final caller = _rig(split: split, truncate: truncate);
   try {
-    final call = caller.clientStream<RpcString, RpcString>(
+    final reply = await caller.clientStream<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'collect',
+      requests: Stream.value(('x' * 64).rpc),
       requestCodec: _codec,
       responseCodec: _codec,
       context: RpcContext.empty().withTimeout(timeout),
     );
-    final reply = await call(Stream.value(('x' * 64).rpc));
     return reply.value;
   } on RpcStatusException catch (e) {
     return 'status ${e.statusCode}: ${e.message}';

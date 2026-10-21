@@ -170,7 +170,8 @@ void main() {
             requestCodec: _codec,
             responseCodec: _codec,
             context: _atDeadline(),
-          )(_one())
+            requests: _one(),
+          )
           .timeout(const Duration(seconds: 5)),
       throwsA(isA<RpcDeadlineExceededException>()),
     );

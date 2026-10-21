@@ -236,17 +236,16 @@ void main() {
         }).withTraceId('client-stream-trace');
 
         final requestsController = StreamController<RpcString>();
-        final clientStreamFn = clientEndpoint
+        // Act
+        final responsePromise = clientEndpoint
             .clientStream<RpcString, RpcString>(
               serviceName: 'ValidationService',
               methodName: 'AggregateWithContext',
+              requests: requestsController.stream,
               requestCodec: RpcString.codec,
               responseCodec: RpcString.codec,
               context: context,
             );
-
-        // Act
-        final responsePromise = clientStreamFn(requestsController.stream);
 
         requestsController.add('item1'.rpc);
         requestsController.add('item2'.rpc);

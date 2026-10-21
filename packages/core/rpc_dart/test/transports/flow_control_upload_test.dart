@@ -249,7 +249,8 @@ void main() {
               methodName: 'stallsUpload',
               requestCodec: _codec,
               responseCodec: _codec,
-            )(_gen(2000, () => pulled++))
+              requests: _gen(2000, () => pulled++),
+            )
             .catchError((Object _) => ''.rpc),
       );
       await Future<void>.delayed(const Duration(milliseconds: 1200));
@@ -276,7 +277,8 @@ void main() {
               methodName: 'stallsUpload',
               requestCodec: _codec,
               responseCodec: _codec,
-            )(_gen(2000, () => pulled++))
+              requests: _gen(2000, () => pulled++),
+            )
             .catchError((Object _) => ''.rpc),
       );
       await _waitUntil(() => pulled > 1000);
@@ -339,7 +341,8 @@ void main() {
                   methodName: 'ignoresUpload',
                   requestCodec: _codec,
                   responseCodec: _codec,
-                )(_gen(300, () => pulled++))
+                  requests: _gen(300, () => pulled++),
+                )
                 .timeout(
                   const Duration(seconds: 15),
                   onTimeout: () => fail(
@@ -362,7 +365,8 @@ void main() {
                   methodName: 'returnsEarly',
                   requestCodec: _codec,
                   responseCodec: _codec,
-                )(_gen(300, () => pulled++))
+                  requests: _gen(300, () => pulled++),
+                )
                 .timeout(const Duration(seconds: 15)))
             .value,
         'early',
@@ -380,7 +384,8 @@ void main() {
                   methodName: 'counts',
                   requestCodec: _codec,
                   responseCodec: _codec,
-                )(_gen(300, () => pulled++))
+                  requests: _gen(300, () => pulled++),
+                )
                 .timeout(const Duration(seconds: 20)))
             .value,
         'c:300',

@@ -60,7 +60,8 @@ void main() {
         methodName: 'upload',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       requests
         ..add('1'.rpc)
         ..add('2'.rpc);
@@ -81,7 +82,8 @@ void main() {
           methodName: 'upload',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(Stream.value('x'.rpc)),
+          requests: Stream.value('x'.rpc),
+        ),
         throwsA(
           isA<RpcStatusException>().having(
             (e) => e.statusCode,

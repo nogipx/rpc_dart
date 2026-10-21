@@ -252,7 +252,8 @@ void main() {
           methodName: 'Up',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(_items(1000));
+          requests: _items(1000),
+        );
 
         expect(r.value, '1000');
       });

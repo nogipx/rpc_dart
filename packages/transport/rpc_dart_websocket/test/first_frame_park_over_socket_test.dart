@@ -154,7 +154,8 @@ Future<void> _probe({
     methodName: 'Upload',
     requestCodec: _codec,
     responseCodec: _codec,
-  )(requests.stream);
+    requests: requests.stream,
+  );
   for (var i = 0; i < count; i++) {
     requests.add(RpcString(filler));
   }

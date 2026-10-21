@@ -103,7 +103,8 @@ Future<void> _check(String method) async {
             requestCodec: _codec,
             responseCodec: _codec,
             context: shared,
-          )(Stream.value('q'.rpc));
+            requests: Stream.value('q'.rpc),
+          );
     await call.then<void>((_) {}, onError: (Object _) {});
     expect(token.isCancelled, isFalse);
     return;

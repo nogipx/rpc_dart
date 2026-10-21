@@ -181,12 +181,14 @@ void main() {
 
       for (var i = 0; i < n; i++) {
         try {
-          final call = h.caller.clientStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'cs',
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
+          Future<RpcString> call(Stream<RpcString> requests) =>
+              h.caller.clientStream<RpcString, RpcString>(
+                requests: requests,
+                serviceName: 'Svc',
+                methodName: 'cs',
+                requestCodec: _codec,
+                responseCodec: _codec,
+              );
           await call(_failingRequests());
         } catch (_) {}
       }
@@ -276,12 +278,14 @@ void main() {
     test('a client-streaming call still returns its response', () async {
       final h = _build();
 
-      final call = h.caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'cs',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<RpcString> call(Stream<RpcString> requests) =>
+          h.caller.clientStream<RpcString, RpcString>(
+            requests: requests,
+            serviceName: 'Svc',
+            methodName: 'cs',
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
       final res = await call(Stream.fromIterable(['a'.rpc, 'b'.rpc]));
 
       expect(res.value, 'got2');
@@ -295,12 +299,14 @@ void main() {
     test('an empty request stream still completes normally', () async {
       final h = _build();
 
-      final call = h.caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'cs',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<RpcString> call(Stream<RpcString> requests) =>
+          h.caller.clientStream<RpcString, RpcString>(
+            requests: requests,
+            serviceName: 'Svc',
+            methodName: 'cs',
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
       final res = await call(const Stream<RpcString>.empty());
 
       expect(res.value, 'got0');

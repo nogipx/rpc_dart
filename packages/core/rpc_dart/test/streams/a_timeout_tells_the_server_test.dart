@@ -116,16 +116,15 @@ void main() {
     'a client-stream deadline tells the server',
     () async {
       final rig = await _rig();
-      final call = rig.caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'neverUp',
-        requestCodec: _codec,
-        responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 300)),
-      );
-
       await expectLater(
-        call(Stream.value('a'.rpc)),
+        rig.caller.clientStream<RpcString, RpcString>(
+          serviceName: 'Svc',
+          methodName: 'neverUp',
+          requests: Stream.value('a'.rpc),
+          requestCodec: _codec,
+          responseCodec: _codec,
+          context: RpcContext.withTimeout(const Duration(milliseconds: 300)),
+        ),
         throwsA(isA<RpcStatusException>()),
       );
       await _awaitCancel(rig.cancels);

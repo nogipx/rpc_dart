@@ -158,10 +158,11 @@ int Function() _startUpload(RpcCallerEndpoint caller, String shape) {
     final call = caller.clientStream<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Upload',
+      requests: requests(),
       requestCodec: _codec,
       responseCodec: _codec,
     );
-    unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
+    unawaited(call.then((_) {}, onError: (Object _) {}));
   }
   return () => sent;
 }

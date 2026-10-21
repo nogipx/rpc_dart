@@ -122,12 +122,14 @@ class _Harness {
 
   /// Sends [texts] as one client-stream call and returns what the handler saw.
   Future<List<String>> collect(List<String> texts) async {
-    final call = _caller.clientStream<RpcString, RpcString>(
-      serviceName: 'Collecting',
-      methodName: 'Collect',
-      requestCodec: RpcString.codec,
-      responseCodec: RpcString.codec,
-    );
+    Future<RpcString> call(Stream<RpcString> requests) =>
+        _caller.clientStream<RpcString, RpcString>(
+          requests: requests,
+          serviceName: 'Collecting',
+          methodName: 'Collect',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+        );
     final requests = StreamController<RpcString>();
     final response = call(requests.stream);
     for (final t in texts) {

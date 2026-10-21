@@ -146,7 +146,8 @@ Future<_Loud> _stream(String shape, String outcome) async {
           requestCodec: _codec,
           responseCodec: _codec,
           context: ctx,
-        )(Stream.value('x'.rpc));
+          requests: Stream.value('x'.rpc),
+        );
       default:
         await caller
             .bidirectionalStream<RpcString, RpcString>(

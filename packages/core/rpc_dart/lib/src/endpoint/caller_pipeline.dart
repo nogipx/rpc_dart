@@ -175,14 +175,17 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     return cancelled;
   }
 
-  /// Cancels all active calls.
-  void cancelAllMethods([String? reason]) {
+  /// Cancels every call in flight; returns how many.
+  int cancelAllMethods([String? reason]) {
+    var cancelled = 0;
     for (final tokens in _callerTokens.values) {
       for (final token in tokens.values) {
         token.cancel(reason ?? 'All methods cancelled');
+        cancelled++;
       }
     }
     _callerTokens.clear();
+    return cancelled;
   }
 
   /// Collects caller-specific metrics.
@@ -519,56 +522,53 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     );
   }
 
-  /// Creates a client-stream call builder.
-  Future<R> Function(Stream<C>)
-  clientStream<C extends Object, R extends Object>({
+  /// Sends [requests] as one client-stream call and completes with its single
+  /// response.
+  Future<TResponse>
+  clientStream<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
     required String methodName,
-    IRpcCodec<C>? requestCodec,
-    IRpcCodec<R>? responseCodec,
+    required Stream<TRequest> requests,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
-  }) {
-    return (Stream<C> requests) async {
-      // In the closure, not beside the builder: the builder is lazy, so a guard
-      // out there would test whether the endpoint was open when the call was
-      // DESCRIBED rather than when it was made.
-      if (!isActive) throw RpcClosedException('Endpoint');
+  }) async {
+    if (!isActive) throw RpcClosedException('Endpoint');
 
-      final ctx = _prepareCallerContext(context);
-      // The builder is already lazy: this runs when the call is invoked.
-      _trackCallerRequest(serviceName, methodName, ctx);
-      try {
-        return await _handleClientStream<C, R>(
-          direction: RpcCallDirection.outgoing,
-          serviceName: serviceName,
-          methodName: methodName,
-          context: ctx,
-          requests: requests,
-          handler: (c, reqs) {
-            return ClientStreamCaller<C, R>(
-              transport: transport,
-              serviceName: serviceName,
-              methodName: methodName,
-              requestCodec: requestCodec,
-              responseCodec: responseCodec,
-              context: c,
-              logger: _log,
-            ).call(reqs);
-          },
-        );
-      } finally {
-        _untrackCallerRequest(serviceName, methodName, ctx);
-      }
-    };
+    final ctx = _prepareCallerContext(context);
+    _trackCallerRequest(serviceName, methodName, ctx);
+    try {
+      return await _handleClientStream<TRequest, TResponse>(
+        direction: RpcCallDirection.outgoing,
+        serviceName: serviceName,
+        methodName: methodName,
+        context: ctx,
+        requests: requests,
+        handler: (c, reqs) {
+          return ClientStreamCaller<TRequest, TResponse>(
+            transport: transport,
+            serviceName: serviceName,
+            methodName: methodName,
+            requestCodec: requestCodec,
+            responseCodec: responseCodec,
+            context: c,
+            logger: _log,
+          ).call(reqs);
+        },
+      );
+    } finally {
+      _untrackCallerRequest(serviceName, methodName, ctx);
+    }
   }
 
   /// Opens a bidirectional-stream call.
-  Stream<R> bidirectionalStream<C extends Object, R extends Object>({
+  Stream<TResponse>
+  bidirectionalStream<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
     required String methodName,
-    required Stream<C> requests,
-    IRpcCodec<C>? requestCodec,
-    IRpcCodec<R>? responseCodec,
+    required Stream<TRequest> requests,
+    IRpcCodec<TRequest>? requestCodec,
+    IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
     // Through the stream, for the same reason as unaryRequest's.
@@ -576,13 +576,13 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
     final ctx = _prepareCallerContext(context);
 
-    final stream = _handleBidirectionalStream<C, R>(
+    final stream = _handleBidirectionalStream<TRequest, TResponse>(
       direction: RpcCallDirection.outgoing,
       serviceName: serviceName,
       methodName: methodName,
       context: ctx,
       requests: requests,
-      handler: (c, reqs) => _buildBidirectionalStream<C, R>(
+      handler: (c, reqs) => _buildBidirectionalStream<TRequest, TResponse>(
         serviceName: serviceName,
         methodName: methodName,
         requestCodec: requestCodec,
@@ -603,7 +603,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     // The token is fired here as well as in _buildBidirectionalStream's
     // cleanup, because the inner chain may not unwind promptly; cancel() is
     // idempotent.
-    return _bridgeCallerResponses<R>(
+    return _bridgeCallerResponses<TResponse>(
       stream: stream,
       serviceName: serviceName,
       methodName: methodName,

@@ -193,13 +193,13 @@ void main() {
   test('client stream does not leak the handler exception', () async {
     expectNoLeak(
       await failureText(() async {
-        final call = caller.clientStream<RpcString, RpcString>(
+        await caller.clientStream<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'clientStream',
+          requests: Stream.fromIterable(['a'.rpc]),
           requestCodec: _codec,
           responseCodec: _codec,
         );
-        await call(Stream.fromIterable(['a'.rpc]));
       }),
     );
   });

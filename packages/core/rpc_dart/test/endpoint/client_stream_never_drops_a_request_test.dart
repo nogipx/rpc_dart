@@ -84,7 +84,8 @@ void main() {
         methodName: 'Collect',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests)
+        requests: requests,
+      )
       .timeout(const Duration(seconds: 20))
       .then((r) => r.value);
 

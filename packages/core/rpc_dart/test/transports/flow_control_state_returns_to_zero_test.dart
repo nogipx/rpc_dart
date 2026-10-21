@@ -92,14 +92,16 @@ Future<Map<String, int>> _drive({required bool drains}) async {
       }
     }
 
-    final call = caller.clientStream<RpcString, RpcString>(
-      serviceName: 'Svc',
-      methodName: 'Upload',
-      requestCodec: _codec,
-      responseCodec: _codec,
-    );
     try {
-      await call(requests()).timeout(const Duration(seconds: 20));
+      await caller
+          .clientStream<RpcString, RpcString>(
+            serviceName: 'Svc',
+            methodName: 'Upload',
+            requests: requests(),
+            requestCodec: _codec,
+            responseCodec: _codec,
+          )
+          .timeout(const Duration(seconds: 20));
     } catch (_) {}
     // Teardown runs in the pipeline's cleanup, not synchronously with the
     // response, so give it a turn before reading the counters.

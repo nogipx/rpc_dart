@@ -33,12 +33,14 @@ void main() {
       final bad = <String>[];
 
       Future<void> one(int n) async {
-        final call = caller.clientStream<RpcString, RpcString>(
-          serviceName: 'Collecting',
-          methodName: 'Collect',
-          requestCodec: RpcString.codec,
-          responseCodec: RpcString.codec,
-        );
+        Future<RpcString> call(Stream<RpcString> requests) =>
+            caller.clientStream<RpcString, RpcString>(
+              requests: requests,
+              serviceName: 'Collecting',
+              methodName: 'Collect',
+              requestCodec: RpcString.codec,
+              responseCodec: RpcString.codec,
+            );
         final requests = StreamController<RpcString>();
         final response = call(requests.stream);
         for (var i = 0; i < 8; i++) {

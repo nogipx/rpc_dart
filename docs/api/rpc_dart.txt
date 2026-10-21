@@ -56,7 +56,7 @@ GrpcHealthCheckContract method addServerStreamMethod<TRequest, TResponse>({requi
 GrpcHealthCheckContract method addUnaryMethod<TRequest, TResponse>({required String methodName, required Future<TResponse> Function(TRequest, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
 GrpcHealthCheckContract method dispose() -> void
 GrpcHealthCheckContract method setup() -> void
-GrpcHealthCheckContract new new(GrpcHealthServiceStatus _status)
+GrpcHealthCheckContract new new(GrpcHealthServiceStatus status)
 GrpcHealthCheckContract static field grpcServiceName: String (get)
 GrpcHealthCheckRequest field service: String (get)
 GrpcHealthCheckRequest new new({String service})
@@ -230,7 +230,7 @@ LogScope method withData(Map<String, Object> data) -> LogScope
 LogScope method withSpan<T>(String spanName, Future<T> Function(LogSpanHandle) body, {Map<String, Object>? data}) -> Future<T>
 LogScope method withSpanSync<T>(String spanName, T Function(LogSpanHandle) body, {Map<String, Object>? data}) -> T
 LogScope method withTag(String tag) -> LogScope
-LogScope new new(LogController _controller, String name, {String? tag, Map<String, Object>? boundData, String? traceId, String? requestId, String? parentSpanId, DateTime Function()? clock})
+LogScope new new(LogController controller, String name, {String? tag, Map<String, Object>? boundData, String? traceId, String? requestId, String? parentSpanId, DateTime Function()? clock})
 LogScope static field noop: LogScope (get)
 LogSpan field data: Map<String, Object>? (get)
 LogSpan field duration: Duration (get)
@@ -342,7 +342,7 @@ RpcCallerContract method cancelMethod(String methodName, [String? reason]) -> in
 RpcCallerContract method getActiveCallsCount(String methodName) -> int
 RpcCallerContract method getCancellationTokensForMethod(String methodName) -> Map<String, RpcCancellationToken>
 RpcCallerContract method isMethodActive(String methodName) -> bool
-RpcCallerContract new new(String serviceName, RpcCallerEndpoint _endpoint, {RpcDataTransferMode dataTransferMode})
+RpcCallerContract new new(String serviceName, RpcCallerEndpoint endpoint, {RpcDataTransferMode dataTransferMode})
 RpcCallerEndpoint field activeResponderCount: int (get)
 RpcCallerEndpoint field compressionEnabled: bool (get)
 RpcCallerEndpoint field debugLabel: String? (get)
@@ -351,12 +351,12 @@ RpcCallerEndpoint field transport: IRpcTransport (get)
 RpcCallerEndpoint method activeCallCount(String serviceName, String methodName) -> int
 RpcCallerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcCallerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
-RpcCallerEndpoint method bidirectionalStream<C, R>({required String serviceName, required String methodName, required Stream<C> requests, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Stream<R>
-RpcCallerEndpoint method cancelAllMethods([String? reason]) -> void
+RpcCallerEndpoint method bidirectionalStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcCallerEndpoint method cancelAllMethods([String? reason]) -> int
 RpcCallerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
 RpcCallerEndpoint method cancelRequest(String serviceName, String methodName, String requestId, [String? reason]) -> bool
 RpcCallerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
-RpcCallerEndpoint method clientStream<C, R>({required String serviceName, required String methodName, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Future<R> Function(Stream<C>)
+RpcCallerEndpoint method clientStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerEndpoint method close() -> Future<void>
 RpcCallerEndpoint method collectEndpointMetrics() -> Map<String, Object?>
 RpcCallerEndpoint method getCancellationTokensForMethod(String serviceName, String methodName) -> Map<String, RpcCancellationToken>
@@ -689,7 +689,7 @@ RpcHeaderBoundedServerSocket field maxHeaderBytes: int? (get)
 RpcHeaderBoundedServerSocket field port: int (get)
 RpcHeaderBoundedServerSocket method peerGone(HttpConnectionInfo info) -> Future<void>?
 RpcHeaderBoundedServerSocket method responseWritten(HttpConnectionInfo info) -> void
-RpcHeaderBoundedServerSocket new new(ServerSocket _server, {int? maxHeaderBytes, Duration? headerTimeout, int? maxConnections})
+RpcHeaderBoundedServerSocket new new(ServerSocket server, {int? maxHeaderBytes, Duration? headerTimeout, int? maxConnections})
 RpcHeaderBoundedServerSocket static method defaultMaxHeaderBytes(RpcSecurityPolicy policy) -> int
 RpcHeaders new new()
 RpcHeaders static field connectionSpecific: Set<String> (get)
@@ -752,6 +752,7 @@ RpcInt new fromJson(Map<String, dynamic> json)
 RpcInt new new(int value)
 RpcInt static field codec: RpcCodec<RpcInt> (get)
 RpcIntX field rpc: RpcInt (get)
+RpcList field hashCode: int (get)
 RpcList field iterator: Iterator<T> (get)
 RpcList field length: int (get)
 RpcList method add(T value) -> void
@@ -824,13 +825,12 @@ RpcMethodType static field clientStream: RpcMethodType (get)
 RpcMethodType static field serverStream: RpcMethodType (get)
 RpcMethodType static field unary: RpcMethodType (get)
 RpcMethodType static field values: List<RpcMethodType> (get)
-RpcMiddlewareContext field context: RpcContext (get/set)
+RpcMiddlewareContext field context: RpcContext (get)
 RpcMiddlewareContext field direction: RpcCallDirection? (get)
 RpcMiddlewareContext field endpoint: RpcEndpointBase (get)
 RpcMiddlewareContext field methodName: String (get)
 RpcMiddlewareContext field serviceName: String (get)
 RpcMiddlewareContext method copyWith({RpcEndpointBase? endpoint, String? serviceName, String? methodName, RpcContext? context, RpcCallDirection? direction}) -> RpcMiddlewareContext
-RpcMiddlewareContext method updateContext(RpcContext newContext) -> void
 RpcMiddlewareContext new new({required RpcEndpointBase endpoint, required String serviceName, required String methodName, required RpcContext context, RpcCallDirection? direction})
 RpcNoConnectionException field details: List<RpcErrorDetail> (get)
 RpcNoConnectionException field isPushback: bool (get)
@@ -895,12 +895,12 @@ RpcPeerEndpoint field transport: IRpcTransport (get)
 RpcPeerEndpoint method activeCallCount(String serviceName, String methodName) -> int
 RpcPeerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcPeerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
-RpcPeerEndpoint method bidirectionalStream<C, R>({required String serviceName, required String methodName, required Stream<C> requests, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Stream<R>
-RpcPeerEndpoint method cancelAllMethods([String? reason]) -> void
+RpcPeerEndpoint method bidirectionalStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
+RpcPeerEndpoint method cancelAllMethods([String? reason]) -> int
 RpcPeerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
 RpcPeerEndpoint method cancelRequest(String serviceName, String methodName, String requestId, [String? reason]) -> bool
 RpcPeerEndpoint method cancelServiceMethods(String serviceName, [String? reason]) -> int
-RpcPeerEndpoint method clientStream<C, R>({required String serviceName, required String methodName, IRpcCodec<C>? requestCodec, IRpcCodec<R>? responseCodec, RpcContext? context}) -> Future<R> Function(Stream<C>)
+RpcPeerEndpoint method clientStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerEndpoint method close() -> Future<void>
 RpcPeerEndpoint method collectEndpointMetrics() -> Map<String, Object?>
 RpcPeerEndpoint method drain({Duration timeout}) -> Future<void>
@@ -926,7 +926,7 @@ RpcProtoReader method readString() -> String
 RpcProtoReader method readTag() -> ({int field, int wireType})
 RpcProtoReader method readVarint() -> int
 RpcProtoReader method skip(int wireType) -> void
-RpcProtoReader new new(Uint8List _bytes)
+RpcProtoReader new new(Uint8List bytes)
 RpcProtoWireType new new()
 RpcProtoWireType static field fixed32: int (get)
 RpcProtoWireType static field fixed64: int (get)
@@ -1142,7 +1142,7 @@ RpcWriteCoalescer field maxBytes: int (get)
 RpcWriteCoalescer method add(Uint8List data) -> void
 RpcWriteCoalescer method discard() -> void
 RpcWriteCoalescer method flush() -> void
-RpcWriteCoalescer new new(void Function(Uint8List) _write, {int maxBytes, int directBytes})
+RpcWriteCoalescer new new(void Function(Uint8List) write, {int maxBytes, int directBytes})
 SamplingConfig field interval: Duration (get)
 SamplingConfig field maxPerInterval: Map<RpcLogLevel, int> (get)
 SamplingConfig new new({Duration interval, Map<RpcLogLevel, int> maxPerInterval})

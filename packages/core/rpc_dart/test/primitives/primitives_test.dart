@@ -121,6 +121,18 @@ void main() {
       expect(const RpcNum(10) ~/ const RpcInt(4), const RpcNum(2));
     });
 
+    test('RpcList compares by value, as the other primitives do', () {
+      final a = RpcList<RpcString>.from([const RpcString('a')]);
+      final same = RpcList<RpcString>.from([const RpcString('a')]);
+      final other = RpcList<RpcString>.from([const RpcString('b')]);
+
+      // `==` itself: `equals` would compare an Iterable element by element.
+      expect(a == same, isTrue);
+      expect(a.hashCode, same.hashCode);
+      expect(a == other, isFalse);
+      expect(a == RpcList<RpcString>(), isFalse);
+    });
+
     test('RpcList.filled supports the whole wrapper API', () {
       // filled() used to build a fixed-length backing list, so most of the
       // mutators this class exposes threw UnsupportedError on the result.

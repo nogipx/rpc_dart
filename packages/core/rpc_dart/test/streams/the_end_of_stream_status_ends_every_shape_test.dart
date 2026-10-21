@@ -69,7 +69,8 @@ Future<String> _outcome(
             requestCodec: _codec,
             responseCodec: _codec,
             context: ctx,
-          )(requests.stream)
+            requests: requests.stream,
+          )
           .then((r) => 'OK ${r.value}'),
     'server' =>
       caller

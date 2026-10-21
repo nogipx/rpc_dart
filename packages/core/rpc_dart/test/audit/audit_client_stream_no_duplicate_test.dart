@@ -32,7 +32,8 @@ void main() {
         methodName: 'Collect',
         requestCodec: RpcString.codec,
         responseCodec: RpcString.codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
 
       for (var i = 0; i < 5; i++) {
         requests.add('chunk-$i'.rpc);
@@ -70,7 +71,8 @@ void main() {
           methodName: 'Collect',
           requestCodec: RpcString.codec,
           responseCodec: RpcString.codec,
-        )(requests.stream);
+          requests: requests.stream,
+        );
 
         // No delay between sends: everything lands before the responder binds.
         for (var i = 0; i < 5; i++) {

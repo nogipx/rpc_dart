@@ -163,7 +163,8 @@ Future<Object?> _drive(_Rig rig, String shape, RpcContext? ctx) async {
           requestCodec: _codec,
           responseCodec: _codec,
           context: ctx,
-        )(_oneRequest());
+          requests: _oneRequest(),
+        );
       case 'bidi':
         await rig.caller
             .bidirectionalStream<RpcString, RpcString>(

@@ -233,7 +233,8 @@ void main() {
         methodName: 'collect',
         requestCodec: _plain,
         responseCodec: _plain,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       requests.add(const Msg(0));
       await requests.close();
 

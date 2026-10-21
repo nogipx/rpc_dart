@@ -176,12 +176,14 @@ void main() {
         }
       }
 
-      final call = caller.clientStream<RpcString, RpcString>(
-        serviceName: 'Svc',
-        methodName: 'Upload',
-        requestCodec: _codec,
-        responseCodec: _codec,
-      );
+      Future<RpcString> call(Stream<RpcString> requests) =>
+          caller.clientStream<RpcString, RpcString>(
+            requests: requests,
+            serviceName: 'Svc',
+            methodName: 'Upload',
+            requestCodec: _codec,
+            responseCodec: _codec,
+          );
       unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
 
       // Settles on what is ASSERTED -- the bytes held in the client -- not on
@@ -256,12 +258,14 @@ void main() {
               )
               .listen((_) {}, onError: (Object _) {});
         } else {
-          final call = caller.clientStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Upload',
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
+          Future<RpcString> call(Stream<RpcString> requests) =>
+              caller.clientStream<RpcString, RpcString>(
+                requests: requests,
+                serviceName: 'Svc',
+                methodName: 'Upload',
+                requestCodec: _codec,
+                responseCodec: _codec,
+              );
           unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
         }
 
@@ -327,12 +331,14 @@ void main() {
               )
               .listen((_) {}, onError: (Object _) {});
         } else {
-          final call = caller.clientStream<RpcString, RpcString>(
-            serviceName: 'Svc',
-            methodName: 'Upload',
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
+          Future<RpcString> call(Stream<RpcString> requests) =>
+              caller.clientStream<RpcString, RpcString>(
+                requests: requests,
+                serviceName: 'Svc',
+                methodName: 'Upload',
+                requestCodec: _codec,
+                responseCodec: _codec,
+              );
           unawaited(call(requests()).then((_) {}, onError: (Object _) {}));
         }
 

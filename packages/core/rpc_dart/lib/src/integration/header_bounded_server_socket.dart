@@ -31,11 +31,11 @@ final class RpcHeaderBoundedServerSocket extends Stream<Socket>
     implements ServerSocket {
   /// Bounds the connections [server] accepts. Each bound is off when null.
   RpcHeaderBoundedServerSocket(
-    this._server, {
+    ServerSocket server, {
     this.maxHeaderBytes,
     this.headerTimeout,
     this.maxConnections,
-  });
+  }) : _server = server;
 
   /// Four times what [policy] admits as one request's head: the method path,
   /// the metadata text, the `: ` and CRLF around each header, and the request

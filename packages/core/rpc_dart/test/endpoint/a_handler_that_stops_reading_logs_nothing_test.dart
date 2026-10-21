@@ -64,7 +64,8 @@ void main() {
       methodName: 'c',
       requestCodec: _codec,
       responseCodec: _codec,
-    )(requests.stream);
+      requests: requests.stream,
+    );
     for (var i = 0; i < 20; i++) {
       requests.add('$i'.rpc);
       await Future<void>.delayed(const Duration(milliseconds: 5));

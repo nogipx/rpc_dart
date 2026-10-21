@@ -308,20 +308,19 @@ abstract class RpcCallerContract
 
   /// Data transfer mode used by this contract's methods.
   final RpcDataTransferMode dataTransferMode;
-  final RpcCallerEndpoint _endpoint;
 
-  /// Creates a caller contract bound to the given [serviceName] and [_endpoint].
+  /// Endpoint used to send requests.
+  final RpcCallerEndpoint endpoint;
+
+  /// Creates a caller contract bound to the given [serviceName] and [endpoint].
   RpcCallerContract(
     this.serviceName,
-    this._endpoint, {
+    this.endpoint, {
     this.dataTransferMode = RpcDataTransferMode.auto,
   });
 
-  /// Endpoint used to send requests.
-  RpcCallerEndpoint get endpoint => _endpoint;
-
   @override
-  RpcCallerPipelineMixin get _outgoing => _endpoint;
+  RpcCallerPipelineMixin get _outgoing => endpoint;
 
   @override
   RpcDataTransferMode get _outgoingMode => dataTransferMode;
@@ -424,10 +423,11 @@ mixin _RpcOutgoingCalls {
     return _outgoing.clientStream<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
+      requests: requests,
       requestCodec: rq,
       responseCodec: rs,
       context: context,
-    )(requests);
+    );
   }
 
   /// Opens a bidirectional-stream call over [requests].

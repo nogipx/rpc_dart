@@ -170,7 +170,8 @@ void main() {
         methodName: 'client',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(requests.stream);
+        requests: requests.stream,
+      );
       requests.add(const Msg('hi'));
       await requests.close();
 
@@ -333,7 +334,8 @@ void main() {
         methodName: 'client',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(Stream.fromIterable(List.generate(5, (i) => Msg('$i'))));
+        requests: Stream.fromIterable(List.generate(5, (i) => Msg('$i'))),
+      );
       await expectLater(call.timeout(const Duration(seconds: 15)), _mismatch);
       await Future<void>.delayed(const Duration(milliseconds: 50));
 

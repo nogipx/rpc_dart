@@ -184,8 +184,9 @@ void main() {
 
         // Act
         final requests = ['payment1'.rpc, 'payment2'.rpc, 'payment3'.rpc];
-        final clientStreamBuilder = clientEndpoint
-            .clientStream<RpcString, RpcString>(
+        Future<RpcString> clientStreamBuilder(Stream<RpcString> requests) =>
+            clientEndpoint.clientStream<RpcString, RpcString>(
+              requests: requests,
               serviceName: 'PaymentService',
               methodName: 'ProcessPayments',
               requestCodec: RpcString.codec,
@@ -233,8 +234,9 @@ void main() {
         const batchSize = 50;
         final requests = List.generate(batchSize, (i) => 'batch_item_$i'.rpc);
 
-        final clientStreamBuilder = clientEndpoint
-            .clientStream<RpcString, RpcString>(
+        Future<RpcString> clientStreamBuilder(Stream<RpcString> requests) =>
+            clientEndpoint.clientStream<RpcString, RpcString>(
+              requests: requests,
               serviceName: 'PaymentService',
               methodName: 'ProcessPayments',
               requestCodec: RpcString.codec,
@@ -468,13 +470,15 @@ void main() {
 
             // 3. Client Stream
             futures.add(() async {
-              final clientStreamBuilder = clientEndpoint
-                  .clientStream<RpcString, RpcString>(
-                    serviceName: 'MixedService',
-                    methodName: 'ProcessPayments',
-                    requestCodec: RpcString.codec,
-                    responseCodec: RpcString.codec,
-                  );
+              Future<RpcString> clientStreamBuilder(
+                Stream<RpcString> requests,
+              ) => clientEndpoint.clientStream<RpcString, RpcString>(
+                requests: requests,
+                serviceName: 'MixedService',
+                methodName: 'ProcessPayments',
+                requestCodec: RpcString.codec,
+                responseCodec: RpcString.codec,
+              );
 
               final requests = ['item1'.rpc, 'item2'.rpc];
               final response = await clientStreamBuilder(

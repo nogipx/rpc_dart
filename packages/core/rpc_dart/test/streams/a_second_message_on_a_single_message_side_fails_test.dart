@@ -120,7 +120,8 @@ void main() {
           methodName: 'M',
           requestCodec: _codec,
           responseCodec: _codec,
-        )(Stream.value('q'.rpc)),
+          requests: Stream.value('q'.rpc),
+        ),
         throwsA(_internal),
       );
     });

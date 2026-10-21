@@ -69,7 +69,8 @@ void main() {
         methodName: 'M',
         requestCodec: _codec,
         responseCodec: _codec,
-      )(Stream.fromIterable(['q'.rpc])),
+        requests: Stream.fromIterable(['q'.rpc]),
+      ),
       throwsA(_internal),
     );
   });
