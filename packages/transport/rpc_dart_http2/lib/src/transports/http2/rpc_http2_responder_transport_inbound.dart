@@ -167,7 +167,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
           ),
           endStream: true,
         );
-      } on RpcMetadataViolation catch (e) {
+      } on RpcMetadataViolationException catch (e) {
         // The REFUSAL ITSELF violated the policy that produced it. Trimming the
         // message covers `maxHeaderValueBytes` and not `maxHeaders`: this
         // trailer carries grpc-status AND grpc-message, so a cap below 2
@@ -204,11 +204,11 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
         // fault, or a plain disconnect reads as UNAVAILABLE and is retried.
         // Same order as the channel transport's protocol close.
         //
-        // `RpcMetadataViolation`, not `ArgumentError`. This decides whether to
+        // `RpcMetadataViolationException`, not `ArgumentError`. This decides whether to
         // END A CONNECTION, and `ArgumentError` means "a caller passed a bad
         // argument" — a programming mistake, which must not be charged to the
         // peer's 256-strike budget. `validateMetadata` throws only this type.
-        if (error is RpcMetadataViolation &&
+        if (error is RpcMetadataViolationException &&
             (_policy.closeOnProtocolError ||
                 ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations)) {
           await _closeForProtocolError();

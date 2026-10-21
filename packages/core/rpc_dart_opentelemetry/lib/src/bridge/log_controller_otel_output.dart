@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:fixnum/fixnum.dart';
-import 'package:opentelemetry/api.dart' hide SpanStatus;
+import 'package:opentelemetry/api.dart';
 import 'package:rpc_dart/rpc_dart.dart';
 
 /// A [LogOutput] that mirrors [LogController] spans and events into
@@ -205,7 +205,7 @@ class LogControllerOtelOutput extends LogOutput {
         span.setAttribute(_attribute(entry.key, entry.value));
       }
     }
-    if (record.status == SpanStatus.error) {
+    if (record.status == LogSpanStatus.error) {
       if (record.error != null) {
         span.recordException(
           record.error!,

@@ -171,7 +171,7 @@ class LogEvent implements LogRecord {
 /// Status of a completed span.
 ///
 /// Open: a minor release may add a value, so a `switch` keeps a default.
-enum SpanStatus {
+enum LogSpanStatus {
   /// Span completed successfully.
   ok,
 
@@ -212,7 +212,7 @@ class LogSpan implements LogRecord {
   Duration get duration => endTime.difference(startTime);
 
   /// Outcome of the operation.
-  final SpanStatus status;
+  final LogSpanStatus status;
 
   /// Error (if status == error).
   final Object? error;
@@ -246,7 +246,7 @@ class LogSpan implements LogRecord {
     String? name,
     DateTime? startTime,
     DateTime? endTime,
-    SpanStatus? status,
+    LogSpanStatus? status,
     String? parentSpanId,
     String? traceId,
     Object? error,
@@ -297,7 +297,7 @@ class LogSpan implements LogRecord {
       json['startTime'] as int? ?? 0,
     ),
     endTime: DateTime.fromMillisecondsSinceEpoch(json['endTime'] as int? ?? 0),
-    status: json['status'] == 'error' ? SpanStatus.error : SpanStatus.ok,
+    status: json['status'] == 'error' ? LogSpanStatus.error : LogSpanStatus.ok,
     error: json['error'],
     data: (json['data'] as Map<String, dynamic>?)?.cast<String, Object>(),
     events:

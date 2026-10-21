@@ -214,7 +214,7 @@ class RpcFrameMultiplexedChannel extends IRpcMultiplexedChannel {
       // the same number, and a server closes the connection over it.
       final encoded = frame.length - RpcChannelFrame.headerSize;
       if (_refuses(RpcChannelFrame.flagMetadata, encoded)) {
-        throw RpcMetadataViolation(
+        throw RpcMetadataViolationException(
           'Metadata too large once encoded: $encoded bytes > '
           '${_policy.maxMetadataBytes}',
           name: 'metadata',

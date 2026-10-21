@@ -620,7 +620,7 @@ class RpcChannelTransport extends IRpcTransport
     try {
       _policy.validateMetadata(metadata);
       return metadata;
-    } on RpcMetadataViolation catch (error) {
+    } on RpcMetadataViolationException catch (error) {
       final violation = _OneStreamViolation(
         'Inbound metadata violates the security policy on stream '
         '$streamId: ${error.message}',

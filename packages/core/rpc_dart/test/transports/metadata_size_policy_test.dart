@@ -64,7 +64,7 @@ void main() {
       peer.send(
         RpcTransportMessage.withMetadata(metadata: _oversized, streamId: 1),
       ),
-      throwsA(isA<RpcMetadataViolation>()),
+      throwsA(isA<RpcMetadataViolationException>()),
     );
 
     await peer.close();

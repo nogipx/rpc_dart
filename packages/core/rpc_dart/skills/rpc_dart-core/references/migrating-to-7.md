@@ -64,6 +64,14 @@ builds a transport, a channel or frames imports
 | `ctx.withValue('key', v)`, `ctx.getValue<T>('key')` | a typed key: `const key = RpcContextKey<T>('key')`, then `withValue(key, v)` / `getValue(key)` |
 | `getValue<RpcCallScope>(RpcCallScope)` | `ctx.callScope` |
 | `endpoint.collectEndpointMetrics()['openStreams']` | `endpoint.collectEndpointMetrics().openStreams` (`RpcEndpointMetrics`; `toJson()` for the map) |
+| `RpcContextBuilder()...build()` | `RpcContext.empty()` or a factory, then `with...` copies; `withBearerAuth`, `withBasicAuth`, `withApiKey` are on `RpcContext` |
+| `ctx.createChild()`, `ctx.createChildWith(...)`, `RpcContextBuilder.inheritFrom(ctx)` | `ctx.forward(headers:, timeout:)`; it drops `ctx`'s credentials, so pass one on by naming it in `headers` |
+| `RpcContextUtils.merge(a, b)` | gone; chain `with...` copies |
+| `contract.cancelMethod(m)`, `contract.cancelAllMethods()`, `contract.isMethodActive(m)`, `contract.getActiveCallsCount(m)` | `endpoint.cancelMethod(service, m)`, `endpoint.cancelService(service)`, `endpoint.activeCallCount(service, m)` |
+| `endpoint.cancelAllMethods()`, `endpoint.cancelServiceMethods(s)` | `cancelAll()`, `cancelService(s)` |
+| `getCancellationTokensForMethod(...)` | gone; `activeCallCount`, or a token in the call's context |
+| `SpanStatus` | `LogSpanStatus` |
+| `implements IRpcChannelProtocolClose` | `extends IRpcChannel` and override `closeFor(RpcChannelCloseReason)` |
 
 `RpcException` is abstract: throw `RpcStatusException(RpcStatus.x, '...')`.
 Match errors on the type or on `statusCode`, never on the message text.
@@ -127,7 +135,7 @@ to apply to every method of the same type.
 - **A retry waits the delay the server's `RpcRetryInfo` asks for**, not its
   own backoff, when the delay is positive.
 - **A metadata violation is not an `ArgumentError`.** A header the security
-  policy refuses throws `RpcMetadataViolation` (INVALID_ARGUMENT, exported
+  policy refuses throws `RpcMetadataViolationException` (INVALID_ARGUMENT, exported
   from `rpc_dart.dart`); a `catch (ArgumentError)` no longer catches it.
 - **A zero-copy contract on a byte-only transport fails at registration**,
   not on every call.
@@ -144,7 +152,7 @@ to apply to every method of the same type.
 - **A `switch` over an open type keeps a default branch**: minor releases may
   add values to `RpcHealthLevel`, `RpcClientConnectionState`,
   `RpcCallOutcome`, `RpcDataTransferMode`, `RpcContentTypeValidation`,
-  `ConsoleFormat`, `SpanStatus`, `GrpcServingStatus`, `RateLimit` and
+  `ConsoleFormat`, `LogSpanStatus`, `GrpcServingStatus`, `RateLimit` and
   `LogRecord`. `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`,
   `RpcServiceKind`, `RpcServerMode` and `RpcLogLevel` are closed.
 

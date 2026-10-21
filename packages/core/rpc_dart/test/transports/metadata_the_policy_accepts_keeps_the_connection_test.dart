@@ -101,7 +101,7 @@ void main() {
         sid,
         RpcMetadata(_framingHeavy(), methodPath: '/S/echo'),
       ),
-      throwsA(isA<RpcMetadataViolation>()),
+      throwsA(isA<RpcMetadataViolationException>()),
     );
 
     expect(
@@ -131,7 +131,7 @@ void main() {
 
     await expectLater(
       server.sendMetadata(sid, trailer, endStream: true),
-      throwsA(isA<RpcMetadataViolation>()),
+      throwsA(isA<RpcMetadataViolationException>()),
     );
     expect(client.isClosed, isFalse);
   });

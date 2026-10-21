@@ -98,6 +98,8 @@ No error message is a contract: match on the type or the status.
 | `cancelMethod`, `cancelAllMethods`, `isMethodActive`, `getActiveCallsCount`, `getCancellationTokensForMethod` on a contract | the endpoint's `cancelMethod(service, method)`, `cancelService(service)`, `activeCallCount(service, method)`; a service method may now have any of these names |
 | `endpoint.cancelAllMethods`, `endpoint.cancelServiceMethods` | `cancelAll`, `cancelService` |
 | `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
+| `SpanStatus` | `LogSpanStatus`; it no longer clashes with OpenTelemetry's `SpanStatus` |
+| `RpcCallScope.disposerTimeout = d` (a static, for the whole isolate) | `RpcCallScope(disposerTimeout: d)`; `RpcCallScope.defaultDisposerTimeout` |
 | `RpcHeaders.xRouteService` | gone; routing uses the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | the same without `const` |
 | `RpcList.toMutableList()`, `where` returning `RpcList` | `RpcList` is an `Iterable`: `toList()` copies, `where` returns an `Iterable`, `for`-in works |

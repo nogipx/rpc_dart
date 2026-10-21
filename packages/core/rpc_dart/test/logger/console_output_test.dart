@@ -143,7 +143,7 @@ void main() {
         name: 'query',
         startTime: now.subtract(Duration(milliseconds: 42)),
         endTime: now,
-        status: SpanStatus.ok,
+        status: LogSpanStatus.ok,
       );
 
       final lines = capturePrints(() => output.write(span));
@@ -164,7 +164,7 @@ void main() {
         name: 'op',
         startTime: now.subtract(Duration(milliseconds: 5)),
         endTime: now,
-        status: SpanStatus.error,
+        status: LogSpanStatus.error,
         error: Exception('boom'),
       );
 
@@ -234,7 +234,7 @@ void main() {
         name: 'op',
         startTime: now,
         endTime: now,
-        status: SpanStatus.ok,
+        status: LogSpanStatus.ok,
       );
 
       final lines = capturePrints(() => output.write(span));
@@ -276,7 +276,7 @@ void main() {
         name: 'op',
         startTime: now.subtract(Duration(milliseconds: 10)),
         endTime: now,
-        status: SpanStatus.ok,
+        status: LogSpanStatus.ok,
       );
 
       final lines = capturePrints(() => output.write(span));

@@ -16,7 +16,7 @@ export 'src/logger/_index.dart'
         LogSpan,
         LogSpanStart,
         LogSpanHandle,
-        SpanStatus,
+        LogSpanStatus,
         LogOutput,
         ConsoleOutput,
         ConsoleFormat,

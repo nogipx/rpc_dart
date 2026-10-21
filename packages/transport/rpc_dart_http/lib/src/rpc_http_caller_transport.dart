@@ -242,7 +242,7 @@ class RpcHttpCallerTransport extends IRpcTransport {
     try {
       _policy.validateMetadata(metadata);
       return metadata;
-    } on RpcMetadataViolation catch (error) {
+    } on RpcMetadataViolationException catch (error) {
       _warnOnce(
         'metadata',
         'Response metadata on stream $streamId violates the policy '

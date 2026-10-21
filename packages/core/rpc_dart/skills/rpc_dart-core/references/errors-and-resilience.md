@@ -24,7 +24,7 @@ tools: retry, circuit breaker, rate limiter and reconnecting connection.
   errors raised on the caller itself keep their subtype:
   `RpcCancelledException`, `RpcDeadlineExceededException`,
   `CircuitBreakerOpenException`, `RpcClosedException`,
-  `RpcNoConnectionException`, `RpcMetadataViolation`.
+  `RpcNoConnectionException`, `RpcMetadataViolationException`.
 - Interceptors are attached with `endpoint.addInterceptor(...)`. The first one added is
   the OUTERMOST.
 
@@ -115,7 +115,7 @@ plain RESOURCE_EXHAUSTED means "too big" and is never retried.
 | `RpcNoConnectionException(what, reconnecting:)` | UNAVAILABLE | no live connection |
 | `CircuitBreakerOpenException({retryAfter})` | UNAVAILABLE | thrown by the breaker on the caller |
 | `RpcRateLimitException(message, {retryAfter})` | RESOURCE_EXHAUSTED | carries `RpcRetryInfo` when `retryAfter` is set |
-| `RpcMetadataViolation` | INVALID_ARGUMENT | metadata failed the security policy; not an `ArgumentError` |
+| `RpcMetadataViolationException` | INVALID_ARGUMENT | metadata failed the security policy; not an `ArgumentError` |
 | `RpcFrameException` / `.limit` / `.policy` | INTERNAL / RESOURCE_EXHAUSTED / INVALID_ARGUMENT | malformed or oversized frames |
 
 ## Retry: `RpcRetryInterceptor` (caller)

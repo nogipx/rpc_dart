@@ -39,7 +39,7 @@ TaggedRecord _span(
   required String scope,
   required String name,
   String? traceId,
-  SpanStatus status = SpanStatus.ok,
+  LogSpanStatus status = LogSpanStatus.ok,
   Object? error,
   int durationMs = 100,
 }) {

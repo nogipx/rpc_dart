@@ -236,11 +236,11 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
       // `closeOnOversizedFrame: !isClient`). A peer that has done it 256 times
       // is no longer one bad frame.
       //
-      // `RpcMetadataViolation`, not `ArgumentError`: this closes a connection,
+      // `RpcMetadataViolationException`, not `ArgumentError`: this closes a connection,
       // and ArgumentError means a programming mistake, so any of those raised
       // on this path was being charged to the peer's budget. See the same
       // narrowing on the responder.
-      if (e is RpcMetadataViolation &&
+      if (e is RpcMetadataViolationException &&
           ++_policyViolations > RpcSecurityPolicy.maxPolicyViolations) {
         _log.warning('Peer sent $_policyViolations policy violations; closing');
         unawaited(close());
@@ -312,7 +312,7 @@ extension _Http2CallerInbound on RpcHttp2CallerTransport {
     try {
       metadata = http2HeadersToRpcMetadata(message.headers, policy: _policy);
       _policy.validateMetadata(metadata);
-    } on RpcMetadataViolation catch (violation) {
+    } on RpcMetadataViolationException catch (violation) {
       // Our limits must not be able to destroy a status the PEER sent. Read from
       // the RAW headers, because the converter throws DURING its walk on
       // `maxHeaders` and never returns metadata to read the status out of.

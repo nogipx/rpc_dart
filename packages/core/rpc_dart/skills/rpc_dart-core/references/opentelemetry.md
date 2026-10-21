@@ -256,7 +256,7 @@ every span still open.
   or above on a controller that has this output.
 - `LogControllerOtelOutput` does not use the OTel logs API. Logs reach the
   backend as spans and span events.
-- `SpanStatus` exists in both `package:rpc_dart` (log spans) and
+- `LogSpanStatus` exists in both `package:rpc_dart` (log spans) and
   `package:opentelemetry/api.dart`. Using it unprefixed with both imported is
   an ambiguous-import error; prefix one import.
 

@@ -30,7 +30,7 @@ const String kAbsentTrailerMessage = 'Unknown error';
 /// meant to identify a KIND matched everything.
 ///
 /// Throw [RpcStatusException] with the status that fits, or a subclass that
-/// picks one for you ([RpcFrameException], [RpcMetadataViolation],
+/// picks one for you ([RpcFrameException], [RpcMetadataViolationException],
 /// [RpcCancelledException], [RpcDeadlineExceededException]).
 ///
 /// Still the type to CATCH: `e is RpcException` remains the one check that
@@ -280,7 +280,7 @@ base class RpcFrameException extends RpcStatusException {
 ///
 /// It is in the hierarchy, so a peer is told INVALID_ARGUMENT with the
 /// diagnostic rather than a redacted INTERNAL.
-final class RpcMetadataViolation extends RpcStatusException {
+final class RpcMetadataViolationException extends RpcStatusException {
   /// The offending value, when there is a single one worth naming.
   final Object? invalidValue;
 
@@ -288,7 +288,7 @@ final class RpcMetadataViolation extends RpcStatusException {
   final String? name;
 
   /// Creates a violation describing [message].
-  RpcMetadataViolation(String message, {this.invalidValue, this.name})
+  RpcMetadataViolationException(String message, {this.invalidValue, this.name})
     : super(RpcStatus.invalidArgument, message);
 
   @override

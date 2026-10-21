@@ -3,11 +3,11 @@
 //
 // SPDX-License-Identifier: MIT
 
-// For RpcMetadataViolation: peer metadata failing this policy is a wire fact,
+// For RpcMetadataViolationException: peer metadata failing this policy is a wire fact,
 // not a caller's programming mistake, and the type says which.
 import '../codec/special_cbor.dart' show CborCodec;
 import 'channel_frame.dart' show RpcChannelFrame;
-import 'errors.dart' show RpcMetadataViolation;
+import 'errors.dart' show RpcMetadataViolationException;
 import 'metadata.dart';
 import 'peer_text.dart';
 import 'protocol.dart';
@@ -658,13 +658,13 @@ final class RpcSecurityPolicy {
 
   /// Best-effort metadata validation.
   ///
-  /// Throws [RpcMetadataViolation]: catch that, not [ArgumentError], so an
+  /// Throws [RpcMetadataViolationException]: catch that, not [ArgumentError], so an
   /// ordinary programming mistake raised elsewhere on the same path is not
   /// taken for bad metadata. It carries INVALID_ARGUMENT instead of being
   /// redacted to INTERNAL on the way out.
   void validateMetadata(RpcMetadata metadata) {
     if (metadata.headers.length > maxHeaders) {
-      throw RpcMetadataViolation(
+      throw RpcMetadataViolationException(
         'Too many metadata headers: ${metadata.headers.length} > $maxHeaders',
         name: 'metadata.headers',
         invalidValue: metadata.headers.length,
@@ -681,14 +681,14 @@ final class RpcSecurityPolicy {
     var totalBytes = 0;
     for (final header in metadata.headers) {
       if (!isValidHeaderName(header.name)) {
-        throw RpcMetadataViolation(
+        throw RpcMetadataViolationException(
           'Invalid metadata header name: ${_peerText(header.name)}',
           name: 'metadata.headers.name',
           invalidValue: header.name,
         );
       }
       if (!isValidHeaderValue(header.value)) {
-        throw RpcMetadataViolation(
+        throw RpcMetadataViolationException(
           'Invalid metadata header value for: ${header.name}',
           name: 'metadata.headers.value',
           invalidValue: header.name,
@@ -696,7 +696,7 @@ final class RpcSecurityPolicy {
       }
       totalBytes += header.name.length + header.value.length;
       if (totalBytes > maxMetadataBytes) {
-        throw RpcMetadataViolation(
+        throw RpcMetadataViolationException(
           'Metadata too large: $totalBytes bytes > $maxMetadataBytes',
           name: 'metadata.headers',
           invalidValue: totalBytes,
@@ -706,7 +706,7 @@ final class RpcSecurityPolicy {
 
     final methodPath = metadata.methodPath;
     if (!isValidMethodPath(methodPath)) {
-      throw RpcMetadataViolation(
+      throw RpcMetadataViolationException(
         'Invalid methodPath in metadata: ${_peerText(methodPath!)}',
         name: 'metadata.methodPath',
         invalidValue: methodPath,

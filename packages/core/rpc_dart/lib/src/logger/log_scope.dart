@@ -209,10 +209,10 @@ class LogScope {
     final span = startSpan(spanName, data: data);
     try {
       final result = await body(span);
-      span.end(status: SpanStatus.ok);
+      span.end(status: LogSpanStatus.ok);
       return result;
     } catch (e, st) {
-      span.end(status: SpanStatus.error, error: e, stackTrace: st);
+      span.end(status: LogSpanStatus.error, error: e, stackTrace: st);
       rethrow;
     }
   }
@@ -226,10 +226,10 @@ class LogScope {
     final span = startSpan(spanName, data: data);
     try {
       final result = body(span);
-      span.end(status: SpanStatus.ok);
+      span.end(status: LogSpanStatus.ok);
       return result;
     } catch (e, st) {
-      span.end(status: SpanStatus.error, error: e, stackTrace: st);
+      span.end(status: LogSpanStatus.error, error: e, stackTrace: st);
       rethrow;
     }
   }

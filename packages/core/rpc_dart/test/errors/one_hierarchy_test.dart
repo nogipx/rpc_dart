@@ -133,7 +133,7 @@ void main() {
         thrown = e;
       }
 
-      expect(thrown, isA<RpcMetadataViolation>());
+      expect(thrown, isA<RpcMetadataViolationException>());
       expect(
         thrown,
         isNot(isA<ArgumentError>()),
@@ -157,7 +157,7 @@ void main() {
     test('a foreign ArgumentError is not a metadata violation', () {
       expect(
         ArgumentError('some ordinary bug'),
-        isNot(isA<RpcMetadataViolation>()),
+        isNot(isA<RpcMetadataViolationException>()),
       );
       expect(ArgumentError('some ordinary bug'), isNot(isA<RpcException>()));
     });

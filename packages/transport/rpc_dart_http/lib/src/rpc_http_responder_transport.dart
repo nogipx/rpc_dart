@@ -349,7 +349,7 @@ class RpcHttpResponderTransport extends IRpcTransport {
       // Bounds the total as well as each header.
       try {
         policy.validateMetadata(RpcMetadata(requestHeaders));
-      } on RpcMetadataViolation catch (e) {
+      } on RpcMetadataViolationException catch (e) {
         _warnRejected(
           _Rejection.metadata,
           'Rejected request: metadata violation — $e [streamId: $streamId]',

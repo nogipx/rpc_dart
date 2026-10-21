@@ -81,11 +81,9 @@ void main() {
   });
 
   test('GUARD: an async disposer that hangs is still abandoned', () async {
-    final previous = RpcCallScope.disposerTimeout;
-    RpcCallScope.disposerTimeout = const Duration(milliseconds: 50);
-    addTearDown(() => RpcCallScope.disposerTimeout = previous);
-
-    final scope = RpcCallScope();
+    final scope = RpcCallScope(
+      disposerTimeout: const Duration(milliseconds: 50),
+    );
     scope.onDispose(() => Completer<void>().future);
     await scope.close().timeout(
       const Duration(seconds: 2),

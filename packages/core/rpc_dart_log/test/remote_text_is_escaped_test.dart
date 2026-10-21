@@ -42,7 +42,7 @@ TaggedRecord _hostileSpan() {
       name: 'name$_escape',
       startTime: now,
       endTime: now,
-      status: SpanStatus.error,
+      status: LogSpanStatus.error,
       error: 'err\nFORGED',
     ),
   );

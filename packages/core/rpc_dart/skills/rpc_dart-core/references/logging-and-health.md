@@ -88,7 +88,7 @@ Derivation: `child(name)` (appends `.name`), `withTag(tag)`,
 `withData(map)` (bound to every record), `withContext(traceId:, requestId:)`.
 Spans: `startSpan(name)` returns a `LogSpanHandle` (`event`, `addData`,
 `startSpan`, `end(status:, error:, stackTrace:)`); `withSpan(name, body)` and
-`withSpanSync` end the span with `SpanStatus.ok` or `SpanStatus.error`
+`withSpanSync` end the span with `LogSpanStatus.ok` or `LogSpanStatus.error`
 and rethrow.
 
 ```dart

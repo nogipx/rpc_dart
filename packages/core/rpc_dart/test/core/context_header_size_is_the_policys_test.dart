@@ -93,7 +93,7 @@ void main() {
     test('past the policy ceiling the caller is refused, not truncated', () {
       expect(
         () => _headersReaching(const RpcSecurityPolicy(), 200),
-        throwsA(isA<RpcMetadataViolation>()),
+        throwsA(isA<RpcMetadataViolationException>()),
         reason: '200 headers against the default 128 must raise, not truncate',
       );
     });

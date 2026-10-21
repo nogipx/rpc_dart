@@ -52,7 +52,6 @@ void main() {
   test(
     'close() does not wait out the disposer budget on a parked cancel',
     () async {
-      RpcCallScope.disposerTimeout = const Duration(seconds: 5);
       final scope = RpcCallScope();
       final cancelled = Completer<void>();
 
@@ -131,7 +130,6 @@ void main() {
 
   // GUARD: track's cancel discipline, which was already right, stays right.
   test('GUARD: track still cancels without awaiting', () async {
-    RpcCallScope.disposerTimeout = const Duration(seconds: 5);
     final scope = RpcCallScope();
     final cancelled = Completer<void>();
 

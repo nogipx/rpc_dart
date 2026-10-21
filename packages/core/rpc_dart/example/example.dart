@@ -89,7 +89,7 @@ void main() async {
   await Future<void>.delayed(Duration(milliseconds: 15));
   span.event('Step 2: processing');
   await Future<void>.delayed(Duration(milliseconds: 20));
-  span.end(status: SpanStatus.ok);
+  span.end(status: LogSpanStatus.ok);
 
   // Error span
   try {
@@ -99,7 +99,7 @@ void main() async {
       throw Exception('Something went wrong');
     });
   } catch (_) {
-    // withSpan auto-ends with SpanStatus.error
+    // withSpan auto-ends with LogSpanStatus.error
   }
 
   // ---------------------------------------------------------------------------

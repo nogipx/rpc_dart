@@ -84,7 +84,7 @@ void main() {
             request: 'test'.rpc,
             context: context,
           ),
-          throwsA(isA<RpcMetadataViolation>()),
+          throwsA(isA<RpcMetadataViolationException>()),
         );
       });
 

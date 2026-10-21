@@ -12,7 +12,7 @@ import 'package:test/test.dart';
 String _violation(RpcMetadata metadata) {
   try {
     const RpcSecurityPolicy().validateMetadata(metadata);
-  } on RpcMetadataViolation catch (e) {
+  } on RpcMetadataViolationException catch (e) {
     return e.message.toString();
   }
   return 'accepted';

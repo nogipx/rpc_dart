@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-import 'errors.dart' show RpcMetadataViolation;
+import 'errors.dart' show RpcMetadataViolationException;
 
 /// gRPC-semantic header name constants.
 ///
@@ -150,7 +150,7 @@ abstract final class RpcHeaders {
     'upgrade',
   };
 
-  /// Throws an [RpcMetadataViolation] for user metadata that could not arrive
+  /// Throws an [RpcMetadataViolationException] for user metadata that could not arrive
   /// the same way on every transport: a connection-specific [name], or a
   /// [value] that starts or ends with a space or tab.
   ///
@@ -159,7 +159,7 @@ abstract final class RpcHeaders {
   /// silently -- one value, two different arrivals.
   static void checkUserHeader(String name, String value) {
     if (connectionSpecific.contains(name.toLowerCase())) {
-      throw RpcMetadataViolation(
+      throw RpcMetadataViolationException(
         'Metadata key "$name" is a connection-specific header',
         name: name,
       );
@@ -167,7 +167,7 @@ abstract final class RpcHeaders {
     if (value.isEmpty) return;
     bool ws(int c) => c == 0x20 || c == 0x09;
     if (ws(value.codeUnitAt(0)) || ws(value.codeUnitAt(value.length - 1))) {
-      throw RpcMetadataViolation(
+      throw RpcMetadataViolationException(
         'Metadata value for "$name" starts or ends with whitespace',
         name: name,
       );

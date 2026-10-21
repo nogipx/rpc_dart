@@ -487,7 +487,7 @@ RpcMetadata http2HeadersToRpcMetadata(
     // Skip pseudo-headers — they belong to the HTTP/2 transport layer.
     if (name.startsWith(':')) continue;
 
-    // RpcMetadataViolation, like validateMetadata: these are the PEER's headers
+    // RpcMetadataViolationException, like validateMetadata: these are the PEER's headers
     // and this is the enforcement that happens DURING the walk, so it is the
     // same fact about the same untrusted input. It still IS an ArgumentError.
     //
@@ -495,7 +495,7 @@ RpcMetadata http2HeadersToRpcMetadata(
     // its four callers all build OUTBOUND headers from our own metadata, where
     // a non-printable value is this side's programming mistake.
     if (rpcHeaders.length >= maxHeaders) {
-      throw RpcMetadataViolation(
+      throw RpcMetadataViolationException(
         'Too many metadata headers: more than $maxHeaders',
         name: 'metadata.headers',
         invalidValue: maxHeaders,

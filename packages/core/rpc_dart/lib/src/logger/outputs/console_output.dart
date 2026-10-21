@@ -105,7 +105,7 @@ class ConsoleOutput extends LogOutput {
       '[${_formatTime(span.endTime)}] SPAN ${_shortId(span.spanId)} ${span.scope}.${span.name}',
     );
     buf.write(' ${span.duration.inMilliseconds}ms');
-    buf.write(span.status == SpanStatus.ok ? ' [ok]' : ' [ERROR]');
+    buf.write(span.status == LogSpanStatus.ok ? ' [ok]' : ' [ERROR]');
 
     if (span.traceId != null) buf.write('  trace=${span.traceId}');
     _writeData(buf, span.data);
@@ -114,7 +114,7 @@ class ConsoleOutput extends LogOutput {
 
     final line = buf.toString();
     if (colored) {
-      final color = span.status == SpanStatus.ok ? '\x1B[36m' : '\x1B[31m';
+      final color = span.status == LogSpanStatus.ok ? '\x1B[36m' : '\x1B[31m';
       print('$color$line\x1B[0m');
     } else {
       print(line);
@@ -168,7 +168,7 @@ class ConsoleOutput extends LogOutput {
         print('$time $level ${event.scope}: ${escapeLine(event.message)}');
       case final LogSpan span:
         final time = _formatTime(span.endTime);
-        final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
+        final status = span.status == LogSpanStatus.ok ? 'OK' : 'ERR';
         print(
           '$time SPN ${span.scope}.${span.name} '
           '${span.duration.inMilliseconds}ms $status',

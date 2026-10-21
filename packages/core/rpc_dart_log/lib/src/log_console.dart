@@ -125,13 +125,13 @@ class LogCollectorConsole {
   void _printSpan(String label, LogSpan span) {
     final time = formatClock(span.endTime, millis: true);
     final ms = span.duration.inMilliseconds;
-    final status = span.status == SpanStatus.ok ? 'OK' : 'ERR';
+    final status = span.status == LogSpanStatus.ok ? 'OK' : 'ERR';
     final scope = escapeRemote(span.scope);
     final name = escapeRemote(span.name);
     final error = span.error;
 
     if (colored) {
-      final statusColor = span.status == SpanStatus.ok ? _green : _red;
+      final statusColor = span.status == LogSpanStatus.ok ? _green : _red;
       _sink.writeln(
         '$_dim$time$_reset '
         '$_cyan$label$_reset '

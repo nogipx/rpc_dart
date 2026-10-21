@@ -2,19 +2,19 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcCallScope.close() awaited every disposer without a bound, and it sits on
-// the shutdown path: _cleanupStream -> callScope.close(), and
-// closeResponderResources runs that for every open stream. So one handler
-// registering a disposer that never completes -- a flush to a dead socket, a
-// lock nobody releases -- stopped the whole endpoint from shutting down.
-//
-// Measured with a single such handler: responder.close() was still unfinished
-// after 4s and stayed that way. With the bound it returns in ~509ms against a
-// 500ms timeout.
+// RpcCallScope.close() sits on the shutdown path: _cleanupStream ->
+// callScope.close(), and closeResponderResources runs that for every open
+// stream. Each disposer is bounded by the scope's disposerTimeout, so a
+// handler registering one that never completes -- a flush to a dead socket, a
+// lock nobody releases -- cannot stop the whole endpoint from shutting down.
 //
 // The disposer is abandoned, not cancelled -- an arbitrary Future cannot be
 // cancelled -- so it may still be running afterwards. That is strictly better
 // than never shutting down, and it is logged rather than hidden.
+//
+// The endpoint builds its call scopes with the default bound, so the endpoint
+// test waits that out once; the ordering is checked on a scope of its own with
+// a short bound.
 
 import 'dart:async';
 
@@ -38,25 +38,6 @@ final class _Contract extends RpcResponderContract {
           _ran.add('stuck-start');
           await Completer<void>().future; // never completes
         });
-        if (!_started.isCompleted) _started.complete();
-        yield 'a'.rpc;
-        await Completer<void>().future;
-      },
-      requestCodec: _codec,
-      responseCodec: _codec,
-    );
-    addServerStreamMethod<RpcString, RpcString>(
-      methodName: 'ordered',
-      handler: (r, {RpcContext? context}) async* {
-        final scope = context?.callScope;
-        // LIFO: 'second' must run before 'first'. The middle one hangs, and
-        // must not strand the one registered before it.
-        scope?.onDispose(() => _ran.add('first'));
-        scope?.onDispose(() async {
-          _ran.add('hang-start');
-          await Completer<void>().future;
-        });
-        scope?.onDispose(() => _ran.add('third'));
         if (!_started.isCompleted) _started.complete();
         yield 'a'.rpc;
         await Completer<void>().future;
@@ -112,15 +93,12 @@ Future<StreamSubscription<RpcString>> _start(_Rig rig, String method) async {
 }
 
 void main() {
-  late Duration original;
+  const bound = RpcCallScope.defaultDisposerTimeout;
 
   setUp(() {
     _started = Completer<void>();
     _ran = [];
-    original = RpcCallScope.disposerTimeout;
-    RpcCallScope.disposerTimeout = const Duration(milliseconds: 400);
   });
-  tearDown(() => RpcCallScope.disposerTimeout = original);
 
   group('a stuck disposer cannot block shutdown', () {
     test('the endpoint still closes', () async {
@@ -129,7 +107,7 @@ void main() {
 
       final sw = Stopwatch()..start();
       await rig.responder.close().timeout(
-        const Duration(seconds: 5),
+        bound * 2,
         onTimeout: () =>
             fail('responder.close() hung on a disposer that never completes'),
       );
@@ -141,8 +119,8 @@ void main() {
         reason: 'it should have been tried',
       );
       expect(
-        sw.elapsedMilliseconds,
-        lessThan(3000),
+        sw.elapsed,
+        lessThan(bound + const Duration(seconds: 2)),
         reason: 'close took ${sw.elapsedMilliseconds}ms',
       );
 
@@ -150,25 +128,27 @@ void main() {
       await rig.caller.close();
       await rig.client.close();
       await rig.server.close();
-    });
+    }, timeout: const Timeout(Duration(seconds: 30)));
 
     test('the disposers around it still run', () async {
       // LIFO order, with the hanging one in the middle: the one registered
       // before it must not be stranded.
-      final rig = _connect();
-      final sub = await _start(rig, 'ordered');
+      final scope = RpcCallScope(
+        disposerTimeout: const Duration(milliseconds: 100),
+      );
+      scope.onDispose(() => _ran.add('first'));
+      scope.onDispose(() async {
+        _ran.add('hang-start');
+        await Completer<void>().future;
+      });
+      scope.onDispose(() => _ran.add('third'));
 
-      await rig.responder.close().timeout(
+      await scope.close().timeout(
         const Duration(seconds: 5),
-        onTimeout: () => fail('responder.close() hung'),
+        onTimeout: () => fail('close() hung'),
       );
 
       expect(_ran, ['third', 'hang-start', 'first']);
-
-      await sub.cancel();
-      await rig.caller.close();
-      await rig.client.close();
-      await rig.server.close();
     });
   });
 
@@ -219,7 +199,8 @@ void main() {
     });
 
     test('the default bound is generous enough for real cleanup', () {
-      expect(original, greaterThanOrEqualTo(const Duration(seconds: 1)));
+      expect(bound, greaterThanOrEqualTo(const Duration(seconds: 1)));
+      expect(RpcCallScope().disposerTimeout, bound);
     });
   });
 }

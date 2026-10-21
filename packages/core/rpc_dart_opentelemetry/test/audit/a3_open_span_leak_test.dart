@@ -92,7 +92,7 @@ void main() {
           name: 'long-op',
           startTime: start,
           endTime: end,
-          status: SpanStatus.ok,
+          status: LogSpanStatus.ok,
         ),
       );
 

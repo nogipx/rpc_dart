@@ -58,7 +58,11 @@ final class RpcCallScope {
   ///
   /// If the context has a deadline, a Timer auto-closes the scope when it
   /// expires. If it has a cancellation token, the scope closes on cancel.
-  RpcCallScope({RpcContext? context}) : _context = context {
+  /// [disposerTimeout] bounds each disposer; see [close].
+  RpcCallScope({
+    RpcContext? context,
+    this.disposerTimeout = defaultDisposerTimeout,
+  }) : _context = context {
     _wireDeadline();
     _wireCancellation();
   }
@@ -179,11 +183,15 @@ final class RpcCallScope {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  /// How long a single disposer may take before it is abandoned.
+  /// How long a single disposer may take before it is abandoned. The scope a
+  /// server builds for each call uses [defaultDisposerTimeout].
+  final Duration disposerTimeout;
+
+  /// The default [disposerTimeout].
   ///
   /// Generous: real cleanup (flushing a buffer, closing a handle) finishes in
   /// microseconds, so this only ever fires on something genuinely stuck.
-  static Duration disposerTimeout = const Duration(seconds: 5);
+  static const Duration defaultDisposerTimeout = Duration(seconds: 5);
 
   /// Closes the scope and runs all disposers in reverse order.
   ///

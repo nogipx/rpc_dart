@@ -29,7 +29,7 @@ void main() {
         name: 'login',
         startTime: now,
         endTime: now,
-        status: SpanStatus.ok,
+        status: LogSpanStatus.ok,
         events: [
           LogEvent(
             scope: 'test',
@@ -63,7 +63,7 @@ void main() {
         name: 'login',
         startTime: now,
         endTime: now,
-        status: SpanStatus.ok,
+        status: LogSpanStatus.ok,
         data: const {'password': 'hunter2'},
       ),
     );

@@ -42,7 +42,7 @@ void main() {
       expect(output.spans, hasLength(1));
       expect(output.spans.first.name, 'op');
       expect(output.spans.first.scope, 'api');
-      expect(output.spans.first.status, SpanStatus.ok);
+      expect(output.spans.first.status, LogSpanStatus.ok);
     });
 
     test('span has duration', () async {
@@ -107,7 +107,7 @@ void main() {
       });
 
       expect(result, 42);
-      expect(output.spans.first.status, SpanStatus.ok);
+      expect(output.spans.first.status, LogSpanStatus.ok);
     });
 
     test('withSpan auto-ends with error on throw', () async {
@@ -118,7 +118,7 @@ void main() {
         });
       } catch (_) {}
 
-      expect(output.spans.first.status, SpanStatus.error);
+      expect(output.spans.first.status, LogSpanStatus.error);
       expect(output.spans.first.error.toString(), contains('fail'));
     });
 
@@ -130,7 +130,7 @@ void main() {
       });
 
       expect(result, 'ok');
-      expect(output.spans.first.status, SpanStatus.ok);
+      expect(output.spans.first.status, LogSpanStatus.ok);
       expect(output.spans.first.events, hasLength(1));
     });
 

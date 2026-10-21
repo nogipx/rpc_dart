@@ -498,7 +498,7 @@ A minor release may add a value to these enums or a subtype to these sealed
 families, so a `switch` over one of them keeps a default branch:
 `RpcHealthLevel`, `RpcClientConnectionState`, `RpcCallOutcome`,
 `RpcDataTransferMode`, `RpcContentTypeValidation`, `ConsoleFormat`,
-`SpanStatus`, `GrpcServingStatus` (it mirrors a protobuf enum, which can
+`LogSpanStatus`, `GrpcServingStatus` (it mirrors a protobuf enum, which can
 grow), `RateLimit` and `LogRecord`. These are closed and stay as they are:
 `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`, `RpcServiceKind`,
 `RpcServerMode`, `RpcLogLevel` and `RpcProtoWireType`.

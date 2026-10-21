@@ -83,7 +83,7 @@ void main() {
       () => const RpcSecurityPolicy(
         maxMetadataBytes: 100,
       ).validateMetadata(tooBig),
-      throwsA(isA<RpcMetadataViolation>()),
+      throwsA(isA<RpcMetadataViolationException>()),
     );
   });
 }

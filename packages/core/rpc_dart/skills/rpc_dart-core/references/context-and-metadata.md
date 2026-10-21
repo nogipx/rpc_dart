@@ -19,11 +19,11 @@ receives one as its named `context` parameter.
   value containing CR, LF or NUL. `getHeader` lower-cases its argument as well.
 - Header values must be printable ASCII (`0x20`-`0x7E`). The context keeps other
   values, but the transport refuses them when sending: the call fails with
-  `RpcMetadataViolation`, an `RpcStatusException(INVALID_ARGUMENT)` (not an
+  `RpcMetadataViolationException`, an `RpcStatusException(INVALID_ARGUMENT)` (not an
   `ArgumentError`). To send binary or non-ASCII data, base64-encode it
   under a key ending in `-bin`.
 - A value that starts or ends with a space or tab is refused before sending,
-  with the same `RpcMetadataViolation` (INVALID_ARGUMENT). Trim values yourself.
+  with the same `RpcMetadataViolationException` (INVALID_ARGUMENT). Trim values yourself.
 - A handler never sees request headers starting with `grpc-`, except
   `grpc-timeout`, `grpc-encoding` and `grpc-accept-encoding`
   (`RpcHeaders.isHiddenFromHandler`). Do not carry application data under a

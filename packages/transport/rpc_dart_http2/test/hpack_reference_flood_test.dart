@@ -75,7 +75,7 @@ void main() {
           methodPath: '/S/M',
           policy: const RpcSecurityPolicy(),
         ),
-        throwsA(isA<RpcMetadataViolation>()),
+        throwsA(isA<RpcMetadataViolationException>()),
         reason:
             'the conversion copied every reference into its own String and only '
             'then let validateMetadata refuse the result',
@@ -132,7 +132,7 @@ void main() {
       final overLimit = _flood(policy.maxHeaders + 1, valueBytes: 4);
       expect(
         () => http2HeadersToRpcMetadata(overLimit, policy: policy),
-        throwsA(isA<RpcMetadataViolation>()),
+        throwsA(isA<RpcMetadataViolationException>()),
       );
     });
 
