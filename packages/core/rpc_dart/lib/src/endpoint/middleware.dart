@@ -27,8 +27,13 @@ class RpcMiddlewareContext {
   /// Method name for the current call.
   final String methodName;
 
-  /// The current RPC context, may be updated by middleware.
-  RpcContext context;
+  /// The RPC context at this stage of the chain.
+  ///
+  /// Fixed for the stage: an interceptor hands the stages below it a
+  /// different one by passing it to `next`, and each stage gets its own
+  /// [RpcMiddlewareContext]. A response middleware sees the context the
+  /// handler was called with.
+  final RpcContext context;
 
   /// Whether this endpoint is making the call or serving it.
   ///
@@ -45,11 +50,6 @@ class RpcMiddlewareContext {
     required this.context,
     this.direction,
   });
-
-  /// Updates the stored [context].
-  void updateContext(RpcContext newContext) {
-    context = newContext;
-  }
 
   /// Creates a copy with updated fields.
   RpcMiddlewareContext copyWith({

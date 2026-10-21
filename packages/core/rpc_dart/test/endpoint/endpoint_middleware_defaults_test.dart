@@ -32,20 +32,23 @@ void main() {
       expect(result, equals(11));
     });
 
-    test('RpcMiddlewareContext.copyWith and updateContext preserve fields', () {
+    test('RpcMiddlewareContext.copyWith preserves fields', () {
       final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
 
-      final call = RpcMiddlewareContext(
+      final original = RpcMiddlewareContext(
         endpoint: endpoint,
         serviceName: 'svc',
         methodName: 'method',
         context: RpcContext.withHeaders({'a': '1'}),
       );
 
-      call.updateContext(call.context.withAdditionalHeaders({'b': '2'}));
+      final call = original.copyWith(
+        context: original.context.withAdditionalHeaders({'b': '2'}),
+      );
 
       expect(call.context.getHeader('a'), equals('1'));
       expect(call.context.getHeader('b'), equals('2'));
+      expect(original.context.getHeader('b'), isNull);
 
       final copy = call.copyWith(methodName: 'other');
       expect(copy.serviceName, equals('svc'));

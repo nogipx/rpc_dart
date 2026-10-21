@@ -28,7 +28,6 @@ void main() {
               mw1ResponseContexts.add(context);
               expect(context.context.getHeader('A'), equals('yes'));
               expect(context.context.getHeader('B'), equals('true'));
-              expect(context.context.getHeader('C'), equals('done'));
               return (value as int) + 1;
             },
           ),
@@ -44,7 +43,6 @@ void main() {
               mw2ResponseContexts.add(context);
               expect(context.context.getHeader('A'), equals('yes'));
               expect(context.context.getHeader('B'), equals('true'));
-              expect(context.context.getHeader('C'), equals('done'));
               return (value as int) * 2;
             },
           ),
@@ -443,7 +441,6 @@ class _InnerUnaryInterceptor extends IRpcInterceptor {
     final response = await next(newContext, (intRequest * 3) as TRequest);
     final intResponse = response as int;
     events.add('inner after $intResponse');
-    call.updateContext(call.context.withAdditionalHeaders({'C': 'done'}));
     return (intResponse * 2) as TResponse;
   }
 }

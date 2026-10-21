@@ -275,7 +275,7 @@ void main() {
       final expiredContext = RpcContext.withDeadline(
         DateTime.now().subtract(Duration(seconds: 1)),
       );
-      callContext.updateContext(expiredContext);
+      callContext = callContext.copyWith(context: expiredContext);
 
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
@@ -305,8 +305,8 @@ void main() {
       // park the caller for 5s past a deadline they set at 50ms, and the
       // attempt after the sleep could only fail with DEADLINE_EXCEEDED.
       final now = DateTime.utc(2026, 1, 1, 12);
-      callContext.updateContext(
-        RpcContext.empty()
+      callContext = callContext.copyWith(
+        context: RpcContext.empty()
             .withClock(() => now)
             .withTimeout(const Duration(milliseconds: 50)),
       );
@@ -340,8 +340,8 @@ void main() {
 
     test('still retries when the backoff fits inside the deadline', () async {
       final now = DateTime.utc(2026, 1, 1, 12);
-      callContext.updateContext(
-        RpcContext.empty()
+      callContext = callContext.copyWith(
+        context: RpcContext.empty()
             .withClock(() => now)
             .withTimeout(const Duration(seconds: 30)),
       );

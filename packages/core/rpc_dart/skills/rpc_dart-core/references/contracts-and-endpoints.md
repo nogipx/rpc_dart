@@ -232,12 +232,15 @@ interceptor also implements `IRpcCallCheck`, whose `check(call)` runs before
 the interceptor's method for every call shape; throw an `RpcStatusException`
 to refuse. A check written in `interceptUnary` alone leaves the three
 streaming shapes unchecked. `RpcMiddlewareContext` has `endpoint`, `serviceName`,
-`methodName`, a mutable `context`, and `direction`
+`methodName`, `context`, and `direction`
 (`RpcCallDirection.outgoing` for a call the endpoint makes, `.incoming` for one
 it serves). On an `RpcPeerEndpoint` one middleware list runs both ways, so
 check `direction` for side-specific work such as adding vs checking auth.
 `next` takes `(RpcContext, request)`; pass `call.context` to keep the current
-one.
+one, or a derived one to change it for the stages below. `call.context` is
+fixed for the interceptor: each stage gets its own `RpcMiddlewareContext`, so a
+retry calling `next` again starts from its own context, and response
+middlewares see the context the handler got.
 
 ```dart
 import 'dart:async';

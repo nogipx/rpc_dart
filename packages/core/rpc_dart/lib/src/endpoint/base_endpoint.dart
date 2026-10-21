@@ -363,6 +363,18 @@ abstract base class RpcEndpointBase {
     return pending is Future<void> ? pending : null;
   }
 
+  /// The call as one interceptor sees it: [ctx] is what the stage above handed
+  /// to `next`.
+  ///
+  /// A new object per stage, never [call] rebound. An interceptor that calls
+  /// `next` more than once (a retry) reads `call.context` again for each
+  /// attempt. Rebinding one shared object hands it the context the stages
+  /// BELOW it built on the attempt before, and their changes stack.
+  static RpcMiddlewareContext _stage(
+    RpcMiddlewareContext call,
+    RpcContext ctx,
+  ) => identical(ctx, call.context) ? call : call.copyWith(context: ctx);
+
   Future<({TResponse response, RpcContext context})>
   _invokeUnaryInterceptors<TRequest, TResponse>(
     RpcMiddlewareContext context,
@@ -370,10 +382,11 @@ abstract base class RpcEndpointBase {
     Future<TResponse> Function(RpcContext ctx, TRequest request) handler,
   ) async {
     final origin = context.context.cancellationToken;
+    var chosen = context.context;
     Future<TResponse> invokeHandler(RpcContext ctx, TRequest req) async {
-      context.updateContext(_keepCancellable(origin, ctx));
-      _handlerContextChosen(origin, context.context);
-      return handler(context.context, req);
+      chosen = _keepCancellable(origin, ctx);
+      _handlerContextChosen(origin, chosen);
+      return handler(chosen, req);
     }
 
     RpcUnaryNext<TRequest, TResponse> next = invokeHandler;
@@ -381,11 +394,11 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, req) async {
-        context.updateContext(ctx);
-        final before = _beforeCall(interceptor, context);
+        final call = _stage(context, ctx);
+        final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptUnary<TRequest, TResponse>(
-          context,
+          call,
           req,
           previous,
         );
@@ -393,7 +406,7 @@ abstract base class RpcEndpointBase {
     }
 
     final response = await next(context.context, request);
-    return (response: response, context: context.context);
+    return (response: response, context: chosen);
   }
 
   Future<({Stream<TResponse> stream, RpcContext context})>
@@ -404,10 +417,11 @@ abstract base class RpcEndpointBase {
     handler,
   ) async {
     final origin = context.context.cancellationToken;
+    var chosen = context.context;
     FutureOr<Stream<TResponse>> invokeHandler(RpcContext ctx, TRequest req) {
-      context.updateContext(_keepCancellable(origin, ctx));
-      _handlerContextChosen(origin, context.context);
-      return handler(context.context, req);
+      chosen = _keepCancellable(origin, ctx);
+      _handlerContextChosen(origin, chosen);
+      return handler(chosen, req);
     }
 
     RpcServerStreamNext<TRequest, TResponse> next = invokeHandler;
@@ -415,11 +429,11 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, req) async {
-        context.updateContext(ctx);
-        final before = _beforeCall(interceptor, context);
+        final call = _stage(context, ctx);
+        final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptServerStream<TRequest, TResponse>(
-          context,
+          call,
           req,
           previous,
         );
@@ -430,7 +444,7 @@ abstract base class RpcEndpointBase {
       next(context.context, request),
     );
 
-    return (stream: stream, context: context.context);
+    return (stream: stream, context: chosen);
   }
 
   Future<({TResponse response, RpcContext context})>
@@ -441,13 +455,14 @@ abstract base class RpcEndpointBase {
     handler,
   ) async {
     final origin = context.context.cancellationToken;
+    var chosen = context.context;
     Future<TResponse> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) async {
-      context.updateContext(_keepCancellable(origin, ctx));
-      _handlerContextChosen(origin, context.context);
-      return handler(context.context, reqs);
+      chosen = _keepCancellable(origin, ctx);
+      _handlerContextChosen(origin, chosen);
+      return handler(chosen, reqs);
     }
 
     RpcClientStreamNext<TRequest, TResponse> next = invokeHandler;
@@ -455,11 +470,11 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, reqs) async {
-        context.updateContext(ctx);
-        final before = _beforeCall(interceptor, context);
+        final call = _stage(context, ctx);
+        final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptClientStream<TRequest, TResponse>(
-          context,
+          call,
           reqs,
           previous,
         );
@@ -467,7 +482,7 @@ abstract base class RpcEndpointBase {
     }
 
     final response = await next(context.context, requests);
-    return (response: response, context: context.context);
+    return (response: response, context: chosen);
   }
 
   Future<({Stream<TResponse> stream, RpcContext context})>
@@ -481,13 +496,14 @@ abstract base class RpcEndpointBase {
     handler,
   ) async {
     final origin = context.context.cancellationToken;
+    var chosen = context.context;
     FutureOr<Stream<TResponse>> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) {
-      context.updateContext(_keepCancellable(origin, ctx));
-      _handlerContextChosen(origin, context.context);
-      return handler(context.context, reqs);
+      chosen = _keepCancellable(origin, ctx);
+      _handlerContextChosen(origin, chosen);
+      return handler(chosen, reqs);
     }
 
     RpcBidirectionalStreamNext<TRequest, TResponse> next = invokeHandler;
@@ -495,11 +511,11 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, reqs) async {
-        context.updateContext(ctx);
-        final before = _beforeCall(interceptor, context);
+        final call = _stage(context, ctx);
+        final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptBidirectionalStream<TRequest, TResponse>(
-          context,
+          call,
           reqs,
           previous,
         );
@@ -510,7 +526,7 @@ abstract base class RpcEndpointBase {
       next(context.context, requests),
     );
 
-    return (stream: stream, context: context.context);
+    return (stream: stream, context: chosen);
   }
 
   /// Runs [handler] through middleware and interceptors for a unary call.
@@ -541,9 +557,8 @@ abstract base class RpcEndpointBase {
           handler,
         );
 
-    middlewareContext.updateContext(interceptorResult.context);
     final normalizedResponse = await _applyResponseMiddlewares<TResponse>(
-      middlewareContext,
+      _stage(middlewareContext, interceptorResult.context),
       interceptorResult.response,
     );
 
@@ -581,10 +596,8 @@ abstract base class RpcEndpointBase {
           handler,
         );
 
-    middlewareContext.updateContext(interceptorResult.context);
-
     yield* _applyResponseMiddlewaresToStream<TResponse>(
-      middlewareContext,
+      _stage(middlewareContext, interceptorResult.context),
       interceptorResult.stream,
     );
   }
@@ -620,9 +633,8 @@ abstract base class RpcEndpointBase {
           handler,
         );
 
-    middlewareContext.updateContext(interceptorResult.context);
     return _applyResponseMiddlewares<TResponse>(
-      middlewareContext,
+      _stage(middlewareContext, interceptorResult.context),
       interceptorResult.response,
     );
   }
@@ -659,7 +671,7 @@ abstract base class RpcEndpointBase {
         );
 
     yield* _applyResponseMiddlewaresToStream<TResponse>(
-      middlewareContext,
+      _stage(middlewareContext, interceptorResult.context),
       interceptorResult.stream,
     );
   }
