@@ -96,7 +96,17 @@ Future<void> _notifyPeerOfCancellation(
   }
 
   try {
-    final cancellationMetadata = RpcTrailers.cancelled(reason);
+    var cancellationMetadata = RpcTrailers.cancelled(reason);
+    // The reason is advisory, the notice is not: a reason that does not fit
+    // this transport's header limit even encoded would get the whole notice
+    // refused, and the server would never learn the call was cancelled.
+    final encoded = cancellationMetadata.getHeaderValue(
+      RpcHeaders.xCancellationReason,
+    );
+    if (encoded != null &&
+        !transport.securityPolicy.isValidHeaderValue(encoded)) {
+      cancellationMetadata = RpcTrailers.cancelled('Cancelled by client');
+    }
 
     if (logger.isInternal) {
       logger.internal(

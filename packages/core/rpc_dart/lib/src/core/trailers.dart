@@ -83,9 +83,17 @@ abstract final class RpcTrailers {
   /// also raises it inbound for a stream whose peer went away, so the side
   /// reading it ends the call the same way either way. A responder acts on
   /// `x-rpc-client-cancelled` and ignores the status.
+  ///
+  /// [reason] is percent-encoded and trimmed like `grpc-message`: it is often
+  /// an application's own text, and a header value the policy refuses (not
+  /// printable ASCII, or too long) would stop the whole notice, so the peer
+  /// would never learn the call was cancelled.
   static RpcMetadata cancelled(String reason) => RpcMetadata([
     const RpcHeader(RpcHeaders.xClientCancelled, 'true'),
-    RpcHeader(RpcHeaders.xCancellationReason, reason),
+    RpcHeader(
+      RpcHeaders.xCancellationReason,
+      RpcMetadata.encodeGrpcMessage(reason),
+    ),
     RpcHeader(RpcHeaders.grpcStatus, RpcStatus.cancelled.toString()),
   ]);
 

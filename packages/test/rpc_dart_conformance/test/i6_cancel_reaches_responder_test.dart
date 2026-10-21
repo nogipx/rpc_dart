@@ -107,6 +107,42 @@ void main() {
           }
         },
       );
+
+      // The reason is the application's text and rides in a header where no
+      // stream reset carries the cancel; one in another language must not get
+      // the notice refused.
+      cell(
+        member,
+        'unary, cancelled with a reason in another language',
+        knownFailing: _knownFailing.map(
+          (k, v) => MapEntry(
+            k == 'http | unary'
+                ? 'http | unary, cancelled with a reason in another language'
+                : k,
+            v,
+          ),
+        ),
+        () async {
+          final rig = await member.serve();
+          addTearDown(rig.close);
+          final caller = await rig.caller();
+          final id = nextCallId();
+
+          final call = Call.start(
+            caller,
+            CallShape.unary,
+            Blob.request(id: id, mode: Mode.hang),
+          );
+          await rig.probe.waitFor('enter', id);
+          await call.cancel(reason: 'Пользователь отменил');
+          await rig.probe.waitFor(
+            'cancelled',
+            id,
+            within: _within,
+            because: 'the caller cancelled with a non-ASCII reason',
+          );
+        },
+      );
     }
   });
 }

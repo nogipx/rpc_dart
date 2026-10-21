@@ -146,9 +146,12 @@ extension _ResponderPipelineDispatch on RpcResponderPipelineMixin {
         RpcHeaders.xClientCancelled,
       );
       if (isCancelled == 'true') {
-        final reason =
-            message.metadata!.getHeaderValue(RpcHeaders.xCancellationReason) ??
-            'Cancelled by client';
+        final encoded = message.metadata!.getHeaderValue(
+          RpcHeaders.xCancellationReason,
+        );
+        final reason = encoded == null
+            ? 'Cancelled by client'
+            : RpcMetadata.decodeGrpcMessage(encoded);
         _detached(
           _handleClientCancellation(state, reason),
           'client cancellation',

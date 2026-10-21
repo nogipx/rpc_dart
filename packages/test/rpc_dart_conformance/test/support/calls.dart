@@ -162,11 +162,12 @@ final class Call {
   /// context's token for a unary or client-stream call, the subscription for
   /// a server-stream or bidi call. The outcome of a cancelled subscription is
   /// recorded here, because a cancelled subscription reports nothing more.
-  Future<void> cancel() async {
+  /// [reason] goes on the token; a subscription carries none.
+  Future<void> cancel({String reason = 'the caller cancels'}) async {
     switch (shape) {
       case CallShape.unary:
       case CallShape.clientStream:
-        token.cancel('the caller cancels');
+        token.cancel(reason);
       case CallShape.serverStream:
       case CallShape.bidi:
         final sub = _sub;
