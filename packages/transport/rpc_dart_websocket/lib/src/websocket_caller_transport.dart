@@ -195,8 +195,8 @@ class RpcWebSocketCallerTransport extends RpcChannelTransport {
   ///
   /// [cancellationToken] abandons the open: when it is cancelled before the
   /// open completes, the pending connect is closed at once and this throws an
-  /// [RpcCancelledException]. `RpcClientConnection.cancellable` hands one to
-  /// its factory per attempt, so a dispose does not leave the socket open until
+  /// [RpcCancelledException]. `RpcClientConnection` hands one to its factory
+  /// per attempt, so a dispose does not leave the socket open until
   /// [connectTimeout] -- or for good, with none.
   ///
   /// [enableCompression] is false so the client does not OFFER

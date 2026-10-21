@@ -91,7 +91,7 @@ void main() {
     test('forceReconnect after disconnect, $label', () async {
       var calls = 0;
       final conn = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           calls++;
           if (calls == 1) throw StateError('first connect fails');
           return _T();

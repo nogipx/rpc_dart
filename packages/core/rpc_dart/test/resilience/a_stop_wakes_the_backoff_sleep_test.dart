@@ -26,7 +26,7 @@ void main() {
         baseDelay: Duration(seconds: 5),
         jitter: false,
       ),
-      transportFactory: () async {
+      transportFactory: (_) async {
         if (++calls == 1) throw Exception('refused');
         final (client, _) = RpcChannelTransport.memoryPair();
         return client;
@@ -60,7 +60,7 @@ void main() {
         baseDelay: Duration(milliseconds: 300),
         jitter: false,
       ),
-      transportFactory: () async {
+      transportFactory: (_) async {
         attempts.add(Stopwatch()..start());
         if (++calls == 1) throw Exception('refused');
         final (client, _) = RpcChannelTransport.memoryPair();

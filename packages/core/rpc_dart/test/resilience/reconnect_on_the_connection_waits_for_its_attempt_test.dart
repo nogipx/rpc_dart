@@ -101,7 +101,7 @@ void main() {
     built = [];
     down = false;
     connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         if (down) throw StateError('server down');
         final t = _T();
         built.add(t);

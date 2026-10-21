@@ -56,7 +56,7 @@ Future<void> _nextOnline(RpcClientConnection connection) => connection.state
 Future<RpcClientConnection> _connect(List<WebSocketChannel> sockets) async {
   var attempt = 0;
   final connection = RpcClientConnection(
-    transportFactory: () async =>
+    transportFactory: (_) async =>
         RpcWebSocketCallerTransport(sockets[attempt++], policy: _policy),
   );
   addTearDown(() => connection.dispose().catchError((Object _) {}));

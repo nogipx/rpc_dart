@@ -191,7 +191,7 @@ Future<_Run> _run(
       // A socket opened ahead of time is used once, by the next attempt.
       WebSocketChannel? next;
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           final ready = next;
           if (ready == null) return RpcWebSocketCallerTransport.connect(uri);
           next = null;

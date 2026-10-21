@@ -58,8 +58,9 @@ reconnect.
 **Reconnect lives in one layer, `RpcClientConnection`.** `transport.reconnect()`
 and `endpoint.reconnect()` are gone. Wrap the transport factory in
 `RpcClientConnection`; `forceReconnect()` replaces a manual reconnect.
-`transportFactory` opens a new transport for every connection. The connection
-waits for a transport to be ready and learns from the transport when the
+`transportFactory` opens a new transport for every connection. It takes an
+`RpcCancellationToken`, cancelled when the attempt is abandoned; a factory
+that has no use for it is written `(_) => ...`. The connection waits for a transport to be ready and learns from the transport when the
 connection is lost.
 
 **Call shapes are built by the endpoint.** `UnaryCaller`, the stream callers and

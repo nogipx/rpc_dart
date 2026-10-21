@@ -74,7 +74,7 @@ void main() {
       var server = await _Server.bind(0);
       final port = server.http.port;
       final connection = RpcClientConnection(
-        transportFactory: () => RpcWebSocketCallerTransport.connect(
+        transportFactory: (_) => RpcWebSocketCallerTransport.connect(
           Uri.parse('ws://127.0.0.1:$port'),
         ),
         backoff: const ExponentialBackoff(

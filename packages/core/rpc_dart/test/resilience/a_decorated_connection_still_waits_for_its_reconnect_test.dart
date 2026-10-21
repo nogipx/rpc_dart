@@ -107,7 +107,7 @@ void main() {
     test('$arm: a retry waits for the reconnect and succeeds', () async {
       final servers = <RpcResponderEndpoint>[];
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           final (client, server) = RpcChannelTransport.memoryPair();
           servers.add(
             RpcResponderEndpoint(transport: server)

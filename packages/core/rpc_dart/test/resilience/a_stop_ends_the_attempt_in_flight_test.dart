@@ -87,7 +87,7 @@ void main() {
     final factoryCalled = Completer<_NeverReady>();
     final connection = RpcClientConnection(
       connectTimeout: null, // nothing else would ever end the wait
-      transportFactory: () async {
+      transportFactory: (_) async {
         final (client, _) = RpcChannelTransport.memoryPair();
         final t = _NeverReady(client);
         factoryCalled.complete(t);
@@ -108,7 +108,7 @@ void main() {
 
   test('dispose cancels the token of a factory still working', () async {
     final token = Completer<RpcCancellationToken>();
-    final connection = RpcClientConnection.cancellable(
+    final connection = RpcClientConnection(
       connectTimeout: null,
       transportFactory: (cancellation) {
         token.complete(cancellation);
@@ -125,7 +125,7 @@ void main() {
 
   test('connectTimeout cancels the token of the attempt it ends', () async {
     final token = Completer<RpcCancellationToken>();
-    final connection = RpcClientConnection.cancellable(
+    final connection = RpcClientConnection(
       connectTimeout: const Duration(milliseconds: 50),
       maxAttempts: 1,
       transportFactory: (cancellation) {
@@ -143,7 +143,7 @@ void main() {
     var calls = 0;
     final errors = <Object?>[];
     final firstCalled = Completer<void>();
-    final connection = RpcClientConnection.cancellable(
+    final connection = RpcClientConnection(
       connectTimeout: null,
       shouldReconnect: (e) {
         errors.add(e);

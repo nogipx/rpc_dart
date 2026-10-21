@@ -372,7 +372,7 @@ Exceeding a limit throws `RpcRateLimitException` (an `RpcStatusException` with `
 
 ```dart
 final connection = RpcClientConnection(
-  transportFactory: () async {
+  transportFactory: (_) async {
     final ch = WebSocketChannel.connect(Uri.parse(serverUrl));
     await ch.ready;
     return RpcWebSocketCallerTransport(ch);

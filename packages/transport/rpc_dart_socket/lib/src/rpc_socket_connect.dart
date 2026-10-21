@@ -25,7 +25,7 @@ import 'rpc_socket_channel.dart';
 /// cursor across, and waits for `ready` before it reports Online.
 ///
 /// ```dart
-/// final connection = RpcClientConnection.cancellable(
+/// final connection = RpcClientConnection(
 ///   transportFactory: (cancellation) => connectRpcSocket(
 ///     const RpcSocketAddress.unix('/tmp/app/rpc.sock'),
 ///     cancellationToken: cancellation,
@@ -45,8 +45,8 @@ import 'rpc_socket_channel.dart';
 ///
 /// [cancellationToken] abandons the socket connect: when it is cancelled
 /// first, the pending socket is closed at once and this throws an
-/// [RpcCancelledException]. `RpcClientConnection.cancellable` hands one to its
-/// factory per attempt, so a dispose during a connect to an address that
+/// [RpcCancelledException]. `RpcClientConnection` hands one to its factory per
+/// attempt, so a dispose during a connect to an address that
 /// never answers does not keep the process alive until [connectTimeout] or the
 /// OS gives up.
 ///

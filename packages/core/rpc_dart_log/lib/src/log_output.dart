@@ -118,7 +118,7 @@ class LogCollectorOutput extends LogOutput {
        _channelFactory = channelFactory ?? _defaultChannelFactory,
        sessionId = _generateSessionId() {
     _connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         final ch = await _channelFactory(_uri);
         await ch.ready;
         return RpcWebSocketCallerTransport(ch);

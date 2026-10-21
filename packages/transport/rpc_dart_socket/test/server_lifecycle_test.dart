@@ -140,7 +140,7 @@ void main() {
       final server = await serveEcho(address);
 
       final connection = RpcClientConnection(
-        transportFactory: () => connectRpcSocket(address),
+        transportFactory: (_) => connectRpcSocket(address),
         backoff: const ExponentialBackoff(
           baseDelay: Duration(milliseconds: 50),
           maxDelay: Duration(milliseconds: 200),

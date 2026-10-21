@@ -102,7 +102,7 @@ void main() {
     () async {
       var built = 0;
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           built++;
           return _T(const Duration(milliseconds: 5));
         },
@@ -132,7 +132,7 @@ void main() {
       final attempts = <int>[];
       var built = 0;
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           built++;
           // Two failures, then a connection that lasts past the stability
           // threshold, then failures again. Without the reset the count it

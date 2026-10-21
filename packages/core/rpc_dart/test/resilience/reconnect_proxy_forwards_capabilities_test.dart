@@ -28,7 +28,7 @@ final _codec = RpcCodec(RpcString.fromJson);
 
 /// Brings an [RpcClientConnection] online over [inner] and returns its proxy.
 Future<IRpcTransport> _proxyOver(IRpcTransport inner) async {
-  final conn = RpcClientConnection(transportFactory: () async => inner);
+  final conn = RpcClientConnection(transportFactory: (_) async => inner);
   addTearDown(conn.dispose);
   conn.connect();
   final online = Completer<void>();
@@ -232,7 +232,7 @@ void main() {
 
       var built = 0;
       final conn = RpcClientConnection(
-        transportFactory: () async => built++ == 0 ? first : second,
+        transportFactory: (_) async => built++ == 0 ? first : second,
       );
       addTearDown(conn.dispose);
       conn.connect();

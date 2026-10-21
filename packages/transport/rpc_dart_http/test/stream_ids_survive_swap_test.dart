@@ -79,7 +79,7 @@ Future<_Fixture> _build() async {
   final baseUrl = 'http://127.0.0.1:${server.actualPort}';
 
   final connection = RpcClientConnection(
-    transportFactory: () async {
+    transportFactory: (_) async {
       built++;
       return RpcHttpCallerTransport(baseUrl: baseUrl);
     },

@@ -108,8 +108,7 @@ closed at once and the call throws an `RpcCancelledException`.
 ### Reconnect
 
 The transport does not reconnect itself: a dropped socket closes it. For a
-client that comes back, give `RpcClientConnection.cancellable` from `rpc_dart`
-a factory that calls `connectRpcSocket` with the token it is handed. It builds
+client that comes back, give `RpcClientConnection` from `rpc_dart` a factory that calls `connectRpcSocket` with the token it is handed. It builds
 a fresh transport per connection, carries the stream id cursor across, and
 waits for `ready` before it reports Online. The token lets `dispose()` end a
 connect still in progress, which against a host that never answers would
@@ -120,7 +119,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_socket/rpc_dart_socket.dart';
 
 RpcCallerEndpoint reconnectingCaller() {
-  final connection = RpcClientConnection.cancellable(
+  final connection = RpcClientConnection(
     transportFactory: (cancellation) => connectRpcSocket(
       const RpcSocketAddress.unix('/tmp/app/rpc.sock'),
       cancellationToken: cancellation,

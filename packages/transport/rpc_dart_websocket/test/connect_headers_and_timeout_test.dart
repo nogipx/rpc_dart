@@ -82,7 +82,7 @@ void main() {
         var issued = 0;
 
         final connection = RpcClientConnection(
-          transportFactory: () => RpcWebSocketCallerTransport.connect(
+          transportFactory: (_) => RpcWebSocketCallerTransport.connect(
             uri,
             headers: {'authorization': 'Bearer t${++issued}'},
           ),

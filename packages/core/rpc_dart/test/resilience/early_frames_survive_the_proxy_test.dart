@@ -46,7 +46,7 @@ void main() {
     'a frame that arrived before the app subscribed survives the proxy',
     () async {
       final client = await _clientWithAGreetingPending();
-      final conn = RpcClientConnection(transportFactory: () async => client);
+      final conn = RpcClientConnection(transportFactory: (_) async => client);
 
       conn.connect();
       // The documented way to wait for a usable connection -- and the ordering
@@ -71,7 +71,7 @@ void main() {
 
   test('subscribing before connect() sees it too (the guard)', () async {
     final client = await _clientWithAGreetingPending();
-    final conn = RpcClientConnection(transportFactory: () async => client);
+    final conn = RpcClientConnection(transportFactory: (_) async => client);
 
     final seen = <RpcTransportMessage>[];
     final sub = conn.transport.incomingMessages.listen(seen.add);

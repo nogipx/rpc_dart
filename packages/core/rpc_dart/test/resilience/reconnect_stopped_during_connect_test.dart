@@ -106,7 +106,7 @@ _Harness _build() {
   final made = <_Tracked>[];
   final gate = Completer<void>();
   final connection = RpcClientConnection(
-    transportFactory: () async {
+    transportFactory: (_) async {
       await gate.future;
       final t = _Tracked(made.length);
       made.add(t);
@@ -259,7 +259,7 @@ void main() {
     test('disconnect() then connect() still reconnects', () async {
       final made = <_Tracked>[];
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           final t = _Tracked(made.length);
           made.add(t);
           return t;

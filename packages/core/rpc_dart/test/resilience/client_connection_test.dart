@@ -98,7 +98,7 @@ void main() {
     test('emits Online after successful connect', () async {
       final (client, _) = _pair();
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
       );
       addTearDown(connection.dispose);
 
@@ -115,7 +115,7 @@ void main() {
     test('emits Connecting on first attempt', () async {
       final (client, _) = _pair();
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
       );
       addTearDown(connection.dispose);
 
@@ -132,7 +132,7 @@ void main() {
     test('transport is accessible after connect', () async {
       final (client, _) = _pair();
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
       );
       addTearDown(connection.dispose);
 
@@ -145,7 +145,7 @@ void main() {
 
     test('idle before connect() is called', () async {
       final connection = RpcClientConnection(
-        transportFactory: () async => _pair().$1,
+        transportFactory: (_) async => _pair().$1,
       );
       addTearDown(connection.dispose);
 
@@ -155,7 +155,7 @@ void main() {
     test('disconnect() returns to Idle and stops reconnecting', () async {
       final (client, _) = _pair();
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
       );
       addTearDown(connection.dispose);
 
@@ -170,7 +170,7 @@ void main() {
     test('dispose() closes transport proxy', () async {
       final (client, _) = _pair();
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
       );
 
       connection.connect();
@@ -188,7 +188,7 @@ void main() {
       final queue = _TransportQueue([c1, c2]);
 
       final connection = RpcClientConnection(
-        transportFactory: queue.next,
+        transportFactory: (_) => queue.next(),
         backoff: const FixedBackoff(Duration(milliseconds: 20)),
       );
       addTearDown(connection.dispose);
@@ -216,7 +216,7 @@ void main() {
       final (client, _) = _pair();
 
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           factoryCalls++;
           if (factoryCalls < 3) throw Exception('not ready');
           return client;
@@ -242,7 +242,7 @@ void main() {
       final queue = _TransportQueue([c1, c2]);
 
       final connection = RpcClientConnection(
-        transportFactory: queue.next,
+        transportFactory: (_) => queue.next(),
         backoff: const FixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
@@ -266,7 +266,7 @@ void main() {
         final queue = _TransportQueue([c1, c2]);
 
         final connection = RpcClientConnection(
-          transportFactory: queue.next,
+          transportFactory: (_) => queue.next(),
           backoff: const FixedBackoff(Duration(milliseconds: 10)),
         );
         addTearDown(connection.dispose);
@@ -294,7 +294,7 @@ void main() {
         final (good, _) = _pair();
 
         final connection = RpcClientConnection(
-          transportFactory: () async {
+          transportFactory: (_) async {
             if (fail) throw Exception('boom');
             return good;
           },
@@ -325,7 +325,7 @@ void main() {
 
     test('emits Disconnected when shouldReconnect returns false', () async {
       final connection = RpcClientConnection(
-        transportFactory: () async => throw Exception('unauthenticated'),
+        transportFactory: (_) async => throw Exception('unauthenticated'),
         shouldReconnect: (e) => !e.toString().contains('unauthenticated'),
       );
       addTearDown(connection.dispose);
@@ -342,7 +342,7 @@ void main() {
 
     test('Disconnected carries the error reason', () async {
       final connection = RpcClientConnection(
-        transportFactory: () async => throw Exception('payment_required'),
+        transportFactory: (_) async => throw Exception('payment_required'),
         shouldReconnect: (e) => false,
       );
       addTearDown(connection.dispose);
@@ -363,7 +363,7 @@ void main() {
         final (client, server) = _pair();
 
         final connection = RpcClientConnection(
-          transportFactory: () async => client,
+          transportFactory: (_) async => client,
           shouldReconnect: (e) => false,
         );
         addTearDown(connection.dispose);
@@ -383,7 +383,9 @@ void main() {
       final (c2, _) = _pair();
       final queue = _TransportQueue([c1, c2]);
 
-      final connection = RpcClientConnection(transportFactory: queue.next);
+      final connection = RpcClientConnection(
+        transportFactory: (_) => queue.next(),
+      );
       addTearDown(connection.dispose);
 
       connection.connect();
@@ -404,7 +406,7 @@ void main() {
     test('stops after maxAttempts exceeded', () async {
       var factoryCalls = 0;
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           factoryCalls++;
           throw Exception('always fails');
         },
@@ -427,7 +429,7 @@ void main() {
 
     test('connect timeout aborts slow factory', () async {
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           await Future<void>.delayed(const Duration(seconds: 10));
           return _pair().$1;
         },
@@ -452,7 +454,7 @@ void main() {
       final (logger, logs) = _capturingLogger();
 
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
         logger: logger,
       );
       addTearDown(connection.dispose);
@@ -469,7 +471,7 @@ void main() {
       final (logger, logs) = _capturingLogger();
 
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           calls++;
           if (calls < 2) throw Exception('oops');
           return client;
@@ -493,7 +495,7 @@ void main() {
       final callbacks = <RpcClientConnectionState>[];
 
       final connection = RpcClientConnection(
-        transportFactory: () async => client,
+        transportFactory: (_) async => client,
         onStateChanged: callbacks.add,
       );
       addTearDown(connection.dispose);
@@ -513,7 +515,7 @@ void main() {
       final queue = _TransportQueue([c1, c2]);
 
       final connection = RpcClientConnection(
-        transportFactory: queue.next,
+        transportFactory: (_) => queue.next(),
         backoff: const FixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
@@ -532,7 +534,7 @@ void main() {
       final (client, _) = _pair();
 
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           factoryCalls++;
           await Future<void>.delayed(const Duration(milliseconds: 30));
           return client;

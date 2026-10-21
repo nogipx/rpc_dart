@@ -131,7 +131,7 @@ void main() {
 
   test('a drained connection recovers under RpcClientConnection', () async {
     final connection = RpcClientConnection(
-      transportFactory: () =>
+      transportFactory: (_) =>
           RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: socket.port),
       backoff: const ExponentialBackoff(
         baseDelay: Duration(milliseconds: 20),

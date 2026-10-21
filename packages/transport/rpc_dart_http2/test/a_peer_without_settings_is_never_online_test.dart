@@ -20,7 +20,7 @@ RpcClientConnection _connection(int port) {
   final connection = RpcClientConnection(
     maxAttempts: 1,
     connectTimeout: const Duration(seconds: 2),
-    transportFactory: () =>
+    transportFactory: (_) =>
         RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: port),
   );
   addTearDown(connection.dispose);

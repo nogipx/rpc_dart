@@ -80,7 +80,7 @@ void main() {
     await server.afterModulesStart();
     final proxy = await _killingProxy(server.actualPort!);
     final connection = RpcClientConnection(
-      transportFactory: () async =>
+      transportFactory: (_) async =>
           RpcHttpCallerTransport(baseUrl: 'http://127.0.0.1:${proxy.port}'),
     );
     addTearDown(() async {

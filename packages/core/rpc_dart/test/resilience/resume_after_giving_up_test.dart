@@ -43,7 +43,7 @@ void main() {
     final made = <IRpcTransport>[];
 
     final connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         calls++;
         if (!peerUp) throw StateError('peer is down');
         final (client, _) = RpcChannelTransport.memoryPair();
@@ -102,7 +102,7 @@ void main() {
     // honoured maxAttempts at all.
     var calls = 0;
     final connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         calls++;
         throw StateError('peer is down');
       },

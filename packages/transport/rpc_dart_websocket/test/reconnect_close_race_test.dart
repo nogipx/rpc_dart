@@ -60,7 +60,7 @@ class _CountingServer {
 ) {
   var slow = false;
   final connection = RpcClientConnection(
-    transportFactory: () async {
+    transportFactory: (_) async {
       if (slow) await Future<void>.delayed(const Duration(milliseconds: 150));
       return RpcWebSocketCallerTransport.connect(server.uri);
     },

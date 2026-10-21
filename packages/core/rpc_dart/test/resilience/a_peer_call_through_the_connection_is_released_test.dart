@@ -38,7 +38,9 @@ void main() {
     addTearDown(under.close);
     addTearDown(other.close);
 
-    final connection = RpcClientConnection(transportFactory: () async => under);
+    final connection = RpcClientConnection(
+      transportFactory: (_) async => under,
+    );
     addTearDown(connection.dispose);
     final online = connection.state.firstWhere((s) => s is RpcClientOnline);
     connection.connect();

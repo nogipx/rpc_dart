@@ -106,7 +106,7 @@ _Harness _build({int? maxAttempts}) {
   final made = <_Tracked>[];
   final gates = <Completer<IRpcTransport>>[];
   final connection = RpcClientConnection(
-    transportFactory: () {
+    transportFactory: (_) {
       final gate = Completer<IRpcTransport>();
       gates.add(gate);
       return gate.future;
@@ -237,7 +237,7 @@ void main() {
     test('the connection comes up and stays up', () async {
       final made = <_Tracked>[];
       final connection = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           final t = _Tracked(made.length);
           made.add(t);
           return t;

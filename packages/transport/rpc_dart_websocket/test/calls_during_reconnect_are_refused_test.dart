@@ -85,7 +85,7 @@ Future<_Rig> _rig({int? maxAttempts}) async {
   var stall = Duration.zero;
   var failNext = false;
   final connection = RpcClientConnection(
-    transportFactory: () async {
+    transportFactory: (_) async {
       if (stall > Duration.zero) await Future<void>.delayed(stall);
       if (failNext) throw const SocketException('factory refused');
       return RpcWebSocketCallerTransport.connect(uri);

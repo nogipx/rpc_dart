@@ -96,7 +96,7 @@ Future<(List<_Fake>, int)> _run(
   final built = <_Fake>[];
   var online = 0;
   final conn = RpcClientConnection(
-    transportFactory: () async {
+    transportFactory: (_) async {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       final t = _Fake();
       built.add(t);

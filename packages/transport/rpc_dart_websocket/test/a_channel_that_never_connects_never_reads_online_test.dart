@@ -26,7 +26,7 @@ Future<RpcClientConnection> _connection(Uri uri) async {
       baseDelay: Duration(milliseconds: 50),
       jitter: false,
     ),
-    transportFactory: () async =>
+    transportFactory: (_) async =>
         RpcWebSocketCallerTransport(IOWebSocketChannel.connect(uri)),
   );
   addTearDown(connection.dispose);

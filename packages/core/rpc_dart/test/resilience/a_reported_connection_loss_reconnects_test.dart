@@ -97,7 +97,7 @@ void main() {
     built = [];
     states = [];
     connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         final t = _T();
         built.add(t);
         return t;

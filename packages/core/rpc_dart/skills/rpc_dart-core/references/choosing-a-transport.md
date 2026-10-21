@@ -117,8 +117,9 @@ RpcCallerEndpoint overCustomPipe(IRpcChannel channel) => RpcCallerEndpoint(
 RpcCallerEndpoint resilientCaller(
   Future<IRpcTransport> Function() connectTransport,
 ) {
-  final connection = RpcClientConnection(transportFactory: connectTransport)
-    ..connect();
+  final connection = RpcClientConnection(
+    transportFactory: (_) => connectTransport(),
+  )..connect();
   return RpcCallerEndpoint(transport: connection.transport);
 }
 ```

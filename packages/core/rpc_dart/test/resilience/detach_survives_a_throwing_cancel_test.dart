@@ -100,7 +100,7 @@ _Rig _build({required bool throwOnCancel}) {
     return _Fake(throwOnCancel: throwOnCancel, onClosed: () => closed++);
   }
 
-  final connection = RpcClientConnection(transportFactory: factory);
+  final connection = RpcClientConnection(transportFactory: (_) => factory());
   addTearDown(() async {
     try {
       await connection.dispose();

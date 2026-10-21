@@ -30,7 +30,7 @@ import 'package:test/test.dart';
   runZonedGuarded(
     () async {
       final conn = RpcClientConnection(
-        transportFactory: () async {
+        transportFactory: (_) async {
           built++;
           final (c, _) = RpcFrameMultiplexedChannel.pair();
           return RpcChannelTransport(channel: c, isClient: true);

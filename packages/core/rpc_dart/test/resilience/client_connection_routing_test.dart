@@ -25,7 +25,7 @@ void main() {
   test('per-stream routing is delegated to the live transport', () async {
     late RpcChannelTransport inner;
     final connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         final (client, _) = RpcChannelTransport.pair();
         inner = client;
         return client;
@@ -57,7 +57,7 @@ void main() {
   test('messages still reach a per-stream subscriber', () async {
     late RpcChannelTransport peer;
     final connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         final (client, server) = RpcChannelTransport.pair();
         peer = server;
         return client;
@@ -84,7 +84,7 @@ void main() {
 
   test('subscribing before the first connect still works', () async {
     final connection = RpcClientConnection(
-      transportFactory: () async => RpcChannelTransport.pair().$1,
+      transportFactory: (_) async => RpcChannelTransport.pair().$1,
     );
 
     // No inner transport yet: the proxy must fall back rather than throw.

@@ -54,7 +54,7 @@ const _backoff = ExponentialBackoff(
 ) {
   final states = <RpcClientConnectionState>[];
   final connection = RpcClientConnection(
-    transportFactory: factory,
+    transportFactory: (_) => factory(),
     backoff: _backoff,
     connectTimeout: const Duration(milliseconds: 500),
     onStateChanged: states.add,

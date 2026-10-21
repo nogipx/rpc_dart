@@ -37,6 +37,7 @@ builds a transport, a channel or frames imports
 | `RpcInMemoryTransport.pair()` | `RpcChannelTransport.memoryPair()` |
 | `transport.reconnect()`, `endpoint.reconnect()` | wrap the transport factory in `RpcClientConnection`; `forceReconnect()` |
 | listening to `connectionLost` | the transport closes; `RpcClientConnection` reconnects |
+| `RpcClientConnection(transportFactory: () => ...)` | `transportFactory: (cancellation) => ...`, or `(_) => ...` |
 | `onEndpointCreated:` on a server | `mode: RpcResponderMode((endpoint) { ... })` |
 | `onPeerEndpointCreated:` | `mode: RpcPeerMode(...)` |
 | contracts list on a server | `mode: RpcResponderMode.contracts([...])` |
@@ -86,7 +87,7 @@ values (an auth header, a fresh token) are built inside it:
 import 'package:rpc_dart/rpc_dart.dart';
 
 Future<void> reconnecting(Future<IRpcTransport> Function() open) async {
-  final connection = RpcClientConnection(transportFactory: open);
+  final connection = RpcClientConnection(transportFactory: (_) => open());
   final endpoint = RpcCallerEndpoint(transport: connection.transport);
   connection.connect();
 

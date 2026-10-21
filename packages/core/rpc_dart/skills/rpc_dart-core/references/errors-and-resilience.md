@@ -231,7 +231,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
-    transportFactory: open,
+    transportFactory: (_) => open(),
     backoff: const ExponentialBackoff(maxDelay: Duration(seconds: 30)),
     maxAttempts: 10,
     connectTimeout: const Duration(seconds: 5),
@@ -264,11 +264,11 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
 - Other members: `state` (a broadcast stream), `currentState`, `forceReconnect()`, `disconnect()`
   (resume later with `connect()`), `dispose()` (permanent).
 - `dispose()` and `disconnect()` stop waiting for an attempt in flight and close a transport it
-  delivers, but cannot stop a factory's own work. Use `RpcClientConnection.cancellable(transportFactory:
-  (cancellation) => ...)` and pass the `RpcCancellationToken` to a transport connect that accepts
-  `cancellationToken:` (the WebSocket caller does): the token is cancelled on `dispose()`, on
-  `disconnect()` and past `connectTimeout`, and the pending socket closes at once. With the plain
-  constructor it stays open until the transport's own timeout, or for good with none.
+  delivers, but cannot stop a factory's own work. The factory is handed an `RpcCancellationToken`
+  per attempt; pass it to a transport connect that accepts `cancellationToken:` (the WebSocket and
+  socket callers do): the token is cancelled on `dispose()`, on `disconnect()` and past
+  `connectTimeout`, and the pending socket closes at once. A factory written `(_) => ...` ignores
+  it, and its socket stays open until the transport's own timeout, or for good with none.
 - `logger:` takes a `LogScope` (e.g. `controller.scope('app.connection')`) and receives drops, attempts and
   give-ups at info, warning and error.
 - When the state is `RpcClientDisconnected(reason)`, the connection has stopped trying. Call `connect()` to start again.

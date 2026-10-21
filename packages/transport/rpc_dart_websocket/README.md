@@ -122,15 +122,14 @@ One transport is one socket. When the socket drops the transport closes, and
 calls in flight on it fail. For reconnects with backoff, give
 `RpcClientConnection` from `rpc_dart` a factory that calls
 `RpcWebSocketCallerTransport.connect`; build endpoints once on
-`connection.transport`. Build it with `RpcClientConnection.cancellable` and
-pass the token through, so `dispose()` closes an upgrade still in flight
+`connection.transport`. Pass the factory's token through, so `dispose()` closes an upgrade still in flight
 instead of leaving its socket open until `connectTimeout`:
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
 
-RpcClientConnection reconnecting(Uri uri) => RpcClientConnection.cancellable(
+RpcClientConnection reconnecting(Uri uri) => RpcClientConnection(
   transportFactory: (cancellation) => RpcWebSocketCallerTransport.connect(
     uri,
     cancellationToken: cancellation,

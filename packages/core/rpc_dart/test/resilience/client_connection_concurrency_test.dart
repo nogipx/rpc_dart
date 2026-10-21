@@ -123,7 +123,7 @@ void main() {
   }
 
   RpcClientConnection connection() => RpcClientConnection(
-    transportFactory: slowFactory,
+    transportFactory: (_) => slowFactory(),
     backoff: const ExponentialBackoff(
       baseDelay: Duration(milliseconds: 10),
       maxDelay: Duration(milliseconds: 20),

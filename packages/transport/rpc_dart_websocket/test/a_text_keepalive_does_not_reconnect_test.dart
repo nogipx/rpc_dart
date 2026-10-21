@@ -73,7 +73,7 @@ Future<_Rig> _rig() async {
     return RpcWebSocketCallerTransport(IOWebSocketChannel.connect(url));
   }
 
-  final connection = RpcClientConnection(transportFactory: factory);
+  final connection = RpcClientConnection(transportFactory: (_) => factory());
   connection.connect();
   await connection.state
       .firstWhere((s) => s is RpcClientOnline)

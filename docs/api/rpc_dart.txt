@@ -446,8 +446,7 @@ RpcClientConnection method connect() -> void
 RpcClientConnection method disconnect() -> Future<void>
 RpcClientConnection method dispose() -> Future<void>
 RpcClientConnection method forceReconnect() -> void
-RpcClientConnection new cancellable({required Future<IRpcTransport> Function(RpcCancellationToken) transportFactory, BackoffPolicy backoff, bool Function(Object?)? shouldReconnect, int? maxAttempts, Duration? connectTimeout, LogScope? logger, void Function(RpcClientConnectionState)? onStateChanged})
-RpcClientConnection new new({required Future<IRpcTransport> Function() transportFactory, BackoffPolicy backoff, bool Function(Object?)? shouldReconnect, int? maxAttempts, Duration? connectTimeout, LogScope? logger, void Function(RpcClientConnectionState)? onStateChanged})
+RpcClientConnection new new({required Future<IRpcTransport> Function(RpcCancellationToken) transportFactory, BackoffPolicy backoff, bool Function(Object?)? shouldReconnect, int? maxAttempts, Duration? connectTimeout, LogScope? logger, void Function(RpcClientConnectionState)? onStateChanged})
 RpcClientConnectionState new new()
 RpcClientDisconnected field reason: Object? (get)
 RpcClientDisconnected new new({Object? reason})

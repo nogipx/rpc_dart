@@ -18,7 +18,7 @@ void main() {
     var down = false;
     late _T live;
     connection = RpcClientConnection(
-      transportFactory: () async {
+      transportFactory: (_) async {
         if (down) throw StateError('server down');
         return live = _T();
       },

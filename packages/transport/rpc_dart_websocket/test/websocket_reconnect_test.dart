@@ -78,7 +78,7 @@ class _RawEchoServer {
 /// each attempt.
 Future<RpcClientConnection> _connection(Uri Function() url) async {
   final connection = RpcClientConnection(
-    transportFactory: () => RpcWebSocketCallerTransport.connect(url()),
+    transportFactory: (_) => RpcWebSocketCallerTransport.connect(url()),
     backoff: const FixedBackoff(Duration(milliseconds: 50)),
   );
   addTearDown(connection.dispose);

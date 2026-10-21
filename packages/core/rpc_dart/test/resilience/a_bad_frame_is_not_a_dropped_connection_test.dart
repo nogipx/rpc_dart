@@ -84,7 +84,7 @@ Future<_Rig> _rig({bool strict = false}) async {
     return client;
   }
 
-  final connection = RpcClientConnection(transportFactory: factory);
+  final connection = RpcClientConnection(transportFactory: (_) => factory());
   connection.connect();
   await connection.state
       .firstWhere((s) => s is RpcClientOnline)

@@ -84,7 +84,7 @@ Future<_Rig> _connect() async {
 
   final uri = Uri.parse('ws://127.0.0.1:${http.port}');
   final connection = RpcClientConnection(
-    transportFactory: () => RpcWebSocketCallerTransport.connect(uri),
+    transportFactory: (_) => RpcWebSocketCallerTransport.connect(uri),
   );
   final online = _nextOnline(connection);
   connection.connect();

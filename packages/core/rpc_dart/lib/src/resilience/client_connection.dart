@@ -562,11 +562,10 @@ final class _AttemptStopped {
 ///
 /// ```dart
 /// final connection = RpcClientConnection(
-///   transportFactory: () async {
-///     final ch = WebSocketChannel.connect(uri);
-///     await ch.ready;
-///     return RpcWebSocketCallerTransport(ch);
-///   },
+///   transportFactory: (cancellation) => RpcWebSocketCallerTransport.connect(
+///     uri,
+///     cancellationToken: cancellation,
+///   ),
 ///   shouldReconnect: (error) => !error.toString().contains('unauthenticated'),
 /// );
 ///
@@ -579,51 +578,30 @@ final class _AttemptStopped {
 class RpcClientConnection {
   /// Creates a new [RpcClientConnection].
   ///
-  /// [connectTimeout] bounds each attempt's [transportFactory] call, 30 s by
-  /// default; pass null for none. Without it a factory waiting on a peer that
-  /// accepted the socket and never answers -- the WebSocket upgrade in the
-  /// example above -- keeps the connection in [RpcClientConnecting] for good,
-  /// because nothing else ends that wait.
-  ///
-  /// [dispose] and [disconnect] stop waiting for an attempt in flight and close
-  /// the transport it delivers, but cannot stop the factory's own work: its
-  /// socket stays open until the factory gives up by itself. Use
-  /// [RpcClientConnection.cancellable] to end it at once.
-  RpcClientConnection({
-    required Future<IRpcTransport> Function() transportFactory,
-    BackoffPolicy backoff = const ExponentialBackoff(),
-    bool Function(Object? error)? shouldReconnect,
-    int? maxAttempts,
-    Duration? connectTimeout = const Duration(seconds: 30),
-    LogScope? logger,
-    void Function(RpcClientConnectionState state)? onStateChanged,
-  }) : this.cancellable(
-         transportFactory: (_) => transportFactory(),
-         backoff: backoff,
-         shouldReconnect: shouldReconnect,
-         maxAttempts: maxAttempts,
-         connectTimeout: connectTimeout,
-         logger: logger,
-         onStateChanged: onStateChanged,
-       );
-
-  /// Creates a connection whose factory is told when an attempt is given up.
-  ///
   /// [transportFactory] gets a fresh [RpcCancellationToken] per attempt. It is
   /// cancelled when [dispose] or [disconnect] runs during the attempt, and when
   /// the attempt outlives [connectTimeout]. Pass it to the transport's connect
   /// as `cancellationToken` and the socket of an abandoned attempt closes at
   /// once, not when the transport's own timeout fires -- or never, with none.
+  /// A factory that ignores it is written `(_) => ...`; the connection then
+  /// stops waiting for the attempt and closes the transport it delivers, but
+  /// the factory's own work runs on until it gives up by itself.
+  ///
+  /// [connectTimeout] bounds each attempt's [transportFactory] call, 30 s by
+  /// default; pass null for none. Without it a factory waiting on a peer that
+  /// accepted the socket and never answers -- the WebSocket upgrade in the
+  /// example below -- keeps the connection in [RpcClientConnecting] for good,
+  /// because nothing else ends that wait.
   ///
   /// ```dart
-  /// final connection = RpcClientConnection.cancellable(
+  /// final connection = RpcClientConnection(
   ///   transportFactory: (cancellation) => RpcWebSocketCallerTransport.connect(
   ///     uri,
   ///     cancellationToken: cancellation,
   ///   ),
   /// );
   /// ```
-  RpcClientConnection.cancellable({
+  RpcClientConnection({
     required Future<IRpcTransport> Function(RpcCancellationToken cancellation)
     transportFactory,
     BackoffPolicy backoff = const ExponentialBackoff(),

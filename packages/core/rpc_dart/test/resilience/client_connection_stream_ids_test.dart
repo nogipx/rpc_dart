@@ -143,7 +143,7 @@ _Fixture _build({IRpcTransport Function(IRpcTransport)? decorate}) {
     return decorate == null ? client : decorate(client);
   }
 
-  final connection = RpcClientConnection(transportFactory: factory);
+  final connection = RpcClientConnection(transportFactory: (_) => factory());
   addTearDown(() async {
     await connection.dispose();
     for (final r in responders) {

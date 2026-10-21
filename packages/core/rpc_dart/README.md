@@ -201,7 +201,7 @@ reconnects:
 ```dart
 RpcCallerEndpoint connect(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
-    transportFactory: open,
+    transportFactory: (_) => open(),
     backoff: const ExponentialBackoff(maxDelay: Duration(seconds: 30)),
   );
   connection.connect(); // returns void; watch connection.state

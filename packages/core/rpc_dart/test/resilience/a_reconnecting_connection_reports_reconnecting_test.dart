@@ -16,7 +16,7 @@ void main() {
   test('the transport is reconnecting while the connect loop runs', () async {
     final never = Completer<IRpcTransport>();
     final connection = RpcClientConnection(
-      transportFactory: () => never.future,
+      transportFactory: (_) => never.future,
       connectTimeout: const Duration(seconds: 30),
     );
     addTearDown(connection.dispose);
@@ -32,7 +32,7 @@ void main() {
 
   test('GUARD the transport is unhealthy when no loop runs', () async {
     final connection = RpcClientConnection(
-      transportFactory: () => Completer<IRpcTransport>().future,
+      transportFactory: (_) => Completer<IRpcTransport>().future,
     );
     addTearDown(connection.dispose);
 

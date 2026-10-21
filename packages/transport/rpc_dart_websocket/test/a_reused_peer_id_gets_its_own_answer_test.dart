@@ -157,7 +157,7 @@ Future<_Run> _run({required bool reconnect, bool finishFirstEarly = false}) {
 
       final uri = Uri.parse('ws://127.0.0.1:${http.port}');
       final connection = RpcClientConnection(
-        transportFactory: () => RpcWebSocketCallerTransport.connect(uri),
+        transportFactory: (_) => RpcWebSocketCallerTransport.connect(uri),
       );
       final firstOnline = _nextOnline(connection);
       connection.connect();

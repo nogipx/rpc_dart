@@ -90,7 +90,7 @@ Future<_Rig> _rig(RpcStatus boomStatus, {int maxAttempts = 2}) async {
 
   final uri = Uri.parse('ws://127.0.0.1:${http.port}');
   final connection = RpcClientConnection(
-    transportFactory: () => RpcWebSocketCallerTransport.connect(uri),
+    transportFactory: (_) => RpcWebSocketCallerTransport.connect(uri),
     backoff: const FixedBackoff(Duration(milliseconds: 20)),
   );
   final online = connection.state

@@ -137,7 +137,7 @@ void main() {
     }, onError: (Object _) {});
 
     final connection = RpcClientConnection(
-      transportFactory: () =>
+      transportFactory: (_) =>
           RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: socket.port),
     );
     addTearDown(() async {

@@ -99,7 +99,7 @@ final class _TrackedTransport extends IRpcTransport {
 ({RpcClientConnection connection, List<_TrackedTransport> made}) _build() {
   final made = <_TrackedTransport>[];
   final connection = RpcClientConnection(
-    transportFactory: () async {
+    transportFactory: (_) async {
       final t = _TrackedTransport(made.length);
       made.add(t);
       return t;
