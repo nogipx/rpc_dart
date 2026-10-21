@@ -151,19 +151,31 @@ class RpcInt extends RpcPrimitiveMessage<int> {
   /// Creates an [RpcInt] wrapping [value].
   const RpcInt(super.value);
 
-  /// Creates RpcInt from JSON.
+  /// Creates RpcInt from JSON: an integral number or numeric string; no value
+  /// is 0. A fraction, a non-finite number or anything else throws
+  /// [FormatException] rather than being truncated into a different value.
   factory RpcInt.fromJson(Map<String, dynamic> json) {
     final v = json['v'];
     if (v == null) return const RpcInt(0);
-    if (v is int) return RpcInt(v);
-    if (v is num) return RpcInt(v.toInt());
-    if (v is String) {
-      final parsed = int.tryParse(v) ?? double.tryParse(v)?.toInt();
-      if (parsed != null) return RpcInt(parsed);
-    }
+    final parsed = switch (v) {
+      num() => _integral(v),
+      String() => int.tryParse(v) ?? _integral(double.tryParse(v)),
+      _ => null,
+    };
+    if (parsed != null) return RpcInt(parsed);
     throw FormatException(
       'RpcInt.fromJson: cannot decode value of type ${v.runtimeType}: $v',
     );
+  }
+
+  /// [n] as an int when it holds a whole, finite value, else null. By value,
+  /// not by `is int`, which dart2js answers true for `2.0` and for
+  /// `double.infinity`, and the VM false; so finiteness is checked first.
+  static int? _integral(num? n) {
+    if (n == null || !n.isFinite) return null;
+    if (n is int) return n;
+    if (n != n.truncateToDouble()) return null;
+    return n.toInt();
   }
 
   /// Default codec for [RpcInt].
@@ -172,24 +184,27 @@ class RpcInt extends RpcPrimitiveMessage<int> {
   @override
   String toString() => value.toString();
 
-  // Arithmetic operators.
+  // Arithmetic operators. An int result takes a whole operand only: a
+  // fraction throws [ArgumentError] instead of being truncated.
   /// Adds [other] to this value.
-  RpcInt operator +(Object other) => RpcInt(value + _extractInt(other));
+  RpcInt operator +(Object other) => RpcInt(value + _extractInt(other, '+'));
 
   /// Subtracts [other] from this value.
-  RpcInt operator -(Object other) => RpcInt(value - _extractInt(other));
+  RpcInt operator -(Object other) => RpcInt(value - _extractInt(other, '-'));
 
   /// Multiplies this value by [other].
-  RpcInt operator *(Object other) => RpcInt(value * _extractInt(other));
+  RpcInt operator *(Object other) => RpcInt(value * _extractInt(other, '*'));
 
   /// Integer-divides this value by [other].
-  RpcInt operator ~/(Object other) => RpcInt(value ~/ _extractInt(other));
+  RpcInt operator ~/(Object other) => RpcInt(value ~/ _extractInt(other, '~/'));
 
   /// Returns the remainder of dividing this value by [other].
-  RpcInt operator %(Object other) => RpcInt(value % _extractInt(other));
+  RpcInt operator %(Object other) => RpcInt(value % _extractInt(other, '%'));
 
-  /// Divides this value by [other], returning an [RpcDouble].
-  RpcDouble operator /(Object other) => RpcDouble(value / _extractInt(other));
+  /// Divides this value by [other], a fraction included, returning an
+  /// [RpcDouble].
+  RpcDouble operator /(Object other) =>
+      RpcDouble(value / _extractNumber(other, '/'));
 
   /// Returns the negation of this value.
   RpcInt operator -() => RpcInt(-value);
@@ -239,13 +254,23 @@ class RpcInt extends RpcPrimitiveMessage<int> {
   @override
   int get hashCode => value.hashCode;
 
-  int _extractInt(Object other) {
-    if (other is RpcInt) return other.value;
-    if (other is RpcNum) return other.value.toInt();
-    if (other is RpcDouble) return other.value.toInt();
-    if (other is int) return other;
-    if (other is num) return other.toInt();
-    throw _unsupportedOperand(type: 'RpcInt', op: 'extract', other: other);
+  num _extractNumber(Object other, String op) => switch (other) {
+    RpcInt() => other.value,
+    RpcNum() => other.value,
+    RpcDouble() => other.value,
+    num() => other,
+    _ => throw _unsupportedOperand(type: 'RpcInt', op: op, other: other),
+  };
+
+  int _extractInt(Object other, String op) {
+    final n = _extractNumber(other, op);
+    return _integral(n) ??
+        (throw ArgumentError.value(
+          other,
+          'other',
+          'RpcInt "$op" needs a whole number; use RpcDouble or RpcNum for a '
+              'fraction',
+        ));
   }
 }
 
