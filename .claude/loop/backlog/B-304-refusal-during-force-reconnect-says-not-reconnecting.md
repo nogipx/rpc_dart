@@ -5,7 +5,7 @@ commit: acade03e
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
 probe:
 reason: risk — seen while porting the websocket tests to RpcClientConnection in major-release step 2, not measured
-rank: 5
+rank: 7
 ---
 
 # B-304 — refusal during force reconnect says not reconnecting

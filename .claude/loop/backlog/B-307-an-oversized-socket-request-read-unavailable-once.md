@@ -5,7 +5,7 @@ commit: ab7e4b41
 paths: [packages/test/rpc_dart_conformance/test/i7_one_failure_one_status_test.dart, packages/transport/rpc_dart_socket/lib/**, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart]
 probe:
 reason: risk — one failure seen in major-release step 3 (section 7 work), not reproduced
-rank: 8
+rank: 10
 ---
 
 # B-307 — an oversized socket request read UNAVAILABLE once

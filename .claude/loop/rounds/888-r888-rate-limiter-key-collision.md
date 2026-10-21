@@ -92,8 +92,13 @@ the perf canary (which is P-340 above).
 `melos run analyze`, `test:unit:quiet --no-select`, `format:check`,
 `license:check`, `api:check`: green. The public API is unchanged — the new
 `_KeyedLruStore`/`_LruNode` are private and the constructor signature is the
-same. The new guard is VM-only, skipped under `-p node`; the salt is
-platform-agnostic.
+same. The new guard is VM-only, skipped under `-p node`.
+
+`-p node` / `test:web` was NOT run, though the config asks for it on a core
+change, and the claim made here that the salt was platform-agnostic was
+wrong: `Random.secure()` throws on node, so every `RpcRateLimiter` failed to
+construct there (45 failures). Found by round 890's `test:web` and fixed in
+its own commit with a fallback to `Random()`.
 
 ## Siblings
 

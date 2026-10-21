@@ -1,10 +1,10 @@
 ---
-status: open
-round: (not re-measured)
+status: closed (round 890)
+round: 890
 commit: acade03e
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart]
-probe:
-reason: risk — seen while porting the websocket tests to RpcClientConnection in major-release step 2, not measured
+probe: P-341
+reason: closed — CONFIRMED in round 890 (P-341: 29.8 s after dispose with default timeouts, still open at 60 s with none) and fixed there: RpcClientConnection.cancellable plus the websocket cancellationToken, and a transport not yet ready is closed on a stop. Socket and http2 factory stages remain: B-309, B-310
 rank: 6
 ---
 
