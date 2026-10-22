@@ -364,7 +364,6 @@ RpcCallerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
 RpcCallerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcCallerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
-RpcCallerEndpoint method start() -> void
 RpcCallerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
 RpcCancellationToken field cancelled: Future<void> (get)
@@ -586,7 +585,6 @@ RpcEndpointBase method addInterceptor(IRpcInterceptor interceptor) -> void
 RpcEndpointBase method close() -> Future<void>
 RpcEndpointBase method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcEndpointBase method health() -> Future<RpcEndpointHealth>
-RpcEndpointBase method start() -> void
 RpcEndpointBase new new({required IRpcTransport transport, String? debugLabel})
 RpcEndpointHealth field dependencies: Map<String, RpcHealthStatus> (get)
 RpcEndpointHealth field endpointStatus: RpcHealthStatus (get)

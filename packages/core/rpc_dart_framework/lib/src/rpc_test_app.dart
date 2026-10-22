@@ -82,7 +82,6 @@ class RpcTestApp {
       await caller.close();
       rethrow;
     }
-    caller.start();
     return RpcTestApp._(caller, app);
   }
 

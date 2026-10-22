@@ -54,7 +54,6 @@ void main() {
         await channel.ready;
         final transport = RpcWebSocketCallerTransport(channel);
         final endpoint = RpcCallerEndpoint(transport: transport);
-        endpoint.start();
         final caller = LogCollectorServiceCaller(endpoint);
 
         final first = await caller.handshake(

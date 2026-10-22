@@ -201,9 +201,8 @@ Future<void> main() async {
   final responderEndpoint = RpcResponderEndpoint(transport: serverTransport);
   // The caller endpoint, over clientTransport.
   final callerEndpoint = RpcCallerEndpoint(transport: clientTransport);
-  // Start both.
+  // Start the responder; a caller needs no start.
   responderEndpoint.start();
-  callerEndpoint.start();
   await demoZeroCopyMode(responderEndpoint, callerEndpoint);
   await demoCodecMode(responderEndpoint, callerEndpoint);
   await demoAutoMode(responderEndpoint, callerEndpoint);

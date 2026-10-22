@@ -168,7 +168,6 @@ void main() {
       responder.registerServiceContract(contract);
 
       responder.start();
-      caller.start();
 
       // Use caller contract
       final callerContract = LogCollectorServiceCaller(caller);

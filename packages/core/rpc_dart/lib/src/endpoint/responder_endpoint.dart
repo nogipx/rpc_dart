@@ -57,9 +57,10 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   RpcEndpointMetrics collectEndpointMetrics() =>
       _metrics(responder: _collectResponderMetrics());
 
-  @override
+  /// Starts serving: the endpoint reads calls from the transport and
+  /// dispatches them to the registered contracts.
   void start() {
-    super.start();
+    _log.internal('Starting RPC endpoint');
     _startResponderListening(messageFilter: _inboundFilter);
   }
 

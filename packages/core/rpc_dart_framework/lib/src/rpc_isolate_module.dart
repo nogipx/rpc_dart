@@ -95,7 +95,6 @@ abstract class RpcIsolateModule extends RpcServerModule {
     );
 
     final caller = RpcCallerEndpoint(transport: result.transport);
-    caller.start();
 
     _isolateCaller = caller;
     _killIsolate = result.kill;

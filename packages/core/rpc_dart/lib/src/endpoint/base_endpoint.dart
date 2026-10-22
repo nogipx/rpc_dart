@@ -151,11 +151,6 @@ abstract base class RpcEndpointBase {
   /// The underlying transport used by this endpoint.
   IRpcTransport get transport => _transport;
 
-  /// Starts the endpoint.
-  void start() {
-    _log.internal('Starting RPC endpoint');
-  }
-
   /// Closes the endpoint and releases all resources.
   ///
   /// Concurrent and later calls share one close and return when it is done,

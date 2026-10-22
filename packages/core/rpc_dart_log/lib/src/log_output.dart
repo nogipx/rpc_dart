@@ -127,7 +127,6 @@ class LogCollectorOutput extends LogOutput {
     // Build the endpoint and caller exactly once on the connection's stable
     // proxy transport; they survive reconnects transparently.
     _endpoint = RpcCallerEndpoint(transport: _connection.transport);
-    _endpoint.start();
     _caller = LogCollectorServiceCaller(_endpoint);
     _stateSub = _connection.state.listen(_onState);
     _connection.connect();

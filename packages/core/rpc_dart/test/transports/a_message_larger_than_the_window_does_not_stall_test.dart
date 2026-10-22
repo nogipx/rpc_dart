@@ -43,7 +43,7 @@ Future<int> _receive({required int count, required int size}) async {
   final responder = RpcResponderEndpoint(transport: server)
     ..registerServiceContract(_Feed(count, size))
     ..start();
-  final caller = RpcCallerEndpoint(transport: client)..start();
+  final caller = RpcCallerEndpoint(transport: client);
   addTearDown(() async {
     await caller.close();
     await responder.close();

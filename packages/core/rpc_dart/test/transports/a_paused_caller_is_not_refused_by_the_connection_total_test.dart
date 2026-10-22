@@ -46,7 +46,7 @@ void main() {
     final responder = RpcResponderEndpoint(transport: server)
       ..registerServiceContract(_Feed())
       ..start();
-    final caller = RpcCallerEndpoint(transport: client)..start();
+    final caller = RpcCallerEndpoint(transport: client);
     addTearDown(() async {
       await caller.close();
       await responder.close();

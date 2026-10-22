@@ -98,6 +98,7 @@ No error message is a contract: match on the type or the status.
 | `RpcContextExtensions` | gone; `forward` is a method of `RpcContext` |
 | `cancelMethod`, `cancelAllMethods`, `isMethodActive`, `getActiveCallsCount`, `getCancellationTokensForMethod` on a contract | the endpoint's `cancelMethod(service, method)`, `cancelService(service)`, `activeCallCount(service, method)`; a service method may now have any of these names |
 | `endpoint.cancelAllMethods`, `endpoint.cancelServiceMethods` | `cancelAll`, `cancelService` |
+| `RpcCallerEndpoint.start`, `RpcEndpointBase.start` | gone; a caller needs no start, a responder or peer endpoint still has `start()` |
 | `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
 | `SpanStatus` | `LogSpanStatus`; it no longer clashes with OpenTelemetry's `SpanStatus` |
 | `RpcStatus` as `int` constants, `RpcStatusException.statusCode` an `int` | `RpcStatus` is an enum with `code` and `grpcName`, `statusCode` is one of its values, `RpcStatus.fromCode(n)` reads a wire number (outside 0..16 is `unknown`); `RpcStatus.isFault(code)` is `status.isFault` |

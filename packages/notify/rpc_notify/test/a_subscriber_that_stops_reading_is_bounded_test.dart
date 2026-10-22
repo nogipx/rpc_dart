@@ -34,7 +34,7 @@ _setUp({int maxPendingEvents = 1024, int maxPendingBytes = 8 << 20}) async {
   final serverEndpoint = RpcResponderEndpoint(transport: server)
     ..registerServiceContract(responder)
     ..start();
-  final clientEndpoint = RpcCallerEndpoint(transport: client)..start();
+  final clientEndpoint = RpcCallerEndpoint(transport: client);
   addTearDown(() async {
     await clientEndpoint.close();
     await serverEndpoint.close();

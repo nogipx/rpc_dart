@@ -37,7 +37,7 @@ Future<(DataServiceClient, DataServiceContractCaller)> _setUp({
     repository: server.repository,
   );
   await rawServer.start();
-  final rawEndpoint = RpcCallerEndpoint(transport: rawT)..start();
+  final rawEndpoint = RpcCallerEndpoint(transport: rawT);
   addTearDown(() async {
     await rawEndpoint.close();
     await rawServer.close();
