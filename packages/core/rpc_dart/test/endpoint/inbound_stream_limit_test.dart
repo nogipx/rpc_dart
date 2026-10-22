@@ -259,6 +259,9 @@ final class _PlainTransport extends IRpcTransport {
   int get lastIssuedStreamId => _next;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     final resumed = streamId.isEven ? streamId : streamId - 1;
     if (resumed > _next) _next = resumed;

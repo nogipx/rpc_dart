@@ -46,6 +46,9 @@ final class _Fake extends IRpcTransport {
   int get lastIssuedStreamId => _lastId;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     if (streamId > _lastId) _lastId = streamId;
   }

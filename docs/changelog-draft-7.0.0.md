@@ -55,6 +55,14 @@ similar checks with the member. A custom transport adds the members, or
 that forwards `reconnectOutcome` keeps `RpcRetryInterceptor` waiting for the
 reconnect.
 
+**Stream-id resume is opt-in.** `lastIssuedStreamId` and
+`resumeStreamIdsAfter` have defaults that throw, and a transport that
+implements them says so with `supportsStreamIdResume => true`. A server-side
+or test transport no longer writes them. `RpcClientConnection` refuses a
+transport without them, with `RpcClientDisconnected(reason: UnsupportedError)`,
+instead of reusing ids after a reconnect. A decorator forwards
+`supportsStreamIdResume` with the other two.
+
 **Reconnect lives in one layer, `RpcClientConnection`.** `transport.reconnect()`
 and `endpoint.reconnect()` are gone. Wrap the transport factory in
 `RpcClientConnection`; `forceReconnect()` replaces a manual reconnect.

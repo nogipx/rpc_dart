@@ -53,7 +53,7 @@ Notes:
 | --- | --- |
 | `RpcChannelTransport.memoryPair({policy})` | Returns `(client, server)`. Objects passed by reference, `supportsZeroCopy == true`. Default for in-process use and unit tests. |
 | `RpcChannelTransport.pair({policy})` | Returns `(client, server)`. In memory but encodes real frames, `supportsZeroCopy == false`. Use in tests to exercise codecs, compression and frame limits as a network transport would. |
-| `RpcChannelTransport.fromChannel({required channel, required isClient, policy, resumeStreamIdsAfter, ready, logger})` | Wraps a raw `IRpcChannel` (bytes in, bytes out) with rpc_dart framing, multiplexing, flow control and policy checks. Build one per side. `ready` is the channel's own readiness when it is still connecting. |
+| `RpcChannelTransport.fromChannel({required channel, required isClient, policy, ready, prefaceTimeout, logger})` | Wraps a raw `IRpcChannel` (bytes in, bytes out) with rpc_dart framing, multiplexing, flow control and policy checks. Build one per side. `ready` is the channel's own readiness when it is still connecting. |
 
 `policy` is an `RpcSecurityPolicy` (see `security-and-flow-control.md`).
 
@@ -106,10 +106,14 @@ RpcCallerEndpoint overCustomPipe(IRpcChannel channel) => RpcCallerEndpoint(
   backoff. Call `connect()` and give `connection.transport` to a single
   endpoint that you keep for the app's lifetime. See
   `errors-and-resilience.md`.
-- Every `IRpcTransport` carries its stream-id cursor (`lastIssuedStreamId`,
-  `resumeStreamIdsAfter`). The connection resumes the new transport's ids after
-  the old one's, so late frames from dead calls never land on new calls. In
-  peer mode it also ends the calls the peer had opened on the lost connection.
+- A transport the factory returns carries its stream-id cursor
+  (`supportsStreamIdResume`, `lastIssuedStreamId`, `resumeStreamIdsAfter`;
+  every built-in one does). The connection resumes the new transport's ids
+  after the old one's, so late frames from dead calls never land on new calls,
+  and it refuses a transport without them (`RpcClientDisconnected` with an
+  `UnsupportedError`). A server-side transport can leave the three to their
+  defaults. In peer mode the connection also ends the calls the peer had
+  opened on the lost connection.
 - In-flight calls do not survive a reconnect. Only new calls do; reissue the
   lost ones yourself (idempotent methods only).
 

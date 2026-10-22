@@ -57,6 +57,9 @@ final class _TrackedTransport extends IRpcTransport {
   @override
   int get lastIssuedStreamId => _next;
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     if (streamId <= _next) return;
     _next = streamId.isOdd ? streamId : streamId + 1;

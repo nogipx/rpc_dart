@@ -128,6 +128,7 @@ IRpcTransport field lastIssuedStreamId: int (get)
 IRpcTransport field ready: Future<void> (get)
 IRpcTransport field reconnectOutcome: IRpcReconnectOutcome? (get)
 IRpcTransport field securityPolicy: RpcSecurityPolicy (get)
+IRpcTransport field supportsStreamIdResume: bool (get)
 IRpcTransport field supportsZeroCopy: bool (get)
 IRpcTransport method close() -> Future<void>
 IRpcTransport method createStream() -> int
@@ -406,6 +407,7 @@ RpcChannelTransport field lastIssuedStreamId: int (get)
 RpcChannelTransport field ready: Future<void> (get)
 RpcChannelTransport field reconnectOutcome: IRpcReconnectOutcome? (get)
 RpcChannelTransport field securityPolicy: RpcSecurityPolicy (get)
+RpcChannelTransport field supportsStreamIdResume: bool (get)
 RpcChannelTransport field supportsZeroCopy: bool (get)
 RpcChannelTransport method chargeConnectionBuffer(int bytes) -> bool
 RpcChannelTransport method close() -> Future<void>

@@ -116,6 +116,9 @@ class RpcHttpResponderTransport extends IRpcTransport {
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   /// Optional CORS policy. When set, handles `OPTIONS` preflight requests

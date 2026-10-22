@@ -277,6 +277,9 @@ class RpcChannelTransport extends IRpcTransport
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   /// Creates a paired client/server transport over in-memory frame channels.

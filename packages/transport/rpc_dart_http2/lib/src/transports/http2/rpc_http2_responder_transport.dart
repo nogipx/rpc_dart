@@ -40,6 +40,9 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   int get lastIssuedStreamId => _nextStreamId - 2;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     // Server ids are even; a wrong-parity value rounds UP. Forward only.
     final aligned = streamId.isEven ? streamId : streamId + 1;

@@ -117,5 +117,8 @@ final class _DummyTransport extends IRpcTransport {
   int get lastIssuedStreamId => 0;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {}
 }

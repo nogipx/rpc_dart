@@ -290,7 +290,17 @@ abstract class IRpcTransport {
   /// Checks transport health and returns diagnostics.
   Future<RpcHealthStatus> health();
 
-  // Stream-id sequence. Required: see [lastIssuedStreamId].
+  // Stream-id sequence across reconnects. Only a transport an
+  // `RpcClientConnection` factory returns needs it.
+
+  /// Whether this transport implements [lastIssuedStreamId] and
+  /// [resumeStreamIdsAfter].
+  ///
+  /// `RpcClientConnection` refuses a transport that does not: without them a
+  /// new transport starts its ids at 1 again and reuses ids a call from the
+  /// dropped connection still holds. The default, false, suits a server-side
+  /// or test transport.
+  bool get supportsStreamIdResume => false;
 
   /// The stream id handed out most recently, or a value below the first
   /// assignable id when none has been.
@@ -305,7 +315,13 @@ abstract class IRpcTransport {
   /// **The cursor must survive [close].** A drop is usually started by the
   /// peer, and a transport reports it by closing itself, so a cursor destroyed
   /// at close is gone before anything above can read it.
-  int get lastIssuedStreamId;
+  ///
+  /// Override together with [resumeStreamIdsAfter] and
+  /// [supportsStreamIdResume].
+  int get lastIssuedStreamId => throw UnsupportedError(
+    '$runtimeType does not track its stream ids '
+    '(supportsStreamIdResume is false)',
+  );
 
   /// Continues the sequence after [streamId].
   ///
@@ -313,7 +329,10 @@ abstract class IRpcTransport {
   /// client transport still issues odd ids afterwards, a server even ones.
   /// Safe to call with a value from a different transport instance; that is
   /// the entire point.
-  void resumeStreamIdsAfter(int streamId);
+  void resumeStreamIdsAfter(int streamId) => throw UnsupportedError(
+    '$runtimeType does not resume stream ids '
+    '(supportsStreamIdResume is false)',
+  );
 
   // Optional behaviour, with safe defaults.
 

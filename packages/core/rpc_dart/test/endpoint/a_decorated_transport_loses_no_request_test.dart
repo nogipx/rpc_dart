@@ -71,6 +71,9 @@ final class _AsyncDecorator implements IRpcTransport {
   @override
   int get lastIssuedStreamId => _inner.lastIssuedStreamId;
   @override
+  bool get supportsStreamIdResume => _inner.supportsStreamIdResume;
+
+  @override
   void resumeStreamIdsAfter(int streamId) =>
       _inner.resumeStreamIdsAfter(streamId);
   @override

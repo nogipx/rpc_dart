@@ -84,6 +84,9 @@ class _CountingTransport implements IRpcTransport {
   @override
   int get lastIssuedStreamId => inner.lastIssuedStreamId;
   @override
+  bool get supportsStreamIdResume => inner.supportsStreamIdResume;
+
+  @override
   void resumeStreamIdsAfter(int streamId) =>
       inner.resumeStreamIdsAfter(streamId);
   @override

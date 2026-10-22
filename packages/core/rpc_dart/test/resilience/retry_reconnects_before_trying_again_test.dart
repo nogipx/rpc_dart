@@ -37,6 +37,9 @@ class _FlakyTransport extends IRpcTransport implements IRpcReconnectOutcome {
   int get lastIssuedStreamId => 1;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {}
 
   @override

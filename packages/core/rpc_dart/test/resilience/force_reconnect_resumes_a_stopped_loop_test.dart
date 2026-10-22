@@ -41,6 +41,9 @@ final class _T extends IRpcTransport {
   int get lastIssuedStreamId => _next;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     if (streamId > _next) _next = streamId.isOdd ? streamId : streamId + 1;
   }

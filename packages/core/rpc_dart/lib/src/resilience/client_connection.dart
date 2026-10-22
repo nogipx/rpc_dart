@@ -453,6 +453,9 @@ final class _ReconnectingTransportProxy
   int get lastIssuedStreamId => _inner?.lastIssuedStreamId ?? _idWatermark;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     if (streamId > _idWatermark) _idWatermark = streamId;
     _inner?.resumeStreamIdsAfter(streamId);
@@ -897,6 +900,21 @@ class RpcClientConnection {
         if (_isStopped || _proxy.isClosed) {
           _log.info('Discarding transport: connection stopped');
           unawaited(inner.close().catchError((_) {}));
+          guard.complete();
+          return;
+        }
+
+        // Without it a reconnect reuses ids the dropped connection's calls
+        // still hold. A configuration error, so no retry would help.
+        if (!inner.supportsStreamIdResume) {
+          unawaited(inner.close().catchError((_) {}));
+          final error = UnsupportedError(
+            '${inner.runtimeType} cannot carry ids across a reconnect: '
+            'it must implement IRpcTransport.supportsStreamIdResume, '
+            'lastIssuedStreamId and resumeStreamIdsAfter',
+          );
+          _log.error('Transport refused', error: error);
+          _emit(RpcClientDisconnected(reason: error));
           guard.complete();
           return;
         }

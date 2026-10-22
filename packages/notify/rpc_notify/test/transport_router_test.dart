@@ -938,6 +938,9 @@ class _ReusableIdTestTransport extends IRpcTransport {
   int get lastIssuedStreamId => _nextId - 2;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     if (streamId < _nextId) return;
     _nextId = streamId.isOdd ? streamId + 2 : streamId + 1;

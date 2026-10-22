@@ -319,6 +319,9 @@ class RpcHttpCallerTransport extends IRpcTransport {
   int get lastIssuedStreamId => _idManager.lastIssuedId;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) => _idManager.resumeAfter(streamId);
 
   @override

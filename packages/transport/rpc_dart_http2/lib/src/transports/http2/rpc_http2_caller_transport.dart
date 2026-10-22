@@ -60,6 +60,9 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   int get lastIssuedStreamId => _nextStreamId - 2;
 
   @override
+  bool get supportsStreamIdResume => true;
+
+  @override
   void resumeStreamIdsAfter(int streamId) {
     // Client ids are odd; a wrong-parity watermark rounds UP so the sequence
     // stays odd. Forward only, so a stale watermark cannot rewind live ids.

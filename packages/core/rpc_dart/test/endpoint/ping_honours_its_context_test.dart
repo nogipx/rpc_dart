@@ -73,6 +73,9 @@ final class _SwallowsPing implements IRpcTransport {
   @override
   int get lastIssuedStreamId => _inner.lastIssuedStreamId;
   @override
+  bool get supportsStreamIdResume => _inner.supportsStreamIdResume;
+
+  @override
   void resumeStreamIdsAfter(int id) => _inner.resumeStreamIdsAfter(id);
   @override
   RpcSecurityPolicy get securityPolicy => _inner.securityPolicy;

@@ -58,6 +58,9 @@ class _SlowClose implements IRpcTransport {
   @override
   int get lastIssuedStreamId => inner.lastIssuedStreamId;
   @override
+  bool get supportsStreamIdResume => inner.supportsStreamIdResume;
+
+  @override
   void resumeStreamIdsAfter(int id) => inner.resumeStreamIdsAfter(id);
   @override
   RpcSecurityPolicy get securityPolicy => inner.securityPolicy;
