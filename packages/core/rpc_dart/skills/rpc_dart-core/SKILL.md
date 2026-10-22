@@ -129,8 +129,9 @@ not zero-copy, and a method without codecs fails on them.
    tests over `pair()` too.
 8. **Bound every call.** Give a deadline
    (`RpcContext.empty().withTimeout(d)`, `ctx.withTimeout(d)`) or a
-   cancellation token. `ping()` without `timeout:`
-   waits forever, and its timeout throws `dart:async` `TimeoutException`.
+   cancellation token. `ping(context:)` is bounded the same way: without a
+   deadline or a token it waits forever, and a deadline that passes while it
+   waits throws `dart:async` `TimeoutException`.
 9. **A cancelled token poisons its context.** After `token.cancel()`, or after
    cancelling an early stream subscription that used that context, every
    later call with the same context fails at once with CANCELLED. Make a new

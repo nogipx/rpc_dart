@@ -272,9 +272,11 @@ Other methods: `getStatus`, `clearStatus`, `clearAll`, `changes`.
 - `RpcHealthLevel` has no `active`; `RpcEndpointHealth` has no `level`.
 - `log.warning(..., data: status.details)` is a type error:
   `Map<String, Object?>` is not `Map<String, Object>`.
-- `ping` timeout throws `dart:async` `TimeoutException`, not an
-  `RpcStatusException`. Without `timeout:` the context deadline applies; with
-  neither, ping waits indefinitely.
+- `ping` has no `timeout:`; its context's deadline bounds it. A deadline that
+  passes while it waits throws `dart:async` `TimeoutException`, not an
+  `RpcStatusException`; one already past when it is called throws
+  `RpcDeadlineExceededException`. Without a deadline or a token, ping waits
+  indefinitely.
 - `minLevel` defaults to `debug`, so a `LogController()` with a console output
   prints all debug traffic. Set `minLevel: RpcLogLevel.info` in production.
 - Spans ignore `minLevel`; disable them with `spansEnabled: false`.
