@@ -167,7 +167,7 @@ LogController method scope(String name, {String? tag}) -> LogScope
 LogController method setRedactor(LogRedactor? redactor) -> void
 LogController method setScopeLevel(String scope, RpcLogLevel level) -> void
 LogController method setTagLevel(String tag, RpcLogLevel level) -> void
-LogController new new({RpcLogLevel minLevel, bool spansEnabled, DateTime Function()? clock, List<LogOutput> outputs, List<LogEnricher> enrichers, SamplingConfig? sampling, List<String> redactFields})
+LogController new new({RpcLogLevel minLevel, bool spansEnabled, DateTime Function()? clock, List<LogOutput> outputs, List<LogEnricher> enrichers, SamplingConfig? sampling, LogRedactor? redactor})
 LogEnricher method enrich(LogRecord record) -> Map<String, Object>
 LogEnricher new new()
 LogEvent field data: Map<String, Object>? (get)

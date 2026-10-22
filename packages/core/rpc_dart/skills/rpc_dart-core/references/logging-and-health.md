@@ -38,7 +38,7 @@ SPDX-License-Identifier: MIT
 | `outputs` | `[]` | `LogOutput` sinks. |
 | `enrichers` | `[]` | `LogEnricher`s adding fields to every record. |
 | `sampling` | `null` | `SamplingConfig(interval:, maxPerInterval: {level: n})`. |
-| `redactFields` | `[]` | Case-insensitive keys whose values become `[REDACTED]` in `data`, and `key=value` / `key: value` in messages and error text. |
+| `redactor` | `null` | `LogRedactor(fields: [...], replacement:)`: case-insensitive keys whose values become `[REDACTED]` (or `replacement`) in `data`, and `key=value` / `key: value` in messages and error text. `setRedactor` replaces it at runtime. |
 
 Runtime methods: `setScopeLevel(prefix, level)` / `clearScopeLevel`,
 `setTagLevel(tag, level)` / `clearTagLevel`, `addOutput` / `removeOutput`,
@@ -65,7 +65,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 final logger = LogController(
   minLevel: RpcLogLevel.info,
   outputs: [ConsoleOutput(format: ConsoleFormat.compact, colored: false)],
-  redactFields: ['authorization', 'password'],
+  redactor: LogRedactor(fields: ['authorization', 'password']),
 );
 
 (RpcCallerEndpoint, RpcResponderEndpoint) wireWithLogging() {
@@ -278,7 +278,7 @@ Other methods: `getStatus`, `clearStatus`, `clearAll`, `changes`.
 - `minLevel` defaults to `debug`, so a `LogController()` with a console output
   prints all debug traffic. Set `minLevel: RpcLogLevel.info` in production.
 - Spans ignore `minLevel`; disable them with `spansEnabled: false`.
-- `redactFields` only masks `data` keys and `key=value` / `key: value` text:
+- A `LogRedactor` only masks `data` keys and `key=value` / `key: value` text:
   plain, in a query string (`?token=x&password=y`), in JSON
   (`"password":"x"`), and an authorization value with its scheme
   (`authorization: Bearer x` becomes `authorization: [REDACTED]`). A secret

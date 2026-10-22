@@ -148,7 +148,7 @@ void main() async {
   final prodLog = LogController(
     minLevel: RpcLogLevel.info,
     enrichers: [_HostEnricher()],
-    redactFields: ['password', 'token', 'secret'],
+    redactor: LogRedactor(fields: ['password', 'token', 'secret']),
     outputs: [ConsoleOutput(format: ConsoleFormat.json)],
   );
 

@@ -85,7 +85,7 @@ void main() {
       final output = _CollectorOutput();
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
-        redactFields: ['password', 'token'],
+        redactor: LogRedactor(fields: ['password', 'token']),
         outputs: [output],
       );
 
@@ -106,7 +106,7 @@ void main() {
       final output = _CollectorOutput();
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
-        redactFields: ['secret'],
+        redactor: LogRedactor(fields: ['secret']),
         outputs: [output],
       );
 
@@ -128,7 +128,7 @@ void main() {
       final output = _CollectorOutput();
       final controller = LogController(
         minLevel: RpcLogLevel.debug,
-        redactFields: ['Password'],
+        redactor: LogRedactor(fields: ['Password']),
         outputs: [output],
       );
 

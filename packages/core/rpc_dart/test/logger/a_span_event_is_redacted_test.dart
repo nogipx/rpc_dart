@@ -19,7 +19,7 @@ void main() {
     final out = _Collector();
     final controller = LogController(
       outputs: [out],
-      redactFields: const ['password'],
+      redactor: LogRedactor(fields: const ['password']),
     );
     final now = DateTime.now();
     controller.add(
@@ -53,7 +53,7 @@ void main() {
     final out = _Collector();
     final controller = LogController(
       outputs: [out],
-      redactFields: const ['password'],
+      redactor: LogRedactor(fields: const ['password']),
     );
     final now = DateTime.now();
     controller.add(

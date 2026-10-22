@@ -62,6 +62,7 @@ class LogController {
   /// Creates a [LogController] with optional outputs, enrichers, and filters.
   ///
   /// Pass [clock] to override timestamp generation (useful for tests).
+  /// [redactor] masks sensitive values; [setRedactor] replaces it later.
   LogController({
     this.minLevel = RpcLogLevel.debug,
     this.spansEnabled = true,
@@ -69,13 +70,11 @@ class LogController {
     List<LogOutput> outputs = const [],
     List<LogEnricher> enrichers = const [],
     SamplingConfig? sampling,
-    List<String> redactFields = const [],
+    LogRedactor? redactor,
   }) : clock = clock ?? DateTime.now,
        _outputs = List.of(outputs),
        _enrichers = List.of(enrichers),
-       _redactor = redactFields.isNotEmpty
-           ? LogRedactor(fields: redactFields)
-           : null,
+       _redactor = redactor,
        _sampling = sampling != null ? SamplingState(sampling) : null;
 
   // --- Level filtering ---

@@ -122,6 +122,7 @@ No error message is a contract: match on the type or the status.
 | endpoint pipeline members (`handleUnary` and the other three, `start*Listening`, `close*Resources`, `collect*Metrics`, `registeredMethods`, `registeredMethodBindings`, `validateMethodExists`, `getCancellationToken`, `responderIsListening`) and `RpcResponderContract.registrations` | not public; `collectEndpointMetrics()` for the metrics |
 | `IRpcMiddleware`, `addMiddleware`, `RpcEndpointMetrics.middlewareCount` | an `IRpcInterceptor`, the one way to wrap a call: it changes the request before `next` or maps the request or response stream |
 | `RpcMiddlewareContext` | `RpcCallInfo`, whose `direction` is always set |
+| `LogController(redactFields: [...])` | `LogController(redactor: LogRedactor(fields: [...]))`, which also takes a `replacement`; `setRedactor` takes the same type |
 | `RpcContext.withTimeout(d)`, `.withDeadline(t)`, `.withCancellation(token)`, `.withTraceId(id)` as constructors | `RpcContext.empty().withTimeout(d)` and the other `with...` copies; `empty()` and `withHeaders(...)` stay the two constructors |
 | `RpcContext.isContextValid(ctx)`, `RpcContext.sanitize(ctx)` | `ctx.isValid`, `ctx.sanitized()` |
 | `RpcEndpointHealth.dependencies['transport']`, a nullable `transportStatus` | `transportStatus`, always set; `RpcEndpointHealth(endpointStatus:, transportStatus:)` |

@@ -66,6 +66,7 @@ builds a transport, a channel or frames imports
 | `ctx.withValue('key', v)`, `ctx.getValue<T>('key')` | a typed key: `const key = RpcContextKey<T>('key')`, then `withValue(key, v)` / `getValue(key)` |
 | `getValue<RpcCallScope>(RpcCallScope)` | `ctx.callScope` |
 | `endpoint.collectEndpointMetrics()['openStreams']` | `endpoint.collectEndpointMetrics().openStreams` (`RpcResponderEndpointMetrics`; a caller endpoint returns `RpcCallerEndpointMetrics`, a peer `RpcPeerEndpointMetrics`; `toJson()` for the map) |
+| `LogController(redactFields: [...])` | `LogController(redactor: LogRedactor(fields: [...]))` |
 | `RpcContext.withTimeout(d)`, `RpcContext.withDeadline(t)`, `RpcContext.withCancellation(token)`, `RpcContext.withTraceId(id)` | `RpcContext.empty().withTimeout(d)` and the other `with...` copies |
 | `RpcContext.isContextValid(ctx)`, `RpcContext.sanitize(ctx)` | `ctx.isValid`, `ctx.sanitized()` |
 | `report.dependencies['transport']`, `report.transportStatus?.level` | `report.transportStatus.level`; it is never null |
