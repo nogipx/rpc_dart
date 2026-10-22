@@ -114,23 +114,24 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
   Duration? connectTimeout,
   required LogScope logger,
   _DrainSignal? drainSignal,
+  required _AttemptGuard guard,
 }) async {
   final proxyHost = proxyUri.host;
   final proxyPort = proxyUri.hasPort ? proxyUri.port : 3128;
 
   // `connectTimeout` bounds the two phases here that are not the CONNECT
   // exchange (that one has `handshakeTimeout`): reaching the proxy, and the
-  // TLS handshake through the tunnel. See the direct paths for why
-  // `timeout:` rather than an outer `.timeout()` on the socket connect.
+  // TLS handshake through the tunnel.
   // A RawSocket throughout, not a Socket: it is the only kind that stays
   // closable through the TLS handshake. Once SecureSocket.secure owns a
   // Socket, destroying the original no longer closes it, so a handshake
   // that timed out left its socket to the proxy open. See RawSocketPipe.
-  final raw = await RawSocket.connect(
-    proxyHost,
-    proxyPort,
-    timeout: connectTimeout,
+  final raw = await _tcpConnect(
+    RawSocket.startConnect(proxyHost, proxyPort),
+    connectTimeout,
+    guard,
   );
+  guard.hold(raw.close);
   try {
     raw.setOption(SocketOption.tcpNoDelay, true);
   } catch (error) {
@@ -257,6 +258,7 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
       via: ' through the proxy',
     );
     final pipe = RawSocketPipe(secureSocket);
+    guard.hold(pipe.destroy);
     return _guardedConnection(
       incoming: pipe.incoming,
       outgoing: pipe,
@@ -270,6 +272,7 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
   // The guard sits on the tunnel's stream, so it bounds what the TUNNELED
   // peer sends as well as anything the proxy injects.
   final pipe = RawSocketPipe(raw, subscription: sub);
+  guard.hold(pipe.destroy);
   final Stream<List<int>> incoming = leftover.isEmpty
       ? pipe.incoming
       : _prepend(leftover, pipe.incoming);
@@ -288,6 +291,54 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
 Stream<List<int>> _prepend(List<int> first, Stream<List<int>> rest) async* {
   yield first;
   yield* rest;
+}
+
+/// What one connect attempt holds open, released when its token is cancelled
+/// before the attempt delivers. A cancel after [deliver] is the caller's
+/// business: the connection is theirs by then.
+final class _AttemptGuard {
+  _AttemptGuard(RpcCancellationToken? token) {
+    token?.cancelled.then((_) {
+      if (_delivered) return;
+      _cancelled = true;
+      _release?.call();
+    });
+  }
+
+  bool _delivered = false;
+  bool _cancelled = false;
+  void Function()? _release;
+
+  /// Makes [release] what a cancel closes, replacing the previous stage's;
+  /// runs it at once if the cancel came first.
+  void hold(void Function() release) {
+    _release = release;
+    if (_cancelled) release();
+  }
+
+  void deliver() => _delivered = true;
+}
+
+/// A TCP connect bounded by [timeout] and stoppable through [guard].
+///
+/// A `ConnectionTask` is the only form of a dart:io connect that can be
+/// stopped; cancelling it closes the pending socket, so neither the timeout
+/// nor a cancel leaves one behind.
+Future<S> _tcpConnect<S>(
+  Future<ConnectionTask<S>> start,
+  Duration? timeout,
+  _AttemptGuard guard,
+) async {
+  final task = await start;
+  guard.hold(task.cancel);
+  if (timeout == null) return task.socket;
+  return task.socket.timeout(
+    timeout,
+    onTimeout: () {
+      task.cancel();
+      throw SocketException('Connection timed out after $timeout');
+    },
+  );
 }
 
 /// The client TLS handshake over [raw], bounded by [timeout], offering `h2`.

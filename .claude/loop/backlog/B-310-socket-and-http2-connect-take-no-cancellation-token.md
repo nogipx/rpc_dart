@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured)
+status: closed (round 905)
+round: 905
 commit: b3350b20
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_connect.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: P-342
@@ -26,6 +26,13 @@ caller `Socket.startConnect` returns a `ConnectionTask` with `cancel()`.
 Measure the black-hole case: a connect to a non-routable address
 (10.255.255.1), dispose() mid-connect, time to the socket's release (the
 client process's descriptor count, L-21). Control: a refused port.
+
+## Closed
+
+The socket half by round 897. The http2 half by round 905: `connect` and
+`secureConnect` take `cancellationToken`, which ends every stage of the open.
+P-355, dispose 200 ms into the attempt: direct TLS open 15003 ms after dispose
+-> closed 2 ms; proxy CONNECT 15002 ms -> 6 ms. The isolate spawn is B-315.
 
 ## Owner decision
 

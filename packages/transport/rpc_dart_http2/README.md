@@ -73,6 +73,7 @@ Future<RpcHttp2CallerTransport> connectLocal() =>
 | `pingInterval` | `null` (off) | Sends an HTTP/2 PING this often. The only way the client notices a half-open connection. |
 | `pingTimeout` | `pingInterval` | How long to wait for the PING ACK before the connection is torn down. |
 | `logger` | `null` | A `LogScope`. |
+| `cancellationToken` | none | Cancelling it abandons a pending open in any stage (TCP, proxy `CONNECT`, TLS): the socket closes at once and the connect throws `RpcCancelledException`. Pass the one `RpcClientConnection` hands its `transportFactory`. |
 
 ### Your own socket
 

@@ -3,8 +3,8 @@ refines: U-14
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/core/**]
 applies: sibling implementations of one interface each hand-roll the same helper
 breaks: "wrong result: the copies drift, and the one that drifted is the one nobody compared."
-applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585, 587, 603, 605, 606, 609, 614, 631, 632, 637, 641, 642, 649, 650, 652, 654, 658, 666, 679, 680, 681, 690, 692, 694, 697, 698, 700, 718, 727, 728, 791, 796, 814, 829, 835, 846, 847, 848, 851, 853, 854, 855, 857, 858, 861, 862, 863, 864, 865, 866, 867, 876, 877, 878, 879, 895, 897, 898, 899]
-status: confirmed (round 846)
+applied: [308, 309, 310, 311, 312, 313, 315, 316, 317, 318, 331, 332, 336, 354, 360, 367, 368, 369, 370, 371, 374, 384, 386, 388, 389, 390, 391, 393, 402, 403, 406, 407, 410, 412, 415, 416, 417, 420, 422, 423, 424, 425, 426, 444, 446, 447, 448, 449, 451, 452, 453, 454, 455, 456, 458, 459, 460, 461, 462, 464, 465, 468, 478, 496, 498, 582, 583, 585, 587, 603, 605, 606, 609, 614, 631, 632, 637, 641, 642, 649, 650, 652, 654, 658, 666, 679, 680, 681, 690, 692, 694, 697, 698, 700, 718, 727, 728, 791, 796, 814, 829, 835, 846, 847, 848, 851, 853, 854, 855, 857, 858, 861, 862, 863, 864, 865, 866, 867, 876, 877, 878, 879, 895, 897, 898, 899, 905]
+status: confirmed (round 905)
 rank: 4
 ---
 
@@ -126,3 +126,4 @@ Then, before acting:
 - **585** — `List<int>` vs `BytesBuilder(copy: false)`: 32 MiB +205 MiB -> +0. B-148. `../probes/P-205-what-one-buffered-request-body-costs.md`, `../rounds/585-the-buffer-the-sibling-had-already-replaced.md`
 - **587** — two `catch` clauses, two log levels: 8 calls, 8 errors on `close()`. B-143. `../probes/P-207-what-an-orderly-close-logs-per-in-flight-call.md`, `../rounds/587-eight-calls-eight-errors.md`
 - **846** — `holdsPartialFrame` guarded requests only: a cut response ended clean. **Grep a rule's every use and ask which side each is on.** `../rounds/846-a-response-cut-mid-message-is-an-error.md`, `../probes/P-315-a-response-cut-mid-message.md`
+- **905** — the transport-factory contract `RpcClientConnection` hands a token to: websocket and socket took it, http2 did not, so a dispose left its TLS or CONNECT stage open 15 s+ (-> 2-6 ms). The copy that is ABSENT shows up by listing every implementer of the contract's consumer, not of an interface. Closing what a stage holds did not end a pending `RawSecureSocket.secure`: the await needs its own race. `../rounds/905-a-dispose-ends-the-http2-connect.md`, `../probes/P-355-r905-dispose-mid-http2-connect.md`

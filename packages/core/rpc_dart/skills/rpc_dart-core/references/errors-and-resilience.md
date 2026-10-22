@@ -267,8 +267,8 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   (resume later with `connect()`), `dispose()` (permanent).
 - `dispose()` and `disconnect()` stop waiting for an attempt in flight and close a transport it
   delivers, but cannot stop a factory's own work. The factory is handed an `RpcCancellationToken`
-  per attempt; pass it to a transport connect that accepts `cancellationToken:` (the WebSocket and
-  socket callers do): the token is cancelled on `dispose()`, on `disconnect()` and past
+  per attempt; pass it to a transport connect that accepts `cancellationToken:` (the WebSocket,
+  socket and HTTP/2 callers do): the token is cancelled on `dispose()`, on `disconnect()` and past
   `connectTimeout`, and the pending socket closes at once. A factory written `(_) => ...` ignores
   it, and its socket stays open until the transport's own timeout, or for good with none.
 - `logger:` takes a `LogScope` (e.g. `controller.scope('app.connection')`) and receives drops, attempts and

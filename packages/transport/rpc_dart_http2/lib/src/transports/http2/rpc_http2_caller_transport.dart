@@ -230,6 +230,12 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   ///
   /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
   /// Proxy auth is taken from the URI's userinfo (`http://user:pass@proxy:3128`).
+  ///
+  /// [cancellationToken] abandons the open: when it is cancelled first, the
+  /// pending socket is closed at once and this throws an
+  /// [RpcCancelledException]. `RpcClientConnection` hands one to its factory
+  /// per attempt, so a dispose mid-connect does not hold the socket until
+  /// [connectTimeout].
   static Future<RpcHttp2CallerTransport> secureConnect({
     required String host,
     int port = 443,
@@ -240,6 +246,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     Duration? connectTimeout = _connectTimeout,
     Duration? pingInterval,
     Duration? pingTimeout,
+    RpcCancellationToken? cancellationToken,
   }) => _dial(
     secure: true,
     host: host,
@@ -251,6 +258,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     connectTimeout: connectTimeout,
     pingInterval: pingInterval,
     pingTimeout: pingTimeout,
+    cancellationToken: cancellationToken,
   );
 
   /// Wraps an ALREADY-ESTABLISHED socket.
@@ -299,6 +307,8 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   ///
   /// [proxyUri] — optional HTTP CONNECT proxy, e.g. `Uri.parse('http://proxy:3128')`.
   /// Proxy auth is taken from the URI's userinfo (`http://user:pass@proxy:3128`).
+  ///
+  /// [cancellationToken] as in [secureConnect].
   static Future<RpcHttp2CallerTransport> connect({
     required String host,
     int port = 80,
@@ -309,6 +319,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     Duration? connectTimeout = _connectTimeout,
     Duration? pingInterval,
     Duration? pingTimeout,
+    RpcCancellationToken? cancellationToken,
   }) => _dial(
     secure: false,
     host: host,
@@ -320,6 +331,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     connectTimeout: connectTimeout,
     pingInterval: pingInterval,
     pingTimeout: pingTimeout,
+    cancellationToken: cancellationToken,
   );
 
   /// Opens the connection for [connect] (h2c) and [secureConnect] (h2 over
@@ -335,7 +347,11 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     required Duration? connectTimeout,
     required Duration? pingInterval,
     required Duration? pingTimeout,
+    required RpcCancellationToken? cancellationToken,
   }) async {
+    if (cancellationToken != null && cancellationToken.isCancelled) {
+      throw _cancelled(cancellationToken);
+    }
     if (logger.isInternal) {
       logger.internal(
         'Opening ${secure ? 'a secure' : 'an'} HTTP/2 connection to '
@@ -344,6 +360,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
     }
 
     final drainSignal = _DrainSignal();
+    final guard = _AttemptGuard(cancellationToken);
 
     Future<http2.ClientTransportConnection> open() async {
       if (proxyUri != null) {
@@ -357,18 +374,18 @@ class RpcHttp2CallerTransport extends IRpcTransport {
           policy: policy,
           logger: logger,
           drainSignal: drainSignal,
+          guard: guard,
         );
       }
-      // `timeout:` rather than an outer `.timeout()`: dart:io abandons the
-      // attempt and releases the socket, where wrapping the future would leave
-      // the connect running with nobody to close what it eventually produces.
-      // It bounds the TCP connect only; _secureH2 bounds the handshake.
+      // _tcpConnect bounds the TCP connect only; _secureH2 bounds the
+      // handshake.
       if (secure) {
-        final raw = await RawSocket.connect(
-          host,
-          port,
-          timeout: connectTimeout,
+        final raw = await _tcpConnect(
+          RawSocket.startConnect(host, port),
+          connectTimeout,
+          guard,
         );
+        guard.hold(raw.close);
         try {
           raw.setOption(SocketOption.tcpNoDelay, true);
         } catch (error) {
@@ -382,6 +399,7 @@ class RpcHttp2CallerTransport extends IRpcTransport {
             timeout: connectTimeout,
           ),
         );
+        guard.hold(pipe.destroy);
         return _guardedConnection(
           incoming: pipe.incoming,
           outgoing: pipe,
@@ -392,7 +410,12 @@ class RpcHttp2CallerTransport extends IRpcTransport {
           drainSignal: drainSignal,
         );
       }
-      final socket = await Socket.connect(host, port, timeout: connectTimeout);
+      final socket = await _tcpConnect(
+        Socket.startConnect(host, port),
+        connectTimeout,
+        guard,
+      );
+      guard.hold(socket.destroy);
       // See disableNagle: the proxy path does the same.
       disableNagle(socket, logger: logger, what: 'h2c socket to $host:$port');
       return _guardedConnection(
@@ -406,7 +429,20 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       );
     }
 
-    final connection = await _asStatus(open);
+    var attempt = _asStatus(open);
+    if (cancellationToken != null) {
+      // The race ends the await; the guard closes what the attempt holds, so
+      // the losing attempt fails and leaves nothing open.
+      unawaited(attempt.then<void>((_) {}, onError: (Object _) {}));
+      attempt = Future.any([
+        attempt,
+        cancellationToken.cancelled.then<http2.ClientTransportConnection>(
+          (_) => throw _cancelled(cancellationToken),
+        ),
+      ]);
+    }
+    final connection = await attempt;
+    guard.deliver();
     logger.internal('HTTP/2 connection established');
 
     return RpcHttp2CallerTransport._(
@@ -440,6 +476,13 @@ class RpcHttp2CallerTransport extends IRpcTransport {
   /// It also bounds the wait for the peer's first SETTINGS, after `connect()`
   /// has returned; see `_guardedConnection`.
   static const Duration _connectTimeout = Duration(seconds: 30);
+
+  /// The failure of a connect [token] abandoned.
+  static RpcCancelledException _cancelled(RpcCancellationToken token) =>
+      RpcCancelledException(
+        'HTTP/2 connect cancelled'
+        '${token.reason == null ? '' : ': ${token.reason}'}',
+      );
 
   /// Opens a connection for [connect] and [secureConnect], failing with a
   /// status as the http and websocket callers do: an
