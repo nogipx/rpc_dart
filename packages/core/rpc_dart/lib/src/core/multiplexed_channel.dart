@@ -24,6 +24,20 @@ abstract class IRpcMultiplexedChannel {
   /// Incoming messages from all streams, already decoded.
   Stream<RpcTransportMessage> get incoming;
 
+  /// The bytes of each frame the channel refused and stepped over, reported
+  /// per stream as they ARRIVE, never for bytes merely announced.
+  ///
+  /// A refused frame never becomes a message, so the receiver's
+  /// credit-on-consume path never sees it, yet the peer charged those bytes
+  /// against its window when it sent them. `RpcChannelTransport` credits them
+  /// back; without that the window shrinks for good and the connection wedges
+  /// after enough refusals.
+  ///
+  /// The default is empty, for a channel that never refuses a frame. A
+  /// decorator forwards it.
+  Stream<({int streamId, int bytes})> get discardedFrames =>
+      const Stream.empty();
+
   /// Send a message to the remote side.
   ///
   /// **A send on a CLOSED channel returns normally and delivers nothing.** Both

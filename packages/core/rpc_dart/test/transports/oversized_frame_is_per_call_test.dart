@@ -79,8 +79,7 @@ _Rig _rig({RpcSecurityPolicy policy = _policy}) {
   final messages = <RpcTransportMessage>[];
   final errors = <Object>[];
   final discarded = <({int streamId, int bytes})>[];
-  channel.onFrameDiscarded = (id, bytes) =>
-      discarded.add((streamId: id, bytes: bytes));
+  channel.discardedFrames.listen(discarded.add);
   channel.incoming.listen(messages.add, onError: errors.add);
   addTearDown(channel.close);
   return (

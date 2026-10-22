@@ -154,6 +154,7 @@ class RpcChannelTransport extends IRpcTransport {
   final Set<int> _statusSeen = {};
 
   StreamSubscription<RpcTransportMessage>? _channelSub;
+  StreamSubscription<({int streamId, int bytes})>? _discardSub;
   bool _closed = false;
 
   /// See [ready].
@@ -204,11 +205,10 @@ class RpcChannelTransport extends IRpcTransport {
     _fc.advertiseConnection();
     // A frame the channel steps over never becomes a message, so the ordinary
     // credit-on-consume path never sees it -- yet the peer charged those bytes
-    // when it sent them. Wired at construction, not probed with an `is` check
-    // elsewhere, so a wrapper cannot silently drop it.
-    if (channel is RpcFrameMultiplexedChannel) {
-      channel.onFrameDiscarded = _fc.credit;
-    }
+    // when it sent them.
+    _discardSub = channel.discardedFrames.listen(
+      (d) => _fc.credit(d.streamId, d.bytes),
+    );
     _channelSub = _channel.incoming.listen(
       _onMessage,
       onError: (Object e) {
@@ -529,6 +529,8 @@ class RpcChannelTransport extends IRpcTransport {
 
     await _channelSub?.cancel();
     _channelSub = null;
+    await _discardSub?.cancel();
+    _discardSub = null;
     _activeStreams.clear();
     _finishedStreams.clear();
     _buffers.clear();

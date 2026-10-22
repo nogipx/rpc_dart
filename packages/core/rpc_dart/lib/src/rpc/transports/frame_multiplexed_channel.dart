@@ -288,6 +288,7 @@ class RpcFrameMultiplexedChannel extends IRpcMultiplexedChannel {
     _channelSub = null;
     _buf = Uint8List(0);
     _bufLen = 0;
+    if (!_discardedCtl.isClosed) unawaited(_discardedCtl.close());
     if (!_incomingCtl.isClosed) await _incomingCtl.close();
   }
 
@@ -392,21 +393,23 @@ class RpcFrameMultiplexedChannel extends IRpcMultiplexedChannel {
     return payloadLen > ceiling;
   }
 
-  /// Notified as skipped bytes ARRIVE, never for bytes merely announced.
-  ///
-  /// The receiver returns flow-control credit only for messages it DELIVERS, so
-  /// a skipped frame otherwise shrinks the peer's window permanently and the
-  /// connection wedges after enough refusals.
+  /// Synchronous, so the credit is returned in the same turn the bytes arrive.
+  final StreamController<({int streamId, int bytes})> _discardedCtl =
+      StreamController<({int streamId, int bytes})>.broadcast(sync: true);
+
+  /// Reports skipped bytes as they ARRIVE.
   ///
   /// Crediting the DECLARED length instead is worse than the wedge it fixes: a
   /// peer sending nothing but 9-byte headers gets its window topped up for free,
   /// which is the one thing flow control exists to stop.
-  void Function(int streamId, int bytes)? onFrameDiscarded;
+  @override
+  Stream<({int streamId, int bytes})> get discardedFrames =>
+      _discardedCtl.stream;
 
-  /// Returns credit for [bytes] of a refused frame that have actually arrived.
+  /// Reports [bytes] of a refused frame that have actually arrived.
   void _creditSkipped(int streamId, int bytes) {
-    if (bytes <= 0) return;
-    onFrameDiscarded?.call(streamId, bytes);
+    if (bytes <= 0 || _discardedCtl.isClosed) return;
+    _discardedCtl.add((streamId: streamId, bytes: bytes));
   }
 
   /// Fails the call that frame belonged to, in the peer's own protocol terms.
