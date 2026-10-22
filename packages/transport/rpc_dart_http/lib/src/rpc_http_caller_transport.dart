@@ -122,8 +122,8 @@ class RpcHttpCallerTransport extends IRpcTransport {
   /// that, so each is empty for part of every call's life and a ceiling read off
   /// either one admits past itself.
   final Set<int> _activeStreams = {};
-  final BufferedBroadcastController<RpcTransportMessage> _incoming =
-      BufferedBroadcastController<RpcTransportMessage>(
+  final RpcBufferedBroadcastController<RpcTransportMessage> _incoming =
+      RpcBufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
       );
 

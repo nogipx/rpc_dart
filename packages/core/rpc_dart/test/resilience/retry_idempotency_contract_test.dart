@@ -83,7 +83,7 @@ Future<({String? result, Object? error, int commits})> _call({
     RpcRetryInterceptor(
       maxAttempts: maxAttempts,
       retryOn: retryOn,
-      backoff: const ExponentialBackoff(
+      backoff: const RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 5),
         maxDelay: Duration(milliseconds: 15),
       ),

@@ -74,7 +74,7 @@ final class RpcTransportMessage {
   /// What this message weighs while it is held in a queue, in bytes.
   ///
   /// One home for the rule, because every transport buffers these and each
-  /// would otherwise repeat it — notably `BufferedBroadcastController.sizeOf`.
+  /// would otherwise repeat it — notably `RpcBufferedBroadcastController.sizeOf`.
   ///
   /// A `directPayload` weighs nothing: it is a reference to an object this
   /// process already owns, so queuing it costs a pointer, not its contents.

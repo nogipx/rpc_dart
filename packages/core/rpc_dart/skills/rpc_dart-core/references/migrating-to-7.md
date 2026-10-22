@@ -56,6 +56,7 @@ builds a transport, a channel or frames imports
 | `RpcContextUtils.generateTraceId()` | `RpcContext.generateTraceId()` |
 | `RpcHeaders.xRouteService` | gone; route on the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | drop `const` |
+| `RpcRateLimiter`, `RateLimit`, `CircuitBreakerState`, `CircuitBreakerOpenException`, `BackoffPolicy`, `ExponentialBackoff`, `FixedBackoff`, `CborCodec`, `BufferedBroadcastController` | the same with an `Rpc` prefix; `RpcRateLimiter` is `RpcRateLimitInterceptor`. Regenerate generated code |
 | `RpcList.toMutableList()` | `toList()`; `RpcList` is an `Iterable` and `where` returns an `Iterable` |
 | `LogSpanHandle(...)` and the `Span*Callback` typedefs | `LogScope.startSpan` / `withSpan` |
 | endpoint pipeline members (`handleUnary`, `startResponderListening`, `collectResponderMetrics`, `registeredMethods`, ...) and `contract.registrations` | not public; `collectEndpointMetrics()` for metrics |
@@ -171,8 +172,8 @@ to apply to every method of the same type.
 - **A `switch` over an open type keeps a default branch**: minor releases may
   add values to `RpcHealthLevel`, `RpcClientConnectionState`,
   `RpcCallOutcome`, `RpcDataTransferMode`, `RpcContentTypeValidation`,
-  `ConsoleFormat`, `LogSpanStatus`, `GrpcServingStatus`, `RateLimit` and
-  `LogRecord`. `RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`,
+  `ConsoleFormat`, `LogSpanStatus`, `GrpcServingStatus`, `RpcRateLimit` and
+  `LogRecord`. `RpcMethodType`, `RpcCallDirection`, `RpcCircuitBreakerState`,
   `RpcServiceKind`, `RpcServerMode` and `RpcLogLevel` are closed.
 
 ## 5. Verify

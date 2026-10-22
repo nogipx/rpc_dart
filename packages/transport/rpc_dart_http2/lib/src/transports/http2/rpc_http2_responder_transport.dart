@@ -59,8 +59,8 @@ class RpcHttp2ResponderTransport extends IRpcTransport
   /// builds one the caller would otherwise never see.
   http2.ServerTransportConnection get connection => _connection;
 
-  final BufferedBroadcastController<RpcTransportMessage> _messageController =
-      BufferedBroadcastController<RpcTransportMessage>(
+  final RpcBufferedBroadcastController<RpcTransportMessage> _messageController =
+      RpcBufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
       );
 

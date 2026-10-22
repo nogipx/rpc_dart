@@ -6,7 +6,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 dynamic _roundTrip(Object value) =>
-    CborCodec.decode(CborCodec.encode({'v': value}))['v'];
+    RpcCborCodec.decode(RpcCborCodec.encode({'v': value}))['v'];
 
 void main() {
   group('a typed int list keeps its values', () {

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RateLimit's bounds were `assert`s in the spec constructors. Dart STRIPS
+// RpcRateLimit's bounds were `assert`s in the spec constructors. Dart STRIPS
 // asserts in release builds, so a misconfiguration a developer trips over in
 // debug becomes a silently disabled rate limiter in production.
 //
@@ -17,11 +17,11 @@
 // The sliding-window variant instead throws IntegerDivisionByZeroException on
 // first use, failing every call. Loud, but still a broken limiter.
 //
-// The bounds are now real throws, checked by RpcRateLimiter for every spec it
+// The bounds are now real throws, checked by RpcRateLimitInterceptor for every spec it
 // is given, so they hold in every build mode. Moving them out of the
 // constructors also fixed the `const` factories: Duration supports neither
 // comparison nor property access in a constant expression, so an assert
-// mentioning one made `const RateLimit.slidingWindow(...)` a compile error.
+// mentioning one made `const RpcRateLimit.slidingWindow(...)` a compile error.
 //
 // NOTE: this file runs with asserts ENABLED (dart test always does), so it
 // cannot itself observe the release-mode behaviour. What it pins is that the
@@ -35,8 +35,8 @@ void main() {
   group('a spec that cannot enforce is rejected', () {
     test('token bucket with a zero window', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.tokenBucket(max: 5, window: Duration.zero),
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.tokenBucket(max: 5, window: Duration.zero),
         ),
         throwsA(
           isA<ArgumentError>().having(
@@ -50,8 +50,8 @@ void main() {
 
     test('sliding window with a zero window', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.slidingWindow(max: 5, window: Duration.zero),
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(max: 5, window: Duration.zero),
         ),
         throwsArgumentError,
       );
@@ -59,8 +59,8 @@ void main() {
 
     test('a non-positive max', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 0,
             window: const Duration(seconds: 1),
           ),
@@ -71,8 +71,8 @@ void main() {
 
     test('a non-positive burst', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.tokenBucket(
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.tokenBucket(
             max: 5,
             window: const Duration(seconds: 1),
             burst: 0,
@@ -86,8 +86,8 @@ void main() {
       // The distinction IS the fix: an AssertionError vanishes in release.
       Object? thrown;
       try {
-        RpcRateLimiter(
-          global: RateLimit.tokenBucket(max: 5, window: Duration.zero),
+        RpcRateLimitInterceptor(
+          global: RpcRateLimit.tokenBucket(max: 5, window: Duration.zero),
         );
       } catch (e) {
         thrown = e;
@@ -100,9 +100,9 @@ void main() {
   group('every slot is validated, not just global', () {
     test('perService', () {
       expect(
-        () => RpcRateLimiter(
+        () => RpcRateLimitInterceptor(
           perService: {
-            'Svc': RateLimit.slidingWindow(max: 5, window: Duration.zero),
+            'Svc': RpcRateLimit.slidingWindow(max: 5, window: Duration.zero),
           },
         ),
         throwsArgumentError,
@@ -111,9 +111,9 @@ void main() {
 
     test('perMethod', () {
       expect(
-        () => RpcRateLimiter(
+        () => RpcRateLimitInterceptor(
           perMethod: {
-            'Svc.m': RateLimit.slidingWindow(max: 5, window: Duration.zero),
+            'Svc.m': RpcRateLimit.slidingWindow(max: 5, window: Duration.zero),
           },
         ),
         throwsArgumentError,
@@ -122,8 +122,11 @@ void main() {
 
     test('perKeyFallback', () {
       expect(
-        () => RpcRateLimiter(
-          perKeyFallback: RateLimit.tokenBucket(max: 5, window: Duration.zero),
+        () => RpcRateLimitInterceptor(
+          perKeyFallback: RpcRateLimit.tokenBucket(
+            max: 5,
+            window: Duration.zero,
+          ),
           keyExtractor: (_) => 'k',
         ),
         throwsArgumentError,
@@ -134,29 +137,29 @@ void main() {
   test('a valid spec is usable as a compile-time constant', () {
     // The const factories advertised this and could not deliver it: an assert
     // touching Duration is not a constant expression, so `const
-    // RateLimit.slidingWindow(...)` failed to compile.
-    const sliding = RateLimit.slidingWindow(
+    // RpcRateLimit.slidingWindow(...)` failed to compile.
+    const sliding = RpcRateLimit.slidingWindow(
       max: 10,
       window: Duration(seconds: 1),
     );
-    const bucket = RateLimit.tokenBucket(
+    const bucket = RpcRateLimit.tokenBucket(
       max: 10,
       window: Duration(seconds: 1),
       burst: 20,
     );
-    const limits = <String, RateLimit>{'a': sliding, 'b': bucket};
+    const limits = <String, RpcRateLimit>{'a': sliding, 'b': bucket};
 
     expect(limits, hasLength(2));
     expect(
-      () => RpcRateLimiter(global: sliding, perMethod: limits),
+      () => RpcRateLimitInterceptor(global: sliding, perMethod: limits),
       returnsNormally,
     );
   });
 
   test('sane specs still limit', () {
     // Guards the obvious wrong fix: validating everything into oblivion.
-    final limiter = RpcRateLimiter(
-      global: RateLimit.tokenBucket(
+    final limiter = RpcRateLimitInterceptor(
+      global: RpcRateLimit.tokenBucket(
         max: 5,
         window: const Duration(seconds: 30),
       ),

@@ -40,7 +40,7 @@ import 'protocol.dart';
 /// deliberately does NOT implement the whole of `StreamController`, whose
 /// settable `onListen` this type uses internally to flush the buffer: exposing
 /// it would let a caller override the flush and break the invariant.
-class BufferedBroadcastController<T> implements StreamSink<T> {
+class RpcBufferedBroadcastController<T> implements StreamSink<T> {
   /// Creates a buffered broadcast controller.
   ///
   /// [maxPendingEvents] bounds how many events are retained while no listener
@@ -58,7 +58,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
   /// transport below has already routed that call's next frame. The buffered
   /// events are replayed one microtask after the first listen, so none is
   /// delivered from inside `listen()`.
-  BufferedBroadcastController({
+  RpcBufferedBroadcastController({
     this.maxPendingEvents = 4096,
     this.maxPendingBytes = 16 * 1024 * 1024,
     this.sizeOf,
@@ -238,7 +238,7 @@ class BufferedBroadcastController<T> implements StreamSink<T> {
       _controller.addError(
         RpcStatusException(
           RpcStatus.dataLoss,
-          'BufferedBroadcastController dropped $dropped event(s): over '
+          'RpcBufferedBroadcastController dropped $dropped event(s): over '
           '$_overflowBound buffered with no listener attached. The stream is '
           'closed; re-establish the connection.',
         ),

@@ -66,7 +66,11 @@ final class _Healthy extends RpcResponderContract {
   }
 }
 
-typedef _Outcome = ({CircuitBreakerState state, int failures, String healthy});
+typedef _Outcome = ({
+  RpcCircuitBreakerState state,
+  int failures,
+  String healthy,
+});
 
 Future<_Outcome> _fiveFailuresThenHealthy(
   RpcStatus status, {
@@ -95,7 +99,7 @@ Future<_Outcome> _fiveFailuresThenHealthy(
       );
       return r.value;
     } catch (e) {
-      return e is CircuitBreakerOpenException ? 'BREAKER OPEN' : '$e';
+      return e is RpcCircuitBreakerOpenException ? 'BREAKER OPEN' : '$e';
     }
   }
 
@@ -129,7 +133,7 @@ void main() {
 
           expect(
             out.state,
-            CircuitBreakerState.closed,
+            RpcCircuitBreakerState.closed,
             reason:
                 'five $name answers are a working server, and opening on them '
                 'blocks every other method on the endpoint',
@@ -162,7 +166,7 @@ void main() {
 
         expect(
           out.state,
-          CircuitBreakerState.open,
+          RpcCircuitBreakerState.open,
           reason:
               'narrowing the default must not disarm the breaker for what it '
               'exists to catch',
@@ -245,7 +249,7 @@ void main() {
         } catch (_) {}
       }
 
-      expect(breaker.state, CircuitBreakerState.open);
+      expect(breaker.state, RpcCircuitBreakerState.open);
     },
     timeout: const Timeout(Duration(seconds: 30)),
   );

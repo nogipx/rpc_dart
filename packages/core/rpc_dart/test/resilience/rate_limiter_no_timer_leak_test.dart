@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// RpcRateLimiter used to sweep stale per-key counters from a Timer.periodic.
+// RpcRateLimitInterceptor used to sweep stale per-key counters from a Timer.periodic.
 // A periodic timer keeps the isolate alive on its own and holds the limiter --
 // and every counter it tracks -- reachable for as long as it runs. A limiter
 // whose owner forgot dispose() therefore leaked permanently, and the process
@@ -18,7 +18,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('RpcRateLimiter holds no background timer', () {
+  group('RpcRateLimitInterceptor holds no background timer', () {
     late RpcCallInfo callContext;
 
     setUp(() {
@@ -40,8 +40,8 @@ void main() {
       runZoned(
         () {
           // The keyed form is the one that used to arm Timer.periodic.
-          RpcRateLimiter(
-            global: RateLimit.slidingWindow(
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.slidingWindow(
               max: 5,
               window: const Duration(seconds: 1),
             ),
@@ -68,8 +68,8 @@ void main() {
     test('stale per-key counters are still evicted, without a timer', () {
       // Injected clock: cleanup must be driven by calls, not by wall time.
       var nowUs = 0;
-      final limiter = RpcRateLimiter(
-        perKeyFallback: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        perKeyFallback: RpcRateLimit.slidingWindow(
           max: 1,
           window: const Duration(seconds: 1),
         ),
@@ -105,8 +105,8 @@ void main() {
     });
 
     test('dispose is optional and idempotent', () {
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 1,
           window: const Duration(seconds: 1),
         ),

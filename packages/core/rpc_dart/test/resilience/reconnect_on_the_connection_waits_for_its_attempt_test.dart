@@ -110,7 +110,7 @@ void main() {
         built.add(t);
         return t;
       },
-      backoff: const FixedBackoff(Duration(milliseconds: 100)),
+      backoff: const RpcFixedBackoff(Duration(milliseconds: 100)),
     );
     addTearDown(connection.dispose);
     connection.connect();

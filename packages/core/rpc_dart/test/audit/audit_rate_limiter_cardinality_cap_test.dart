@@ -16,9 +16,9 @@ const _userId = RpcContextKey<String>('userId');
 void main() {
   test('R2: dynamic key map is capped with LRU eviction', () async {
     const fixedNow = 1000000;
-    final limiter = RpcRateLimiter(
+    final limiter = RpcRateLimitInterceptor(
       perMethod: {
-        'S.M': RateLimit.slidingWindow(
+        'S.M': RpcRateLimit.slidingWindow(
           max: 1,
           window: const Duration(minutes: 1),
         ),

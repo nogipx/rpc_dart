@@ -48,10 +48,13 @@ void main() {
         var nowUs = 0;
         const window = Duration(seconds: 1);
 
-        final limiter = RpcRateLimiter(
+        final limiter = RpcRateLimitInterceptor(
           // Per-method limit of 4 messages / window for the matched method.
           perMethod: {
-            'SyncService.push': RateLimit.slidingWindow(max: 4, window: window),
+            'SyncService.push': RpcRateLimit.slidingWindow(
+              max: 4,
+              window: window,
+            ),
           },
           keyExtractor: (ctx) => ctx.context.getValue(_userId),
           // This test drives per-element metering through a server-stream to

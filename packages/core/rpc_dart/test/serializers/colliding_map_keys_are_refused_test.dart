@@ -70,7 +70,7 @@ List<String> _collidingKeys(int count) {
 }
 
 Uint8List _encodeKeys(List<String> keys) =>
-    CborCodec.encode({for (final k in keys) k: 0});
+    RpcCborCodec.encode({for (final k in keys) k: 0});
 
 void main() {
   group('a map of keys sharing one hashCode is refused', () {
@@ -93,7 +93,7 @@ void main() {
       final bytes = _encodeKeys(_collidingKeys(2000));
       final sw = Stopwatch()..start();
       expect(
-        () => CborCodec.decode(bytes),
+        () => RpcCborCodec.decode(bytes),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -112,18 +112,18 @@ void main() {
       final colliding = _collidingKeys(17);
       final filler = List.generate(80, (i) => 'filler_$i');
       expect(
-        CborCodec.decode(_encodeKeys([...colliding.take(16), ...filler])),
+        RpcCborCodec.decode(_encodeKeys([...colliding.take(16), ...filler])),
         hasLength(96),
       );
       expect(
-        () => CborCodec.decode(_encodeKeys([...colliding, ...filler])),
+        () => RpcCborCodec.decode(_encodeKeys([...colliding, ...filler])),
         throwsA(isA<FormatException>()),
       );
     });
 
     test('GUARD a large map of distinct keys still decodes', () {
       final keys = List.generate(5000, (i) => 'field_$i');
-      final decoded = CborCodec.decode(_encodeKeys(keys));
+      final decoded = RpcCborCodec.decode(_encodeKeys(keys));
       expect(decoded, hasLength(5000));
     });
 
@@ -134,7 +134,7 @@ void main() {
         'c': true,
         'nested': {'x': 10},
       };
-      expect(CborCodec.decode(CborCodec.encode(value)), value);
+      expect(RpcCborCodec.decode(RpcCborCodec.encode(value)), value);
     });
   });
 }

@@ -462,7 +462,7 @@ class _Emitter {
         // directly via CBOR instead of referencing a non-existent
         // `Map<String, dynamic>.fromJson`.
         b.writeln(
-          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encode, fromBytes: CborCodec.decode);',
+          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: RpcCborCodec.encode, fromBytes: RpcCborCodec.decode);',
         );
       } else {
         // Primitive types (String/int/double/bool) have no `fromJson` factory.
@@ -474,11 +474,11 @@ class _Emitter {
         // A double goes through num: dart2js cannot tell 2.0 from 2, so a web
         // peer writes an integral double as a CBOR integer.
         final decoded = info.type.isDartCoreDouble
-            ? '(CborCodec.decodeUnsafe(bytes) as num).toDouble()'
-            : 'CborCodec.decodeUnsafe(bytes) as $typeName';
+            ? '(RpcCborCodec.decodeUnsafe(bytes) as num).toDouble()'
+            : 'RpcCborCodec.decodeUnsafe(bytes) as $typeName';
         b.writeln('  static $typeName $decoder(Uint8List bytes) => $decoded;');
         b.writeln(
-          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: CborCodec.encodeUnsafe, fromBytes: $decoder);',
+          '  static const $codecName = RpcBinaryCodec<$typeName>(toBytes: RpcCborCodec.encodeUnsafe, fromBytes: $decoder);',
         );
       }
     }

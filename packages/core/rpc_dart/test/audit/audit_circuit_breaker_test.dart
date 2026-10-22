@@ -65,7 +65,7 @@ void main() {
       // this assertion fails -> bug CONFIRMED.
       expect(
         cb.state,
-        CircuitBreakerState.open,
+        RpcCircuitBreakerState.open,
         reason:
             'breaker must count errors emitted by the returned stream; '
             'it currently calls _onSuccess() before any item is produced',
@@ -93,7 +93,7 @@ void main() {
 
       expect(
         cb.state,
-        CircuitBreakerState.open,
+        RpcCircuitBreakerState.open,
         reason: 'bidi stream errors must be counted as failures',
       );
     });

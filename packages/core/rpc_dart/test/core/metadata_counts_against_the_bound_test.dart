@@ -20,7 +20,7 @@ import 'package:test/test.dart';
 const _perFrame = 64 * 1024;
 
 int _admit({required bool asMetadata}) {
-  final ctl = BufferedBroadcastController<RpcTransportMessage>(
+  final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
     sizeOf: (m) => m.bufferedBytes,
   );
   for (var i = 0; i < 6000; i++) {

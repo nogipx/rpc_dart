@@ -73,7 +73,7 @@ Future<({RpcStatusException error, int calls})> _call(String method) async {
       )..addInterceptor(
         RpcRetryInterceptor(
           maxAttempts: 3,
-          backoff: const FixedBackoff(Duration(milliseconds: 1)),
+          backoff: const RpcFixedBackoff(Duration(milliseconds: 1)),
         ),
       );
   addTearDown(() async {

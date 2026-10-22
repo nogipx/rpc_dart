@@ -76,7 +76,7 @@ Future<(String, int)> _call({
     caller.addInterceptor(
       RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 10),
         ),
       ),

@@ -91,7 +91,7 @@ SIGTERM or SIGINT, then `stop()`.
 | `RpcCallSpy` | interceptor that records each finished call as an `RpcCallEvent`: `entries`, `callCount`, `successCount`, `errorCount` (cancelled calls count as neither), `callsTo`, `wasCalled`, `reset`; `maxEntries:` caps retention |
 | `RpcFaultInjector` | interceptor: `failMethod`, `failMethodOnce`, `delayMethod`, `removeMethod`, `clear` |
 
-Rate limiting (`RpcRateLimiter`) and the reconnecting client
+Rate limiting (`RpcRateLimitInterceptor`) and the reconnecting client
 (`RpcClientConnection`) live in `package:rpc_dart`, not here. See
 `errors-and-resilience.md`. Pass a limiter in `interceptors:`.
 
@@ -324,8 +324,8 @@ Future<void> main() async {
 
 ## Pitfalls
 
-- These do NOT exist in this package: `RpcClientModule`, `RpcRateLimiter`,
-  `RateLimit`, `RpcClientConnection` (the last three are in `rpc_dart`),
+- These do NOT exist in this package: `RpcClientModule`, `RpcRateLimitInterceptor`,
+  `RpcRateLimit`, `RpcClientConnection` (the last three are in `rpc_dart`),
   `RpcCallSpy.calls`, `callsFor`, `RpcFaultInjector.injectError`,
   `injectDelay`, `clearFault`.
 - `RpcCallSpy` and `RpcFaultInjector` take the service and method as two

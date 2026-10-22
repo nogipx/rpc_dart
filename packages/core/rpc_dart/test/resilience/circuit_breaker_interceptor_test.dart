@@ -23,7 +23,7 @@ void main() {
 
     test('starts in closed state', () {
       final cb = RpcCircuitBreakerInterceptor();
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
       expect(cb.failureCount, 0);
     });
 
@@ -37,7 +37,7 @@ void main() {
       );
 
       expect(result, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('opens after failureThreshold consecutive failures', () async {
@@ -56,7 +56,7 @@ void main() {
         }
       }
 
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
       expect(cb.failureCount, 3);
     });
 
@@ -78,7 +78,7 @@ void main() {
         // expected
       }
 
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
 
       // Next call should fail immediately.
       try {
@@ -87,8 +87,8 @@ void main() {
           'req',
           (ctx, req) async => 'should not reach',
         );
-        fail('Should have thrown CircuitBreakerOpenException');
-      } on CircuitBreakerOpenException catch (e) {
+        fail('Should have thrown RpcCircuitBreakerOpenException');
+      } on RpcCircuitBreakerOpenException catch (e) {
         expect(e.retryAfter, isNotNull);
       }
     });
@@ -110,7 +110,7 @@ void main() {
       } on RpcException {
         // expected
       }
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
 
       // Wait for reset timeout.
       await Future<void>.delayed(Duration(milliseconds: 80));
@@ -123,7 +123,7 @@ void main() {
       );
 
       expect(result, 'recovered');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('half-open probe failure reopens circuit', () async {
@@ -158,7 +158,7 @@ void main() {
         // expected
       }
 
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
     });
 
     test('success resets failure count', () async {
@@ -186,7 +186,7 @@ void main() {
         (ctx, req) async => 'ok',
       );
       expect(cb.failureCount, 0);
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('cancellation does not count as failure', () async {
@@ -202,7 +202,7 @@ void main() {
         // expected
       }
 
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
       expect(cb.failureCount, 0);
     });
 
@@ -223,7 +223,7 @@ void main() {
       } on RpcException {
         // expected
       }
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
 
       // Critical error — counted.
       try {
@@ -236,7 +236,7 @@ void main() {
       } on RpcException {
         // expected
       }
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
     });
 
     test('manual reset', () async {
@@ -252,10 +252,10 @@ void main() {
       } on RpcException {
         // expected
       }
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
 
       cb.reset();
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
       expect(cb.failureCount, 0);
     });
   });

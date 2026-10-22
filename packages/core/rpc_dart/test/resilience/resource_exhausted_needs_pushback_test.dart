@@ -71,7 +71,7 @@ Future<({List<String> results, int ran, int attempts})> _run(
   final caller = RpcCallerEndpoint(transport: client)
     ..addInterceptor(
       RpcRetryInterceptor(
-        backoff: const FixedBackoff(Duration(milliseconds: 350)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 350)),
       ),
     );
 
@@ -120,8 +120,8 @@ void main() {
   test('a rate-limit refusal is retried', () async {
     final r = await _run(
       const RpcSecurityPolicy(),
-      serverInterceptor: RpcRateLimiter(
-        global: const RateLimit.tokenBucket(
+      serverInterceptor: RpcRateLimitInterceptor(
+        global: const RpcRateLimit.tokenBucket(
           max: 1,
           window: Duration(milliseconds: 300),
         ),
@@ -155,14 +155,14 @@ void main() {
       final e = await attempt(
         RpcStatusException(RpcStatus.resourceExhausted, 'too large'),
       );
-      expect(e, isNot(isA<CircuitBreakerOpenException>()));
+      expect(e, isNot(isA<RpcCircuitBreakerOpenException>()));
     }
     for (var i = 0; i < 2; i++) {
       await attempt(RpcStatusException.atCapacity('busy'));
     }
     expect(
       await attempt(RpcStatusException.atCapacity('busy')),
-      isA<CircuitBreakerOpenException>(),
+      isA<RpcCircuitBreakerOpenException>(),
       reason: 'capacity refusals still count',
     );
   });

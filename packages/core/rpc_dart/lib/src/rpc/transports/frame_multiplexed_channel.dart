@@ -25,8 +25,8 @@ class RpcFrameMultiplexedChannel extends IRpcMultiplexedChannel {
   /// loses a frame today — `fromChannel` builds channel and transport in one
   /// expression — but that is an ordering property of a constructor, not an
   /// invariant, and this type is public and documented for direct construction.
-  final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
-      BufferedBroadcastController<RpcTransportMessage>(
+  final RpcBufferedBroadcastController<RpcTransportMessage> _incomingCtl =
+      RpcBufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
       );
   StreamSubscription<Uint8List>? _channelSub;

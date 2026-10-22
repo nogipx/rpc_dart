@@ -112,12 +112,12 @@ void main() {
 
   test('CBOR refuses only with FormatException', () {
     final seeds = [
-      CborCodec.encode({
+      RpcCborCodec.encode({
         'a': 1,
         'b': 'text',
         'c': [1, 2.5, true, null],
       }),
-      CborCodec.encode({
+      RpcCborCodec.encode({
         'n': {
           'x': Uint8List.fromList([1, 2]),
           'y': -5,
@@ -125,8 +125,11 @@ void main() {
       }),
       codec.serialize('hello'.rpc),
     ];
-    expect(_fuzz(seeds, CborCodec.decode, _formatOnly), isEmpty);
-    expect(_fuzz(seeds, CborCodec.decodeUnsafe, _formatOnly, seed: 2), isEmpty);
+    expect(_fuzz(seeds, RpcCborCodec.decode, _formatOnly), isEmpty);
+    expect(
+      _fuzz(seeds, RpcCborCodec.decodeUnsafe, _formatOnly, seed: 2),
+      isEmpty,
+    );
   });
 
   test('the gRPC parser refuses only with RpcException, at any chunking', () {

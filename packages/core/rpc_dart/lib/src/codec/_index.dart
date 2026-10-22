@@ -7,7 +7,7 @@ import 'dart:typed_data';
 
 import 'special_cbor.dart';
 
-export 'special_cbor.dart' show CborCodec;
+export 'special_cbor.dart' show RpcCborCodec;
 
 part 'codec.dart';
 part 'binary_codec.dart';

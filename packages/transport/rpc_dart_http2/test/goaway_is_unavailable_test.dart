@@ -133,7 +133,7 @@ void main() {
     final connection = RpcClientConnection(
       transportFactory: (_) =>
           RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: socket.port),
-      backoff: const ExponentialBackoff(
+      backoff: const RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 20),
         maxDelay: Duration(milliseconds: 50),
         jitter: false,
@@ -150,7 +150,7 @@ void main() {
       ..addInterceptor(
         RpcRetryInterceptor(
           maxAttempts: 3,
-          backoff: const ExponentialBackoff(
+          backoff: const RpcExponentialBackoff(
             baseDelay: Duration(milliseconds: 20),
             maxDelay: Duration(milliseconds: 50),
           ),

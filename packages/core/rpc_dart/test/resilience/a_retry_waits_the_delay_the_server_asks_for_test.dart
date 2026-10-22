@@ -32,7 +32,7 @@ void main() {
     final starts = <Duration>[];
     final retry = RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: const FixedBackoff(Duration(milliseconds: 10)),
+      backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
     );
     await expectLater(
       retry.interceptUnary<int, int>(callWith(context), 0, (ctx, req) async {

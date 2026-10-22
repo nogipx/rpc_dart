@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// BufferedBroadcastController bounded its pending queue by EVENT COUNT alone
+// RpcBufferedBroadcastController bounded its pending queue by EVENT COUNT alone
 // (maxPendingEvents, default 4096) while its doc claimed "memory stays bounded
 // instead of growing without limit". Nothing measured bytes, and the
 // neighbouring limit -- RpcSecurityPolicy.maxMessageLengthBytes -- bounds ONE
@@ -32,7 +32,7 @@ RpcTransportMessage _msg(int bytes) =>
 void main() {
   group('WITNESS: the pending queue is bounded by BYTES', () {
     test('stops at maxPendingBytes long before maxPendingEvents', () {
-      final ctl = BufferedBroadcastController<RpcTransportMessage>(
+      final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
         maxPendingEvents: 4096,
         maxPendingBytes: 1024 * _k, // 1 MiB
         sizeOf: (m) => m.bufferedBytes,
@@ -55,7 +55,7 @@ void main() {
 
     test('scales with the item size, which is the whole point', () {
       // Same byte budget, items four times larger -> a quarter as many held.
-      final ctl = BufferedBroadcastController<RpcTransportMessage>(
+      final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
         maxPendingBytes: 1024 * _k,
         sizeOf: (m) => m.bufferedBytes,
       );
@@ -73,7 +73,7 @@ void main() {
       () async {
         // The byte bound reuses the count bound's failure path rather than
         // inventing one: survivors, then a StateError, then close.
-        final ctl = BufferedBroadcastController<RpcTransportMessage>(
+        final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
           maxPendingBytes: 128 * _k,
           sizeOf: (m) => m.bufferedBytes,
         );
@@ -113,7 +113,7 @@ void main() {
 
   group('GUARD: nothing else changes', () {
     test('without a sizer the count bound behaves exactly as before', () {
-      final ctl = BufferedBroadcastController<RpcTransportMessage>(
+      final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
         maxPendingEvents: 32,
       );
       addTearDown(ctl.close);
@@ -130,7 +130,7 @@ void main() {
     });
 
     test('a listener attached retains nothing at any size', () async {
-      final ctl = BufferedBroadcastController<RpcTransportMessage>(
+      final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
         maxPendingBytes: 1024 * _k,
         sizeOf: (m) => m.bufferedBytes,
       );
@@ -152,7 +152,7 @@ void main() {
     test('the leading frames a cold connection needs still arrive', () async {
       // What the queue EXISTS for: a handful of frames before the pipeline
       // subscribes must still be replayed in order.
-      final ctl = BufferedBroadcastController<RpcTransportMessage>(
+      final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
         maxPendingBytes: 1024 * _k,
         sizeOf: (m) => m.bufferedBytes,
       );

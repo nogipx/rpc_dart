@@ -59,7 +59,7 @@ void main() {
         }
         expect(
           cb.state,
-          CircuitBreakerState.open,
+          RpcCircuitBreakerState.open,
           reason: 'breaker should be open after 3 failures',
         );
 
@@ -72,7 +72,7 @@ void main() {
         // If R1 is real, the breaker is wrongly back to CLOSED here.
         expect(
           cb.state,
-          CircuitBreakerState.open,
+          RpcCircuitBreakerState.open,
           reason: 'a stale success must not re-close an open breaker',
         );
       },

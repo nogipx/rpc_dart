@@ -41,7 +41,7 @@ void main() {
     test('retries a transient status up to maxAttempts', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -65,7 +65,7 @@ void main() {
     test('default does NOT retry a generic application error', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -90,7 +90,7 @@ void main() {
     test('default does NOT retry a non-transient status code', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -114,7 +114,7 @@ void main() {
     test('default retries RESOURCE_EXHAUSTED with pushback', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -138,7 +138,7 @@ void main() {
     test('default does not retry a bare RESOURCE_EXHAUSTED', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -162,7 +162,7 @@ void main() {
     test('succeeds on retry after transient failure', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -185,7 +185,7 @@ void main() {
     test('does not retry RpcCancelledException', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -209,7 +209,7 @@ void main() {
     test('does not retry RpcDeadlineExceededException', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -233,7 +233,7 @@ void main() {
     test('respects custom retryOn predicate', () async {
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
         retryOn: (e) => e is RpcException && e.message == 'retry-me',
       );
       var callCount = 0;
@@ -280,7 +280,7 @@ void main() {
 
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: FixedBackoff(Duration(milliseconds: 10)),
+        backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -314,7 +314,7 @@ void main() {
 
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: const FixedBackoff(Duration(seconds: 5)),
+        backoff: const RpcFixedBackoff(Duration(seconds: 5)),
       );
       var callCount = 0;
       final stopwatch = Stopwatch()..start();
@@ -349,7 +349,7 @@ void main() {
 
       final interceptor = RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       var callCount = 0;
 
@@ -408,7 +408,7 @@ void main() {
       caller.addInterceptor(
         RpcRetryInterceptor(
           maxAttempts: 4,
-          backoff: FixedBackoff(Duration(milliseconds: 10)),
+          backoff: RpcFixedBackoff(Duration(milliseconds: 10)),
         ),
       );
 

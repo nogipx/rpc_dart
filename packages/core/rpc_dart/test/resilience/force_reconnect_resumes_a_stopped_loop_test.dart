@@ -99,7 +99,7 @@ void main() {
           if (calls == 1) throw StateError('first connect fails');
           return _T();
         },
-        backoff: const FixedBackoff(Duration(milliseconds: 300)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 300)),
       );
       addTearDown(conn.dispose);
 

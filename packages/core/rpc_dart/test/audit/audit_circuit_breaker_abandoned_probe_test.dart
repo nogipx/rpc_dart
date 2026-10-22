@@ -60,7 +60,7 @@ void main() {
       );
 
       await tripToOpen(cb);
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
 
       // Wait for the reset window so the next call transitions to half-open.
       await Future<void>.delayed(const Duration(milliseconds: 40));
@@ -74,7 +74,7 @@ void main() {
       );
       // Intentionally do NOT listen `probeStream` (abandoned by the caller).
       expect(probeStream, isA<Stream<String>>());
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       // Complete the source. With the fix, eager subscription observes the done
       // event and releases the probe gate even though nobody listened.
@@ -85,7 +85,7 @@ void main() {
       // Probe resolved successfully -> circuit should be closed and admit work.
       expect(
         cb.state,
-        CircuitBreakerState.closed,
+        RpcCircuitBreakerState.closed,
         reason: 'abandoned probe must be released on source completion',
       );
 
@@ -96,7 +96,7 @@ void main() {
         (ctx, req) async => 'ok',
       );
       expect(result, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('counts failures from an abandoned failing stream probe', () async {
@@ -117,13 +117,13 @@ void main() {
         ),
       );
       // Do not listen.
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(
         cb.state,
-        CircuitBreakerState.open,
+        RpcCircuitBreakerState.open,
         reason:
             'abandoned failing probe must be counted and reopen the breaker',
       );
@@ -152,7 +152,7 @@ void main() {
           'req',
           (ctx, req) async => source.stream,
         );
-        expect(cb.state, CircuitBreakerState.halfOpen);
+        expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
         // After the abandon timeout, the gate is force-released.
         //
@@ -164,7 +164,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 60));
         expect(
           cb.state,
-          CircuitBreakerState.halfOpen,
+          RpcCircuitBreakerState.halfOpen,
           reason: 'abandon safety timer must release a wedged half-open probe',
         );
 
@@ -183,7 +183,11 @@ void main() {
           isTrue,
           reason: 'a released gate must let the next call probe for real',
         );
-        expect(cb.state, CircuitBreakerState.closed, reason: 'that one passed');
+        expect(
+          cb.state,
+          RpcCircuitBreakerState.closed,
+          reason: 'that one passed',
+        );
 
         expect(probeStream, isA<Stream<String>>());
       },

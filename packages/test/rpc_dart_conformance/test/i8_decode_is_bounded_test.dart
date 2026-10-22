@@ -124,7 +124,7 @@ void main() {
         final (status, _) = await _call(
           caller,
           CallShape.unary,
-          Doc.request(id: id, items: 2 * CborCodec.defaultMaxItems),
+          Doc.request(id: id, items: 2 * RpcCborCodec.defaultMaxItems),
         );
         expect(status, RpcStatus.resourceExhausted);
         expect(rig.probe.has('received', id), isFalse);

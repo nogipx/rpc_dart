@@ -62,7 +62,7 @@ filtering in `toJson`, or to have `maxMessageLengthBytes` (see
 | `IRpcCodec<T>` | Interface: `Uint8List serialize(T)`, `T deserialize(Uint8List)`. Implement for any format. `deserialize` may be given a VIEW into a larger buffer: slice it with `Uint8List.sublistView`, or copy it with `Uint8List.fromList`, never with `sublist`. Under dart2wasm in a browser the bytes can be JS-backed, and `sublist` on such a view at a non-zero offset counts the offset twice (an SDK bug), returning wrong bytes or throwing. |
 | `RpcCodec<T extends IRpcSerializable>` | CBOR of `toJson()`. `const RpcCodec(fromJson)`; the decoder is required. |
 | `RpcBinaryCodec<T>` | Adapter: `const RpcBinaryCodec(toBytes:, fromBytes:)`. Use for protobuf or any existing byte format; `T` need not implement `IRpcSerializable`. |
-| `CborCodec` | Static `encode(Map<String, dynamic>)` / `decode(Uint8List, {int? maxItems})` used by `RpcCodec`. A decode past `maxItems` data items throws a `FormatException`; without the argument the bound is the endpoint's `RpcSecurityPolicy.maxDecodedItems` inside an endpoint and `CborCodec.defaultMaxItems` elsewhere. |
+| `RpcCborCodec` | Static `encode(Map<String, dynamic>)` / `decode(Uint8List, {int? maxItems})` used by `RpcCodec`. A decode past `maxItems` data items throws a `FormatException`; without the argument the bound is the endpoint's `RpcSecurityPolicy.maxDecodedItems` inside an endpoint and `RpcCborCodec.defaultMaxItems` elsewhere. |
 | `approxJsonBytes(Object?)` | Function: the approximate size of a value's JSON form without encoding it (string code units, keys included, plus 8 per other scalar; an `IRpcSerializable` counts as its `toJson()`). Use it to bound a buffer of messages in bytes. |
 
 ```dart

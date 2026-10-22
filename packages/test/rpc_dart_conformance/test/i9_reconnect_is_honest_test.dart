@@ -42,7 +42,7 @@ const _notApplicable = <String, String>{
       'NOT APPLICABLE (I-9): no HTTP/1.1 connection exists before a request',
 };
 
-const _backoff = ExponentialBackoff(
+const _backoff = RpcExponentialBackoff(
   baseDelay: Duration(milliseconds: 20),
   maxDelay: Duration(milliseconds: 100),
   jitter: false,

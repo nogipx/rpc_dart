@@ -331,13 +331,13 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  group('RpcRateLimiter', () {
+  group('RpcRateLimitInterceptor', () {
     test('allows calls within limit', () async {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
-            global: RateLimit.slidingWindow(
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.slidingWindow(
               max: 5,
               window: Duration(seconds: 1),
             ),
@@ -355,8 +355,8 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
-            global: RateLimit.slidingWindow(
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.slidingWindow(
               max: 2,
               window: Duration(seconds: 10),
             ),
@@ -383,9 +383,9 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
+          RpcRateLimitInterceptor(
             perMethod: {
-              'EchoService.ping': RateLimit.slidingWindow(
+              'EchoService.ping': RpcRateLimit.slidingWindow(
                 max: 1,
                 window: Duration(seconds: 10),
               ),
@@ -416,9 +416,9 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
+          RpcRateLimitInterceptor(
             perService: {
-              'EchoService': RateLimit.slidingWindow(
+              'EchoService': RpcRateLimit.slidingWindow(
                 max: 2,
                 window: Duration(seconds: 10),
               ),
@@ -448,16 +448,16 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
+          RpcRateLimitInterceptor(
             perService: {
-              'EchoService': RateLimit.slidingWindow(
+              'EchoService': RpcRateLimit.slidingWindow(
                 max: 10,
                 window: Duration(seconds: 10),
               ),
             },
             perMethod: {
               // Stricter limit on ping — should win over service limit
-              'EchoService.ping': RateLimit.slidingWindow(
+              'EchoService.ping': RpcRateLimit.slidingWindow(
                 max: 1,
                 window: Duration(seconds: 10),
               ),
@@ -488,14 +488,14 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
-            global: RateLimit.slidingWindow(
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.slidingWindow(
               max: 10,
               window: Duration(seconds: 10),
             ),
             perService: {
               // Stricter limit on EchoService — should win over global
-              'EchoService': RateLimit.slidingWindow(
+              'EchoService': RpcRateLimit.slidingWindow(
                 max: 1,
                 window: Duration(seconds: 10),
               ),
@@ -522,8 +522,8 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
-            global: RateLimit.tokenBucket(
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.tokenBucket(
               max: 2,
               window: Duration(seconds: 10),
               burst: 2,
@@ -551,8 +551,8 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
-            global: RateLimit.tokenBucket(
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.tokenBucket(
               max: 1,
               window: Duration(seconds: 1),
               burst: 5,
@@ -584,8 +584,8 @@ void main() {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
         interceptors: [
-          RpcRateLimiter(
-            global: RateLimit.tokenBucket(max: 1, window: window, burst: 1),
+          RpcRateLimitInterceptor(
+            global: RpcRateLimit.tokenBucket(max: 1, window: window, burst: 1),
           ),
         ],
       );
@@ -612,7 +612,7 @@ void main() {
     test('no limiter configured passes all calls through', () async {
       final app = await RpcTestApp.start(
         modules: [EchoModule()],
-        interceptors: [RpcRateLimiter()],
+        interceptors: [RpcRateLimitInterceptor()],
       );
       final client = EchoCallerContract(app.caller);
       for (var i = 0; i < 20; i++) {
@@ -630,9 +630,9 @@ void main() {
       );
 
       test('different keys have independent counters', () async {
-        final limiter = RpcRateLimiter(
+        final limiter = RpcRateLimitInterceptor(
           perMethod: {
-            'EchoService.ping': RateLimit.slidingWindow(
+            'EchoService.ping': RpcRateLimit.slidingWindow(
               max: 2,
               window: Duration(seconds: 10),
             ),
@@ -663,14 +663,14 @@ void main() {
       });
 
       test('null key falls through to global', () async {
-        final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 2,
             window: Duration(seconds: 10),
           ),
           perMethod: {
             // Would be strict limit per key, but key will be null → skipped
-            'EchoService.ping': RateLimit.slidingWindow(
+            'EchoService.ping': RpcRateLimit.slidingWindow(
               max: 1,
               window: Duration(seconds: 10),
             ),
@@ -699,9 +699,9 @@ void main() {
       test(
         'perService per-key: shared budget across methods for same key',
         () async {
-          final limiter = RpcRateLimiter(
+          final limiter = RpcRateLimitInterceptor(
             perService: {
-              'EchoService': RateLimit.slidingWindow(
+              'EchoService': RpcRateLimit.slidingWindow(
                 max: 2,
                 window: Duration(seconds: 10),
               ),
@@ -737,15 +737,15 @@ void main() {
       test(
         'perMethod per-key takes priority over perService per-key',
         () async {
-          final limiter = RpcRateLimiter(
+          final limiter = RpcRateLimitInterceptor(
             perService: {
-              'EchoService': RateLimit.slidingWindow(
+              'EchoService': RpcRateLimit.slidingWindow(
                 max: 10,
                 window: Duration(seconds: 10),
               ),
             },
             perMethod: {
-              'EchoService.ping': RateLimit.slidingWindow(
+              'EchoService.ping': RpcRateLimit.slidingWindow(
                 max: 1,
                 window: Duration(seconds: 10),
               ),
@@ -778,8 +778,8 @@ void main() {
       test('global is always shared regardless of keyExtractor', () async {
         // No perMethod/perService — all calls fall through to global.
         // Global is a single shared counter even when keyExtractor is set.
-        final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 3,
             window: Duration(seconds: 10),
           ),
@@ -808,8 +808,8 @@ void main() {
       });
 
       test('perKeyFallback applies per (key, method) for any method', () async {
-        final limiter = RpcRateLimiter(
-          perKeyFallback: RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          perKeyFallback: RpcRateLimit.slidingWindow(
             max: 2,
             window: Duration(seconds: 10),
           ),
@@ -844,14 +844,14 @@ void main() {
       test(
         'perKeyFallback is overridden by perMethod for matching methods',
         () async {
-          final limiter = RpcRateLimiter(
-            perKeyFallback: RateLimit.slidingWindow(
+          final limiter = RpcRateLimitInterceptor(
+            perKeyFallback: RpcRateLimit.slidingWindow(
               max: 10,
               window: Duration(seconds: 10),
             ),
             perMethod: {
               // Stricter limit for ping — overrides perKeyFallback
-              'EchoService.ping': RateLimit.slidingWindow(
+              'EchoService.ping': RpcRateLimit.slidingWindow(
                 max: 1,
                 window: Duration(seconds: 10),
               ),
@@ -882,12 +882,12 @@ void main() {
       );
 
       test('perKeyFallback null key falls through to global', () async {
-        final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 2,
             window: Duration(seconds: 10),
           ),
-          perKeyFallback: RateLimit.slidingWindow(
+          perKeyFallback: RpcRateLimit.slidingWindow(
             max: 1,
             window: Duration(seconds: 10),
           ),

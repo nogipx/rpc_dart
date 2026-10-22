@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 // Feature #2: in halfOpen, only ONE probe may be admitted. Concurrent probes
-// must be rejected (CircuitBreakerOpenException) until the in-flight probe
+// must be rejected (RpcCircuitBreakerOpenException) until the in-flight probe
 // resolves to success (close) or failure (reopen).
 
 import 'dart:async';
@@ -47,7 +47,7 @@ void main() {
       );
 
       await trip(cb);
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       // First call transitions to halfOpen and is admitted as the single probe.
@@ -60,7 +60,7 @@ void main() {
         (ctx, req) => probeGate.future,
       );
 
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       // Second concurrent call must be rejected while the probe is in flight.
       await expectLater(
@@ -69,13 +69,13 @@ void main() {
           'req',
           (ctx, req) async => 'should-not-run',
         ),
-        throwsA(isA<CircuitBreakerOpenException>()),
+        throwsA(isA<RpcCircuitBreakerOpenException>()),
       );
 
       // Resolve the probe successfully -> circuit closes.
       probeGate.complete('ok');
       expect(await probe, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('probe failure releases the gate and reopens', () async {
@@ -98,7 +98,7 @@ void main() {
       } on RpcException {
         // expected
       }
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
 
       // After another reset window, a fresh probe is admitted again.
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -108,7 +108,7 @@ void main() {
         (ctx, req) async => 'recovered',
       );
       expect(result, 'recovered');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
   });
 }

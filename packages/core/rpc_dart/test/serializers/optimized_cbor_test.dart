@@ -91,10 +91,10 @@ void main() {
         };
 
         // Encode with the fast encoder.
-        final fastEncoded = CborCodec.encode(testData);
+        final fastEncoded = RpcCborCodec.encode(testData);
 
         // Decode with the fast decoder.
-        final fastDecoded = CborCodec.decode(fastEncoded);
+        final fastDecoded = RpcCborCodec.decode(fastEncoded);
 
         // Everything must come back identical.
         expect(fastDecoded['integers'], equals(testData['integers']));
@@ -125,8 +125,8 @@ void main() {
           },
         };
 
-        final fastEncoded = CborCodec.encode(testData);
-        final unsafeEncoded = CborCodec.encodeUnsafe(testData);
+        final fastEncoded = RpcCborCodec.encode(testData);
+        final unsafeEncoded = RpcCborCodec.encodeUnsafe(testData);
 
         // Both encoders must produce identical bytes.
         expect(fastEncoded, equals(unsafeEncoded));
@@ -136,8 +136,8 @@ void main() {
     group('Edge Cases and Error Handling', () {
       test('Empty map handling', () {
         final emptyMap = <String, dynamic>{};
-        final encoded = CborCodec.encode(emptyMap);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(emptyMap);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded, isA<Map<String, dynamic>>());
         expect(decoded.isEmpty, isTrue);
@@ -150,8 +150,8 @@ void main() {
           'large_negative': -4294967295,
         };
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded['max_safe_int'], equals(9007199254740991));
         expect(decoded['large_positive'], equals(4294967295));
@@ -167,8 +167,8 @@ void main() {
           'mixed': 'Hello 🌍 Мир 世界',
         };
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         testData.forEach((key, value) {
           expect(decoded[key], equals(value));
@@ -179,8 +179,8 @@ void main() {
         final longString = 'A' * 100000; // A 100 KB string.
         final testData = {'long_string': longString};
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded['long_string'], equals(longString));
         expect(decoded['long_string'].length, equals(100000));
@@ -190,8 +190,8 @@ void main() {
         final largeArray = List.generate(10000, (i) => i);
         final testData = {'large_array': largeArray};
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded['large_array'], equals(largeArray));
         expect(decoded['large_array'].length, equals(10000));
@@ -210,8 +210,8 @@ void main() {
         }
 
         final deepData = createNestedMap(50); // 50 levels deep.
-        final encoded = CborCodec.encode(deepData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(deepData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         // Check several depths, not just the top.
         expect(decoded['level'], equals(50));
@@ -231,8 +231,8 @@ void main() {
         );
         final testData = {'binary': largeBinary};
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded['binary'], equals(largeBinary));
         expect(decoded['binary'].length, equals(50000));
@@ -244,7 +244,7 @@ void main() {
         final largeData = generateRandomData(3, 100); // 3 levels, 100 keys.
 
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(largeData);
+        final encoded = RpcCborCodec.encode(largeData);
         stopwatch.stop();
 
         print('Large data encoding took: ${stopwatch.elapsedMilliseconds}ms');
@@ -259,10 +259,10 @@ void main() {
 
       test('Large data decoding performance', () {
         final largeData = generateRandomData(3, 100);
-        final encoded = CborCodec.encode(largeData);
+        final encoded = RpcCborCodec.encode(largeData);
 
         final stopwatch = Stopwatch()..start();
-        final decoded = CborCodec.decode(encoded);
+        final decoded = RpcCborCodec.decode(encoded);
         stopwatch.stop();
 
         print('Large data decoding took: ${stopwatch.elapsedMilliseconds}ms');
@@ -276,7 +276,7 @@ void main() {
         final testData = generateRandomData(2, 50);
 
         // CBOR
-        final cborEncoded = CborCodec.encode(testData);
+        final cborEncoded = RpcCborCodec.encode(testData);
 
         // JSON, for comparison.
         final jsonEncoded = utf8.encode(jsonEncode(testData));
@@ -297,9 +297,9 @@ void main() {
         final testData = {'c': 3, 'a': 1, 'b': 2};
 
         // Encode the same data several times.
-        final encoded1 = CborCodec.encode(testData);
-        final encoded2 = CborCodec.encode(testData);
-        final encoded3 = CborCodec.encode(testData);
+        final encoded1 = RpcCborCodec.encode(testData);
+        final encoded2 = RpcCborCodec.encode(testData);
+        final encoded3 = RpcCborCodec.encode(testData);
 
         // Every run must produce the same bytes.
         expect(encoded1, equals(encoded2));
@@ -319,8 +319,8 @@ void main() {
         ];
 
         final testData = {'mixed_array': mixedArray};
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         final result = decoded['mixed_array'] as List;
         expect(result[0], equals(1));
@@ -344,8 +344,8 @@ void main() {
           'very_large': 1.0e+100,
         };
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded['positive_infinity'], equals(double.infinity));
         expect(decoded['negative_infinity'], equals(double.negativeInfinity));
@@ -368,8 +368,8 @@ void main() {
           },
         };
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(decoded, isA<Map<String, dynamic>>());
         expect(decoded['nested'], isA<Map<String, dynamic>>());
@@ -384,7 +384,7 @@ void main() {
         // keys), so the encoder rejects them instead of coercing via toString.
         final testDataWithIntKeys = {1: 'one', 2: 'two', 3: 'three'};
         expect(
-          () => CborCodec.encodeUnsafe(testDataWithIntKeys),
+          () => RpcCborCodec.encodeUnsafe(testDataWithIntKeys),
           throwsArgumentError,
         );
       });
@@ -401,8 +401,8 @@ void main() {
         // 1000 encode/decode cycles.
         for (int i = 0; i < 1000; i++) {
           data['counter'] = i;
-          final encoded = CborCodec.encode(data);
-          data = Map<String, dynamic>.from(CborCodec.decode(encoded));
+          final encoded = RpcCborCodec.encode(data);
+          data = Map<String, dynamic>.from(RpcCborCodec.decode(encoded));
         }
 
         expect(data['counter'], equals(999));
@@ -426,12 +426,12 @@ void main() {
         // Encode and decode every one of them.
         final encodedObjects = <Uint8List>[];
         for (final obj in largeObjects) {
-          encodedObjects.add(CborCodec.encode(obj));
+          encodedObjects.add(RpcCborCodec.encode(obj));
         }
 
         final decodedObjects = <Map<String, dynamic>>[];
         for (final encoded in encodedObjects) {
-          decodedObjects.add(CborCodec.decode(encoded));
+          decodedObjects.add(RpcCborCodec.decode(encoded));
         }
 
         // Every id must have survived.
@@ -453,8 +453,8 @@ void main() {
             final localData = Map<String, dynamic>.from(testData);
             localData['thread_id'] = i;
 
-            final encoded = CborCodec.encode(localData);
-            final decoded = CborCodec.decode(encoded);
+            final encoded = RpcCborCodec.encode(localData);
+            final decoded = RpcCborCodec.decode(encoded);
 
             expect(decoded['thread_id'], equals(i));
           }());

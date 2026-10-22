@@ -72,7 +72,7 @@ double _pow2(int n) {
 
 /// CBOR (Concise Binary Object Representation) implementation for RPC.
 /// Format reference: RFC 7049 https://tools.ietf.org/html/rfc7049
-abstract interface class CborCodec {
+abstract interface class RpcCborCodec {
   /// Major type constants.
   static const int _majorTypeUnsignedInt = 0;
   static const int _majorTypeNegativeInt = 1;
@@ -182,11 +182,11 @@ abstract interface class CborCodec {
 int? _scopedMaxItems;
 
 /// Runs [decode] with [maxItems] as the item budget of every
-/// [CborCodec.decode] and [CborCodec.decodeUnsafe] inside it that does not
+/// [RpcCborCodec.decode] and [RpcCborCodec.decodeUnsafe] inside it that does not
 /// pass its own.
 ///
 /// This is how an endpoint's policy reaches a codec it did not build: a
-/// generated codec calls `CborCodec.decode` as a tear-off, and a codec's
+/// generated codec calls `RpcCborCodec.decode` as a tear-off, and a codec's
 /// `deserialize` takes no policy. A decode is synchronous, so nothing else
 /// runs while the budget is in force.
 T withCborItemBudget<T>(int maxItems, T Function() decode) {
@@ -259,12 +259,12 @@ class _FastCborReader {
   /// dart2js (IEEE-754 double). Decoded integers above this are rejected so the
   /// result never silently differs between platforms. The writer is pinned to
   /// the same bound, so this only ever fires on bytes from a foreign encoder.
-  static const int _maxSafeInteger = CborCodec._maxSafeInteger;
+  static const int _maxSafeInteger = RpcCborCodec._maxSafeInteger;
 
   final Uint8List _bytes;
   int _offset = 0;
 
-  /// Data items this decode may still produce. See [CborCodec.defaultMaxItems].
+  /// Data items this decode may still produce. See [RpcCborCodec.defaultMaxItems].
   int _itemsLeft;
   final int _maxItems;
 
@@ -307,7 +307,7 @@ class _FastCborReader {
     final majorType = byte >> 5;
     final additionalInfo = byte & 0x1F;
 
-    if (majorType != CborCodec._majorTypeMap) {
+    if (majorType != RpcCborCodec._majorTypeMap) {
       throw FormatException('Expected map, got major type: $majorType');
     }
 
@@ -337,7 +337,7 @@ class _FastCborReader {
     _checkDepth(depth);
     final result = <String, dynamic>{};
 
-    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+    if (additionalInfo == RpcCborCodec._additionalInfoIndefiniteLength) {
       // Length unknown, so track collisions from the first key: an
       // indefinite-length map is the shape that can grow without a declared
       // bound.
@@ -380,16 +380,16 @@ class _FastCborReader {
     final majorType = byte >> 5;
     final additionalInfo = byte & 0x1F;
 
-    if (majorType != CborCodec._majorTypeTextString) {
+    if (majorType != RpcCborCodec._majorTypeTextString) {
       throw FormatException('Expected text string, got major type: $majorType');
     }
 
-    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+    if (additionalInfo == RpcCborCodec._additionalInfoIndefiniteLength) {
       // Indefinite-length text string: definite-length chunks until a break.
       final buffer = StringBuffer();
       while (!_consumeBreakMarker('indefinite-length text string')) {
         final chunkByte = _bytes[_offset];
-        if ((chunkByte >> 5) != CborCodec._majorTypeTextString) {
+        if ((chunkByte >> 5) != RpcCborCodec._majorTypeTextString) {
           throw FormatException(
             'Indefinite-length text string contains a non-text-string chunk',
           );
@@ -399,7 +399,8 @@ class _FastCborReader {
         // this recursion. Each nested 0x7F consumes one byte and adds a frame,
         // so a run of them would blow the native stack (StackOverflowError,
         // not the FormatException callers handle) on attacker-supplied bytes.
-        if ((chunkByte & 0x1F) == CborCodec._additionalInfoIndefiniteLength) {
+        if ((chunkByte & 0x1F) ==
+            RpcCborCodec._additionalInfoIndefiniteLength) {
           throw FormatException(
             'Indefinite-length text string contains a nested '
             'indefinite-length chunk',
@@ -446,28 +447,28 @@ class _FastCborReader {
 
     // Optimized for the most common types.
     switch (majorType) {
-      case CborCodec._majorTypeUnsignedInt:
+      case RpcCborCodec._majorTypeUnsignedInt:
         return _readUnsignedIntFast(additionalInfo);
-      case CborCodec._majorTypeNegativeInt:
+      case RpcCborCodec._majorTypeNegativeInt:
         return -_readUnsignedIntFast(additionalInfo) - 1;
-      case CborCodec._majorTypeTextString:
+      case RpcCborCodec._majorTypeTextString:
         // Step back one byte and read as string.
         _offset--;
         return _readStringFast();
-      case CborCodec._majorTypeByteString:
+      case RpcCborCodec._majorTypeByteString:
         return _readByteStringFast(additionalInfo);
-      case CborCodec._majorTypeArray:
+      case RpcCborCodec._majorTypeArray:
         return _readArrayFast(additionalInfo, depth);
-      case CborCodec._majorTypeMap:
+      case RpcCborCodec._majorTypeMap:
         return _readMapFast(additionalInfo, depth);
-      case CborCodec._majorTypeTag:
+      case RpcCborCodec._majorTypeTag:
         // Skip the tag and read the tagged value (mirrors the slow reader).
         // A tag chains into another value without a container, so it counts
         // toward depth to bound a tag-only nesting attack.
         _checkDepth(depth);
         _readUnsignedIntFast(additionalInfo);
         return _readValueFast(depth + 1);
-      case CborCodec._majorTypeSimple:
+      case RpcCborCodec._majorTypeSimple:
         return _readSimpleValueFast(additionalInfo);
       default:
         throw FormatException('Unknown CBOR major type: $majorType');
@@ -481,16 +482,16 @@ class _FastCborReader {
     }
 
     switch (additionalInfo) {
-      case CborCodec._additionalInfoOneByteFollow:
+      case RpcCborCodec._additionalInfoOneByteFollow:
         return _readByteFast();
-      case CborCodec._additionalInfoTwoByteFollow:
+      case RpcCborCodec._additionalInfoTwoByteFollow:
         return (_readByteFast() << 8) | _readByteFast();
-      case CborCodec._additionalInfoFourByteFollow:
+      case RpcCborCodec._additionalInfoFourByteFollow:
         return (_readByteFast() << 24) |
             (_readByteFast() << 16) |
             (_readByteFast() << 8) |
             _readByteFast();
-      case CborCodec._additionalInfoEightByteFollow:
+      case RpcCborCodec._additionalInfoEightByteFollow:
         // Combine high/low 32-bit halves without a >32-bit shift (dart2js-safe).
         final hi =
             (_readByteFast() * 0x1000000) +
@@ -514,7 +515,7 @@ class _FastCborReader {
           );
         }
         return value;
-      case CborCodec._additionalInfoIndefiniteLength:
+      case RpcCborCodec._additionalInfoIndefiniteLength:
         // Mirrors the slow reader's message for malformed indefinite ints/tags.
         throw FormatException('Indefinite length not implemented');
       default:
@@ -524,12 +525,12 @@ class _FastCborReader {
 
   /// Fast byte string read.
   Uint8List _readByteStringFast(int additionalInfo) {
-    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+    if (additionalInfo == RpcCborCodec._additionalInfoIndefiniteLength) {
       // Indefinite-length byte string: definite-length chunks until a break.
       final builder = BytesBuilder();
       while (!_consumeBreakMarker('indefinite-length byte string')) {
         final chunkByte = _readByteFast();
-        if ((chunkByte >> 5) != CborCodec._majorTypeByteString) {
+        if ((chunkByte >> 5) != RpcCborCodec._majorTypeByteString) {
           throw FormatException(
             'Indefinite-length byte string contains a non-byte-string chunk',
           );
@@ -538,7 +539,7 @@ class _FastCborReader {
         // definite-length chunks, and rejecting nested indefinite ones is what
         // keeps a run of 0x5F from recursing the stack to death.
         final chunkInfo = chunkByte & 0x1F;
-        if (chunkInfo == CborCodec._additionalInfoIndefiniteLength) {
+        if (chunkInfo == RpcCborCodec._additionalInfoIndefiniteLength) {
           throw FormatException(
             'Indefinite-length byte string contains a nested '
             'indefinite-length chunk',
@@ -569,7 +570,7 @@ class _FastCborReader {
     _checkDepth(depth);
     final result = <dynamic>[];
 
-    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+    if (additionalInfo == RpcCborCodec._additionalInfoIndefiniteLength) {
       // Indefinite-length array: elements until a break marker.
       while (!_consumeBreakMarker('indefinite-length array')) {
         result.add(_readValueFast(depth + 1));
@@ -589,31 +590,31 @@ class _FastCborReader {
   /// Fast read for simple values.
   dynamic _readSimpleValueFast(int additionalInfo) {
     switch (additionalInfo) {
-      case CborCodec._simpleValueFalse:
+      case RpcCborCodec._simpleValueFalse:
         return false;
-      case CborCodec._simpleValueTrue:
+      case RpcCborCodec._simpleValueTrue:
         return true;
-      case CborCodec._simpleValueNull:
+      case RpcCborCodec._simpleValueNull:
         return null;
-      case CborCodec._simpleValueUndefined:
+      case RpcCborCodec._simpleValueUndefined:
         // Dart treats undefined as null (mirrors the slow reader).
         return null;
-      case CborCodec._simpleValueBreak:
+      case RpcCborCodec._simpleValueBreak:
         // Same dedicated message as the slow reader for parity.
         throw FormatException(
           'Unexpected break value outside indefinite-length item',
         );
-      case CborCodec._additionalInfoTwoByteFollow:
+      case RpcCborCodec._additionalInfoTwoByteFollow:
         // IEEE 754 half-precision float (16-bit).
         return _decodeHalfFloat(_readByteFast(), _readByteFast());
-      case CborCodec._additionalInfoFourByteFollow:
+      case RpcCborCodec._additionalInfoFourByteFollow:
         // IEEE 754 single-precision float (32-bit).
         final byteData = ByteData(4);
         for (int i = 0; i < 4; i++) {
           byteData.setUint8(i, _readByteFast());
         }
         return byteData.getFloat32(0, Endian.big);
-      case CborCodec._additionalInfoEightByteFollow:
+      case RpcCborCodec._additionalInfoEightByteFollow:
         // Inline IEEE 754 double for speed.
         final byteData = ByteData(8);
         for (int i = 0; i < 8; i++) {
@@ -624,7 +625,7 @@ class _FastCborReader {
         // Unassigned simple values (0-19, and 32-255 in the one-byte form) mean
         // nothing here; returned as ints they read as numbers. The one-byte
         // form of a value under 32 is not well-formed (RFC 8949 3.3).
-        if (additionalInfo == CborCodec._additionalInfoOneByteFollow) {
+        if (additionalInfo == RpcCborCodec._additionalInfoOneByteFollow) {
           throw FormatException('Unknown simple value: ${_readByteFast()}');
         }
         throw FormatException('Unknown simple value: $additionalInfo');
@@ -636,7 +637,7 @@ class _FastCborReader {
     if (additionalInfo < 24) {
       return additionalInfo;
     }
-    if (additionalInfo == CborCodec._additionalInfoIndefiniteLength) {
+    if (additionalInfo == RpcCborCodec._additionalInfoIndefiniteLength) {
       // Indefinite length reaching this point means a non-container (e.g. int)
       // used additional info 31, which is not a valid definite length.
       throw FormatException('Indefinite length not implemented');
@@ -651,9 +652,9 @@ class _FastCborReader {
       throw FormatException('Unexpected end of CBOR data inside $context');
     }
     if (_bytes[_offset] ==
-        CborCodec._getMajorTypeByte(
-          CborCodec._majorTypeSimple,
-          CborCodec._simpleValueBreak,
+        RpcCborCodec._getMajorTypeByte(
+          RpcCborCodec._majorTypeSimple,
+          RpcCborCodec._simpleValueBreak,
         )) {
       _offset++;
       return true;
@@ -757,7 +758,10 @@ class _FastCborWriter {
   /// Encodes null.
   void _writeNull() {
     _builder.addByte(
-      _getMajorTypeByte(CborCodec._majorTypeSimple, CborCodec._simpleValueNull),
+      _getMajorTypeByte(
+        RpcCborCodec._majorTypeSimple,
+        RpcCborCodec._simpleValueNull,
+      ),
     );
   }
 
@@ -765,8 +769,8 @@ class _FastCborWriter {
   void _writeBool(bool value) {
     _builder.addByte(
       _getMajorTypeByte(
-        CborCodec._majorTypeSimple,
-        value ? CborCodec._simpleValueTrue : CborCodec._simpleValueFalse,
+        RpcCborCodec._majorTypeSimple,
+        value ? RpcCborCodec._simpleValueTrue : RpcCborCodec._simpleValueFalse,
       ),
     );
   }
@@ -785,8 +789,8 @@ class _FastCborWriter {
     if (asNum.isNaN ||
         asNum.isInfinite ||
         (asNum == 0 && asNum.isNegative) ||
-        asNum >= CborCodec._cborIntDoubleThreshold ||
-        asNum < -CborCodec._cborIntDoubleThreshold) {
+        asNum >= RpcCborCodec._cborIntDoubleThreshold ||
+        asNum < -RpcCborCodec._cborIntDoubleThreshold) {
       _writeDouble(asNum.toDouble());
       return;
     }
@@ -794,9 +798,9 @@ class _FastCborWriter {
     // anything outside the 53-bit range is not exactly representable on
     // dart2js, so putting it on the wire would make the payload readable by a
     // VM peer and not by a web one. Keep both directions honest.
-    if (asNum > CborCodec._maxSafeInteger ||
-        asNum < CborCodec._minSafeInteger) {
-      if (CborCodec._singleNumericType) {
+    if (asNum > RpcCborCodec._maxSafeInteger ||
+        asNum < RpcCborCodec._minSafeInteger) {
+      if (RpcCborCodec._singleNumericType) {
         // dart2js: `value is int` is true for an integral double, and this one
         // is past the int range, so it IS a double. The double encoder is
         // lossless for it and a VM peer decodes the same value.
@@ -807,15 +811,15 @@ class _FastCborWriter {
         value,
         'value',
         'Integer is outside the range this codec can carry across platforms '
-            '(${CborCodec._minSafeInteger}..${CborCodec._maxSafeInteger}). '
+            '(${RpcCborCodec._minSafeInteger}..${RpcCborCodec._maxSafeInteger}). '
             'A web (dart2js) peer stores it as a double and cannot decode it '
             'exactly. Send it as a String, or split it into two 32-bit halves.',
       );
     }
     if (value >= 0) {
-      _writeHead(CborCodec._majorTypeUnsignedInt, value);
+      _writeHead(RpcCborCodec._majorTypeUnsignedInt, value);
     } else {
-      _writeHead(CborCodec._majorTypeNegativeInt, -value - 1);
+      _writeHead(RpcCborCodec._majorTypeNegativeInt, -value - 1);
     }
   }
 
@@ -824,8 +828,8 @@ class _FastCborWriter {
     // Use IEEE 754 64-bit (double).
     _builder.addByte(
       _getMajorTypeByte(
-        CborCodec._majorTypeSimple,
-        CborCodec._additionalInfoEightByteFollow,
+        RpcCborCodec._majorTypeSimple,
+        RpcCborCodec._additionalInfoEightByteFollow,
       ),
     );
 
@@ -853,19 +857,19 @@ class _FastCborWriter {
   /// [_writeString] for the same source string.
   void _writeStringBytes(List<int> utf8Bytes) {
     // Standard string encoding per RFC 7049.
-    _writeHead(CborCodec._majorTypeTextString, utf8Bytes.length);
+    _writeHead(RpcCborCodec._majorTypeTextString, utf8Bytes.length);
     _builder.add(utf8Bytes);
   }
 
   /// Encodes a binary string.
   void _writeByteString(Uint8List bytes) {
-    _writeHead(CborCodec._majorTypeByteString, bytes.length);
+    _writeHead(RpcCborCodec._majorTypeByteString, bytes.length);
     _builder.add(bytes);
   }
 
   /// Encodes a list.
   void _writeList(List<dynamic> list) {
-    _writeHead(CborCodec._majorTypeArray, list.length);
+    _writeHead(RpcCborCodec._majorTypeArray, list.length);
     for (final item in list) {
       _writeValue(item);
     }
@@ -885,7 +889,7 @@ class _FastCborWriter {
         _CborSortKey(utf8.encode(_requireStringKey(key)), key),
     ]..sort(_compareSortKeys);
 
-    _writeHead(CborCodec._majorTypeMap, map.length);
+    _writeHead(RpcCborCodec._majorTypeMap, map.length);
     for (final entry in entries) {
       _writeStringBytes(entry.keyBytes);
       _writeValue(map[entry.key]);
@@ -909,18 +913,21 @@ class _FastCborWriter {
       _builder.addByte(_getMajorTypeByte(majorType, argument));
     } else if (argument <= 0xFF) {
       _builder.addByte(
-        _getMajorTypeByte(majorType, CborCodec._additionalInfoOneByteFollow),
+        _getMajorTypeByte(majorType, RpcCborCodec._additionalInfoOneByteFollow),
       );
       _builder.addByte(argument & 0xFF);
     } else if (argument <= 0xFFFF) {
       _builder.addByte(
-        _getMajorTypeByte(majorType, CborCodec._additionalInfoTwoByteFollow),
+        _getMajorTypeByte(majorType, RpcCborCodec._additionalInfoTwoByteFollow),
       );
       _builder.addByte((argument >> 8) & 0xFF);
       _builder.addByte(argument & 0xFF);
     } else if (argument <= 0xFFFFFFFF) {
       _builder.addByte(
-        _getMajorTypeByte(majorType, CborCodec._additionalInfoFourByteFollow),
+        _getMajorTypeByte(
+          majorType,
+          RpcCborCodec._additionalInfoFourByteFollow,
+        ),
       );
       _builder.addByte((argument >> 24) & 0xFF);
       _builder.addByte((argument >> 16) & 0xFF);
@@ -928,7 +935,10 @@ class _FastCborWriter {
       _builder.addByte(argument & 0xFF);
     } else {
       _builder.addByte(
-        _getMajorTypeByte(majorType, CborCodec._additionalInfoEightByteFollow),
+        _getMajorTypeByte(
+          majorType,
+          RpcCborCodec._additionalInfoEightByteFollow,
+        ),
       );
       _writeUint64BigEndian(_builder, argument);
     }

@@ -77,7 +77,7 @@ void main() {
         transportFactory: (_) => RpcWebSocketCallerTransport.connect(
           Uri.parse('ws://127.0.0.1:$port'),
         ),
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 50),
           maxDelay: Duration(milliseconds: 200),
           jitter: false,

@@ -8,7 +8,7 @@ SPDX-License-Identifier: MIT
 
 Application framework for `rpc_dart`. Provides module lifecycle management, dependency injection, environment configuration, health aggregation, graceful shutdown, isolate worker modules, and an in-process test harness.
 
-Rate limiting (`RpcRateLimiter`) and the reconnecting client (`RpcClientConnection`) live in `package:rpc_dart`. They work with this framework, and the sections below show how.
+Rate limiting (`RpcRateLimitInterceptor`) and the reconnecting client (`RpcClientConnection`) live in `package:rpc_dart`. They work with this framework, and the sections below show how.
 
 The package uses `dart:io`. It does not run on the web.
 
@@ -26,7 +26,7 @@ The package uses `dart:io`. It does not run on the web.
 - [RpcContainer — dependency injection](#rpccontainer--dependency-injection)
 - [RpcEnvConfig — environment variables](#rpcenvconfig--environment-variables)
 - [RpcAppConfig — hooks and timeouts](#rpcappconfig--hooks-and-timeouts)
-- [RpcRateLimiter](#rpcratelimiter)
+- [RpcRateLimitInterceptor](#rpcratelimiter)
 - [RpcClientConnection](#rpcclientconnection)
 - [Health](#health)
 - [Testing](#testing)
@@ -315,28 +315,28 @@ RpcAppConfig(
 
 ---
 
-## RpcRateLimiter
+## RpcRateLimitInterceptor
 
-`RpcRateLimiter` and `RateLimit` are in `package:rpc_dart`. The limiter is an `IRpcInterceptor`; pass it in `interceptors` of `RpcApp.server` or `RpcTestApp.start`. Two algorithms:
+`RpcRateLimitInterceptor` and `RpcRateLimit` are in `package:rpc_dart`. The limiter is an `IRpcInterceptor`; pass it in `interceptors` of `RpcApp.server` or `RpcTestApp.start`. Two algorithms:
 
 | Algorithm | API | Characteristics |
 |---|---|---|
-| Sliding window | `RateLimit.slidingWindow(max:, window:)` | Two fixed-window buckets, O(1), no burst above `max` |
-| Token bucket | `RateLimit.tokenBucket(max:, window:, burst:)` | Burst-tolerant, O(1); `burst` defaults to `max` |
+| Sliding window | `RpcRateLimit.slidingWindow(max:, window:)` | Two fixed-window buckets, O(1), no burst above `max` |
+| Token bucket | `RpcRateLimit.tokenBucket(max:, window:, burst:)` | Burst-tolerant, O(1); `burst` defaults to `max` |
 
 ```dart
-final limiter = RpcRateLimiter(
+final limiter = RpcRateLimitInterceptor(
   // Single shared counter across all callers. A ceiling on every call.
-  global: RateLimit.slidingWindow(max: 10000, window: Duration(seconds: 1)),
+  global: RpcRateLimit.slidingWindow(max: 10000, window: Duration(seconds: 1)),
 
   // Per-service counter. Keys are service names.
   perService: {
-    'BlobService': RateLimit.tokenBucket(max: 200, window: Duration(seconds: 1), burst: 400),
+    'BlobService': RpcRateLimit.tokenBucket(max: 200, window: Duration(seconds: 1), burst: 400),
   },
 
   // Per-method counter. Keys are 'Service.method'.
   perMethod: {
-    'UserService.deleteUser': RateLimit.slidingWindow(max: 10, window: Duration(minutes: 1)),
+    'UserService.deleteUser': RpcRateLimit.slidingWindow(max: 10, window: Duration(minutes: 1)),
   },
 
   // Extract a per-caller key from the call.
@@ -346,7 +346,7 @@ final limiter = RpcRateLimiter(
       call.context.getValue(const RpcContextKey<String>('userId')),
 
   // Catch-all: applies per (key, method) for any call no other spec matches.
-  perKeyFallback: RateLimit.slidingWindow(max: 50, window: Duration(seconds: 1)),
+  perKeyFallback: RpcRateLimit.slidingWindow(max: 50, window: Duration(seconds: 1)),
 );
 
 // Call dispose() on shutdown to cancel the cleanup timer.
@@ -377,7 +377,7 @@ final connection = RpcClientConnection(
     await ch.ready;
     return RpcWebSocketCallerTransport(ch);
   },
-  backoff: ExponentialBackoff(
+  backoff: RpcExponentialBackoff(
     baseDelay: Duration(seconds: 1),
     maxDelay: Duration(seconds: 30),
   ),
@@ -418,11 +418,11 @@ Other options: `maxAttempts`, `connectTimeout`, `logger`, `onStateChanged`. `cur
 | `RpcClientOffline` | Transport dropped, reconnect loop running |
 | `RpcClientDisconnected(reason)` | Terminal — `shouldReconnect` returned false or attempts ran out |
 
-**Backoff policies** (`BackoffPolicy`):
+**Backoff policies** (`RpcBackoffPolicy`):
 
 ```dart
-ExponentialBackoff(baseDelay: ..., maxDelay: ..., jitter: true) // the default
-FixedBackoff(Duration(seconds: 5))                              // constant delay between attempts
+RpcExponentialBackoff(baseDelay: ..., maxDelay: ..., jitter: true) // the default
+RpcFixedBackoff(Duration(seconds: 5))                              // constant delay between attempts
 ```
 
 ---

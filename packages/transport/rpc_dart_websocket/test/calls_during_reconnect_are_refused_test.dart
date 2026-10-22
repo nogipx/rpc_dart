@@ -90,7 +90,7 @@ Future<_Rig> _rig({int? maxAttempts}) async {
       if (failNext) throw const SocketException('factory refused');
       return RpcWebSocketCallerTransport.connect(uri);
     },
-    backoff: const FixedBackoff(Duration(milliseconds: 50)),
+    backoff: const RpcFixedBackoff(Duration(milliseconds: 50)),
     maxAttempts: maxAttempts,
   );
   final online = connection.state

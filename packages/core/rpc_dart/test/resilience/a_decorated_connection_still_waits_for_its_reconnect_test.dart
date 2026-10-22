@@ -119,7 +119,7 @@ void main() {
           );
           return client;
         },
-        backoff: const FixedBackoff(Duration(milliseconds: 100)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 100)),
       );
       addTearDown(() async {
         await connection.dispose();
@@ -136,7 +136,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: transport)
         ..addInterceptor(
           RpcRetryInterceptor(
-            backoff: const FixedBackoff(Duration(milliseconds: 10)),
+            backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
           ),
         );
       addTearDown(caller.close);

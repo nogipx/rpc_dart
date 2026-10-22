@@ -9,7 +9,7 @@
 //
 //   RpcCancelledException         contracts/context.dart
 //   RpcDeadlineExceededException  contracts/context.dart
-//   CircuitBreakerOpenException   resilience/circuit_breaker_interceptor.dart
+//   RpcCircuitBreakerOpenException   resilience/circuit_breaker_interceptor.dart
 //
 // So a handler throwing a cancellation was indistinguishable from one throwing
 // a foreign StateError. Measured over a real socket, before and after:
@@ -35,7 +35,7 @@ void main() {
       final errors = <Object>[
         RpcCancelledException('cancelled'),
         RpcDeadlineExceededException(DateTime(2026)),
-        CircuitBreakerOpenException(),
+        RpcCircuitBreakerOpenException(),
         _LibraryAuthored('a subclass carrying no status of its own'),
         RpcStatusException(RpcStatus.notFound, 'missing'),
       ];
@@ -57,7 +57,7 @@ void main() {
         RpcStatus.deadlineExceeded,
       );
       expect(
-        CircuitBreakerOpenException().statusCode,
+        RpcCircuitBreakerOpenException().statusCode,
         RpcStatus.unavailable,
         reason: 'an open breaker is "try again later", which is UNAVAILABLE',
       );
@@ -208,14 +208,14 @@ void main() {
         'RpcCancelledException: why',
       );
       expect(
-        CircuitBreakerOpenException(
+        RpcCircuitBreakerOpenException(
           retryAfter: Duration(milliseconds: 250),
         ).toString(),
-        'CircuitBreakerOpenException: circuit is open, retry after 250ms',
+        'RpcCircuitBreakerOpenException: circuit is open, retry after 250ms',
       );
       expect(
-        CircuitBreakerOpenException().toString(),
-        'CircuitBreakerOpenException: circuit is open',
+        RpcCircuitBreakerOpenException().toString(),
+        'RpcCircuitBreakerOpenException: circuit is open',
       );
     });
 

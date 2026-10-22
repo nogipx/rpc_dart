@@ -18,7 +18,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('RpcRateLimiter per-message stream accounting', () {
+  group('RpcRateLimitInterceptor per-message stream accounting', () {
     late RpcCallInfo callContext;
 
     setUp(() {
@@ -40,8 +40,8 @@ void main() {
         'passes through regardless of count', () async {
       // Limit of 3, but a single stream open costs ONE token — so all five
       // responses must be delivered even though 5 > 3.
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 3,
           window: const Duration(hours: 1),
         ),
@@ -62,8 +62,8 @@ void main() {
       'server-stream (default): the Nth+1 stream OPEN is rejected',
       () async {
         // Establishment metering: 3 opens allowed per window, the 4th throws.
-        final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 3,
             window: const Duration(hours: 1),
           ),
@@ -90,8 +90,8 @@ void main() {
       'server-stream (meterServerStreamMessages: true): each response '
       'consumes a token and then emits RESOURCE_EXHAUSTED after limit',
       () async {
-        final limiter = RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 3,
             window: const Duration(hours: 1),
           ),
@@ -129,8 +129,8 @@ void main() {
     );
 
     test('client-stream: each request message consumes a token', () async {
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 2,
           window: const Duration(hours: 1),
         ),
@@ -172,8 +172,8 @@ void main() {
       // The limit trips on the 3rd message. Every element after it used to be
       // metered again and push its own error, so a client that kept sending
       // got a storm of RESOURCE_EXHAUSTED instead of a terminated call.
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 2,
           window: const Duration(hours: 1),
         ),
@@ -211,7 +211,7 @@ void main() {
     });
 
     test('no limit configured: stream passes through unchanged', () async {
-      final limiter = RpcRateLimiter(clock: frozenClock);
+      final limiter = RpcRateLimitInterceptor(clock: frozenClock);
 
       final out = await limiter.interceptServerStream<String, String>(
         callContext,
@@ -224,8 +224,8 @@ void main() {
     });
 
     test('unary behavior unchanged: one token per call', () async {
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 2,
           window: const Duration(hours: 1),
         ),

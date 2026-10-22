@@ -96,9 +96,9 @@ void main() {
         final original = {'v': value};
 
         // slow-encode -> both decode entry points (now one reader).
-        final slowBytes = CborCodec.encodeUnsafe(original);
-        final mapDecoded = _normalize(CborCodec.decode(slowBytes));
-        final unsafeDecoded = _normalize(CborCodec.decodeUnsafe(slowBytes));
+        final slowBytes = RpcCborCodec.encodeUnsafe(original);
+        final mapDecoded = _normalize(RpcCborCodec.decode(slowBytes));
+        final unsafeDecoded = _normalize(RpcCborCodec.decodeUnsafe(slowBytes));
 
         // decode (readMap) and decodeUnsafe (readValue) share a reader and MUST
         // agree, always and on every platform.
@@ -123,7 +123,7 @@ void main() {
         }
 
         // fast-encode must be byte-identical to slow-encode.
-        final fastBytes = CborCodec.encode(original);
+        final fastBytes = RpcCborCodec.encode(original);
         expect(
           fastBytes,
           equals(slowBytes),
@@ -132,7 +132,7 @@ void main() {
 
         // And fast bytes must decode back to the same value.
         _expectEqual(
-          _normalize(CborCodec.decode(fastBytes)),
+          _normalize(RpcCborCodec.decode(fastBytes)),
           unsafeDecoded,
           reason: 'fast-encode -> decode != decodeUnsafe for $name',
         );
@@ -148,8 +148,8 @@ void main() {
       test(name, () {
         final bytes = Uint8List.fromList(raw);
         final norm = _normalize(expected);
-        final viaMap = _normalize(CborCodec.decode(bytes));
-        final viaUnsafe = _normalize(CborCodec.decodeUnsafe(bytes));
+        final viaMap = _normalize(RpcCborCodec.decode(bytes));
+        final viaUnsafe = _normalize(RpcCborCodec.decodeUnsafe(bytes));
         _expectEqual(viaMap, norm, reason: 'decode mismatch on $name');
         _expectEqual(viaUnsafe, norm, reason: 'decodeUnsafe mismatch on $name');
       });
@@ -216,8 +216,8 @@ void main() {
     // both entry points.
     test('extended simple value', () {
       final bytes = Uint8List.fromList([0xa1, 0x61, 0x73, 0xf8, 0xc8]);
-      expect(() => CborCodec.decode(bytes), throwsFormatException);
-      expect(() => CborCodec.decodeUnsafe(bytes), throwsFormatException);
+      expect(() => RpcCborCodec.decode(bytes), throwsFormatException);
+      expect(() => RpcCborCodec.decodeUnsafe(bytes), throwsFormatException);
     });
 
     // { "l": indefinite array [1, 2, 3] }
@@ -320,7 +320,7 @@ void main() {
 
     test('values inside the safe range round-trip', () {
       for (final v in <int>[0, 1, -1, 9007199254740991, -9007199254740992]) {
-        expect(CborCodec.decode(CborCodec.encode({'v': v}))['v'], v);
+        expect(RpcCborCodec.decode(RpcCborCodec.encode({'v': v}))['v'], v);
       }
     });
 
@@ -330,12 +330,12 @@ void main() {
       for (final v in <int>[beyond, negativeBeyond]) {
         Uint8List bytes;
         try {
-          bytes = CborCodec.encode({'v': v});
+          bytes = RpcCborCodec.encode({'v': v});
         } on ArgumentError {
           continue; // refused at the source — also fine, and what the VM does.
         }
         expect(
-          () => CborCodec.decode(bytes),
+          () => RpcCborCodec.decode(bytes),
           returnsNormally,
           reason: 'encode() produced bytes decode() rejects for $v',
         );
@@ -346,16 +346,19 @@ void main() {
       if (singleNumericType) {
         // Web: the value is really a double, so it is written as one and comes
         // back exactly — a VM peer reads the same number.
-        expect(CborCodec.decode(CborCodec.encode({'v': beyond}))['v'], beyond);
+        expect(
+          RpcCborCodec.decode(RpcCborCodec.encode({'v': beyond}))['v'],
+          beyond,
+        );
       } else {
         // VM: a genuine 64-bit int. Emitting it would hand a web peer bytes it
         // cannot decode exactly, so it is refused at the call site instead.
         expect(
-          () => CborCodec.encode({'v': beyond}),
+          () => RpcCborCodec.encode({'v': beyond}),
           throwsA(isA<ArgumentError>()),
         );
         expect(
-          () => CborCodec.encode({'v': negativeBeyond}),
+          () => RpcCborCodec.encode({'v': negativeBeyond}),
           throwsA(isA<ArgumentError>()),
         );
       }
@@ -386,10 +389,10 @@ void main() {
 
     test('rejects deeply-nested arrays with FormatException', () {
       // Shallow nesting still decodes fine.
-      expect(CborCodec.decodeUnsafe(nestedArrays(10)), isA<List<Object?>>());
+      expect(RpcCborCodec.decodeUnsafe(nestedArrays(10)), isA<List<Object?>>());
       // A pathological depth throws instead of crashing the isolate.
       expect(
-        () => CborCodec.decodeUnsafe(nestedArrays(5000)),
+        () => RpcCborCodec.decodeUnsafe(nestedArrays(5000)),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -401,9 +404,9 @@ void main() {
     });
 
     test('rejects deeply-nested maps with FormatException', () {
-      expect(CborCodec.decode(nestedMaps(10)), isA<Map<Object?, Object?>>());
+      expect(RpcCborCodec.decode(nestedMaps(10)), isA<Map<Object?, Object?>>());
       expect(
-        () => CborCodec.decode(nestedMaps(5000)),
+        () => RpcCborCodec.decode(nestedMaps(5000)),
         throwsA(
           isA<FormatException>().having(
             (e) => e.message,
@@ -423,7 +426,7 @@ void main() {
     test('rejects nested indefinite-length text-string chunks', () {
       // Well-formed indefinite text string still decodes: "he" + "llo".
       expect(
-        CborCodec.decodeUnsafe(
+        RpcCborCodec.decodeUnsafe(
           Uint8List.fromList([
             0x7f,
             0x62, 0x68, 0x65, //
@@ -435,7 +438,7 @@ void main() {
       );
 
       expect(
-        () => CborCodec.decodeUnsafe(
+        () => RpcCborCodec.decodeUnsafe(
           Uint8List.fromList(List<int>.filled(200000, 0x7f)),
         ),
         throwsA(isA<FormatException>()),
@@ -445,7 +448,7 @@ void main() {
     test('rejects nested indefinite-length byte-string chunks', () {
       // Well-formed indefinite byte string still decodes: 0x0102 + 0x03.
       expect(
-        CborCodec.decodeUnsafe(
+        RpcCborCodec.decodeUnsafe(
           Uint8List.fromList([
             0x5f,
             0x42, 0x01, 0x02, //
@@ -457,7 +460,7 @@ void main() {
       );
 
       expect(
-        () => CborCodec.decodeUnsafe(
+        () => RpcCborCodec.decodeUnsafe(
           Uint8List.fromList(List<int>.filled(200000, 0x5f)),
         ),
         throwsA(isA<FormatException>()),
@@ -472,7 +475,7 @@ void main() {
       }
       builder.addByte(0x00);
       expect(
-        () => CborCodec.decodeUnsafe(builder.toBytes()),
+        () => RpcCborCodec.decodeUnsafe(builder.toBytes()),
         throwsA(isA<FormatException>()),
       );
     });

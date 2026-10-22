@@ -329,7 +329,7 @@ final class RpcDeadlineExceededException extends RpcStatusException {
   String toString() => 'RpcDeadlineExceededException: $message';
 }
 
-/// Thrown by `RpcRateLimiter` when a call exceeds the configured limit.
+/// Thrown by `RpcRateLimitInterceptor` when a call exceeds the configured limit.
 ///
 /// RESOURCE_EXHAUSTED, so retry policies can back off and retry. [retryAfter]
 /// travels as an [RpcRetryInfo] detail: that pushback is what tells a remote
@@ -349,19 +349,19 @@ final class RpcRateLimitException extends RpcStatusException {
 ///
 /// UNAVAILABLE, because an open breaker is exactly "try again later", which is
 /// also what `RpcRetryInterceptor` treats as retryable.
-final class CircuitBreakerOpenException extends RpcStatusException {
+final class RpcCircuitBreakerOpenException extends RpcStatusException {
   /// Time until the circuit breaker will transition to half-open.
   final Duration? retryAfter;
 
-  /// Creates a [CircuitBreakerOpenException].
-  CircuitBreakerOpenException({this.retryAfter})
+  /// Creates a [RpcCircuitBreakerOpenException].
+  RpcCircuitBreakerOpenException({this.retryAfter})
     : super(RpcStatus.unavailable, 'circuit is open');
 
   @override
   String toString() {
     if (retryAfter != null) {
-      return 'CircuitBreakerOpenException: circuit is open, retry after ${retryAfter!.inMilliseconds}ms';
+      return 'RpcCircuitBreakerOpenException: circuit is open, retry after ${retryAfter!.inMilliseconds}ms';
     }
-    return 'CircuitBreakerOpenException: circuit is open';
+    return 'RpcCircuitBreakerOpenException: circuit is open';
   }
 }

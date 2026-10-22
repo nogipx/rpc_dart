@@ -60,7 +60,7 @@ Future<({RpcStatus status, int requests})> _call(int httpStatus) async {
     ..addInterceptor(
       RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: const FixedBackoff(Duration(milliseconds: 1)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 1)),
       ),
     );
   addTearDown(() async {

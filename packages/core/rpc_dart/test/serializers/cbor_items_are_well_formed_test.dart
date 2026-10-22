@@ -18,37 +18,46 @@ void main() {
     test('two maps glued together are refused', () {
       // {"a": 1} {"b": 2}
       expect(
-        () => CborCodec.decode(_hex('a1616101a1616202')),
+        () => RpcCborCodec.decode(_hex('a1616101a1616202')),
         throwsFormatException,
       );
     });
 
     test('a valid item followed by garbage is refused', () {
-      expect(() => CborCodec.decodeUnsafe(_hex('0001')), throwsFormatException);
+      expect(
+        () => RpcCborCodec.decodeUnsafe(_hex('0001')),
+        throwsFormatException,
+      );
     });
 
     test('GUARD a single item still decodes', () {
-      expect(CborCodec.decode(_hex('a1616101')), {'a': 1});
+      expect(RpcCborCodec.decode(_hex('a1616101')), {'a': 1});
     });
 
     test('GUARD a truncated item is still refused', () {
-      expect(() => CborCodec.decode(_hex('a16161')), throwsFormatException);
+      expect(() => RpcCborCodec.decode(_hex('a16161')), throwsFormatException);
     });
   });
 
   group('simple values with no meaning here are refused', () {
     test('an unassigned simple value is not an int', () {
       // {"v": simple(16)}
-      expect(() => CborCodec.decode(_hex('a16176f0')), throwsFormatException);
+      expect(
+        () => RpcCborCodec.decode(_hex('a16176f0')),
+        throwsFormatException,
+      );
     });
 
     test('the two-byte form of a small simple value is not well-formed', () {
       // {"v": f8 18} -- RFC 8949 3.3
-      expect(() => CborCodec.decode(_hex('a16176f818')), throwsFormatException);
+      expect(
+        () => RpcCborCodec.decode(_hex('a16176f818')),
+        throwsFormatException,
+      );
     });
 
     test('GUARD false, true and null still decode', () {
-      expect(CborCodec.decode(_hex('a3616ff46174f5616ef6')), {
+      expect(RpcCborCodec.decode(_hex('a3616ff46174f5616ef6')), {
         'o': false,
         't': true,
         'n': null,
@@ -64,6 +73,6 @@ void main() {
   });
 
   test('GUARD 0 is still an integer zero', () {
-    expect(CborCodec.encode({'v': 0}), _hex('a1617600'));
+    expect(RpcCborCodec.encode({'v': 0}), _hex('a1617600'));
   });
 }

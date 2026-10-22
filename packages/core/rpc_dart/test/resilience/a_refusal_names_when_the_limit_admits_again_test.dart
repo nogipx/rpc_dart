@@ -26,7 +26,7 @@ void main() {
   });
 
   /// Null when admitted, else the delay the refusal asks for.
-  Future<Duration?> attempt(RpcRateLimiter limiter) async {
+  Future<Duration?> attempt(RpcRateLimitInterceptor limiter) async {
     try {
       await limiter.interceptUnary<int, int>(call, 0, (c, r) async => 0);
       return null;
@@ -38,15 +38,15 @@ void main() {
   for (final (name, limit) in [
     (
       'sliding window',
-      RateLimit.slidingWindow(max: 2, window: const Duration(seconds: 1)),
+      RpcRateLimit.slidingWindow(max: 2, window: const Duration(seconds: 1)),
     ),
     (
       'token bucket',
-      RateLimit.tokenBucket(max: 2, window: const Duration(seconds: 1)),
+      RpcRateLimit.tokenBucket(max: 2, window: const Duration(seconds: 1)),
     ),
   ]) {
     test('$name: waiting the pushback is enough', () async {
-      final limiter = RpcRateLimiter(
+      final limiter = RpcRateLimitInterceptor(
         global: limit,
         clock: () => DateTime.fromMicrosecondsSinceEpoch(nowUs),
       );
@@ -65,8 +65,8 @@ void main() {
   test(
     'sliding window: the pushback decays with the previous window',
     () async {
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 2,
           window: const Duration(seconds: 1),
         ),

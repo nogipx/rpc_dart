@@ -116,7 +116,7 @@ _Harness _build({int? maxAttempts}) {
     },
     connectTimeout: const Duration(milliseconds: 20),
     maxAttempts: maxAttempts,
-    backoff: const ExponentialBackoff(
+    backoff: const RpcExponentialBackoff(
       baseDelay: Duration(milliseconds: 5),
       maxDelay: Duration(milliseconds: 10),
     ),
@@ -246,7 +246,9 @@ void main() {
           return t;
         },
         connectTimeout: const Duration(milliseconds: 500),
-        backoff: const ExponentialBackoff(baseDelay: Duration(milliseconds: 5)),
+        backoff: const RpcExponentialBackoff(
+          baseDelay: Duration(milliseconds: 5),
+        ),
       );
 
       connection.connect();

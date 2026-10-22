@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 // Every transport retains inbound frames until its first listener
-// (BufferedBroadcastController), and `_ReconnectingTransportProxy.attach()` IS
+// (RpcBufferedBroadcastController), and `_ReconnectingTransportProxy.attach()` IS
 // that first listener. It used to forward into a plain broadcast controller, so
 // the inner buffer was drained into a controller nobody was listening to yet and
 // everything the peer had sent was discarded one hop later.

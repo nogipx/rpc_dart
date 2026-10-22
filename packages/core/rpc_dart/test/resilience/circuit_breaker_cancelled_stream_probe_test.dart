@@ -8,7 +8,7 @@
 // cancels -- `stream.first`, `take(n)`, a disposed widget -- hits neither:
 // onListen cancels the abandon timer, and a cancelled subscription never
 // delivers onDone. The gate stayed pinned and every later call on that breaker
-// was rejected with CircuitBreakerOpenException forever.
+// was rejected with RpcCircuitBreakerOpenException forever.
 
 import 'dart:async';
 
@@ -52,7 +52,7 @@ void main() {
         ),
         throwsA(isA<RpcException>()),
       );
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
       // Let the reset window elapse so the next call is admitted as the probe.
       await Future<void>.delayed(const Duration(milliseconds: 40));
     }
@@ -87,11 +87,11 @@ void main() {
         'req',
         (ctx, req) async => source.stream,
       );
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       // The consumer takes one item and cancels.
       expect(await probe.first, 'tick');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('a cancelled server-stream probe releases the gate', () async {
@@ -104,13 +104,13 @@ void main() {
         'req',
         (ctx, req) async => source.stream,
       );
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       // Cancelled before any message: the probe proved nothing.
       await probe.listen((_) {}).cancel();
 
       // The breaker must still be probing, not wedged shut.
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       // The next call takes its turn as the probe and closes the circuit.
       final result = await cb.interceptUnary<String, String>(
@@ -119,7 +119,7 @@ void main() {
         (ctx, req) async => 'ok',
       );
       expect(result, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('a cancelled bidirectional probe releases the gate', () async {
@@ -132,10 +132,10 @@ void main() {
         const Stream<String>.empty(),
         (ctx, reqs) async => source.stream,
       );
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       await probe.listen((_) {}).cancel();
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       final result = await cb.interceptUnary<String, String>(
         callContext,
@@ -143,7 +143,7 @@ void main() {
         (ctx, req) async => 'ok',
       );
       expect(result, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     // The guard: releasing on cancel must not swallow the outcomes that DO
@@ -158,7 +158,7 @@ void main() {
         (ctx, req) async => Stream<String>.fromIterable(['a', 'b']),
       );
       expect(await probe.toList(), ['a', 'b']);
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     // The other half of the guard: a failing probe still reopens, even though
@@ -175,7 +175,7 @@ void main() {
         ),
       );
       await expectLater(probe.first, throwsA(isA<RpcException>()));
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
     });
   });
 }

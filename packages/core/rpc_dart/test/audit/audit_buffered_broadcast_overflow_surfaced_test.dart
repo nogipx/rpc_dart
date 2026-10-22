@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Regression guard (audit R4): when BufferedBroadcastController drops events
+// Regression guard (audit R4): when RpcBufferedBroadcastController drops events
 // past maxPendingEvents, the loss must be SURFACED to the subscriber as a
 // stream error (not silently swallowed). The retained events are delivered
 // first, then the drop error.
@@ -17,7 +17,7 @@ import 'package:test/test.dart';
 void main() {
   test('R4: overflow is fatal — error then the stream closes', () async {
     var overflowFired = 0;
-    final c = BufferedBroadcastController<int>(
+    final c = RpcBufferedBroadcastController<int>(
       maxPendingEvents: 4,
       onOverflow: () => overflowFired++,
     );

@@ -22,7 +22,7 @@ void main() {
   test('connect after a disconnect mid-backoff does not wait it out', () async {
     var calls = 0;
     final connection = RpcClientConnection(
-      backoff: const ExponentialBackoff(
+      backoff: const RpcExponentialBackoff(
         baseDelay: Duration(seconds: 5),
         jitter: false,
       ),
@@ -56,7 +56,7 @@ void main() {
     var calls = 0;
     final attempts = <Stopwatch>[];
     final connection = RpcClientConnection(
-      backoff: const ExponentialBackoff(
+      backoff: const RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 300),
         jitter: false,
       ),

@@ -13,7 +13,7 @@ import 'package:test/test.dart';
 
 void main() {
   test('a live event is delivered inside add', () {
-    final ctl = BufferedBroadcastController<int>(sync: true);
+    final ctl = RpcBufferedBroadcastController<int>(sync: true);
     final seen = <int>[];
     ctl.stream.listen(seen.add);
     return Future<void>(() {
@@ -23,7 +23,7 @@ void main() {
   });
 
   test('CONTROL: without sync the same event waits a turn', () async {
-    final ctl = BufferedBroadcastController<int>();
+    final ctl = RpcBufferedBroadcastController<int>();
     final seen = <int>[];
     ctl.stream.listen(seen.add);
     ctl.add(1);
@@ -35,7 +35,7 @@ void main() {
   test(
     'the buffer replays after listen returns, ahead of live events',
     () async {
-      final ctl = BufferedBroadcastController<int>(sync: true)
+      final ctl = RpcBufferedBroadcastController<int>(sync: true)
         ..add(1)
         ..add(2);
       final seen = <int>[];

@@ -141,7 +141,7 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: (_) => connectRpcSocket(address),
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 50),
           maxDelay: Duration(milliseconds: 200),
         ),

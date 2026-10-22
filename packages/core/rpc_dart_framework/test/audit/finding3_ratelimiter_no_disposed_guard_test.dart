@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// Audit finding 3: RpcRateLimiter has no `_disposed` guard.
+// Audit finding 3: RpcRateLimitInterceptor has no `_disposed` guard.
 // Source: packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart
 //   - dispose() at 294-299 cancels the cleanup timer AND clears the dynamic maps.
 //   - _check() at 344-372 and _getDynamic() at 332-342 keep calling putIfAbsent,
@@ -25,8 +25,8 @@ void main() {
       await clientT.close();
     });
 
-    final limiter = RpcRateLimiter(
-      perKeyFallback: RateLimit.slidingWindow(
+    final limiter = RpcRateLimitInterceptor(
+      perKeyFallback: RpcRateLimit.slidingWindow(
         max: 1,
         window: Duration(hours: 1),
       ),

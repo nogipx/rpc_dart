@@ -51,7 +51,7 @@ void main() {
       .then(
         (_) => 'admitted',
         onError: (Object e) =>
-            e is CircuitBreakerOpenException ? 'rejected' : 'error',
+            e is RpcCircuitBreakerOpenException ? 'rejected' : 'error',
       );
 
   group('a call admitted while closed ends during the probe', () {
@@ -69,14 +69,14 @@ void main() {
           .then((_) {}, onError: (Object _) {});
       await fail(cb);
       await fail(cb);
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       final probeGate = Completer<String>();
       final probe = cb
           .interceptUnary<String, String>(ctx, 'r', (c, r) => probeGate.future)
           .then((_) {}, onError: (Object _) {});
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       if (stale is String) {
         staleGate.complete(stale);
@@ -97,12 +97,12 @@ void main() {
       test('$name: only the probe decides', () async {
         final (cb, probeGate, probe) = await staleDuringProbe(stale);
 
-        expect(cb.state, CircuitBreakerState.halfOpen);
+        expect(cb.state, RpcCircuitBreakerState.halfOpen);
         expect(await tryCall(cb), 'rejected', reason: 'one probe at a time');
 
         probeGate.complete('p');
         await probe;
-        expect(cb.state, CircuitBreakerState.closed);
+        expect(cb.state, RpcCircuitBreakerState.closed);
       });
     }
   });
@@ -131,7 +131,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       expect(received, ['m1']);
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
       expect(await tryCall(cb), 'admitted');
     },
   );

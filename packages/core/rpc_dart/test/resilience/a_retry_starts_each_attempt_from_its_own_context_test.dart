@@ -57,7 +57,7 @@ Future<({int attempts, List<String?> headers})> _run(
   caller.addInterceptor(
     RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: const FixedBackoff(Duration(milliseconds: 100)),
+      backoff: const RpcFixedBackoff(Duration(milliseconds: 100)),
     ),
   );
   inner.forEach(caller.addInterceptor);

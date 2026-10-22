@@ -8,7 +8,7 @@
 // for outcomes it does not count -- a cancellation, or anything the caller's
 // failureOn predicate rejects -- without clearing the gate. If such an outcome
 // belonged to the admitted probe, the breaker stayed halfOpen with the gate
-// pinned, so every later call was rejected with CircuitBreakerOpenException
+// pinned, so every later call was rejected with RpcCircuitBreakerOpenException
 // forever and only a manual reset() could clear it. Cancelled calls are
 // ordinary (deadline, caller navigated away), so this wedged live clients.
 
@@ -41,7 +41,7 @@ void main() {
         ),
         throwsA(isA<RpcException>()),
       );
-      expect(cb.state, CircuitBreakerState.open);
+      expect(cb.state, RpcCircuitBreakerState.open);
     }
 
     test('a cancelled probe releases the gate for the next call', () async {
@@ -63,7 +63,7 @@ void main() {
       );
 
       // The breaker must still be probing, not wedged shut.
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       // The next call takes its turn as the probe and closes the circuit.
       final result = await cb.interceptUnary<String, String>(
@@ -72,7 +72,7 @@ void main() {
         (ctx, req) async => 'ok',
       );
       expect(result, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
 
     test('a failureOn-rejected probe releases the gate too', () async {
@@ -97,7 +97,7 @@ void main() {
         throwsA(isA<RpcException>()),
       );
 
-      expect(cb.state, CircuitBreakerState.halfOpen);
+      expect(cb.state, RpcCircuitBreakerState.halfOpen);
 
       final result = await cb.interceptUnary<String, String>(
         callContext,
@@ -105,7 +105,7 @@ void main() {
         (ctx, req) async => 'ok',
       );
       expect(result, 'ok');
-      expect(cb.state, CircuitBreakerState.closed);
+      expect(cb.state, RpcCircuitBreakerState.closed);
     });
   });
 }

@@ -90,7 +90,7 @@ final class _ReconnectingTransportProxy
   /// the app subscribed — including the connection-window advertisement, whose
   /// absence reads as "the peer does not do flow control" and leaves sends
   /// unbounded for the life of the connection.
-  final _msgCtl = BufferedBroadcastController<RpcTransportMessage>(
+  final _msgCtl = RpcBufferedBroadcastController<RpcTransportMessage>(
     sizeOf: (m) => m.bufferedBytes,
   );
   bool _closed = false;
@@ -607,7 +607,7 @@ class RpcClientConnection {
   RpcClientConnection({
     required Future<IRpcTransport> Function(RpcCancellationToken cancellation)
     transportFactory,
-    BackoffPolicy backoff = const ExponentialBackoff(),
+    RpcBackoffPolicy backoff = const RpcExponentialBackoff(),
     bool Function(Object? error)? shouldReconnect,
     int? maxAttempts,
     Duration? connectTimeout = const Duration(seconds: 30),
@@ -627,7 +627,7 @@ class RpcClientConnection {
   }
 
   final Future<IRpcTransport> Function(RpcCancellationToken) _factory;
-  final BackoffPolicy _backoff;
+  final RpcBackoffPolicy _backoff;
   final bool Function(Object? error)? _shouldReconnect;
   final int? _maxAttempts;
   final Duration? _connectTimeout;

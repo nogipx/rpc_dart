@@ -36,8 +36,8 @@ RpcCallInfo _ctx(String method) {
   );
 }
 
-RpcRateLimiter _limiter() => RpcRateLimiter(
-  global: RateLimit.slidingWindow(max: 5, window: const Duration(hours: 1)),
+RpcRateLimitInterceptor _limiter() => RpcRateLimitInterceptor(
+  global: RpcRateLimit.slidingWindow(max: 5, window: const Duration(hours: 1)),
   clock: _frozenClock,
 );
 
@@ -186,7 +186,7 @@ void main() {
     () async {
       // _check and _meterStream both no-op when no counter applies. The
       // establishment charge must not turn an unconfigured limiter into a gate.
-      final limiter = RpcRateLimiter(clock: _frozenClock);
+      final limiter = RpcRateLimitInterceptor(clock: _frozenClock);
       addTearDown(limiter.dispose);
       final ctx = _ctx('free');
 

@@ -39,7 +39,7 @@ RpcCallInfo _ctx(String method) {
 }
 
 /// Opens [_n] unary calls through [limiter] and counts how many were admitted.
-Future<int> _admitted(RpcRateLimiter limiter, RpcCallInfo ctx) async {
+Future<int> _admitted(RpcRateLimitInterceptor limiter, RpcCallInfo ctx) async {
   var ok = 0;
   for (var i = 0; i < _n; i++) {
     try {
@@ -59,10 +59,13 @@ Future<int> _admitted(RpcRateLimiter limiter, RpcCallInfo ctx) async {
 void main() {
   test('WITNESS a looser perMethod does not lift the global ceiling', () async {
     final clock = _Clock();
-    final limiter = RpcRateLimiter(
-      global: RateLimit.slidingWindow(max: 5, window: const Duration(hours: 1)),
+    final limiter = RpcRateLimitInterceptor(
+      global: RpcRateLimit.slidingWindow(
+        max: 5,
+        window: const Duration(hours: 1),
+      ),
       perMethod: {
-        'Feed.hot': RateLimit.slidingWindow(
+        'Feed.hot': RpcRateLimit.slidingWindow(
           max: 1000,
           window: const Duration(hours: 1),
         ),
@@ -86,13 +89,13 @@ void main() {
       // The fix can overshoot into charging something twice, or into refusing a
       // call no specific limit covers. Both read here as a number below 5.
       final clock = _Clock();
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 5,
           window: const Duration(hours: 1),
         ),
         perMethod: {
-          'Feed.other': RateLimit.slidingWindow(
+          'Feed.other': RpcRateLimit.slidingWindow(
             max: 1,
             window: const Duration(hours: 1),
           ),
@@ -109,13 +112,13 @@ void main() {
     'GUARD a perMethod tighter than global is still the binding one',
     () async {
       final clock = _Clock();
-      final limiter = RpcRateLimiter(
-        global: RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: RpcRateLimit.slidingWindow(
           max: 5,
           window: const Duration(hours: 1),
         ),
         perMethod: {
-          'Feed.tight': RateLimit.slidingWindow(
+          'Feed.tight': RpcRateLimit.slidingWindow(
             max: 2,
             window: const Duration(hours: 1),
           ),
@@ -139,13 +142,13 @@ void main() {
     // clock makes the consequence observable: roll the global window over and
     // ask how much of the per-method budget survived.
     final clock = _Clock();
-    final limiter = RpcRateLimiter(
-      global: RateLimit.slidingWindow(
+    final limiter = RpcRateLimitInterceptor(
+      global: RpcRateLimit.slidingWindow(
         max: 5,
         window: const Duration(seconds: 1),
       ),
       perMethod: {
-        'Feed.hot': RateLimit.slidingWindow(
+        'Feed.hot': RpcRateLimit.slidingWindow(
           max: 10,
           window: const Duration(hours: 1),
         ),
@@ -179,10 +182,13 @@ void main() {
     // against `global: 5` and a loose per-method: 5 arrive, then the stream
     // errors.
     final clock = _Clock();
-    final limiter = RpcRateLimiter(
-      global: RateLimit.slidingWindow(max: 5, window: const Duration(hours: 1)),
+    final limiter = RpcRateLimitInterceptor(
+      global: RpcRateLimit.slidingWindow(
+        max: 5,
+        window: const Duration(hours: 1),
+      ),
       perMethod: {
-        'Feed.upload': RateLimit.slidingWindow(
+        'Feed.upload': RpcRateLimit.slidingWindow(
           max: 1000,
           window: const Duration(hours: 1),
         ),

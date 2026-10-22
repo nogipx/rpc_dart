@@ -79,7 +79,7 @@ class _RawEchoServer {
 Future<RpcClientConnection> _connection(Uri Function() url) async {
   final connection = RpcClientConnection(
     transportFactory: (_) => RpcWebSocketCallerTransport.connect(url()),
-    backoff: const FixedBackoff(Duration(milliseconds: 50)),
+    backoff: const RpcFixedBackoff(Duration(milliseconds: 50)),
   );
   addTearDown(connection.dispose);
   final online = _nextOnline(connection);

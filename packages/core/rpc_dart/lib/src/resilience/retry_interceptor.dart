@@ -42,7 +42,7 @@ typedef RpcRetryPredicate = bool Function(Object error);
 /// ```dart
 /// caller.addInterceptor(RpcRetryInterceptor(
 ///   maxAttempts: 3,
-///   backoff: ExponentialBackoff(baseDelay: Duration(milliseconds: 200)),
+///   backoff: RpcExponentialBackoff(baseDelay: Duration(milliseconds: 200)),
 /// ));
 /// ```
 class RpcRetryInterceptor extends IRpcInterceptor {
@@ -50,7 +50,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   final int maxAttempts;
 
   /// Backoff strategy for computing delays between retries.
-  final BackoffPolicy backoff;
+  final RpcBackoffPolicy backoff;
 
   /// Predicate to decide if an error is retryable.
   ///
@@ -82,7 +82,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// transport.
   RpcRetryInterceptor({
     this.maxAttempts = 3,
-    this.backoff = const ExponentialBackoff(
+    this.backoff = const RpcExponentialBackoff(
       baseDelay: Duration(milliseconds: 200),
       maxDelay: Duration(seconds: 5),
     ),

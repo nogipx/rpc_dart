@@ -10,7 +10,7 @@ import 'package:test/test.dart';
 
 /// Guards the byte-identical output of the allocation/perf optimizations:
 /// - RpcMessageFrame.encode (single Uint8List alloc)
-/// - CborCodec.encode canonical key ordering (key bytes cached once)
+/// - RpcCborCodec.encode canonical key ordering (key bytes cached once)
 /// - RpcChannelFrame.decodeAll (single ByteData view) vs per-frame decode
 void main() {
   group('perf optimizations preserve bytes', () {
@@ -45,7 +45,7 @@ void main() {
       }
     });
 
-    test('CborCodec.encode uses canonical (UTF-8 byte) key order', () {
+    test('RpcCborCodec.encode uses canonical (UTF-8 byte) key order', () {
       // Keys deliberately out of order, including a multi-byte UTF-8 key, to
       // exercise the cached-byte sort path. Output must be deterministic.
       final map = <String, dynamic>{
@@ -56,14 +56,14 @@ void main() {
         'A': 5, // 0x41 -> sorts before lowercase
       };
 
-      final bytes1 = CborCodec.encode(map);
+      final bytes1 = RpcCborCodec.encode(map);
       // Same logical map, different insertion order: must yield identical bytes.
       final map2 = <String, dynamic>{'á': 4, 'A': 5, 'aa': 3, 'a': 2, 'b': 1};
-      final bytes2 = CborCodec.encode(map2);
+      final bytes2 = RpcCborCodec.encode(map2);
 
       expect(bytes1, equals(bytes2));
       // Round-trips back to the same logical content.
-      expect(CborCodec.decode(bytes1), equals(map));
+      expect(RpcCborCodec.decode(bytes1), equals(map));
     });
 
     test('RpcChannelFrame.decodeAll equals per-frame decode', () {

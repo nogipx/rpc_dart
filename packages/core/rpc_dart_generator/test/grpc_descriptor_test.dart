@@ -242,7 +242,7 @@ class Totals implements IRpcSerializable {
         expect(_messageHasFieldNumber(descriptor, 'Totals', 2), isTrue);
         expect(_messageHasFieldNumber(descriptor, 'Totals', 3), isFalse);
         // A bare primitive's codec has a typed decoder, or it does not compile.
-        expect(output, isNot(contains('fromBytes: CborCodec.decodeUnsafe')));
+        expect(output, isNot(contains('fromBytes: RpcCborCodec.decodeUnsafe')));
       },
     );
   });

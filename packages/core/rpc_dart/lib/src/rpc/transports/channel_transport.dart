@@ -110,11 +110,11 @@ class RpcChannelTransport extends IRpcTransport {
 
   /// Global new-stream dispatch. The transport starts consuming the channel as
   /// soon as the connection is up, but the endpoint pipeline subscribes a little
-  /// later; [BufferedBroadcastController] retains frames that arrive in that
+  /// later; [RpcBufferedBroadcastController] retains frames that arrive in that
   /// window and flushes them on the first listen, so nothing is lost (e.g. a
   /// client-stream's leading chunk on a cold connection).
-  final BufferedBroadcastController<RpcTransportMessage> _incoming =
-      BufferedBroadcastController<RpcTransportMessage>(
+  final RpcBufferedBroadcastController<RpcTransportMessage> _incoming =
+      RpcBufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
       );
 

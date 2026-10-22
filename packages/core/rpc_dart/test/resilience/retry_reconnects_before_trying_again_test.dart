@@ -119,7 +119,7 @@ void main() {
   test('an UNAVAILABLE retry reconnects first', () async {
     final interceptor = RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: FixedBackoff(Duration(milliseconds: 5)),
+      backoff: RpcFixedBackoff(Duration(milliseconds: 5)),
     );
     var attempts = 0;
 
@@ -153,7 +153,7 @@ void main() {
   test('RESOURCE_EXHAUSTED is retried WITHOUT reconnecting', () async {
     final interceptor = RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: FixedBackoff(Duration(milliseconds: 5)),
+      backoff: RpcFixedBackoff(Duration(milliseconds: 5)),
     );
     var attempts = 0;
 
@@ -179,7 +179,7 @@ void main() {
   test('a non-transient error neither retries nor reconnects', () async {
     final interceptor = RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: FixedBackoff(Duration(milliseconds: 5)),
+      backoff: RpcFixedBackoff(Duration(milliseconds: 5)),
     );
     var attempts = 0;
 

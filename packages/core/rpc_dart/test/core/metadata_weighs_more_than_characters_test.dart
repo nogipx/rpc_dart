@@ -45,7 +45,7 @@ RpcTransportMessage _thin(int headers) => RpcTransportMessage(
 );
 
 int _fill(RpcTransportMessage Function() build, {int attempts = 6000}) {
-  final ctl = BufferedBroadcastController<RpcTransportMessage>(
+  final ctl = RpcBufferedBroadcastController<RpcTransportMessage>(
     sizeOf: (m) => m.bufferedBytes,
   );
   for (var i = 0; i < attempts; i++) {

@@ -179,7 +179,7 @@ void configureCaller(RpcCallerEndpoint caller) {
     ..addInterceptor(
       RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 100),
           maxDelay: Duration(seconds: 5),
         ),
@@ -188,8 +188,8 @@ void configureCaller(RpcCallerEndpoint caller) {
 }
 ```
 
-Retry covers unary calls only and is meant for idempotent methods. `FixedBackoff`
-is the other built-in `BackoffPolicy`.
+Retry covers unary calls only and is meant for idempotent methods. `RpcFixedBackoff`
+is the other built-in `RpcBackoffPolicy`.
 
 ### Client connection with reconnect
 
@@ -202,7 +202,7 @@ reconnects:
 RpcCallerEndpoint connect(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
     transportFactory: (_) => open(),
-    backoff: const ExponentialBackoff(maxDelay: Duration(seconds: 30)),
+    backoff: const RpcExponentialBackoff(maxDelay: Duration(seconds: 30)),
   );
   connection.connect(); // returns void; watch connection.state
   return RpcCallerEndpoint(transport: connection.transport);
@@ -217,9 +217,9 @@ A responder-side interceptor:
 void limit(RpcResponderEndpoint responder) {
   const second = Duration(seconds: 1);
   responder.addInterceptor(
-    RpcRateLimiter(
-      global: const RateLimit.slidingWindow(max: 5000, window: second),
-      perKeyFallback: const RateLimit.slidingWindow(max: 100, window: second),
+    RpcRateLimitInterceptor(
+      global: const RpcRateLimit.slidingWindow(max: 5000, window: second),
+      perKeyFallback: const RpcRateLimit.slidingWindow(max: 100, window: second),
       keyExtractor: (call) => call.context.getHeader('user-id'),
     ),
   );
@@ -477,7 +477,7 @@ It is installed into your agent's skills directory, for example
 ## Versioning
 
 A minor release may add members to the classes you build on: `IRpcTransport`,
-`IRpcChannel`, `IRpcMultiplexedChannel`, `IRpcCodec`, `IRpcInterceptor`, `IRpcServer`, `RpcCompressionCodec` and `BackoffPolicy`. A
+`IRpcChannel`, `IRpcMultiplexedChannel`, `IRpcCodec`, `IRpcInterceptor`, `IRpcServer`, `RpcCompressionCodec` and `RpcBackoffPolicy`. A
 new member comes with a default body, so code that
 `extends` them keeps compiling. Code that `implements` them may have to add the
 member. Mocks that implement an interface are fine in tests; for production
@@ -498,8 +498,8 @@ families, so a `switch` over one of them keeps a default branch:
 `RpcHealthLevel`, `RpcClientConnectionState`, `RpcCallOutcome`,
 `RpcDataTransferMode`, `RpcContentTypeValidation`, `ConsoleFormat`,
 `LogSpanStatus`, `GrpcServingStatus` (it mirrors a protobuf enum, which can
-grow), `RateLimit` and `LogRecord`. These are closed and stay as they are:
-`RpcMethodType`, `RpcCallDirection`, `CircuitBreakerState`, `RpcServiceKind`,
+grow), `RpcRateLimit` and `LogRecord`. These are closed and stay as they are:
+`RpcMethodType`, `RpcCallDirection`, `RpcCircuitBreakerState`, `RpcServiceKind`,
 `RpcServerMode`, `RpcLogLevel` and `RpcProtoWireType`.
 
 An error detail of a `google.rpc` type that arrives as `RpcRawErrorDetail`

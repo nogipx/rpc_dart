@@ -42,7 +42,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// costs two things.
   ///
   /// It RETAINS them. The transport routes every inbound frame to both the
-  /// per-stream controller and the global [BufferedBroadcastController], which
+  /// per-stream controller and the global [RpcBufferedBroadcastController], which
   /// buffers while it has no listener so the responder pipeline does not miss
   /// frames arriving before it subscribes. A caller-only endpoint never
   /// subscribes, so nothing drains it and the buffer climbs to its event cap and

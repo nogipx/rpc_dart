@@ -40,7 +40,7 @@ Future<(RpcStatus?, int)> _call({Duration? cancelAfter}) async {
     ..addInterceptor(
       RpcRetryInterceptor(
         maxAttempts: 2,
-        backoff: const FixedBackoff(Duration(seconds: 3)),
+        backoff: const RpcFixedBackoff(Duration(seconds: 3)),
       ),
     );
   final token = RpcCancellationToken();
@@ -98,7 +98,7 @@ void main() {
       );
       final retry = RpcRetryInterceptor(
         maxAttempts: 2,
-        backoff: const FixedBackoff(Duration(seconds: 2)),
+        backoff: const RpcFixedBackoff(Duration(seconds: 2)),
       );
       if (cancel) {
         Timer(const Duration(milliseconds: 100), () => token.cancel('x'));

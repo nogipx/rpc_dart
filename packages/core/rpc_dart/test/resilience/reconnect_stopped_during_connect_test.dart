@@ -115,7 +115,7 @@ _Harness _build() {
       made.add(t);
       return t;
     },
-    backoff: const ExponentialBackoff(
+    backoff: const RpcExponentialBackoff(
       baseDelay: Duration(milliseconds: 5),
       maxDelay: Duration(milliseconds: 20),
     ),
@@ -267,7 +267,7 @@ void main() {
           made.add(t);
           return t;
         },
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 5),
           maxDelay: Duration(milliseconds: 20),
         ),

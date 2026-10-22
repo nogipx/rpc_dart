@@ -50,7 +50,7 @@ void main() {
         made.add(client);
         return client;
       },
-      backoff: const FixedBackoff(Duration(milliseconds: 10)),
+      backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       maxAttempts: 3,
     );
     addTearDown(() async {
@@ -106,7 +106,7 @@ void main() {
         calls++;
         throw StateError('peer is down');
       },
-      backoff: const FixedBackoff(Duration(milliseconds: 10)),
+      backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       maxAttempts: 3,
     );
     addTearDown(connection.dispose);

@@ -110,7 +110,7 @@ void main() {
       '656721';
 
   test('CBOR: types, and keys in a fixed order', () {
-    final encoded = CborCodec.encode({
+    final encoded = RpcCborCodec.encode({
       'b': 1,
       'a': 'x',
       'list': [true, null, 1.5],
@@ -119,7 +119,7 @@ void main() {
     });
     expect(_toHex(encoded), cbor);
 
-    final decoded = CborCodec.decode(_hex(cbor));
+    final decoded = RpcCborCodec.decode(_hex(cbor));
     expect(decoded['a'], 'x');
     expect(decoded['b'], 1);
     expect(decoded['neg'], -2);

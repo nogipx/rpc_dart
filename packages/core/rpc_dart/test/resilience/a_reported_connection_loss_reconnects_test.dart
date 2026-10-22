@@ -105,7 +105,7 @@ void main() {
         built.add(t);
         return t;
       },
-      backoff: const FixedBackoff(Duration(milliseconds: 10)),
+      backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       onStateChanged: states.add,
     );
     addTearDown(connection.dispose);

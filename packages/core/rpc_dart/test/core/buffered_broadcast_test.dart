@@ -8,9 +8,9 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('BufferedBroadcastController', () {
+  group('RpcBufferedBroadcastController', () {
     test('replays events added before the first listener, in order', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       c.add(1);
       c.add(2);
       c.add(3);
@@ -26,7 +26,7 @@ void main() {
     });
 
     test('forwards live once listened', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       final got = <int>[];
       c.stream.listen(got.add);
       c.add(1);
@@ -37,7 +37,7 @@ void main() {
     });
 
     test('buffers errors in order with data', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       final events = <Object>[];
       c.add(1);
       c.addError(StateError('boom'));
@@ -54,7 +54,7 @@ void main() {
     });
 
     test('re-buffers between listeners (detach then re-attach)', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       final first = <int>[];
       final sub = c.stream.listen(first.add);
       c.add(1);
@@ -77,7 +77,7 @@ void main() {
 
     test('bounds memory and fires onOverflow when never drained', () async {
       var overflowed = false;
-      final c = BufferedBroadcastController<int>(
+      final c = RpcBufferedBroadcastController<int>(
         maxPendingEvents: 10,
         onOverflow: () => overflowed = true,
       );
@@ -90,7 +90,7 @@ void main() {
     });
 
     test('addStream completes when the source finishes', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       final seen = <int>[];
       c.stream.listen(seen.add);
 
@@ -105,7 +105,7 @@ void main() {
     test('addStream completes on error when cancelOnError is set', () async {
       // cancelOnError tears the subscription down at the first error, so the
       // source's onDone never fires; the returned future used to hang forever.
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       final seen = <int>[];
       final errors = <Object>[];
       c.stream.listen(seen.add, onError: errors.add);
@@ -130,7 +130,7 @@ void main() {
       // The pipe's subscription used to be dropped on the floor: the caller
       // had no handle to it, so it outlived the sink and kept draining the
       // source forever into a closed (no-op) controller.
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       c.stream.listen((_) {});
 
       var cancelled = false;
@@ -154,7 +154,7 @@ void main() {
     });
 
     test('addStream on an already-closed sink returns immediately', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       await c.close();
 
       var listened = false;
@@ -170,7 +170,7 @@ void main() {
     });
 
     test('close clears the buffer', () async {
-      final c = BufferedBroadcastController<int>();
+      final c = RpcBufferedBroadcastController<int>();
       c.add(1);
       c.add(2);
       expect(c.pendingCount, 2);

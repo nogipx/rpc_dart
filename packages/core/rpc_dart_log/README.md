@@ -61,7 +61,7 @@ The constructor starts connecting at once. `write` never blocks: records wait
 in a buffer while offline and are sent once the connection is up.
 
 - On a drop, `LogCollectorOutput` reconnects through the core
-  `RpcClientConnection` with its default `ExponentialBackoff`: 1s base, capped
+  `RpcClientConnection` with its default `RpcExponentialBackoff`: 1s base, capped
   at 60s, with jitter, no attempt limit. After each reconnect it handshakes
   again and resends unacknowledged records in order.
 - `bufferSize` caps buffered plus in-flight records, and `bufferBytes` caps

@@ -134,7 +134,7 @@ void main() {
   test('a 503 is retried and a 400 is not', () async {
     RpcRetryInterceptor retry() => RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: const ExponentialBackoff(
+      backoff: const RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 20),
         maxDelay: Duration(milliseconds: 50),
       ),

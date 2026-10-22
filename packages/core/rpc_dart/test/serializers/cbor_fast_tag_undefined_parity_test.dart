@@ -37,14 +37,14 @@ void main() {
     ]);
 
     test('fast decode handles tag and undefined', () {
-      final fast = CborCodec.decode(bytes);
+      final fast = RpcCborCodec.decode(bytes);
       expect(fast['tagged'], 1234, reason: 'tag must be skipped, value read');
       expect(fast['undef'], isNull, reason: 'undefined maps to null');
     });
 
     test('fast decode matches slow decode (parity)', () {
-      final fast = CborCodec.decode(bytes);
-      final slow = CborCodec.decodeUnsafe(bytes);
+      final fast = RpcCborCodec.decode(bytes);
+      final slow = RpcCborCodec.decodeUnsafe(bytes);
 
       expect(slow, isA<Map<Object?, Object?>>());
       final slowMap = (slow as Map).map((k, v) => MapEntry(k.toString(), v));
@@ -65,7 +65,7 @@ void main() {
         0xc2, 0x18, 0x2a,
         0xf7,
       ]);
-      final fast = CborCodec.decode(nested);
+      final fast = RpcCborCodec.decode(nested);
       expect(fast['list'], [42, null]);
     });
   });

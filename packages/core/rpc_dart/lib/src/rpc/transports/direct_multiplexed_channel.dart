@@ -26,8 +26,8 @@ class RpcDirectMultiplexedChannel extends IRpcMultiplexedChannel {
   ///
   /// `sizeOf` is `bufferedBytes`, which is 0 for a `directPayload` by definition:
   /// queuing one costs a pointer, so the COUNT bound is the one that binds here.
-  final BufferedBroadcastController<RpcTransportMessage> _incomingCtl =
-      BufferedBroadcastController<RpcTransportMessage>(
+  final RpcBufferedBroadcastController<RpcTransportMessage> _incomingCtl =
+      RpcBufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
       );
   late final StreamSubscription<RpcTransportMessage> _sub;

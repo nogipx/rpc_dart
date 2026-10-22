@@ -74,7 +74,7 @@ void main() {
     endpoint = RpcCallerEndpoint(transport: clientTransport);
   });
 
-  Future<void> hit(RpcRateLimiter limiter, String key) {
+  Future<void> hit(RpcRateLimitInterceptor limiter, String key) {
     final c = RpcCallInfo(
       endpoint: endpoint,
       serviceName: 'S',
@@ -96,8 +96,8 @@ void main() {
       hasLength(1),
       reason: 'the construction must collide, or the test is vacuous',
     );
-    final limiter = RpcRateLimiter(
-      perKeyFallback: RateLimit.slidingWindow(
+    final limiter = RpcRateLimitInterceptor(
+      perKeyFallback: RpcRateLimit.slidingWindow(
         max: 1,
         window: const Duration(minutes: 1),
       ),
@@ -122,8 +122,8 @@ void main() {
 
   test('LRU eviction holds across colliding keys', () async {
     final keys = _collidingKeys(2000); // all share one hashCode
-    final limiter = RpcRateLimiter(
-      perKeyFallback: RateLimit.slidingWindow(
+    final limiter = RpcRateLimitInterceptor(
+      perKeyFallback: RpcRateLimit.slidingWindow(
         max: 1,
         window: const Duration(minutes: 1),
       ),

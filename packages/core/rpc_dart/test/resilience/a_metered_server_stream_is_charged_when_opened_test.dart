@@ -26,8 +26,8 @@ void main() {
           context: RpcContext.empty(),
           direction: RpcCallDirection.incoming,
         );
-        final limiter = RpcRateLimiter(
-          global: const RateLimit.slidingWindow(
+        final limiter = RpcRateLimitInterceptor(
+          global: const RpcRateLimit.slidingWindow(
             max: 2,
             window: Duration(hours: 1),
           ),
@@ -71,8 +71,8 @@ void main() {
         context: RpcContext.empty(),
         direction: RpcCallDirection.incoming,
       );
-      final limiter = RpcRateLimiter(
-        global: const RateLimit.slidingWindow(
+      final limiter = RpcRateLimitInterceptor(
+        global: const RpcRateLimit.slidingWindow(
           max: 3,
           window: Duration(hours: 1),
         ),

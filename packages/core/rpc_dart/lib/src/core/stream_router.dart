@@ -15,7 +15,7 @@ import 'transport.dart';
 /// message, and lets a stream-scoped error reach every subscriber; this gives
 /// each stream its own controller instead.
 ///
-/// Transport-authoring API, like `BufferedBroadcastController` beside it. It
+/// Transport-authoring API, like `RpcBufferedBroadcastController` beside it. It
 /// owns ONLY the per-stream half — the transport keeps its own broadcast and
 /// decides what to put on it.
 ///

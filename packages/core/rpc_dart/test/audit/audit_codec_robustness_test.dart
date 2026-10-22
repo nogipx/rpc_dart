@@ -22,13 +22,13 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('CborCodec malformed-input error contract', () {
+  group('RpcCborCodec malformed-input error contract', () {
     test(
       'truncated map (declared entry, missing key) throws FormatException',
       () {
         // 0xA1 = map with 1 entry; no key/value bytes follow.
         expect(
-          () => CborCodec.decode(Uint8List.fromList([0xa1])),
+          () => RpcCborCodec.decode(Uint8List.fromList([0xa1])),
           throwsA(isA<FormatException>()),
           reason:
               'a truncated key read must surface FormatException, not '
@@ -51,7 +51,7 @@ void main() {
         0x00,
       ]);
       expect(
-        () => CborCodec.decodeUnsafe(bytes),
+        () => RpcCborCodec.decodeUnsafe(bytes),
         throwsA(isA<FormatException>()),
         reason:
             'a uint64 that cannot be represented exactly on both the VM '
@@ -73,7 +73,7 @@ void main() {
         0xFF,
       ]);
       expect(
-        () => CborCodec.decodeUnsafe(bytes),
+        () => RpcCborCodec.decodeUnsafe(bytes),
         throwsA(isA<FormatException>()),
       );
     });

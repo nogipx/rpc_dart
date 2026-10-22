@@ -14,24 +14,24 @@ import '../_internal.dart';
 
 /// Describes a rate-limit algorithm and its parameters.
 ///
-/// A [RateLimit] instance is a **specification** — it is passed to
-/// [RpcRateLimiter] which creates internal counters from it as needed.
+/// A [RpcRateLimit] instance is a **specification** — it is passed to
+/// [RpcRateLimitInterceptor] which creates internal counters from it as needed.
 ///
 /// Two built-in algorithms:
 ///
-/// - [RateLimit.slidingWindow] — O(1) sliding-window counter using two
+/// - [RpcRateLimit.slidingWindow] — O(1) sliding-window counter using two
 ///   fixed-window buckets. Strict: no burst allowance.
-/// - [RateLimit.tokenBucket] — token-bucket with configurable burst capacity.
+/// - [RpcRateLimit.tokenBucket] — token-bucket with configurable burst capacity.
 ///   Allows short bursts above the average rate.
 ///
 /// Open: a minor release may add an algorithm.
-sealed class RateLimit {
-  const RateLimit();
+sealed class RpcRateLimit {
+  const RpcRateLimit();
 
   /// O(1) sliding-window counter.
   ///
   /// [max] requests are allowed per [window]. No burst above [max].
-  const factory RateLimit.slidingWindow({
+  const factory RpcRateLimit.slidingWindow({
     required int max,
     required Duration window,
   }) = _SlidingWindowSpec;
@@ -41,7 +41,7 @@ sealed class RateLimit {
   /// Tokens refill at [max] per [window]. The bucket holds at most [burst]
   /// tokens (defaults to [max]). Short spikes up to [burst] are served
   /// instantly as long as the bucket is sufficiently full.
-  const factory RateLimit.tokenBucket({
+  const factory RpcRateLimit.tokenBucket({
     required int max,
     required Duration window,
     int? burst,
@@ -67,8 +67,8 @@ sealed class RateLimit {
   ///
   /// Here rather than in the constructors, because `Duration` supports neither
   /// comparison nor property access in a constant expression: an assert
-  /// mentioning one makes `const RateLimit.slidingWindow(...)` a compile error.
-  /// [RpcRateLimiter] calls this for every spec it is given.
+  /// mentioning one makes `const RpcRateLimit.slidingWindow(...)` a compile error.
+  /// [RpcRateLimitInterceptor] calls this for every spec it is given.
   void _validate();
 }
 
@@ -76,7 +76,7 @@ sealed class RateLimit {
 // Spec implementations
 // ---------------------------------------------------------------------------
 
-class _SlidingWindowSpec extends RateLimit {
+class _SlidingWindowSpec extends RpcRateLimit {
   final int max;
   @override
   final Duration _window;
@@ -90,14 +90,14 @@ class _SlidingWindowSpec extends RateLimit {
       throw ArgumentError.value(
         max,
         'max',
-        'RateLimit.slidingWindow max must be > 0',
+        'RpcRateLimit.slidingWindow max must be > 0',
       );
     }
     if (_window <= Duration.zero) {
       throw ArgumentError.value(
         _window,
         'window',
-        'RateLimit.slidingWindow window must be > 0 (a zero window divides by '
+        'RpcRateLimit.slidingWindow window must be > 0 (a zero window divides by '
             'zero in the counter)',
       );
     }
@@ -108,7 +108,7 @@ class _SlidingWindowSpec extends RateLimit {
       _SlidingWindowCounter(max: max, window: _window, nowMicros: nowMicros);
 }
 
-class _TokenBucketSpec extends RateLimit {
+class _TokenBucketSpec extends RpcRateLimit {
   final int max;
   final int? burst;
   @override
@@ -126,14 +126,14 @@ class _TokenBucketSpec extends RateLimit {
       throw ArgumentError.value(
         max,
         'max',
-        'RateLimit.tokenBucket max must be > 0',
+        'RpcRateLimit.tokenBucket max must be > 0',
       );
     }
     if (_window <= Duration.zero) {
       throw ArgumentError.value(
         _window,
         'window',
-        'RateLimit.tokenBucket window must be > 0 (a zero window makes the '
+        'RpcRateLimit.tokenBucket window must be > 0 (a zero window makes the '
             'refill Infinity, so the bucket is always full and the limiter '
             'accepts everything)',
       );
@@ -143,7 +143,7 @@ class _TokenBucketSpec extends RateLimit {
       throw ArgumentError.value(
         b,
         'burst',
-        'RateLimit.tokenBucket burst must be > 0 when provided',
+        'RpcRateLimit.tokenBucket burst must be > 0 when provided',
       );
     }
   }
@@ -467,11 +467,11 @@ class _KeyedLruStore<V> {
 /// Rate-limiting interceptor for [RpcResponderEndpoint].
 ///
 /// ```dart
-/// RpcRateLimiter(
-///   global: RateLimit.slidingWindow(max: 5000, window: Duration(seconds: 1)),
-///   perService: {'Heavy': RateLimit.slidingWindow(max: 10, window: second)},
-///   perMethod: {'Sync.push': RateLimit.tokenBucket(max: 10, window: second)},
-///   perKeyFallback: RateLimit.slidingWindow(max: 50, window: second),
+/// RpcRateLimitInterceptor(
+///   global: RpcRateLimit.slidingWindow(max: 5000, window: Duration(seconds: 1)),
+///   perService: {'Heavy': RpcRateLimit.slidingWindow(max: 10, window: second)},
+///   perMethod: {'Sync.push': RpcRateLimit.tokenBucket(max: 10, window: second)},
+///   perKeyFallback: RpcRateLimit.slidingWindow(max: 50, window: second),
 ///   keyExtractor: (call) => call.context.getValue(userIdKey),
 /// )
 /// ```
@@ -518,7 +518,7 @@ class _KeyedLruStore<V> {
 ///
 /// Enforced within a single Dart isolate, so no locking. Idle counters are
 /// swept as calls arrive; [dispose] drops them all at shutdown.
-class RpcRateLimiter extends IRpcInterceptor {
+class RpcRateLimitInterceptor extends IRpcInterceptor {
   /// Creates a rate limiter.
   ///
   /// When [keyExtractor] is provided, [perService] and [perMethod] counters
@@ -531,11 +531,11 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// fake clock in tests. The default is a monotonic [Stopwatch] read as
   /// microseconds, so wall-clock jumps cannot break the windows and a call
   /// allocates no [DateTime].
-  RpcRateLimiter({
-    RateLimit? global,
-    Map<String, RateLimit> perService = const {},
-    Map<String, RateLimit> perMethod = const {},
-    RateLimit? perKeyFallback,
+  RpcRateLimitInterceptor({
+    RpcRateLimit? global,
+    Map<String, RpcRateLimit> perService = const {},
+    Map<String, RpcRateLimit> perMethod = const {},
+    RpcRateLimit? perKeyFallback,
     String? Function(RpcCallInfo)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
     int maxTrackedKeys = 100000,
@@ -568,7 +568,7 @@ class RpcRateLimiter extends IRpcInterceptor {
 
     // Validate EVERY spec up front, in every build mode. A spec that cannot
     // enforce anything must fail loudly at construction rather than at first
-    // use -- or, worse, never (see RateLimit._validate).
+    // use -- or, worse, never (see RpcRateLimit._validate).
     global?._validate();
     _perKeyFallbackSpec?._validate();
     for (final spec in perService.values) {
@@ -601,10 +601,10 @@ class RpcRateLimiter extends IRpcInterceptor {
   static final Stopwatch _monotonic = Stopwatch()..start();
   static int _defaultMonotonicMicros() => _monotonic.elapsedMicroseconds;
 
-  final RateLimit? _globalSpec;
-  final Map<String, RateLimit> _perServiceSpec;
-  final Map<String, RateLimit> _perMethodSpec;
-  final RateLimit? _perKeyFallbackSpec;
+  final RpcRateLimit? _globalSpec;
+  final Map<String, RpcRateLimit> _perServiceSpec;
+  final Map<String, RpcRateLimit> _perMethodSpec;
+  final RpcRateLimit? _perKeyFallbackSpec;
   final String? Function(RpcCallInfo)? _keyExtractor;
   final bool _meterServerStreamMessages;
   final int Function() _nowMicros;
@@ -692,7 +692,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     _KeyedLruStore<Map<String, _RateLimitCounter>> store,
     String userKey,
     String slotKey,
-    RateLimit? spec,
+    RpcRateLimit? spec,
   ) {
     if (spec == null) return null;
     // The key is attacker-controlled (it comes from _keyExtractor, e.g. a

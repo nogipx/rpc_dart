@@ -7,7 +7,7 @@ import 'dart:async';
 import '../_internal.dart';
 
 /// Circuit breaker states.
-enum CircuitBreakerState {
+enum RpcCircuitBreakerState {
   /// Normal operation. Requests pass through.
   closed,
 
@@ -22,7 +22,7 @@ enum CircuitBreakerState {
 ///
 /// Tracks consecutive failures. When failures exceed [failureThreshold],
 /// the circuit opens and subsequent calls fail immediately with
-/// [CircuitBreakerOpenException]. After [resetTimeout], one probe request
+/// [RpcCircuitBreakerOpenException]. After [resetTimeout], one probe request
 /// is allowed through (half-open). If it succeeds, the circuit closes.
 /// If it fails, the circuit opens again.
 ///
@@ -74,7 +74,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     return true;
   }
 
-  CircuitBreakerState _state = CircuitBreakerState.closed;
+  RpcCircuitBreakerState _state = RpcCircuitBreakerState.closed;
   int _failureCount = 0;
 
   /// Monotonic stopwatch measuring elapsed time since the last recorded
@@ -85,7 +85,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   Stopwatch? _sinceLastFailure;
 
   /// Whether a half-open probe is currently in flight. Only one probe is
-  /// admitted in [CircuitBreakerState.halfOpen]; further calls are rejected
+  /// admitted in [RpcCircuitBreakerState.halfOpen]; further calls are rejected
   /// until the in-flight probe resolves (success -> close, failure -> reopen).
   bool _probeInFlight = false;
 
@@ -103,7 +103,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   });
 
   /// Current state of the circuit breaker.
-  CircuitBreakerState get state => _state;
+  RpcCircuitBreakerState get state => _state;
 
   /// Current consecutive failure count.
   int get failureCount => _failureCount;
@@ -155,7 +155,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     final _Admission admission;
     try {
       admission = _checkState();
-    } on CircuitBreakerOpenException catch (e, st) {
+    } on RpcCircuitBreakerOpenException catch (e, st) {
       return Stream<T>.error(e, st);
     }
     try {
@@ -293,37 +293,39 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
   /// generation its call was admitted in; see [_Admission].
   int _generation = 0;
 
-  void _setState(CircuitBreakerState state) {
+  void _setState(RpcCircuitBreakerState state) {
     _state = state;
     _generation++;
   }
 
-  /// Admits a call, or throws [CircuitBreakerOpenException] if the circuit is
+  /// Admits a call, or throws [RpcCircuitBreakerOpenException] if the circuit is
   /// open, and says what the call was admitted as.
   _Admission _checkState() {
     switch (_state) {
-      case CircuitBreakerState.closed:
+      case RpcCircuitBreakerState.closed:
         return _Admission(_generation, isProbe: false);
 
-      case CircuitBreakerState.open:
+      case RpcCircuitBreakerState.open:
         // Check if reset timeout has elapsed (monotonic, clock-jump immune).
         if (_sinceLastFailure != null) {
           final elapsed = _sinceLastFailure!.elapsed;
           if (elapsed >= resetTimeout) {
             // Transition to half-open and admit exactly this one probe.
-            _setState(CircuitBreakerState.halfOpen);
+            _setState(RpcCircuitBreakerState.halfOpen);
             _probeInFlight = true;
             return _Admission(_generation, isProbe: true);
           }
-          throw CircuitBreakerOpenException(retryAfter: resetTimeout - elapsed);
+          throw RpcCircuitBreakerOpenException(
+            retryAfter: resetTimeout - elapsed,
+          );
         }
-        throw CircuitBreakerOpenException();
+        throw RpcCircuitBreakerOpenException();
 
-      case CircuitBreakerState.halfOpen:
+      case RpcCircuitBreakerState.halfOpen:
         // Single-probe gate: only one probe may run at a time. Reject the
         // rest until the in-flight probe resolves (success or failure).
         if (_probeInFlight) {
-          throw CircuitBreakerOpenException();
+          throw RpcCircuitBreakerOpenException();
         }
         _probeInFlight = true;
         return _Admission(_generation, isProbe: true);
@@ -355,7 +357,7 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     if (admission.isProbe) {
       // The admitted probe succeeded — close the circuit and clear the gate.
       _probeInFlight = false;
-      _setState(CircuitBreakerState.closed);
+      _setState(RpcCircuitBreakerState.closed);
     }
   }
 
@@ -390,15 +392,15 @@ class RpcCircuitBreakerInterceptor extends IRpcInterceptor {
     if (admission.isProbe) {
       // Probe failed — reopen and release the probe gate.
       _probeInFlight = false;
-      _setState(CircuitBreakerState.open);
+      _setState(RpcCircuitBreakerState.open);
     } else if (_failureCount >= failureThreshold) {
-      _setState(CircuitBreakerState.open);
+      _setState(RpcCircuitBreakerState.open);
     }
   }
 
   /// Manually resets the circuit breaker to closed state.
   void reset() {
-    _setState(CircuitBreakerState.closed);
+    _setState(RpcCircuitBreakerState.closed);
     _failureCount = 0;
     _sinceLastFailure?.stop();
     _sinceLastFailure = null;

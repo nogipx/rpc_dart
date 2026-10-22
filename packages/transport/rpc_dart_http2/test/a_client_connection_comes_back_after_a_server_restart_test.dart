@@ -76,7 +76,7 @@ void main() {
       final connection = RpcClientConnection(
         transportFactory: (_) =>
             RpcHttp2CallerTransport.connect(host: '127.0.0.1', port: port),
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 50),
           maxDelay: Duration(milliseconds: 200),
           jitter: false,

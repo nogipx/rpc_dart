@@ -119,7 +119,7 @@ not zero-copy, and a method without codecs fails on them.
 5. **There is no `interceptors:` constructor parameter.**
    Use `addInterceptor`. The first interceptor added is the
    outermost. Add a circuit breaker before a retry interceptor, or the retry
-   will retry `CircuitBreakerOpenException` (UNAVAILABLE).
+   will retry `RpcCircuitBreakerOpenException` (UNAVAILABLE).
 6. **Limits live on the transport, not the endpoint.** Pass an
    `RpcSecurityPolicy` to the transport factory (`memoryPair(policy:)`,
    `pair(policy:)`, or a transport package's `policy` parameter). Endpoints

@@ -22,7 +22,7 @@ import 'package:web_socket_channel/io.dart';
 Future<RpcClientConnection> _connection(Uri uri) async {
   final connection = RpcClientConnection(
     maxAttempts: 3,
-    backoff: const ExponentialBackoff(
+    backoff: const RpcExponentialBackoff(
       baseDelay: Duration(milliseconds: 50),
       jitter: false,
     ),

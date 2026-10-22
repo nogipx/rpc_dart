@@ -23,7 +23,7 @@ void main() {
         return live = _T();
       },
       // The next attempt is far beyond the reconnect wait's own 5 s limit.
-      backoff: const FixedBackoff(Duration(seconds: 30)),
+      backoff: const RpcFixedBackoff(Duration(seconds: 30)),
     );
     addTearDown(connection.dispose);
     connection.connect();
@@ -122,7 +122,7 @@ Future<(Object?, int)> _call(
   );
   final retry = RpcRetryInterceptor(
     maxAttempts: 2,
-    backoff: FixedBackoff(backoff),
+    backoff: RpcFixedBackoff(backoff),
   );
   final sw = Stopwatch()..start();
   Object? outcome;

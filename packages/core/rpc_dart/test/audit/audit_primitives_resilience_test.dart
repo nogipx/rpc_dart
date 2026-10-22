@@ -10,7 +10,7 @@
 //    returned a value on dart2js — a platform divergence. `~/` is well-defined
 //    for any num, so it is now computed directly and is platform-stable.
 //
-// 2. rate_limiter.dart: RateLimit.slidingWindow / .tokenBucket accepted a
+// 2. rate_limiter.dart: RpcRateLimit.slidingWindow / .tokenBucket accepted a
 //    zero/negative max and a zero window with no validation, which divides by
 //    zero (sliding window) or yields NaN/Infinity (token bucket) at runtime.
 
@@ -44,14 +44,14 @@ void main() {
   // asserted AssertionError. That expectation was the defect: Dart strips
   // asserts in release, so the guard these tests were guarding did not exist in
   // production -- a zero-window token bucket accepted 50/50 requests against
-  // `max: 5`. The bounds are now real throws checked by RpcRateLimiter, which
+  // `max: 5`. The bounds are now real throws checked by RpcRateLimitInterceptor, which
   // hold in every build mode, so the checks moved from the spec constructor to
   // the limiter that uses it. See rate_limit_spec_validation_test.dart.
-  group('RateLimit specs validate their arguments', () {
+  group('RpcRateLimit specs validate their arguments', () {
     test('slidingWindow rejects max <= 0', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 0,
             window: const Duration(seconds: 1),
           ),
@@ -62,8 +62,8 @@ void main() {
 
     test('slidingWindow rejects a zero window', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.slidingWindow(max: 10, window: Duration.zero),
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(max: 10, window: Duration.zero),
         ),
         throwsArgumentError,
       );
@@ -71,14 +71,14 @@ void main() {
 
     test('tokenBucket rejects a zero window and a zero burst', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.tokenBucket(max: 10, window: Duration.zero),
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.tokenBucket(max: 10, window: Duration.zero),
         ),
         throwsArgumentError,
       );
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.tokenBucket(
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.tokenBucket(
             max: 10,
             window: const Duration(seconds: 1),
             burst: 0,
@@ -90,8 +90,8 @@ void main() {
 
     test('valid specs construct without error', () {
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.slidingWindow(
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.slidingWindow(
             max: 10,
             window: const Duration(seconds: 1),
           ),
@@ -99,8 +99,8 @@ void main() {
         returnsNormally,
       );
       expect(
-        () => RpcRateLimiter(
-          global: RateLimit.tokenBucket(
+        () => RpcRateLimitInterceptor(
+          global: RpcRateLimit.tokenBucket(
             max: 10,
             window: const Duration(seconds: 1),
             burst: 5,

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
-// ExponentialBackoff worked in whole milliseconds, so a base under 1 ms
+// RpcExponentialBackoff worked in whole milliseconds, so a base under 1 ms
 // truncated to 0 -- and the overflow guard read 0 as "too large" and answered
 // maxDelay. `baseDelay: Duration.zero`, which reads as "no delay", slept the
 // maximum (60 s by default) before every retry and reconnect. With jitter,
@@ -15,7 +15,7 @@ void main() {
   const max = Duration(seconds: 30);
 
   test('a base under a millisecond grows from itself', () {
-    const b = ExponentialBackoff(
+    const b = RpcExponentialBackoff(
       baseDelay: Duration(microseconds: 500),
       maxDelay: max,
       jitter: false,
@@ -26,7 +26,7 @@ void main() {
   });
 
   test('a zero base means no delay', () {
-    const b = ExponentialBackoff(
+    const b = RpcExponentialBackoff(
       baseDelay: Duration.zero,
       maxDelay: max,
       jitter: false,
@@ -37,7 +37,7 @@ void main() {
   });
 
   test('CONTROL: whole milliseconds, capped, at any attempt', () {
-    const b = ExponentialBackoff(
+    const b = RpcExponentialBackoff(
       baseDelay: Duration(milliseconds: 1),
       maxDelay: max,
       jitter: false,
@@ -51,7 +51,7 @@ void main() {
   });
 
   test('jitter stays inside (0, cap] at a cap past 2^32 microseconds', () {
-    const b = ExponentialBackoff(
+    const b = RpcExponentialBackoff(
       baseDelay: Duration(days: 1),
       maxDelay: Duration(days: 50),
     );

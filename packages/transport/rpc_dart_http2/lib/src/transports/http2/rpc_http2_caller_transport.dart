@@ -75,8 +75,8 @@ class RpcHttp2CallerTransport extends IRpcTransport {
 
   final http2.ClientTransportConnection _connection;
 
-  final BufferedBroadcastController<RpcTransportMessage> _messageController =
-      BufferedBroadcastController<RpcTransportMessage>(
+  final RpcBufferedBroadcastController<RpcTransportMessage> _messageController =
+      RpcBufferedBroadcastController<RpcTransportMessage>(
         sizeOf: (m) => m.bufferedBytes,
       );
 

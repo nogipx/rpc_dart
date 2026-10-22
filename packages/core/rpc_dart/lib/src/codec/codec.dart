@@ -15,8 +15,8 @@ class RpcCodec<T extends IRpcSerializable> implements IRpcCodec<T> {
     : _fromJson = fromJson;
 
   @override
-  Uint8List serialize(T message) => CborCodec.encode(message.toJson());
+  Uint8List serialize(T message) => RpcCborCodec.encode(message.toJson());
 
   @override
-  T deserialize(Uint8List bytes) => _fromJson(CborCodec.decode(bytes));
+  T deserialize(Uint8List bytes) => _fromJson(RpcCborCodec.decode(bytes));
 }

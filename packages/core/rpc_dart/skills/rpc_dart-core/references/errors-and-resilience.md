@@ -23,7 +23,7 @@ tools: retry, circuit breaker, rate limiter and reconnecting connection.
   `RpcStatusException`. Branch on `e.statusCode`, not on subtype. Only
   errors raised on the caller itself keep their subtype:
   `RpcCancelledException`, `RpcDeadlineExceededException`,
-  `CircuitBreakerOpenException`, `RpcClosedException`,
+  `RpcCircuitBreakerOpenException`, `RpcClosedException`,
   `RpcNoConnectionException`, `RpcMetadataViolationException`.
 - Interceptors are attached with `endpoint.addInterceptor(...)`. The first one added is
   the OUTERMOST.
@@ -116,7 +116,7 @@ plain RESOURCE_EXHAUSTED means "too big" and is never retried.
 | `RpcClosedException(what, {detail})` | FAILED_PRECONDITION | this side closed it; `byPeer == false` |
 | `RpcClosedException.byPeer(what)` | UNAVAILABLE | peer went away; `byPeer == true` |
 | `RpcNoConnectionException(what, reconnecting:)` | UNAVAILABLE | no live connection |
-| `CircuitBreakerOpenException({retryAfter})` | UNAVAILABLE | thrown by the breaker on the caller |
+| `RpcCircuitBreakerOpenException({retryAfter})` | UNAVAILABLE | thrown by the breaker on the caller |
 | `RpcRateLimitException(message, {retryAfter})` | RESOURCE_EXHAUSTED | carries `RpcRetryInfo` when `retryAfter` is set |
 | `RpcMetadataViolationException` | INVALID_ARGUMENT | metadata failed the security policy; not an `ArgumentError` |
 | `RpcFrameException` / `.limit` / `.policy` | INTERNAL / RESOURCE_EXHAUSTED / INVALID_ARGUMENT | malformed or oversized frames |
@@ -132,7 +132,7 @@ void configure(RpcCallerEndpoint caller) {
     ..addInterceptor(
       RpcRetryInterceptor(
         maxAttempts: 3,
-        backoff: const ExponentialBackoff(
+        backoff: const RpcExponentialBackoff(
           baseDelay: Duration(milliseconds: 200),
           maxDelay: Duration(seconds: 5),
         ),
@@ -143,7 +143,7 @@ void configure(RpcCallerEndpoint caller) {
 
 - UNARY calls only. All streaming shapes pass through without retry.
 - `maxAttempts` counts the first call and must be >= 1 (otherwise `ArgumentError`). The defaults are 3 attempts and
-  `ExponentialBackoff(baseDelay: 200 ms, maxDelay: 5 s)`.
+  `RpcExponentialBackoff(baseDelay: 200 ms, maxDelay: 5 s)`.
 - What the default predicate retries: UNAVAILABLE; RESOURCE_EXHAUSTED only with pushback
   (`RpcRetryInfo` detail or `RpcRateLimitException`). Never retried: cancellation,
   deadline exceeded, a context with no time left, INTERNAL, INVALID_ARGUMENT, a
@@ -162,10 +162,10 @@ void configure(RpcCallerEndpoint caller) {
 
 ## Backoff
 
-`BackoffPolicy` is abstract, with one method: `Duration delayFor(int attempt)` (attempt is 0-based).
-`ExponentialBackoff({baseDelay = 1 s, maxDelay = 60 s, jitter = true})`:
+`RpcBackoffPolicy` is abstract, with one method: `Duration delayFor(int attempt)` (attempt is 0-based).
+`RpcExponentialBackoff({baseDelay = 1 s, maxDelay = 60 s, jitter = true})`:
 `baseDelay * 2^attempt`, capped at `maxDelay`. With jitter, the delay is uniform in (0, cap].
-`FixedBackoff(Duration delay)`. To build a custom policy, extend `BackoffPolicy`.
+`RpcFixedBackoff(Duration delay)`. To build a custom policy, extend `RpcBackoffPolicy`.
 
 ## Circuit breaker: `RpcCircuitBreakerInterceptor` (caller)
 
@@ -174,21 +174,21 @@ failureOn, probeAbandonTimeout = 30 s})`. Covers all four call shapes.
 
 - closed -> open after `failureThreshold` CONSECUTIVE counted failures. Any success resets
   the count.
-- open: calls fail at once with `CircuitBreakerOpenException(retryAfter: remaining time)`.
+- open: calls fail at once with `RpcCircuitBreakerOpenException(retryAfter: remaining time)`.
   Streaming calls get it as a stream error.
 - After `resetTimeout`, the state is half-open: exactly one probe call is admitted, and other calls get
-  `CircuitBreakerOpenException`. If the probe succeeds the circuit closes; if it fails, the circuit opens again.
+  `RpcCircuitBreakerOpenException`. If the probe succeeds the circuit closes; if it fails, the circuit opens again.
   A streaming probe succeeds at its first message. A probe stream not listened to within
   `probeAbandonTimeout` ends with `RpcCancelledException` and frees the probe slot; other streams have no
   such limit.
 - Failures counted by default: UNAVAILABLE, INTERNAL, UNKNOWN, DEADLINE_EXCEEDED,
   RESOURCE_EXHAUSTED with pushback, and any error that is not an `RpcStatusException`.
   Cancellation is never counted. `failureOn` replaces the default set.
-- Inspect with `state` (`CircuitBreakerState.closed/open/halfOpen`) and `failureCount`. Use `reset()` to close it manually.
+- Inspect with `state` (`RpcCircuitBreakerState.closed/open/halfOpen`) and `failureCount`. Use `reset()` to close it manually.
 - Add it BEFORE the retry interceptor, so it is outermost: then an open circuit fails
   fast instead of being retried, and one logical call counts once.
 
-## Rate limiting: `RpcRateLimiter` (responder)
+## Rate limiting: `RpcRateLimitInterceptor` (responder)
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';
@@ -196,19 +196,19 @@ import 'package:rpc_dart/rpc_dart.dart';
 void limit(RpcResponderEndpoint responder) {
   const second = Duration(seconds: 1);
   responder.addInterceptor(
-    RpcRateLimiter(
-      global: const RateLimit.slidingWindow(max: 5000, window: second),
-      perService: {'Search': const RateLimit.slidingWindow(max: 50, window: second)},
-      perMethod: {'Sync.push': const RateLimit.tokenBucket(max: 10, window: second, burst: 20)},
-      perKeyFallback: const RateLimit.slidingWindow(max: 100, window: second),
+    RpcRateLimitInterceptor(
+      global: const RpcRateLimit.slidingWindow(max: 5000, window: second),
+      perService: {'Search': const RpcRateLimit.slidingWindow(max: 50, window: second)},
+      perMethod: {'Sync.push': const RpcRateLimit.tokenBucket(max: 10, window: second, burst: 20)},
+      perKeyFallback: const RpcRateLimit.slidingWindow(max: 100, window: second),
       keyExtractor: (call) => call.context.getHeader('x-user-id'),
     ),
   );
 }
 ```
 
-- `RateLimit.slidingWindow({max, window})` (strict, no burst) and
-  `RateLimit.tokenBucket({max, window, burst})` (`burst` defaults to `max`).
+- `RpcRateLimit.slidingWindow({max, window})` (strict, no burst) and
+  `RpcRateLimit.tokenBucket({max, window, burst})` (`burst` defaults to `max`).
   A `max` or `window` <= 0 throws `ArgumentError` when the limiter is constructed.
 - `perMethod` keys are `'Service.method'` (with a dot). `perService` keys are service names.
 - `global` is a CEILING that is always charged. Each call is also charged against the first matching one of
@@ -233,7 +233,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
   final connection = RpcClientConnection(
     transportFactory: (_) => open(),
-    backoff: const ExponentialBackoff(maxDelay: Duration(seconds: 30)),
+    backoff: const RpcExponentialBackoff(maxDelay: Duration(seconds: 30)),
     maxAttempts: 10,
     connectTimeout: const Duration(seconds: 5),
     shouldReconnect: (error) => true,
@@ -284,8 +284,8 @@ RpcCallerEndpoint connectWithRetry(Future<IRpcTransport> Function() open) {
 
 - These do NOT exist: `RpcException(code:, message:, details:)`, `e.code`,
   `RpcTimeoutException`, `RpcTransportException`, `StatusCode`,
-  `BackoffPolicy.exponential(...)`, `RpcClientConnection(reconnectPolicy:)`,
-  `RpcRateLimiter(maxRequests:, window:)`.
+  `RpcBackoffPolicy.exponential(...)`, `RpcClientConnection(reconnectPolicy:)`,
+  `RpcRateLimitInterceptor(maxRequests:, window:)`.
 - `on RpcCancelledException` does not catch a CANCELLED status sent by the server. Check
   `e.statusCode == RpcStatus.cancelled`.
 - A handler that throws `Exception('user not found')` sends the caller

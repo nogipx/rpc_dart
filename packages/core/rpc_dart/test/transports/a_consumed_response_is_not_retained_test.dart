@@ -74,7 +74,7 @@ void main() {
       }
       expect(got, 100, reason: 'the stream must actually have been consumed');
 
-      // A BufferedBroadcastController replays to a late subscriber, which is how
+      // A RpcBufferedBroadcastController replays to a late subscriber, which is how
       // what it retained becomes visible through the public API.
       var replayed = 0;
       final sub = client.incomingMessages.listen((_) => replayed++);

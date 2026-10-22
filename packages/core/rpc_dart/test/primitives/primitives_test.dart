@@ -159,7 +159,7 @@ void main() {
         ],
       };
 
-      final cbor = CborCodec.decode(CborCodec.encode({'nested': list}));
+      final cbor = RpcCborCodec.decode(RpcCborCodec.encode({'nested': list}));
       expect(cbor['nested'], expected);
 
       final json = jsonDecode(jsonEncode({'nested': list})) as Map;

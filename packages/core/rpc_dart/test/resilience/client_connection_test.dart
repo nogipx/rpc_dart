@@ -45,9 +45,9 @@ class _TransportQueue {
 // ---------------------------------------------------------------------------
 
 void main() {
-  group('BackoffPolicy', () {
-    test('ExponentialBackoff without jitter', () {
-      const backoff = ExponentialBackoff(
+  group('RpcBackoffPolicy', () {
+    test('RpcExponentialBackoff without jitter', () {
+      const backoff = RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 100),
         maxDelay: Duration(seconds: 10),
         jitter: false,
@@ -59,8 +59,8 @@ void main() {
       expect(backoff.delayFor(3), Duration(milliseconds: 800));
     });
 
-    test('ExponentialBackoff caps at maxDelay', () {
-      const backoff = ExponentialBackoff(
+    test('RpcExponentialBackoff caps at maxDelay', () {
+      const backoff = RpcExponentialBackoff(
         baseDelay: Duration(seconds: 1),
         maxDelay: Duration(seconds: 5),
         jitter: false,
@@ -71,8 +71,8 @@ void main() {
       expect(backoff.delayFor(10), Duration(seconds: 5));
     });
 
-    test('ExponentialBackoff with jitter stays within bounds', () {
-      const backoff = ExponentialBackoff(
+    test('RpcExponentialBackoff with jitter stays within bounds', () {
+      const backoff = RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 100),
         maxDelay: Duration(seconds: 10),
         jitter: true,
@@ -85,8 +85,8 @@ void main() {
       }
     });
 
-    test('FixedBackoff returns constant delay', () {
-      const backoff = FixedBackoff(Duration(milliseconds: 42));
+    test('RpcFixedBackoff returns constant delay', () {
+      const backoff = RpcFixedBackoff(Duration(milliseconds: 42));
       expect(backoff.delayFor(0), Duration(milliseconds: 42));
       expect(backoff.delayFor(99), Duration(milliseconds: 42));
     });
@@ -189,7 +189,7 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: (_) => queue.next(),
-        backoff: const FixedBackoff(Duration(milliseconds: 20)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 20)),
       );
       addTearDown(connection.dispose);
 
@@ -221,7 +221,7 @@ void main() {
           if (factoryCalls < 3) throw Exception('not ready');
           return client;
         },
-        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
 
@@ -243,7 +243,7 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: (_) => queue.next(),
-        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
 
@@ -267,7 +267,7 @@ void main() {
 
         final connection = RpcClientConnection(
           transportFactory: (_) => queue.next(),
-          backoff: const FixedBackoff(Duration(milliseconds: 10)),
+          backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
         );
         addTearDown(connection.dispose);
 
@@ -298,7 +298,7 @@ void main() {
             if (fail) throw Exception('boom');
             return good;
           },
-          backoff: const FixedBackoff(Duration(milliseconds: 5)),
+          backoff: const RpcFixedBackoff(Duration(milliseconds: 5)),
           maxAttempts: 2,
         );
         addTearDown(connection.dispose);
@@ -410,7 +410,7 @@ void main() {
           factoryCalls++;
           throw Exception('always fails');
         },
-        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
         maxAttempts: 3,
       );
       addTearDown(connection.dispose);
@@ -476,7 +476,7 @@ void main() {
           if (calls < 2) throw Exception('oops');
           return client;
         },
-        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
         logger: logger,
       );
       addTearDown(connection.dispose);
@@ -516,7 +516,7 @@ void main() {
 
       final connection = RpcClientConnection(
         transportFactory: (_) => queue.next(),
-        backoff: const FixedBackoff(Duration(milliseconds: 10)),
+        backoff: const RpcFixedBackoff(Duration(milliseconds: 10)),
       );
       addTearDown(connection.dispose);
 

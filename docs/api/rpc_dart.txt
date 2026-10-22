@@ -1,32 +1,3 @@
-BackoffPolicy method delayFor(int attempt) -> Duration
-BackoffPolicy new new()
-BufferedBroadcastController field done: Future<void> (get)
-BufferedBroadcastController field hasListener: bool (get)
-BufferedBroadcastController field isClosed: bool (get)
-BufferedBroadcastController field maxPendingBytes: int (get)
-BufferedBroadcastController field maxPendingEvents: int (get)
-BufferedBroadcastController field onOverflow: void Function()? (get)
-BufferedBroadcastController field pendingCount: int (get)
-BufferedBroadcastController field sizeOf: int Function(T)? (get)
-BufferedBroadcastController field stream: Stream<T> (get)
-BufferedBroadcastController new new({int maxPendingEvents, int maxPendingBytes, int Function(T)? sizeOf, void Function()? onOverflow, bool sync})
-CborCodec new new()
-CborCodec static field defaultMaxItems: int (get)
-CborCodec static method decode(Uint8List bytes, {int? maxItems}) -> Map<String, dynamic>
-CborCodec static method decodeUnsafe(Uint8List bytes, {int? maxItems}) -> dynamic
-CborCodec static method encode(Map<String, dynamic> value) -> Uint8List
-CborCodec static method encodeUnsafe(dynamic value) -> Uint8List
-CircuitBreakerOpenException field details: List<RpcErrorDetail> (get)
-CircuitBreakerOpenException field isPushback: bool (get)
-CircuitBreakerOpenException field message: String (get)
-CircuitBreakerOpenException field retryAfter: Duration? (get)
-CircuitBreakerOpenException field statusCode: RpcStatus (get)
-CircuitBreakerOpenException field statusDetailsBin: Uint8List? (get)
-CircuitBreakerOpenException new new({Duration? retryAfter})
-CircuitBreakerState static field closed: CircuitBreakerState (get)
-CircuitBreakerState static field halfOpen: CircuitBreakerState (get)
-CircuitBreakerState static field open: CircuitBreakerState (get)
-CircuitBreakerState static field values: List<CircuitBreakerState> (get)
 ConsoleFormat static field compact: ConsoleFormat (get)
 ConsoleFormat static field json: ConsoleFormat (get)
 ConsoleFormat static field pretty: ConsoleFormat (get)
@@ -40,14 +11,6 @@ ConsoleOutput method write(LogRecord record) -> void
 ConsoleOutput method writeAsync(LogRecord record) -> Future<void>
 ConsoleOutput new new({bool colored, ConsoleFormat format, String? scopeFilter})
 ConsoleOutput static method escapeLine(String text) -> String
-ExponentialBackoff field baseDelay: Duration (get)
-ExponentialBackoff field jitter: bool (get)
-ExponentialBackoff field maxDelay: Duration (get)
-ExponentialBackoff method delayFor(int attempt) -> Duration
-ExponentialBackoff new new({Duration baseDelay, Duration maxDelay, bool jitter})
-FixedBackoff field delay: Duration (get)
-FixedBackoff method delayFor(int attempt) -> Duration
-FixedBackoff new new(Duration delay)
 GrpcHealthCheckContract field dataTransferMode: RpcDataTransferMode (get)
 GrpcHealthCheckContract field serviceName: String (get)
 GrpcHealthCheckContract method addBidirectionalMethod<TRequest, TResponse>({required String methodName, required Stream<TResponse> Function(Stream<TRequest>, {RpcContext? context}) handler, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, String description}) -> void
@@ -270,9 +233,6 @@ LogSpanStart new new({required String spanId, required String scope, required St
 LogSpanStatus static field error: LogSpanStatus (get)
 LogSpanStatus static field ok: LogSpanStatus (get)
 LogSpanStatus static field values: List<LogSpanStatus> (get)
-RateLimit new new()
-RateLimit new slidingWindow({required int max, required Duration window})
-RateLimit new tokenBucket({required int max, required Duration window, int? burst})
 RingBufferOutput field entries: List<LogRecord> (get)
 RingBufferOutput field isAsync: bool (get)
 RingBufferOutput field length: int (get)
@@ -284,6 +244,8 @@ RingBufferOutput method query(LogFilter filter, {int? limit}) -> List<LogRecord>
 RingBufferOutput method write(LogRecord record) -> void
 RingBufferOutput method writeAsync(LogRecord record) -> Future<void>
 RingBufferOutput new new({int maxEntries, String? scopeFilter})
+RpcBackoffPolicy method delayFor(int attempt) -> Duration
+RpcBackoffPolicy new new()
 RpcBadRequest field typeUrl: String (get)
 RpcBadRequest field violations: List<RpcFieldViolation> (get)
 RpcBadRequest method encode() -> Uint8List
@@ -301,6 +263,16 @@ RpcBool new fromJson(Map<String, dynamic> json)
 RpcBool new new(bool value)
 RpcBool static field codec: RpcCodec<RpcBool> (get)
 RpcBoolX field rpc: RpcBool (get)
+RpcBufferedBroadcastController field done: Future<void> (get)
+RpcBufferedBroadcastController field hasListener: bool (get)
+RpcBufferedBroadcastController field isClosed: bool (get)
+RpcBufferedBroadcastController field maxPendingBytes: int (get)
+RpcBufferedBroadcastController field maxPendingEvents: int (get)
+RpcBufferedBroadcastController field onOverflow: void Function()? (get)
+RpcBufferedBroadcastController field pendingCount: int (get)
+RpcBufferedBroadcastController field sizeOf: int Function(T)? (get)
+RpcBufferedBroadcastController field stream: Stream<T> (get)
+RpcBufferedBroadcastController new new({int maxPendingEvents, int maxPendingBytes, int Function(T)? sizeOf, void Function()? onOverflow, bool sync})
 RpcCallCancelled new new()
 RpcCallDirection static field incoming: RpcCallDirection (get)
 RpcCallDirection static field outgoing: RpcCallDirection (get)
@@ -392,6 +364,12 @@ RpcCancelledException field reason: String (get)
 RpcCancelledException field statusCode: RpcStatus (get)
 RpcCancelledException field statusDetailsBin: Uint8List? (get)
 RpcCancelledException new new(String message)
+RpcCborCodec new new()
+RpcCborCodec static field defaultMaxItems: int (get)
+RpcCborCodec static method decode(Uint8List bytes, {int? maxItems}) -> Map<String, dynamic>
+RpcCborCodec static method decodeUnsafe(Uint8List bytes, {int? maxItems}) -> dynamic
+RpcCborCodec static method encode(Map<String, dynamic> value) -> Uint8List
+RpcCborCodec static method encodeUnsafe(dynamic value) -> Uint8List
 RpcChannelCloseReason field message: String (get)
 RpcChannelCloseReason new new(String message)
 RpcChannelFrame new new()
@@ -438,7 +416,7 @@ RpcCircuitBreakerInterceptor field failureOn: bool Function(Object)? (get)
 RpcCircuitBreakerInterceptor field failureThreshold: int (get)
 RpcCircuitBreakerInterceptor field probeAbandonTimeout: Duration (get)
 RpcCircuitBreakerInterceptor field resetTimeout: Duration (get)
-RpcCircuitBreakerInterceptor field state: CircuitBreakerState (get)
+RpcCircuitBreakerInterceptor field state: RpcCircuitBreakerState (get)
 RpcCircuitBreakerInterceptor method check(RpcCallInfo call) -> FutureOr<void>
 RpcCircuitBreakerInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
 RpcCircuitBreakerInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
@@ -446,6 +424,17 @@ RpcCircuitBreakerInterceptor method interceptServerStream<TRequest, TResponse>(R
 RpcCircuitBreakerInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
 RpcCircuitBreakerInterceptor method reset() -> void
 RpcCircuitBreakerInterceptor new new({int failureThreshold, Duration resetTimeout, bool Function(Object)? failureOn, Duration probeAbandonTimeout})
+RpcCircuitBreakerOpenException field details: List<RpcErrorDetail> (get)
+RpcCircuitBreakerOpenException field isPushback: bool (get)
+RpcCircuitBreakerOpenException field message: String (get)
+RpcCircuitBreakerOpenException field retryAfter: Duration? (get)
+RpcCircuitBreakerOpenException field statusCode: RpcStatus (get)
+RpcCircuitBreakerOpenException field statusDetailsBin: Uint8List? (get)
+RpcCircuitBreakerOpenException new new({Duration? retryAfter})
+RpcCircuitBreakerState static field closed: RpcCircuitBreakerState (get)
+RpcCircuitBreakerState static field halfOpen: RpcCircuitBreakerState (get)
+RpcCircuitBreakerState static field open: RpcCircuitBreakerState (get)
+RpcCircuitBreakerState static field values: List<RpcCircuitBreakerState> (get)
 RpcClientConnecting field attempt: int (get)
 RpcClientConnecting new new({required int attempt})
 RpcClientConnection field currentState: RpcClientConnectionState (get)
@@ -455,7 +444,7 @@ RpcClientConnection method connect() -> void
 RpcClientConnection method disconnect() -> Future<void>
 RpcClientConnection method dispose() -> Future<void>
 RpcClientConnection method forceReconnect() -> void
-RpcClientConnection new new({required Future<IRpcTransport> Function(RpcCancellationToken) transportFactory, BackoffPolicy backoff, bool Function(Object?)? shouldReconnect, int? maxAttempts, Duration? connectTimeout, LogScope? logger, void Function(RpcClientConnectionState)? onStateChanged})
+RpcClientConnection new new({required Future<IRpcTransport> Function(RpcCancellationToken) transportFactory, RpcBackoffPolicy backoff, bool Function(Object?)? shouldReconnect, int? maxAttempts, Duration? connectTimeout, LogScope? logger, void Function(RpcClientConnectionState)? onStateChanged})
 RpcClientConnectionState new new()
 RpcClientDisconnected field reason: Object? (get)
 RpcClientDisconnected new new({Object? reason})
@@ -634,9 +623,17 @@ RpcErrorInfo static field type: String (get)
 RpcErrorInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
 RpcException field message: String (get)
 RpcException new new(String message)
+RpcExponentialBackoff field baseDelay: Duration (get)
+RpcExponentialBackoff field jitter: bool (get)
+RpcExponentialBackoff field maxDelay: Duration (get)
+RpcExponentialBackoff method delayFor(int attempt) -> Duration
+RpcExponentialBackoff new new({Duration baseDelay, Duration maxDelay, bool jitter})
 RpcFieldViolation field description: String (get)
 RpcFieldViolation field field: String (get)
 RpcFieldViolation new new({required String field, required String description})
+RpcFixedBackoff field delay: Duration (get)
+RpcFixedBackoff method delayFor(int attempt) -> Duration
+RpcFixedBackoff new new(Duration delay)
 RpcFrameException field details: List<RpcErrorDetail> (get)
 RpcFrameException field isPushback: bool (get)
 RpcFrameException field message: String (get)
@@ -942,19 +939,22 @@ RpcProtoWriter method writeTag(int field, int wireType) -> void
 RpcProtoWriter method writeVarint(int value) -> void
 RpcProtoWriter method writeVarintField(int field, int value) -> void
 RpcProtoWriter new new()
+RpcRateLimit new new()
+RpcRateLimit new slidingWindow({required int max, required Duration window})
+RpcRateLimit new tokenBucket({required int max, required Duration window, int? burst})
 RpcRateLimitException field details: List<RpcErrorDetail> (get)
 RpcRateLimitException field isPushback: bool (get)
 RpcRateLimitException field message: String (get)
 RpcRateLimitException field statusCode: RpcStatus (get)
 RpcRateLimitException field statusDetailsBin: Uint8List? (get)
 RpcRateLimitException new new(String message, {Duration? retryAfter})
-RpcRateLimiter method check(RpcCallInfo call) -> FutureOr<void>
-RpcRateLimiter method dispose() -> void
-RpcRateLimiter method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
-RpcRateLimiter method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
-RpcRateLimiter method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
-RpcRateLimiter method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
-RpcRateLimiter new new({RateLimit? global, Map<String, RateLimit> perService, Map<String, RateLimit> perMethod, RateLimit? perKeyFallback, String? Function(RpcCallInfo)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, DateTime Function()? clock})
+RpcRateLimitInterceptor method check(RpcCallInfo call) -> FutureOr<void>
+RpcRateLimitInterceptor method dispose() -> void
+RpcRateLimitInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcRateLimitInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcRateLimitInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcRateLimitInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcRateLimitInterceptor new new({RpcRateLimit? global, Map<String, RpcRateLimit> perService, Map<String, RpcRateLimit> perMethod, RpcRateLimit? perKeyFallback, String? Function(RpcCallInfo)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, DateTime Function()? clock})
 RpcRawErrorDetail field typeUrl: String (get)
 RpcRawErrorDetail field value: Uint8List (get)
 RpcRawErrorDetail method encode() -> Uint8List
@@ -1025,7 +1025,7 @@ RpcRetryInfo method encodeAsAny() -> Uint8List
 RpcRetryInfo new new(Duration retryDelay)
 RpcRetryInfo static field type: String (get)
 RpcRetryInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
-RpcRetryInterceptor field backoff: BackoffPolicy (get)
+RpcRetryInterceptor field backoff: RpcBackoffPolicy (get)
 RpcRetryInterceptor field maxAttempts: int (get)
 RpcRetryInterceptor field retryOn: bool Function(Object)? (get)
 RpcRetryInterceptor method check(RpcCallInfo call) -> FutureOr<void>
@@ -1033,7 +1033,7 @@ RpcRetryInterceptor method interceptBidirectionalStream<TRequest, TResponse>(Rpc
 RpcRetryInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
 RpcRetryInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
 RpcRetryInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
-RpcRetryInterceptor new new({int maxAttempts, BackoffPolicy backoff, bool Function(Object)? retryOn})
+RpcRetryInterceptor new new({int maxAttempts, RpcBackoffPolicy backoff, bool Function(Object)? retryOn})
 RpcSecurityPolicy field advertisedWindowBytes: int? (get)
 RpcSecurityPolicy field closeOnProtocolError: bool (get)
 RpcSecurityPolicy field contentTypeValidation: RpcContentTypeValidation (get)
@@ -1182,15 +1182,8 @@ top static method requestEndedMidMessage() -> RpcStatusException (transport.dart
 top static method responseEndedMidMessage() -> RpcStatusException (transport.dart, transport_io.dart)
 top static method rpcPeerText(String text, {bool asciiOnly, int? maxRunes}) -> String (transport.dart, transport_io.dart)
 top static method wireStatusFor(Object error) -> ({Uint8List? detailsBin, String message, RpcStatus status}) (transport.dart, transport_io.dart)
-type BackoffPolicy [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type BufferedBroadcastController<T> : EventSink<T>, Object, Sink<T>, StreamConsumer<T>, StreamSink<T> (transport.dart, transport_io.dart)
-type CborCodec : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type CircuitBreakerOpenException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
-type CircuitBreakerState : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type ConsoleFormat : Enum, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
 type ConsoleOutput : LogOutput, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
-type ExponentialBackoff : BackoffPolicy, Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type FixedBackoff : BackoffPolicy, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type GrpcHealthCheckContract : IRpcContract, Object, RpcResponderContract (rpc_dart.dart, transport.dart, transport_io.dart)
 type GrpcHealthCheckRequest : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type GrpcHealthCheckResponse : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1221,12 +1214,13 @@ type LogSpan : LogRecord, Object (logger.dart, rpc_dart.dart, transport.dart, tr
 type LogSpanHandle : Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
 type LogSpanStart : LogRecord, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
 type LogSpanStatus : Enum, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
-type RateLimit [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RingBufferOutput : LogOutput, Object (logger.dart, rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcBackoffPolicy [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcBadRequest : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcBinaryCodec<T> : IRpcCodec<T>, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcBool : IRpcSerializable, Object, RpcPrimitiveMessage<bool> (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcBoolX :  (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcBufferedBroadcastController<T> : EventSink<T>, Object, Sink<T>, StreamConsumer<T>, StreamSink<T> (transport.dart, transport_io.dart)
 type RpcCallCancelled : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallDirection : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallFailed : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1240,10 +1234,13 @@ type RpcCallerEndpoint : Object, RpcCallerPipelineMixin, RpcEndpointBase (rpc_da
 type RpcCallerEndpointMetrics : Object, RpcEndpointMetrics (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCancellationToken : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCancelledException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCborCodec : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcChannelCloseReason [required] : Object (transport.dart, transport_io.dart)
 type RpcChannelFrame : Object (transport.dart, transport_io.dart)
 type RpcChannelTransport : IRpcTransport, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCircuitBreakerInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCircuitBreakerOpenException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCircuitBreakerState : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientConnecting : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientConnection : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientConnectionState : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1276,7 +1273,9 @@ type RpcEndpointPingResult : Object (rpc_dart.dart, transport.dart, transport_io
 type RpcErrorDetail : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcErrorInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcException : Exception, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcExponentialBackoff : Object, RpcBackoffPolicy (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcFieldViolation : Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcFixedBackoff : Object, RpcBackoffPolicy (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcFrameException : Exception, Object, RpcException, RpcStatusException (transport.dart, transport_io.dart)
 type RpcFrameMultiplexedChannel : IRpcMultiplexedChannel, Object (transport.dart, transport_io.dart)
 type RpcGrpcCompression : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1310,8 +1309,9 @@ type RpcPrimitiveMessage<T> : IRpcSerializable, Object (rpc_dart.dart, transport
 type RpcProtoReader : Object (transport.dart, transport_io.dart)
 type RpcProtoWireType : Object (transport.dart, transport_io.dart)
 type RpcProtoWriter : Object (transport.dart, transport_io.dart)
+type RpcRateLimit [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcRateLimitException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcRateLimiter : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcRateLimitInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcRawErrorDetail : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcRecentIds : Object (transport.dart, transport_io.dart)
 type RpcRemoved : Object (rpc_dart.dart, transport.dart, transport_io.dart)

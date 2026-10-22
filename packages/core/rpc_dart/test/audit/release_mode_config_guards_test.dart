@@ -13,7 +13,7 @@
 //        Error.throwWithStackTrace(lastError!, lastStack!) on two nulls -- and
 //        the RPC was never attempted.
 //
-//   RpcRateLimiter(maxTrackedKeys: 0)
+//   RpcRateLimitInterceptor(maxTrackedKeys: 0)
 //     -> RpcStatusException(13): Bad state: No element
 //        _getDynamic evicts when `store.length >= _maxTrackedKeys`, true on an
 //        EMPTY map, so `store.keys.first` throws. Reached the client as
@@ -74,10 +74,10 @@ void main() {
       );
     });
 
-    test('RpcRateLimiter rejects maxTrackedKeys < 1', () {
+    test('RpcRateLimitInterceptor rejects maxTrackedKeys < 1', () {
       expectsSurvivingGuard(
         'maxTrackedKeys: 0',
-        () => RpcRateLimiter(maxTrackedKeys: 0),
+        () => RpcRateLimitInterceptor(maxTrackedKeys: 0),
       );
     });
   });
@@ -85,7 +85,7 @@ void main() {
   group('valid configuration is untouched', () {
     test('the documented defaults construct', () {
       expect(RpcRetryInterceptor.new, returnsNormally);
-      expect(RpcRateLimiter.new, returnsNormally);
+      expect(RpcRateLimitInterceptor.new, returnsNormally);
     });
 
     test('maxAttempts: 1 means no retries, and is legal', () {
@@ -98,7 +98,7 @@ void main() {
     var attempts = 0;
     final interceptor = RpcRetryInterceptor(
       maxAttempts: 3,
-      backoff: const ExponentialBackoff(
+      backoff: const RpcExponentialBackoff(
         baseDelay: Duration(milliseconds: 1),
         maxDelay: Duration(milliseconds: 2),
       ),

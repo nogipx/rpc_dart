@@ -33,8 +33,8 @@ void main() {
         // form. Exactly representable in JS. The 32-bit `<<` on read drops the
         // high bit, yielding 1 on dart2js.
         const value = 4294967297;
-        final encoded = CborCodec.encode({'v': value});
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode({'v': value});
+        final decoded = RpcCborCodec.decode(encoded);
 
         expect(
           decoded['v'],
@@ -47,8 +47,8 @@ void main() {
 
       test('0xFF_0000_0000 survives roundtrip', () {
         const value = 0xFF00000000; // 1095216660480, fits JS double exactly
-        final encoded = CborCodec.encode({'v': value});
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode({'v': value});
+        final decoded = RpcCborCodec.decode(encoded);
         expect(
           decoded['v'],
           equals(value),
@@ -58,8 +58,8 @@ void main() {
 
       test('5_000_000_000 survives roundtrip', () {
         const value = 5000000000; // > 2^32, well within 2^53
-        final encoded = CborCodec.encode({'v': value});
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode({'v': value});
+        final decoded = RpcCborCodec.decode(encoded);
         expect(decoded['v'], equals(value));
       });
     },

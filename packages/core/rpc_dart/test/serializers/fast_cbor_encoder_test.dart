@@ -22,13 +22,13 @@ void main() {
 
         // Time the encode.
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(testData);
+        final encoded = RpcCborCodec.encode(testData);
         stopwatch.stop();
 
         print('Integer encoding took: ${stopwatch.elapsedMicroseconds}μs');
 
         // Then check the decode is correct.
-        final decoded = CborCodec.decode(encoded);
+        final decoded = RpcCborCodec.decode(encoded);
         expect(decoded['small_positive'], equals([0, 1, 23]));
         expect(decoded['medium_positive'], equals([24, 255, 256, 65535]));
         expect(decoded['large_positive'], equals([65536, 4294967295]));
@@ -51,13 +51,13 @@ void main() {
         };
 
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(testData);
+        final encoded = RpcCborCodec.encode(testData);
         stopwatch.stop();
 
         print('String encoding took: ${stopwatch.elapsedMicroseconds}μs');
         print('Encoded size: ${encoded.length} bytes');
 
-        final decoded = CborCodec.decode(encoded);
+        final decoded = RpcCborCodec.decode(encoded);
         expect(decoded['empty'], equals(''));
         expect(decoded['ascii_short'], equals('hello'));
         expect(decoded['ascii_medium'], equals('a' * 100));
@@ -82,13 +82,13 @@ void main() {
         };
 
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(testData);
+        final encoded = RpcCborCodec.encode(testData);
         stopwatch.stop();
 
         print('Binary encoding took: ${stopwatch.elapsedMicroseconds}μs');
         print('Encoded size: ${encoded.length} bytes');
 
-        final decoded = CborCodec.decode(encoded);
+        final decoded = RpcCborCodec.decode(encoded);
         expect(decoded['small_binary'], equals(Uint8List.fromList([1, 2, 3])));
         expect(decoded['medium_binary'], equals(testData['medium_binary']));
         expect(decoded['large_binary'], equals(testData['large_binary']));
@@ -113,13 +113,13 @@ void main() {
         final times = <int>[];
         for (int i = 0; i < 3; i++) {
           final stopwatch = Stopwatch()..start();
-          final encoded = CborCodec.encode(testData);
+          final encoded = RpcCborCodec.encode(testData);
           stopwatch.stop();
           times.add(stopwatch.elapsedMicroseconds);
 
           if (i == 0) {
             // Only check correctness on the first pass.
-            final decoded = CborCodec.decode(encoded);
+            final decoded = RpcCborCodec.decode(encoded);
             final simpleFloats = decoded['simple_floats'] as List;
             expect(simpleFloats[0], equals(0.0));
             expect(simpleFloats[1], equals(1.0));
@@ -175,7 +175,7 @@ void main() {
         final complexData = createComplexNested(5);
 
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(complexData);
+        final encoded = RpcCborCodec.encode(complexData);
         stopwatch.stop();
 
         print(
@@ -183,7 +183,7 @@ void main() {
         );
         print('Encoded size: ${encoded.length} bytes');
 
-        final decoded = CborCodec.decode(encoded);
+        final decoded = RpcCborCodec.decode(encoded);
         expect(decoded['level'], equals(5));
         expect((decoded['children'] as List).length, equals(5));
 
@@ -214,7 +214,7 @@ void main() {
         }
 
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(largeMap);
+        final encoded = RpcCborCodec.encode(largeMap);
         stopwatch.stop();
 
         print(
@@ -241,7 +241,7 @@ void main() {
 
         final encodings = <Uint8List>[];
         for (int i = 0; i < 10; i++) {
-          encodings.add(CborCodec.encode(testData));
+          encodings.add(RpcCborCodec.encode(testData));
         }
 
         // Every encode must produce the same bytes.
@@ -273,8 +273,8 @@ void main() {
 
         final testData = {'mixed': mixedArray};
 
-        final encoded = CborCodec.encode(testData);
-        final decoded = CborCodec.decode(encoded);
+        final encoded = RpcCborCodec.encode(testData);
+        final decoded = RpcCborCodec.decode(encoded);
 
         final result = decoded['mixed'] as List;
         expect(result.length, equals(mixedArray.length));
@@ -318,7 +318,7 @@ void main() {
         };
 
         final stopwatch = Stopwatch()..start();
-        final encoded = CborCodec.encode(testData);
+        final encoded = RpcCborCodec.encode(testData);
         stopwatch.stop();
 
         print('Length encoding test took: ${stopwatch.elapsedMilliseconds}ms');
@@ -326,7 +326,7 @@ void main() {
           'Total encoded size: ${(encoded.length / 1024 / 1024).toStringAsFixed(2)} MB',
         );
 
-        final decoded = CborCodec.decode(encoded);
+        final decoded = RpcCborCodec.decode(encoded);
         expect(decoded['short_string'], equals('a' * 20));
         expect(decoded['short_array'], equals(List.generate(15, (i) => i)));
         expect(decoded['medium_string'], equals('b' * 100));
@@ -360,7 +360,7 @@ void main() {
           }
 
           final stopwatch = Stopwatch()..start();
-          final encoded = CborCodec.encode(testData);
+          final encoded = RpcCborCodec.encode(testData);
           stopwatch.stop();
 
           final encodingSpeed =

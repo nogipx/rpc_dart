@@ -5,7 +5,7 @@
 
 // For RpcMetadataViolationException: peer metadata failing this policy is a wire fact,
 // not a caller's programming mistake, and the type says which.
-import '../codec/special_cbor.dart' show CborCodec;
+import '../codec/special_cbor.dart' show RpcCborCodec;
 import 'channel_frame.dart' show RpcChannelFrame;
 import 'errors.dart' show RpcMetadataViolationException;
 import 'metadata.dart';
@@ -300,7 +300,7 @@ final class RpcSecurityPolicy {
   // writes a literal back in.
   static const int _defaultMaxMessageLengthBytes = 16 * 1024 * 1024;
   static const int _defaultMaxMessagesPerChunk = 1024;
-  static const int _defaultMaxDecodedItems = CborCodec.defaultMaxItems;
+  static const int _defaultMaxDecodedItems = RpcCborCodec.defaultMaxItems;
   static const int _defaultMaxActiveStreams = 4096;
   static const int _defaultMaxMetadataBytes = 64 * 1024;
   static const int _defaultMaxHeaders = 128;

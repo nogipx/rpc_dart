@@ -93,7 +93,7 @@ final class _T extends IRpcTransport {
       RpcHealthStatus.healthy(component: 't', message: 'ok');
 }
 
-const _backoff = ExponentialBackoff(
+const _backoff = RpcExponentialBackoff(
   baseDelay: Duration(milliseconds: 20),
   maxDelay: Duration(milliseconds: 200),
   jitter: false,

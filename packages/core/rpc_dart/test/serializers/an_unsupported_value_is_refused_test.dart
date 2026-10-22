@@ -27,19 +27,19 @@ void main() {
   ]) {
     test('a $name is refused', () {
       expect(
-        () => CborCodec.encode({'v': value}),
+        () => RpcCborCodec.encode({'v': value}),
         throwsA(isA<ArgumentError>()),
       );
     });
   }
 
   test('a value with toJson() is encoded through it', () {
-    final bytes = CborCodec.encode({
+    final bytes = RpcCborCodec.encode({
       'map': const _Wrapped({'a': 1}),
       'string': const _Wrapped('s'),
       'number': const _Wrapped(2),
     });
-    expect(CborCodec.decode(bytes), {
+    expect(RpcCborCodec.decode(bytes), {
       'map': {'a': 1},
       'string': 's',
       'number': 2,

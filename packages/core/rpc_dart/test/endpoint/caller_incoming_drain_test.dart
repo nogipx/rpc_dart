@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 // RpcChannelTransport routes every inbound frame to BOTH the per-stream
-// controller and the global _incoming BufferedBroadcastController. That
+// controller and the global _incoming RpcBufferedBroadcastController. That
 // controller buffers while it has no listener, so the responder pipeline does
 // not miss frames arriving before it subscribes.
 //
