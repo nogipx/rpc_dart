@@ -25,6 +25,7 @@ final class BidirectionalStreamResponder<
     required Stream<TResponse> Function(Stream<TRequest> requests) handler,
     super.context,
     super.logger,
+    super.compressResponses,
   }) : _handler = handler,
        super(
          logName: 'BidirectionalResponder',

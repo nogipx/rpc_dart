@@ -24,6 +24,7 @@ abstract base class RpcResponderBase<
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
+    bool compressResponses = false,
     required String logName,
     required String className,
   }) : _logger = logger?.child(logName) ?? LogScope.noop {
@@ -44,6 +45,7 @@ abstract base class RpcResponderBase<
       responseCodec: responseCodec,
       context: context,
       logger: _logger,
+      compressResponses: compressResponses,
     );
   }
 

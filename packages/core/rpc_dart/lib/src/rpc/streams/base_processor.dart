@@ -238,6 +238,10 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// peer's initial metadata when it arrives.
   String? _responseEncoding;
 
+  /// Whether the endpoint compresses responses at all. Without it a server
+  /// compresses every response a client merely accepts compressed.
+  final bool _compressResponses;
+
   /// Encoding the peer advertised in grpc-encoding, read by the decompressor.
   String? _requestEncoding;
 
@@ -254,10 +258,12 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
     LogScope? logger,
+    bool compressResponses = false,
   }) : _transport = transport,
        _streamId = streamId,
        _serviceName = serviceName,
        _methodName = methodName,
+       _compressResponses = compressResponses,
        _isZeroCopy = requestCodec == null && responseCodec == null,
        _answerDirect = requestCodec == null && responseCodec == null,
        _requestCodec = requestCodec,
@@ -275,7 +281,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
     );
 
     _methodPath = '/$_serviceName/$_methodName';
-    _responseEncoding = _pickResponseEncoding(context);
+    if (_compressResponses) _responseEncoding = _pickResponseEncoding(context);
 
     if (_logger.isInternal) {
       _logger.internal(

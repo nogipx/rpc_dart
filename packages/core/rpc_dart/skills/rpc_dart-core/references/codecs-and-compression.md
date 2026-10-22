@@ -173,9 +173,12 @@ RpcList<RpcString> names() => RpcList.from(['a'.rpc, 'b'.rpc]);
   `compressionEnabled: true` (`RpcCallerEndpoint`, `RpcPeerEndpoint`; default
   `false`). It then declares `grpc-encoding` (gzip if registered) and advertises
   every registered encoding in `grpc-accept-encoding`.
-- Responses are compressed by the responder when the caller advertised a
-  registered non-identity encoding. With `compressionEnabled: false` the caller
-  advertises `identity` only, so responses are not compressed either.
+- Responses are compressed only when the responding endpoint was created with
+  `compressionEnabled: true` (`RpcResponderEndpoint`, `RpcPeerEndpoint`, or a
+  server's `compressionEnabled`; default `false`) AND the caller advertised a
+  registered non-identity encoding. A caller with `compressionEnabled: false`
+  advertises `identity` only. On a peer endpoint the one flag covers both its
+  requests and its responses.
 - Each message is sent compressed only if that makes it smaller, so tiny or
   incompressible messages go out plain under a compressed `grpc-encoding`.
 - Compression is skipped entirely when `transport.supportsZeroCopy` is true.

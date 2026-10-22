@@ -22,6 +22,7 @@ final class ClientStreamResponder<
     required Future<TResponse> Function(Stream<TRequest> requests) handler,
     super.context,
     super.logger,
+    super.compressResponses,
   }) : super(logName: 'ClientResponder', className: 'ClientStreamResponder') {
     _serve(handler);
   }

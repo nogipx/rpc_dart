@@ -181,9 +181,11 @@ extension _StreamProcessorInternals<
       }
 
       // grpc-accept-encoding: what the peer can decompress → use for responses.
-      _responseEncoding ??= RpcGrpcCompression.selectResponseEncoding(
-        meta.getHeaderValue(RpcHeaders.grpcAcceptEncoding),
-      );
+      if (_compressResponses) {
+        _responseEncoding ??= RpcGrpcCompression.selectResponseEncoding(
+          meta.getHeaderValue(RpcHeaders.grpcAcceptEncoding),
+        );
+      }
     }
 
     if (message.isDirect && message.directPayload != null) {

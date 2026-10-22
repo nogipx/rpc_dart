@@ -61,6 +61,7 @@ void main() {
         requestCodec: codec,
         responseCodec: codec,
         context: serverContext,
+        compressResponses: true,
         handler: (request) async* {
           yield largePayload;
           yield largePayload;
@@ -203,6 +204,7 @@ void main() {
           requestCodec: codec,
           responseCodec: codec,
           context: serverContext,
+          compressResponses: true,
           handler: (requests) async {
             final all = await requests.toList();
             return 'count:${all.length}'.rpc;
@@ -259,6 +261,7 @@ void main() {
           }
         },
         context: serverContext,
+        compressResponses: true,
       );
 
       server.bindToMessageStream(

@@ -75,6 +75,7 @@ builds a transport, a channel or frames imports
 | `endpoint.ping(timeout: d)` | `endpoint.ping(context: RpcContext.withTimeout(d))` |
 | `endpoint.unaryRequest(...)` | `endpoint.unary(...)`, named like `serverStream`, `clientStream`, `bidirectionalStream` |
 | `RpcRateLimiter(nowMicros: () => us)` | `RpcRateLimiter(clock: () => DateTime.fromMicrosecondsSinceEpoch(us))` |
+| a server compressing responses for any client that accepts gzip | `compressionEnabled: true` on the server or `RpcResponderEndpoint`; off by default |
 | `getCancellationTokensForMethod(...)` | gone; `activeCallCount`, or a token in the call's context |
 | `SpanStatus` | `LogSpanStatus` |
 | `RpcStatus` `int` constants; `RpcStatusException(14, ...)`; `int status = e.statusCode` | `RpcStatus` is an enum and `statusCode` its value: `RpcStatus.unavailable`, `RpcStatus.fromCode(14)`; the wire number is `status.code` |

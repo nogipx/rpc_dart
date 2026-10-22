@@ -50,12 +50,14 @@ final class RpcPeerMode extends RpcServerMode {
 /// refused connection is told.
 final class RpcConnectionHost {
   /// [maxConnections] caps the connections [admit] lets in, or null for no
-  /// cap. [logController] is handed to every endpoint.
+  /// cap. [logController] and [compressionEnabled] are handed to every
+  /// endpoint.
   RpcConnectionHost({
     required this.mode,
     this.maxConnections,
     LogScope? logger,
     LogController? logController,
+    this.compressionEnabled = false,
   }) : _log = logger ?? LogScope.noop,
        _logController = logController;
 
@@ -64,6 +66,10 @@ final class RpcConnectionHost {
 
   /// The cap on concurrent connections, or null.
   final int? maxConnections;
+
+  /// Whether each endpoint compresses its responses (and, in peer mode, its
+  /// requests). See [RpcResponderEndpoint.compressionEnabled].
+  final bool compressionEnabled;
 
   final LogScope _log;
   final LogController? _logController;
@@ -117,6 +123,7 @@ final class RpcConnectionHost {
           transport: transport,
           debugLabel: debugLabel,
           logController: _logController,
+          compressionEnabled: compressionEnabled,
         );
         endpoint = responder;
         _live[endpoint] = onRelease;
@@ -131,6 +138,7 @@ final class RpcConnectionHost {
           transport: transport,
           debugLabel: debugLabel,
           logController: _logController,
+          compressionEnabled: compressionEnabled,
         );
         endpoint = peer;
         _live[endpoint] = onRelease;

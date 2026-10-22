@@ -48,9 +48,11 @@ codec, so on the VM this also replaces the built-in `dart:io` gzip.
 `RpcGrpcCompression.unregister('gzip')` removes it.
 
 Registration only makes the encoding available. A caller compresses its
-requests, and advertises the registered encodings so responses come back
-compressed, only when its endpoint is created with `compressionEnabled: true`
-(`RpcCallerEndpoint` or `RpcPeerEndpoint`; the default is `false`):
+requests, and advertises the registered encodings, only when its endpoint is
+created with `compressionEnabled: true` (`RpcCallerEndpoint` or
+`RpcPeerEndpoint`; the default is `false`). A server compresses its responses
+only with its own `compressionEnabled: true` (on the server,
+`RpcResponderEndpoint` or `RpcPeerEndpoint`):
 
 ```dart
 RpcCallerEndpoint compressedCaller(IRpcTransport transport) {

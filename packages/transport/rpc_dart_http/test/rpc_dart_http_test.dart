@@ -989,6 +989,7 @@ void main() {
       final serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'CompressServer',
+        compressionEnabled: true,
       );
       serverEndpoint.registerServiceContract(_EchoService());
       serverEndpoint.start();
@@ -1028,6 +1029,7 @@ void main() {
       final serverEndpoint = RpcResponderEndpoint(
         transport: serverTransport,
         debugLabel: 'CompressServer',
+        compressionEnabled: true,
       );
       serverEndpoint.registerServiceContract(_EchoService());
       serverEndpoint.start();

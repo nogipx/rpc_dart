@@ -109,6 +109,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         ),
         context: context,
         logger: context.log,
+        compressResponses: compressionEnabled,
       ),
       _pipelineFedPreBound(state),
     );
@@ -146,6 +147,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         ),
         context: context,
         logger: context.log,
+        compressResponses: compressionEnabled,
       ),
       _pipelineFedRequestStream(
         state,
@@ -183,6 +185,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         ),
         context: context,
         logger: context.log,
+        compressResponses: compressionEnabled,
       ),
       _pipelineFedPreBound(state),
     );
@@ -217,6 +220,7 @@ extension _ResponderPipelineResponders on RpcResponderPipelineMixin {
         ),
         context: context,
         logger: context.log,
+        compressResponses: compressionEnabled,
       ),
       _pipelineFedPreBound(state),
     );

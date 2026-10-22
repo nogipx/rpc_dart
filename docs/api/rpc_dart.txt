@@ -476,6 +476,7 @@ RpcCodec new new(T Function(Map<String, dynamic>) fromJson)
 RpcCompressionCodec method compress(Uint8List data) -> Uint8List
 RpcCompressionCodec method decompress(Uint8List data, {int? maxOutputBytes}) -> Uint8List
 RpcCompressionCodec new new()
+RpcConnectionHost field compressionEnabled: bool (get)
 RpcConnectionHost field endpoints: List<RpcResponderEndpoint> (get)
 RpcConnectionHost field length: int (get)
 RpcConnectionHost field maxConnections: int? (get)
@@ -484,7 +485,7 @@ RpcConnectionHost method admit({int pending}) -> bool
 RpcConnectionHost method release(RpcEndpointBase endpoint) -> void
 RpcConnectionHost method serve(IRpcTransport transport, {required Future<void> done, String? debugLabel, void Function()? onRelease}) -> RpcResponderEndpoint
 RpcConnectionHost method stop({Duration? drainTimeout}) -> Future<void>
-RpcConnectionHost new new({required RpcServerMode mode, int? maxConnections, LogScope? logger, LogController? logController})
+RpcConnectionHost new new({required RpcServerMode mode, int? maxConnections, LogScope? logger, LogController? logController, bool compressionEnabled})
 RpcConstants new new()
 RpcConstants static field compressed: int (get)
 RpcConstants static field compressionFlagIndex: int (get)
@@ -972,6 +973,7 @@ RpcResponderContract method dispose() -> void
 RpcResponderContract method setup() -> void
 RpcResponderContract new new(String serviceName, {RpcDataTransferMode dataTransferMode})
 RpcResponderEndpoint field activeResponderCount: int (get)
+RpcResponderEndpoint field compressionEnabled: bool (get)
 RpcResponderEndpoint field debugLabel: String? (get)
 RpcResponderEndpoint field isActive: bool (get)
 RpcResponderEndpoint field isDraining: bool (get)
@@ -987,7 +989,7 @@ RpcResponderEndpoint method registerServiceContract(RpcResponderContract contrac
 RpcResponderEndpoint method setLogController(LogController controller) -> void
 RpcResponderEndpoint method start() -> void
 RpcResponderEndpoint method unregisterServiceContract(String serviceName) -> void
-RpcResponderEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController})
+RpcResponderEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
 RpcResponderMode field register: void Function(RpcResponderEndpoint) (get)
 RpcResponderMode new contracts(List<RpcResponderContract> contracts)
 RpcResponderMode new new(void Function(RpcResponderEndpoint) register)

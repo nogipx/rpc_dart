@@ -41,7 +41,8 @@ dependencies:
 - Registration only makes gzip available. The caller compresses requests, and
   asks for compressed responses, only when its endpoint is created with
   `compressionEnabled: true` (`RpcCallerEndpoint` or `RpcPeerEndpoint`). The
-  responder needs nothing beyond registration.
+  responder compresses responses only with its own `compressionEnabled: true`
+  (`RpcResponderEndpoint`, `RpcPeerEndpoint`, or the server's).
 - Compression runs only on transports with `supportsZeroCopy == false`. Over
   `RpcChannelTransport.memoryPair()` nothing is compressed; use
   `RpcChannelTransport.pair()` to exercise it in tests.

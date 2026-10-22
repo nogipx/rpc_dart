@@ -18,6 +18,12 @@ final class RpcResponderEndpoint extends RpcEndpointBase
   /// The scope [setLogController] logs under.
   final String _logScopeName;
 
+  /// Whether to compress responses, in an encoding from the caller's
+  /// `grpc-accept-encoding` with a codec registered for it. Off by default:
+  /// registering a codec makes it available, not used.
+  @override
+  final bool compressionEnabled;
+
   /// Creates an [RpcResponderEndpoint] bound to the given transport.
   ///
   /// With [logController] the endpoint logs under the `rpc.responder` scope.
@@ -25,6 +31,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     required super.transport,
     super.debugLabel,
     LogController? logController,
+    this.compressionEnabled = false,
   }) : _logScopeName = 'rpc.responder',
        _log = logController?.scope('rpc.responder') ?? LogScope.noop {
     _validateServerTransport();
@@ -35,6 +42,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     required super.transport,
     super.debugLabel,
     LogController? logController,
+    required this.compressionEnabled,
   }) : _logScopeName = 'rpc.peer',
        _log = logController?.scope('rpc.peer') ?? LogScope.noop;
 

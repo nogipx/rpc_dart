@@ -23,6 +23,9 @@ int _trailerMessageCap(IRpcTransport transport) =>
 /// and stream lifecycle. Concrete endpoints control which messages enter
 /// the pipeline via [startResponderListening]'s optional [messageFilter].
 base mixin RpcResponderPipelineMixin on RpcEndpointBase {
+  /// Whether responses are compressed in an encoding the caller accepts.
+  bool get compressionEnabled;
+
   /// Runs detached teardown work that must never take the process with it.
   ///
   /// Every path below is a cleanup: a cancellation, a drain, a rejected

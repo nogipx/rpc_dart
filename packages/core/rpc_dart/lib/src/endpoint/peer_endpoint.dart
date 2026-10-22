@@ -20,17 +20,16 @@ part of '_index.dart';
 /// Accepts both client and server transports — no role validation.
 final class RpcPeerEndpoint extends RpcResponderEndpoint
     with RpcCallerPipelineMixin {
-  @override
-  final bool compressionEnabled;
-
   /// Creates an [RpcPeerEndpoint] bound to the given transport.
   ///
   /// With [logController] the endpoint logs under the `rpc.peer` scope.
+  /// [compressionEnabled] covers both directions: the requests it sends and
+  /// the responses it answers with.
   RpcPeerEndpoint({
     required super.transport,
     super.debugLabel,
     super.logController,
-    this.compressionEnabled = false,
+    super.compressionEnabled = false,
   }) : super._peer();
 
   // ---------------------------------------------------------------------------

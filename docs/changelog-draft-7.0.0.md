@@ -130,6 +130,10 @@ their `codec`.
 
 ### Behaviour you will notice without changing code
 
+- **A server compresses responses only when told to.** It used to gzip every
+  response for a client that accepted gzip. `compressionEnabled: true` on the
+  server, `RpcConnectionHost` or `RpcResponderEndpoint` turns it on; on
+  `RpcPeerEndpoint` the existing flag now covers responses as well.
 - **No deadline means no timeout.** A call without a deadline waits until it
   ends. Set a deadline on the context to bound it.
 - **Internal error text stays on the server.** An unexpected exception reaches

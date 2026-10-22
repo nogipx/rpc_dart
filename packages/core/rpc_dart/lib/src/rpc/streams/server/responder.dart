@@ -35,6 +35,7 @@ final class ServerStreamResponder<
     required Stream<TResponse> Function(TRequest request) handler,
     super.context,
     super.logger,
+    super.compressResponses,
   }) : super(logName: 'ServerResponder', className: 'ServerStreamResponder') {
     _setupRequestHandler((request) => _serve(request, handler));
   }
@@ -54,6 +55,7 @@ final class ServerStreamResponder<
     required FutureOr<TResponse> Function(TRequest request) handler,
     super.context,
     super.logger,
+    super.compressResponses,
   }) : super(logName: 'ServerResponder', className: 'ServerStreamResponder') {
     _setupRequestHandler((request) => _serveOne(request, handler));
   }
