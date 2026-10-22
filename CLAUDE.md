@@ -215,6 +215,25 @@ Fix the skill in its own repository, not through the link. An edit made here
 lands in the other repository's working tree, where it is easy to commit by
 accident into an unrelated change.
 
+## Renames leave history alone
+
+A rename must not rewrite a record of the past: the journal, an audit, a
+released CHANGELOG entry, or the "was" side of a migration table.
+
+`.dart-runner.json` tells dart-runner's `rename` and `text_replace` what is
+history:
+
+- `history`: paths whose matches get no id in a dry run, so `mentions: "all"`
+  cannot reach them. Dart files are never history.
+- `historyColumns`: headers of markdown-table columns that hold old names
+  (`Was` in the CHANGELOG draft, `6.x` in the migration guide). The other
+  columns are current and are renamed as usual.
+
+A new history file or "old → new" table adds its path or column header there.
+`includeHistory: true` brings the matches back when one really has to change.
+An old name in the prose of a current column is still offered: read the dry
+run.
+
 ## Style
 
 - No emoji anywhere (code, comments, commits, docs).

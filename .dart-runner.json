@@ -1,0 +1,10 @@
+{
+  "history": [
+    ".claude/loop/**",
+    ".devtrack/**",
+    "docs/audit-*.md",
+    "docs/major-release-proposals*.md",
+    "**/CHANGELOG.md"
+  ],
+  "historyColumns": ["Was", "6.x"]
+}
