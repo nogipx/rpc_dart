@@ -59,7 +59,7 @@ receives one as its named `context` parameter.
 | `ctx.getHeader(name)`, `ctx.headers` | read (unmodifiable map) |
 | `ctx.deadline`, `ctx.remainingTime`, `ctx.isExpired`, `ctx.isCancelled` | deadline / cancel state |
 | `ctx.traceId` (nullable), `ctx.requestId` (always set), `ctx.log` (`LogScope`) | correlation and logging |
-| `RpcContext.isContextValid(ctx)` | static: not null, not expired, not cancelled |
+| `ctx.isValid` | not expired and not cancelled |
 
 `ctx.forward({headers, timeout})` builds the context for a downstream call.
 It keeps this context's headers, deadline, token and values, always generates
@@ -70,7 +70,7 @@ credentials are dropped: `authorization`, `proxy-authorization`, `x-api-key`,
 after that, so `forward(headers: {'authorization': 'Bearer <service token>'})`
 sends the downstream call's own credential, and passing the caller's on means
 naming it: `forward(headers: {'authorization': ctx.getHeader('authorization')!})`.
-`RpcContext.sanitize(ctx)` drops the same set.
+`ctx.sanitized()` drops the same set.
 
 A call without a `traceId` gets one from the endpoint, on both sides. Set one
 with `withTraceId` to join an existing trace, or with
@@ -177,14 +177,15 @@ Stream<int> watch(int id, {RpcContext? context}) {
 `RpcCallScope.disposerTimeout` (static, default 5 s) is abandoned and logged.
 `ctx.values` does not include the scope.
 
-## `RpcContext.sanitize` (static)
+## `ctx.sanitized()`
 
-`RpcContext.sanitize(ctx)` returns a NEW context for logging. Not for a
+`ctx.sanitized()` returns a NEW context for logging. Not for a
 downstream call: without the deadline and token, that call outlives the
 incoming one (use `forward`). It contains:
 
-- the headers, minus exactly `authorization`, `x-api-key` and `cookie`. Other
-  secrets stay, e.g. an API key under a custom `headerName`.
+- the headers, minus the credentials `forward` drops: `authorization`,
+  `proxy-authorization`, `x-api-key`, `cookie`, and a header named by
+  `withApiKey(headerName:)`. Other secrets under custom names stay.
 - `traceId`, or `'sanitized-trace'` if there was none.
 - a NEW `requestId`. The deadline, cancellation token, values, logger and clock are
   all dropped.

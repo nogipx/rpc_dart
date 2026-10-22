@@ -92,7 +92,7 @@ void main() {
       );
     });
 
-    test('isContextValid detects expired and cancelled contexts', () {
+    test('isValid detects expired and cancelled contexts', () {
       final validContext = RpcContext.empty();
       final expiredContext = RpcContext.withDeadline(
         DateTime.now().subtract(Duration(minutes: 1)),
@@ -100,13 +100,12 @@ void main() {
       final cancelledToken = RpcCancellationToken.cancelled();
       final cancelledContext = RpcContext.withCancellation(cancelledToken);
 
-      expect(RpcContext.isContextValid(validContext), isTrue);
-      expect(RpcContext.isContextValid(expiredContext), isFalse);
-      expect(RpcContext.isContextValid(cancelledContext), isFalse);
-      expect(RpcContext.isContextValid(null), isFalse);
+      expect(validContext.isValid, isTrue);
+      expect(expiredContext.isValid, isFalse);
+      expect(cancelledContext.isValid, isFalse);
     });
 
-    test('sanitize removes sensitive headers', () {
+    test('sanitized removes sensitive headers', () {
       final context = RpcContext.withHeaders({
         'authorization': 'Bearer secret-token',
         'x-api-key': 'secret-key',
@@ -115,7 +114,7 @@ void main() {
         'x-public-data': 'safe-value',
       }).withTraceId('trace-123');
 
-      final sanitized = RpcContext.sanitize(context);
+      final sanitized = context.sanitized();
 
       expect(sanitized.getHeader('authorization'), isNull);
       expect(sanitized.getHeader('x-api-key'), isNull);

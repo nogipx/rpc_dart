@@ -507,6 +507,7 @@ RpcContext field deadline: DateTime? (get)
 RpcContext field headers: Map<String, String> (get)
 RpcContext field isCancelled: bool (get)
 RpcContext field isExpired: bool (get)
+RpcContext field isValid: bool (get)
 RpcContext field log: LogScope (get)
 RpcContext field remainingTime: Duration? (get)
 RpcContext field requestId: String (get)
@@ -516,6 +517,7 @@ RpcContext method forward({Map<String, String>? headers, Duration? timeout}) -> 
 RpcContext method getHeader(String key) -> String?
 RpcContext method getValue<T>(RpcContextKey<T> key) -> T?
 RpcContext method requireCallScope() -> RpcCallScope
+RpcContext method sanitized() -> RpcContext
 RpcContext method withAdditionalHeaders(Map<String, String> additionalHeaders) -> RpcContext
 RpcContext method withApiKey(String key, {String headerName}) -> RpcContext
 RpcContext method withBasicAuth(String username, String password) -> RpcContext
@@ -535,9 +537,7 @@ RpcContext new withHeaders(Map<String, String> headers, {String? requestId})
 RpcContext new withTimeout(Duration timeout)
 RpcContext new withTraceId(String traceId)
 RpcContext static method generateTraceId() -> String
-RpcContext static method isContextValid(RpcContext? context) -> bool
 RpcContext static method monotonicNow() -> DateTime
-RpcContext static method sanitize(RpcContext context) -> RpcContext
 RpcContextKey field name: String (get)
 RpcContextKey new new(String name)
 RpcDataTransferMode static field auto: RpcDataTransferMode (get)

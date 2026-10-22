@@ -96,7 +96,7 @@ final class RpcContext {
   static final Stopwatch _sinceOrigin = Stopwatch()..start();
 
   /// Header names set as credentials under a name of the caller's choosing
-  /// ([withApiKey]); [sanitize] and [forward] drop them with the built-in
+  /// ([withApiKey]); [sanitized] and [forward] drop them with the built-in
   /// ones.
   final Set<String> _credentialNames;
 
@@ -180,7 +180,7 @@ final class RpcContext {
     return withAdditionalHeaders({'authorization': 'Basic $credentials'});
   }
 
-  /// Creates a copy with the API key under [headerName]; [sanitize] and
+  /// Creates a copy with the API key under [headerName]; [sanitized] and
   /// [forward] drop it whatever the name.
   RpcContext withApiKey(String key, {String headerName = 'x-api-key'}) {
     final withKey = withAdditionalHeaders({headerName: key});
@@ -452,13 +452,10 @@ final class RpcContext {
     return 'RpcContext(${parts.join(', ')})';
   }
 
-  /// Returns true if the context is neither expired nor cancelled.
-  static bool isContextValid(RpcContext? context) {
-    if (context == null) return false;
-    return !context.isExpired && !context.isCancelled;
-  }
+  /// Whether the context is neither expired nor cancelled.
+  bool get isValid => !isExpired && !isCancelled;
 
-  /// Headers [sanitize] and [forward] drop, with any name [withApiKey] was
+  /// Headers [sanitized] and [forward] drop, with any name [withApiKey] was
   /// given.
   static const _credentialHeaders = {
     'authorization',
@@ -474,13 +471,13 @@ final class RpcContext {
   ///
   /// It drops the deadline and the cancellation token too, so a call made
   /// with it outlives the incoming one; a downstream call wants [forward].
-  static RpcContext sanitize(RpcContext context) {
-    final sanitizedHeaders = Map<String, String>.from(context.headers)
-      ..removeWhere((name, _) => context._isCredential(name));
+  RpcContext sanitized() {
+    final sanitizedHeaders = Map<String, String>.from(headers)
+      ..removeWhere((name, _) => _isCredential(name));
 
     return RpcContext.withHeaders(
       sanitizedHeaders,
-    ).withTraceId(context.traceId ?? 'sanitized-trace');
+    ).withTraceId(traceId ?? 'sanitized-trace');
   }
 
   /// The context for a downstream call made on behalf of this one.

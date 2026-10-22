@@ -32,8 +32,8 @@ void main() {
     expect(downstream.getHeader('x-service-key'), isNull);
   });
 
-  test('sanitize drops an api key under its own name', () {
-    final logged = RpcContext.sanitize(incoming);
+  test('sanitized drops an api key under its own name', () {
+    final logged = incoming.sanitized();
 
     expect(logged.getHeader('x-service-key'), isNull);
     expect(logged.getHeader('proxy-authorization'), isNull);
