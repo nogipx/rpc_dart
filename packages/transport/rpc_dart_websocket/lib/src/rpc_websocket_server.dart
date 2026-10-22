@@ -48,6 +48,7 @@ class RpcWebSocketServer extends IRpcServer {
     required RpcServerMode mode,
     LogScope? logger,
     LogController? logController,
+    bool compressionEnabled = false,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? maxConnections,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
@@ -61,6 +62,7 @@ class RpcWebSocketServer extends IRpcServer {
          maxConnections: maxConnections,
          logger: logger?.child('WebSocketServer'),
          logController: logController,
+         compressionEnabled: compressionEnabled,
        ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
@@ -72,6 +74,7 @@ class RpcWebSocketServer extends IRpcServer {
     required List<RpcResponderContract> contracts,
     LogScope? logger,
     LogController? logController,
+    bool compressionEnabled = false,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     int? maxConnections,
   }) {
@@ -80,6 +83,7 @@ class RpcWebSocketServer extends IRpcServer {
       mode: RpcResponderMode.contracts(contracts),
       logger: logger,
       logController: logController,
+      compressionEnabled: compressionEnabled,
       policy: policy,
       maxConnections: maxConnections,
     );

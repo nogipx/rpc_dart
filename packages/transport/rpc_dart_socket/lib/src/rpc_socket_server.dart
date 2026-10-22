@@ -61,6 +61,7 @@ class RpcSocketServer extends IRpcServer {
     Duration? prefaceTimeout = const Duration(seconds: 10),
     LogScope? logger,
     LogController? logController,
+    bool compressionEnabled = false,
     void Function(Object error, StackTrace? stackTrace)? onConnectionError,
     void Function(RpcSocketChannel channel)? onConnectionOpened,
     void Function(RpcSocketChannel channel)? onConnectionClosed,
@@ -73,6 +74,7 @@ class RpcSocketServer extends IRpcServer {
          maxConnections: maxConnections,
          logger: logger?.child('SocketServer'),
          logController: logController,
+         compressionEnabled: compressionEnabled,
        ),
        _onConnectionError = onConnectionError,
        _onConnectionOpened = onConnectionOpened,
@@ -87,6 +89,7 @@ class RpcSocketServer extends IRpcServer {
     Duration? prefaceTimeout = const Duration(seconds: 10),
     LogScope? logger,
     LogController? logController,
+    bool compressionEnabled = false,
   }) {
     return RpcSocketServer(
       address: address,
@@ -96,6 +99,7 @@ class RpcSocketServer extends IRpcServer {
       prefaceTimeout: prefaceTimeout,
       logger: logger,
       logController: logController,
+      compressionEnabled: compressionEnabled,
     );
   }
 

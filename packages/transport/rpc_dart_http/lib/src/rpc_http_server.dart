@@ -68,6 +68,7 @@ class RpcHttpServer extends IRpcServer {
   final RpcResponderMode _mode;
   final LogScope _log;
   final LogController? _logController;
+  final bool _compressionEnabled;
 
   RpcHttpResponderTransport? _transport;
   RpcResponderEndpoint? _endpoint;
@@ -148,6 +149,7 @@ class RpcHttpServer extends IRpcServer {
     int? maxConnections,
     LogScope? logger,
     LogController? logController,
+    bool compressionEnabled = false,
   }) : _host = host,
        _port = port,
        _corsPolicy = corsPolicy,
@@ -158,6 +160,7 @@ class RpcHttpServer extends IRpcServer {
        _maxConnections = maxConnections,
        _mode = mode,
        _logController = logController,
+       _compressionEnabled = compressionEnabled,
        _log = logger?.child('HttpServer') ?? LogScope.noop;
 
   @override
@@ -272,6 +275,7 @@ class RpcHttpServer extends IRpcServer {
     final endpoint = RpcResponderEndpoint(
       transport: transport,
       logController: _logController,
+      compressionEnabled: _compressionEnabled,
     );
     _endpoint = endpoint;
 
