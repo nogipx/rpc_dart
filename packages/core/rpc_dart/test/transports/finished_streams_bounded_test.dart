@@ -107,7 +107,7 @@ Future<void> _abortedCall(RpcCallerEndpoint caller) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      context: RpcContext.withTimeout(const Duration(milliseconds: 2)),
+      context: RpcContext.empty().withTimeout(const Duration(milliseconds: 2)),
     );
   } catch (_) {
     // The deadline is the point.

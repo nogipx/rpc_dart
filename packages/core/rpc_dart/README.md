@@ -387,7 +387,7 @@ Future<void> checkHealth(RpcCallerEndpoint caller) async {
 ```dart
 Future<void> cancellable(CalculatorCaller calculator) async {
   final token = RpcCancellationToken();
-  final ctx = RpcContext.withCancellation(
+  final ctx = RpcContext.empty().withCancellation(
     token,
   ).withTimeout(const Duration(seconds: 2));
 

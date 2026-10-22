@@ -173,7 +173,7 @@ void main() {
       final rig = _build();
       await _call(
         rig.caller,
-        context: RpcContext.withTraceId('trace_supplied-by-the-app'),
+        context: RpcContext.empty().withTraceId('trace_supplied-by-the-app'),
       );
 
       expect(rig.svc.seen.single.traceId, 'trace_supplied-by-the-app');

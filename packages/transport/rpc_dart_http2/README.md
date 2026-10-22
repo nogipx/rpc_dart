@@ -43,7 +43,7 @@ Future<void> callServer() async {
 
   final reply = await GreeterCaller(endpoint).hello(
     const RpcString('http2'),
-    context: RpcContext.withTimeout(const Duration(seconds: 5)),
+    context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
   );
   print(reply.value);
 

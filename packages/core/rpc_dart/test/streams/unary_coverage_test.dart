@@ -225,7 +225,7 @@ void main() {
               methodName: 'M',
               requestCodec: codec,
               responseCodec: codec,
-              context: RpcContext.withCancellation(cancelled),
+              context: RpcContext.empty().withCancellation(cancelled),
               handler: handler,
             );
         final cancelledFeed = StreamController<RpcTransportMessage>();

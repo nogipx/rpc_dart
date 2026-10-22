@@ -98,7 +98,7 @@ void main() {
       _call(
         rig,
         requests.stream,
-        RpcContext.withTimeout(const Duration(milliseconds: 600)),
+        RpcContext.empty().withTimeout(const Duration(milliseconds: 600)),
       ).timeout(
         const Duration(seconds: 5),
         onTimeout: () => fail('the deadline never fired on a stalled producer'),
@@ -127,7 +127,11 @@ void main() {
     Timer(const Duration(milliseconds: 300), () => token.cancel('user quit'));
 
     await expectLater(
-      _call(rig, requests.stream, RpcContext.withCancellation(token)).timeout(
+      _call(
+        rig,
+        requests.stream,
+        RpcContext.empty().withCancellation(token),
+      ).timeout(
         const Duration(seconds: 5),
         onTimeout: () => fail('cancellation never reached a stalled producer'),
       ),
@@ -183,7 +187,7 @@ void main() {
         await _call(
           rig,
           requests.stream,
-          RpcContext.withTimeout(const Duration(seconds: 30)),
+          RpcContext.empty().withTimeout(const Duration(seconds: 30)),
         ).timeout(const Duration(seconds: 5)),
         'x',
       );

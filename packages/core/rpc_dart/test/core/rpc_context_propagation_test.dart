@@ -35,7 +35,7 @@ void main() {
 
     test('creates context with deadline', () {
       final deadline = DateTime.now().add(Duration(minutes: 5));
-      final context = RpcContext.withDeadline(deadline);
+      final context = RpcContext.empty().withDeadline(deadline);
 
       expect(context.deadline, equals(deadline));
       expect(context.isExpired, isFalse);
@@ -45,7 +45,7 @@ void main() {
 
     test('creates context with timeout', () {
       final timeout = Duration(minutes: 10);
-      final context = RpcContext.withTimeout(timeout);
+      final context = RpcContext.empty().withTimeout(timeout);
 
       expect(context.deadline, isNotNull);
       expect(context.isExpired, isFalse);
@@ -54,7 +54,7 @@ void main() {
 
     test('detects expired deadline', () {
       final pastDeadline = DateTime.now().subtract(Duration(minutes: 1));
-      final context = RpcContext.withDeadline(pastDeadline);
+      final context = RpcContext.empty().withDeadline(pastDeadline);
 
       expect(context.isExpired, isTrue);
       expect(context.remainingTime, equals(Duration.zero));
@@ -94,11 +94,13 @@ void main() {
 
     test('isValid detects expired and cancelled contexts', () {
       final validContext = RpcContext.empty();
-      final expiredContext = RpcContext.withDeadline(
+      final expiredContext = RpcContext.empty().withDeadline(
         DateTime.now().subtract(Duration(minutes: 1)),
       );
       final cancelledToken = RpcCancellationToken.cancelled();
-      final cancelledContext = RpcContext.withCancellation(cancelledToken);
+      final cancelledContext = RpcContext.empty().withCancellation(
+        cancelledToken,
+      );
 
       expect(validContext.isValid, isTrue);
       expect(expiredContext.isValid, isFalse);
@@ -228,7 +230,8 @@ void main() {
       final timeout = Duration(minutes: 5);
       final traceId = 'trace-123';
 
-      final context = RpcContext.withTraceId(traceId)
+      final context = RpcContext.empty()
+          .withTraceId(traceId)
           .withTimeout(timeout)
           .withAdditionalHeaders({'x-user-id': '123'})
           .withBearerAuth('token-abc')
@@ -268,7 +271,7 @@ void main() {
 
     test('forward inherits trace ID and generates new request ID', () {
       final parentTraceId = 'parent-trace-123';
-      final parent = RpcContext.withTraceId(parentTraceId);
+      final parent = RpcContext.empty().withTraceId(parentTraceId);
 
       final child = parent.forward();
 
@@ -278,7 +281,7 @@ void main() {
     });
 
     test('forward applies headers and timeout', () {
-      final parent = RpcContext.withTraceId('trace-123');
+      final parent = RpcContext.empty().withTraceId('trace-123');
       final additionalHeaders = {'x-custom': 'value'};
       final timeout = Duration(seconds: 30);
 
@@ -299,9 +302,10 @@ void main() {
       final cancellationToken = RpcCancellationToken();
       final timeout = Duration(seconds: 30);
 
-      final context = RpcContext.withTraceId(
-        RpcContextUtils.generateTraceId(),
-      ).withTimeout(timeout).withCancellation(cancellationToken);
+      final context = RpcContext.empty()
+          .withTraceId(RpcContextUtils.generateTraceId())
+          .withTimeout(timeout)
+          .withCancellation(cancellationToken);
 
       final childContext = context.forward();
 

@@ -45,7 +45,7 @@ Future<String> _outcome(
     transport: RpcChannelTransport.fromChannel(channel: chan, isClient: true),
   );
   addTearDown(caller.close);
-  final ctx = RpcContext.withTimeout(const Duration(seconds: 2));
+  final ctx = RpcContext.empty().withTimeout(const Duration(seconds: 2));
   final requests = StreamController<RpcString>()..add('q'.rpc);
   unawaited(requests.close());
   final items = <String>[];

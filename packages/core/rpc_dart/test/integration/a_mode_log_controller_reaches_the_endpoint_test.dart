@@ -40,7 +40,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: client);
 
       await caller.ping(
-        context: RpcContext.withTimeout(const Duration(seconds: 5)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
       );
 
       expect(
@@ -65,7 +65,7 @@ void main() {
     final caller = RpcCallerEndpoint(transport: client);
 
     await caller.ping(
-      context: RpcContext.withTimeout(const Duration(seconds: 5)),
+      context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
     );
 
     expect(

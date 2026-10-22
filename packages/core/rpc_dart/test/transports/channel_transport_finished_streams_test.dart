@@ -34,7 +34,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 20)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 20),
+        ),
       );
       await expectLater(caller.call('x'.rpc), throwsA(anything));
     }

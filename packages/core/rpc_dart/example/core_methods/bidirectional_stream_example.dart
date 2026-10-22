@@ -76,9 +76,9 @@ class BidirectionalStreamExample {
       // 3: a chat that gets cancelled.
       print('\n--- 3: cancelling a chat ---');
       final cancellationToken = RpcCancellationToken();
-      final cancelContext = RpcContext.withCancellation(
-        cancellationToken,
-      ).withValue(_chatType, 'long-running');
+      final cancelContext = RpcContext.empty()
+          .withCancellation(cancellationToken)
+          .withValue(_chatType, 'long-running');
       // Cancel after 300ms.
       Future<void>.delayed(Duration(milliseconds: 300), () {
         print('CLIENT: cancelling the chat');

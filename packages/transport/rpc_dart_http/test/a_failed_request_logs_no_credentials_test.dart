@@ -44,7 +44,7 @@ void main() {
         request: 'x'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(seconds: 5)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
       ),
       throwsA(isA<RpcStatusException>()),
     );

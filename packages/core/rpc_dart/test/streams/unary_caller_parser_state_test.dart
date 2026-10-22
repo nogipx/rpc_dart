@@ -62,7 +62,9 @@ void main() {
     // buffers it and emits nothing until the deadline.
     await expectLater(
       caller(
-        context: RpcContext.withTimeout(const Duration(milliseconds: 100)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 100),
+        ),
       ).call('first'.rpc),
       throwsA(isA<RpcDeadlineExceededException>()),
     );

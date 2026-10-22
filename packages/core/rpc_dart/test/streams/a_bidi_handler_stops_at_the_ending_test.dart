@@ -112,7 +112,7 @@ Future<_Reading> _run(_Ending ending) async {
         requestCodec: _codec,
         responseCodec: _codec,
         context: ending == _Ending.deadlinePasses
-            ? RpcContext.withTimeout(const Duration(seconds: 1))
+            ? RpcContext.empty().withTimeout(const Duration(seconds: 1))
             : null,
       )
       .listen(

@@ -57,7 +57,7 @@ Future<void> main(List<String> args) async {
           request: ('x' * (2 * 1024 * 1024)).rpc,
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withTimeout(const Duration(seconds: 5)),
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
         )
         // A backstop only. The call must settle on the SERVER's answer long
         // before this; if it ever fires, the wait is gated on the send again.
@@ -159,7 +159,7 @@ void main() {
       // The SERVER's answer, not a local deadline. Once the crash was gone the
       // call still hung: `call()` was inside `await sendMessage` when the
       // trailer arrived, so the wait was gated on a send the peer had stopped
-      // reading, and `RpcContext.withTimeout(5s)` never applied. Measured
+      // reading, and `RpcContext.empty().withTimeout(5s)` never applied. Measured
       // through the probe: still running at 15 s -> RpcStatusException(8) in
       // 19 ms.
       expect(

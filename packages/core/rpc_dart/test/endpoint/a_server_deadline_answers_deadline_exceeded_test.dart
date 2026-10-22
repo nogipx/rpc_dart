@@ -119,7 +119,7 @@ void main() {
         request: 'q'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(seconds: 30)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 30)),
       ),
       throwsA(isA<RpcDeadlineExceededException>()),
     );

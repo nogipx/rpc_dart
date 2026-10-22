@@ -113,7 +113,9 @@ void main() {
           request: 'a'.rpc,
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withTimeout(const Duration(milliseconds: 50)),
+          context: RpcContext.empty().withTimeout(
+            const Duration(milliseconds: 50),
+          ),
         );
       } catch (_) {
         // Expected: the deadline ends the call.
@@ -145,7 +147,9 @@ void main() {
               request: 'a'.rpc,
               requestCodec: _codec,
               responseCodec: _codec,
-              context: RpcContext.withTimeout(const Duration(milliseconds: 50)),
+              context: RpcContext.empty().withTimeout(
+                const Duration(milliseconds: 50),
+              ),
             )
             .toList();
       } catch (_) {}
@@ -170,7 +174,9 @@ void main() {
         request: 'a'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 100)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 100),
+        ),
       );
     } catch (_) {}
 
@@ -196,7 +202,9 @@ void main() {
         request: 'a'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 100)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 100),
+        ),
       ),
       throwsA(isA<RpcDeadlineExceededException>()),
     );
@@ -214,7 +222,7 @@ void main() {
         request: 'hi'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(seconds: 30)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 30)),
       );
       expect(r.value, 'hi');
     }

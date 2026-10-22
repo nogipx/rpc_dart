@@ -114,7 +114,7 @@ Future<String> _stillServing(_Rig rig) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      context: RpcContext.withTimeout(const Duration(seconds: 5)),
+      context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
     );
     return answer.value;
   } finally {

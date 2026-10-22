@@ -183,7 +183,9 @@ void main() {
 
     group('deadline', () {
       test('auto-closes scope when deadline expires', () async {
-        final context = RpcContext.withTimeout(Duration(milliseconds: 50));
+        final context = RpcContext.empty().withTimeout(
+          Duration(milliseconds: 50),
+        );
         final scope = RpcCallScope(context: context);
 
         expect(scope.isClosed, isFalse);
@@ -194,7 +196,9 @@ void main() {
       });
 
       test('runs disposers when deadline expires', () async {
-        final context = RpcContext.withTimeout(Duration(milliseconds: 50));
+        final context = RpcContext.empty().withTimeout(
+          Duration(milliseconds: 50),
+        );
         final scope = RpcCallScope(context: context);
 
         var cleaned = false;
@@ -205,7 +209,7 @@ void main() {
       });
 
       test('already expired deadline closes immediately', () async {
-        final context = RpcContext.withDeadline(
+        final context = RpcContext.empty().withDeadline(
           DateTime.now().subtract(Duration(seconds: 1)),
         );
         final scope = RpcCallScope(context: context);
@@ -218,7 +222,7 @@ void main() {
     group('cancellation', () {
       test('auto-closes scope when token is cancelled', () async {
         final token = RpcCancellationToken();
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
         final scope = RpcCallScope(context: context);
 
         expect(scope.isClosed, isFalse);
@@ -231,7 +235,7 @@ void main() {
 
       test('runs disposers on cancellation', () async {
         final token = RpcCancellationToken();
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
         final scope = RpcCallScope(context: context);
 
         var cleaned = false;
@@ -245,7 +249,7 @@ void main() {
 
       test('already cancelled token closes immediately', () async {
         final token = RpcCancellationToken.cancelled('pre-cancelled');
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
         final scope = RpcCallScope(context: context);
 
         await Future<void>.delayed(Duration.zero);
@@ -265,7 +269,7 @@ void main() {
       });
 
       test('returns positive duration before deadline', () {
-        final context = RpcContext.withTimeout(Duration(seconds: 10));
+        final context = RpcContext.empty().withTimeout(Duration(seconds: 10));
         final scope = RpcCallScope(context: context);
 
         final rem = scope.remaining;

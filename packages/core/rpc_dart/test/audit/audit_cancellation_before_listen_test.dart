@@ -35,7 +35,7 @@ void main() {
       test('StreamProcessor: cancel before subscribing still delivers '
           'RpcCancelledException to requests stream', () async {
         final token = RpcCancellationToken();
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
 
         final (client, rawServer) = RpcChannelTransport.memoryPair();
 
@@ -90,7 +90,7 @@ void main() {
       test('CallProcessor: cancel before subscribing still delivers '
           'RpcCancelledException to responses stream', () async {
         final token = RpcCancellationToken();
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
 
         final (client, rawServer) = RpcChannelTransport.memoryPair();
 

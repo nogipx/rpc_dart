@@ -74,7 +74,7 @@ void main() {
   test('a retry delay past the deadline ends the call at once', () async {
     final clock = Stopwatch()..start();
     final waited = await gaps(
-      RpcContext.withTimeout(const Duration(seconds: 1)),
+      RpcContext.empty().withTimeout(const Duration(seconds: 1)),
       () => RpcRateLimitException(
         'slow down',
         retryAfter: const Duration(seconds: 5),

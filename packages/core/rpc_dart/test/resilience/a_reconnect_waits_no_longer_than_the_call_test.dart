@@ -36,7 +36,7 @@ void main() {
   test('the wait ends at the call deadline', () async {
     final (outcome, ms) = await _call(
       connection.transport,
-      RpcContext.withTimeout(const Duration(seconds: 1)),
+      RpcContext.empty().withTimeout(const Duration(seconds: 1)),
     );
     expect(outcome, isA<RpcDeadlineExceededException>());
     expect(ms, lessThan(2000), reason: 'held past the deadline: $ms ms');
@@ -50,7 +50,7 @@ void main() {
       final left = <Duration?>[];
       await _call(
         connection.transport,
-        RpcContext.withTimeout(const Duration(milliseconds: 5)),
+        RpcContext.empty().withTimeout(const Duration(milliseconds: 5)),
         backoff: const Duration(milliseconds: 1),
         onAttempt: left.add,
       );
@@ -80,7 +80,7 @@ void main() {
     Timer(const Duration(milliseconds: 300), () => token.cancel('x'));
     final (outcome, ms) = await _call(
       connection.transport,
-      RpcContext.withCancellation(token),
+      RpcContext.empty().withCancellation(token),
     );
     expect(outcome, isA<RpcCancelledException>());
     expect(ms, lessThan(1500), reason: 'held past the cancel: $ms ms');
@@ -97,7 +97,7 @@ void main() {
   test('a deadline past the web timer ceiling waits like none', () async {
     final (outcome, ms) = await _call(
       connection.transport,
-      RpcContext.withTimeout(const Duration(days: 30)),
+      RpcContext.empty().withTimeout(const Duration(days: 30)),
     );
     expect(outcome, isA<RpcStatusException>());
     expect(ms, greaterThanOrEqualTo(4500), reason: 'the wait ended early');

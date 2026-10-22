@@ -17,7 +17,7 @@ void main() {
           RpcChannelTransport.memoryPair();
       final token = RpcCancellationToken();
       token.cancel('stop');
-      final context = RpcContext.withCancellation(token);
+      final context = RpcContext.empty().withCancellation(token);
 
       final client = UnaryCaller<RpcString, RpcString>(
         transport: clientTransport,
@@ -40,7 +40,7 @@ void main() {
     test('UnaryCaller throws when context deadline already expired', () async {
       final (clientTransport, serverTransport) =
           RpcChannelTransport.memoryPair();
-      final context = RpcContext.withDeadline(
+      final context = RpcContext.empty().withDeadline(
         DateTime.fromMillisecondsSinceEpoch(0),
       );
 

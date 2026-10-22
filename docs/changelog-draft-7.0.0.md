@@ -99,7 +99,7 @@ No error message is a contract: match on the type or the status.
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` |
 | health metric `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` and its `timeout` | `RpcDeadlineExceededException(deadline)` |
-| `RpcContextUtils` | not exported; the endpoint gives a call without a trace id one, `RpcContext.withTraceId(id)` joins a trace, `RpcContext.generateTraceId()` mints one ahead of the call. Spans belong to `rpc_dart_opentelemetry` |
+| `RpcContextUtils` | not exported; the endpoint gives a call without a trace id one, `RpcContext.empty().withTraceId(id)` joins a trace, `RpcContext.generateTraceId()` mints one ahead of the call. Spans belong to `rpc_dart_opentelemetry` |
 | `ctx.createChild()`, `ctx.createChildWith(headers:, timeout:)`, `RpcContextBuilder.inheritFrom(ctx)` | `ctx.forward(headers:, timeout:)`, which drops this context's credentials; pass one on by naming it in `headers` |
 | `RpcContextBuilder` | the `RpcContext` factories and `with...` copies; `withBearerAuth`, `withBasicAuth` and `withApiKey` are on `RpcContext` |
 | `RpcContextUtils.merge(left, right)` | gone; chain `with...` copies |
@@ -107,7 +107,7 @@ No error message is a contract: match on the type or the status.
 | `cancelMethod`, `cancelAllMethods`, `isMethodActive`, `getActiveCallsCount`, `getCancellationTokensForMethod` on a contract | the endpoint's `cancelMethod(service, method)`, `cancelService(service)`, `activeCallCount(service, method)`; a service method may now have any of these names |
 | `endpoint.cancelAllMethods`, `endpoint.cancelServiceMethods` | `cancelAll`, `cancelService` |
 | `RpcCallerEndpoint.start`, `RpcEndpointBase.start` | gone; a caller needs no start, a responder or peer endpoint still has `start()` |
-| `ping(timeout: d)` | `ping(context: RpcContext.withTimeout(d))`; the context's deadline is the one bound, as for any call |
+| `ping(timeout: d)` | `ping(context: RpcContext.empty().withTimeout(d))`; the context's deadline is the one bound, as for any call |
 | `endpoint.unaryRequest` | `endpoint.unary`, named like the other three shapes |
 | `RpcRateLimiter(nowMicros:)` | `clock:`, a `DateTime Function()` like `RpcContext.withClock` and `LogController(clock:)`; the default stays a monotonic stopwatch |
 | `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
@@ -122,6 +122,7 @@ No error message is a contract: match on the type or the status.
 | endpoint pipeline members (`handleUnary` and the other three, `start*Listening`, `close*Resources`, `collect*Metrics`, `registeredMethods`, `registeredMethodBindings`, `validateMethodExists`, `getCancellationToken`, `responderIsListening`) and `RpcResponderContract.registrations` | not public; `collectEndpointMetrics()` for the metrics |
 | `IRpcMiddleware`, `addMiddleware`, `RpcEndpointMetrics.middlewareCount` | an `IRpcInterceptor`, the one way to wrap a call: it changes the request before `next` or maps the request or response stream |
 | `RpcMiddlewareContext` | `RpcCallInfo`, whose `direction` is always set |
+| `RpcContext.withTimeout(d)`, `.withDeadline(t)`, `.withCancellation(token)`, `.withTraceId(id)` as constructors | `RpcContext.empty().withTimeout(d)` and the other `with...` copies; `empty()` and `withHeaders(...)` stay the two constructors |
 | `RpcContext.isContextValid(ctx)`, `RpcContext.sanitize(ctx)` | `ctx.isValid`, `ctx.sanitized()` |
 | `RpcEndpointHealth.dependencies['transport']`, a nullable `transportStatus` | `transportStatus`, always set; `RpcEndpointHealth(endpointStatus:, transportStatus:)` |
 | `responderEndpoint.setLogController(c)` after construction | `logController:` when the endpoint is built; for the endpoints a server builds, `RpcResponderMode(register, logController: c)` or `RpcPeerMode(...)`, which takes the place of the server's own |

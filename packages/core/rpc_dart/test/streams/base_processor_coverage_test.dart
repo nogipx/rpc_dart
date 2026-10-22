@@ -109,7 +109,7 @@ void main() {
             methodName: 'M',
             requestCodec: codec,
             responseCodec: codec,
-            context: RpcContext.withCancellation(token),
+            context: RpcContext.empty().withCancellation(token),
           );
           processor.bindToMessageStream(controller.stream);
 
@@ -321,7 +321,7 @@ void main() {
             methodName: 'M',
             requestCodec: codec,
             responseCodec: codec,
-            context: RpcContext.withCancellation(token),
+            context: RpcContext.empty().withCancellation(token),
           );
 
           // Cancelled => send() should early return.
@@ -436,7 +436,7 @@ void main() {
             methodName: 'M',
             requestCodec: codec,
             responseCodec: codec,
-            context: RpcContext.withDeadline(
+            context: RpcContext.empty().withDeadline(
               DateTime.fromMillisecondsSinceEpoch(0),
             ),
           ),
@@ -485,7 +485,9 @@ void main() {
         final (client, server) = RpcChannelTransport.memoryPair();
 
         final deadline = DateTime.now().add(const Duration(minutes: 1));
-        final context = RpcContext.withDeadline(deadline).withTraceId('t');
+        final context = RpcContext.empty()
+            .withDeadline(deadline)
+            .withTraceId('t');
 
         final metadataSeen = Completer<RpcMetadata>();
         server.incomingMessages.listen((m) {
@@ -522,7 +524,7 @@ void main() {
       test('cancellation sends cancellation metadata to server', () async {
         final (client, server) = RpcChannelTransport.memoryPair();
         final token = RpcCancellationToken();
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
 
         final cancellationSeen = Completer<RpcTransportMessage>();
         server.incomingMessages.listen((m) {

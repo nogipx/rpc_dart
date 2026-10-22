@@ -40,9 +40,9 @@ class ClientStreamingExample {
     try {
       // 1: aggregating text messages.
       print('\n--- 1: aggregating text messages ---');
-      final context1 = RpcContext.withTraceId(
-        'client-stream-123',
-      ).withValue(_aggregationType, 'text');
+      final context1 = RpcContext.empty()
+          .withTraceId('client-stream-123')
+          .withValue(_aggregationType, 'text');
       final messages = [
         'Message 1: Hello',
         'Message 2: How are you?',
@@ -92,9 +92,10 @@ class ClientStreamingExample {
       // 3: aggregating, then cancelling.
       print('\n--- 3: cancelling an aggregation ---');
       final cancellationToken = RpcCancellationToken();
-      final cancelContext = RpcContext.withCancellation(
-        cancellationToken,
-      ).withValue(_batchSize, 100).withTraceId('cancel-aggregate-789');
+      final cancelContext = RpcContext.empty()
+          .withCancellation(cancellationToken)
+          .withValue(_batchSize, 100)
+          .withTraceId('cancel-aggregate-789');
       // Cancel after 150ms.
       Future<void>.delayed(Duration(milliseconds: 150), () {
         print('CLIENT: cancelling the aggregation');

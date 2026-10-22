@@ -241,7 +241,7 @@ void main() {
     // WITNESS on the web, end to end: this is what a peer could trigger.
     test('a 30-day call scope is not closed immediately', () async {
       final scope = RpcCallScope(
-        context: RpcContext.withDeadline(
+        context: RpcContext.empty().withDeadline(
           DateTime.now().add(const Duration(days: 30)),
         ),
       );
@@ -262,7 +262,9 @@ void main() {
       expect(remaining, isNotNull);
 
       final scope = RpcCallScope(
-        context: RpcContext.withDeadline(DateTime.now().add(remaining!)),
+        context: RpcContext.empty().withDeadline(
+          DateTime.now().add(remaining!),
+        ),
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -275,7 +277,7 @@ void main() {
     // an ordinary short one must still fire.
     test('an already-expired deadline still closes the scope', () async {
       final scope = RpcCallScope(
-        context: RpcContext.withDeadline(
+        context: RpcContext.empty().withDeadline(
           DateTime.now().subtract(const Duration(seconds: 1)),
         ),
       );
@@ -287,7 +289,9 @@ void main() {
 
     test('a short deadline still closes the scope', () async {
       final scope = RpcCallScope(
-        context: RpcContext.withTimeout(const Duration(milliseconds: 40)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 40),
+        ),
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 200));

@@ -89,7 +89,7 @@ final class RpcContext {
 
   /// A new trace id in the format the endpoints mint, for a trace that must be
   /// known before its first call:
-  /// `RpcContext.withTraceId(RpcContext.generateTraceId())`.
+  /// `RpcContext.empty().withTraceId(RpcContext.generateTraceId())`.
   static String generateTraceId() => RpcContextUtils.generateTraceId();
 
   static final DateTime _origin = DateTime.now();
@@ -141,22 +141,6 @@ final class RpcContext {
     Map<String, String> headers, {
     String? requestId,
   }) => RpcContext._(headers: _sanitizeHeaders(headers), requestId: requestId);
-
-  /// Creates a context with a deadline.
-  factory RpcContext.withDeadline(DateTime deadline) =>
-      RpcContext._(deadline: deadline);
-
-  /// Creates a context with a timeout, measured on [monotonicNow].
-  factory RpcContext.withTimeout(Duration timeout) =>
-      RpcContext._(deadline: monotonicNow().add(timeout));
-
-  /// Creates a context with a cancellation token.
-  factory RpcContext.withCancellation(RpcCancellationToken token) =>
-      RpcContext._(cancellationToken: token);
-
-  /// Creates a context with a trace ID.
-  factory RpcContext.withTraceId(String traceId) =>
-      RpcContext._(traceId: traceId);
 
   /// Creates a copy of the context with additional headers.
   ///

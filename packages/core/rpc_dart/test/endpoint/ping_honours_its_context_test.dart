@@ -149,7 +149,7 @@ void main() {
       final clock = Stopwatch()..start();
       await expectLater(
         rig.caller
-            .ping(context: RpcContext.withCancellation(token))
+            .ping(context: RpcContext.empty().withCancellation(token))
             .timeout(const Duration(seconds: 3)),
         throwsA(isA<RpcCancelledException>()),
         reason: 'the token was pre-checked once and then never consulted',
@@ -227,7 +227,11 @@ void main() {
       () async {
         final rig = await _rig(swallow: false);
         final result = await rig.caller
-            .ping(context: RpcContext.withTimeout(const Duration(seconds: 5)))
+            .ping(
+              context: RpcContext.empty().withTimeout(
+                const Duration(seconds: 5),
+              ),
+            )
             .timeout(const Duration(seconds: 10));
 
         expect(result.roundTrip, greaterThanOrEqualTo(Duration.zero));

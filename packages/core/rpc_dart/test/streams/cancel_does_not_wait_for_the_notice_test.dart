@@ -74,7 +74,7 @@ Future<String> _cancelInFlight({required bool hangingNotice}) async {
           request: 'x'.rpc,
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withCancellation(token),
+          context: RpcContext.empty().withCancellation(token),
         );
         outcome = 'returned a value';
       } catch (e) {
@@ -155,7 +155,7 @@ void main() {
                 request: 'x'.rpc,
                 requestCodec: _codec,
                 responseCodec: _codec,
-                context: RpcContext.withCancellation(token),
+                context: RpcContext.empty().withCancellation(token),
               )
               .catchError((Object _) => 'cancelled'.rpc),
         );

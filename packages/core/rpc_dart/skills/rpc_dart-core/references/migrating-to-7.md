@@ -52,7 +52,7 @@ builds a transport, a channel or frames imports
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` (`maxHeaders`, `maxHeaderNameBytes`, `maxHeaderValueBytes`) |
 | health detail `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` | `RpcDeadlineExceededException(deadline)` |
-| `RpcContextUtils.withTracing(...)` | nothing: the endpoint gives a call without a trace id one; `RpcContext.withTraceId(id)` to join a trace. Spans come from `rpc_dart_opentelemetry` |
+| `RpcContextUtils.withTracing(...)` | nothing: the endpoint gives a call without a trace id one; `RpcContext.empty().withTraceId(id)` to join a trace. Spans come from `rpc_dart_opentelemetry` |
 | `RpcContextUtils.generateTraceId()` | `RpcContext.generateTraceId()` |
 | `RpcHeaders.xRouteService` | gone; route on the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | drop `const` |
@@ -66,6 +66,7 @@ builds a transport, a channel or frames imports
 | `ctx.withValue('key', v)`, `ctx.getValue<T>('key')` | a typed key: `const key = RpcContextKey<T>('key')`, then `withValue(key, v)` / `getValue(key)` |
 | `getValue<RpcCallScope>(RpcCallScope)` | `ctx.callScope` |
 | `endpoint.collectEndpointMetrics()['openStreams']` | `endpoint.collectEndpointMetrics().openStreams` (`RpcResponderEndpointMetrics`; a caller endpoint returns `RpcCallerEndpointMetrics`, a peer `RpcPeerEndpointMetrics`; `toJson()` for the map) |
+| `RpcContext.withTimeout(d)`, `RpcContext.withDeadline(t)`, `RpcContext.withCancellation(token)`, `RpcContext.withTraceId(id)` | `RpcContext.empty().withTimeout(d)` and the other `with...` copies |
 | `RpcContext.isContextValid(ctx)`, `RpcContext.sanitize(ctx)` | `ctx.isValid`, `ctx.sanitized()` |
 | `report.dependencies['transport']`, `report.transportStatus?.level` | `report.transportStatus.level`; it is never null |
 | `endpoint.setLogController(c)` | `RpcResponderEndpoint(..., logController: c)`; for a server's endpoints, `RpcResponderMode(register, logController: c)` |
@@ -77,7 +78,7 @@ builds a transport, a channel or frames imports
 | `contract.cancelMethod(m)`, `contract.cancelAllMethods()`, `contract.isMethodActive(m)`, `contract.getActiveCallsCount(m)` | `endpoint.cancelMethod(service, m)`, `endpoint.cancelService(service)`, `endpoint.activeCallCount(service, m)` |
 | `endpoint.cancelAllMethods()`, `endpoint.cancelServiceMethods(s)` | `cancelAll()`, `cancelService(s)` |
 | `start()` on an `RpcCallerEndpoint` | delete the call; only a responder or peer endpoint starts |
-| `endpoint.ping(timeout: d)` | `endpoint.ping(context: RpcContext.withTimeout(d))` |
+| `endpoint.ping(timeout: d)` | `endpoint.ping(context: RpcContext.empty().withTimeout(d))` |
 | `endpoint.unaryRequest(...)` | `endpoint.unary(...)`, named like `serverStream`, `clientStream`, `bidirectionalStream` |
 | `RpcRateLimiter(nowMicros: () => us)` | `RpcRateLimiter(clock: () => DateTime.fromMicrosecondsSinceEpoch(us))` |
 | a server compressing responses for any client that accepts gzip | `compressionEnabled: true` on the server or `RpcResponderEndpoint`; off by default |

@@ -25,7 +25,9 @@ void main() {
       try {
         await caller.slow(
           _Msg('x'),
-          context: RpcContext.withTimeout(const Duration(milliseconds: 120)),
+          context: RpcContext.empty().withTimeout(
+            const Duration(milliseconds: 120),
+          ),
         );
       } catch (_) {
         // Client surfaces its own timeout; we only care about the server.
@@ -50,7 +52,7 @@ void main() {
 
       final r = await caller.fast(
         _Msg('hi'),
-        context: RpcContext.withTimeout(const Duration(seconds: 5)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
       );
       expect(r.value, 'ok:hi');
 

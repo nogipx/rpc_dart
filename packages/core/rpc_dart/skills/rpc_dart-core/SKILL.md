@@ -87,7 +87,7 @@ Future<void> main() async {
 
   final reply = await GreeterCaller(client).hello(
     const RpcString('rpc_dart'),
-    context: RpcContext.withTimeout(const Duration(seconds: 5)),
+    context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
   );
   print(reply.value);
 
@@ -127,8 +127,9 @@ not zero-copy, and a method without codecs fails on them.
 7. **`memoryPair()` hides wire bugs.** It skips codecs on `auto` contracts and
    never enforces byte limits. If production uses a network transport, run
    tests over `pair()` too.
-8. **Bound every call.** Give a deadline (`RpcContext.withTimeout`,
-   `ctx.withTimeout`) or a cancellation token. `ping()` without `timeout:`
+8. **Bound every call.** Give a deadline
+   (`RpcContext.empty().withTimeout(d)`, `ctx.withTimeout(d)`) or a
+   cancellation token. `ping()` without `timeout:`
    waits forever, and its timeout throws `dart:async` `TimeoutException`.
 9. **A cancelled token poisons its context.** After `token.cancel()`, or after
    cancelling an early stream subscription that used that context, every

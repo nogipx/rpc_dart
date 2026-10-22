@@ -166,7 +166,7 @@ void main() {
     await expectLater(
       client.slow(
         const RpcString('x'),
-        context: RpcContext.withTimeout(const Duration(milliseconds: 100)),
+        context: RpcContext.empty().withTimeout(const Duration(milliseconds: 100)),
       ),
       throwsStatus(RpcStatus.deadlineExceeded),
     );
@@ -176,7 +176,7 @@ void main() {
     final token = RpcCancellationToken();
     final call = client.slow(
       const RpcString('x'),
-      context: RpcContext.withCancellation(token),
+      context: RpcContext.empty().withCancellation(token),
     );
     Timer(const Duration(milliseconds: 50), () => token.cancel('user'));
     await expectLater(call, throwsStatus(RpcStatus.cancelled));
@@ -291,5 +291,5 @@ caller contract `dataTransferMode: RpcDataTransferMode.codec`; see
   the next test.
 - An unawaited call that is expected to fail must be `.ignore()`d or
   awaited, or its error is reported as unhandled and fails the test.
-- `RpcContext.withTimeout` reads the wall clock. For deterministic deadline
+- `withTimeout` reads the context's clock, a monotonic one by default. For deterministic deadline
   logic use `context.withClock(...)`.

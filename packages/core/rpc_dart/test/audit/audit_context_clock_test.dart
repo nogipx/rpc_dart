@@ -40,7 +40,7 @@ void main() {
     });
 
     test('default clock is the real DateTime.now', () {
-      final ctx = RpcContext.withTimeout(const Duration(seconds: 30));
+      final ctx = RpcContext.empty().withTimeout(const Duration(seconds: 30));
       expect(ctx.isExpired, isFalse);
       expect(ctx.remainingTime!.inSeconds, greaterThan(25));
     });

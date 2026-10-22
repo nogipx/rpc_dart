@@ -238,7 +238,7 @@ void main() {
                 request: 'q'.rpc,
                 requestCodec: _codec,
                 responseCodec: _codec,
-                context: RpcContext.withTimeout(
+                context: RpcContext.empty().withTimeout(
                   const Duration(milliseconds: 300),
                 ),
               )

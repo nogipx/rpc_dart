@@ -19,9 +19,10 @@ void main() {
       final deadline = DateTime.now().add(const Duration(seconds: 30));
 
       // Parent has a token, deadline and a header but NO trace ID.
-      final parent = RpcContext.withCancellation(
-        token,
-      ).withDeadline(deadline).withAdditionalHeaders({'x-custom': 'value'});
+      final parent = RpcContext.empty()
+          .withCancellation(token)
+          .withDeadline(deadline)
+          .withAdditionalHeaders({'x-custom': 'value'});
       expect(parent.traceId, isNull, reason: 'precondition: no trace ID');
 
       final child = parent.forward();
@@ -51,7 +52,7 @@ void main() {
   );
 
   test('forward inherits trace ID when parent has one', () {
-    final parent = RpcContext.withTraceId('trace_parent');
+    final parent = RpcContext.empty().withTraceId('trace_parent');
     final child = parent.forward();
     expect(child.traceId, 'trace_parent');
   });

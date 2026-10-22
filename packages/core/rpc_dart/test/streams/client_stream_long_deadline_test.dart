@@ -112,7 +112,7 @@ void main() {
       _call(
         rig,
         'blackhole',
-        RpcContext.withTimeout(const Duration(milliseconds: 400)),
+        RpcContext.empty().withTimeout(const Duration(milliseconds: 400)),
       ).timeout(const Duration(seconds: 5)),
       throwsA(
         anyOf(isA<RpcDeadlineExceededException>(), isA<TimeoutException>()),
@@ -134,7 +134,7 @@ void main() {
       await _call(
         rig,
         'collect',
-        RpcContext.withTimeout(const Duration(seconds: 30)),
+        RpcContext.empty().withTimeout(const Duration(seconds: 30)),
       ).timeout(const Duration(seconds: 5)),
       isA<RpcString>().having((r) => r.value, 'value', 'a'),
     );
@@ -168,7 +168,7 @@ void main() {
         _call(
           rig,
           'blackhole',
-          RpcContext.withTimeout(const Duration(seconds: 90)),
+          RpcContext.empty().withTimeout(const Duration(seconds: 90)),
         ),
         throwsA(
           anyOf(isA<RpcDeadlineExceededException>(), isA<TimeoutException>()),

@@ -427,7 +427,7 @@ void main() {
         serverEndpoint.start();
 
         const traceId = 'error-trace-999';
-        final context = RpcContext.withTraceId(traceId);
+        final context = RpcContext.empty().withTraceId(traceId);
 
         // Act & Assert
         try {

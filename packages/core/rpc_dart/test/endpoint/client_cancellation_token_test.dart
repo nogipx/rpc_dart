@@ -112,7 +112,7 @@ void main() {
             request: 'x'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
-            context: RpcContext.withCancellation(token),
+            context: RpcContext.empty().withCancellation(token),
           )
           // The caller gets RpcCancelledException; that part already worked.
           .catchError((Object _) => 'err'.rpc),
@@ -153,7 +153,7 @@ void main() {
           request: 'x'.rpc,
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withCancellation(token),
+          context: RpcContext.empty().withCancellation(token),
         )
         .listen((_) {}, onError: (Object _) {});
 

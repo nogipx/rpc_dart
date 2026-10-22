@@ -47,9 +47,9 @@ receives one as its named `context` parameter.
 | --- | --- |
 | `RpcContext.empty()` | no headers, fresh `requestId` |
 | `RpcContext.withHeaders(map, {requestId})` | headers (sanitized as above) |
-| `RpcContext.withTimeout(d)` / `.withDeadline(t)` | deadline = `DateTime.now() + d` / `t` |
-| `RpcContext.withCancellation(token)` | carries an `RpcCancellationToken` |
-| `RpcContext.withTraceId(id)` | trace id |
+| `RpcContext.empty().withTimeout(d)` / `.withDeadline(t)` | deadline = `DateTime.now() + d` / `t` |
+| `RpcContext.empty().withCancellation(token)` | carries an `RpcCancellationToken` |
+| `RpcContext.empty().withTraceId(id)` | trace id |
 | `ctx.withAdditionalHeaders(map)` | merge headers; existing keys are overwritten |
 | `ctx.withBearerAuth(token)` / `ctx.withBasicAuth(user, pass)` | `authorization` header |
 | `ctx.withApiKey(key, {headerName = 'x-api-key'})` | the key under `headerName`, treated as a credential whatever the name |
@@ -74,7 +74,7 @@ naming it: `forward(headers: {'authorization': ctx.getHeader('authorization')!})
 
 A call without a `traceId` gets one from the endpoint, on both sides. Set one
 with `withTraceId` to join an existing trace, or with
-`RpcContext.withTraceId(RpcContext.generateTraceId())` to know it before the
+`RpcContext.empty().withTraceId(RpcContext.generateTraceId())` to know it before the
 call.
 
 ```dart
@@ -114,7 +114,7 @@ from scratch instead loses the deadline and the cancellation.
   the wall time read once, advanced by a stopwatch, so a system clock jump
   neither expires a call early nor stretches it. Prefer `withTimeout(d)`; a
   `withDeadline(DateTime.now().add(d))` is on the wall clock and drifts from
-  it after a jump. The `RpcContext.withTimeout(d)` factory always uses
+  it after a jump. The `RpcContext.empty().withTimeout(d)` factory always uses
   `monotonicNow`. For a fake clock, use
   `RpcContext.empty().withClock(fake).withTimeout(d)`.
 
@@ -125,7 +125,7 @@ import 'package:rpc_dart/rpc_dart.dart';
 
 Future<void> cancellable(RpcCallerContract api) async {
   final token = RpcCancellationToken();
-  final ctx = RpcContext.withCancellation(token);
+  final ctx = RpcContext.empty().withCancellation(token);
   final pending = api.callUnary<String, String>(
     methodName: 'slow',
     request: 'x',

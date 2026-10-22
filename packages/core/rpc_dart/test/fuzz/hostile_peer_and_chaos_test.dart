@@ -218,7 +218,7 @@ void main() {
         for (var i = 0; i < 150; i++) {
           final kind = kinds[rnd.nextInt(kinds.length)];
           final token = RpcCancellationToken();
-          var ctx = RpcContext.withCancellation(token);
+          var ctx = RpcContext.empty().withCancellation(token);
           if (rnd.nextInt(3) == 0) {
             ctx = ctx.withTimeout(
               Duration(milliseconds: 10 + rnd.nextInt(100)),

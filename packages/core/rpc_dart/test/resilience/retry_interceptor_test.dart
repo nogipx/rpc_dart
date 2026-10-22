@@ -273,7 +273,7 @@ void main() {
     });
 
     test('does not retry when deadline is already expired', () async {
-      final expiredContext = RpcContext.withDeadline(
+      final expiredContext = RpcContext.empty().withDeadline(
         DateTime.now().subtract(Duration(seconds: 1)),
       );
       callContext = callContext.copyWith(context: expiredContext);

@@ -58,9 +58,9 @@ class ServerStreamingExample {
       // 3: a server stream that gets cancelled.
       print('\n--- 3: cancelling a server stream ---');
       final cancellationToken = RpcCancellationToken();
-      final cancelContext = RpcContext.withCancellation(
-        cancellationToken,
-      ).withValue(_streamType, 'long-running');
+      final cancelContext = RpcContext.empty()
+          .withCancellation(cancellationToken)
+          .withValue(_streamType, 'long-running');
       // Cancel after 200ms.
       Future<void>.delayed(Duration(milliseconds: 200), () {
         print('CLIENT: cancelling the stream');

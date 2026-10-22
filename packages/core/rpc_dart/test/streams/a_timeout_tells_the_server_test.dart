@@ -95,7 +95,9 @@ void main() {
           request: 'a'.rpc,
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withTimeout(const Duration(milliseconds: 300)),
+          context: RpcContext.empty().withTimeout(
+            const Duration(milliseconds: 300),
+          ),
         ),
         throwsA(isA<RpcDeadlineExceededException>()),
       );
@@ -123,7 +125,9 @@ void main() {
           requests: Stream.value('a'.rpc),
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withTimeout(const Duration(milliseconds: 300)),
+          context: RpcContext.empty().withTimeout(
+            const Duration(milliseconds: 300),
+          ),
         ),
         throwsA(isA<RpcStatusException>()),
       );

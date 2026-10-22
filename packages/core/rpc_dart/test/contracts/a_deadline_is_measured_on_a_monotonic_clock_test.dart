@@ -20,7 +20,7 @@ void main() {
   });
 
   test('withTimeout counts down on it', () async {
-    final context = RpcContext.withTimeout(const Duration(seconds: 1));
+    final context = RpcContext.empty().withTimeout(const Duration(seconds: 1));
     final first = context.remainingTime!;
 
     await Future<void>.delayed(const Duration(milliseconds: 50));

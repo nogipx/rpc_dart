@@ -82,7 +82,7 @@ void main() {
           methodName: 'M',
           requestCodec: codec,
           responseCodec: codec,
-          context: RpcContext.withDeadline(
+          context: RpcContext.empty().withDeadline(
             DateTime.fromMillisecondsSinceEpoch(0),
           ),
         ),
@@ -119,7 +119,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 50)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 50),
+        ),
       );
       await expectLater(caller1.call('x'.rpc), throwsA(anything));
 
@@ -130,7 +132,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 50)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 50),
+        ),
       );
       await expectLater(caller2.call('y'.rpc), throwsA(anything));
 
@@ -153,14 +157,14 @@ void main() {
       // Throws after createStream() but before anything is sent, so the
       // transport never sees the endStream that would free the id.
       await expectLater(
-        caller.ping(context: RpcContext.withCancellation(token)),
+        caller.ping(context: RpcContext.empty().withCancellation(token)),
         throwsA(isA<RpcCancelledException>()),
       );
 
       // The failed ping must not have consumed the only available id.
       await expectLater(
         caller.ping(
-          context: RpcContext.withTimeout(const Duration(seconds: 5)),
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
         ),
         completes,
       );
@@ -183,7 +187,7 @@ void main() {
       // Throws after createStream() but before anything is sent.
       await expectLater(
         caller.ping(
-          context: RpcContext.withDeadline(
+          context: RpcContext.empty().withDeadline(
             DateTime.fromMillisecondsSinceEpoch(0),
           ),
         ),
@@ -193,7 +197,7 @@ void main() {
       // The failed ping must not have consumed the only available id.
       await expectLater(
         caller.ping(
-          context: RpcContext.withTimeout(const Duration(seconds: 5)),
+          context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
         ),
         completes,
       );

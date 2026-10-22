@@ -104,7 +104,7 @@ Future<void> _teardown(_Rig r) async {
 /// timer lands in when it fires on the boundary.
 RpcContext _atDeadline() {
   final now = DateTime.now();
-  return RpcContext.withDeadline(now).withClock(() => now);
+  return RpcContext.empty().withDeadline(now).withClock(() => now);
 }
 
 Stream<RpcString> _one() {
@@ -188,7 +188,9 @@ void main() {
             request: 'a'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
-            context: RpcContext.withTimeout(const Duration(seconds: 30)),
+            context: RpcContext.empty().withTimeout(
+              const Duration(seconds: 30),
+            ),
           )
           .map((r) => r.value)
           .toList()
@@ -210,9 +212,9 @@ void main() {
             request: 'a'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
-            context: RpcContext.withTimeout(
-              const Duration(seconds: 30),
-            ).withCancellation(token),
+            context: RpcContext.empty()
+                .withTimeout(const Duration(seconds: 30))
+                .withCancellation(token),
           )
           .toList();
 

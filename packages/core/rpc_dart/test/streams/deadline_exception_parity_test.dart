@@ -199,7 +199,7 @@ void main() {
             await _drive(
               rig,
               shape,
-              RpcContext.withTimeout(const Duration(milliseconds: 500)),
+              RpcContext.empty().withTimeout(const Duration(milliseconds: 500)),
             ).timeout(
               const Duration(seconds: 5),
               onTimeout: () => fail('$shape ignored its deadline'),
@@ -245,7 +245,7 @@ void main() {
     // for the same deadline expiring a moment later.
     final rig = _connect();
 
-    final expired = RpcContext.withDeadline(
+    final expired = RpcContext.empty().withDeadline(
       DateTime.now().subtract(const Duration(seconds: 1)),
     );
     final before = await _drive(rig, 'unary', expired);
@@ -254,7 +254,7 @@ void main() {
     final during = await _drive(
       rig,
       'unary',
-      RpcContext.withTimeout(const Duration(milliseconds: 300)),
+      RpcContext.empty().withTimeout(const Duration(milliseconds: 300)),
     );
     expect(
       during.runtimeType,
@@ -274,7 +274,7 @@ void main() {
         request: 'hello'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withTimeout(const Duration(seconds: 30)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 30)),
       );
       expect(result.value, 'hello');
       await _teardown(rig);

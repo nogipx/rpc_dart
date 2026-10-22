@@ -94,10 +94,10 @@ Each has corresponding `addXxxMethod` and `callXxx` methods.
 ### RpcContext Usage
 ```dart
 // With cancellation token
-final context = RpcContext.withCancellation(cancellationToken);
+final context = RpcContext.empty().withCancellation(cancellationToken);
 
 // With timeout
-final context = RpcContext.withTimeout(Duration(seconds: 30));
+final context = RpcContext.empty().withTimeout(Duration(seconds: 30));
 
 // For service calls (trace inheritance)
 final context = RpcContext.forServiceCall(

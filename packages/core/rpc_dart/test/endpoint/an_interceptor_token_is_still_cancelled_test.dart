@@ -123,7 +123,7 @@ void main() {
             request: 'x'.rpc,
             requestCodec: _codec,
             responseCodec: _codec,
-            context: RpcContext.withCancellation(token),
+            context: RpcContext.empty().withCancellation(token),
           )
           .then((_) {}, onError: (Object _) {});
       await Future<void>.delayed(const Duration(milliseconds: 50));

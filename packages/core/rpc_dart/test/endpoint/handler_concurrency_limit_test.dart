@@ -185,7 +185,9 @@ Future<Object?> _call(
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      context: deadline == null ? null : RpcContext.withTimeout(deadline),
+      context: deadline == null
+          ? null
+          : RpcContext.empty().withTimeout(deadline),
     );
     return null;
   } on RpcStatusException catch (e) {

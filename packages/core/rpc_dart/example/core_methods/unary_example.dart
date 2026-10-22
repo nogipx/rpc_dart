@@ -50,9 +50,9 @@ class UnaryRpcExample {
       print('CLIENT: response: "$response2"');
       // 3: a call with a deadline.
       print('\n--- 3: a call with a timeout ---');
-      final timeoutContext = RpcContext.withTimeout(
-        Duration(milliseconds: 500),
-      ).withValue(_requestType, 'health-check');
+      final timeoutContext = RpcContext.empty()
+          .withTimeout(Duration(milliseconds: 500))
+          .withValue(_requestType, 'health-check');
       final response3 = await client.checkHealth(
         'Status'.rpc,
         context: timeoutContext,
@@ -69,7 +69,9 @@ class UnaryRpcExample {
       print('\n--- 5: cancelling an operation ---');
       try {
         final cancellationToken = RpcCancellationToken();
-        final cancelContext = RpcContext.withCancellation(cancellationToken);
+        final cancelContext = RpcContext.empty().withCancellation(
+          cancellationToken,
+        );
         // Cancel after 100ms.
         Future<void>.delayed(Duration(milliseconds: 100), () {
           print('CLIENT: cancelling');

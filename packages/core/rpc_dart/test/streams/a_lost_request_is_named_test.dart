@@ -243,7 +243,9 @@ void main() {
           (c, _) => upload(
             c,
             'putForever',
-            context: RpcContext.withTimeout(const Duration(milliseconds: 200)),
+            context: RpcContext.empty().withTimeout(
+              const Duration(milliseconds: 200),
+            ),
           ),
         ),
         isEmpty,
@@ -257,7 +259,7 @@ void main() {
           final f = upload(
             c,
             'putForever',
-            context: RpcContext.withCancellation(token),
+            context: RpcContext.empty().withCancellation(token),
           );
           await Future<void>.delayed(const Duration(milliseconds: 80));
           token.cancel('probe');

@@ -568,7 +568,7 @@ final class _Run {
     final id = nextCallId();
     final c = _Live(op, id, _now);
     _calls[op.call] = c;
-    var context = RpcContext.withCancellation(c.token);
+    var context = RpcContext.empty().withCancellation(c.token);
     if (op.deadlineMs case final ms?) {
       context = context.withTimeout(Duration(milliseconds: ms));
     }

@@ -86,7 +86,7 @@ void main() {
 
     test('deadline expiry is detected before repository execution', () async {
       await startServer();
-      final expiredContext = RpcContext.withDeadline(
+      final expiredContext = RpcContext.empty().withDeadline(
         DateTime.now().subtract(const Duration(minutes: 1)),
       );
 

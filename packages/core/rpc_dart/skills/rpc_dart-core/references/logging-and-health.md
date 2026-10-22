@@ -221,7 +221,7 @@ any name works; one too long for the header limit is left out
 Future<Duration?> probe(RpcCallerEndpoint caller) async {
   try {
     final pong = await caller.ping(
-      context: RpcContext.withTimeout(const Duration(seconds: 2)),
+      context: RpcContext.empty().withTimeout(const Duration(seconds: 2)),
     );
     return pong.roundTrip;
   } on TimeoutException {

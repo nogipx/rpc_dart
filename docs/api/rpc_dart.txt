@@ -531,11 +531,7 @@ RpcContext method withTimeout(Duration timeout) -> RpcContext
 RpcContext method withTraceId(String newTraceId) -> RpcContext
 RpcContext method withValue<T>(RpcContextKey<T> key, T value) -> RpcContext
 RpcContext new empty()
-RpcContext new withCancellation(RpcCancellationToken token)
-RpcContext new withDeadline(DateTime deadline)
 RpcContext new withHeaders(Map<String, String> headers, {String? requestId})
-RpcContext new withTimeout(Duration timeout)
-RpcContext new withTraceId(String traceId)
 RpcContext static method generateTraceId() -> String
 RpcContext static method monotonicNow() -> DateTime
 RpcContextKey field name: String (get)

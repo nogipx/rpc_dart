@@ -44,7 +44,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 200)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 200),
+        ),
       );
 
       final received = <String>[];
@@ -66,7 +68,9 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        context: RpcContext.withTimeout(const Duration(milliseconds: 200)),
+        context: RpcContext.empty().withTimeout(
+          const Duration(milliseconds: 200),
+        ),
       );
 
       await caller.send('a'.rpc);
@@ -102,7 +106,7 @@ void main() {
         methodName: 'M',
         requestCodec: codec,
         responseCodec: codec,
-        context: RpcContext.withTimeout(const Duration(seconds: 30)),
+        context: RpcContext.empty().withTimeout(const Duration(seconds: 30)),
       );
 
       await caller.send('a'.rpc);

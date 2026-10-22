@@ -69,7 +69,7 @@ Future<({int attempts, List<String?> headers})> _run(
       request: const _Empty(),
       requestCodec: _Empty.codec,
       responseCodec: _Empty.codec,
-      context: RpcContext.withTimeout(const Duration(seconds: 10)),
+      context: RpcContext.empty().withTimeout(const Duration(seconds: 10)),
     ),
     throwsA(
       isA<RpcStatusException>().having(

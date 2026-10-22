@@ -85,7 +85,7 @@ void main() {
               requests: requests.stream,
               requestCodec: _codec,
               responseCodec: _codec,
-              context: RpcContext.withCancellation(token),
+              context: RpcContext.empty().withCancellation(token),
             )
             .listen((_) {}, onError: (Object _) {});
 
@@ -174,7 +174,9 @@ void main() {
           methodName: 'boom',
           requestCodec: _codec,
           responseCodec: _codec,
-          context: RpcContext.withTimeout(const Duration(milliseconds: 400)),
+          context: RpcContext.empty().withTimeout(
+            const Duration(milliseconds: 400),
+          ),
         );
         unawaited(caller.call('a'.rpc).catchError((Object _) => 'x'.rpc));
 

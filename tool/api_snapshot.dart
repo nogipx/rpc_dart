@@ -20,7 +20,8 @@ import 'dart:io';
 ///
 /// The API comes from `dart_apitool extract`. Its `diff` command cannot be used
 /// here: it fails on a named constructor and an instance method of the same
-/// name (`RpcContext.withTimeout` and `context.withTimeout`). Install it once:
+/// name (`RpcCancellationToken.cancelled` and `token.cancelled`). Install it
+/// once:
 ///   fvm dart pub global activate dart_apitool 0.23.2
 Future<void> main(List<String> args) async {
   final update = args.contains('--update');

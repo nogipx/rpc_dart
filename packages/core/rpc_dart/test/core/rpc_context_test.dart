@@ -53,7 +53,7 @@ void main() {
         final deadline = DateTime.now().add(Duration(hours: 1));
 
         // Act
-        final sut = RpcContext.withDeadline(deadline);
+        final sut = RpcContext.empty().withDeadline(deadline);
 
         // Assert
         expect(sut.deadline, equals(deadline));
@@ -68,7 +68,7 @@ void main() {
         final beforeCreation = DateTime.now().add(timeout);
 
         // Act
-        final sut = RpcContext.withTimeout(timeout);
+        final sut = RpcContext.empty().withTimeout(timeout);
 
         // Assert
         final afterCreation = DateTime.now().add(timeout);
@@ -88,7 +88,7 @@ void main() {
         final cancellationToken = RpcCancellationToken();
 
         // Act
-        final sut = RpcContext.withCancellation(cancellationToken);
+        final sut = RpcContext.empty().withCancellation(cancellationToken);
 
         // Assert
         expect(sut.cancellationToken, equals(cancellationToken));
@@ -100,7 +100,7 @@ void main() {
         const traceId = 'trace-id-12345';
 
         // Act
-        final sut = RpcContext.withTraceId(traceId);
+        final sut = RpcContext.empty().withTraceId(traceId);
 
         // Assert
         expect(sut.traceId, equals(traceId));
@@ -237,7 +237,7 @@ void main() {
       test('sees an expired deadline', () {
         // Arrange
         final expiredDeadline = DateTime.now().subtract(Duration(minutes: 1));
-        final sut = RpcContext.withDeadline(expiredDeadline);
+        final sut = RpcContext.empty().withDeadline(expiredDeadline);
 
         // Act & Assert
         expect(sut.isExpired, isTrue);
@@ -247,7 +247,7 @@ void main() {
       test('sees a live deadline', () {
         // Arrange
         final futureDeadline = DateTime.now().add(Duration(hours: 1));
-        final sut = RpcContext.withDeadline(futureDeadline);
+        final sut = RpcContext.empty().withDeadline(futureDeadline);
 
         // Act & Assert
         expect(sut.isExpired, isFalse);
@@ -258,7 +258,7 @@ void main() {
       test('sees a cancelled context', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
-        final sut = RpcContext.withCancellation(cancellationToken);
+        final sut = RpcContext.empty().withCancellation(cancellationToken);
 
         // Act
         cancellationToken.cancel('the user cancelled the operation');
@@ -270,7 +270,7 @@ void main() {
       test('sees a context that is not cancelled', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
-        final sut = RpcContext.withCancellation(cancellationToken);
+        final sut = RpcContext.empty().withCancellation(cancellationToken);
 
         // Act & Assert
         expect(sut.isCancelled, isFalse);
@@ -397,7 +397,7 @@ void main() {
       test('prints that it is cancelled', () {
         // Arrange
         final cancellationToken = RpcCancellationToken();
-        final sut = RpcContext.withCancellation(cancellationToken);
+        final sut = RpcContext.empty().withCancellation(cancellationToken);
 
         // Act
         cancellationToken.cancel();
@@ -410,7 +410,7 @@ void main() {
       test('prints that it has expired', () {
         // Arrange
         final expiredDeadline = DateTime.now().subtract(Duration(minutes: 1));
-        final sut = RpcContext.withDeadline(expiredDeadline);
+        final sut = RpcContext.empty().withDeadline(expiredDeadline);
 
         // Act
         final result = sut.toString();

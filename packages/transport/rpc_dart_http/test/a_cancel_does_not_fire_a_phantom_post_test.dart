@@ -105,7 +105,7 @@ void main() {
         request: 'x'.rpc,
         requestCodec: _codec,
         responseCodec: _codec,
-        context: RpcContext.withCancellation(token),
+        context: RpcContext.empty().withCancellation(token),
       );
 
       // Cancel once the request has ARRIVED, not after a fixed delay.

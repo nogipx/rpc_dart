@@ -104,7 +104,9 @@ void main() {
     test('does not escape when a deadline closed the scope first', () async {
       final escaped = await escapedErrors(() async {
         final scope = RpcCallScope(
-          context: RpcContext.withTimeout(const Duration(milliseconds: 20)),
+          context: RpcContext.empty().withTimeout(
+            const Duration(milliseconds: 20),
+          ),
         );
         // The handler is still running when the deadline fires.
         await Future<void>.delayed(const Duration(milliseconds: 60));

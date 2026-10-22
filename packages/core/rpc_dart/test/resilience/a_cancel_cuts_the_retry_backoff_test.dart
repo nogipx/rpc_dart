@@ -56,7 +56,7 @@ Future<(RpcStatus?, int)> _call({Duration? cancelAfter}) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      context: RpcContext.withCancellation(token),
+      context: RpcContext.empty().withCancellation(token),
     );
   } on RpcStatusException catch (e) {
     status = e.statusCode;
@@ -93,7 +93,7 @@ void main() {
         endpoint: RpcCallerEndpoint(transport: transport),
         serviceName: 'Svc',
         methodName: 'm',
-        context: RpcContext.withCancellation(token),
+        context: RpcContext.empty().withCancellation(token),
         direction: RpcCallDirection.outgoing,
       );
       final retry = RpcRetryInterceptor(

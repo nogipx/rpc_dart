@@ -22,7 +22,7 @@ void main() {
       methodName: 'M',
       requestCodec: codec,
       responseCodec: codec,
-      context: RpcContext.withDeadline(
+      context: RpcContext.empty().withDeadline(
         DateTime.now().subtract(const Duration(seconds: 1)),
       ),
     );

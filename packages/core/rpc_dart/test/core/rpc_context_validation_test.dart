@@ -90,7 +90,7 @@ void main() {
 
       test('the system headers behave', () async {
         // Arrange
-        final context = RpcContext.withTraceId('test-trace-123');
+        final context = RpcContext.empty().withTraceId('test-trace-123');
 
         // Act
         final result = await clientEndpoint.unary<RpcString, RpcString>(
@@ -112,7 +112,9 @@ void main() {
     group('deadline and timeout', () {
       test('a context with a timeout works', () async {
         // Arrange
-        final context = RpcContext.withTimeout(Duration(milliseconds: 10));
+        final context = RpcContext.empty().withTimeout(
+          Duration(milliseconds: 10),
+        );
 
         // Act & Assert
         await expectLater(
@@ -133,7 +135,7 @@ void main() {
       test('a deadline is checked before the call goes out', () async {
         // Arrange: a deadline that has already passed.
         final expiredDeadline = DateTime.now().subtract(Duration(hours: 1));
-        final context = RpcContext.withDeadline(expiredDeadline);
+        final context = RpcContext.empty().withDeadline(expiredDeadline);
 
         // Act & Assert
         expect(
@@ -154,7 +156,7 @@ void main() {
       test('cancelling before the call throws', () async {
         // Arrange
         final token = RpcCancellationToken.cancelled('Pre-cancelled');
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
 
         // Act & Assert
         expect(
@@ -173,7 +175,7 @@ void main() {
       test('cancelling mid-flight interrupts the operation', () async {
         // Arrange
         final token = RpcCancellationToken();
-        final context = RpcContext.withCancellation(token);
+        final context = RpcContext.empty().withCancellation(token);
 
         // Cancel once the handler is under way.
         Timer(Duration(milliseconds: 1), () {

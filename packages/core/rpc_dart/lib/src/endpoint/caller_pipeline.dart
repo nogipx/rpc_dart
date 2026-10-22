@@ -352,7 +352,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   /// Performs a ping to the remote endpoint and returns the result.
   ///
   /// [context]'s deadline bounds the wait, as for any call:
-  /// `ping(context: RpcContext.withTimeout(d))`.
+  /// `ping(context: RpcContext.empty().withTimeout(d))`.
   Future<RpcEndpointPingResult> ping({RpcContext? context}) async {
     if (!isActive) throw RpcClosedException('Endpoint');
     if (transport.isClosed) throw RpcClosedException('Transport');

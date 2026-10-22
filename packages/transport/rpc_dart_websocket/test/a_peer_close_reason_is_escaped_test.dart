@@ -36,7 +36,7 @@ Future<String> _failureWhenClosedWith(String reason) async {
       request: 'x'.rpc,
       requestCodec: _codec,
       responseCodec: _codec,
-      context: RpcContext.withTimeout(const Duration(seconds: 5)),
+      context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
     );
     return 'answered';
   } on RpcStatusException catch (e) {

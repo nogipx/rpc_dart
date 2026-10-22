@@ -222,7 +222,7 @@ void main() {
       });
 
       final token = RpcCancellationToken()..cancel('stop');
-      final context = RpcContext.withCancellation(token);
+      final context = RpcContext.empty().withCancellation(token);
 
       await expectLater(
         () => caller.ping(context: context),
@@ -239,7 +239,7 @@ void main() {
         await responder.close();
       });
 
-      final context = RpcContext.withDeadline(
+      final context = RpcContext.empty().withDeadline(
         DateTime.now().toUtc().subtract(const Duration(seconds: 1)),
       );
 

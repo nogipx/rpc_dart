@@ -86,7 +86,7 @@ Future<void> _check(String method) async {
   });
 
   final token = RpcCancellationToken();
-  final shared = RpcContext.withCancellation(token);
+  final shared = RpcContext.empty().withCancellation(token);
   if (method == 'unaryFail' || method == 'collectFail') {
     final Future<RpcString> call = method == 'unaryFail'
         ? caller.unary<RpcString, RpcString>(

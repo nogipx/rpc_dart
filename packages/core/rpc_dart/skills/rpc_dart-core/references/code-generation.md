@@ -142,7 +142,7 @@ Future<void> main() async {
 
   final reply = await greeter.hello(
     RpcString('rpc_dart'),
-    context: RpcContext.withTimeout(const Duration(seconds: 5)),
+    context: RpcContext.empty().withTimeout(const Duration(seconds: 5)),
   );
   print(reply.value);
 

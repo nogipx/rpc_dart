@@ -153,7 +153,9 @@ void main() {
       final start = DateTime.now();
       final deadline = start.add(const Duration(seconds: 30));
       var now = start;
-      final ctx = RpcContext.withDeadline(deadline).withClock(() => now);
+      final ctx = RpcContext.empty()
+          .withDeadline(deadline)
+          .withClock(() => now);
 
       final call = _call(rig, 'slow', ctx: ctx);
       await Future<void>.delayed(const Duration(milliseconds: 100));

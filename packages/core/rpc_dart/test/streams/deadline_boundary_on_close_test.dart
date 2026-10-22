@@ -93,7 +93,7 @@ Future<void> _teardown(_Rig r) async {
   final start = DateTime.now();
   final deadline = start.add(const Duration(seconds: 30));
   var now = start;
-  final ctx = RpcContext.withDeadline(deadline).withClock(() => now);
+  final ctx = RpcContext.empty().withDeadline(deadline).withClock(() => now);
   return (
     ctx: ctx,
     deadline: deadline,

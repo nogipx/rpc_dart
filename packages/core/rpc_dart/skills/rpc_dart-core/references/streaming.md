@@ -27,7 +27,7 @@ them, call them, end them, cancel them, and how backpressure really works.
   pass `onError`. Cancellation and deadline errors are delivered
   on that stream, and an unhandled one is an uncaught async error, which kills
   the isolate.
-- Put a deadline on any long-lived call (`RpcContext.withTimeout`). Without
+- Put a deadline on any long-lived call (`ctx.withTimeout(d)`). Without
   one, a call that is waiting for a response has no time limit.
 
 ## Handler signatures
@@ -141,7 +141,7 @@ message on the response stream.
 | API | Scope |
 | --- | --- |
 | `subscription.cancel()` / `take`, `first`, `timeout` | this call |
-| `RpcCancellationToken` in `RpcContext.withCancellation(token)`, then `token.cancel(reason)` | every call made with that context |
+| `RpcCancellationToken` in `RpcContext.empty().withCancellation(token)`, then `token.cancel(reason)` | every call made with that context |
 | `endpoint.cancelMethod(service, 'count', reason)` -> `int` | all active calls of this method |
 | `endpoint.cancelService(service, reason)` -> `int` | all active calls of this service |
 | `endpoint.cancelAll(reason)` -> `int` | every active call on the endpoint |
