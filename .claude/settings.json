@@ -26,7 +26,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Read",
+        "matcher": "Bash|Read|Edit|MultiEdit",
         "hooks": [
           {
             "type": "command",
@@ -41,6 +41,18 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/evidence-loop/scripts/journal_guard.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/navigation_guard.py\"",
             "timeout": 10
           }
         ]
