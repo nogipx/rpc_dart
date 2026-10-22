@@ -134,7 +134,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: spawned.transport);
       for (var i = 0; i < 5; i++) {
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: '$i'.rpc,

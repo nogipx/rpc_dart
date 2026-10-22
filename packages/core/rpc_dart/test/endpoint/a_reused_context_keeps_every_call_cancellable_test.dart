@@ -50,7 +50,7 @@ void main() {
   });
 
   Future<String> call(String ms, RpcContext context) => caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'S',
         methodName: 'slow',
         request: ms.rpc,

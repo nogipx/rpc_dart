@@ -92,7 +92,7 @@ Future<Object?> _unary(int port) async {
     await client.close();
   });
   return caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'x'.rpc,

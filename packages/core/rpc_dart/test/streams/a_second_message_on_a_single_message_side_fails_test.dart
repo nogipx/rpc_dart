@@ -102,7 +102,7 @@ void main() {
   group('the caller', () {
     test('unary, two responses', () async {
       await expectLater(
-        _answering(['one', 'two']).unaryRequest<RpcString, RpcString>(
+        _answering(['one', 'two']).unary<RpcString, RpcString>(
           serviceName: 'S',
           methodName: 'M',
           request: 'q'.rpc,
@@ -127,14 +127,13 @@ void main() {
     });
 
     test('CONTROL unary, one response', () async {
-      final answer = await _answering(['one'])
-          .unaryRequest<RpcString, RpcString>(
-            serviceName: 'S',
-            methodName: 'M',
-            request: 'q'.rpc,
-            requestCodec: _codec,
-            responseCodec: _codec,
-          );
+      final answer = await _answering(['one']).unary<RpcString, RpcString>(
+        serviceName: 'S',
+        methodName: 'M',
+        request: 'q'.rpc,
+        requestCodec: _codec,
+        responseCodec: _codec,
+      );
       expect(answer.value, 'one');
     });
   });

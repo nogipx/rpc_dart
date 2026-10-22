@@ -76,7 +76,7 @@ Future<({List<String> results, int ran, int attempts})> _run(
     );
 
   Future<String> call() => caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'Echo',
         request: request.rpc,

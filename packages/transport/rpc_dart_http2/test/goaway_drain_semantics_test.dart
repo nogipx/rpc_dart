@@ -86,7 +86,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: transport);
 
       final slow = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Slow',
             request: 'x'.rpc,
@@ -102,7 +102,7 @@ void main() {
       // A call issued AFTER shutdown began, on the connection we already have.
       await Future<void>.delayed(const Duration(milliseconds: 400));
       final late = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Quick',
             request: 'y'.rpc,
@@ -155,7 +155,7 @@ void main() {
 
       for (var i = 0; i < 4; i++) {
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Quick',
               request: '$i'.rpc,

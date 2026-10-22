@@ -59,7 +59,7 @@ Future<RpcCallerEndpoint> _open() async {
 
 Future<String> _echo(RpcCallerEndpoint caller, String value) async {
   try {
-    return (await caller.unaryRequest<RpcString, RpcString>(
+    return (await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: value.rpc,

@@ -194,7 +194,7 @@ void main() {
           Uri.parse('ws://127.0.0.1:${http.port}'),
         );
         final caller = RpcCallerEndpoint(transport: client);
-        final answer = await caller.unaryRequest<RpcString, RpcString>(
+        final answer = await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'ping'.rpc,
@@ -232,7 +232,7 @@ void main() {
           }
           final caller = RpcCallerEndpoint(transport: client);
           final outcome = await caller
-              .unaryRequest<RpcString, RpcString>(
+              .unary<RpcString, RpcString>(
                 serviceName: 'Svc',
                 methodName: 'u',
                 request: 'q'.rpc,

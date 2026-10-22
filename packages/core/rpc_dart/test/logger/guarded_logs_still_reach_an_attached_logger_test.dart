@@ -109,7 +109,7 @@ void main() {
   test(
     'a unary call still logs at internal level when one is attached',
     () async {
-      final reply = await caller.unaryRequest<RpcString, RpcString>(
+      final reply = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'hi'.rpc,

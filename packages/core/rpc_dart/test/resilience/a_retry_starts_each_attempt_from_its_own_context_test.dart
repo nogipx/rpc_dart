@@ -63,7 +63,7 @@ Future<({int attempts, List<String?> headers})> _run(
   inner.forEach(caller.addInterceptor);
 
   await expectLater(
-    caller.unaryRequest<_Empty, _Empty>(
+    caller.unary<_Empty, _Empty>(
       serviceName: 'Probe',
       methodName: 'Call',
       request: const _Empty(),

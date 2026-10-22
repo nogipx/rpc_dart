@@ -131,7 +131,7 @@ Future<_Ending> _callThrough({
   // Before the call, so the request frames are what sits unread.
   relay?.stopReading();
 
-  final call = caller.unaryRequest<RpcString, RpcString>(
+  final call = caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'echo',
     request: 'x'.rpc,
@@ -284,7 +284,7 @@ class _ErroringRig {
       await caller.close().catchError((Object _) {});
     });
 
-    final call = caller.unaryRequest<RpcString, RpcString>(
+    final call = caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

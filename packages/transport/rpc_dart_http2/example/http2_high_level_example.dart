@@ -36,7 +36,7 @@ Future<void> main() async {
       final client = RpcCallerEndpoint(transport: transport);
 
       // === One RPC call ===
-      final response = await client.unaryRequest<RpcString, RpcString>(
+      final response = await client.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Say',
         requestCodec: RpcString.codec,

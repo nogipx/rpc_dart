@@ -66,7 +66,7 @@ Future<String> _call(int port) async {
     transport = t;
     caller = RpcCallerEndpoint(transport: t);
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'x'.rpc,

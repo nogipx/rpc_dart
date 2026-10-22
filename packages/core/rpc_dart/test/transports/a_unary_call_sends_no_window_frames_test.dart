@@ -90,7 +90,7 @@ void main() {
   for (final method in ['echo', 'slow']) {
     test('a unary call sends no per-stream window ($method handler)', () async {
       for (var i = 0; i < 3; i++) {
-        final reply = await caller.unaryRequest<RpcString, RpcString>(
+        final reply = await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: method,
           request: 'hi'.rpc,

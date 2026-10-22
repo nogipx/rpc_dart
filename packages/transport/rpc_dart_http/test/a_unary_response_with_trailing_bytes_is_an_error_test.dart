@@ -53,7 +53,7 @@ Future<Object?> _unary(int port) async {
   );
   addTearDown(caller.close);
   return caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'x'.rpc,

@@ -77,7 +77,7 @@ Future<List<String>> _headersDelivered({
     await responderTransport.close();
   });
 
-  await caller.unaryRequest<RpcString, RpcString>(
+  await caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'echo',
     request: 'x'.rpc,

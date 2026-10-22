@@ -175,7 +175,7 @@ void main() {
       });
 
       await expectLater(
-        caller.unaryRequest<RpcString, RpcString>(
+        caller.unary<RpcString, RpcString>(
           serviceName: 'a.b',
           methodName: 'ok',
           request: 'x'.rpc,
@@ -210,7 +210,7 @@ void main() {
       });
 
       expect(responder.registeredMethodBindings.keys, ['Svc.recovered']);
-      final r = await caller.unaryRequest<RpcString, RpcString>(
+      final r = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'recovered',
         request: 'x'.rpc,

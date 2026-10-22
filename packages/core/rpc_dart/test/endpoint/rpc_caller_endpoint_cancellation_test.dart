@@ -121,7 +121,7 @@ void main() {
     });
 
     test('cancelling one unary method by key', () async {
-      final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'FastMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -136,7 +136,7 @@ void main() {
 
     test('cancelling every method of one service', () async {
       // Start several methods.
-      final future1 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future1 = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -144,7 +144,7 @@ void main() {
         request: TestRequest('operation 1'),
       );
 
-      final future2 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future2 = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'FastMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -178,7 +178,7 @@ void main() {
 
     test('cancelling every live method', () async {
       // Start a method.
-      final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -214,7 +214,7 @@ void main() {
 
     test('activeCallCount reports the live calls', () async {
       // Start a method.
-      final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -248,7 +248,7 @@ void main() {
 
     test('several calls of one method get separate tokens', () async {
       // Start several calls of the same method.
-      final future1 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future1 = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -259,7 +259,7 @@ void main() {
       // A short gap between them.
       await Future<void>.delayed(Duration(milliseconds: 10));
 
-      final future2 = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future2 = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -287,7 +287,7 @@ void main() {
     });
 
     test('cancelling with a caller-supplied reason', () async {
-      final future = callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+      final future = callerEndpoint.unary<TestRequest, TestResponse>(
         serviceName: 'TestService',
         methodName: 'SlowMethod',
         requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),

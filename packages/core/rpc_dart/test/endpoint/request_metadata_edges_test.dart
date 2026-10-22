@@ -39,7 +39,7 @@ Future<String> _call(Map<String, String> headers, String read) async {
     await responder.close();
   });
   try {
-    final r = await caller.unaryRequest<RpcString, RpcString>(
+    final r = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Get',
       request: read.rpc,

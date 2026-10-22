@@ -94,7 +94,7 @@ Future<RpcString> _echo(
   RpcCallerEndpoint caller,
   String value, {
   RpcContext? context,
-}) => caller.unaryRequest<RpcString, RpcString>(
+}) => caller.unary<RpcString, RpcString>(
   serviceName: 'Svc',
   methodName: 'echo',
   request: value.rpc,
@@ -256,7 +256,7 @@ void main() {
 
       final error = await _errorOf(
         caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'big',
               request: 'hi'.rpc,

@@ -275,7 +275,7 @@ void main() {
       final rig = _connect(connWindow: 128 * 1024, streamWindow: 64 * 1024);
       expect(
         (await rig.caller
-                .unaryRequest<RpcString, RpcString>(
+                .unary<RpcString, RpcString>(
                   serviceName: 'Svc',
                   methodName: 'unary',
                   request: 'x'.rpc,

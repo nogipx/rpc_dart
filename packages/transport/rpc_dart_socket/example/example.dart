@@ -37,7 +37,7 @@ Future<void> main() async {
   await server.start();
 
   final caller = RpcCallerEndpoint(transport: await connectRpcSocket(address));
-  final reply = await caller.unaryRequest<RpcString, RpcString>(
+  final reply = await caller.unary<RpcString, RpcString>(
     serviceName: 'Greeter',
     methodName: 'hello',
     request: 'socket'.rpc,

@@ -95,7 +95,7 @@ void main() {
 
       // Now try to make a call — should get UNAVAILABLE.
       await expectLater(
-        caller.unaryRequest<_Req, _Resp>(
+        caller.unary<_Req, _Resp>(
           serviceName: 'FastService',
           methodName: 'Echo',
           request: _Req('hello'),
@@ -118,7 +118,7 @@ void main() {
       responder.start();
 
       // Start a slow call that blocks in the handler.
-      final callFuture = caller.unaryRequest<_Req, _Resp>(
+      final callFuture = caller.unary<_Req, _Resp>(
         serviceName: 'SlowService',
         methodName: 'Slow',
         request: _Req('hello'),

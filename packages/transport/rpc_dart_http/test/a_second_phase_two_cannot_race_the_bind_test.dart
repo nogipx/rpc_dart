@@ -80,7 +80,7 @@ Future<_Run> _start({required int phaseTwo}) async {
   String answer;
   try {
     final reply = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'x'.rpc,

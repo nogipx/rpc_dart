@@ -92,7 +92,7 @@ void main() {
   /// Starts a call and returns once its handler is running.
   Future<Future<_Resp>> startCall() async {
     final call = caller
-        .unaryRequest<_Req, _Resp>(
+        .unary<_Req, _Resp>(
           serviceName: 'Stubborn',
           methodName: 'Work',
           request: _Req('x'),

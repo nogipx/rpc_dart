@@ -48,7 +48,7 @@ void main() {
     try {
       // Unary round-trip.
       final response = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'EchoService',
             methodName: 'Echo',
             requestCodec: RpcString.codec,

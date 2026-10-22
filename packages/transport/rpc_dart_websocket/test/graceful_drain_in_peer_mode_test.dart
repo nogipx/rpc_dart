@@ -75,7 +75,7 @@ void main() {
     addTearDown(() => caller.close().catchError((Object _) {}));
 
     final call = caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Slow',
           request: 'x'.rpc,

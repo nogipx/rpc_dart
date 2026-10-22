@@ -62,7 +62,7 @@ void main() {
     );
     addTearDown(client.close);
 
-    final response = await client.unaryRequest<RpcString, RpcString>(
+    final response = await client.unary<RpcString, RpcString>(
       serviceName: 'Echo',
       methodName: 'Echo',
       requestCodec: RpcString.codec,
@@ -103,7 +103,7 @@ void main() {
     final client = RpcCallerEndpoint(transport: transport);
     addTearDown(client.close);
 
-    final response = await client.unaryRequest<RpcString, RpcString>(
+    final response = await client.unary<RpcString, RpcString>(
       serviceName: 'Echo',
       methodName: 'Echo',
       requestCodec: RpcString.codec,
@@ -129,7 +129,7 @@ void main() {
     addTearDown(client.close);
 
     await expectLater(
-      client.unaryRequest<RpcString, RpcString>(
+      client.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Fail',
         requestCodec: RpcString.codec,

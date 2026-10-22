@@ -169,7 +169,7 @@ void main() {
       });
 
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'ping'.rpc,

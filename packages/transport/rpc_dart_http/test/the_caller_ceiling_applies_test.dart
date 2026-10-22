@@ -81,7 +81,7 @@ Future<RpcCallerEndpoint> _caller(int ceiling) async {
 
 Future<String> _call(RpcCallerEndpoint caller) async {
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'park',
       request: 'x'.rpc,

@@ -80,7 +80,7 @@ void main() {
     () async {
       final (caller, svc) = await _pair(_RefusingCodec());
       final error = await _errorOf(
-        caller.unaryRequest<RpcString, RpcString>(
+        caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'x'.rpc,
@@ -96,7 +96,7 @@ void main() {
   test('a response the decoder refuses is RESOURCE_EXHAUSTED', () async {
     final (caller, _) = await _pair(_codec);
     final error = await _errorOf(
-      caller.unaryRequest<RpcString, RpcString>(
+      caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'Echo',
         request: 'x'.rpc,
@@ -109,7 +109,7 @@ void main() {
 
   test('GUARD the same call with a decoding codec succeeds', () async {
     final (caller, svc) = await _pair(_codec);
-    final reply = await caller.unaryRequest<RpcString, RpcString>(
+    final reply = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Echo',
       request: 'x'.rpc,

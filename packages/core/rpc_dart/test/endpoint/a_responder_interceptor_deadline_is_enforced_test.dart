@@ -68,7 +68,7 @@ Future<({String outcome, int ms, bool cancelled})> _call({
   final clock = Stopwatch()..start();
   String outcome;
   try {
-    outcome = (await caller.unaryRequest<RpcString, RpcString>(
+    outcome = (await caller.unary<RpcString, RpcString>(
       serviceName: 'S',
       methodName: 'slow',
       request: 'x'.rpc,

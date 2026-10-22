@@ -153,7 +153,7 @@ void main() {
   });
 
   test('consumed calls of every shape release their tracking', () async {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

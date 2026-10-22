@@ -56,7 +56,7 @@ void main() {
     final innocent = [
       for (var i = 0; i < 3; i++)
         caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Slow',
               request: 'x'.rpc,

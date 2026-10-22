@@ -406,8 +406,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   /// Sends a unary request.
-  Future<TResponse>
-  unaryRequest<TRequest extends Object, TResponse extends Object>({
+  Future<TResponse> unary<TRequest extends Object, TResponse extends Object>({
     required String serviceName,
     required String methodName,
     required TRequest request,
@@ -457,7 +456,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
-    // Through the stream, for the same reason as unaryRequest's.
+    // Through the stream, for the same reason as unary's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
     final ctx = _prepareCallerContext(context);
@@ -546,7 +545,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
     IRpcCodec<TResponse>? responseCodec,
     RpcContext? context,
   }) {
-    // Through the stream, for the same reason as unaryRequest's.
+    // Through the stream, for the same reason as unary's.
     if (!isActive) return Stream.error(RpcClosedException('Endpoint'));
 
     final ctx = _prepareCallerContext(context);

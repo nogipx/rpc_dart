@@ -48,7 +48,7 @@ void _worker(IRpcTransport transport, Map<String, dynamic> params) {
 
 Future<RpcStatus?> _echo(RpcCallerEndpoint caller) async {
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Echo',
       request: 'x'.rpc,
@@ -67,7 +67,7 @@ void main() {
     final caller = RpcCallerEndpoint(transport: spawned.transport);
     addTearDown(spawned.kill);
 
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Exit',
       request: 'x'.rpc,

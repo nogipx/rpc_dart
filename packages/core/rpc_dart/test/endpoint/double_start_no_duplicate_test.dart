@@ -125,7 +125,7 @@ void main() {
     test('a unary handler runs once per call', () async {
       final h = _build(starts: 2);
 
-      await h.caller.unaryRequest<RpcString, RpcString>(
+      await h.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'once',
         request: 'x'.rpc,
@@ -173,7 +173,7 @@ void main() {
     test('unary still works', () async {
       final h = _build(starts: 1);
 
-      final res = await h.caller.unaryRequest<RpcString, RpcString>(
+      final res = await h.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'once',
         request: 'x'.rpc,

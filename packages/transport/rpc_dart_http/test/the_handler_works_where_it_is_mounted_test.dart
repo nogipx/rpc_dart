@@ -77,7 +77,7 @@ Future<_Run> _call({required String? mountAt}) async {
   String outcome;
   try {
     final reply = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Echo',
           methodName: 'echo',
           request: 'hi'.rpc,

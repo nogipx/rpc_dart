@@ -79,7 +79,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: transport);
 
       final call = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Slow',
             request: 'x'.rpc,
@@ -139,7 +139,7 @@ void main() {
 
       for (var i = 0; i < 3; i++) {
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Quick',
               request: '$i'.rpc,

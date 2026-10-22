@@ -110,7 +110,7 @@ void main() {
     () async {
       final tick = Tick(_runtimeString('AAPL'), 19999);
       final seen = await caller
-          .unaryRequest<Tick, Seen>(
+          .unary<Tick, Seen>(
             serviceName: _service,
             methodName: 'Tick',
             request: tick,
@@ -133,7 +133,7 @@ void main() {
       // "shared" if identity happened to survive for some other reason.
       final tick = PlainTick(_runtimeString('AAPL'), 19999);
       final seen = await caller
-          .unaryRequest<PlainTick, Seen>(
+          .unary<PlainTick, Seen>(
             serviceName: _service,
             methodName: 'PlainTick',
             request: tick,
@@ -152,7 +152,7 @@ void main() {
       // copied, but the subgraph the pragma covers is handed over as is.
       final envelope = Envelope(Tick(_runtimeString('MSFT'), 42), 'note');
       final seen = await caller
-          .unaryRequest<Envelope, Seen>(
+          .unary<Envelope, Seen>(
             serviceName: _service,
             methodName: 'Envelope',
             request: envelope,

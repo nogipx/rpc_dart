@@ -143,7 +143,7 @@ Future<({int? delivered, Object? error})> _send({
   Object? error;
   try {
     await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'sink',
           request: (' ' * payloadChars).rpc,

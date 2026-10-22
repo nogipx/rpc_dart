@@ -63,7 +63,7 @@ void main() {
       Future<int> once(String method, String arg) async {
         final clock = Stopwatch()..start();
         await c.caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Echo',
               methodName: method,
               request: arg.rpc,

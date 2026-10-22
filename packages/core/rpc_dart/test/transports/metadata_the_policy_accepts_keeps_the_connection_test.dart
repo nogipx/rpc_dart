@@ -66,7 +66,7 @@ void main() {
   });
 
   Future<String> call(String value, [RpcContext? context]) => caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'S',
         methodName: 'echo',
         request: value.rpc,

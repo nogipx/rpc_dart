@@ -146,7 +146,7 @@ void main() {
       for (var i = 0; i < parked; i++) {
         unawaited(
           caller
-              .unaryRequest<_Req, _Req>(
+              .unary<_Req, _Req>(
                 serviceName: 'Svc',
                 methodName: 'Park',
                 request: _Req('x'),
@@ -190,7 +190,7 @@ void main() {
     });
 
     final call = caller
-        .unaryRequest<_Req, _Req>(
+        .unary<_Req, _Req>(
           serviceName: 'Svc',
           methodName: 'Park',
           request: _Req('x'),

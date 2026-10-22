@@ -39,12 +39,12 @@ void main() async {
   // Exercise them.
   print('\nExercising the services');
   // Initialise the resources (zero-copy).
-  await callerEndpoint.unaryRequest<ResourceRequest, ResourceResponse>(
+  await callerEndpoint.unary<ResourceRequest, ResourceResponse>(
     serviceName: 'DatabaseService',
     methodName: 'initialize',
     request: ResourceRequest('init database'),
   );
-  await callerEndpoint.unaryRequest<ResourceRequest, ResourceResponse>(
+  await callerEndpoint.unary<ResourceRequest, ResourceResponse>(
     serviceName: 'CachingService',
     methodName: 'initialize',
     request: ResourceRequest('setup cache'),

@@ -82,15 +82,14 @@ void main() {
       await callerEndpoint.close();
     });
 
-    test('unaryRequest clears tracked token after completion', () async {
-      final response = await callerEndpoint
-          .unaryRequest<_TestRequest, _TestResponse>(
-            serviceName: _EchoService.serviceId,
-            methodName: _EchoService.unaryMethodId,
-            requestCodec: RpcCodec<_TestRequest>(_TestRequest.fromJson),
-            responseCodec: RpcCodec<_TestResponse>(_TestResponse.fromJson),
-            request: _TestRequest('ok'),
-          );
+    test('unary clears tracked token after completion', () async {
+      final response = await callerEndpoint.unary<_TestRequest, _TestResponse>(
+        serviceName: _EchoService.serviceId,
+        methodName: _EchoService.unaryMethodId,
+        requestCodec: RpcCodec<_TestRequest>(_TestRequest.fromJson),
+        responseCodec: RpcCodec<_TestResponse>(_TestResponse.fromJson),
+        request: _TestRequest('ok'),
+      );
       expect(response.value, equals('ok'));
 
       expect(

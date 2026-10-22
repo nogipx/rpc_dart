@@ -52,7 +52,7 @@ class _Mod extends RpcIsolateModule {
 }
 
 Future<Object?> _call(RpcCallerEndpoint caller, String method) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Work',
       methodName: method,
       request: 'x'.rpc,

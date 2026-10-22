@@ -107,7 +107,7 @@ void main() {
 
     for (var i = 0; i < calls; i++) {
       try {
-        await rig.caller.unaryRequest<RpcString, RpcString>(
+        await rig.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'stubborn',
           request: 'a'.rpc,
@@ -164,7 +164,7 @@ void main() {
     final rig = _connect();
 
     try {
-      await rig.caller.unaryRequest<RpcString, RpcString>(
+      await rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'stubborn',
         request: 'a'.rpc,
@@ -190,7 +190,7 @@ void main() {
     final rig = _connect();
 
     await expectLater(
-      rig.caller.unaryRequest<RpcString, RpcString>(
+      rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'stubborn',
         request: 'a'.rpc,
@@ -208,7 +208,7 @@ void main() {
     final rig = _connect();
 
     for (var i = 0; i < 10; i++) {
-      final r = await rig.caller.unaryRequest<RpcString, RpcString>(
+      final r = await rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'quick',
         request: 'hi'.rpc,

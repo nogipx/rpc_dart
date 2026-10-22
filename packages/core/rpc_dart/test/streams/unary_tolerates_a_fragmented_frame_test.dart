@@ -264,7 +264,7 @@ Future<String> _unary({
   );
 
   try {
-    final reply = await caller.unaryRequest<RpcString, RpcString>(
+    final reply = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: ('x' * requestBytes).rpc,

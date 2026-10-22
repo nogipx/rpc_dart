@@ -42,7 +42,7 @@ void main() {
 
       final order =
           (await caller
-                  .unaryRequest<RpcString, RpcString>(
+                  .unary<RpcString, RpcString>(
                     serviceName: 'Echo',
                     methodName: 'TimerOrder',
                     request: ''.rpc,

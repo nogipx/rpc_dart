@@ -74,7 +74,7 @@ void main() {
         await sub.cancel();
       });
 
-      final answer = await caller.unaryRequest<RpcString, RpcString>(
+      final answer = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'x'.rpc,

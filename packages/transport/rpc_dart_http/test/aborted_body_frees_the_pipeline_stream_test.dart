@@ -141,7 +141,7 @@ Future<int> _until(
 }
 
 Future<RpcString> _echo(RpcCallerEndpoint caller) =>
-    caller.unaryRequest<RpcString, RpcString>(
+    caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'hi'.rpc,

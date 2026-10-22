@@ -104,7 +104,7 @@ void main() {
       Object? thrown;
       try {
         await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x'.rpc,
@@ -169,7 +169,7 @@ void main() {
       _mode = 'rstImmediate';
       try {
         await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x'.rpc,
@@ -185,7 +185,7 @@ void main() {
       // one aborted call would take every other call on the socket with it.
       _mode = 'ok';
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,

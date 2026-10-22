@@ -62,7 +62,7 @@ Future<String> _call(HttpServer server) async {
   });
 
   try {
-    final response = await caller.unaryRequest<RpcString, RpcString>(
+    final response = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

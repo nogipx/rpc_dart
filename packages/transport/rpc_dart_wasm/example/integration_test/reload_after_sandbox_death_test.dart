@@ -58,7 +58,7 @@ void main() {
       Future<String> say(RpcCallerEndpoint caller, String v) async {
         try {
           final r = await caller
-              .unaryRequest<RpcString, RpcString>(
+              .unary<RpcString, RpcString>(
                 serviceName: 'Echo',
                 methodName: 'Say',
                 request: v.rpc,

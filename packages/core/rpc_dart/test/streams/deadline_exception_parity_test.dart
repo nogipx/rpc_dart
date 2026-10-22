@@ -137,7 +137,7 @@ Future<Object?> _drive(_Rig rig, String shape, RpcContext? ctx) async {
   try {
     switch (shape) {
       case 'unary':
-        await rig.caller.unaryRequest<RpcString, RpcString>(
+        await rig.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'unary',
           request: 'a'.rpc,
@@ -268,7 +268,7 @@ void main() {
   group('unchanged behaviour', () {
     test('a call that answers inside its deadline is unaffected', () async {
       final rig = _connect();
-      final result = await rig.caller.unaryRequest<RpcString, RpcString>(
+      final result = await rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'hello'.rpc,

@@ -86,7 +86,7 @@ Future<_Outcome> _fiveFailuresThenHealthy(
 
   Future<String> call(String method) async {
     try {
-      final r = await caller.unaryRequest<RpcString, RpcString>(
+      final r = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: method,
         request: 'x'.rpc,
@@ -194,7 +194,7 @@ void main() {
 
       for (var i = 0; i < 2; i++) {
         try {
-          await caller.unaryRequest<RpcString, RpcString>(
+          await caller.unary<RpcString, RpcString>(
             serviceName: 'Healthy',
             methodName: 'ok',
             request: 'x'.rpc,
@@ -235,7 +235,7 @@ void main() {
 
       for (var i = 0; i < 5; i++) {
         try {
-          await caller.unaryRequest<RpcString, RpcString>(
+          await caller.unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'lookup',
             request: 'x'.rpc,

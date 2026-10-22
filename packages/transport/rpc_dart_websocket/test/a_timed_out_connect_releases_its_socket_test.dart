@@ -141,7 +141,7 @@ void main() {
       addTearDown(() => caller.close().catchError((Object _) {}));
 
       final reply = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'echo',
             request: 'hi'.rpc,
@@ -186,7 +186,7 @@ void main() {
       addTearDown(() => caller.close().catchError((Object _) {}));
 
       final reply = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'echo',
             request: 'hi'.rpc,

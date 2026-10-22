@@ -43,7 +43,7 @@ void main() {
       await responder.close();
     });
 
-    final answer = await caller.unaryRequest<RpcString, RpcString>(
+    final answer = await caller.unary<RpcString, RpcString>(
       serviceName: service,
       methodName: 'Get',
       request: 'x'.rpc,

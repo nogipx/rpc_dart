@@ -122,7 +122,7 @@ void main() {
       responder.start();
 
       final reply = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Big',
             request: 'req'.rpc,
@@ -161,7 +161,7 @@ void main() {
       responder.start();
 
       final reply = await caller
-          .unaryRequest<Uint8List, Uint8List>(
+          .unary<Uint8List, Uint8List>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: Uint8List.fromList([1, 2, 3]),

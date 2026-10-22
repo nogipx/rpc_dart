@@ -88,7 +88,7 @@ _connect({required int serverMaxStreams}) {
 List<Future<Object>> _fire(RpcCallerEndpoint caller, String method, int n) => [
   for (var i = 0; i < n; i++)
     caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: method,
           request: 'x'.rpc,

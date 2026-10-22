@@ -169,7 +169,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: client);
       addTearDown(caller.close);
       final response = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'after'.rpc,

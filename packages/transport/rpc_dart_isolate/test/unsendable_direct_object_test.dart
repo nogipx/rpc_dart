@@ -179,19 +179,18 @@ void main() {
   late RpcCallerEndpoint caller;
 
   /// With codecs: the call serializes.
-  Future<Res> unary(String method, Req request) =>
-      caller.unaryRequest<Req, Res>(
-        serviceName: _service,
-        methodName: method,
-        request: request,
-        requestCodec: _req,
-        responseCodec: _res,
-      );
+  Future<Res> unary(String method, Req request) => caller.unary<Req, Res>(
+    serviceName: _service,
+    methodName: method,
+    request: request,
+    requestCodec: _req,
+    responseCodec: _res,
+  );
 
   /// No codecs: the object itself crosses, which is the only path left where an
   /// unsendable field can reach `SendPort.send`.
   Future<ZcRes> zcUnary(String method, ZcReq request) =>
-      caller.unaryRequest<ZcReq, ZcRes>(
+      caller.unary<ZcReq, ZcRes>(
         serviceName: _zcService,
         methodName: method,
         request: request,

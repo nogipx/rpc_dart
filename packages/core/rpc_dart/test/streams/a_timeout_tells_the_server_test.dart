@@ -89,7 +89,7 @@ void main() {
       final rig = await _rig();
 
       await expectLater(
-        rig.caller.unaryRequest<RpcString, RpcString>(
+        rig.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'never',
           request: 'a'.rpc,
@@ -143,7 +143,7 @@ void main() {
       final rig = await _rig();
 
       final reply = await rig.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'hi'.rpc,

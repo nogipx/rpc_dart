@@ -93,7 +93,7 @@ Future<({String? result, Object? error, int commits})> _call({
   String? result;
   Object? error;
   try {
-    final r = await caller.unaryRequest<RpcString, RpcString>(
+    final r = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'charge',
       request: 'x'.rpc,

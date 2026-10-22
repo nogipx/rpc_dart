@@ -144,7 +144,7 @@ void main() {
       addTearDown(caller.close);
 
       final reply = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'hi'.rpc,

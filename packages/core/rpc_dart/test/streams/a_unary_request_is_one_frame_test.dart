@@ -41,7 +41,7 @@ Future<List<String>> _requestFrames(
     ..start();
   final caller = RpcCallerEndpoint(transport: clientT);
   try {
-    final reply = await caller.unaryRequest<RpcString, RpcString>(
+    final reply = await caller.unary<RpcString, RpcString>(
       serviceName: 'Echo',
       methodName: 'echo',
       request: 'hi'.rpc,

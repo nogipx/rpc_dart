@@ -101,7 +101,7 @@ Future<int> _finished(IRpcTransport t) async {
 
 Future<void> _abortedCall(RpcCallerEndpoint caller) async {
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'slow',
       request: 'x'.rpc,
@@ -151,7 +151,7 @@ void main() {
       final h = _build();
 
       for (var i = 0; i < 20; i++) {
-        await h.caller.unaryRequest<RpcString, RpcString>(
+        await h.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'fast',
           request: 'x'.rpc,

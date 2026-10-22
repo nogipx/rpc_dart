@@ -138,14 +138,13 @@ void main() {
 
     test('a unary request comes back with the right answer', () async {
       // Send a unary request.
-      final response = await callerEndpoint
-          .unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'TestService',
-            methodName: 'UnaryMethod',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-            request: TestRequest('Hello from test'),
-          );
+      final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+        serviceName: 'TestService',
+        methodName: 'UnaryMethod',
+        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+        request: TestRequest('Hello from test'),
+      );
 
       // Check the answer.
       expect(response.message, equals('Reply to: Hello from test'));
@@ -270,14 +269,13 @@ void main() {
 
     test('closing the endpoint releases its resources', () async {
       // A request before the close.
-      final response = await callerEndpoint
-          .unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'TestService',
-            methodName: 'UnaryMethod',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-            request: TestRequest('Pre-close request'),
-          );
+      final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+        serviceName: 'TestService',
+        methodName: 'UnaryMethod',
+        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+        request: TestRequest('Pre-close request'),
+      );
 
       expect(response.message, equals('Reply to: Pre-close request'));
 
@@ -289,7 +287,7 @@ void main() {
 
       // Using a closed endpoint must throw.
       expect(() async {
-        await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+        await callerEndpoint.unary<TestRequest, TestResponse>(
           serviceName: 'TestService',
           methodName: 'UnaryMethod',
           requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),

@@ -193,7 +193,7 @@ void main() {
     Object? seen;
     try {
       await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'whatever',
             request: 'x'.rpc,
@@ -249,7 +249,7 @@ void main() {
       });
 
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,

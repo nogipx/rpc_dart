@@ -87,7 +87,7 @@ void main() {
     () async {
       // WITNESS: pre-fix this waited out the 5 s and reported HANGS.
       final rig = _rig();
-      final call = rig.caller.unaryRequest<RpcString, RpcString>(
+      final call = rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'Slow',
         request: 'hi'.rpc,
@@ -168,7 +168,7 @@ void main() {
       // the first two tests would pass on a transport that failed everything.
       final rig = _rig();
       final r = await rig.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Fast',
             request: 'hi'.rpc,

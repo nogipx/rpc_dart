@@ -51,7 +51,7 @@ Matcher get _internal => isA<RpcStatusException>().having(
 void main() {
   test('unary', () async {
     await expectLater(
-      _againstGarbage().unaryRequest<RpcString, RpcString>(
+      _againstGarbage().unary<RpcString, RpcString>(
         serviceName: 'S',
         methodName: 'M',
         request: 'q'.rpc,

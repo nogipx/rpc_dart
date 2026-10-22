@@ -102,7 +102,7 @@ void main() {
 
       expect(_running, 0, reason: 'the refused handlers must be cancelled');
       final answer = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'still here'.rpc,

@@ -71,7 +71,7 @@ Future<({RpcStatus status, int requests})> _call(int httpStatus) async {
 
   var status = RpcStatus.ok;
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

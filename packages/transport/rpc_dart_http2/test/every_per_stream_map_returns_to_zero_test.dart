@@ -88,7 +88,7 @@ void main() {
       // accident, and a repeat is what turns a leak into a trend.
       for (var i = 0; i < 5; i++) {
         final reply = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x$i'.rpc,

@@ -35,7 +35,7 @@ final class _Contract extends RpcResponderContract {
 Future<String> _echo(RpcCallerEndpoint caller) async {
   try {
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'x'.rpc,

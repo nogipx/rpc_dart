@@ -412,7 +412,7 @@ void main() {
         ),
       );
 
-      final response = await caller.unaryRequest<_TestRequest, _TestResponse>(
+      final response = await caller.unary<_TestRequest, _TestResponse>(
         serviceName: 'TestService',
         methodName: 'Echo',
         requestCodec: _TestRequest.codec,

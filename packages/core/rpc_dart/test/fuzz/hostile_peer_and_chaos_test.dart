@@ -230,7 +230,7 @@ void main() {
           Stream<RpcString> requests() =>
               Stream.fromIterable(List.filled(1 + rnd.nextInt(5), kind.rpc));
           final Future<Object?> call = switch (i % 4) {
-            0 => caller.unaryRequest<RpcString, RpcString>(
+            0 => caller.unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'u',
               request: kind.rpc,

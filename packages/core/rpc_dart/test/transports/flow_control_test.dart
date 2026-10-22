@@ -248,7 +248,7 @@ void main() {
     test('unary', () async {
       final rig = _connect(window: 64 * 1024);
       final r = await rig.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'unary',
             request: 'x'.rpc,

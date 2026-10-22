@@ -63,7 +63,7 @@ void main() {
     responder.start();
 
     for (var i = 0; i < 100; i++) {
-      await caller.unaryRequest<RpcString, RpcString>(
+      await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'x'.rpc,
@@ -145,7 +145,7 @@ void main() {
 
     final results = await Future.wait([
       for (var i = 0; i < 5; i++)
-        caller.unaryRequest<RpcString, RpcString>(
+        caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'v$i'.rpc,

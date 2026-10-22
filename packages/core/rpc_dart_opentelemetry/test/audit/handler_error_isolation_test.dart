@@ -39,7 +39,7 @@ void main() {
           server.start();
 
           await expectLater(
-            client.unaryRequest<RpcString, RpcString>(
+            client.unary<RpcString, RpcString>(
               serviceName: 'Throwing',
               methodName: 'BoomRpc',
               requestCodec: RpcString.codec,
@@ -79,7 +79,7 @@ void main() {
           server.start();
 
           await expectLater(
-            client.unaryRequest<RpcString, RpcString>(
+            client.unary<RpcString, RpcString>(
               serviceName: 'Throwing',
               methodName: 'BoomStatus',
               requestCodec: RpcString.codec,

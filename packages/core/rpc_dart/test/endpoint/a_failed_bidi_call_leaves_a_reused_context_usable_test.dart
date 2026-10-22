@@ -89,7 +89,7 @@ Future<void> _check(String method) async {
   final shared = RpcContext.withCancellation(token);
   if (method == 'unaryFail' || method == 'collectFail') {
     final Future<RpcString> call = method == 'unaryFail'
-        ? caller.unaryRequest<RpcString, RpcString>(
+        ? caller.unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: method,
             request: 'q'.rpc,
@@ -130,7 +130,7 @@ Future<void> _check(String method) async {
   await stream.toList().then<void>((_) {}, onError: (Object _) {});
 
   expect(token.isCancelled, isFalse);
-  final answer = await caller.unaryRequest<RpcString, RpcString>(
+  final answer = await caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'ping',
     request: 'x'.rpc,

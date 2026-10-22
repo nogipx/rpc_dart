@@ -90,7 +90,7 @@ Future<(String, int)> _call({
 
   try {
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Charge',
           request: 'x'.rpc,

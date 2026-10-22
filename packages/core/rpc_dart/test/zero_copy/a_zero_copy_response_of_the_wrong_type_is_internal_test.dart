@@ -50,7 +50,7 @@ void main() {
 
   test('unary', () async {
     await expectLater(
-      caller.unaryRequest<RpcString, RpcString>(
+      caller.unary<RpcString, RpcString>(
         serviceName: 'S',
         methodName: 'u',
         request: 'x'.rpc,

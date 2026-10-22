@@ -69,7 +69,7 @@ Future<Object?> _callWith(List<http2.Header> extra) async {
 
   try {
     await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'x'.rpc,
@@ -148,7 +148,7 @@ void main() {
     for (var i = 0; i < 3; i++) {
       try {
         await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x'.rpc,

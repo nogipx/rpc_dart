@@ -129,7 +129,7 @@ final class GreeterCaller extends RpcCallerContract {
 All endpoints: `addInterceptor`, `close()`, `health()`, `isActive`,
 `transport`. There is no `interceptors:` constructor parameter.
 
-Endpoints also have an untyped call API (`unaryRequest`, `serverStream`,
+Endpoints also have an untyped call API (`unary`, `serverStream`,
 `clientStream` returning a `Future<R> Function(Stream<C>)` builder,
 `bidirectionalStream`; each takes `serviceName:`, `methodName:`). Prefer caller
 contracts: they validate codecs against the transfer mode.
@@ -349,7 +349,7 @@ the older responders registered while old callers exist.
 ## Pitfalls
 
 - `RpcCallerContract(...)` cannot be instantiated; write a subclass.
-- `callUnary` is on the contract; the endpoint's method is `unaryRequest`.
+- `callUnary` is on the contract; the endpoint's method is `unary`.
 - Zero-copy (no codecs) on a transport without `supportsZeroCopy` throws
   `ArgumentError`; for unary and server-stream calls it is thrown synchronously
   by the call, not delivered through the Future/Stream.

@@ -107,7 +107,7 @@ Future<List<RpcHttp2CallerTransport>> _connectAndCall(
     );
     final caller = RpcCallerEndpoint(transport: t);
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'x'.rpc,
@@ -247,7 +247,7 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: '$i'.rpc,
@@ -280,7 +280,7 @@ void main() {
       );
       final caller = RpcCallerEndpoint(transport: transport);
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,

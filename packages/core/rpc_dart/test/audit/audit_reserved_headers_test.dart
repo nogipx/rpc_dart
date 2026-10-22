@@ -46,7 +46,7 @@ void main() {
         'te': 'chunked',
         'x-custom': 'keep-me',
       });
-      await client.unaryRequest<_Msg, _Msg>(
+      await client.unary<_Msg, _Msg>(
         serviceName: 'S',
         methodName: 'echo',
         request: const _Msg('hi'),

@@ -364,7 +364,7 @@ RpcCallerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
 RpcCallerEndpoint method ping({RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcCallerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
-RpcCallerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcCallerEndpoint method unary<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
 RpcCancellationToken field cancelled: Future<void> (get)
 RpcCancellationToken field isCancelled: bool (get)
@@ -903,7 +903,7 @@ RpcPeerEndpoint method registerServiceContract(RpcResponderContract contract) ->
 RpcPeerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcPeerEndpoint method setLogController(LogController controller) -> void
 RpcPeerEndpoint method start() -> void
-RpcPeerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
+RpcPeerEndpoint method unary<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerEndpoint method unregisterServiceContract(String serviceName) -> void
 RpcPeerEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
 RpcPeerMode field register: void Function(RpcPeerEndpoint) (get)

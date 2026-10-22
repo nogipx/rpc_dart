@@ -104,7 +104,7 @@ void main() {
 
   Future<String> live() async {
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'live',
           request: '?'.rpc,

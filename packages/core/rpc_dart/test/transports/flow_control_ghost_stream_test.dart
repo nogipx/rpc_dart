@@ -170,7 +170,7 @@ void main() {
       final rig = _connect();
       for (var i = 0; i < 30; i++) {
         expect(
-          (await rig.caller.unaryRequest<RpcString, RpcString>(
+          (await rig.caller.unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'ping',
             request: 'n$i'.rpc,

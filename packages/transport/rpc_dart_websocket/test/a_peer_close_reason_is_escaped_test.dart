@@ -30,7 +30,7 @@ Future<String> _failureWhenClosedWith(String reason) async {
   final caller = RpcCallerEndpoint(transport: transport);
   addTearDown(caller.close);
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'm',
       request: 'x'.rpc,

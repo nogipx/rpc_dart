@@ -34,7 +34,7 @@ final class _Echo extends RpcResponderContract {
 }
 
 Future<RpcString> _call(RpcCallerEndpoint caller) =>
-    caller.unaryRequest<RpcString, RpcString>(
+    caller.unary<RpcString, RpcString>(
       serviceName: 'Echo',
       methodName: 'u',
       request: 'x'.rpc,

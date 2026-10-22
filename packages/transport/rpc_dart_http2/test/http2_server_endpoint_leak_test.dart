@@ -55,7 +55,7 @@ void main() {
     // Drive one call so the connection is fully established server-side.
     final caller = RpcCallerEndpoint(transport: transport);
     await expectLater(
-      caller.unaryRequest<RpcString, RpcString>(
+      caller.unary<RpcString, RpcString>(
         serviceName: 'Spy',
         methodName: 'nope',
         request: 'x'.rpc,

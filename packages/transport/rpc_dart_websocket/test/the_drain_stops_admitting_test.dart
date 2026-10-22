@@ -113,7 +113,7 @@ void main() {
         while (running) {
           try {
             final r = await caller
-                .unaryRequest<RpcString, RpcString>(
+                .unary<RpcString, RpcString>(
                   serviceName: 'Svc',
                   methodName: 'echo',
                   request: 'x'.rpc,

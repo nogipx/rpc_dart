@@ -161,7 +161,7 @@ Future<_Call> _startLongCall(RpcCallerEndpoint caller) async {
 
 Future<Object?> _callBoom(RpcCallerEndpoint caller) async {
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'boom',
       request: 'B'.rpc,
@@ -231,7 +231,7 @@ void main() {
     () async {
       final rig = await _rig(RpcStatus.unavailable, maxAttempts: 3);
 
-      final call = rig.caller.unaryRequest<RpcString, RpcString>(
+      final call = rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'slow',
         request: 'x'.rpc,

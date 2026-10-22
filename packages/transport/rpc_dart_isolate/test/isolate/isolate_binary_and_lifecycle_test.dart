@@ -234,7 +234,7 @@ void main() {
       await caller.close();
 
       expect(
-        () => caller.unaryRequest<_Empty, _Empty>(
+        () => caller.unary<_Empty, _Empty>(
           serviceName: 'x',
           methodName: 'y',
           request: const _Empty(),

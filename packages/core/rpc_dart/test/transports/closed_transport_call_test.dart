@@ -8,7 +8,7 @@
 // getMessagesForStream returned `const Stream.empty()`, done the moment it is
 // listened to. The unary caller's onDone ("response stream closed without a
 // response") therefore ran while the application was still inside
-// unaryRequest() and had not yet attached to the future -- and completing a
+// unary() and had not yet attached to the future -- and completing a
 // future with an error that has no listener AT THAT MOMENT is what Dart
 // reports as unhandled. Attaching afterwards does not retract it.
 //
@@ -81,7 +81,7 @@ void main() {
 
     // Warm-up: the pair works.
     expect(
-      (await caller.unaryRequest<RpcString, RpcString>(
+      (await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'x'.rpc,
@@ -97,7 +97,7 @@ void main() {
     final unhandled = await _unhandledDuring(() async {
       try {
         await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'echo',
               request: 'x'.rpc,
@@ -193,7 +193,7 @@ void main() {
 
     for (var i = 0; i < 5; i++) {
       expect(
-        (await caller.unaryRequest<RpcString, RpcString>(
+        (await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'x'.rpc,

@@ -97,7 +97,7 @@ Future<_Rig> _serve({required bool cooperative}) async {
 Future<void> _callWithDeadline(RpcCallerEndpoint caller) async {
   try {
     await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'slow',
           request: 'x'.rpc,
@@ -190,7 +190,7 @@ void main() {
       });
 
       final reply = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'hi'.rpc,

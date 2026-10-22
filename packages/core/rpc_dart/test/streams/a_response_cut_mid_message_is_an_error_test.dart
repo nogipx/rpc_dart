@@ -80,7 +80,7 @@ Future<Object?> _unary(int cut) async {
   final caller = RpcCallerEndpoint(transport: transport);
   addTearDown(caller.close);
   final outcome = caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'go'.rpc,

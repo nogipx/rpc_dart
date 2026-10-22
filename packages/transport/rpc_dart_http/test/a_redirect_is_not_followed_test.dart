@@ -51,7 +51,7 @@ Future<({List<String> seen, Object? error})> _redirectedBy(int status) async {
 
   Object? error;
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

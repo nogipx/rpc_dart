@@ -33,7 +33,7 @@ void main() {
       });
 
       final credit = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'EchoService',
             methodName: 'Credit',
             requestCodec: RpcString.codec,

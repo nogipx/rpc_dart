@@ -75,7 +75,7 @@ void main() {
 
       Object? caught;
       final call = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Slow',
             request: 'x'.rpc,
@@ -143,7 +143,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: transport);
 
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Quick',
             request: 'x'.rpc,

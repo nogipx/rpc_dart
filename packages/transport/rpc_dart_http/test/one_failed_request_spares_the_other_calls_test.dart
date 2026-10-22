@@ -95,7 +95,7 @@ void main() {
     final caller = RpcCallerEndpoint(transport: connection.transport);
 
     Future<String> call(String method) => caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: method,
           request: 'x'.rpc,

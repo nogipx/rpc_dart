@@ -84,7 +84,7 @@ void main() {
   Future<Object?> send(int chars) async {
     try {
       await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: ('A' * chars).rpc,

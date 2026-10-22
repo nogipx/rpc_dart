@@ -78,7 +78,7 @@ _Rig _build() {
 }
 
 Future<void> _call(RpcCallerEndpoint caller, {RpcContext? context}) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

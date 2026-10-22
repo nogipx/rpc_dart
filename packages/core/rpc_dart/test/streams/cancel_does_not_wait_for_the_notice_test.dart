@@ -68,7 +68,7 @@ Future<String> _cancelInFlight({required bool hangingNotice}) async {
   unawaited(
     Future<void>(() async {
       try {
-        await caller.unaryRequest<RpcString, RpcString>(
+        await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'slow',
           request: 'x'.rpc,
@@ -149,7 +149,7 @@ void main() {
         final token = RpcCancellationToken();
         unawaited(
           caller
-              .unaryRequest<RpcString, RpcString>(
+              .unary<RpcString, RpcString>(
                 serviceName: 'Svc',
                 methodName: 'slow',
                 request: 'x'.rpc,

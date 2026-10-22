@@ -107,7 +107,7 @@ void _cases({required bool peer}) {
 
     final caller = RpcCallerEndpoint(transport: client);
     final answer = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'ping'.rpc,
@@ -130,7 +130,7 @@ void _cases({required bool peer}) {
 
     final caller = RpcCallerEndpoint(transport: client);
     await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'ping'.rpc,

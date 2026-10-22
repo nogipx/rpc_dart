@@ -100,7 +100,7 @@ Future<_Rig> _rig() async {
 }
 
 Future<String> _call(RpcCallerEndpoint caller, String tag) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Wait',
       request: tag.rpc,

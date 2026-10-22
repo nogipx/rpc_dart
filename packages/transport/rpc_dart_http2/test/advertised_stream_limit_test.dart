@@ -332,7 +332,7 @@ void main() {
       );
       final caller = RpcCallerEndpoint(transport: client);
 
-      final response = await caller.unaryRequest<RpcString, RpcString>(
+      final response = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'hello'.rpc,

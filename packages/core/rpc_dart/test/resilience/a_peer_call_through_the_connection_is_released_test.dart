@@ -56,7 +56,7 @@ void main() {
 
     const calls = 20;
     for (var i = 0; i < calls; i++) {
-      final reply = await remote.unaryRequest<RpcString, RpcString>(
+      final reply = await remote.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'Echo',
         request: '$i'.rpc,

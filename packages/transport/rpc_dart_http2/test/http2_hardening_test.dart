@@ -39,7 +39,7 @@ void main() {
       final bigPayload = 'x' * 1000;
 
       await expectLater(
-        caller.unaryRequest<RpcString, RpcString>(
+        caller.unary<RpcString, RpcString>(
           serviceName: 'Echo',
           methodName: 'Echo',
           requestCodec: RpcString.codec,
@@ -71,7 +71,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: client);
       addTearDown(caller.close);
 
-      final response = await caller.unaryRequest<RpcString, RpcString>(
+      final response = await caller.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -176,7 +176,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: client);
       addTearDown(caller.close);
 
-      final response = await caller.unaryRequest<RpcString, RpcString>(
+      final response = await caller.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
         requestCodec: RpcString.codec,

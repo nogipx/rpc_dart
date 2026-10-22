@@ -80,7 +80,7 @@ Future<({String outcome, bool channelTornDown})> _send(int appBytes) async {
   String outcome;
   try {
     await caller
-        .unaryRequest<_Bytes, _Bytes>(
+        .unary<_Bytes, _Bytes>(
           serviceName: 'Svc',
           methodName: 'sink',
           request: _Bytes(Uint8List(appBytes)),

@@ -84,7 +84,7 @@ void main() {
   test('WITNESS a unary call with no deadline is not bounded', () async {
     final rig = _rig();
 
-    final call = rig.caller.unaryRequest<RpcString, RpcString>(
+    final call = rig.caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'never',
       request: 'x'.rpc,
@@ -147,7 +147,7 @@ void main() {
 
       Object? error;
       try {
-        await rig.caller.unaryRequest<RpcString, RpcString>(
+        await rig.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'never',
           request: 'x'.rpc,

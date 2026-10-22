@@ -98,7 +98,7 @@ void main() {
     final rig = await _connect();
     final context = RpcContext.empty();
 
-    await rig.caller.unaryRequest<RpcString, RpcString>(
+    await rig.caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,
@@ -120,7 +120,7 @@ void main() {
     final rig = await _connect();
     final context = RpcContext.empty().withTraceId('trace_pinned');
 
-    await rig.caller.unaryRequest<RpcString, RpcString>(
+    await rig.caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

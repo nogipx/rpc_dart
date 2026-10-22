@@ -157,7 +157,7 @@ void main() {
       );
       addTearDown(caller.close);
       final response = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'alive'.rpc,
@@ -210,7 +210,7 @@ void main() {
       addTearDown(caller.close);
 
       final response = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'hi'.rpc,

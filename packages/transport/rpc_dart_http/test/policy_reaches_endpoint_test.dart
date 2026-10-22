@@ -85,7 +85,7 @@ Future<_Rig> _serve({
 }
 
 Future<Object> _call(_Rig rig, String method) => rig.caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: method,
       request: 'x'.rpc,

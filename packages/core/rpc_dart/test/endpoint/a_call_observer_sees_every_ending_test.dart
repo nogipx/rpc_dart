@@ -123,7 +123,7 @@ void main() {
     });
   });
 
-  Future<RpcString> unary(String method) => caller.unaryRequest(
+  Future<RpcString> unary(String method) => caller.unary(
     serviceName: 'S',
     methodName: method,
     request: 'x'.rpc,

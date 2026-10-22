@@ -74,7 +74,7 @@ Future<String> _callEcho(int port) async {
     ).timeout(const Duration(seconds: 6));
     final caller = RpcCallerEndpoint(transport: t);
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'x'.rpc,
@@ -221,7 +221,7 @@ void main() {
       // 64 KiB header-block cap, so the guard must let the header block through
       // untouched. Sent as a real HTTP/2 header via the request context.
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,

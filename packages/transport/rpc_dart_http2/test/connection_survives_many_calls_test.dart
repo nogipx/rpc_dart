@@ -86,7 +86,7 @@ _connect() async {
 }
 
 Future<Object> _echo(RpcCallerEndpoint caller) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,

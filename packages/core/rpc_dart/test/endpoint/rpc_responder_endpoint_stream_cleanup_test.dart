@@ -81,7 +81,7 @@ void main() {
     });
 
     test('cleans up after unary call completes', () async {
-      final res = await callerEndpoint.unaryRequest<RpcString, RpcString>(
+      final res = await callerEndpoint.unary<RpcString, RpcString>(
         serviceName: _TestService.name,
         methodName: 'EchoUnary',
         requestCodec: RpcString.codec,

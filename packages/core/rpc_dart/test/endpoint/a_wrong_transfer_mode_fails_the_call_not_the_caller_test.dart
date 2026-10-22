@@ -30,7 +30,7 @@ void main() {
   test('unary with no codecs fails through its future', () async {
     late final Future<RpcString> call;
     expect(
-      () => call = caller.unaryRequest<RpcString, RpcString>(
+      () => call = caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'm',
         request: 'x'.rpc,
@@ -43,7 +43,7 @@ void main() {
   test('unary with one codec fails through its future', () async {
     late final Future<RpcString> call;
     expect(
-      () => call = caller.unaryRequest<RpcString, RpcString>(
+      () => call = caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'm',
         request: 'x'.rpc,

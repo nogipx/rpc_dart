@@ -84,7 +84,7 @@ _Rig _rig() {
 
   Future<String> call(String method) async {
     try {
-      final r = await caller.unaryRequest<RpcString, RpcString>(
+      final r = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: method,
         request: 'x'.rpc,

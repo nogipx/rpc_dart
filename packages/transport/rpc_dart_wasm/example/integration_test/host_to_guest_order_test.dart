@@ -108,7 +108,7 @@ void main() {
       );
 
       Future<String> say(String payload) => caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'Say',
             request: payload.rpc,

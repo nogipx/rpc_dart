@@ -82,7 +82,7 @@ Future<_Rig> _serve() async {
 }
 
 Future<RpcString> _send(RpcCallerEndpoint caller, int chars) =>
-    caller.unaryRequest<RpcString, RpcString>(
+    caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'sink',
       request: ('x' * chars).rpc,
@@ -139,7 +139,7 @@ void main() {
 
       await expectLater(
         rig.caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'nope',
               request: 'x'.rpc,

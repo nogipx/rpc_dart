@@ -93,7 +93,7 @@ void main() {
   Future<void> startInFlightCall() async {
     unawaited(
       caller
-          .unaryRequest<_Req, _Resp>(
+          .unary<_Req, _Resp>(
             serviceName: 'Parking',
             methodName: 'Park',
             request: _Req('x'),

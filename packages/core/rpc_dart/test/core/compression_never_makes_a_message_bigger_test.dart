@@ -96,7 +96,7 @@ Future<int> _frameSize(String text, {required bool compress}) async {
   });
 
   Future<String> call() async {
-    final r = await caller.unaryRequest<RpcString, RpcString>(
+    final r = await caller.unary<RpcString, RpcString>(
       serviceName: 'Echo',
       methodName: 'echo',
       request: text.rpc,

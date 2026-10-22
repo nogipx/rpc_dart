@@ -41,7 +41,7 @@ Future<String> _paramsSeenByWorker(Map<String, dynamic> customParams) async {
   final caller = RpcCallerEndpoint(transport: spawned.transport);
   try {
     final reported = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'EchoService',
           methodName: 'Params',
           requestCodec: RpcString.codec,
@@ -93,7 +93,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: spawned.transport);
       try {
         final response = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'EchoService',
               methodName: 'Echo',
               requestCodec: RpcString.codec,

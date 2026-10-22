@@ -111,7 +111,7 @@ Future<Msg> _call(
   RpcCallerEndpoint caller, {
   required String service,
   required bool withCodecs,
-}) => caller.unaryRequest<Msg, Msg>(
+}) => caller.unary<Msg, Msg>(
   serviceName: service,
   methodName: 'echo',
   request: const Msg('hi'),

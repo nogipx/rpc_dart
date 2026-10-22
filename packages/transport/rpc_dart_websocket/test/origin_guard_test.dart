@@ -83,7 +83,7 @@ Future<String> _call(_Rig rig, {String? origin}) async {
   final client = RpcWebSocketCallerTransport(IOWebSocketChannel(socket));
   final caller = RpcCallerEndpoint(transport: client);
   try {
-    final answer = await caller.unaryRequest<RpcString, RpcString>(
+    final answer = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'secret',
       request: 'x'.rpc,

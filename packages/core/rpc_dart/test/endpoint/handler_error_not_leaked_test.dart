@@ -163,7 +163,7 @@ void main() {
   test('unary does not leak the handler exception', () async {
     expectNoLeak(
       await failureText(
-        () => caller.unaryRequest<RpcString, RpcString>(
+        () => caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'unary',
           request: 'x'.rpc,
@@ -227,7 +227,7 @@ void main() {
       // caller something must still be able to. Silencing this too would make
       // the fix useless -- there would be no way to report anything.
       final text = await failureText(
-        () => caller.unaryRequest<RpcString, RpcString>(
+        () => caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'explicit',
           request: 'x'.rpc,

@@ -40,15 +40,14 @@ void main() {
         final context = RpcContext.empty().withBearerAuth('test-token-123');
 
         // Act
-        final response = await clientEndpoint
-            .unaryRequest<RpcString, RpcString>(
-              serviceName: 'TestService',
-              methodName: 'GetUserData',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: 'user-123'.rpc,
-              context: context,
-            );
+        final response = await clientEndpoint.unary<RpcString, RpcString>(
+          serviceName: 'TestService',
+          methodName: 'GetUserData',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+          request: 'user-123'.rpc,
+          context: context,
+        );
 
         // Assert
         expect(response.value, contains('Bearer test-token-123'));
@@ -65,15 +64,14 @@ void main() {
         final context = RpcContextUtils.withTracing(traceId: traceId);
 
         // Act
-        final response = await clientEndpoint
-            .unaryRequest<RpcString, RpcString>(
-              serviceName: 'TracingService',
-              methodName: 'TracedOperation',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: 'trace-me'.rpc,
-              context: context,
-            );
+        final response = await clientEndpoint.unary<RpcString, RpcString>(
+          serviceName: 'TracingService',
+          methodName: 'TracedOperation',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+          request: 'trace-me'.rpc,
+          context: context,
+        );
 
         // Assert
         expect(response.value, contains(traceId));
@@ -91,15 +89,14 @@ void main() {
                 .withAdditionalHeaders({'user-id': 'user-456'});
 
         // Act
-        final response = await clientEndpoint
-            .unaryRequest<RpcString, RpcString>(
-              serviceName: 'CombinedContextService',
-              methodName: 'ProcessWithFullContext',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: 'combined-request'.rpc,
-              context: combinedContext,
-            );
+        final response = await clientEndpoint.unary<RpcString, RpcString>(
+          serviceName: 'CombinedContextService',
+          methodName: 'ProcessWithFullContext',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+          request: 'combined-request'.rpc,
+          context: combinedContext,
+        );
 
         // Assert
         expect(response.value, contains('Bearer auth-token'));
@@ -434,7 +431,7 @@ void main() {
 
         // Act & Assert
         try {
-          await clientEndpoint.unaryRequest<RpcString, RpcString>(
+          await clientEndpoint.unary<RpcString, RpcString>(
             serviceName: 'ErrorService',
             methodName: 'ThrowError',
             requestCodec: RpcString.codec,

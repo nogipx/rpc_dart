@@ -331,7 +331,7 @@ Future<({int open, IRpcTransport transport, _CountingTransport? wrapper})> _run(
   final calls = <Future<Object>>[
     for (var i = 0; i < 60; i++)
       caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'park',
             request: 'x'.rpc,

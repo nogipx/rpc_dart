@@ -360,7 +360,7 @@ mixin _RpcOutgoingCalls {
     RpcContext? context,
   }) {
     final (rq, rs) = _codecsFor(requestCodec, responseCodec);
-    return _outgoing.unaryRequest<TRequest, TResponse>(
+    return _outgoing.unary<TRequest, TResponse>(
       serviceName: serviceName,
       methodName: methodName,
       request: request,

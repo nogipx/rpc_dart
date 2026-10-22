@@ -224,7 +224,7 @@ void main() {
     });
 
     test('basic_unary_call_succeeds', () async {
-      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+      final response = await clientEndpoint.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -238,7 +238,7 @@ void main() {
     test('concurrent_unary_calls_all_succeed', () async {
       final futures = List.generate(
         5,
-        (i) => clientEndpoint.unaryRequest<RpcString, RpcString>(
+        (i) => clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'Echo',
           methodName: 'Echo',
           requestCodec: RpcString.codec,
@@ -256,7 +256,7 @@ void main() {
 
     test('server_error_propagates_as_grpc_error', () async {
       await expectLater(
-        clientEndpoint.unaryRequest<RpcString, RpcString>(
+        clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'Echo',
           methodName: 'Throw',
           requestCodec: RpcString.codec,
@@ -272,7 +272,7 @@ void main() {
         'x-tenant-id': 'tenant-42',
       }).withBearerAuth('test-token');
 
-      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+      final response = await clientEndpoint.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'EchoHeaders',
         requestCodec: RpcString.codec,
@@ -287,7 +287,7 @@ void main() {
     test('large_payload_round_trip', () async {
       final large = 'x' * 65536;
 
-      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+      final response = await clientEndpoint.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -375,7 +375,7 @@ void main() {
       );
       final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
-      final callFuture = clientEndpoint.unaryRequest<RpcString, RpcString>(
+      final callFuture = clientEndpoint.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -709,7 +709,7 @@ void main() {
       final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
 
       await expectLater(
-        clientEndpoint.unaryRequest<RpcString, RpcString>(
+        clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Method',
           requestCodec: RpcString.codec,
@@ -950,7 +950,7 @@ void main() {
           baseUrl: 'http://127.0.0.1:$port',
         );
         final clientEndpoint = RpcCallerEndpoint(transport: clientTransport);
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'Echo',
           methodName: 'Echo',
           requestCodec: RpcString.codec,
@@ -1002,7 +1002,7 @@ void main() {
 
       final context = RpcContext.withHeaders({RpcHeaders.grpcEncoding: 'gzip'});
 
-      final response = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+      final response = await clientEndpoint.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -1093,14 +1093,13 @@ void main() {
           compressionEnabled: false,
         );
 
-        final response = await clientEndpoint
-            .unaryRequest<RpcString, RpcString>(
-              serviceName: 'Echo',
-              methodName: 'Echo',
-              requestCodec: RpcString.codec,
-              responseCodec: RpcString.codec,
-              request: RpcString('hello'),
-            );
+        final response = await clientEndpoint.unary<RpcString, RpcString>(
+          serviceName: 'Echo',
+          methodName: 'Echo',
+          requestCodec: RpcString.codec,
+          responseCodec: RpcString.codec,
+          request: RpcString('hello'),
+        );
 
         expect(response.value, 'Echo: hello');
 

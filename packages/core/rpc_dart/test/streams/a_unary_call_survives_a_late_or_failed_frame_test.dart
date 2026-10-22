@@ -42,7 +42,7 @@ void main() {
           isClient: true,
         ),
       );
-      final call = caller.unaryRequest<RpcString, RpcString>(
+      final call = caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'm',
         request: 'q'.rpc,
@@ -87,7 +87,7 @@ void main() {
         ),
       );
       outcome = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'm',
             request: 'q'.rpc,

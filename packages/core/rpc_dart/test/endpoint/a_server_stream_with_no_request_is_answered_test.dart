@@ -71,7 +71,7 @@ Future<void> _run(Uint8List? payload) async {
     everyElement('${RpcStatus.invalidArgument.code}'),
     reason: 'a call with no request message must be refused, not left open',
   );
-  final answer = await caller.unaryRequest<RpcString, RpcString>(
+  final answer = await caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'Echo',
     request: 'x'.rpc,

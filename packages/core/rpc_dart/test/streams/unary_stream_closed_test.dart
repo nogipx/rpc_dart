@@ -73,7 +73,7 @@ _Rig _connect() {
 }
 
 Future<RpcString> _call(_Rig rig, String method, {RpcContext? ctx}) {
-  return rig.caller.unaryRequest<RpcString, RpcString>(
+  return rig.caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: method,
     request: 'a'.rpc,

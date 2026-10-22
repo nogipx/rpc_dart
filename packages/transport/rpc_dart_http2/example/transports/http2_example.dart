@@ -74,7 +74,7 @@ Future<void> _demonstrateUnaryRpc(RpcCallerEndpoint endpoint) async {
   print('   sending: "Hello, HTTP/2 Unary World!"');
 
   try {
-    final response = await endpoint.unaryRequest<RpcString, RpcString>(
+    final response = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'DemoService',
       methodName: 'Echo',
       requestCodec: RpcString.codec,

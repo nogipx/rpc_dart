@@ -157,7 +157,7 @@ void main() {
 
       expect(contract.setupRuns, 1);
       expect(
-        (await caller.unaryRequest<RpcString, RpcString>(
+        (await caller.unary<RpcString, RpcString>(
           serviceName: 'Ok',
           methodName: 'a',
           request: 'x'.rpc,
@@ -190,7 +190,7 @@ void main() {
         reason: 'registration must not run setup a second time',
       );
       expect(
-        (await caller.unaryRequest<RpcString, RpcString>(
+        (await caller.unary<RpcString, RpcString>(
           serviceName: 'Ok',
           methodName: 'a',
           request: 'y'.rpc,
@@ -229,7 +229,7 @@ void main() {
 
       for (final rig in rigs) {
         expect(
-          (await rig.$3.unaryRequest<RpcString, RpcString>(
+          (await rig.$3.unary<RpcString, RpcString>(
             serviceName: 'Ok',
             methodName: 'a',
             request: 'z'.rpc,

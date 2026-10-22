@@ -183,7 +183,7 @@ Future<void> _startCall(_Rig rig, String shape) {
   switch (shape) {
     case 'unary':
       return rig.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'unary',
             request: 'x'.rpc,
@@ -289,7 +289,7 @@ void main() {
       // The abort must not poison a call that already completed.
       final rig = _connect();
       final r = await rig.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'quick',
             request: 'hi'.rpc,

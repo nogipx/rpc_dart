@@ -125,7 +125,7 @@ Future<Object?> _errorOf(
 }) async {
   try {
     await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: service,
           methodName: method,
           request: 'hi'.rpc,
@@ -234,7 +234,7 @@ void main() {
       final caller = _rig(const RpcSecurityPolicy(maxHeaderValueBytes: 64));
 
       final response = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'ok',
             request: 'hi'.rpc,

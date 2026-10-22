@@ -108,7 +108,7 @@ void main() {
       );
 
       final caught = await _catch(
-        () => rig.caller.unaryRequest<_Msg, _Msg>(
+        () => rig.caller.unary<_Msg, _Msg>(
           serviceName: 'S',
           methodName: 'M',
           request: _Msg('x'),
@@ -164,7 +164,7 @@ void main() {
 
       final caught = await _catch(
         () => rig.caller
-            .unaryRequest<_Msg, _Msg>(
+            .unary<_Msg, _Msg>(
               serviceName: 'S',
               methodName: 'M',
               request: _Msg('x'),
@@ -186,7 +186,7 @@ void main() {
 
       final caught = await _catch(
         () => rig.caller
-            .unaryRequest<_Msg, _Msg>(
+            .unary<_Msg, _Msg>(
               serviceName: 'S',
               methodName: 'M',
               request: _Msg('x'),
@@ -256,7 +256,7 @@ void main() {
       _peer(rig.peer, payload: _framed('ok'), status: '${RpcStatus.ok.code}');
 
       final response = await rig.caller
-          .unaryRequest<_Msg, _Msg>(
+          .unary<_Msg, _Msg>(
             serviceName: 'S',
             methodName: 'M',
             request: _Msg('x'),
@@ -290,7 +290,7 @@ void main() {
   });
 
   group('a closed endpoint refuses every call shape', () {
-    // The pre-flight guard covered ping, unaryRequest and serverStream and not
+    // The pre-flight guard covered ping, unary and serverStream and not
     // the other two, so a call on a closed endpoint got as far as building a
     // context and reserving a stream id.
     //
@@ -339,9 +339,9 @@ void main() {
     });
 
     // CONTROL: the three that always had the guard still have it.
-    test('CONTROL: unaryRequest', () {
+    test('CONTROL: unary', () {
       expect(
-        () => caller.unaryRequest<_Msg, _Msg>(
+        () => caller.unary<_Msg, _Msg>(
           serviceName: 'S',
           methodName: 'M',
           request: _Msg('x'),

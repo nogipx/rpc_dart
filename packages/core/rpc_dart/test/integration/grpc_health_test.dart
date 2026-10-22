@@ -244,7 +244,7 @@ void main() {
       });
 
       final response = await caller
-          .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+          .unary<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
             serviceName: GrpcHealthCheckContract.grpcServiceName,
             methodName: 'Check',
             requestCodec: GrpcHealthCheckRequest.codec,
@@ -296,7 +296,7 @@ void main() {
       healthStatus.setStatus('', GrpcServingStatus.serving);
 
       final response = await caller
-          .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+          .unary<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
             serviceName: GrpcHealthCheckContract.grpcServiceName,
             methodName: 'Check',
             requestCodec: GrpcHealthCheckRequest.codec,
@@ -311,7 +311,7 @@ void main() {
       healthStatus.setStatus('MySvc', GrpcServingStatus.notServing);
 
       final response = await caller
-          .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+          .unary<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
             serviceName: GrpcHealthCheckContract.grpcServiceName,
             methodName: 'Check',
             requestCodec: GrpcHealthCheckRequest.codec,
@@ -324,7 +324,7 @@ void main() {
 
     test('Check fails with NOT_FOUND for unregistered service', () async {
       final call = caller
-          .unaryRequest<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
+          .unary<GrpcHealthCheckRequest, GrpcHealthCheckResponse>(
             serviceName: GrpcHealthCheckContract.grpcServiceName,
             methodName: 'Check',
             requestCodec: GrpcHealthCheckRequest.codec,

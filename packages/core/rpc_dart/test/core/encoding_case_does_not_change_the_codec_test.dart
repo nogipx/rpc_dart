@@ -55,7 +55,7 @@ Future<String> _callWith(String? encoding) async {
   });
 
   try {
-    final r = await caller.unaryRequest<RpcString, RpcString>(
+    final r = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Echo',
       request: 'x'.rpc,

@@ -64,7 +64,7 @@ void main() {
 
     Future<String> call(String service, String method) async {
       try {
-        final r = await caller.unaryRequest<RpcString, RpcString>(
+        final r = await caller.unary<RpcString, RpcString>(
           serviceName: service,
           methodName: method,
           request: 'x'.rpc,

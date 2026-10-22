@@ -168,7 +168,7 @@ void main() {
         rig.client.releaseStreamId(id);
       }
       final r = await rig.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'unary',
             request: 'x'.rpc,
@@ -210,7 +210,7 @@ void main() {
     test('a unary handler outliving the window still answers', () async {
       // The window covers dispatch, not execution.
       final rig = _connect();
-      final call = rig.caller.unaryRequest<RpcString, RpcString>(
+      final call = rig.caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'slowUnary',
         request: 'x'.rpc,
@@ -274,7 +274,7 @@ void main() {
     test('ordinary calls are unaffected under repetition', () async {
       final rig = _connect();
       for (var i = 0; i < 25; i++) {
-        final r = await rig.caller.unaryRequest<RpcString, RpcString>(
+        final r = await rig.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'unary',
           request: 'n$i'.rpc,

@@ -145,12 +145,11 @@ void main() {
 
       // Make the call. No codecs: at the endpoint level that is the object
       // path, which this zero-copy transport carries.
-      final response = await callerEndpoint
-          .unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'TestService',
-            methodName: 'processData',
-            request: request,
-          );
+      final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+        serviceName: 'TestService',
+        methodName: 'processData',
+        request: request,
+      );
 
       print('\nanswer:');
       print('   result: ${response.result}');
@@ -199,14 +198,13 @@ void main() {
         final sub = serverTransport.incomingMessages.listen(sentMessages.add);
         addTearDown(sub.cancel);
 
-        final response = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
-              serviceName: 'TestService',
-              methodName: 'processData',
-              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-              request: TestRequest('Serialized', ['a', 'b']),
-            );
+        final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+          serviceName: 'TestService',
+          methodName: 'processData',
+          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          request: TestRequest('Serialized', ['a', 'b']),
+        );
         await Future<void>.delayed(Duration(milliseconds: 1));
 
         expect(response.count, equals(2));
@@ -268,7 +266,7 @@ void main() {
       () async {
         Object? caught;
         try {
-          await callerEndpoint.unaryRequest<TestRequest, TestResponse>(
+          await callerEndpoint.unary<TestRequest, TestResponse>(
             serviceName: 'TestService',
             methodName: 'failUnavailable',
             // No codecs -> the zero-copy path through _executeUnaryCall.

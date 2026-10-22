@@ -65,7 +65,7 @@ Future<_Run> _restart(String window) async {
         transport: RpcWebSocketCallerTransport(clientWs),
       );
       inFlight = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Slow',
             methodName: 'wait',
             request: 'x'.rpc,

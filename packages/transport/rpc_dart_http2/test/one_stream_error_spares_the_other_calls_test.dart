@@ -36,7 +36,7 @@ final class _Svc extends RpcResponderContract {
 }
 
 Future<String> _call(RpcCallerEndpoint caller, String method) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: method,
       request: 'x'.rpc,

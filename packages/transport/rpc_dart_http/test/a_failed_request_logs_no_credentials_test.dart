@@ -38,7 +38,7 @@ void main() {
     addTearDown(caller.close);
 
     await expectLater(
-      caller.unaryRequest<RpcString, RpcString>(
+      caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'm',
         request: 'x'.rpc,

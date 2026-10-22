@@ -129,7 +129,7 @@ void main() {
     addTearDown(caller.close);
 
     final answer = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'tls'.rpc,

@@ -51,7 +51,7 @@ Future<void> main(List<String> args) async {
   final caller = RpcCallerEndpoint(transport: client);
   try {
     await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'sink',
           request: ('x' * (2 * 1024 * 1024)).rpc,

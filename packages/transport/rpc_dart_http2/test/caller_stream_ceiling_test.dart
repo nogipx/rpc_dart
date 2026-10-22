@@ -84,7 +84,7 @@ Future<({RpcCallerEndpoint caller, RpcHttp2CallerTransport client})> _connect(
 }
 
 Future<Object> _call(RpcCallerEndpoint caller, String method) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: method,
       request: 'x'.rpc,

@@ -62,7 +62,7 @@ Future<RpcCallerEndpoint> _open(int port) async => RpcCallerEndpoint(
 
 Future<String> _echo(RpcCallerEndpoint caller) async =>
     (await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'echo',
               request: 'ok'.rpc,

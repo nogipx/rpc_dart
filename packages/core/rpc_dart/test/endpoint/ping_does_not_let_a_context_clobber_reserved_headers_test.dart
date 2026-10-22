@@ -151,7 +151,7 @@ void main() {
         'x-tenant': 'acme',
       });
 
-      final response = await caller.unaryRequest<RpcString, RpcString>(
+      final response = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'x'.rpc,

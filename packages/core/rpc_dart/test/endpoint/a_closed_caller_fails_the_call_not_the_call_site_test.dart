@@ -27,7 +27,7 @@ void main() {
     final caller = await _closedCaller();
     late Future<RpcString> call;
     expect(
-      () => call = caller.unaryRequest<RpcString, RpcString>(
+      () => call = caller.unary<RpcString, RpcString>(
         serviceName: 'S',
         methodName: 'M',
         request: 'q'.rpc,

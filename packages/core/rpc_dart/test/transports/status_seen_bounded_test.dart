@@ -173,7 +173,7 @@ void main() {
       responder.start();
 
       for (var i = 0; i < 20; i++) {
-        final r = await caller.unaryRequest<RpcString, RpcString>(
+        final r = await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'x'.rpc,

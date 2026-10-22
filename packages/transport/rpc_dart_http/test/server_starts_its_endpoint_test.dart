@@ -64,7 +64,7 @@ Future<String> _callThrough({required bool appCallsStart}) async {
 
   try {
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'x'.rpc,
@@ -134,7 +134,7 @@ void main() {
 
     for (var i = 0; i < 5; i++) {
       await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'count',
             request: 'x'.rpc,

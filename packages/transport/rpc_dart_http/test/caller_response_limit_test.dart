@@ -76,7 +76,7 @@ Future<Object?> _call(HttpServer server, {RpcSecurityPolicy? policy}) async {
   final caller = RpcCallerEndpoint(transport: transport);
   try {
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'x'.rpc,

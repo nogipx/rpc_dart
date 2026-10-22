@@ -65,7 +65,7 @@ connection is lost.
 
 **Call shapes are built by the endpoint.** `UnaryCaller`, the stream callers and
 the stream responders are no longer built by hand. Use the endpoint calls
-(`unaryRequest`, `serverStream`, ...) or generated callers.
+(`unary`, `serverStream`, ...) or generated callers.
 
 **Errors.** `RpcException` is abstract, and every error carries a gRPC status.
 No error message is a contract: match on the type or the status.
@@ -100,6 +100,7 @@ No error message is a contract: match on the type or the status.
 | `endpoint.cancelAllMethods`, `endpoint.cancelServiceMethods` | `cancelAll`, `cancelService` |
 | `RpcCallerEndpoint.start`, `RpcEndpointBase.start` | gone; a caller needs no start, a responder or peer endpoint still has `start()` |
 | `ping(timeout: d)` | `ping(context: RpcContext.withTimeout(d))`; the context's deadline is the one bound, as for any call |
+| `endpoint.unaryRequest` | `endpoint.unary`, named like the other three shapes |
 | `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
 | `SpanStatus` | `LogSpanStatus`; it no longer clashes with OpenTelemetry's `SpanStatus` |
 | `RpcStatus` as `int` constants, `RpcStatusException.statusCode` an `int` | `RpcStatus` is an enum with `code` and `grpcName`, `statusCode` is one of its values, `RpcStatus.fromCode(n)` reads a wire number (outside 0..16 is `unknown`); `RpcStatus.isFault(code)` is `status.isFault` |

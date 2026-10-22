@@ -51,7 +51,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: transport);
 
       final call = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Slow',
             request: 'x'.rpc,

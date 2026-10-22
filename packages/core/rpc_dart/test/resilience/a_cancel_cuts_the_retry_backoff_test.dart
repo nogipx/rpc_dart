@@ -50,7 +50,7 @@ Future<(RpcStatus?, int)> _call({Duration? cancelAfter}) async {
   }
   RpcStatus? status;
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'always',
       request: 'x'.rpc,

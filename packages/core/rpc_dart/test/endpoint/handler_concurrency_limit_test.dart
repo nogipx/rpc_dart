@@ -179,7 +179,7 @@ Future<Object?> _call(
   String method = 'work',
 }) async {
   try {
-    await rig.caller.unaryRequest<RpcString, RpcString>(
+    await rig.caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: method,
       request: 'x'.rpc,

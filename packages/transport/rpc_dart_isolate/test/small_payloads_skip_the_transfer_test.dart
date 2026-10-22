@@ -72,7 +72,7 @@ void main() {
           Uint8List(size)..fillRange(0, size, 65),
         );
         final reply = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'length',
               request: body.rpc,

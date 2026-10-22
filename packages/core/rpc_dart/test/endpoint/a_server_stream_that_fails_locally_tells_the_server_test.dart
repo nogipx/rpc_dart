@@ -170,7 +170,7 @@ Future<void> _run({
     0,
     reason: 'the server still runs a handler for a call its caller ended',
   );
-  final answer = await caller.unaryRequest<RpcString, RpcString>(
+  final answer = await caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'ping',
     request: 'x'.rpc,

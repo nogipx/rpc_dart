@@ -67,7 +67,7 @@ void main() {
     final caller = RpcCallerEndpoint(transport: transport);
     try {
       await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,

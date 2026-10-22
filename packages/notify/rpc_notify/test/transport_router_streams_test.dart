@@ -438,7 +438,7 @@ void main() {
             // 1. Unary Request
             futures.add(() async {
               final response = await clientEndpoint
-                  .unaryRequest<RpcString, RpcString>(
+                  .unary<RpcString, RpcString>(
                     serviceName: 'MixedService',
                     methodName: 'Echo',
                     requestCodec: RpcString.codec,

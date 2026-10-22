@@ -183,14 +183,13 @@ void main() {
       responderEndpoint.start();
 
       // Send the request through the caller.
-      final response = await callerEndpoint
-          .unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'TestService',
-            methodName: 'UnaryMethod',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-            request: TestRequest('Test request'),
-          );
+      final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+        serviceName: 'TestService',
+        methodName: 'UnaryMethod',
+        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+        request: TestRequest('Test request'),
+      );
 
       // The answer, and that the handler ran.
       expect(response.message, equals('Reply to: Test request'));
@@ -267,14 +266,13 @@ void main() {
       responderEndpoint.start();
 
       // Call a SubService method.
-      final response = await callerEndpoint
-          .unaryRequest<TestRequest, TestResponse>(
-            serviceName: 'SubService',
-            methodName: 'SubUnaryMethod',
-            requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-            responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-            request: TestRequest('SubService test'),
-          );
+      final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+        serviceName: 'SubService',
+        methodName: 'SubUnaryMethod',
+        requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+        responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+        request: TestRequest('SubService test'),
+      );
 
       // The answer, and that the handler ran.
       expect(response.message, equals('SubService reply to: SubService test'));
@@ -422,14 +420,13 @@ void main() {
         responderEndpoint.unregisterServiceContract('TestService');
 
         // The one left still answers.
-        final response = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
-              serviceName: 'ParentService',
-              methodName: 'ParentMethod',
-              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-              request: TestRequest('After unregister test'),
-            );
+        final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+          serviceName: 'ParentService',
+          methodName: 'ParentMethod',
+          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          request: TestRequest('After unregister test'),
+        );
 
         expect(
           response.message,
@@ -474,14 +471,13 @@ void main() {
         // It is registered, and it answers.
         expect(responderEndpoint.registeredContracts, contains('TestService'));
 
-        final response = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
-              serviceName: 'TestService',
-              methodName: 'UnaryMethod',
-              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-              request: TestRequest('After start test'),
-            );
+        final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+          serviceName: 'TestService',
+          methodName: 'UnaryMethod',
+          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          request: TestRequest('After start test'),
+        );
 
         expect(response.message, equals('Reply to: After start test'));
         expect(testService.callLog, contains('UnaryMethod: After start test'));
@@ -501,7 +497,7 @@ void main() {
 
         // The new service answers.
         final newResponse = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
+            .unary<TestRequest, TestResponse>(
               serviceName: 'TestService',
               methodName: 'UnaryMethod',
               requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
@@ -531,14 +527,13 @@ void main() {
         );
 
         // Call a method that allocates them.
-        final response = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
-              serviceName: 'ResourceHeavyService',
-              methodName: 'CreateResourceIntensiveOperation',
-              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-              request: TestRequest('setup resources'),
-            );
+        final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+          serviceName: 'ResourceHeavyService',
+          methodName: 'CreateResourceIntensiveOperation',
+          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          request: TestRequest('setup resources'),
+        );
 
         expect(response.message, contains('resources created'));
         expect(resourceService.isResourcesActive(), isTrue);
@@ -558,14 +553,13 @@ void main() {
         responderEndpoint.start();
 
         // Allocate them.
-        final response = await callerEndpoint
-            .unaryRequest<TestRequest, TestResponse>(
-              serviceName: 'ResourceHeavyService',
-              methodName: 'CreateResourceIntensiveOperation',
-              requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
-              responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
-              request: TestRequest('setup resources'),
-            );
+        final response = await callerEndpoint.unary<TestRequest, TestResponse>(
+          serviceName: 'ResourceHeavyService',
+          methodName: 'CreateResourceIntensiveOperation',
+          requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),
+          responseCodec: RpcCodec<TestResponse>(TestResponse.fromJson),
+          request: TestRequest('setup resources'),
+        );
 
         expect(response.message, contains('resources created'));
         expect(resourceService.isResourcesActive(), isTrue);
@@ -596,7 +590,7 @@ void main() {
         newResponderEndpoint.start();
 
         // Allocate resources in both of them.
-        await newCallerEndpoint.unaryRequest<TestRequest, TestResponse>(
+        await newCallerEndpoint.unary<TestRequest, TestResponse>(
           serviceName: 'ResourceHeavyService',
           methodName: 'CreateResourceIntensiveOperation',
           requestCodec: RpcCodec<TestRequest>(TestRequest.fromJson),

@@ -113,7 +113,7 @@ void main() {
       );
     });
     await expectLater(
-      caller.unaryRequest<RpcString, RpcString>(
+      caller.unary<RpcString, RpcString>(
         serviceName: 'S',
         methodName: 'M',
         request: 'q'.rpc,

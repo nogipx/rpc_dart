@@ -118,7 +118,7 @@ Future<Object?> _drive(_Rig rig, String shape) async {
   try {
     switch (shape) {
       case 'unary':
-        await rig.caller.unaryRequest<Msg, Msg>(
+        await rig.caller.unary<Msg, Msg>(
           serviceName: 'Svc',
           methodName: 'unary',
           request: const Msg('a'),
@@ -189,7 +189,7 @@ void main() {
       final rig = _connect();
       Object? thrown;
       try {
-        await rig.caller.unaryRequest<Msg, Msg>(
+        await rig.caller.unary<Msg, Msg>(
           serviceName: 'Svc',
           methodName: 'plain',
           request: const Msg('a'),
@@ -205,7 +205,7 @@ void main() {
 
     test('a successful zero-copy call passes the object through', () async {
       final rig = _connect();
-      final r = await rig.caller.unaryRequest<Msg, Msg>(
+      final r = await rig.caller.unary<Msg, Msg>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: const Msg('hi'),
@@ -217,7 +217,7 @@ void main() {
     test('repeated calls leave no per-call state behind', () async {
       final rig = _connect();
       for (var i = 0; i < 20; i++) {
-        await rig.caller.unaryRequest<Msg, Msg>(
+        await rig.caller.unary<Msg, Msg>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: const Msg('x'),

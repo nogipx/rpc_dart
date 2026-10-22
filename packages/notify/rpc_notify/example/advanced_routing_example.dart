@@ -126,7 +126,7 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   // === ТЕСТ 1: Обычный пользователь ===
   print('\n   1️⃣ Обычный пользователь загружает профиль...');
   try {
-    final result1 = await endpoint.unaryRequest<RpcString, RpcString>(
+    final result1 = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'UserService',
       methodName: 'getProfile',
       requestCodec: RpcString.codec,
@@ -141,7 +141,7 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   // === ТЕСТ 2: Premium пользователь ===
   print('\n   2️⃣ Premium пользователь загружает профиль...');
   try {
-    final result2 = await endpoint.unaryRequest<RpcString, RpcString>(
+    final result2 = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'UserService',
       methodName: 'getProfile',
       requestCodec: RpcString.codec,
@@ -156,7 +156,7 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   // === ТЕСТ 3: A/B тестирование платежей группа A ===
   print('\n   3️⃣ Платеж пользователя группы A (Payment V2)...');
   try {
-    final result3 = await endpoint.unaryRequest<RpcString, RpcString>(
+    final result3 = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'PaymentService',
       methodName: 'processPayment',
       requestCodec: RpcString.codec,
@@ -171,7 +171,7 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   // === ТЕСТ 4: A/B тестирование платежей группа B ===
   print('\n   4️⃣ Платеж пользователя группы B (Payment V1)...');
   try {
-    final result4 = await endpoint.unaryRequest<RpcString, RpcString>(
+    final result4 = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'PaymentService',
       methodName: 'processPayment',
       requestCodec: RpcString.codec,
@@ -186,7 +186,7 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   // === ТЕСТ 5: Заказы ===
   print('\n   5️⃣ Создание нового заказа...');
   try {
-    final result5 = await endpoint.unaryRequest<RpcString, RpcString>(
+    final result5 = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'OrderService',
       methodName: 'createOrder',
       requestCodec: RpcString.codec,
@@ -200,7 +200,7 @@ Future<void> _testRealWorldRouting(RpcCallerEndpoint endpoint) async {
   // === ТЕСТ 6: Аудит ===
   print('\n   6️⃣ Аудит операций безопасности...');
   try {
-    final result6 = await endpoint.unaryRequest<RpcString, RpcString>(
+    final result6 = await endpoint.unary<RpcString, RpcString>(
       serviceName: 'AuditService',
       methodName: 'logSecurityEvent',
       requestCodec: RpcString.codec,

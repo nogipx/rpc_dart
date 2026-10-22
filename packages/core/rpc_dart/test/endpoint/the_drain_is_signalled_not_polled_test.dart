@@ -59,7 +59,7 @@ Future<_Rig> _callInFlight() async {
   final caller = RpcCallerEndpoint(transport: client);
 
   final call = caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'Slow',
         methodName: 'wait',
         request: 'x'.rpc,

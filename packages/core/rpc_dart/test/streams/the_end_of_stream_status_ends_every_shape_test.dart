@@ -52,7 +52,7 @@ Future<String> _outcome(
   final Future<String> outcome = switch (shape) {
     'unary' =>
       caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'm',
             request: 'q'.rpc,

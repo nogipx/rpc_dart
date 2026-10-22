@@ -69,7 +69,7 @@ Future<String> _send({
     await client.close();
   });
   final answer = await caller
-      .unaryRequest<RpcString, RpcString>(
+      .unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'length',
         request: ('a' * _size).rpc,

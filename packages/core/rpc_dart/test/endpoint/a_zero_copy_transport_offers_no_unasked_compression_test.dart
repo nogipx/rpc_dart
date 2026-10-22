@@ -81,7 +81,7 @@ Future<List<String?>> _offered({required bool compressionEnabled}) async {
   });
 
   final q = 'q'.rpc;
-  await caller.unaryRequest<RpcString, RpcString>(
+  await caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'u',
     request: q,

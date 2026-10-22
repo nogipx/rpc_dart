@@ -108,7 +108,7 @@ void main() {
   Future<String> ping() async {
     try {
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'ping',
             request: '?'.rpc,

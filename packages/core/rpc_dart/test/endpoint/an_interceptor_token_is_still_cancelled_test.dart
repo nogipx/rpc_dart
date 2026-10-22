@@ -79,7 +79,7 @@ void main() {
       });
 
       final call = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'S',
             methodName: 'park',
             request: 'x'.rpc,
@@ -117,7 +117,7 @@ void main() {
 
       final token = RpcCancellationToken();
       final call = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'S',
             methodName: 'park',
             request: 'x'.rpc,

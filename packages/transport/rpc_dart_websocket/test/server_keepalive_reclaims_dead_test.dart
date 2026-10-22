@@ -163,7 +163,7 @@ void main() {
       );
       final caller = RpcCallerEndpoint(transport: t);
       final r = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,
@@ -260,7 +260,7 @@ void main() {
       // Well past several ping intervals, the connection must still serve.
       for (var i = 0; i < 4; i++) {
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x'.rpc,

@@ -85,7 +85,7 @@ void main() {
     final calls = <Future<Object>>[
       for (var i = 0; i < 200; i++)
         caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'park',
               request: 'x'.rpc,

@@ -69,7 +69,7 @@ void main() {
       Future<String> say(String v, Duration budget) async {
         try {
           final r = await caller
-              .unaryRequest<RpcString, RpcString>(
+              .unary<RpcString, RpcString>(
                 serviceName: 'Echo',
                 methodName: 'Say',
                 request: v.rpc,

@@ -108,7 +108,7 @@ Future<String> _call(
   RpcContext? context,
   RpcCancellationToken? cancelAfter,
 }) async {
-  final call = caller.unaryRequest<RpcString, RpcString>(
+  final call = caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: method,
     request: 'x'.rpc,

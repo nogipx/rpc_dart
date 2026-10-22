@@ -82,7 +82,7 @@ void main() {
     addTearDown(caller.close);
 
     // A real call, so the connection is fully established before reading.
-    final response = await caller.unaryRequest<RpcString, RpcString>(
+    final response = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'x'.rpc,
@@ -146,7 +146,7 @@ void main() {
         logger: LogScope.noop,
       );
       final caller = RpcCallerEndpoint(transport: client);
-      final response = await caller.unaryRequest<RpcString, RpcString>(
+      final response = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'call$i'.rpc,

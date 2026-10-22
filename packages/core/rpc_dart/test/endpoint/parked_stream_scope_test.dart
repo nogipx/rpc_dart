@@ -138,7 +138,7 @@ Future<void> _park(_Rig rig, int n, {required bool dispatch}) async {
 Future<Object?> _callPing(_Rig rig) async {
   try {
     await rig.caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'ping',
           request: 'x'.rpc,

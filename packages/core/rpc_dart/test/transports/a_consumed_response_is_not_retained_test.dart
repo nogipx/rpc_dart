@@ -109,7 +109,7 @@ void main() {
           await responder.close();
         });
 
-        final r = await caller.unaryRequest<RpcString, RpcString>(
+        final r = await caller.unary<RpcString, RpcString>(
           serviceName: 'Feed',
           methodName: 'echo',
           request: 'x'.rpc,
@@ -172,7 +172,7 @@ void main() {
           await responder.close();
         });
 
-        await caller.unaryRequest<RpcString, RpcString>(
+        await caller.unary<RpcString, RpcString>(
           serviceName: 'Feed',
           methodName: 'echo',
           request: 'x'.rpc,

@@ -94,7 +94,7 @@ void main() {
   Future<Object?> callAndCatch(RpcCallerEndpoint caller) async {
     try {
       await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Echo',
             request: 'x'.rpc,

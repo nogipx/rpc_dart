@@ -47,7 +47,7 @@ void main() {
       try {
         answer =
             (await caller
-                    .unaryRequest<RpcString, RpcString>(
+                    .unary<RpcString, RpcString>(
                       serviceName: 'Echo',
                       methodName: 'AfterPromise',
                       request: '100'.rpc,

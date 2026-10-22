@@ -53,7 +53,7 @@ void main() {
       var worstMedianMs = 0;
       for (final wanted in [1, 10, 100, 1000]) {
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Echo',
               methodName: 'TimerLag',
               request: '$wanted'.rpc,

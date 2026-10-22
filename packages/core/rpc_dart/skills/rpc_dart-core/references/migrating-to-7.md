@@ -44,7 +44,7 @@ builds a transport, a channel or frames imports
 | `logger:` on an endpoint, `RpcConnectionHost(endpointLogger:)` | `logController:` (a `LogController`) |
 | `RpcConnectionLogger` | `LogScope` |
 | `RpcCodec.withDecoder(T.fromJson)`, `RpcCodec.fromBytes` | `RpcCodec<T>(T.fromJson)` |
-| `UnaryCaller`, stream callers and responders built by hand | endpoint calls (`unaryRequest`, `serverStream`, ...) or a caller contract |
+| `UnaryCaller`, stream callers and responders built by hand | endpoint calls (`unary`, `serverStream`, ...) or a caller contract |
 | `transferMode:` on `unaryRequest` | the contract's transfer mode |
 | `kind: RpcMethodKind.x` in `@RpcMethod` | `RpcMethodType.x`, or the named constructors `@RpcMethod.unary(...)` |
 | one interceptor overriding the four `intercept*` methods to observe calls | `extends RpcCallObserverInterceptor<S>` |
@@ -72,6 +72,7 @@ builds a transport, a channel or frames imports
 | `endpoint.cancelAllMethods()`, `endpoint.cancelServiceMethods(s)` | `cancelAll()`, `cancelService(s)` |
 | `start()` on an `RpcCallerEndpoint` | delete the call; only a responder or peer endpoint starts |
 | `endpoint.ping(timeout: d)` | `endpoint.ping(context: RpcContext.withTimeout(d))` |
+| `endpoint.unaryRequest(...)` | `endpoint.unary(...)`, named like `serverStream`, `clientStream`, `bidirectionalStream` |
 | `getCancellationTokensForMethod(...)` | gone; `activeCallCount`, or a token in the call's context |
 | `SpanStatus` | `LogSpanStatus` |
 | `RpcStatus` `int` constants; `RpcStatusException(14, ...)`; `int status = e.statusCode` | `RpcStatus` is an enum and `statusCode` its value: `RpcStatus.unavailable`, `RpcStatus.fromCode(14)`; the wire number is `status.code` |

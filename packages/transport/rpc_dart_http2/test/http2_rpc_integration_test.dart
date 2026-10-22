@@ -60,7 +60,7 @@ void main() {
       final request = RpcString('Check nested prefix elimination');
       final payloadFuture = serverRequestPayloads.stream.first;
 
-      final response = await callerEndpoint.unaryRequest<RpcString, RpcString>(
+      final response = await callerEndpoint.unary<RpcString, RpcString>(
         serviceName: 'TestService',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -91,7 +91,7 @@ void main() {
 
     test('unary rpc through caller and responder', () async {
       // Act: a unary call through the high-level API.
-      final response = await callerEndpoint.unaryRequest<RpcString, RpcString>(
+      final response = await callerEndpoint.unary<RpcString, RpcString>(
         serviceName: 'TestService',
         methodName: 'Echo',
         requestCodec: RpcString.codec,
@@ -269,7 +269,7 @@ void main() {
       // Unary
       futures.add(
         callerEndpoint
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'TestService',
               methodName: 'Echo',
               requestCodec: RpcString.codec,

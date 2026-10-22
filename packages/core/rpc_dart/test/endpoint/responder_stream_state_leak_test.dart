@@ -66,7 +66,7 @@ void main() {
 
     for (var i = 0; i < 10; i++) {
       await expectLater(
-        caller.unaryRequest<RpcString, RpcString>(
+        caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'missing',
           request: 'x'.rpc,
@@ -87,7 +87,7 @@ void main() {
 
   test('successful calls still work and leave no state behind', () async {
     for (var i = 0; i < 5; i++) {
-      final response = await caller.unaryRequest<RpcString, RpcString>(
+      final response = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'hello'.rpc,
@@ -105,7 +105,7 @@ void main() {
     // The guard that stops a torn-down stream from being resurrected must not
     // block a genuinely new call, which always opens with a methodPath frame.
     await expectLater(
-      caller.unaryRequest<RpcString, RpcString>(
+      caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'missing',
         request: 'x'.rpc,
@@ -115,7 +115,7 @@ void main() {
       throwsA(anything),
     );
 
-    final response = await caller.unaryRequest<RpcString, RpcString>(
+    final response = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'still-works'.rpc,

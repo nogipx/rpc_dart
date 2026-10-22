@@ -33,14 +33,13 @@ final class _Record extends IRpcInterceptor {
   void check(RpcCallInfo call) => seen.add(call.direction);
 }
 
-Future<void> _echo(RpcPeerEndpoint from) =>
-    from.unaryRequest<RpcString, RpcString>(
-      serviceName: 'S',
-      methodName: 'echo',
-      request: 'x'.rpc,
-      requestCodec: _codec,
-      responseCodec: _codec,
-    );
+Future<void> _echo(RpcPeerEndpoint from) => from.unary<RpcString, RpcString>(
+  serviceName: 'S',
+  methodName: 'echo',
+  request: 'x'.rpc,
+  requestCodec: _codec,
+  responseCodec: _codec,
+);
 
 void main() {
   test('a peer interceptor sees outgoing, then incoming', () async {

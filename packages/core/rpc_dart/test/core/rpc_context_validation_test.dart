@@ -48,7 +48,7 @@ void main() {
         });
 
         // Act
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName: 'ValidateHeaders',
           requestCodec: RpcString.codec,
@@ -76,7 +76,7 @@ void main() {
         final context = RpcContext.withHeaders({'x-name': 'тест с unicode 🚀'});
 
         await expectLater(
-          clientEndpoint.unaryRequest<RpcString, RpcString>(
+          clientEndpoint.unary<RpcString, RpcString>(
             serviceName: 'ValidationService',
             methodName: 'ValidateHeaders',
             requestCodec: RpcString.codec,
@@ -93,7 +93,7 @@ void main() {
         final context = RpcContext.withTraceId('test-trace-123');
 
         // Act
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName: 'ValidateSystemHeaders',
           requestCodec: RpcString.codec,
@@ -116,7 +116,7 @@ void main() {
 
         // Act & Assert
         await expectLater(
-          clientEndpoint.unaryRequest<RpcString, RpcString>(
+          clientEndpoint.unary<RpcString, RpcString>(
             serviceName: 'ValidationService',
             methodName: 'SlowOperation',
             requestCodec: RpcString.codec,
@@ -137,7 +137,7 @@ void main() {
 
         // Act & Assert
         expect(
-          () => clientEndpoint.unaryRequest<RpcString, RpcString>(
+          () => clientEndpoint.unary<RpcString, RpcString>(
             serviceName: 'ValidationService',
             methodName: 'FastOperation',
             requestCodec: RpcString.codec,
@@ -158,7 +158,7 @@ void main() {
 
         // Act & Assert
         expect(
-          () => clientEndpoint.unaryRequest<RpcString, RpcString>(
+          () => clientEndpoint.unary<RpcString, RpcString>(
             serviceName: 'ValidationService',
             methodName: 'FastOperation',
             requestCodec: RpcString.codec,
@@ -182,7 +182,7 @@ void main() {
 
         // Act & Assert
         await expectLater(
-          clientEndpoint.unaryRequest<RpcString, RpcString>(
+          clientEndpoint.unary<RpcString, RpcString>(
             serviceName: 'ValidationService',
             methodName: 'LongOperation',
             requestCodec: RpcString.codec,
@@ -327,7 +327,7 @@ void main() {
             );
 
         // Act
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName: 'CheckContextValues',
           requestCodec: RpcString.codec,
@@ -353,7 +353,7 @@ void main() {
         final context = RpcContext.empty();
 
         // Act
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName: 'ValidateHeaders',
           requestCodec: RpcString.codec,
@@ -368,7 +368,7 @@ void main() {
 
       test('a null context works', () async {
         // Act
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName:
               'ValidateSystemHeaders', // This method always makes a requestId.
@@ -392,7 +392,7 @@ void main() {
         final context = RpcContext.withHeaders({'long-header': longValue});
 
         // Act
-        final result = await clientEndpoint.unaryRequest<RpcString, RpcString>(
+        final result = await clientEndpoint.unary<RpcString, RpcString>(
           serviceName: 'ValidationService',
           methodName: 'ValidateHeaders',
           requestCodec: RpcString.codec,

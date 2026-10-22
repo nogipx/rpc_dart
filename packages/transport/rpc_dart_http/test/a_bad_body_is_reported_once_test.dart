@@ -59,7 +59,7 @@ void main() {
 
     for (var i = 0; i < 3; i++) {
       await expectLater(
-        caller.unaryRequest<RpcString, RpcString>(
+        caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'sink',
           request: ('x' * 4096).rpc,

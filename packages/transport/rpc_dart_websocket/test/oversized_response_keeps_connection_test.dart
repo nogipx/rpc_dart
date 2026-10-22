@@ -114,7 +114,7 @@ Future<_Rig> _connect({RpcSecurityPolicy policy = _clientPolicy}) async {
 }
 
 Future<RpcString> _unary(RpcCallerEndpoint caller, String method) =>
-    caller.unaryRequest<RpcString, RpcString>(
+    caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: method,
       request: 'go'.rpc,

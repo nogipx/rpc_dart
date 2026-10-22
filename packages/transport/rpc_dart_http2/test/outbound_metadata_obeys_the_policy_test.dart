@@ -146,7 +146,7 @@ void main() {
     addTearDown(endpoint.close);
 
     final reply = await endpoint
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'hello'.rpc,

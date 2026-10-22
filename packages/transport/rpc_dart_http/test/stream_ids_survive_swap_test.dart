@@ -181,7 +181,7 @@ void main() {
 
       final caller = RpcCallerEndpoint(transport: f.connection.transport);
       expect(
-        (await caller.unaryRequest<RpcString, RpcString>(
+        (await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'first'.rpc,
@@ -194,7 +194,7 @@ void main() {
       await _swap(f);
 
       expect(
-        (await caller.unaryRequest<RpcString, RpcString>(
+        (await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'second'.rpc,

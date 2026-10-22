@@ -132,7 +132,7 @@ Future<Object?> _drive(_Rig rig, String shape, {String? method}) async {
   try {
     switch (shape) {
       case 'unary':
-        await rig.caller.unaryRequest<RpcString, RpcString>(
+        await rig.caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: name,
           request: 'a'.rpc,

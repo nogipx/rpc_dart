@@ -96,7 +96,7 @@ Future<_Run> _call({required bool compressionEnabled}) async {
     ..start();
   try {
     final reply = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Echo',
           methodName: 'echo',
           request: ('a' * 64).rpc,

@@ -143,7 +143,7 @@ void main() {
       await connection.state.firstWhere((s) => s is RpcClientOffline);
 
       final response = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'say',
             request: 'hi'.rpc,

@@ -112,7 +112,7 @@ void main() {
     'a context carrying the cancel key does not kill its own call',
     () async {
       final result = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'hello'.rpc,
@@ -135,7 +135,7 @@ void main() {
   );
 
   test('the control keys never reach the wire, ordinary ones do', () async {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'hello'.rpc,

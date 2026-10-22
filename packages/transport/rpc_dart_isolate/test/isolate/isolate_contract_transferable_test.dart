@@ -25,7 +25,7 @@ void main() {
       final request = TransferableTypedData.fromList([bytes]);
 
       final response = await caller
-          .unaryRequest<TransferableTypedData, TransferableTypedData>(
+          .unary<TransferableTypedData, TransferableTypedData>(
             serviceName: TransferableEchoContract.serviceNameStatic,
             methodName: TransferableEchoContract.methodName,
             request: request,

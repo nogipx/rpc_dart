@@ -191,7 +191,7 @@ void main() {
     // GUARD: the shape this transport is actually for.
     test('a unary call round-trips', () async {
       final res = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'echo',
             request: 'hi'.rpc,

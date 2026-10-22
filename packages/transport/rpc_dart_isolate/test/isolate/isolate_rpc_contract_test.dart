@@ -176,7 +176,7 @@ void main() {
 
     test('unary request/response round-trips correctly', () async {
       final response = await caller
-          .unaryRequest<EchoRequest, EchoResponse>(
+          .unary<EchoRequest, EchoResponse>(
             serviceName: serviceName,
             methodName: 'Unary',
             request: const EchoRequest('hello', count: 7),
@@ -273,7 +273,7 @@ void main() {
     test('handler exception surfaces as typed RpcStatusException', () async {
       await expectLater(
         caller
-            .unaryRequest<EchoRequest, EchoResponse>(
+            .unary<EchoRequest, EchoResponse>(
               serviceName: serviceName,
               methodName: 'Unary',
               request: const EchoRequest('BOOM'),
@@ -322,7 +322,7 @@ void main() {
 
         // Transport stays usable after cancelling one call.
         final after = await caller
-            .unaryRequest<EchoRequest, EchoResponse>(
+            .unary<EchoRequest, EchoResponse>(
               serviceName: serviceName,
               methodName: 'Unary',
               request: const EchoRequest('post-cancel'),
@@ -338,7 +338,7 @@ void main() {
       final futures = <Future<EchoResponse>>[];
       for (var i = 0; i < 25; i++) {
         futures.add(
-          caller.unaryRequest<EchoRequest, EchoResponse>(
+          caller.unary<EchoRequest, EchoResponse>(
             serviceName: serviceName,
             methodName: 'Unary',
             request: EchoRequest('req$i', count: i),

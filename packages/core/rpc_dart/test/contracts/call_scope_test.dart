@@ -325,14 +325,13 @@ void main() {
           );
           responder.start();
 
-          final response = await caller
-              .unaryRequest<_TestRequest, _TestResponse>(
-                serviceName: 'TestService',
-                methodName: 'Echo',
-                requestCodec: _TestRequest.codec,
-                responseCodec: _TestResponse.codec,
-                request: _TestRequest('hello'),
-              );
+          final response = await caller.unary<_TestRequest, _TestResponse>(
+            serviceName: 'TestService',
+            methodName: 'Echo',
+            requestCodec: _TestRequest.codec,
+            responseCodec: _TestResponse.codec,
+            request: _TestRequest('hello'),
+          );
 
           expect(response.value, 'hello');
           // The handler now receives a real per-call scope (was null before).

@@ -141,7 +141,7 @@ not zero-copy, and a method without codecs fails on them.
 11. **Reconnect with `RpcClientConnection`.** A transport is one connection
     and closes when it is lost; none reconnects itself.
 12. **`RpcCallerContract` is abstract.** Subclass it; do not instantiate it.
-    The untyped endpoint API (`unaryRequest`, `serverStream`, ...) exists, but
+    The untyped endpoint API (`unary`, `serverStream`, ...) exists, but
     prefer caller contracts: they check codecs against the transfer mode.
 
 ## References

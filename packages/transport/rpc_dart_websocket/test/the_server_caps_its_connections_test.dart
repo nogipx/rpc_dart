@@ -35,7 +35,7 @@ Future<String> _call(Uri url) async {
   final caller = RpcCallerEndpoint(transport: client);
   try {
     final answer = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'echo',
           request: 'x'.rpc,

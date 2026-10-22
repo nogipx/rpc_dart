@@ -61,7 +61,7 @@ Future<List<String>> _lateFrameOnAClosedStream({required bool draining}) async {
   // A COMPLETE call, so its id lands in the closed-stream set. Stream 1: client
   // ids are odd and this is the first call, so the late frame below is
   // deliberately NOT a fresh stream.
-  await caller.unaryRequest<RpcString, RpcString>(
+  await caller.unary<RpcString, RpcString>(
     serviceName: 'Svc',
     methodName: 'echo',
     request: 'hi'.rpc,

@@ -201,7 +201,7 @@ void main() {
       responder.registerServiceContract(_EchoContract());
       responder.start();
 
-      final result = await caller.unaryRequest<RpcString, RpcString>(
+      final result = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'hello'.rpc,

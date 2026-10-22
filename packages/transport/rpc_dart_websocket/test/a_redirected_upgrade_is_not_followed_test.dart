@@ -105,7 +105,7 @@ void main() {
     );
     final caller = RpcCallerEndpoint(transport: transport);
     addTearDown(caller.close);
-    final answer = await caller.unaryRequest<RpcString, RpcString>(
+    final answer = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: ('x' * 10000).rpc,

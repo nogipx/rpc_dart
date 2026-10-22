@@ -49,7 +49,7 @@ Future<String> _callOnce(IRpcTransport transport) async {
   final caller = RpcCallerEndpoint(transport: transport);
   try {
     final response = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'EchoService',
           methodName: 'Echo',
           requestCodec: RpcString.codec,
@@ -133,7 +133,7 @@ void main() {
       final caller = RpcCallerEndpoint(transport: spawned.transport);
       await expectLater(
         caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'EchoService',
               methodName: 'Die',
               requestCodec: RpcString.codec,

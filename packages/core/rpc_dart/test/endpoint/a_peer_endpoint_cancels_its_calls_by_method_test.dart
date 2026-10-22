@@ -77,7 +77,7 @@ void main() {
 
   test('the endpoint counts and cancels a call by method', () async {
     final call = outcome(
-      client.unaryRequest<RpcString, RpcString>(
+      client.unary<RpcString, RpcString>(
         serviceName: 'Slow',
         methodName: 'wait',
         request: 'x'.rpc,

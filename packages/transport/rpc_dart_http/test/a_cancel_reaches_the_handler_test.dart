@@ -85,7 +85,7 @@ _serve({LogScope? logger}) async {
 }
 
 Future<void> _call(RpcCallerEndpoint caller, RpcContext context) => caller
-    .unaryRequest<RpcString, RpcString>(
+    .unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'hang',
       request: const RpcString('x'),

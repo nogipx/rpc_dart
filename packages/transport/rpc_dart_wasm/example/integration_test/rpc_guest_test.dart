@@ -137,7 +137,7 @@ void main() {
       final c = await _connect();
 
       final r = await c.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'BootFailure',
             request: ''.rpc,
@@ -167,7 +167,7 @@ void main() {
       final c = await _connect();
 
       final r = await c.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'Say',
             request: 'hello'.rpc,
@@ -222,7 +222,7 @@ void main() {
 
       const n = 4 * 1024 * 1024;
       final r = await c.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'Big',
             request: '$n'.rpc,
@@ -264,7 +264,7 @@ void main() {
 
       // The call itself SUCCEEDS; the failure happens afterwards, detached.
       final r = await c.caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Echo',
             methodName: 'Orphan',
             request: ''.rpc,
@@ -300,7 +300,7 @@ void main() {
       // so two shapes never exercised is a gap, not a formality.
       final c = await _connect();
 
-      final say = await c.caller.unaryRequest<RpcString, RpcString>(
+      final say = await c.caller.unary<RpcString, RpcString>(
         serviceName: 'Echo',
         methodName: 'Say',
         request: 'hi'.rpc,
@@ -360,7 +360,7 @@ void main() {
 
       Future<int> produced() async {
         final r = await c.caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Echo',
               methodName: 'Produced',
               request: ''.rpc,

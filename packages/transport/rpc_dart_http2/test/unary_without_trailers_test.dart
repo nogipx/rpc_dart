@@ -67,7 +67,7 @@ Future<String> _call(int port) async {
   final caller = RpcCallerEndpoint(transport: transport);
   try {
     final r = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Ask',
           request: 'q'.rpc,

@@ -87,7 +87,7 @@ void main() {
       // One call in flight, so the connection is draining WITH active streams --
       // exactly the shape the saturation heuristic mistook for capacity.
       final slow = caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'Slow',
             request: 'x'.rpc,
@@ -103,7 +103,7 @@ void main() {
 
       Object? caught;
       try {
-        await caller.unaryRequest<RpcString, RpcString>(
+        await caller.unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Quick',
           request: 'y'.rpc,
@@ -171,7 +171,7 @@ void main() {
 
       for (var i = 0; i < 4; i++) {
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Quick',
               request: '$i'.rpc,

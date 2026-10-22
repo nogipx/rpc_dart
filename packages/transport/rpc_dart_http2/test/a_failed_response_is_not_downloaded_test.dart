@@ -187,7 +187,7 @@ void main() {
     });
 
     final response = await RpcCallerEndpoint(transport: transport)
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'S',
           methodName: 'M',
           request: 'x'.rpc,

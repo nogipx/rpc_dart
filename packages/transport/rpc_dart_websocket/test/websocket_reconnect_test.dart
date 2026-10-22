@@ -152,7 +152,7 @@ void main() {
     addTearDown(caller.close);
 
     Future<EchoResponse> call(String text, int count) => caller
-        .unaryRequest<EchoRequest, EchoResponse>(
+        .unary<EchoRequest, EchoResponse>(
           serviceName: serviceName,
           methodName: 'Unary',
           request: EchoRequest(text, count: count),

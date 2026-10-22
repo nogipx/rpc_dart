@@ -86,7 +86,7 @@ Future<String> _call(int port) async {
   );
   final caller = RpcCallerEndpoint(transport: transport);
   try {
-    return (await caller.unaryRequest<RpcString, RpcString>(
+    return (await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'ok'.rpc,
@@ -130,7 +130,7 @@ void main() {
     final caller = RpcCallerEndpoint(transport: transport);
     addTearDown(caller.close);
     await Future<void>.delayed(const Duration(milliseconds: 2500));
-    final answer = await caller.unaryRequest<RpcString, RpcString>(
+    final answer = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'echo',
       request: 'later'.rpc,

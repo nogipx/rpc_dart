@@ -129,7 +129,7 @@ void main() {
 
     final caller = RpcCallerEndpoint(transport: transport);
     final warm = await caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Echo',
           request: 'warm'.rpc,
@@ -155,7 +155,7 @@ void main() {
       Object? caught;
       try {
         await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x'.rpc,
@@ -216,7 +216,7 @@ void main() {
       final sw = Stopwatch()..start();
       try {
         await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'x'.rpc,
@@ -264,7 +264,7 @@ void main() {
       // Abandon a call so a stream stays open across the close.
       unawaited(
         caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: 'inflight'.rpc,
@@ -301,7 +301,7 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 150));
         final r = await caller
-            .unaryRequest<RpcString, RpcString>(
+            .unary<RpcString, RpcString>(
               serviceName: 'Svc',
               methodName: 'Echo',
               request: '$i'.rpc,

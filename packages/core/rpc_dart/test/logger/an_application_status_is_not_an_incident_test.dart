@@ -184,7 +184,7 @@ Future<_Loud> _call(String method) async {
   });
 
   try {
-    await caller.unaryRequest<RpcString, RpcString>(
+    await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: method,
       request: 'x'.rpc,

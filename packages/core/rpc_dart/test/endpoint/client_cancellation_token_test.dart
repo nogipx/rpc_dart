@@ -106,7 +106,7 @@ void main() {
 
     unawaited(
       caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'work',
             request: 'x'.rpc,

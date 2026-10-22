@@ -99,7 +99,7 @@ void main() {
       addTearDown(caller.close);
 
       final token = RpcCancellationToken();
-      final call = caller.unaryRequest<RpcString, RpcString>(
+      final call = caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'slow',
         request: 'x'.rpc,
@@ -144,7 +144,7 @@ void main() {
       addTearDown(caller.close);
 
       final reply = await caller
-          .unaryRequest<RpcString, RpcString>(
+          .unary<RpcString, RpcString>(
             serviceName: 'Svc',
             methodName: 'slow',
             request: 'x'.rpc,

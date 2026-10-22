@@ -99,7 +99,7 @@ void main() {
         await caller.close();
         await client.close();
       });
-      final answer = await caller.unaryRequest<RpcString, RpcString>(
+      final answer = await caller.unary<RpcString, RpcString>(
         serviceName: 'Svc',
         methodName: 'echo',
         request: 'ping'.rpc,

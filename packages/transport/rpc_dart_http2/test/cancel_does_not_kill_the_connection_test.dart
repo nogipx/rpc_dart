@@ -128,7 +128,7 @@ Future<void> _teardown(_Rig rig) async {
 Future<String> _ping(_Rig rig) async {
   try {
     final r = await rig.caller
-        .unaryRequest<RpcString, RpcString>(
+        .unary<RpcString, RpcString>(
           serviceName: 'Svc',
           methodName: 'Ping',
           request: 'x'.rpc,

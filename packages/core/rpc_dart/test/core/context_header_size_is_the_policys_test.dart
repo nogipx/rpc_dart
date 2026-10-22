@@ -48,7 +48,7 @@ Future<int> _headersReaching(RpcSecurityPolicy policy, int count) async {
   responder.start();
 
   try {
-    final result = await caller.unaryRequest<RpcString, RpcString>(
+    final result = await caller.unary<RpcString, RpcString>(
       serviceName: 'Svc',
       methodName: 'Count',
       requestCodec: RpcString.codec,
