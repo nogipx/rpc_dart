@@ -20,7 +20,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rpc_dart/rpc_dart.dart' show RpcStatusException;
+import 'package:rpc_dart/rpc_dart.dart' show RpcStatus, RpcStatusException;
 import 'package:rpc_dart_wasm/rpc_dart_wasm.dart';
 
 const _channel = MethodChannel('rpc_dart_wasm');
@@ -174,7 +174,7 @@ void main() {
 
       final e = await error.future.timeout(const Duration(seconds: 2));
       expect(e, isA<RpcStatusException>());
-      expect((e as RpcStatusException).statusCode, 14);
+      expect((e as RpcStatusException).statusCode, RpcStatus.unavailable);
       expect(e.message, contains('content_process_terminated'));
     });
 
