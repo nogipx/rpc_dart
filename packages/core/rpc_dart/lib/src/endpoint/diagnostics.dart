@@ -10,8 +10,8 @@ final class RpcEndpointHealth {
   /// Endpoint health snapshot.
   final RpcHealthStatus endpointStatus;
 
-  /// Health of endpoint dependencies (typically transport).
-  final Map<String, RpcHealthStatus> dependencies;
+  /// Health of the endpoint's transport.
+  final RpcHealthStatus transportStatus;
 
   /// Report timestamp.
   final DateTime timestamp;
@@ -19,16 +19,10 @@ final class RpcEndpointHealth {
   /// Creates an [RpcEndpointHealth] snapshot.
   RpcEndpointHealth({
     required this.endpointStatus,
-    Map<String, RpcHealthStatus>? dependencies,
+    required this.transportStatus,
     DateTime? timestamp,
-  }) : dependencies = Map.unmodifiable(dependencies ?? const {}),
-       timestamp = timestamp ?? DateTime.now();
+  }) : timestamp = timestamp ?? DateTime.now();
 
-  /// True when the endpoint and all dependencies are healthy.
-  bool get isHealthy =>
-      endpointStatus.isHealthy &&
-      dependencies.values.every((status) => status.isHealthy);
-
-  /// Health status of the primary transport (if present).
-  RpcHealthStatus? get transportStatus => dependencies['transport'];
+  /// True when the endpoint and its transport are healthy.
+  bool get isHealthy => endpointStatus.isHealthy && transportStatus.isHealthy;
 }

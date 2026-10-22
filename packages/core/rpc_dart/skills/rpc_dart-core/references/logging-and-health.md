@@ -171,11 +171,9 @@ they plug into this `LogController`.
 ## Health
 
 - `endpoint.health()` returns `Future<RpcEndpointHealth>` on every endpoint.
-- `RpcEndpointHealth`: `isHealthy` (endpoint and all dependencies healthy),
-  `endpointStatus` (an `RpcHealthStatus`), `dependencies` (map; key
-  `'transport'`), `transportStatus` (shortcut for `dependencies['transport']`,
-  nullable), `timestamp`. There is no `level` on it; read
-  `endpointStatus.level`.
+- `RpcEndpointHealth`: `isHealthy` (endpoint and transport healthy),
+  `endpointStatus` and `transportStatus` (each an `RpcHealthStatus`, never
+  null), `timestamp`. There is no `level` on it; read `endpointStatus.level`.
 - `RpcHealthStatus`: `component`, `level`, `message`, `details`
   (`Map<String, Object?>`), `timestamp`, `isHealthy`.
 - `RpcHealthLevel`, ascending severity: `healthy`, `reconnecting`, `degraded`,
@@ -184,8 +182,9 @@ they plug into this `LogController`.
   degraded` and `transportStatus.level == closed`. A closed endpoint reports
   `closed`.
 - `RpcChannelTransport` health details: `activeStreams`, `streamControllers`,
-  `finishedStreams`, `statusSeen`, `zeroCopy` (bool). Other transports report
-  their own keys.
+  `finishedStreams`, `statusSeen`, `zeroCopy` (bool), `flowControl` (map of
+  flow-control state sizes) and, once the peer advertised a connection
+  window, `connectionCredit`. Other transports report their own keys.
 - A transport built on a channel that is still connecting reports `degraded`
   until its `ready` completes.
 
@@ -195,9 +194,9 @@ Future<void> checkHealth(RpcCallerEndpoint caller, LogScope log) async {
   if (report.isHealthy) return;
   final transport = report.transportStatus;
   log.warning(
-    'endpoint ${report.endpointStatus.level.name}: ${transport?.message}',
+    'endpoint ${report.endpointStatus.level.name}: ${transport.message}',
     data: {
-      for (final e in (transport?.details ?? const {}).entries)
+      for (final e in transport.details.entries)
         if (e.value != null) e.key: e.value!,
     },
   );

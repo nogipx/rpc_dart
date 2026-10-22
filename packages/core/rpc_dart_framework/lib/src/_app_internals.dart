@@ -77,7 +77,7 @@ Future<RpcAppHealth> appHealthOf(
 /// degrades the app. An endpoint whose transport is closed cannot serve, so it
 /// counts as unhealthy, although the endpoint itself reports degraded.
 RpcAppHealthLevel appLevelOfEndpoint(RpcEndpointHealth report) {
-  if (report.transportStatus?.level == RpcHealthLevel.closed) {
+  if (report.transportStatus.level == RpcHealthLevel.closed) {
     return RpcAppHealthLevel.unhealthy;
   }
   return appLevelOfStatus(report.endpointStatus.level);

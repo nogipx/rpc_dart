@@ -43,9 +43,9 @@ void main() {
 
       final report = await endpoint.health();
 
-      expect(report.transportStatus?.level, RpcHealthLevel.unhealthy);
+      expect(report.transportStatus.level, RpcHealthLevel.unhealthy);
       expect(report.endpointStatus.level, RpcHealthLevel.unhealthy);
-      expect(report.transportStatus?.details['isClosed'], isFalse);
+      expect(report.transportStatus.details['isClosed'], isFalse);
     });
 
     test(
@@ -62,9 +62,9 @@ void main() {
 
         final report = await endpoint.health();
 
-        expect(report.transportStatus?.level, RpcHealthLevel.closed);
+        expect(report.transportStatus.level, RpcHealthLevel.closed);
         expect(report.endpointStatus.level, RpcHealthLevel.degraded);
-        expect(report.transportStatus?.details['isClosed'], isTrue);
+        expect(report.transportStatus.details['isClosed'], isTrue);
       },
     );
 

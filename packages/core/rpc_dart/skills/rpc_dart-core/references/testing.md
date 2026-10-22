@@ -201,7 +201,7 @@ void main() {
   test('health', () async {
     final report = await callerEndpoint.health();
     expect(report.isHealthy, isTrue);
-    expect(report.transportStatus?.details['zeroCopy'], isTrue);
+    expect(report.transportStatus.details['zeroCopy'], isTrue);
   });
 }
 ```

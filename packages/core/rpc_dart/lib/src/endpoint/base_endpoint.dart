@@ -118,7 +118,7 @@ abstract base class RpcEndpointBase {
 
     return RpcEndpointHealth(
       endpointStatus: endpointStatus,
-      dependencies: {'transport': transportStatus},
+      transportStatus: transportStatus,
     );
   }
 

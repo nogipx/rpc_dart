@@ -70,11 +70,7 @@ class RpcAppHealth {
       for (final endpoint in endpoints)
         {
           ..._statusJson(endpoint.endpointStatus),
-          if (endpoint.dependencies.isNotEmpty)
-            'dependencies': {
-              for (final entry in endpoint.dependencies.entries)
-                entry.key: _statusJson(entry.value),
-            },
+          'dependencies': {'transport': _statusJson(endpoint.transportStatus)},
         },
     ],
   };

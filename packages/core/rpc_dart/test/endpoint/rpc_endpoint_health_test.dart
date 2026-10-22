@@ -17,7 +17,7 @@ void main() {
       final report = await caller.health();
 
       expect(report.endpointStatus.level, RpcHealthLevel.healthy);
-      expect(report.transportStatus?.level, RpcHealthLevel.healthy);
+      expect(report.transportStatus.level, RpcHealthLevel.healthy);
       expect(report.isHealthy, isTrue);
 
       await caller.close();
@@ -35,7 +35,7 @@ void main() {
       final report = await responder.health();
 
       expect(report.endpointStatus.level, RpcHealthLevel.closed);
-      expect(report.transportStatus?.level, RpcHealthLevel.closed);
+      expect(report.transportStatus.level, RpcHealthLevel.closed);
       expect(report.isHealthy, isFalse);
 
       await caller.close();

@@ -375,7 +375,7 @@ Every endpoint reports its own and its transport's health:
 Future<void> checkHealth(RpcCallerEndpoint caller) async {
   final report = await caller.health();
   if (!report.isHealthy) {
-    print('issue: ${report.transportStatus?.message}');
+    print('issue: ${report.transportStatus.message}');
   }
 }
 ```

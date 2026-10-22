@@ -591,12 +591,11 @@ RpcEndpointBase method close() -> Future<void>
 RpcEndpointBase method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcEndpointBase method health() -> Future<RpcEndpointHealth>
 RpcEndpointBase new new({required IRpcTransport transport, String? debugLabel})
-RpcEndpointHealth field dependencies: Map<String, RpcHealthStatus> (get)
 RpcEndpointHealth field endpointStatus: RpcHealthStatus (get)
 RpcEndpointHealth field isHealthy: bool (get)
 RpcEndpointHealth field timestamp: DateTime (get)
-RpcEndpointHealth field transportStatus: RpcHealthStatus? (get)
-RpcEndpointHealth new new({required RpcHealthStatus endpointStatus, Map<String, RpcHealthStatus>? dependencies, DateTime? timestamp})
+RpcEndpointHealth field transportStatus: RpcHealthStatus (get)
+RpcEndpointHealth new new({required RpcHealthStatus endpointStatus, required RpcHealthStatus transportStatus, DateTime? timestamp})
 RpcEndpointMetrics field debugLabel: String? (get)
 RpcEndpointMetrics field interceptorCount: int (get)
 RpcEndpointMetrics field isActive: bool (get)
