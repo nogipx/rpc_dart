@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_socket/.dart_tool/probe/r898_oversize_status/p
 round: 898
 commit: 947f074c
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_channel.dart, packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/transport/rpc_dart_socket/test/an_oversized_request_reads_resource_exhausted_test.dart
 ---
 

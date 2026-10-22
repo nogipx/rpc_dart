@@ -5,7 +5,7 @@ applies: the client writes the request and awaits the reply on one channel
 breaks: a hang that never ends.
 applied: [210, 221, 244, 322, 434, 693, 717, 726, 743, 751, 758, 774, 819, 849]
 status: confirmed (round 849)
-rank: 10
+rank: 9
 ---
 
 # RPC-09 — A call deadline that sits below the write

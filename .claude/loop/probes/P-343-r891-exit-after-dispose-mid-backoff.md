@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r891_backoff/probe.dart
 round: 891
 commit: ae07b025
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (6967b453)
 promoted: no — what it measures is process exit, which a test inside the runner cannot see; the disconnect half is witnessed by test/resilience/a_stop_wakes_the_backoff_sleep_test.dart
 ---
 

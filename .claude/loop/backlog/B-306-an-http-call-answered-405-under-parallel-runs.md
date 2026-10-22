@@ -5,7 +5,7 @@ commit: 562fbbb4
 paths: [packages/test/rpc_dart_conformance/test/i1_every_call_ends_test.dart, packages/transport/rpc_dart_http/lib/**]
 probe:
 reason: risk — one failure seen in major-release step 3, not reproduced
-rank: 9
+rank: 6
 ---
 
 # B-306 — an http call answered 405 under parallel runs

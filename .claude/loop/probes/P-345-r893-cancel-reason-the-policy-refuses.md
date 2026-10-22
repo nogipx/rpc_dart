@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r893_cancel_reason/probe.dart
 round: 893
 commit: 1b07ee3b
 paths: [packages/core/rpc_dart/lib/src/core/trailers.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_caller.dart, packages/core/rpc_dart/lib/src/endpoint/responder_pipeline_dispatch.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/core/rpc_dart/test/streams/a_cancel_reason_in_any_language_reaches_the_server_test.dart
 ---
 

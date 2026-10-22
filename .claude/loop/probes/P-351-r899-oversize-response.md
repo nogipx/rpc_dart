@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_socket/.dart_tool/probe/r899_oversize_response
 round: 899
 commit: 14f0ef47
 paths: [packages/core/rpc_dart/lib/src/rpc/transports/frame_multiplexed_channel.dart, packages/transport/rpc_dart_socket/lib/src/rpc_socket_channel.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_channel.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/test/rpc_dart_conformance/test/i7_one_failure_one_status_test.dart
 ---
 

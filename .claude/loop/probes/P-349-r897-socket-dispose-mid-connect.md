@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_socket/.dart_tool/probe/r897_dispose_mid_conne
 round: 897
 commit: 99126bfa
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_connect.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/transport/rpc_dart_socket/test/a_cancelled_connect_releases_its_socket_test.dart
 ---
 

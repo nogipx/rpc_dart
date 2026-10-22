@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r890_dispose/probe.
 round: 890
 commit: b3350b20
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/transport/rpc_dart_websocket/lib/src/websocket_caller_transport.dart, packages/transport/rpc_dart_websocket/lib/src/ws_open_io.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/transport/rpc_dart_websocket/test/a_cancelled_connect_closes_its_socket_test.dart
 ---
 

@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r895_dispose_server
 round: 895
 commit: 24d08d7e
 paths: [packages/transport/rpc_dart_websocket/lib/src/websocket_http_server.dart, packages/transport/rpc_dart_websocket/lib/src/rpc_websocket_server.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/transport/rpc_dart_websocket/test/dispose_releases_a_bounded_port_test.dart
 ---
 

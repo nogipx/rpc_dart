@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r894_ping_label/probe.dart
 round: 894
 commit: aebe20ff
 paths: [packages/core/rpc_dart/lib/src/endpoint/responder_ping_handler.dart, packages/core/rpc_dart/lib/src/endpoint/ping.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/core/rpc_dart/test/endpoint/a_ping_answers_whatever_the_endpoint_is_called_test.dart
 ---
 

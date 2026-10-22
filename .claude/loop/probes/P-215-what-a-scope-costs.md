@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b205_what_a_scope_costs.dart
 round: 608
 commit: 29ec4134
 paths: [packages/core/rpc_dart/lib/src/logger/log_scope.dart]
-status: valid (round 608)
+status: stale (6967b453) (round 608)
 ---
 
 # P-215 — what a per-call log scope costs

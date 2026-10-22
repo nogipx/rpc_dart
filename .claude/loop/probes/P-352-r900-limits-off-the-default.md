@@ -3,7 +3,7 @@ file: packages/test/rpc_dart_conformance/.dart_tool/probe/r900_raised_limit/prob
 round: 900
 commit: 4965f223
 paths: [packages/core/rpc_dart/lib/src/core/security_policy.dart, packages/transport/rpc_dart_http/lib/src/rpc_http_responder_transport.dart]
-status: valid
+status: stale (6967b453)
 promoted: no — CLEAN round; I-2 already covers the default limit, and the mismatch behaviour is HTTP/1.1's documented one
 ---
 

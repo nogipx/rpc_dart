@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_websocket/.dart_tool/probe/r896_force_reconnec
 round: 896
 commit: 99126bfa
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart]
-status: valid
+status: stale (6967b453)
 promoted: no — CLEAN round, nothing to witness
 ---
 

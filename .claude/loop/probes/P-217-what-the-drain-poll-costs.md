@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/b208_what_the_poll_costs.dart
 round: 612
 commit: 73590cfb
 paths: [packages/core/rpc_dart/lib/src/core/drain.dart]
-status: valid (round 612)
+status: stale (6967b453) (round 612)
 ---
 
 # P-217 — what the drain poll costs

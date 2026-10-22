@@ -3,7 +3,7 @@ file: packages/core/rpc_dart/.dart_tool/probe/r888_ratelimiter/probe.dart
 round: 888
 commit: 1631f3af
 paths: [packages/core/rpc_dart/lib/src/resilience/rate_limiter.dart]
-status: valid
+status: stale (6967b453)
 promoted: no — the defect is a per-request cost, and a timing assertion would be a wall-clock flake (cf. audit_frame_reassembly_linear). Correctness of the new store is guarded by test/audit/audit_rate_limiter_colliding_keys_test.dart
 ---
 

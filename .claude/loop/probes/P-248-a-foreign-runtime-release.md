@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_wasm/test/a_foreign_runtime_is_released_quietl
 round: 744
 commit: 8c0e7531
 paths: [packages/transport/rpc_dart_wasm/lib/src/rpc_flutter_wasm_bridge.dart]
-status: valid
+status: stale (6967b453)
 ---
 
 # P-248 — does releasing a foreign runtime leak an error?

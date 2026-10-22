@@ -5,7 +5,7 @@ commit: dbd45a03
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart]
 probe: none
 reason: risk — read from the code during the API review, not measured: a responder has no compression switch, and on native platforms gzip is registered by default
-rank: 11
+rank: 2
 ---
 
 # B-313 — a native server compresses every response a client accepts

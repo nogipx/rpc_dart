@@ -3,7 +3,7 @@ file: packages/test/rpc_dart_conformance/.dart_tool/probe/r890_siblings/probe.da
 round: 890
 commit: b3350b20
 paths: [packages/core/rpc_dart/lib/src/resilience/client_connection.dart, packages/transport/rpc_dart_socket/lib/src/rpc_socket_connect.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
-status: valid
+status: stale (6967b453)
 promoted: no — the socket and http2 halves are what the core witness `a_stop_ends_the_attempt_in_flight_test.dart` already covers with a transport that is never ready; the TLS arm is a lead (B-309), not a fix
 ---
 

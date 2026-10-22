@@ -3,7 +3,7 @@ file: packages/transport/rpc_dart_isolate/.dart_tool/probe/r860_failed_startup_u
 round: 860
 commit: 4150bad9
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart, packages/transport/rpc_dart_isolate/test/support/exits_after_failed_startup.dart]
-status: valid
+status: stale (6967b453)
 promoted: packages/transport/rpc_dart_isolate/test/audit/startup_failure_releases_the_isolate_test.dart
 ---
 
