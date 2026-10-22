@@ -896,7 +896,6 @@ RpcPeerEndpoint method markDraining() -> void
 RpcPeerEndpoint method ping({RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcPeerEndpoint method registerServiceContract(RpcResponderContract contract) -> void
 RpcPeerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
-RpcPeerEndpoint method setLogController(LogController controller) -> void
 RpcPeerEndpoint method start() -> void
 RpcPeerEndpoint method unary<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcPeerEndpoint method unregisterServiceContract(String serviceName) -> void
@@ -922,8 +921,9 @@ RpcPeerEndpointMetrics field transportClosed: bool (get)
 RpcPeerEndpointMetrics field transportType: String (get)
 RpcPeerEndpointMetrics method toJson() -> Map<String, Object?>
 RpcPeerEndpointMetrics new new({required bool isActive, required int interceptorCount, required bool transportClosed, required String transportType, String? debugLabel, required int registeredContracts, required int registeredMethods, required bool isListening, required bool isDraining, required int openStreams, required int preMethodBufferedBytes, required int metadataStreams, required int bufferedMessages, required int preBindBuffers, required int activeResponders, required List<String> contractKeys, required int pendingRequests, required int trackedMethods, required List<String> activeMethodKeys})
+RpcPeerMode field logController: LogController? (get)
 RpcPeerMode field register: void Function(RpcPeerEndpoint) (get)
-RpcPeerMode new new(void Function(RpcPeerEndpoint) register)
+RpcPeerMode new new(void Function(RpcPeerEndpoint) register, {LogController? logController})
 RpcPrimitiveMessage field hashCode: int (get)
 RpcPrimitiveMessage field value: T (get)
 RpcPrimitiveMessage method toJson() -> Map<String, dynamic>
@@ -998,7 +998,6 @@ RpcResponderEndpoint method drain({Duration timeout}) -> Future<void>
 RpcResponderEndpoint method health() -> Future<RpcEndpointHealth>
 RpcResponderEndpoint method markDraining() -> void
 RpcResponderEndpoint method registerServiceContract(RpcResponderContract contract) -> void
-RpcResponderEndpoint method setLogController(LogController controller) -> void
 RpcResponderEndpoint method start() -> void
 RpcResponderEndpoint method unregisterServiceContract(String serviceName) -> void
 RpcResponderEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
@@ -1020,9 +1019,10 @@ RpcResponderEndpointMetrics field transportClosed: bool (get)
 RpcResponderEndpointMetrics field transportType: String (get)
 RpcResponderEndpointMetrics method toJson() -> Map<String, Object?>
 RpcResponderEndpointMetrics new new({required bool isActive, required int interceptorCount, required bool transportClosed, required String transportType, String? debugLabel, required int registeredContracts, required int registeredMethods, required bool isListening, required bool isDraining, required int openStreams, required int preMethodBufferedBytes, required int metadataStreams, required int bufferedMessages, required int preBindBuffers, required int activeResponders, required List<String> contractKeys})
+RpcResponderMode field logController: LogController? (get)
 RpcResponderMode field register: void Function(RpcResponderEndpoint) (get)
-RpcResponderMode new contracts(List<RpcResponderContract> contracts)
-RpcResponderMode new new(void Function(RpcResponderEndpoint) register)
+RpcResponderMode new contracts(List<RpcResponderContract> contracts, {LogController? logController})
+RpcResponderMode new new(void Function(RpcResponderEndpoint) register, {LogController? logController})
 RpcRetryInfo field retryDelay: Duration (get)
 RpcRetryInfo field typeUrl: String (get)
 RpcRetryInfo method encode() -> Uint8List
@@ -1075,7 +1075,8 @@ RpcSecurityPolicy new fromMap(Map<String, Object?> map)
 RpcSecurityPolicy new new({int maxMessageLengthBytes, int? maxBufferedBytes, int maxMessagesPerChunk, int maxDecodedItems, int maxBufferedMessagesPerStream, int maxActiveStreams, int? maxConcurrentHandlers, int maxMetadataBytes, int maxHeaders, int maxHeaderNameBytes, int maxHeaderValueBytes, int maxMethodPathLength, bool closeOnProtocolError, Duration? halfOpenStreamTimeout, int? flowControlWindowBytes, int? flowControlConnectionWindowBytes, int? initialSendWindowBytes, Duration? initialSendWindowGrace, RpcContentTypeValidation contentTypeValidation})
 RpcSecurityPolicy static field maxPolicyViolations: int (get)
 RpcSecurityPolicy static method isAcceptableContentType(String? value, RpcContentTypeValidation mode) -> bool
-RpcServerMode new new()
+RpcServerMode field logController: LogController? (get)
+RpcServerMode new new({LogController? logController})
 RpcService field description: String? (get)
 RpcService field grpcDescriptor: bool (get)
 RpcService field kind: RpcServiceKind (get)

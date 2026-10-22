@@ -13,22 +13,28 @@ import 'drain.dart';
 /// What a server builds for each connection, and how the application's
 /// contracts get onto it.
 sealed class RpcServerMode {
-  const RpcServerMode();
+  const RpcServerMode({this.logController});
+
+  /// The log controller of every endpoint the server builds for this mode, in
+  /// place of the server's own `logController`; null keeps the server's.
+  final LogController? logController;
 }
 
 /// Each connection gets an [RpcResponderEndpoint]; only the client starts
 /// calls.
 final class RpcResponderMode extends RpcServerMode {
   /// [register] registers the contracts on each connection's endpoint.
-  const RpcResponderMode(this.register);
+  const RpcResponderMode(this.register, {super.logController});
 
   /// A mode that registers [contracts] on every connection.
-  RpcResponderMode.contracts(List<RpcResponderContract> contracts)
-    : register = ((endpoint) {
-        for (final contract in contracts) {
-          endpoint.registerServiceContract(contract);
-        }
-      });
+  RpcResponderMode.contracts(
+    List<RpcResponderContract> contracts, {
+    super.logController,
+  }) : register = ((endpoint) {
+         for (final contract in contracts) {
+           endpoint.registerServiceContract(contract);
+         }
+       });
 
   /// Registers the contracts on a new connection's endpoint.
   final void Function(RpcResponderEndpoint endpoint) register;
@@ -37,7 +43,7 @@ final class RpcResponderMode extends RpcServerMode {
 /// Each connection gets an [RpcPeerEndpoint]; both sides may start calls.
 final class RpcPeerMode extends RpcServerMode {
   /// [register] registers the contracts on each connection's endpoint.
-  const RpcPeerMode(this.register);
+  const RpcPeerMode(this.register, {super.logController});
 
   /// Registers the contracts on a new connection's endpoint.
   final void Function(RpcPeerEndpoint endpoint) register;
@@ -117,12 +123,13 @@ final class RpcConnectionHost {
     void Function()? onRelease,
   }) {
     final RpcResponderEndpoint endpoint;
+    final logController = mode.logController ?? _logController;
     switch (mode) {
       case RpcResponderMode(:final register):
         final responder = RpcResponderEndpoint(
           transport: transport,
           debugLabel: debugLabel,
-          logController: _logController,
+          logController: logController,
           compressionEnabled: compressionEnabled,
         );
         endpoint = responder;
@@ -137,7 +144,7 @@ final class RpcConnectionHost {
         final peer = RpcPeerEndpoint(
           transport: transport,
           debugLabel: debugLabel,
-          logController: _logController,
+          logController: logController,
           compressionEnabled: compressionEnabled,
         );
         endpoint = peer;

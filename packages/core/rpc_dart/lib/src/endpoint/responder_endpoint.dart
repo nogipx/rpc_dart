@@ -13,10 +13,7 @@ part of '_index.dart';
 final class RpcResponderEndpoint extends RpcEndpointBase
     with RpcResponderPipelineMixin {
   @override
-  LogScope _log;
-
-  /// The scope [setLogController] logs under.
-  final String _logScopeName;
+  final LogScope _log;
 
   /// Whether to compress responses, in an encoding from the caller's
   /// `grpc-accept-encoding` with a codec registered for it. Off by default:
@@ -32,8 +29,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     super.debugLabel,
     LogController? logController,
     this.compressionEnabled = false,
-  }) : _logScopeName = 'rpc.responder',
-       _log = logController?.scope('rpc.responder') ?? LogScope.noop {
+  }) : _log = logController?.scope('rpc.responder') ?? LogScope.noop {
     _validateServerTransport();
   }
 
@@ -43,16 +39,7 @@ final class RpcResponderEndpoint extends RpcEndpointBase
     super.debugLabel,
     LogController? logController,
     required this.compressionEnabled,
-  }) : _logScopeName = 'rpc.peer',
-       _log = logController?.scope('rpc.peer') ?? LogScope.noop;
-
-  /// Inject a [LogController] after construction.
-  ///
-  /// Used by the framework to wire [RpcAppConfig.logController] into
-  /// endpoints that were created by transport servers without one.
-  void setLogController(LogController controller) {
-    _log = controller.scope(_logScopeName);
-  }
+  }) : _log = logController?.scope('rpc.peer') ?? LogScope.noop;
 
   /// Which inbound messages enter the responder pipeline; null for all.
   bool Function(RpcTransportMessage message)? get _inboundFilter => null;

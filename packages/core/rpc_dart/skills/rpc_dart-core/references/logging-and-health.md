@@ -11,7 +11,10 @@ SPDX-License-Identifier: MIT
 - Create one `LogController` per process (or per test) and pass it to every
   endpoint and server as `logController:`; they name their own `rpc.*`
   scopes from it. Every other component takes `logger:`, a `LogScope`.
-  Without `logController:` an endpoint logs nothing.
+  Without `logController:` an endpoint logs nothing. A server mode's
+  `logController:` (`RpcResponderMode(register, logController: c)`) takes
+  the place of the server's own for every endpoint it builds; `RpcApp`
+  passes `RpcAppConfig.logController` that way.
 - `LogController` takes named parameters only. There is no `LogConfig`
   argument; `LogConfig` is a read-only snapshot from `controller.config`.
 - Inside your own classes hold a non-nullable `LogScope`, default it to

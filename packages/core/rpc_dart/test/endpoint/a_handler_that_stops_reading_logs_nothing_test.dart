@@ -48,10 +48,10 @@ void main() {
       if (r is LogEvent) reported.add(r.message);
     });
     final (client, server) = RpcChannelTransport.pair();
-    final responder = RpcResponderEndpoint(transport: server)
-      ..setLogController(log)
-      ..registerServiceContract(_ReadsOne(released))
-      ..start();
+    final responder =
+        RpcResponderEndpoint(transport: server, logController: log)
+          ..registerServiceContract(_ReadsOne(released))
+          ..start();
     final caller = RpcCallerEndpoint(transport: client);
     addTearDown(() async {
       await caller.close();

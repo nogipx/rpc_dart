@@ -236,9 +236,7 @@ base mixin RpcResponderPipelineMixin on RpcEndpointBase {
 
   void _rememberClosedStream(int streamId) => _respClosedStreams.add(streamId);
 
-  /// Built per ping, which is rare, so it logs to the endpoint's CURRENT scope:
-  /// `RpcResponderEndpoint.setLogController` replaces that scope after
-  /// construction, and a handler built once kept the old one.
+  /// Built per ping, which is rare.
   RpcResponderPingHandler get _respPingHandler => RpcResponderPingHandler(
     transport: transport,
     logger: _log,

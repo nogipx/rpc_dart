@@ -349,7 +349,9 @@ class RpcApp {
   }
 
   Future<void> _startServer() async {
-    _server = _serverBuilder!(RpcResponderMode(_setupEndpoint));
+    _server = _serverBuilder!(
+      RpcResponderMode(_setupEndpoint, logController: _config.logController),
+    );
     _log.info('Starting transport server');
     await _server!.start();
     _log.info('Transport server started');
@@ -411,9 +413,6 @@ class RpcApp {
   }
 
   void _setupEndpoint(RpcResponderEndpoint endpoint) {
-    if (_config.logController != null) {
-      endpoint.setLogController(_config.logController!);
-    }
     for (final i in _autoInterceptors) {
       endpoint.addInterceptor(i);
     }
