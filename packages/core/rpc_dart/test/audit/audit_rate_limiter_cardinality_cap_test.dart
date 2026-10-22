@@ -24,7 +24,7 @@ void main() {
         ),
       },
       keyExtractor: (c) => c.context.getValue(_userId),
-      nowMicros: () => fixedNow,
+      clock: () => DateTime.fromMicrosecondsSinceEpoch(fixedNow),
       maxTrackedKeys: 1000, // small cap so eviction is observable
     );
     addTearDown(limiter.dispose);

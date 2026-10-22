@@ -221,8 +221,9 @@ void limit(RpcResponderEndpoint responder) {
 - A refusal throws `RpcRateLimitException` (RESOURCE_EXHAUSTED + `RpcRetryInfo`),
   which the caller's default retry predicate treats as transient. Its `retryDelay` is the time until
   the refusing limit admits a call again, and the retry interceptor waits exactly that.
-- Other parameters: `maxTrackedKeys` (100000, LRU), `cleanupInterval`, `nowMicros`
-  (inject a fake clock in tests). Call `dispose()` at shutdown.
+- Other parameters: `maxTrackedKeys` (100000, LRU), `cleanupInterval`, `clock`
+  (a `DateTime Function()`, as on `RpcContext.withClock`, for a fake clock in
+  tests). Call `dispose()` at shutdown.
 
 ## Reconnecting client: `RpcClientConnection`
 

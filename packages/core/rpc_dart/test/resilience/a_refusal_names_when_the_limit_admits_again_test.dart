@@ -46,7 +46,10 @@ void main() {
     ),
   ]) {
     test('$name: waiting the pushback is enough', () async {
-      final limiter = RpcRateLimiter(global: limit, nowMicros: () => nowUs);
+      final limiter = RpcRateLimiter(
+        global: limit,
+        clock: () => DateTime.fromMicrosecondsSinceEpoch(nowUs),
+      );
       addTearDown(limiter.dispose);
 
       expect(await attempt(limiter), isNull);
@@ -67,7 +70,7 @@ void main() {
           max: 2,
           window: const Duration(seconds: 1),
         ),
-        nowMicros: () => nowUs,
+        clock: () => DateTime.fromMicrosecondsSinceEpoch(nowUs),
       );
       addTearDown(limiter.dispose);
       await attempt(limiter);

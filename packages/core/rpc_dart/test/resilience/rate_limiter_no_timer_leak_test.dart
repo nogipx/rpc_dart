@@ -75,7 +75,7 @@ void main() {
         ),
         keyExtractor: (call) => 'user-$nowUs',
         cleanupInterval: const Duration(seconds: 1),
-        nowMicros: () => nowUs,
+        clock: () => DateTime.fromMicrosecondsSinceEpoch(nowUs),
       );
 
       // Each call uses a fresh key, so without eviction the map grows forever.

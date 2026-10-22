@@ -91,7 +91,7 @@ No error message is a contract: match on the type or the status.
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` |
 | health metric `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` and its `timeout` | `RpcDeadlineExceededException(deadline)` |
-| `RpcContextUtils` | not exported; the endpoint gives a call without a trace id one, `RpcContext.withTraceId(id)` joins a trace. Spans belong to `rpc_dart_opentelemetry` |
+| `RpcContextUtils` | not exported; the endpoint gives a call without a trace id one, `RpcContext.withTraceId(id)` joins a trace, `RpcContext.generateTraceId()` mints one ahead of the call. Spans belong to `rpc_dart_opentelemetry` |
 | `ctx.createChild()`, `ctx.createChildWith(headers:, timeout:)`, `RpcContextBuilder.inheritFrom(ctx)` | `ctx.forward(headers:, timeout:)`, which drops this context's credentials; pass one on by naming it in `headers` |
 | `RpcContextBuilder` | the `RpcContext` factories and `with...` copies; `withBearerAuth`, `withBasicAuth` and `withApiKey` are on `RpcContext` |
 | `RpcContextUtils.merge(left, right)` | gone; chain `with...` copies |
@@ -101,6 +101,7 @@ No error message is a contract: match on the type or the status.
 | `RpcCallerEndpoint.start`, `RpcEndpointBase.start` | gone; a caller needs no start, a responder or peer endpoint still has `start()` |
 | `ping(timeout: d)` | `ping(context: RpcContext.withTimeout(d))`; the context's deadline is the one bound, as for any call |
 | `endpoint.unaryRequest` | `endpoint.unary`, named like the other three shapes |
+| `RpcRateLimiter(nowMicros:)` | `clock:`, a `DateTime Function()` like `RpcContext.withClock` and `LogController(clock:)`; the default stays a monotonic stopwatch |
 | `endpoint.getCancellationTokensForMethod` | gone; `activeCallCount` to count, a token in the context to cancel one call |
 | `SpanStatus` | `LogSpanStatus`; it no longer clashes with OpenTelemetry's `SpanStatus` |
 | `RpcStatus` as `int` constants, `RpcStatusException.statusCode` an `int` | `RpcStatus` is an enum with `code` and `grpcName`, `statusCode` is one of its values, `RpcStatus.fromCode(n)` reads a wire number (outside 0..16 is `unknown`); `RpcStatus.isFault(code)` is `status.isFault` |

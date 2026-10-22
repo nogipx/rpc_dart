@@ -526,6 +526,7 @@ RpcContext new withDeadline(DateTime deadline)
 RpcContext new withHeaders(Map<String, String> headers, {String? requestId})
 RpcContext new withTimeout(Duration timeout)
 RpcContext new withTraceId(String traceId)
+RpcContext static method generateTraceId() -> String
 RpcContext static method isContextValid(RpcContext? context) -> bool
 RpcContext static method monotonicNow() -> DateTime
 RpcContext static method sanitize(RpcContext context) -> RpcContext
@@ -943,7 +944,7 @@ RpcRateLimiter method interceptBidirectionalStream<TRequest, TResponse>(RpcCallI
 RpcRateLimiter method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
 RpcRateLimiter method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
 RpcRateLimiter method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
-RpcRateLimiter new new({RateLimit? global, Map<String, RateLimit> perService, Map<String, RateLimit> perMethod, RateLimit? perKeyFallback, String? Function(RpcCallInfo)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, int Function()? nowMicros})
+RpcRateLimiter new new({RateLimit? global, Map<String, RateLimit> perService, Map<String, RateLimit> perMethod, RateLimit? perKeyFallback, String? Function(RpcCallInfo)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, DateTime Function()? clock})
 RpcRawErrorDetail field typeUrl: String (get)
 RpcRawErrorDetail field value: Uint8List (get)
 RpcRawErrorDetail method encode() -> Uint8List

@@ -72,8 +72,10 @@ sends the downstream call's own credential, and passing the caller's on means
 naming it: `forward(headers: {'authorization': ctx.getHeader('authorization')!})`.
 `RpcContext.sanitize(ctx)` drops the same set.
 
-A call without a `traceId` gets one from the endpoint, on both sides; set one
-with `withTraceId` only to join an existing trace.
+A call without a `traceId` gets one from the endpoint, on both sides. Set one
+with `withTraceId` to join an existing trace, or with
+`RpcContext.withTraceId(RpcContext.generateTraceId())` to know it before the
+call.
 
 ```dart
 import 'package:rpc_dart/rpc_dart.dart';

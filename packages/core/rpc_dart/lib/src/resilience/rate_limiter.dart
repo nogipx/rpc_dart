@@ -527,10 +527,10 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// [cleanupInterval] controls how often stale per-key counters are evicted
   /// (only relevant when [keyExtractor] is set).
   ///
-  /// [nowMicros] supplies the current time in microseconds. It defaults to a
-  /// monotonic source (a process-wide [Stopwatch]) so timing cannot be broken
-  /// by wall-clock jumps and is testable. Pass a custom function to inject a
-  /// fake clock in tests.
+  /// [clock] replaces the time source, as on [RpcContext.withClock], for a
+  /// fake clock in tests. The default is a monotonic [Stopwatch] read as
+  /// microseconds, so wall-clock jumps cannot break the windows and a call
+  /// allocates no [DateTime].
   RpcRateLimiter({
     RateLimit? global,
     Map<String, RateLimit> perService = const {},
@@ -540,7 +540,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     Duration cleanupInterval = const Duration(minutes: 5),
     int maxTrackedKeys = 100000,
     bool meterServerStreamMessages = false,
-    int Function()? nowMicros,
+    DateTime Function()? clock,
   }) : _globalSpec = global,
        _perServiceSpec = Map.unmodifiable(perService),
        _perMethodSpec = Map.unmodifiable(perMethod),
@@ -548,7 +548,9 @@ class RpcRateLimiter extends IRpcInterceptor {
        _keyExtractor = keyExtractor,
        _meterServerStreamMessages = meterServerStreamMessages,
        _cleanupIntervalUs = cleanupInterval.inMicroseconds,
-       _nowMicros = nowMicros ?? _defaultMonotonicMicros {
+       _nowMicros = clock == null
+           ? _defaultMonotonicMicros
+           : (() => clock().microsecondsSinceEpoch) {
     // A throw, not an assert, which vanishes in release. At 0 the store evicts
     // each key as it is inserted, so every call gets a fresh counter and no
     // limit is ever enforced -- the opposite of what the operator asked for.

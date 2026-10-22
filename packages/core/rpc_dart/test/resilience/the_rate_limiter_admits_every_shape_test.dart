@@ -23,7 +23,7 @@ import 'package:test/test.dart';
 
 const int _n = 100;
 
-int _frozenClock() => 0;
+DateTime _frozenClock() => DateTime.fromMicrosecondsSinceEpoch(0);
 
 RpcCallInfo _ctx(String method) {
   final (clientTransport, _) = RpcChannelTransport.memoryPair();
@@ -38,7 +38,7 @@ RpcCallInfo _ctx(String method) {
 
 RpcRateLimiter _limiter() => RpcRateLimiter(
   global: RateLimit.slidingWindow(max: 5, window: const Duration(hours: 1)),
-  nowMicros: _frozenClock,
+  clock: _frozenClock,
 );
 
 /// Opens 100 calls and counts how many were not refused.
@@ -186,7 +186,7 @@ void main() {
     () async {
       // _check and _meterStream both no-op when no counter applies. The
       // establishment charge must not turn an unconfigured limiter into a gate.
-      final limiter = RpcRateLimiter(nowMicros: _frozenClock);
+      final limiter = RpcRateLimiter(clock: _frozenClock);
       addTearDown(limiter.dispose);
       final ctx = _ctx('free');
 

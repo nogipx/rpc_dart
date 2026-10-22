@@ -102,7 +102,7 @@ void main() {
         window: const Duration(minutes: 1),
       ),
       keyExtractor: (c) => c.context.getValue(_userId),
-      nowMicros: () => 1000000,
+      clock: () => DateTime.fromMicrosecondsSinceEpoch(1000000),
     );
     addTearDown(limiter.dispose);
 
@@ -128,7 +128,7 @@ void main() {
         window: const Duration(minutes: 1),
       ),
       keyExtractor: (c) => c.context.getValue(_userId),
-      nowMicros: () => 1000000,
+      clock: () => DateTime.fromMicrosecondsSinceEpoch(1000000),
       maxTrackedKeys: 1000, // smaller than the key set, so eviction happens
     );
     addTearDown(limiter.dispose);

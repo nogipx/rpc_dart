@@ -34,7 +34,7 @@ void main() {
     });
 
     // Fixed clock so the sliding window never advances during the test.
-    int frozenClock() => 0;
+    DateTime frozenClock() => DateTime.fromMicrosecondsSinceEpoch(0);
 
     test('server-stream (default): establishment metered once, every response '
         'passes through regardless of count', () async {
@@ -45,7 +45,7 @@ void main() {
           max: 3,
           window: const Duration(hours: 1),
         ),
-        nowMicros: frozenClock,
+        clock: frozenClock,
       );
 
       final out = await limiter.interceptServerStream<String, String>(
@@ -67,7 +67,7 @@ void main() {
             max: 3,
             window: const Duration(hours: 1),
           ),
-          nowMicros: frozenClock,
+          clock: frozenClock,
         );
 
         Future<Stream<String>> open() => Future.value(
@@ -96,7 +96,7 @@ void main() {
             window: const Duration(hours: 1),
           ),
           meterServerStreamMessages: true,
-          nowMicros: frozenClock,
+          clock: frozenClock,
         );
 
         final out = await limiter.interceptServerStream<String, String>(
@@ -134,7 +134,7 @@ void main() {
           max: 2,
           window: const Duration(hours: 1),
         ),
-        nowMicros: frozenClock,
+        clock: frozenClock,
       );
 
       late Stream<String> seenRequests;
@@ -177,7 +177,7 @@ void main() {
           max: 2,
           window: const Duration(hours: 1),
         ),
-        nowMicros: frozenClock,
+        clock: frozenClock,
       );
 
       late Stream<String> seenRequests;
@@ -211,7 +211,7 @@ void main() {
     });
 
     test('no limit configured: stream passes through unchanged', () async {
-      final limiter = RpcRateLimiter(nowMicros: frozenClock);
+      final limiter = RpcRateLimiter(clock: frozenClock);
 
       final out = await limiter.interceptServerStream<String, String>(
         callContext,
@@ -229,7 +229,7 @@ void main() {
           max: 2,
           window: const Duration(hours: 1),
         ),
-        nowMicros: frozenClock,
+        clock: frozenClock,
       );
       final unaryCtx = RpcCallInfo(
         endpoint: callContext.endpoint,

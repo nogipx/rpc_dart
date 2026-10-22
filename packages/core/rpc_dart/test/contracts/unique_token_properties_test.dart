@@ -30,7 +30,7 @@ void main() {
     const count = 50000;
     final seen = <String>{};
     for (var i = 0; i < count; i++) {
-      seen.add(RpcContextUtils.generateTraceId());
+      seen.add(RpcContext.generateTraceId());
     }
     expect(seen, hasLength(count));
   });
@@ -39,7 +39,7 @@ void main() {
     final traces = <String>{};
     final requests = <String>{};
     for (var i = 0; i < 5000; i++) {
-      traces.add(RpcContextUtils.generateTraceId());
+      traces.add(RpcContext.generateTraceId());
       requests.add(RpcContext.withHeaders(const {}).requestId);
     }
     expect(traces, hasLength(5000));
@@ -53,7 +53,7 @@ void main() {
     // rewrite of the draw loop would produce.
     final urlSafe = RegExp(r'^trace_[A-Za-z0-9_-]{22}$');
     for (var i = 0; i < 500; i++) {
-      expect(RpcContextUtils.generateTraceId(), matches(urlSafe));
+      expect(RpcContext.generateTraceId(), matches(urlSafe));
     }
   });
 
@@ -64,7 +64,7 @@ void main() {
     // produce unique, well-formed tokens thanks to the counter.
     final samples = <List<int>>[];
     for (var i = 0; i < 200; i++) {
-      final token = RpcContextUtils.generateTraceId().substring(6);
+      final token = RpcContext.generateTraceId().substring(6);
       samples.add(base64Url.decode('$token=='));
     }
     for (var position = 0; position < 12; position++) {

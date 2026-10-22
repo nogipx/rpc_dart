@@ -87,6 +87,11 @@ final class RpcContext {
   /// expiring a call early or stretching it by the jump.
   static DateTime monotonicNow() => _origin.add(_sinceOrigin.elapsed);
 
+  /// A new trace id in the format the endpoints mint, for a trace that must be
+  /// known before its first call:
+  /// `RpcContext.withTraceId(RpcContext.generateTraceId())`.
+  static String generateTraceId() => RpcContextUtils.generateTraceId();
+
   static final DateTime _origin = DateTime.now();
   static final Stopwatch _sinceOrigin = Stopwatch()..start();
 

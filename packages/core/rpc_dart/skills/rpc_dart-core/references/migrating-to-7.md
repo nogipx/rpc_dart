@@ -52,7 +52,8 @@ builds a transport, a channel or frames imports
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` (`maxHeaders`, `maxHeaderNameBytes`, `maxHeaderValueBytes`) |
 | health detail `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` | `RpcDeadlineExceededException(deadline)` |
-| `RpcContextUtils.withTracing(...)`, `RpcContextUtils.generateTraceId()` | nothing: the endpoint gives a call without a trace id one; `RpcContext.withTraceId(id)` to join a trace. Spans come from `rpc_dart_opentelemetry` |
+| `RpcContextUtils.withTracing(...)` | nothing: the endpoint gives a call without a trace id one; `RpcContext.withTraceId(id)` to join a trace. Spans come from `rpc_dart_opentelemetry` |
+| `RpcContextUtils.generateTraceId()` | `RpcContext.generateTraceId()` |
 | `RpcHeaders.xRouteService` | gone; route on the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | drop `const` |
 | `RpcList.toMutableList()` | `toList()`; `RpcList` is an `Iterable` and `where` returns an `Iterable` |
@@ -73,6 +74,7 @@ builds a transport, a channel or frames imports
 | `start()` on an `RpcCallerEndpoint` | delete the call; only a responder or peer endpoint starts |
 | `endpoint.ping(timeout: d)` | `endpoint.ping(context: RpcContext.withTimeout(d))` |
 | `endpoint.unaryRequest(...)` | `endpoint.unary(...)`, named like `serverStream`, `clientStream`, `bidirectionalStream` |
+| `RpcRateLimiter(nowMicros: () => us)` | `RpcRateLimiter(clock: () => DateTime.fromMicrosecondsSinceEpoch(us))` |
 | `getCancellationTokensForMethod(...)` | gone; `activeCallCount`, or a token in the call's context |
 | `SpanStatus` | `LogSpanStatus` |
 | `RpcStatus` `int` constants; `RpcStatusException(14, ...)`; `int status = e.statusCode` | `RpcStatus` is an enum and `statusCode` its value: `RpcStatus.unavailable`, `RpcStatus.fromCode(14)`; the wire number is `status.code` |

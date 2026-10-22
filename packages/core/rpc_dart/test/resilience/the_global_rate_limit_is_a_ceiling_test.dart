@@ -67,7 +67,7 @@ void main() {
           window: const Duration(hours: 1),
         ),
       },
-      nowMicros: clock.call,
+      clock: () => DateTime.fromMicrosecondsSinceEpoch(clock.call()),
     );
     addTearDown(limiter.dispose);
 
@@ -97,7 +97,7 @@ void main() {
             window: const Duration(hours: 1),
           ),
         },
-        nowMicros: clock.call,
+        clock: () => DateTime.fromMicrosecondsSinceEpoch(clock.call()),
       );
       addTearDown(limiter.dispose);
 
@@ -120,7 +120,7 @@ void main() {
             window: const Duration(hours: 1),
           ),
         },
-        nowMicros: clock.call,
+        clock: () => DateTime.fromMicrosecondsSinceEpoch(clock.call()),
       );
       addTearDown(limiter.dispose);
 
@@ -150,7 +150,7 @@ void main() {
           window: const Duration(hours: 1),
         ),
       },
-      nowMicros: clock.call,
+      clock: () => DateTime.fromMicrosecondsSinceEpoch(clock.call()),
     );
     addTearDown(limiter.dispose);
     final ctx = _ctx('hot');
@@ -187,7 +187,7 @@ void main() {
           window: const Duration(hours: 1),
         ),
       },
-      nowMicros: clock.call,
+      clock: () => DateTime.fromMicrosecondsSinceEpoch(clock.call()),
     );
     addTearDown(limiter.dispose);
 

@@ -60,7 +60,7 @@ void main() {
           meterServerStreamMessages: true,
           // Tiny interval so the real periodic cleanup runs during the test.
           cleanupInterval: const Duration(milliseconds: 5),
-          nowMicros: () => nowUs,
+          clock: () => DateTime.fromMicrosecondsSinceEpoch(nowUs),
         );
         addTearDown(limiter.dispose);
 
