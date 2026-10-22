@@ -14,6 +14,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 const _kib = 1024;
 
@@ -50,9 +52,9 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-Future<bool> _settles(bool Function() done) async {
+Future<bool> _settles(Future<bool> Function() done) async {
   for (var i = 0; i < 500; i++) {
-    if (done()) return true;
+    if (await done()) return true;
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   return done();
@@ -101,12 +103,12 @@ void main() {
       );
 
       final callerIdle = await _settles(
-        () => client.flowControlStateSizes.values.every((v) => v == 0),
+        () async => (await flowStateSizes(client)).values.every((v) => v == 0),
       );
       expect(
         callerIdle,
         isTrue,
-        reason: 'caller state left behind: ${client.flowControlStateSizes}',
+        reason: 'caller state left behind: ${await flowStateSizes(client)}',
       );
 
       // And the connection still serves an ordinary upload afterwards.

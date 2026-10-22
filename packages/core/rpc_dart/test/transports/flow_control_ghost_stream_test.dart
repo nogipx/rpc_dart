@@ -29,6 +29,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 const _cap = 64;
@@ -111,7 +113,7 @@ void main() {
     test('grant frames', () async {
       final rig = _connect();
       await _ghostFrames(rig, _cap * 20, grants: true);
-      final sizes = rig.client.flowControlStateSizes;
+      final sizes = await flowStateSizes(rig.client);
       expect(
         sizes['sendCredit'],
         lessThanOrEqualTo(_cap),
@@ -123,7 +125,7 @@ void main() {
     test('data frames', () async {
       final rig = _connect();
       await _ghostFrames(rig, _cap * 20, grants: false);
-      final sizes = rig.client.flowControlStateSizes;
+      final sizes = await flowStateSizes(rig.client);
       expect(
         sizes['pendingGrant'],
         lessThanOrEqualTo(_cap),
@@ -181,7 +183,7 @@ void main() {
         );
       }
       await Future<void>.delayed(const Duration(milliseconds: 300));
-      final sizes = rig.client.flowControlStateSizes;
+      final sizes = await flowStateSizes(rig.client);
       for (final entry in sizes.entries) {
         expect(
           entry.value,

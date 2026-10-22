@@ -31,6 +31,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 const int _window = 64 * 1024;
@@ -108,7 +110,7 @@ Future<Map<String, int>> _drive({required bool drains}) async {
     await Future<void>.delayed(const Duration(milliseconds: 150));
   }
 
-  final sizes = Map<String, int>.from(clientT.flowControlStateSizes);
+  final sizes = Map<String, int>.from(await flowStateSizes(clientT));
   await caller.close();
   await responder.close();
   await clientT.close();

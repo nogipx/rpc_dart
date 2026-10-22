@@ -23,6 +23,8 @@ library;
 import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 /// Builds both ends of a `pair()`, awaiting one event-loop turn in between when
 /// [gap] is set, and returns the credit each side ended up with.
 Future<(int?, int?)> _credits({required bool gap}) async {
@@ -46,8 +48,8 @@ Future<(int?, int?)> _credits({required bool gap}) async {
   // Let every constructor-time advertisement land.
   await Future<void>.delayed(const Duration(milliseconds: 200));
   return (
-    client.flowControlConnectionCredit,
-    server.flowControlConnectionCredit,
+    await flowConnectionCredit(client),
+    await flowConnectionCredit(server),
   );
 }
 
@@ -93,10 +95,8 @@ void main() {
     });
     await Future<void>.delayed(const Duration(milliseconds: 200));
 
-    expect(client.flowControlConnectionCredit, isNotNull);
-    expect(
-      server.flowControlConnectionCredit,
-      client.flowControlConnectionCredit,
-    );
+    final clientCredit = await flowConnectionCredit(client);
+    expect(clientCredit, isNotNull);
+    expect(await flowConnectionCredit(server), clientCredit);
   });
 }

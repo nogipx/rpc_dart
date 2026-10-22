@@ -28,6 +28,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 /// A window a few messages exhaust, with no grace timer to hand the sender its
 /// credit back for free — the grace would rescue the very state under test.
 const _policy = RpcSecurityPolicy(
@@ -60,7 +62,7 @@ Future<Object?> _parkOne(
 
   await Future<void>.delayed(const Duration(milliseconds: 50));
   expect(
-    client.flowControlStateSizes['waiters'],
+    (await flowStateSizes(client))['waiters'],
     greaterThan(0),
     reason: 'nothing parked, so this test proves nothing',
   );

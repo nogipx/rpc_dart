@@ -139,14 +139,20 @@ Future<Map<String, int>> endpointGauges(RpcEndpointBase endpoint) async {
 
 /// Integer health details of [transport] as `transport.<key>`, and for a
 /// channel transport the per-stream flow-control state as `fc.<key>`.
+///
+/// `connectionCredit` is left out: it is a send window, not a resource. The
+/// peer returns credit in batches, so it rests below its start by whatever
+/// the peer has not yet granted back.
 Future<Map<String, int>> transportGauges(IRpcTransport transport) async {
   final out = <String, int>{};
   final health = await transport.health();
   for (final e in health.details.entries) {
+    if (e.key == 'connectionCredit') continue;
     if (e.value is int) out['transport.${e.key}'] = e.value! as int;
   }
-  if (transport is RpcChannelTransport) {
-    for (final e in transport.flowControlStateSizes.entries) {
+  final flow = health.details['flowControl'];
+  if (flow is Map<String, int>) {
+    for (final e in flow.entries) {
       out['fc.${e.key}'] = e.value;
     }
   }

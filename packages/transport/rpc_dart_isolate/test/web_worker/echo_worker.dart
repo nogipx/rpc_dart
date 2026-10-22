@@ -73,7 +73,7 @@ final class _EchoContract extends RpcResponderContract {
       handler: (r, {RpcContext? context}) async {
         final t = _transport;
         return (t is RpcChannelTransport
-                ? '${t.flowControlConnectionCredit}'
+                ? '${(await t.health()).details['connectionCredit']}'
                 : 'not a channel transport')
             .rpc;
       },

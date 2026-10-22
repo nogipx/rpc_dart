@@ -10,7 +10,7 @@
 // Observed on both sides through the public gauges: the endpoints' integer
 // metrics (`activeResponders`, `openStreams`, `pendingRequests`, ...), every
 // integer the transport's health() reports, and a channel transport's
-// `flowControlStateSizes`. The handler's timer is held through its call scope,
+// `flowControl` map in that report. The handler's timer is held through its call scope,
 // and its release is an event the handler reports (L-11), as is the scope's
 // disposal.
 //

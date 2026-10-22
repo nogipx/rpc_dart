@@ -25,6 +25,35 @@ final class _OneStreamViolation extends RpcFrameException
   _OneStreamViolation(super.message) : super.policy();
 }
 
+/// [RpcChannelTransport.flowCredit]: credit goes back through the transport's
+/// [RpcFlowController].
+final class _ChannelFlowCredit implements IRpcFlowCredit {
+  _ChannelFlowCredit(this._fc);
+
+  final RpcFlowController _fc;
+
+  @override
+  void deferFlowCredit(int streamId) => _fc.defer(streamId);
+
+  @override
+  void returnFlowCredit(int streamId, int bytes) =>
+      _fc.returnCredit(streamId, bytes);
+}
+
+/// [RpcChannelTransport.connectionBuffer]: the connection total of the
+/// transport's [RpcStreamBufferLedger].
+final class _ChannelConnectionBuffer implements IRpcConnectionBuffer {
+  _ChannelConnectionBuffer(this._buffers);
+
+  final RpcStreamBufferLedger _buffers;
+
+  @override
+  bool chargeConnectionBuffer(int bytes) => _buffers.chargeTotal(bytes);
+
+  @override
+  void releaseConnectionBuffer(int bytes) => _buffers.releaseTotal(bytes);
+}
+
 /// Full [IRpcTransport] built from an [IRpcMultiplexedChannel].
 ///
 /// Adds stream-ID management, policy enforcement, flow control and health
@@ -36,8 +65,7 @@ final class _OneStreamViolation extends RpcFrameException
 /// // from a multiplexed one
 /// RpcChannelTransport(channel: myMuxChannel, isClient: true);
 /// ```
-class RpcChannelTransport extends IRpcTransport
-    implements IRpcFlowCredit, IRpcConnectionBuffer {
+class RpcChannelTransport extends IRpcTransport {
   final IRpcMultiplexedChannel _channel;
   final RpcStreamIdManager _idManager;
   final RpcSecurityPolicy _policy;
@@ -124,24 +152,6 @@ class RpcChannelTransport extends IRpcTransport
   /// Streams whose peer has sent a gRPC status. Used on the CLIENT side to tell
   /// a completed response from a truncated one at end-of-stream; cleared there.
   final Set<int> _statusSeen = {};
-
-  /// Sizes of the per-stream flow-control maps, for diagnostics and tests.
-  ///
-  /// Exposed because these are keyed by PEER-CHOSEN stream ids, so their growth
-  /// is the observable symptom of a peer naming ids that never become streams.
-  /// Each is capped at [RpcSecurityPolicy.maxActiveStreams]; a connection with
-  /// healthy traffic sits far below that and returns to near zero when idle.
-  Map<String, int> get flowControlStateSizes => _fc.stateSizes;
-
-  /// Connection-pool credit still available to send, or null when the peer has
-  /// not advertised a connection window.
-  ///
-  /// Diagnostics, and specifically so a test can READ this rather than infer
-  /// it: every indirect observable — how much a fresh stream can push, where a
-  /// sender wedges — sits downstream of a negotiation that hides an
-  /// over-credit. That this never exceeds the configured window is the
-  /// invariant.
-  int? get flowControlConnectionCredit => _fc.connectionCredit;
 
   StreamSubscription<RpcTransportMessage>? _channelSub;
   bool _closed = false;
@@ -548,18 +558,36 @@ class RpcChannelTransport extends IRpcTransport
     }
   }
 
+  /// What every [health] report carries, whatever its level.
+  ///
+  /// `flowControl` holds the sizes of the per-stream flow-control maps. These
+  /// are keyed by PEER-CHOSEN stream ids, so their growth is the observable
+  /// symptom of a peer naming ids that never become streams. Each is capped at
+  /// [RpcSecurityPolicy.maxActiveStreams]; a connection with healthy traffic
+  /// sits far below that and returns to near zero when idle.
+  ///
+  /// `connectionCredit` is the connection-pool credit still available to send,
+  /// absent while the peer has advertised no connection window. It never
+  /// exceeds the configured window.
+  Map<String, Object?> _flowDetails() => {
+    'flowControl': _fc.stateSizes,
+    'connectionCredit': ?_fc.connectionCredit,
+  };
+
   @override
   Future<RpcHealthStatus> health() async {
     if (_closed) {
       return RpcHealthStatus.closed(
         component: 'RpcChannelTransport',
         message: 'Transport is closed',
+        details: _flowDetails(),
       );
     }
     if (_channel.isClosed) {
       return RpcHealthStatus.unhealthy(
         component: 'RpcChannelTransport',
         message: 'Underlying channel is closed',
+        details: _flowDetails(),
       );
     }
     if (!_isReady) {
@@ -575,6 +603,7 @@ class RpcChannelTransport extends IRpcTransport
       return RpcHealthStatus.degraded(
         component: 'RpcChannelTransport',
         message: 'Channel is still connecting',
+        details: _flowDetails(),
       );
     }
     return RpcHealthStatus.healthy(
@@ -595,6 +624,7 @@ class RpcChannelTransport extends IRpcTransport
         // peer naming ids we never minted must not move it at all.
         'statusSeen': _statusSeen.length,
         'zeroCopy': _channel.supportsZeroCopy,
+        ..._flowDetails(),
       },
     );
   }
@@ -701,27 +731,16 @@ class RpcChannelTransport extends IRpcTransport
   // it cannot own — which stream ids are still live, and where a grant goes.
 
   @override
-  IRpcFlowCredit get flowCredit => this;
+  late final IRpcFlowCredit flowCredit = _ChannelFlowCredit(_fc);
 
   /// True: the channel protocol carries message credit.
   @override
   bool get grantsMessageCredit => true;
 
   @override
-  IRpcConnectionBuffer get connectionBuffer => this;
-
-  @override
-  void deferFlowCredit(int streamId) => _fc.defer(streamId);
-
-  @override
-  void returnFlowCredit(int streamId, int bytes) =>
-      _fc.returnCredit(streamId, bytes);
-
-  @override
-  bool chargeConnectionBuffer(int bytes) => _buffers.chargeTotal(bytes);
-
-  @override
-  void releaseConnectionBuffer(int bytes) => _buffers.releaseTotal(bytes);
+  late final IRpcConnectionBuffer connectionBuffer = _ChannelConnectionBuffer(
+    _buffers,
+  );
 
   /// Records [streamId] as finished, keeping [_finishedStreams] bounded.
   ///

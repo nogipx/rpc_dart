@@ -23,6 +23,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 /// A message whose WIRE size and DECODED size are set independently: [wire] is
 /// padding that is serialized, [payload] is a length the receiver would
 /// allocate.
@@ -110,11 +112,11 @@ typedef _Run = ({
 /// `dart test`'s own 30 s per-test timeout so a regression is reported by the
 /// assertion rather than by the runner.
 Future<void> _until(
-  bool Function() done, {
+  FutureOr<bool> Function() done, {
   Duration ceiling = const Duration(seconds: 10),
 }) async {
   final deadline = DateTime.now().add(ceiling);
-  while (!done() && DateTime.now().isBefore(deadline)) {
+  while (!await done() && DateTime.now().isBefore(deadline)) {
     await Future<void>.delayed(const Duration(milliseconds: 2));
   }
 }
@@ -189,13 +191,13 @@ Future<_Run> _run({
     // Sampled AT the park, not at an arbitrary point on the way to it: `first`
     // used to be whatever the producer had reached when the clock ran out, which
     // is the window's number only if it got there.
-    await _until(() => server.flowControlStateSizes['waiters'] == 1);
+    await _until(() async => (await flowStateSizes(server))['waiters'] == 1);
   }
   final first = produced[0];
   final decoded = _Blob.decoded - decodedBefore;
   // `server` IS the sender: a server stream flows responder -> caller, so its
   // own credit map is what bounds it.
-  final senderState = server.flowControlStateSizes;
+  final senderState = await flowStateSizes(server);
   if (resume) {
     sub.resume();
     // "Four times more messages" is not a function of 250 ms either. The ceiling

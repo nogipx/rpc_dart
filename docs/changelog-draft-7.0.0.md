@@ -122,6 +122,7 @@ No error message is a contract: match on the type or the status.
 | endpoint pipeline members (`handleUnary` and the other three, `start*Listening`, `close*Resources`, `collect*Metrics`, `registeredMethods`, `registeredMethodBindings`, `validateMethodExists`, `getCancellationToken`, `responderIsListening`) and `RpcResponderContract.registrations` | not public; `collectEndpointMetrics()` for the metrics |
 | `IRpcMiddleware`, `addMiddleware`, `RpcEndpointMetrics.middlewareCount` | an `IRpcInterceptor`, the one way to wrap a call: it changes the request before `next` or maps the request or response stream |
 | `RpcMiddlewareContext` | `RpcCallInfo`, whose `direction` is always set |
+| `RpcChannelTransport.flowControlStateSizes`, `flowControlConnectionCredit` | `(await transport.health()).details['flowControl']` and `['connectionCredit']`; the transport reaches its flow control only through `flowCredit` and `connectionBuffer` |
 | `collectEndpointMetrics()['openStreams']`, a map | a typed snapshot per endpoint: `RpcCallerEndpointMetrics`, `RpcResponderEndpointMetrics`, `RpcPeerEndpointMetrics`; no field is null; `toJson()` for the map |
 
 **`grpc.health.v1` speaks protobuf.** `GrpcHealthCheckContract` was CBOR on the

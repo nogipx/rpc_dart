@@ -35,6 +35,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 // The connection window is deliberately SMALL. _fcCreditConnection batches and
 // only sends a grant once half the window has accumulated, so a debt below that
 // threshold produces no window update at all -- which is why four earlier
@@ -99,7 +101,7 @@ void main() {
       // Read the SENDER's credit. Crediting the pool on the receive side is sent
       // to the peer as a window update, so a double credit inflates what the
       // CLIENT believes it may send -- the receiver's own number never moves.
-      final credit = client.flowControlConnectionCredit;
+      final credit = await flowConnectionCredit(client);
       await serverSub.cancel();
       await client.close();
       await server.close();

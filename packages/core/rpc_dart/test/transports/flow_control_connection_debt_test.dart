@@ -31,6 +31,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 const int _streamWindow = 256 * 1024;
 const int _connWindow = 1024 * 1024;
 const int _chunk = 32 * 1024;
@@ -205,8 +207,9 @@ void main() {
 
   test('the debt ledger is exposed alongside its neighbours', () async {
     final (client, server) = RpcChannelTransport.pair();
-    expect(client.flowControlStateSizes.containsKey('owedConn'), isTrue);
-    expect(client.flowControlStateSizes['owedConn'], 0);
+    final sizes = await flowStateSizes(client);
+    expect(sizes.containsKey('owedConn'), isTrue);
+    expect(sizes['owedConn'], 0);
     await client.close();
     await server.close();
   });

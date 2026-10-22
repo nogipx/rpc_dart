@@ -20,6 +20,8 @@ import 'dart:async';
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 const _frameBytes = 256 * 1024;
 
@@ -65,8 +67,8 @@ Future<void> _probe({
   // blocked on the window, which is the state under investigation.
   var peakWaiters = 0;
   var parkedMs = 0;
-  final sampler = Timer.periodic(const Duration(milliseconds: 20), (_) {
-    final w = clientT.flowControlStateSizes['waiters'] ?? 0;
+  final sampler = Timer.periodic(const Duration(milliseconds: 20), (_) async {
+    final w = (await flowStateSizes(clientT))['waiters'] ?? 0;
     if (w > 0) parkedMs += 20;
     if (w > peakWaiters) peakWaiters = w;
   });

@@ -108,10 +108,13 @@ Future<Map<String, int>> _metrics(
   }
   final health = await transport.health();
   for (final e in health.details.entries) {
+    // A send window, not a resource; see transportGauges.
+    if (e.key == 'connectionCredit') continue;
     if (e.value is int) out['transport.${e.key}'] = e.value! as int;
   }
-  if (transport is RpcChannelTransport) {
-    for (final e in transport.flowControlStateSizes.entries) {
+  final flow = health.details['flowControl'];
+  if (flow is Map<String, int>) {
+    for (final e in flow.entries) {
       out['fc.${e.key}'] = e.value;
     }
   }

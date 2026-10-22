@@ -14,6 +14,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 final _codec = RpcCodec(RpcString.fromJson);
 
 final class _EchoContract extends RpcResponderContract {
@@ -68,12 +70,11 @@ void main() {
     // The release runs in the responder's cleanup, after the trailer is sent.
     await Future<void>.delayed(const Duration(milliseconds: 50));
 
+    final sizes = await flowStateSizes(under);
     expect(
-      under.flowControlStateSizes.values.every((n) => n == 0),
+      sizes.values.every((n) => n == 0),
       isTrue,
-      reason:
-          'per-stream state of answered calls is still held: '
-          '${under.flowControlStateSizes}',
+      reason: 'per-stream state of answered calls is still held: $sizes',
     );
   });
 }

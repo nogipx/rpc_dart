@@ -17,6 +17,8 @@ import 'dart:async';
 import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
+import '../utils/flow_diagnostics.dart';
+
 const _mib = 1024 * 1024;
 
 /// Four times the 16 MiB `const RpcSecurityPolicy()` defaults to, so a 20 MiB
@@ -216,7 +218,7 @@ void main() {
 
       await started.future.timeout(const Duration(seconds: 10));
       expect(
-        under.flowControlStateSizes['deferred'],
+        (await flowStateSizes(under))['deferred'],
         1,
         reason:
             'without a flowCredit on the proxy the pipeline credits on '

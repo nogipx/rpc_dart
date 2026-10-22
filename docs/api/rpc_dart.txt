@@ -405,10 +405,8 @@ RpcChannelFrame static method decodeAll(Uint8List data, {int? maxPayloadLen, int
 RpcChannelFrame static method encodeData({required int streamId, required Uint8List payload, bool endOfStream}) -> Uint8List
 RpcChannelFrame static method encodeEndOfStream(int streamId) -> Uint8List
 RpcChannelFrame static method encodeMetadata({required int streamId, required RpcMetadata metadata, bool endOfStream}) -> Uint8List
-RpcChannelTransport field connectionBuffer: IRpcConnectionBuffer (get)
-RpcChannelTransport field flowControlConnectionCredit: int? (get)
-RpcChannelTransport field flowControlStateSizes: Map<String, int> (get)
-RpcChannelTransport field flowCredit: IRpcFlowCredit (get)
+RpcChannelTransport field connectionBuffer: IRpcConnectionBuffer? (get)
+RpcChannelTransport field flowCredit: IRpcFlowCredit? (get)
 RpcChannelTransport field grantsMessageCredit: bool (get)
 RpcChannelTransport field incomingMessages: Stream<RpcTransportMessage> (get)
 RpcChannelTransport field isClient: bool (get)
@@ -419,18 +417,14 @@ RpcChannelTransport field reconnectOutcome: IRpcReconnectOutcome? (get)
 RpcChannelTransport field securityPolicy: RpcSecurityPolicy (get)
 RpcChannelTransport field supportsStreamIdResume: bool (get)
 RpcChannelTransport field supportsZeroCopy: bool (get)
-RpcChannelTransport method chargeConnectionBuffer(int bytes) -> bool
 RpcChannelTransport method close() -> Future<void>
 RpcChannelTransport method createStream() -> int
-RpcChannelTransport method deferFlowCredit(int streamId) -> void
 RpcChannelTransport method finishSending(int streamId) -> Future<void>
 RpcChannelTransport method getMessagesForStream(int streamId) -> Stream<RpcTransportMessage>
 RpcChannelTransport method health() -> Future<RpcHealthStatus>
-RpcChannelTransport method releaseConnectionBuffer(int bytes) -> void
 RpcChannelTransport method releaseStreamId(int streamId) -> bool
 RpcChannelTransport method resetStream(int streamId, {String? reason}) -> Future<bool>
 RpcChannelTransport method resumeStreamIdsAfter(int streamId) -> void
-RpcChannelTransport method returnFlowCredit(int streamId, int bytes) -> void
 RpcChannelTransport method sendDirectObject(int streamId, Object object, {bool endStream}) -> Future<void>
 RpcChannelTransport method sendMessage(int streamId, Uint8List data, {bool endStream}) -> Future<void>
 RpcChannelTransport method sendMetadata(int streamId, RpcMetadata metadata, {bool endStream}) -> Future<void>
@@ -1251,7 +1245,7 @@ type RpcCancellationToken : Object (rpc_dart.dart, transport.dart, transport_io.
 type RpcCancelledException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcChannelCloseReason [required] : Object (transport.dart, transport_io.dart)
 type RpcChannelFrame : Object (transport.dart, transport_io.dart)
-type RpcChannelTransport : IRpcConnectionBuffer, IRpcFlowCredit, IRpcTransport, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcChannelTransport : IRpcTransport, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCircuitBreakerInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientConnecting : Object, RpcClientConnectionState (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcClientConnection : Object (rpc_dart.dart, transport.dart, transport_io.dart)

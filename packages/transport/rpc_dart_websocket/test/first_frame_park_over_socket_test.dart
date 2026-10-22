@@ -140,8 +140,10 @@ Future<void> _probe({
 
   var peakWaiters = 0;
   var parkedMs = 0;
-  final sampler = Timer.periodic(const Duration(milliseconds: 20), (_) {
-    final w = transport.flowControlStateSizes['waiters'] ?? 0;
+  final sampler = Timer.periodic(const Duration(milliseconds: 20), (_) async {
+    final flow =
+        (await transport.health()).details['flowControl']! as Map<String, int>;
+    final w = flow['waiters'] ?? 0;
     if (w > 0) parkedMs += 20;
     if (w > peakWaiters) peakWaiters = w;
   });
