@@ -22,32 +22,17 @@ abstract base class RpcEndpointBase {
     : _transport = transport;
 
   /// A snapshot of the endpoint's counters, for health reporting and tests.
-  RpcEndpointMetrics collectEndpointMetrics() => _metrics();
+  ///
+  /// Each endpoint narrows the type to its own metrics.
+  RpcEndpointMetrics collectEndpointMetrics() => _commonMetrics();
 
-  /// The snapshot with the halves this endpoint has.
-  RpcEndpointMetrics _metrics({
-    _ResponderCounts? responder,
-    _CallerCounts? caller,
-  }) => RpcEndpointMetrics(
+  /// The counters every endpoint has.
+  RpcEndpointMetrics _commonMetrics() => RpcEndpointMetrics(
     isActive: _isActive,
     interceptorCount: _interceptors.length,
     transportClosed: _transport.isClosed,
     transportType: _transport.runtimeType.toString(),
     debugLabel: debugLabel,
-    registeredContracts: responder?.registeredContracts,
-    registeredMethods: responder?.registeredMethods,
-    isListening: responder?.isListening,
-    isDraining: responder?.isDraining,
-    openStreams: responder?.openStreams,
-    preMethodBufferedBytes: responder?.preMethodBufferedBytes,
-    metadataStreams: responder?.metadataStreams,
-    bufferedMessages: responder?.bufferedMessages,
-    preBindBuffers: responder?.preBindBuffers,
-    activeResponders: responder?.activeResponders,
-    contractKeys: responder?.contractKeys,
-    pendingRequests: caller?.pendingRequests,
-    trackedMethods: caller?.trackedMethods,
-    activeMethodKeys: caller?.activeMethodKeys,
   );
 
   RpcHealthStatus _createEndpointStatus(RpcHealthStatus transportStatus) {

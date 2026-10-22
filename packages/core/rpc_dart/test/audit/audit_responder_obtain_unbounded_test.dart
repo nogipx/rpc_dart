@@ -48,7 +48,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
     final metrics = responder.collectEndpointMetrics();
-    final openStreams = metrics.openStreams!;
+    final openStreams = metrics.openStreams;
 
     // Correct behavior: meaningless frames should not pile up unbounded state.
     expect(

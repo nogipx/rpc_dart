@@ -63,7 +63,7 @@ void main() {
     await server.close();
   });
 
-  int openStreams() => responder.collectEndpointMetrics().openStreams!;
+  int openStreams() => responder.collectEndpointMetrics().openStreams;
 
   Future<StreamSubscription<RpcString>> openSlowStream() async {
     final sub = caller

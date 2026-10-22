@@ -49,10 +49,12 @@ final class RpcPeerEndpoint extends RpcResponderEndpoint
   }
 
   @override
-  RpcEndpointMetrics collectEndpointMetrics() => _metrics(
-    responder: _collectResponderMetrics(),
-    caller: _collectCallerMetrics(),
-  );
+  RpcPeerEndpointMetrics collectEndpointMetrics() =>
+      RpcPeerEndpointMetrics._from(
+        _commonMetrics(),
+        _collectResponderMetrics(),
+        _collectCallerMetrics(),
+      );
 
   // ---------------------------------------------------------------------------
   // Parity filter

@@ -31,8 +31,8 @@ final class RpcCallerEndpoint extends RpcEndpointBase
   }
 
   @override
-  RpcEndpointMetrics collectEndpointMetrics() =>
-      _metrics(caller: _collectCallerMetrics());
+  RpcCallerEndpointMetrics collectEndpointMetrics() =>
+      RpcCallerEndpointMetrics._from(_commonMetrics(), _collectCallerMetrics());
 
   @override
   Future<void> _closeResources() async {

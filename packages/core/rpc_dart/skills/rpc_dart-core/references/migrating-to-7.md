@@ -65,7 +65,7 @@ builds a transport, a channel or frames imports
 | `call.updateContext(ctx)` / `call.context = ctx` in an interceptor | pass `ctx` to `next(ctx, request)` |
 | `ctx.withValue('key', v)`, `ctx.getValue<T>('key')` | a typed key: `const key = RpcContextKey<T>('key')`, then `withValue(key, v)` / `getValue(key)` |
 | `getValue<RpcCallScope>(RpcCallScope)` | `ctx.callScope` |
-| `endpoint.collectEndpointMetrics()['openStreams']` | `endpoint.collectEndpointMetrics().openStreams` (`RpcEndpointMetrics`; `toJson()` for the map) |
+| `endpoint.collectEndpointMetrics()['openStreams']` | `endpoint.collectEndpointMetrics().openStreams` (`RpcResponderEndpointMetrics`; a caller endpoint returns `RpcCallerEndpointMetrics`, a peer `RpcPeerEndpointMetrics`; `toJson()` for the map) |
 | `RpcContextBuilder()...build()` | `RpcContext.empty()` or a factory, then `with...` copies; `withBearerAuth`, `withBasicAuth`, `withApiKey` are on `RpcContext` |
 | `ctx.createChild()`, `ctx.createChildWith(...)`, `RpcContextBuilder.inheritFrom(ctx)` | `ctx.forward(headers:, timeout:)`; it drops `ctx`'s credentials, so pass one on by naming it in `headers` |
 | `RpcContextUtils.merge(a, b)` | gone; chain `with...` copies |

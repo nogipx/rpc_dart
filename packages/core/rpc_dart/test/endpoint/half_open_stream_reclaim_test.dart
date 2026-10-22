@@ -122,7 +122,7 @@ Future<List<int>> _openHalfOpen(_Rig rig, int n) async {
   return ids;
 }
 
-int _open(_Rig rig) => rig.responder.collectEndpointMetrics().openStreams!;
+int _open(_Rig rig) => rig.responder.collectEndpointMetrics().openStreams;
 
 /// Polls until [condition] holds. A fixed sleep is measuring the scheduler:
 /// under a loaded test runner a 300ms timer can fire well past 700ms.

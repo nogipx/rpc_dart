@@ -506,8 +506,9 @@ An error detail of a `google.rpc` type that arrives as `RpcRawErrorDetail`
 today may be decoded into its own type in a minor release. Code that reads a
 detail by `typeUrl` from a raw one also handles the typed class.
 
-`collectEndpointMetrics()` returns a typed `RpcEndpointMetrics`; a minor
-release may add a field to it. The keys of a health report's `details` are
+`collectEndpointMetrics()` returns a typed snapshot, one type per endpoint:
+`RpcCallerEndpointMetrics`, `RpcResponderEndpointMetrics` or
+`RpcPeerEndpointMetrics`. A minor release may add a field to them. The keys of a health report's `details` are
 diagnostics, not API: read them for display, and do not build on a key.
 
 `package:rpc_dart/transport.dart`, the library for transport authors, is

@@ -62,8 +62,11 @@ final class RpcResponderEndpoint extends RpcEndpointBase
       _respRegistry.exportMethodRegistrations();
 
   @override
-  RpcEndpointMetrics collectEndpointMetrics() =>
-      _metrics(responder: _collectResponderMetrics());
+  RpcResponderEndpointMetrics collectEndpointMetrics() =>
+      RpcResponderEndpointMetrics._from(
+        _commonMetrics(),
+        _collectResponderMetrics(),
+      );
 
   /// Starts serving: the endpoint reads calls from the transport and
   /// dispatches them to the registered contracts.

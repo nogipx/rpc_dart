@@ -345,7 +345,7 @@ Future<({int open, IRpcTransport transport, _CountingTransport? wrapper})> _run(
   ];
   await Future<void>.delayed(const Duration(seconds: 2));
 
-  final open = serverEndpoint!.collectEndpointMetrics().openStreams!;
+  final open = serverEndpoint!.collectEndpointMetrics().openStreams;
   final transport = serverEndpoint!.transport;
 
   _gate.complete();
