@@ -100,7 +100,7 @@ final class ServerStreamResponder<
         // Faults only, as the handler path above does: a malformed request is
         // the peer's (INVALID_ARGUMENT, answered below), and logging it at
         // error would let a peer write one record per call.
-        if (RpcStatus.isFaultError(error)) {
+        if (isFaultError(error)) {
           _logger.error(
             'Error in request stream [id: $id]',
             error: error,
@@ -185,7 +185,7 @@ final class ServerStreamResponder<
       await _processor.finishSending();
       _completeDone();
     } catch (error, trace) {
-      if (RpcStatus.isFaultError(error)) {
+      if (isFaultError(error)) {
         _logger.error(
           'Request handling failed [id: $id]',
           error: error,
@@ -215,7 +215,7 @@ final class ServerStreamResponder<
       }
       _completeDone();
     } catch (error, trace) {
-      if (RpcStatus.isFaultError(error)) {
+      if (isFaultError(error)) {
         _logger.error(
           'Request handling failed [id: $id]',
           error: error,

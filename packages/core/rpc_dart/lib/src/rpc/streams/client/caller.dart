@@ -230,7 +230,7 @@ final class ClientStreamCaller<
     try {
       return await _awaitResponse(() async => _processor.sendOnly(request));
     } catch (e) {
-      if (RpcStatus.isFaultError(e)) {
+      if (isFaultError(e)) {
         _logger.error('Unary call failed', error: e);
       }
       rethrow;
@@ -326,7 +326,7 @@ final class ClientStreamCaller<
       // Finish sending and get the response.
       return await finishSending();
     } catch (e) {
-      if (RpcStatus.isFaultError(e)) {
+      if (isFaultError(e)) {
         _logger.error('Client stream call failed', error: e);
       }
       rethrow;

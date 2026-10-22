@@ -70,7 +70,7 @@ final class ClientStreamResponder<
           }
         })
         .catchError((Object error, StackTrace stackTrace) async {
-          if (RpcStatus.isFaultError(error)) {
+          if (isFaultError(error)) {
             _logger.error(
               'Client stream handling failed [id: $id]',
               error: error,

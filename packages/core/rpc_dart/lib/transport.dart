@@ -48,6 +48,7 @@ export 'src/_index.dart'
         responseEndedMidMessage,
         grpcStatusFromHttpStatus,
         wireStatusFor,
+        isFaultError,
         kInternalErrorWireMessage,
         rpcPeerText,
         // Ping, for a transport that probes a half-open path itself

@@ -1103,7 +1103,6 @@ RpcStatus static field unimplemented: RpcStatus (get)
 RpcStatus static field unknown: RpcStatus (get)
 RpcStatus static field values: List<RpcStatus> (get)
 RpcStatus static method fromCode(int code) -> RpcStatus
-RpcStatus static method isFaultError(Object error) -> bool
 RpcStatusException field details: List<RpcErrorDetail> (get)
 RpcStatusException field isPushback: bool (get)
 RpcStatusException field message: String (get)
@@ -1177,6 +1176,7 @@ top static field kInternalErrorWireMessage: String (get) (transport.dart, transp
 top static method approxJsonBytes(Object? value) -> int (rpc_dart.dart, transport.dart, transport_io.dart)
 top static method drainUntilIdle({required FutureOr<int> Function() pending, required Duration budget, LogScope? logger, String unit}) -> Future<void> (transport.dart, transport_io.dart)
 top static method grpcStatusFromHttpStatus(int httpStatus) -> RpcStatus (transport.dart, transport_io.dart)
+top static method isFaultError(Object error) -> bool (transport.dart, transport_io.dart)
 top static method notifyWithoutDying(String what, void Function() body, {LogScope? logger}) -> void (transport.dart, transport_io.dart)
 top static method requestEndedMidMessage() -> RpcStatusException (transport.dart, transport_io.dart)
 top static method responseEndedMidMessage() -> RpcStatusException (transport.dart, transport_io.dart)

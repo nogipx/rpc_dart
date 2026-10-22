@@ -109,14 +109,14 @@ enum RpcStatus {
     unknown || internal || unavailable || dataLoss => true,
     _ => false,
   };
+}
 
-  /// [isFault] for a caught [error]. A throw that carries no status is a fault:
-  /// an unclassifiable failure is not an application answering. An
-  /// [RpcPeerFaultException] is not, whatever its status: the peer sent it.
-  static bool isFaultError(Object error) {
-    if (error is RpcPeerFaultException) return false;
-    return error is! RpcStatusException || error.statusCode.isFault;
-  }
+/// [RpcStatus.isFault] for a caught [error]. A throw that carries no status is
+/// a fault: an unclassifiable failure is not an application answering. An
+/// [RpcPeerFaultException] is not, whatever its status: the peer sent it.
+bool isFaultError(Object error) {
+  if (error is RpcPeerFaultException) return false;
+  return error is! RpcStatusException || error.statusCode.isFault;
 }
 
 /// Packs and unpacks the 5-byte gRPC message prefix: one compression-flag byte
@@ -226,7 +226,7 @@ Future<void> sendWireError(Object error, RpcErrorSender send) {
     statusDetailsBin: wire.detailsBin,
     // The status alone cannot tell a peer's invalid input from our own
     // failure; the error can.
-    fault: RpcStatus.isFaultError(error),
+    fault: isFaultError(error),
   );
 }
 

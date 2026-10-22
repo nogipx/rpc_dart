@@ -118,7 +118,7 @@ final class ServerStreamCaller<
 
       _logger.internal('Server stream completed');
     } catch (e) {
-      if (RpcStatus.isFaultError(e)) {
+      if (isFaultError(e)) {
         _logger.error('Server stream call failed', error: e);
       }
       rethrow;

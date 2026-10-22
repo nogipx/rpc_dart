@@ -321,7 +321,7 @@ extension _StreamProcessorInternals<
         }
       }
     } catch (e, stackTrace) {
-      if (RpcStatus.isFaultError(e)) {
+      if (isFaultError(e)) {
         _logger.error(
           'message_parsing error [methodPath: $_methodPath, streamId: $_streamId, size: ${messageBytes.length}]',
           error: e,

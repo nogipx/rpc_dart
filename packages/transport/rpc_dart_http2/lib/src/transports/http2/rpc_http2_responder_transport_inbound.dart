@@ -112,7 +112,7 @@ extension _Http2ResponderInbound on RpcHttp2ResponderTransport {
       // A refusal of the peer's request (a :method other than POST) is the
       // peer's doing and is answered with its status; logged as an error it
       // would let a peer write one line per request.
-      if (RpcStatus.isFaultError(e)) {
+      if (isFaultError(e)) {
         _log.error(
           'Error handling a message on stream $streamId',
           error: e,

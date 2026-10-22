@@ -183,7 +183,7 @@ base class RpcStatusException extends RpcException {
 /// that carries one, or a payload the request codec could not decode.
 ///
 /// The peer is told, with the status the error carries. It is not a fault of
-/// this side, so [RpcStatus.isFaultError] reads false and it is not logged as
+/// this side, so [isFaultError] reads false and it is not logged as
 /// one: a peer repeating the call would otherwise choose how many error
 /// records the server writes.
 final class RpcPeerFaultException extends RpcStatusException {

@@ -84,7 +84,8 @@ on the wire, and `grpcName` (`'NOT_FOUND'`): `ok` 0, `cancelled` 1, `unknown`
 10, `outOfRange` 11, `unimplemented` 12, `internal` 13, `unavailable` 14,
 `dataLoss` 15, `unauthenticated` 16. `RpcStatus.fromCode(n)` reads a wire
 number; one outside 0..16 is `unknown`. `status.isFault` is true for
-UNKNOWN, INTERNAL, UNAVAILABLE and DATA_LOSS. `RpcStatus.isFaultError(e)` is also true for any error that is not an
+UNKNOWN, INTERNAL, UNAVAILABLE and DATA_LOSS. `isFaultError(e)`, from
+`package:rpc_dart/transport.dart`, is also true for any error that is not an
 `RpcStatusException`, and false for an error the library raises because the
 peer sent something invalid (a second request on a unary or server-stream
 call, a payload the request codec cannot decode): those are answered INTERNAL

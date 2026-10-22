@@ -431,7 +431,7 @@ final class StreamProcessor<TRequest extends Object, TResponse extends Object> {
   /// Sends an error to the client.
   ///
   /// [fault] false says the status, though a fault code, answers the PEER's
-  /// own invalid input (see `RpcStatus.isFaultError`), so it is not an
+  /// own invalid input (see `isFaultError`), so it is not an
   /// incident here.
   Future<void> sendError(
     RpcStatus statusCode,

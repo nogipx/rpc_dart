@@ -52,7 +52,7 @@ final class BidirectionalStreamResponder<
       await _relay(handler(_processor.requests));
       await finishReceiving();
     } catch (error, stackTrace) {
-      if (RpcStatus.isFaultError(error)) {
+      if (isFaultError(error)) {
         _logger.error(
           'Error in bidi handler [id: $id]',
           error: error,
