@@ -248,37 +248,14 @@ Future<http2.ClientTransportConnection> _connectH2ViaProxy({
         'HTTP proxy sent tunnel bytes before the TLS handshake began',
       );
     }
-    // The bound closes the RawSocket, which -- unlike a Socket handed to
-    // SecureSocket.secure -- really closes the handshake's socket.
-    final handshake = RawSecureSocket.secure(
+    final secureSocket = await _secureH2(
       raw,
       subscription: sub,
       host: targetHost,
-      supportedProtocols: ['h2'],
+      peer: '$targetHost:$targetPort',
+      timeout: connectTimeout,
+      via: ' through the proxy',
     );
-    final RawSecureSocket secureSocket;
-    try {
-      secureSocket = connectTimeout == null
-          ? await handshake
-          : await handshake.timeout(connectTimeout);
-    } on TimeoutException {
-      await raw.close();
-      throw SocketException(
-        'TLS handshake through the proxy did not finish within '
-        '$connectTimeout',
-      );
-    } catch (_) {
-      await raw.close();
-      rethrow;
-    }
-    final chosen = secureSocket.selectedProtocol;
-    if (chosen != 'h2') {
-      await secureSocket.close();
-      throw SocketException(
-        'TLS peer $targetHost:$targetPort did not negotiate HTTP/2 '
-        '(ALPN: ${chosen ?? 'none'})',
-      );
-    }
     final pipe = RawSocketPipe(secureSocket);
     return _guardedConnection(
       incoming: pipe.incoming,
@@ -313,20 +290,54 @@ Stream<List<int>> _prepend(List<int> first, Stream<List<int>> rest) async* {
   yield* rest;
 }
 
-/// Refuses a TLS peer that did not choose `h2` in ALPN.
+/// The client TLS handshake over [raw], bounded by [timeout], offering `h2`.
+///
+/// On a [RawSocket] because closing it really closes a handshake in progress;
+/// a Socket handed to `SecureSocket.secure`, or `SecureSocket.connect`, which
+/// bounds only the TCP connect, leaves a peer that never answers TLS holding
+/// the socket and the caller's await for good.
 ///
 /// Offering `h2` is a request, not a guarantee: a server that speaks only
 /// HTTP/1.1 completes the handshake without choosing it, and an h2 preface
 /// sent to it fails later with an error that does not say why. The socket is
-/// destroyed and the reason named here instead.
-void _requireH2(SecureSocket socket, String peer) {
-  final chosen = socket.selectedProtocol;
-  if (chosen == 'h2') return;
-  socket.destroy();
-  throw SocketException(
-    'TLS peer $peer did not negotiate HTTP/2 '
-    '(ALPN: ${chosen ?? 'none'})',
+/// closed and the reason named here instead.
+Future<RawSecureSocket> _secureH2(
+  RawSocket raw, {
+  StreamSubscription<RawSocketEvent>? subscription,
+  required String host,
+  required String peer,
+  required Duration? timeout,
+  String via = '',
+}) async {
+  final handshake = RawSecureSocket.secure(
+    raw,
+    subscription: subscription,
+    host: host,
+    supportedProtocols: ['h2'],
   );
+  final RawSecureSocket secureSocket;
+  try {
+    secureSocket = timeout == null
+        ? await handshake
+        : await handshake.timeout(timeout);
+  } on TimeoutException {
+    await raw.close();
+    throw SocketException(
+      'TLS handshake$via with $peer did not finish within $timeout',
+    );
+  } catch (_) {
+    await raw.close();
+    rethrow;
+  }
+  final chosen = secureSocket.selectedProtocol;
+  if (chosen != 'h2') {
+    await secureSocket.close();
+    throw SocketException(
+      'TLS peer $peer did not negotiate HTTP/2 '
+      '(ALPN: ${chosen ?? 'none'})',
+    );
+  }
+  return secureSocket;
 }
 
 int _indexOfEndOfHeaders(List<int> bytes) {

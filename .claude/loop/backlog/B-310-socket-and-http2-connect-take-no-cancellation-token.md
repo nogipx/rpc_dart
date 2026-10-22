@@ -5,7 +5,7 @@ commit: b3350b20
 paths: [packages/transport/rpc_dart_socket/lib/src/rpc_socket_connect.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart]
 probe: P-342
 reason: risk — round 890 gave the websocket caller a cancellationToken and round 897 the socket caller (P-349: dispose mid-connect held the process 3.5-19.6 s); the http2 caller still has none, and its factory phase (TCP connect, proxy CONNECT, TLS) cannot be ended by a dispose
-rank: 4
+rank: 3
 ---
 
 # B-310 — socket and http2 connect take no cancellation token

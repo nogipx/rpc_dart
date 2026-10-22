@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/src/rpc_isolate_module.dart, packages/notify/*/lib/**]
 applies: opening a connection takes several stages (TCP, TLS, an upgrade, a protocol preface or SETTINGS, a ready message) and a timeout or a default guards the open
 breaks: a hang that never ends: connect() or reconnect() waits forever on a peer that answered the first stage only.
-applied: [754, 755, 773, 800, 826]
-status: confirmed (round 800)
+applied: [754, 755, 773, 800, 826, 904]
+status: confirmed (round 904)
 rank: 8
 ---
 
@@ -67,3 +67,11 @@ default and an explicit null are different arms.
   still pending at 20 s against 7 ms for an answered peer. Found by the
   conformance matrix, not by this lens's detector, which looks only at opens.
   `../rounds/800-websocket-close-waited-on-an-unanswered-upgrade.md`.
+- **Round 904** — round 773's sweep missed the TLS stage: dart:io's
+  `SecureSocket.connect(timeout:)` bounds only the TCP connect, and its
+  handshake has no handle to close. http2 `secureConnect` against a peer
+  silent after TCP: pending at 8 s, socket open at 23 s -> 1011 ms UNAVAILABLE,
+  closed at 1012 ms. **A dart:io timeout or cancel names the stage it ends;
+  read the SDK source, not the parameter name.** wss and https end on time
+  and still leak the socket (B-314).
+  `../rounds/904-a-silent-tls-handshake-ends-at-the-connect-timeout.md`.

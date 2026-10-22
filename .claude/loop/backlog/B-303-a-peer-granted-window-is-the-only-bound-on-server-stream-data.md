@@ -5,7 +5,7 @@ commit: fea0d0c3
 paths: [packages/transport/rpc_dart_http2/lib/**]
 probe: P-339 — its `inproc` peer already opens windows in the matrix row's form
 reason: risk — a suspicion from round 884's reading of package:http2, not measured
-rank: 5
+rank: 4
 ---
 
 # B-303 — a peer granted window is the only bound on server stream data

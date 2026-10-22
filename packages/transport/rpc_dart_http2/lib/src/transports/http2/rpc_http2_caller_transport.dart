@@ -362,22 +362,39 @@ class RpcHttp2CallerTransport extends IRpcTransport {
       // `timeout:` rather than an outer `.timeout()`: dart:io abandons the
       // attempt and releases the socket, where wrapping the future would leave
       // the connect running with nobody to close what it eventually produces.
-      // Under TLS it covers the handshake too.
-      final Socket socket = secure
-          ? await SecureSocket.connect(
-              host,
-              port,
-              supportedProtocols: ['h2'],
-              timeout: connectTimeout,
-            )
-          : await Socket.connect(host, port, timeout: connectTimeout);
+      // It bounds the TCP connect only; _secureH2 bounds the handshake.
+      if (secure) {
+        final raw = await RawSocket.connect(
+          host,
+          port,
+          timeout: connectTimeout,
+        );
+        try {
+          raw.setOption(SocketOption.tcpNoDelay, true);
+        } catch (error) {
+          logger.warning('Could not disable Nagle on h2 socket: $error');
+        }
+        final pipe = RawSocketPipe(
+          await _secureH2(
+            raw,
+            host: host,
+            peer: '$host:$port',
+            timeout: connectTimeout,
+          ),
+        );
+        return _guardedConnection(
+          incoming: pipe.incoming,
+          outgoing: pipe,
+          destroy: pipe.destroy,
+          policy: policy,
+          settingsTimeout: connectTimeout,
+          logger: logger,
+          drainSignal: drainSignal,
+        );
+      }
+      final socket = await Socket.connect(host, port, timeout: connectTimeout);
       // See disableNagle: the proxy path does the same.
-      disableNagle(
-        socket,
-        logger: logger,
-        what: '${secure ? 'h2' : 'h2c'} socket to $host:$port',
-      );
-      if (socket is SecureSocket) _requireH2(socket, '$host:$port');
+      disableNagle(socket, logger: logger, what: 'h2c socket to $host:$port');
       return _guardedConnection(
         incoming: socket,
         outgoing: socket,

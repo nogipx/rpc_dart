@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured)
+status: closed (round 904)
+round: 904
 commit: dbd45a03
 paths: [packages/core/rpc_dart/lib/src/core/compression.dart, packages/core/rpc_dart/lib/src/rpc/streams/base_processor_responder.dart]
 probe: none
@@ -35,6 +35,15 @@ whether any test pins the current behaviour.
 Probe: a responder answering 1 KiB, 64 KiB and 1 MiB compressible and
 incompressible payloads to a caller sending `grpc-accept-encoding: gzip`, CPU
 time per call against the same caller sending `identity`.
+
+## Closed
+
+By the owner's 18bf8c7b, outside the loop: `RpcResponderEndpoint`,
+`RpcConnectionHost` and `RpcPeerEndpoint` take `compressionEnabled`, off by
+default, and `StreamProcessor` picks a response encoding only when it is on.
+Round 904 re-ran its witness on HEAD:
+`packages/core/rpc_dart/test/endpoint/a_server_compresses_only_when_enabled_test.dart`,
+3/3 green, its CONTROL arm (compression on) included.
 
 ## Owner decision
 

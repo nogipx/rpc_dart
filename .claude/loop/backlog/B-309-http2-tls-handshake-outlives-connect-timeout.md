@@ -1,6 +1,6 @@
 ---
-status: open
-round: (not re-measured)
+status: closed (round 904)
+round: 904
 commit: b3350b20
 paths: [packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport.dart, packages/transport/rpc_dart_http2/lib/src/transports/http2/rpc_http2_caller_transport_dial.dart]
 probe: P-342
@@ -27,6 +27,13 @@ Measure without dispose: one attempt, `connectTimeout` 1 s, count the
 listener's open sockets at 5 s and 60 s; then a reconnect loop of N attempts
 and count again (L-21). Control: a listener that completes TLS. Find where
 the handshake is awaited and whether anything owns the socket to destroy it.
+
+## Closed
+
+Round 904: `SecureSocket.connect(timeout:)` bounds only `RawSocket.connect`
+(SDK source); the handshake had no bound and no handle to close. P-353: h2
+pending at 8 s and its socket open at 23 s, then 1011 ms UNAVAILABLE and closed
+at 1012 ms. The same mechanism in wss and https is B-314.
 
 ## Owner decision
 
