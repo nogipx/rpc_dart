@@ -11,13 +11,12 @@
 // probe giving up at 3 s:
 //
 //                              before    after
-//   timeout: 200ms              222ms     217ms   TimeoutException
 //   context deadline 200ms     3003ms     204ms   TimeoutException
 //   token cancelled at 200ms   3002ms     203ms   RpcCancelledException
 //   nothing asked              3002ms    3004ms   <- correct: nothing asked
 //   CONTROL, peer answers        32ms      20ms   ok
 //
-// The last two rows are what keep the first three honest: a ping with no bound
+// The last two rows are what keep the first two honest: a ping with no bound
 // requested must still wait (that is B-107's policy question, not this one), and
 // a peer that answers must not be slowed or broken.
 
@@ -206,22 +205,6 @@ void main() {
 
   group('GUARD: what must not change', () {
     test(
-      'an explicit timeout: still wins',
-      () async {
-        final rig = await _rig();
-        final clock = Stopwatch()..start();
-        await expectLater(
-          rig.caller
-              .ping(timeout: const Duration(milliseconds: 200))
-              .timeout(const Duration(seconds: 3)),
-          throwsA(isA<TimeoutException>()),
-        );
-        expect(clock.elapsedMilliseconds, lessThan(1500));
-      },
-      timeout: const Timeout(Duration(seconds: 30)),
-    );
-
-    test(
       'a ping with NO bound asked for still waits',
       () async {
         // B-107's policy question, not this one: deriving a bound from the context
@@ -241,7 +224,7 @@ void main() {
       () async {
         final rig = await _rig(swallow: false);
         final result = await rig.caller
-            .ping(timeout: const Duration(seconds: 5))
+            .ping(context: RpcContext.withTimeout(const Duration(seconds: 5)))
             .timeout(const Duration(seconds: 10));
 
         expect(result.roundTrip, greaterThanOrEqualTo(Duration.zero));

@@ -31,7 +31,9 @@ void main() {
       ..start();
     final caller = RpcCallerEndpoint(transport: client);
 
-    await caller.ping(timeout: const Duration(seconds: 5));
+    await caller.ping(
+      context: RpcContext.withTimeout(const Duration(seconds: 5)),
+    );
 
     expect(
       capture.messages.where((m) => m.startsWith('Ping handled')),

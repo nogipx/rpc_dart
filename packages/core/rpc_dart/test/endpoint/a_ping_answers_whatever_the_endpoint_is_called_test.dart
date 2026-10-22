@@ -23,7 +23,9 @@ Future<RpcEndpointPingResult> _ping(
     await caller.close();
     await responder.close();
   });
-  return caller.ping(timeout: const Duration(seconds: 2));
+  return caller.ping(
+    context: RpcContext.withTimeout(const Duration(seconds: 2)),
+  );
 }
 
 void main() {

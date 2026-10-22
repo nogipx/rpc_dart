@@ -282,12 +282,16 @@ void main() {
   // -------------------------------------------------------------------------
   group('ping', () {
     test('peerA pings peerB', () async {
-      final result = await peerA.ping(timeout: Duration(seconds: 5));
+      final result = await peerA.ping(
+        context: RpcContext.withTimeout(Duration(seconds: 5)),
+      );
       expect(result.roundTrip, isA<Duration>());
     });
 
     test('peerB pings peerA', () async {
-      final result = await peerB.ping(timeout: Duration(seconds: 5));
+      final result = await peerB.ping(
+        context: RpcContext.withTimeout(Duration(seconds: 5)),
+      );
       expect(result.roundTrip, isA<Duration>());
     });
   });

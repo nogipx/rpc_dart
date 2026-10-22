@@ -159,7 +159,9 @@ void main() {
 
       // The failed ping must not have consumed the only available id.
       await expectLater(
-        caller.ping(timeout: const Duration(seconds: 5)),
+        caller.ping(
+          context: RpcContext.withTimeout(const Duration(seconds: 5)),
+        ),
         completes,
       );
 
@@ -190,7 +192,9 @@ void main() {
 
       // The failed ping must not have consumed the only available id.
       await expectLater(
-        caller.ping(timeout: const Duration(seconds: 5)),
+        caller.ping(
+          context: RpcContext.withTimeout(const Duration(seconds: 5)),
+        ),
         completes,
       );
 

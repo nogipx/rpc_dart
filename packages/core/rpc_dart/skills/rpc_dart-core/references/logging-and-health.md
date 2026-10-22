@@ -203,8 +203,9 @@ Future<void> checkHealth(RpcCallerEndpoint caller, LogScope log) async {
 
 ### Ping
 
-`ping({Duration? timeout, RpcContext? context})` is on `RpcCallerEndpoint` and
-`RpcPeerEndpoint` (not on `RpcResponderEndpoint`). The responder answers it
+`ping({RpcContext? context})` is on `RpcCallerEndpoint` and
+`RpcPeerEndpoint` (not on `RpcResponderEndpoint`). The context's deadline
+bounds the wait; with none, it waits for the answer. The responder answers it
 automatically, with one trailer and without running interceptors or a
 handler, so it measures the transport and the endpoint's
 dispatch, not your services. Returns `RpcEndpointPingResult`: `sentAt`,
@@ -217,7 +218,9 @@ any name works; one too long for the header limit is left out
 ```dart
 Future<Duration?> probe(RpcCallerEndpoint caller) async {
   try {
-    final pong = await caller.ping(timeout: const Duration(seconds: 2));
+    final pong = await caller.ping(
+      context: RpcContext.withTimeout(const Duration(seconds: 2)),
+    );
     return pong.roundTrip;
   } on TimeoutException {
     return null;

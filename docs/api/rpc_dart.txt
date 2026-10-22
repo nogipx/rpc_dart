@@ -362,7 +362,7 @@ RpcCallerEndpoint method clientStream<TRequest, TResponse>({required String serv
 RpcCallerEndpoint method close() -> Future<void>
 RpcCallerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcCallerEndpoint method health() -> Future<RpcEndpointHealth>
-RpcCallerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
+RpcCallerEndpoint method ping({RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcCallerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcCallerEndpoint method unaryRequest<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Future<TResponse>
 RpcCallerEndpoint new new({required IRpcTransport transport, String? debugLabel, LogController? logController, bool compressionEnabled})
@@ -898,7 +898,7 @@ RpcPeerEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcPeerEndpoint method drain({Duration timeout}) -> Future<void>
 RpcPeerEndpoint method health() -> Future<RpcEndpointHealth>
 RpcPeerEndpoint method markDraining() -> void
-RpcPeerEndpoint method ping({Duration? timeout, RpcContext? context}) -> Future<RpcEndpointPingResult>
+RpcPeerEndpoint method ping({RpcContext? context}) -> Future<RpcEndpointPingResult>
 RpcPeerEndpoint method registerServiceContract(RpcResponderContract contract) -> void
 RpcPeerEndpoint method serverStream<TRequest, TResponse>({required String serviceName, required String methodName, required TRequest request, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcPeerEndpoint method setLogController(LogController controller) -> void

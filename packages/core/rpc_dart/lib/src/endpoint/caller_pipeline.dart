@@ -350,10 +350,10 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
   // ---------------------------------------------------------------------------
 
   /// Performs a ping to the remote endpoint and returns the result.
-  Future<RpcEndpointPingResult> ping({
-    Duration? timeout,
-    RpcContext? context,
-  }) async {
+  ///
+  /// [context]'s deadline bounds the wait, as for any call:
+  /// `ping(context: RpcContext.withTimeout(d))`.
+  Future<RpcEndpointPingResult> ping({RpcContext? context}) async {
     if (!isActive) throw RpcClosedException('Endpoint');
     if (transport.isClosed) throw RpcClosedException('Transport');
 
@@ -378,11 +378,6 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
       // `grpc-timeout` header built above. Otherwise a peer that accepts the
       // ping and never answers holds it past the deadline — and ping IS the
       // keepalive, so the stalled peer is the case it exists for.
-      //
-      // An explicit `timeout:` still wins: it is the caller's own bound on this
-      // one call, where the deadline belongs to the whole context.
-      final effectiveTimeout = timeout ?? routingContext.remainingTime;
-
       return await RpcEndpointPingExchange(
         transport: transport,
         logger: _log,
@@ -390,7 +385,7 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
         sentAt: sentAt,
       ).execute(
         metadata: metadata,
-        timeout: effectiveTimeout,
+        timeout: routingContext.remainingTime,
         cancellationToken: routingContext.cancellationToken,
       );
     } finally {

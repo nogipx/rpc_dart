@@ -71,6 +71,7 @@ builds a transport, a channel or frames imports
 | `contract.cancelMethod(m)`, `contract.cancelAllMethods()`, `contract.isMethodActive(m)`, `contract.getActiveCallsCount(m)` | `endpoint.cancelMethod(service, m)`, `endpoint.cancelService(service)`, `endpoint.activeCallCount(service, m)` |
 | `endpoint.cancelAllMethods()`, `endpoint.cancelServiceMethods(s)` | `cancelAll()`, `cancelService(s)` |
 | `start()` on an `RpcCallerEndpoint` | delete the call; only a responder or peer endpoint starts |
+| `endpoint.ping(timeout: d)` | `endpoint.ping(context: RpcContext.withTimeout(d))` |
 | `getCancellationTokensForMethod(...)` | gone; `activeCallCount`, or a token in the call's context |
 | `SpanStatus` | `LogSpanStatus` |
 | `RpcStatus` `int` constants; `RpcStatusException(14, ...)`; `int status = e.statusCode` | `RpcStatus` is an enum and `statusCode` its value: `RpcStatus.unavailable`, `RpcStatus.fromCode(14)`; the wire number is `status.code` |
