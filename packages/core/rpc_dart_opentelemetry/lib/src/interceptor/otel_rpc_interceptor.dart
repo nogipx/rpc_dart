@@ -51,10 +51,7 @@ class OtelRpcInterceptor extends OtelRpcInterceptorBase {
   /// Starts a new span, extracts W3C parent context from [RpcContext] headers,
   /// and stores the span in [RpcContext] values for downstream access.
   @override
-  (Span, RpcContext, Context) startSpan(
-    RpcMiddlewareContext call,
-    RpcMethodType type,
-  ) {
+  (Span, RpcContext, Context) startSpan(RpcCallInfo call, RpcMethodType type) {
     final parentContext = RpcOtelPropagator.extract(call.context);
 
     final attributes = [

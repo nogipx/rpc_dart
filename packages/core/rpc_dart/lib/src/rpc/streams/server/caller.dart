@@ -93,7 +93,7 @@ final class ServerStreamCaller<
   /// Convenience helper to send a request and yield responses.
   Stream<TResponse> call(TRequest request) async* {
     // Set once the server has ended the call. Any other way out -- a response
-    // that cannot be decoded, a consumer-side middleware that throws, this
+    // that cannot be decoded, a consumer-side interceptor that throws, this
     // generator being cancelled -- is local, and the server cannot see it.
     var serverEnded = false;
     try {

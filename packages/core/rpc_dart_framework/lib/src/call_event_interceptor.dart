@@ -9,21 +9,21 @@ import 'rpc_app_config.dart';
 /// An observer that hands every finished call to [onEvent] as an
 /// [RpcCallEvent].
 abstract class CallEventInterceptor
-    extends RpcCallObserverInterceptor<(RpcMiddlewareContext, RpcMethodType)> {
+    extends RpcCallObserverInterceptor<(RpcCallInfo, RpcMethodType)> {
   const CallEventInterceptor();
 
   /// A call ended.
   void onEvent(RpcCallEvent event);
 
   @override
-  (RpcMiddlewareContext, RpcMethodType) onCallStart(
-    RpcMiddlewareContext call,
+  (RpcCallInfo, RpcMethodType) onCallStart(
+    RpcCallInfo call,
     RpcMethodType type,
   ) => (call, type);
 
   @override
   void onCallEnd(
-    (RpcMiddlewareContext, RpcMethodType) state,
+    (RpcCallInfo, RpcMethodType) state,
     RpcCallOutcome outcome,
     Duration duration,
   ) {

@@ -33,11 +33,12 @@ void main() {
       keyExtractor: (_) => 'user-1',
     );
 
-    final ctx = RpcMiddlewareContext(
+    final ctx = RpcCallInfo(
       endpoint: endpoint,
       serviceName: 'Svc',
       methodName: 'm',
       context: RpcContext.empty(),
+      direction: RpcCallDirection.incoming,
     );
 
     Future<void> call() =>

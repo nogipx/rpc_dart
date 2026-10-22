@@ -39,7 +39,7 @@ final class _CountingInterceptor extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {

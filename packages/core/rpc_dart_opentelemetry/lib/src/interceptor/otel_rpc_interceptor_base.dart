@@ -22,7 +22,7 @@ final class OtelRpcCall {
   );
 
   /// The call.
-  final RpcMiddlewareContext call;
+  final RpcCallInfo call;
 
   /// The call's shape.
   final RpcMethodType type;
@@ -72,10 +72,7 @@ abstract class OtelRpcInterceptorBase
   /// context propagation the side requires, stores the span in the
   /// [RpcContext] values for downstream access, and returns the span together
   /// with the updated [RpcContext] and the active ambient OTel [Context].
-  (Span, RpcContext, Context) startSpan(
-    RpcMiddlewareContext call,
-    RpcMethodType type,
-  );
+  (Span, RpcContext, Context) startSpan(RpcCallInfo call, RpcMethodType type);
 
   /// The `rpc.call_type` attribute value for [type].
   static String callTypeAttribute(RpcMethodType type) => switch (type) {
@@ -86,7 +83,7 @@ abstract class OtelRpcInterceptorBase
   };
 
   @override
-  OtelRpcCall onCallStart(RpcMiddlewareContext call, RpcMethodType type) {
+  OtelRpcCall onCallStart(RpcCallInfo call, RpcMethodType type) {
     final (span, context, otelContext) = startSpan(call, type);
     return OtelRpcCall._(call, type, span, context, otelContext);
   }

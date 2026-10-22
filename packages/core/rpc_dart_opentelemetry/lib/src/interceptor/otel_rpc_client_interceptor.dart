@@ -32,10 +32,7 @@ class OtelRpcClientInterceptor extends OtelRpcInterceptorBase {
   RpcMetricSide get metricSide => RpcMetricSide.client;
 
   @override
-  (Span, RpcContext, Context) startSpan(
-    RpcMiddlewareContext call,
-    RpcMethodType type,
-  ) {
+  (Span, RpcContext, Context) startSpan(RpcCallInfo call, RpcMethodType type) {
     final span = tracer.startSpan(
       '${call.serviceName}/${call.methodName}',
       kind: SpanKind.client,

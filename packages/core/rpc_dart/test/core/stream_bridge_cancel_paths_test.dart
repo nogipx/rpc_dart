@@ -99,11 +99,12 @@ void main() {
 
         final wrapped = await RpcCircuitBreakerInterceptor()
             .interceptServerStream<String, int>(
-              RpcMiddlewareContext(
+              RpcCallInfo(
                 endpoint: endpoint,
                 serviceName: 'Svc',
                 methodName: 'sv',
                 context: RpcContext.empty(),
+                direction: RpcCallDirection.outgoing,
               ),
               'req',
               (ctx, req) async => _parkedGenerator(reached),

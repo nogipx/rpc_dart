@@ -536,7 +536,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     Map<String, RateLimit> perService = const {},
     Map<String, RateLimit> perMethod = const {},
     RateLimit? perKeyFallback,
-    String? Function(RpcMiddlewareContext)? keyExtractor,
+    String? Function(RpcCallInfo)? keyExtractor,
     Duration cleanupInterval = const Duration(minutes: 5),
     int maxTrackedKeys = 100000,
     bool meterServerStreamMessages = false,
@@ -603,7 +603,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   final Map<String, RateLimit> _perServiceSpec;
   final Map<String, RateLimit> _perMethodSpec;
   final RateLimit? _perKeyFallbackSpec;
-  final String? Function(RpcMiddlewareContext)? _keyExtractor;
+  final String? Function(RpcCallInfo)? _keyExtractor;
   final bool _meterServerStreamMessages;
   final int Function() _nowMicros;
   bool _disposed = false;
@@ -716,7 +716,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   ///
   /// The same resolution is used for unary calls and for per-message accounting
   /// on streaming calls.
-  _RateLimitCounter? _resolveSpecific(RpcMiddlewareContext call) {
+  _RateLimitCounter? _resolveSpecific(RpcCallInfo call) {
     // After dispose nothing sweeps the counters, so none are created.
     if (_disposed) return null;
 
@@ -760,7 +760,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// The specific counter is charged first and refunded if [global] then refuses,
   /// because a refused call must cost nothing anywhere — see
   /// [_RateLimitCounter.refund].
-  bool _tryAcquireAll(RpcMiddlewareContext call) {
+  bool _tryAcquireAll(RpcCallInfo call) {
     final specific = _resolveSpecific(call);
     final global = _disposed ? null : _globalCounter;
     if (specific != null && !specific.tryAcquire()) {
@@ -781,10 +781,10 @@ class RpcRateLimiter extends IRpcInterceptor {
 
   /// Whether ANY counter applies to [call], so a call no limit touches can skip
   /// the metering machinery entirely.
-  bool _anyLimitApplies(RpcMiddlewareContext call) =>
+  bool _anyLimitApplies(RpcCallInfo call) =>
       !_disposed && (_globalCounter != null || _resolveSpecific(call) != null);
 
-  RpcRateLimitException _exceededException(RpcMiddlewareContext call) {
+  RpcRateLimitException _exceededException(RpcCallInfo call) {
     final methodKey = '${call.serviceName}.${call.methodName}';
     final userKey = _keyExtractor?.call(call);
     return RpcRateLimitException(
@@ -795,7 +795,7 @@ class RpcRateLimiter extends IRpcInterceptor {
     );
   }
 
-  void _check(RpcMiddlewareContext call) {
+  void _check(RpcCallInfo call) {
     if (!_tryAcquireAll(call)) throw _exceededException(call);
   }
 
@@ -811,7 +811,7 @@ class RpcRateLimiter extends IRpcInterceptor {
   /// is charged so an empty stream cannot be free, and a stream that does send
   /// messages costs exactly what it cost before.
   Stream<T> _meterStream<T>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<T> source, {
     bool firstIsPrepaid = false,
   }) {
@@ -861,7 +861,7 @@ class RpcRateLimiter extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
@@ -871,7 +871,7 @@ class RpcRateLimiter extends IRpcInterceptor {
 
   @override
   FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
@@ -894,7 +894,7 @@ class RpcRateLimiter extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
@@ -910,7 +910,7 @@ class RpcRateLimiter extends IRpcInterceptor {
 
   @override
   FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {

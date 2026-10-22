@@ -13,13 +13,13 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_framework/rpc_dart_framework.dart';
 import 'package:test/test.dart';
 
-RpcMiddlewareContext _ctx(RpcCallerEndpoint endpoint, int i) =>
-    RpcMiddlewareContext(
-      endpoint: endpoint,
-      serviceName: 'Svc',
-      methodName: 'm$i',
-      context: RpcContext.empty(),
-    );
+RpcCallInfo _ctx(RpcCallerEndpoint endpoint, int i) => RpcCallInfo(
+  endpoint: endpoint,
+  serviceName: 'Svc',
+  methodName: 'm$i',
+  context: RpcContext.empty(),
+  direction: RpcCallDirection.incoming,
+);
 
 void main() {
   late RpcCallerEndpoint endpoint;

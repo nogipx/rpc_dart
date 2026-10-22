@@ -188,12 +188,12 @@ void main() {
   });
 
   test('the endpoint lifecycle paths still log at internal level', () async {
-    caller.addMiddleware(const _NoopMiddleware());
+    caller.addInterceptor(const _NoopInterceptor());
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    expectLine('Middleware added:', 'base_endpoint.dart');
+    expectLine('Interceptor added:', 'base_endpoint.dart');
   });
 }
 
-final class _NoopMiddleware extends IRpcMiddleware {
-  const _NoopMiddleware();
+final class _NoopInterceptor extends IRpcInterceptor {
+  const _NoopInterceptor();
 }

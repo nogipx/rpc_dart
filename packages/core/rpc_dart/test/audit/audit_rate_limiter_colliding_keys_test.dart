@@ -75,11 +75,12 @@ void main() {
   });
 
   Future<void> hit(RpcRateLimiter limiter, String key) {
-    final c = RpcMiddlewareContext(
+    final c = RpcCallInfo(
       endpoint: endpoint,
       serviceName: 'S',
       methodName: 'M',
       context: RpcContext.empty().withValue(_userId, key),
+      direction: RpcCallDirection.incoming,
     );
     return limiter.interceptUnary<String, String>(
       c,

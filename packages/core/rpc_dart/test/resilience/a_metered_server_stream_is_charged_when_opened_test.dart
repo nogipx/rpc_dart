@@ -19,11 +19,12 @@ void main() {
         final (_, server) = RpcChannelTransport.memoryPair();
         final endpoint = RpcResponderEndpoint(transport: server);
         addTearDown(endpoint.close);
-        final call = RpcMiddlewareContext(
+        final call = RpcCallInfo(
           endpoint: endpoint,
           serviceName: 'Feed',
           methodName: 'subscribe',
           context: RpcContext.empty(),
+          direction: RpcCallDirection.incoming,
         );
         final limiter = RpcRateLimiter(
           global: const RateLimit.slidingWindow(
@@ -63,11 +64,12 @@ void main() {
       final (_, server) = RpcChannelTransport.memoryPair();
       final endpoint = RpcResponderEndpoint(transport: server);
       addTearDown(endpoint.close);
-      final call = RpcMiddlewareContext(
+      final call = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'Feed',
         methodName: 'subscribe',
         context: RpcContext.empty(),
+        direction: RpcCallDirection.incoming,
       );
       final limiter = RpcRateLimiter(
         global: const RateLimit.slidingWindow(

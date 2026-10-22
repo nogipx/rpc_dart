@@ -126,9 +126,8 @@ final class GreeterCaller extends RpcCallerContract {
 | `RpcCallerEndpoint` | `transport:` (required), `debugLabel:`, `logController:` (`LogController?`), `compressionEnabled:` (default `false`) | `cancelMethod(service, method)`, `cancelService(service)`, `cancelAll()` (each returns how many calls it cancelled), `cancelRequest(service, method, requestId)`, `activeCallCount(service, method)`; `close()` cancels in-flight calls |
 | `RpcPeerEndpoint` | same as caller | union of both, call tracking included; needs `start()` |
 
-All endpoints: `addMiddleware`, `addInterceptor`, `close()`, `health()`,
-`isActive`, `transport`. There are no `interceptors:` /
-`middlewares:` constructor parameters.
+All endpoints: `addInterceptor`, `close()`, `health()`, `isActive`,
+`transport`. There is no `interceptors:` constructor parameter.
 
 Endpoints also have an untyped call API (`unaryRequest`, `serverStream`,
 `clientStream` returning a `Future<R> Function(Stream<C>)` builder,
@@ -210,53 +209,53 @@ Future<void> runPeers() async {
 }
 ```
 
-## Middleware vs interceptors
+## Interceptors
 
-Both run on caller and responder endpoints, for all four call shapes, and the
-set is fixed when a call starts.
+`IRpcInterceptor` runs on caller and responder endpoints, for all four call
+shapes. Register it with `endpoint.addInterceptor(i)`; the first added is the
+outermost, and the set is fixed when a call starts.
 
-| | `IRpcMiddleware` | `IRpcInterceptor` |
-| --- | --- | --- |
-| Hooks | `processRequest<T>(RpcMiddlewareContext call, T request)`, `processResponse<T>(call, T response)`; return `FutureOr<T>` | `check(call)` for every shape, then one of `interceptUnary(call, request, next)`, `interceptServerStream(call, request, next)`, `interceptClientStream(call, requests, next)`, `interceptBidirectionalStream(call, requests, next)` |
-| On streams | runs per message | sees the whole stream |
-| Short-circuit | only by throwing | return without calling `next` |
-| Register | `endpoint.addMiddleware(m)` | `endpoint.addInterceptor(i)` |
-| Order | requests in add order, responses reversed | first added is outermost |
+Hooks: `check(call)` for every shape, then one of
+`interceptUnary(call, request, next)`, `interceptServerStream(call, request,
+next)`, `interceptClientStream(call, requests, next)`,
+`interceptBidirectionalStream(call, requests, next)`. A streaming hook sees
+the whole stream: to change each message, map the request stream before
+`next` or the response stream after it. To short-circuit, return without
+calling `next`.
 
-Per call: request middlewares, then interceptors, then the handler (on a caller
-endpoint: the wire), then response middlewares. Defaults pass through; override
-only what you need. A CHECK (authentication, authorization, a quota): the
+Defaults pass through; override only what you need. A CHECK (authentication, authorization, a quota): the
 interceptor overrides `check(call)`, which runs before the interceptor's
 method for every call shape; throw an `RpcStatusException`
 to refuse. A check written in `interceptUnary` alone leaves the three
-streaming shapes unchecked. `RpcMiddlewareContext` has `endpoint`, `serviceName`,
+streaming shapes unchecked. `RpcCallInfo` has `endpoint`, `serviceName`,
 `methodName`, `context`, and `direction`
 (`RpcCallDirection.outgoing` for a call the endpoint makes, `.incoming` for one
-it serves). On an `RpcPeerEndpoint` one middleware list runs both ways, so
+it serves). On an `RpcPeerEndpoint` one interceptor list runs both ways, so
 check `direction` for side-specific work such as adding vs checking auth.
 `next` takes `(RpcContext, request)`; pass `call.context` to keep the current
 one, or a derived one to change it for the stages below. `call.context` is
-fixed for the interceptor: each stage gets its own `RpcMiddlewareContext`, so a
-retry calling `next` again starts from its own context, and response
-middlewares see the context the handler got.
+fixed for the interceptor: each stage gets its own `RpcCallInfo`, so a
+retry calling `next` again starts from its own context.
 
 ```dart
 import 'dart:async';
 
 import 'package:rpc_dart/rpc_dart.dart';
 
-final class TrimMiddleware extends IRpcMiddleware {
-  const TrimMiddleware();
+/// Trims every string request of a unary call before it goes on.
+final class TrimInterceptor extends IRpcInterceptor {
+  const TrimInterceptor();
 
   @override
-  FutureOr<TRequest> processRequest<TRequest>(
-    RpcMiddlewareContext call,
+  Future<TResponse> interceptUnary<TRequest, TResponse>(
+    RpcCallInfo call,
     TRequest request,
+    RpcUnaryNext<TRequest, TResponse> next,
   ) {
-    if (request is RpcString) {
-      return RpcString(request.value.trim()) as TRequest;
-    }
-    return request;
+    final trimmed = request is RpcString
+        ? RpcString(request.value.trim()) as TRequest
+        : request;
+    return next(call.context, trimmed);
   }
 }
 
@@ -266,7 +265,7 @@ final class RequireTokenInterceptor extends IRpcInterceptor {
   const RequireTokenInterceptor();
 
   @override
-  void check(RpcMiddlewareContext call) {
+  void check(RpcCallInfo call) {
     if (call.context.getHeader('authorization') == null) {
       throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
     }
@@ -275,8 +274,8 @@ final class RequireTokenInterceptor extends IRpcInterceptor {
 
 void wireChain(RpcResponderEndpoint server) {
   server
-    ..addMiddleware(const TrimMiddleware())
-    ..addInterceptor(const RequireTokenInterceptor());
+    ..addInterceptor(const RequireTokenInterceptor())
+    ..addInterceptor(const TrimInterceptor());
 }
 ```
 
@@ -296,7 +295,7 @@ final class SlowCalls extends RpcCallObserverInterceptor<String> {
   final slow = <String>[];
 
   @override
-  String onCallStart(RpcMiddlewareContext call, RpcMethodType type) =>
+  String onCallStart(RpcCallInfo call, RpcMethodType type) =>
       '${call.serviceName}.${call.methodName}';
 
   @override

@@ -477,8 +477,7 @@ It is installed into your agent's skills directory, for example
 ## Versioning
 
 A minor release may add members to the classes you build on: `IRpcTransport`,
-`IRpcChannel`, `IRpcMultiplexedChannel`, `IRpcCodec`, `IRpcMiddleware`,
-`IRpcInterceptor`, `IRpcServer`, `RpcCompressionCodec` and `BackoffPolicy`. A
+`IRpcChannel`, `IRpcMultiplexedChannel`, `IRpcCodec`, `IRpcInterceptor`, `IRpcServer`, `RpcCompressionCodec` and `BackoffPolicy`. A
 new member comes with a default body, so code that
 `extends` them keeps compiling. Code that `implements` them may have to add the
 member. Mocks that implement an interface are fine in tests; for production

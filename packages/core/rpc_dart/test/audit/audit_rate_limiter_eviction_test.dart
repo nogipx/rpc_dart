@@ -28,15 +28,16 @@ const _userId = RpcContextKey<String>('userId');
 
 void main() {
   group('RateLimiter eviction vs in-flight metered stream', () {
-    RpcMiddlewareContext makeContext() {
+    RpcCallInfo makeContext() {
       final (clientTransport, _) = RpcChannelTransport.memoryPair();
       final endpoint = RpcCallerEndpoint(transport: clientTransport);
-      return RpcMiddlewareContext(
+      return RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'SyncService',
         methodName: 'push',
         // userId drives the dynamic per-key counter.
         context: RpcContext.empty().withValue(_userId, 'user-1'),
+        direction: RpcCallDirection.incoming,
       );
     }
 

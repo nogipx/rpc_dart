@@ -31,19 +31,31 @@ final class _FailsOnSecond implements IRpcCodec<RpcString> {
   }
 }
 
-/// Shared by both streams, so it rejects each one's second response: the
-/// 2nd and the 4th it sees. The unary call after them passes.
-final class _RejectsSecond extends IRpcMiddleware {
+/// Shared by both streams, so it fails each one on its second response: the
+/// 2nd and the 4th it sees. The unary call after them is not intercepted.
+final class _RejectsSecond extends IRpcInterceptor {
   int _n = 0;
 
-  @override
-  FutureOr<TResponse> processResponse<TResponse>(
-    RpcMiddlewareContext call,
-    TResponse response,
-  ) {
-    if (++_n == 2 || _n == 4) throw StateError('middleware rejects');
-    return response;
+  Stream<T> _reject<T>(Stream<T> responses) async* {
+    await for (final response in responses) {
+      if (++_n == 2 || _n == 4) throw StateError('interceptor rejects');
+      yield response;
+    }
   }
+
+  @override
+  Future<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
+    RpcCallInfo call,
+    TRequest request,
+    RpcServerStreamNext<TRequest, TResponse> next,
+  ) async => _reject(await next(call.context, request));
+
+  @override
+  Future<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
+    RpcCallInfo call,
+    Stream<TRequest> requests,
+    RpcBidirectionalStreamNext<TRequest, TResponse> next,
+  ) async => _reject(await next(call.context, requests));
 }
 
 final class _Ticks extends RpcResponderContract {
@@ -94,7 +106,7 @@ Future<void> _waitFor(bool Function() condition) async {
 
 Future<void> _run({
   IRpcCodec<RpcString> Function()? responseCodec,
-  IRpcMiddleware Function()? middleware,
+  IRpcInterceptor Function()? interceptor,
   bool consumerLeaves = false,
   bool bidi = false,
 }) async {
@@ -109,7 +121,7 @@ Future<void> _run({
     await responder.close();
   });
 
-  if (middleware != null) caller.addMiddleware(middleware());
+  if (interceptor != null) caller.addInterceptor(interceptor());
   for (var k = 0; k < 2; k++) {
     final stream = bidi
         ? caller.bidirectionalStream<RpcString, RpcString>(
@@ -173,8 +185,8 @@ void main() {
     await _run(responseCodec: _FailsOnSecond.new);
   });
 
-  test('a caller response middleware that throws', () async {
-    await _run(middleware: _RejectsSecond.new);
+  test('a caller interceptor that fails the stream', () async {
+    await _run(interceptor: _RejectsSecond.new);
   });
 
   test('control: the consumer leaves', () async {
@@ -185,8 +197,8 @@ void main() {
     await _run(responseCodec: _FailsOnSecond.new, bidi: true);
   });
 
-  test('bidi: a caller response middleware that throws', () async {
-    await _run(middleware: _RejectsSecond.new, bidi: true);
+  test('bidi: a caller interceptor that fails the stream', () async {
+    await _run(interceptor: _RejectsSecond.new, bidi: true);
   });
 
   test('bidi control: the consumer leaves', () async {

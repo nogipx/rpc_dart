@@ -105,11 +105,12 @@ void main() {
       retryOn: (_) => true,
     );
 
-    final call = RpcMiddlewareContext(
+    final call = RpcCallInfo(
       endpoint: RpcCallerEndpoint(transport: RpcChannelTransport.pair().$1),
       serviceName: 'Svc',
       methodName: 'm',
       context: RpcContext.empty(),
+      direction: RpcCallDirection.outgoing,
     );
 
     await expectLater(

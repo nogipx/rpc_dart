@@ -33,11 +33,12 @@ void main() {
     final endpoint = RpcCallerEndpoint(transport: clientTransport);
 
     Future<void> hit(String key) {
-      final c = RpcMiddlewareContext(
+      final c = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'S',
         methodName: 'M',
         context: RpcContext.empty().withValue(_userId, key),
+        direction: RpcCallDirection.incoming,
       );
       return limiter.interceptUnary<String, String>(
         c,

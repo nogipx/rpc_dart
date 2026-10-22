@@ -40,20 +40,21 @@ buildTracer() {
   return (tracer: tracer, exporter: exporter, provider: provider);
 }
 
-/// Minimal real endpoint so we can construct an [RpcMiddlewareContext].
+/// Minimal real endpoint so we can construct an [RpcCallInfo].
 /// The interceptor never touches transport behaviour; it only reads
 /// serviceName/methodName/context.
-RpcMiddlewareContext buildCall({
+RpcCallInfo buildCall({
   String service = 'TestService',
   String method = 'testMethod',
   RpcContext? context,
 }) {
   final (_, serverTransport) = RpcChannelTransport.memoryPair();
   final endpoint = RpcResponderEndpoint(transport: serverTransport);
-  return RpcMiddlewareContext(
+  return RpcCallInfo(
     endpoint: endpoint,
     serviceName: service,
     methodName: method,
     context: context ?? RpcContext.empty(),
+    direction: RpcCallDirection.incoming,
   );
 }

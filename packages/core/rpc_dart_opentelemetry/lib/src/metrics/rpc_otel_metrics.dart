@@ -84,7 +84,7 @@ class RpcOtelMetrics {
   ///
   /// [duration] is added to the matching `*.duration` sum counter (in ms).
   void recordCall(
-    RpcMiddlewareContext call, {
+    RpcCallInfo call, {
     required int statusCode,
     required Duration duration,
     RpcMetricSide side = RpcMetricSide.server,
@@ -100,7 +100,7 @@ class RpcOtelMetrics {
     durationMs.add(duration.inMilliseconds, attributes: attributes);
   }
 
-  List<Attribute> _attributes(RpcMiddlewareContext call, int statusCode) {
+  List<Attribute> _attributes(RpcCallInfo call, int statusCode) {
     return [
       Attribute.fromString('rpc.system', 'rpc_dart'),
       Attribute.fromString('rpc.service', call.serviceName),

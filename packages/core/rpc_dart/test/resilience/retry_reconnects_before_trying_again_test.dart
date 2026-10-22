@@ -99,15 +99,16 @@ class _FlakyTransport extends IRpcTransport implements IRpcReconnectOutcome {
 
 void main() {
   late _FlakyTransport transport;
-  late RpcMiddlewareContext callContext;
+  late RpcCallInfo callContext;
 
   setUp(() {
     transport = _FlakyTransport();
-    callContext = RpcMiddlewareContext(
+    callContext = RpcCallInfo(
       endpoint: RpcCallerEndpoint(transport: transport),
       serviceName: 'Svc',
       methodName: 'echo',
       context: RpcContext.empty(),
+      direction: RpcCallDirection.outgoing,
     );
   });
 

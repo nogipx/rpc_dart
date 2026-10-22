@@ -39,7 +39,7 @@ final class RpcDataErrorInterceptor extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) => next(call.context, request).catchError(
@@ -49,14 +49,14 @@ final class RpcDataErrorInterceptor extends IRpcInterceptor {
 
   @override
   Future<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async => _stream(await next(call.context, request));
 
   @override
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) => next(call.context, requests).catchError(
@@ -66,7 +66,7 @@ final class RpcDataErrorInterceptor extends IRpcInterceptor {
 
   @override
   Future<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async => _stream(await next(call.context, requests));

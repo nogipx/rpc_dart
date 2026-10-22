@@ -76,6 +76,8 @@ builds a transport, a channel or frames imports
 | `RpcStatus.isFault(code)` | `status.isFault` |
 | `RpcPeerContract(..., responderDataTransferMode: m)` | `dataTransferMode: m`, as on the other two contracts |
 | `implements IRpcChannelProtocolClose` | `extends IRpcChannel` and override `closeFor(RpcChannelCloseReason)` |
+| `IRpcMiddleware`, `endpoint.addMiddleware(m)`, `middlewares:` on `RpcApp` / `RpcTestApp` | an `IRpcInterceptor`: change the request before `next`, map the request or response stream for each message |
+| `RpcMiddlewareContext` | `RpcCallInfo`; `direction:` is required |
 
 `RpcException` is abstract: throw `RpcStatusException(RpcStatus.x, '...')`.
 Match errors on the type or on `statusCode`, never on the message text.

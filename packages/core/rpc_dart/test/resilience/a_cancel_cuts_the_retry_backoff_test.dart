@@ -89,11 +89,12 @@ void main() {
     Future<(String, int, int)> run({required bool cancel}) async {
       final transport = _SlowReconnect();
       final token = RpcCancellationToken();
-      final call = RpcMiddlewareContext(
+      final call = RpcCallInfo(
         endpoint: RpcCallerEndpoint(transport: transport),
         serviceName: 'Svc',
         methodName: 'm',
         context: RpcContext.withCancellation(token),
+        direction: RpcCallDirection.outgoing,
       );
       final retry = RpcRetryInterceptor(
         maxAttempts: 2,

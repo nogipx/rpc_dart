@@ -35,7 +35,6 @@ import 'rpc_server_module.dart';
 class RpcApp {
   final List<RpcModule> _modulesRaw;
   final List<IRpcInterceptor> _interceptors;
-  final List<IRpcMiddleware> _middlewares;
   final IRpcServer Function(RpcResponderMode mode)? _serverBuilder;
   final Future<void> Function(RpcContainer container)? _afterModulesStartHook;
   final RpcAppConfig _config;
@@ -54,13 +53,11 @@ class RpcApp {
     required List<RpcModule> modules,
     IRpcServer Function(RpcResponderMode mode)? serverBuilder,
     required List<IRpcInterceptor> interceptors,
-    required List<IRpcMiddleware> middlewares,
     Future<void> Function(RpcContainer container)? afterModulesStart,
     required RpcAppConfig config,
   }) : _modulesRaw = modules,
        _serverBuilder = serverBuilder,
        _interceptors = List.unmodifiable(interceptors),
-       _middlewares = List.unmodifiable(middlewares),
        _afterModulesStartHook = afterModulesStart,
        _config = config,
        _log = config.logger ?? LogScope.noop;
@@ -80,7 +77,6 @@ class RpcApp {
     required List<RpcModule> modules,
     required IRpcServer Function(RpcResponderMode mode) server,
     List<IRpcInterceptor> interceptors = const [],
-    List<IRpcMiddleware> middlewares = const [],
     Future<void> Function(RpcContainer container)? afterModulesStart,
     RpcAppConfig config = const RpcAppConfig(),
   }) {
@@ -88,7 +84,6 @@ class RpcApp {
       modules: modules,
       serverBuilder: server,
       interceptors: interceptors,
-      middlewares: middlewares,
       afterModulesStart: afterModulesStart,
       config: config,
     );
@@ -424,9 +419,6 @@ class RpcApp {
     }
     for (final i in _interceptors) {
       endpoint.addInterceptor(i);
-    }
-    for (final mw in _middlewares) {
-      endpoint.addMiddleware(mw);
     }
     for (final module in _modules) {
       if (module is! RpcServerModule) continue;

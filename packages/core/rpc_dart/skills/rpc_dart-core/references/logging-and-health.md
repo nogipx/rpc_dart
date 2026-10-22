@@ -205,8 +205,8 @@ Future<void> checkHealth(RpcCallerEndpoint caller, LogScope log) async {
 
 `ping({Duration? timeout, RpcContext? context})` is on `RpcCallerEndpoint` and
 `RpcPeerEndpoint` (not on `RpcResponderEndpoint`). The responder answers it
-automatically, with one trailer and without running middleware,
-interceptors or a handler, so it measures the transport and the endpoint's
+automatically, with one trailer and without running interceptors or a
+handler, so it measures the transport and the endpoint's
 dispatch, not your services. Returns `RpcEndpointPingResult`: `sentAt`,
 `receivedAt`, `roundTrip` (monotonic), `responderTimestamp` (the responder's
 UTC clock), `responderDebugLabel`, `responseHeaders`. The responder's

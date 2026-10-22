@@ -20,7 +20,7 @@ part 'caller_endpoint.dart';
 part 'peer_endpoint.dart';
 part 'diagnostics.dart';
 part 'metrics.dart';
-part 'middleware.dart';
+part 'call_info.dart';
 part 'call_observer.dart';
 part 'ping.dart';
 part 'responder_registry.dart';

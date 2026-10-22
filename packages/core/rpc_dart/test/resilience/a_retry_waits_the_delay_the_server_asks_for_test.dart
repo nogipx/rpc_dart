@@ -16,11 +16,12 @@ void main() {
     addTearDown(endpoint.close);
   });
 
-  RpcMiddlewareContext callWith(RpcContext context) => RpcMiddlewareContext(
+  RpcCallInfo callWith(RpcContext context) => RpcCallInfo(
     endpoint: endpoint,
     serviceName: 'S',
     methodName: 'M',
     context: context,
+    direction: RpcCallDirection.outgoing,
   );
 
   Future<List<Duration>> gaps(

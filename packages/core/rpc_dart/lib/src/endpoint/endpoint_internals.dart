@@ -9,12 +9,12 @@ part of '_index.dart';
 /// Not exported from the public libraries, so the pipeline can change in any
 /// release.
 extension RpcEndpointInternals on RpcEndpointBase {
-  /// Runs [handler] through middleware and interceptors for a unary call.
+  /// Runs [handler] through the interceptors for a unary call.
   Future<TResponse> handleUnary<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
-    RpcCallDirection? direction,
+    required RpcCallDirection direction,
     required TRequest request,
     required Future<TResponse> Function(RpcContext ctx, TRequest request)
     handler,
@@ -27,12 +27,12 @@ extension RpcEndpointInternals on RpcEndpointBase {
     handler: handler,
   );
 
-  /// Runs [handler] through middleware and interceptors for a server stream.
+  /// Runs [handler] through the interceptors for a server stream.
   Stream<TResponse> handleServerStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
-    RpcCallDirection? direction,
+    required RpcCallDirection direction,
     required TRequest request,
     required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
@@ -48,12 +48,12 @@ extension RpcEndpointInternals on RpcEndpointBase {
     handler: handler,
   );
 
-  /// Runs [handler] through middleware and interceptors for a client stream.
+  /// Runs [handler] through the interceptors for a client stream.
   Future<TResponse> handleClientStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
-    RpcCallDirection? direction,
+    required RpcCallDirection direction,
     required Stream<TRequest> requests,
     required Future<TResponse> Function(
       RpcContext ctx,
@@ -69,13 +69,13 @@ extension RpcEndpointInternals on RpcEndpointBase {
     handler: handler,
   );
 
-  /// Runs [handler] through middleware and interceptors for a bidirectional
+  /// Runs [handler] through the interceptors for a bidirectional
   /// stream.
   Stream<TResponse> handleBidirectionalStream<TRequest, TResponse>({
     required String serviceName,
     required String methodName,
     required RpcContext context,
-    RpcCallDirection? direction,
+    required RpcCallDirection direction,
     required Stream<TRequest> requests,
     required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,

@@ -7,14 +7,12 @@ import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('Middleware defaults', () {
-    test('default middleware/interceptor are pass-through', () async {
+  group('Interceptor defaults', () {
+    test('a default interceptor is pass-through', () async {
       final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
       addTearDown(() async => endpoint.close());
 
-      endpoint
-        ..addMiddleware(const _NoopMiddleware())
-        ..addInterceptor(const _NoopInterceptor());
+      endpoint.addInterceptor(const _NoopInterceptor());
 
       final context = RpcContext.withHeaders({'k': 'v'});
 
@@ -22,6 +20,7 @@ void main() {
         serviceName: 'svc',
         methodName: 'method',
         context: context,
+        direction: RpcCallDirection.outgoing,
         request: 10,
         handler: (ctx, request) async {
           expect(ctx.getHeader('k'), equals('v'));
@@ -32,14 +31,15 @@ void main() {
       expect(result, equals(11));
     });
 
-    test('RpcMiddlewareContext.copyWith preserves fields', () {
+    test('RpcCallInfo.copyWith preserves fields', () {
       final endpoint = RpcCallerEndpoint(transport: _DummyTransport());
 
-      final original = RpcMiddlewareContext(
+      final original = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'svc',
         methodName: 'method',
         context: RpcContext.withHeaders({'a': '1'}),
+        direction: RpcCallDirection.outgoing,
       );
 
       final call = original.copyWith(
@@ -54,13 +54,10 @@ void main() {
       expect(copy.serviceName, equals('svc'));
       expect(copy.methodName, equals('other'));
       expect(copy.endpoint, same(endpoint));
+      expect(copy.direction, RpcCallDirection.outgoing);
       expect(copy.context.getHeader('b'), equals('2'));
     });
   });
-}
-
-final class _NoopMiddleware extends IRpcMiddleware {
-  const _NoopMiddleware();
 }
 
 final class _NoopInterceptor extends IRpcInterceptor {

@@ -15,7 +15,7 @@ import 'rpc_module.dart';
 /// In-process test harness for [RpcModule]s.
 ///
 /// Runs an [RpcApp] whose server is an in-memory channel pair, so the full RPC
-/// stack — contracts, interceptors, middleware, codecs, module lifecycle — runs
+/// stack — contracts, interceptors, codecs, module lifecycle — runs
 /// in one Dart process with no network. Startup, rollback, health and shutdown
 /// are [RpcApp]'s own: modules are ordered by [RpcModule.dependencies], isolate
 /// modules are spawned, [RpcAppConfig.onError] / [RpcAppConfig.onCall] are
@@ -49,8 +49,8 @@ class RpcTestApp {
   /// Starts the app and connects [caller] to it.
   ///
   /// - [modules] — any mix of `RpcServerModule`s and plain [RpcModule]s.
-  /// - [interceptors] / [middlewares] — applied to the in-process responder.
-  /// - [callerInterceptors] / [callerMiddlewares] — applied to [caller].
+  /// - [interceptors] — applied to the in-process responder.
+  /// - [callerInterceptors] — applied to [caller].
   /// - [config] — the [RpcAppConfig] the app runs with.
   /// - [env] — environment for env-based configuration; overrides
   ///   [RpcAppConfig.env].
@@ -60,9 +60,7 @@ class RpcTestApp {
   static Future<RpcTestApp> start({
     required List<RpcModule> modules,
     List<IRpcInterceptor> interceptors = const [],
-    List<IRpcMiddleware> middlewares = const [],
     List<IRpcInterceptor> callerInterceptors = const [],
-    List<IRpcMiddleware> callerMiddlewares = const [],
     RpcAppConfig config = const RpcAppConfig(),
     Map<String, String>? env,
   }) async {
@@ -71,15 +69,11 @@ class RpcTestApp {
     for (final interceptor in callerInterceptors) {
       caller.addInterceptor(interceptor);
     }
-    for (final middleware in callerMiddlewares) {
-      caller.addMiddleware(middleware);
-    }
 
     final app = RpcApp.server(
       modules: modules,
       server: (mode) => _InMemoryServer(mode, serverTransport),
       interceptors: interceptors,
-      middlewares: middlewares,
       config: config.copyWith(env: env),
     );
     try {

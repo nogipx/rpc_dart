@@ -62,7 +62,7 @@ export 'src/_index.dart'
         RpcNull,
         RpcNullX,
         RpcList,
-        // Endpoints, interceptors and middleware
+        // Endpoints and interceptors
         RpcEndpointBase,
         RpcCallerEndpoint,
         RpcResponderEndpoint,
@@ -76,8 +76,7 @@ export 'src/_index.dart'
         RpcCallSucceeded,
         RpcCallFailed,
         RpcCallCancelled,
-        IRpcMiddleware,
-        RpcMiddlewareContext,
+        RpcCallInfo,
         RpcCallDirection,
         RpcUnaryNext,
         RpcServerStreamNext,

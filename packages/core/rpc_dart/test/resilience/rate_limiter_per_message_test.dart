@@ -19,16 +19,17 @@ import 'package:test/test.dart';
 
 void main() {
   group('RpcRateLimiter per-message stream accounting', () {
-    late RpcMiddlewareContext callContext;
+    late RpcCallInfo callContext;
 
     setUp(() {
       final (clientTransport, _) = RpcChannelTransport.memoryPair();
       final endpoint = RpcCallerEndpoint(transport: clientTransport);
-      callContext = RpcMiddlewareContext(
+      callContext = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'EchoService',
         methodName: 'stream',
         context: RpcContext.empty(),
+        direction: RpcCallDirection.incoming,
       );
     });
 
@@ -230,11 +231,12 @@ void main() {
         ),
         nowMicros: frozenClock,
       );
-      final unaryCtx = RpcMiddlewareContext(
+      final unaryCtx = RpcCallInfo(
         endpoint: callContext.endpoint,
         serviceName: 'EchoService',
         methodName: 'ping',
         context: RpcContext.empty(),
+        direction: RpcCallDirection.incoming,
       );
 
       Future<String> call() => limiter.interceptUnary<String, String>(

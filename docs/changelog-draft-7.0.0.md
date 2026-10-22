@@ -108,6 +108,8 @@ No error message is a contract: match on the type or the status.
 | `RpcList.toMutableList()`, `where` returning `RpcList` | `RpcList` is an `Iterable`: `toList()` copies, `where` returns an `Iterable`, `for`-in works |
 | `LogSpanHandle(...)`, `SpanStartCallback` / `SpanEventCallback` / `SpanCompleteCallback` | `LogScope.startSpan` / `withSpan` |
 | endpoint pipeline members (`handleUnary` and the other three, `start*Listening`, `close*Resources`, `collect*Metrics`, `registeredMethods`, `registeredMethodBindings`, `validateMethodExists`, `getCancellationToken`, `responderIsListening`) and `RpcResponderContract.registrations` | not public; `collectEndpointMetrics()` for the metrics |
+| `IRpcMiddleware`, `addMiddleware`, `RpcEndpointMetrics.middlewareCount` | an `IRpcInterceptor`, the one way to wrap a call: it changes the request before `next` or maps the request or response stream |
+| `RpcMiddlewareContext` | `RpcCallInfo`, whose `direction` is always set |
 
 **`grpc.health.v1` speaks protobuf.** `GrpcHealthCheckContract` was CBOR on the
 wire, so real gRPC health checkers could not read it. `Check` on an unknown
@@ -155,7 +157,7 @@ their `codec`.
 ### New
 
 - `IRpcInterceptor.check`: a check that runs for every call shape.
-- `RpcCallObserverInterceptor`: observe every call of every shape. Middleware
+- `RpcCallObserverInterceptor`: observe every call of every shape. An interceptor
   can tell an outgoing call from an incoming one.
 - `IRpcServer.stop(drainTimeout:)` stops admitting and waits for in-flight
   calls; `pair()` builds a client.

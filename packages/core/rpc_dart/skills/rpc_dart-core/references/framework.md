@@ -66,7 +66,7 @@ import 'package:rpc_dart_framework/rpc_dart_framework.dart';
 4. For each module: `await onStart(container)`.
 5. Build and start the server. For each new connection the server calls back
    with a `RpcResponderEndpoint`; the app adds the `onError`/`onCall` hooks,
-   the `interceptors:`, the `middlewares:`, registers every server module's
+   the `interceptors:`, registers every server module's
    `buildContracts`, and starts the endpoint.
 6. `afterModulesStart(container)`, if given.
 
@@ -79,7 +79,7 @@ SIGTERM or SIGINT, then `stop()`.
 
 | Type | Purpose |
 | --- | --- |
-| `RpcApp.server(modules:, server:, interceptors:, middlewares:, afterModulesStart:, config:)` | The app. `server` is `IRpcServer Function(RpcResponderMode mode)`. Members: `start()`, `stop()`, `run()`, `health()` |
+| `RpcApp.server(modules:, server:, interceptors:, afterModulesStart:, config:)` | The app. `server` is `IRpcServer Function(RpcResponderMode mode)`. Members: `start()`, `stop()`, `run()`, `health()` |
 | `RpcModule` | `name`, `dependencies`, `configure`, `configureWithEnv`, `onStart`, `onStop`, `checkHealth` (returns `RpcHealthStatus?`; `null` skips the module) |
 | `RpcServerModule` | adds `buildContracts(RpcContainer)` |
 | `RpcIsolateModule` | `workerEntrypoint`, `isolateParams`, `buildProxyContracts(RpcCallerEndpoint)` |
@@ -281,8 +281,8 @@ final class IsolateGreeterModule extends RpcIsolateModule {
 
 `RpcTestApp.start` runs an `RpcApp` whose server is an in-process
 `RpcChannelTransport.memoryPair()`, so startup, rollback, health and shutdown
-behave as in production. It takes `modules:`, `interceptors:`, `middlewares:`,
-`callerInterceptors:`, `callerMiddlewares:`, `config:` and `env:` (overrides
+behave as in production. It takes `modules:`, `interceptors:`,
+`callerInterceptors:`, `config:` and `env:` (overrides
 `config.env`). Call contracts on `app.caller`; `dispose()` closes the caller,
 then stops the app as `RpcApp.stop()` does.
 

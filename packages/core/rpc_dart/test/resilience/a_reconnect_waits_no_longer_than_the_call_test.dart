@@ -113,11 +113,12 @@ Future<(Object?, int)> _call(
   Duration backoff = const Duration(milliseconds: 100),
   void Function(Duration? left)? onAttempt,
 }) async {
-  final call = RpcMiddlewareContext(
+  final call = RpcCallInfo(
     endpoint: RpcCallerEndpoint(transport: transport),
     serviceName: 'Svc',
     methodName: 'm',
     context: ctx,
+    direction: RpcCallDirection.outgoing,
   );
   final retry = RpcRetryInterceptor(
     maxAttempts: 2,

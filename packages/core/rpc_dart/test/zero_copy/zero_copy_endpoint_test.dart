@@ -292,11 +292,12 @@ void main() {
         var attempts = 0;
         try {
           await interceptor.interceptUnary<TestRequest, TestResponse>(
-            RpcMiddlewareContext(
+            RpcCallInfo(
               endpoint: callerEndpoint,
               serviceName: 'TestService',
               methodName: 'failUnavailable',
               context: RpcContext.empty(),
+              direction: RpcCallDirection.outgoing,
             ),
             TestRequest('boom', const []),
             (ctx, req) async {

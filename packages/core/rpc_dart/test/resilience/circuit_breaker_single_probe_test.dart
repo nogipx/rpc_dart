@@ -13,16 +13,17 @@ import 'package:test/test.dart';
 
 void main() {
   group('CircuitBreaker single-probe half-open', () {
-    late RpcMiddlewareContext callContext;
+    late RpcCallInfo callContext;
 
     setUp(() {
       final (clientTransport, _) = RpcChannelTransport.memoryPair();
       final endpoint = RpcCallerEndpoint(transport: clientTransport);
-      callContext = RpcMiddlewareContext(
+      callContext = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'TestService',
         methodName: 'TestMethod',
         context: RpcContext.empty(),
+        direction: RpcCallDirection.outgoing,
       );
     });
 

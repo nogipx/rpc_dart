@@ -18,16 +18,17 @@ import 'package:test/test.dart';
 void main() {
   group('CircuitBreaker cancelled half-open stream probe', () {
     late RpcCallerEndpoint endpoint;
-    late RpcMiddlewareContext callContext;
+    late RpcCallInfo callContext;
 
     setUp(() {
       final (clientTransport, _) = RpcChannelTransport.memoryPair();
       endpoint = RpcCallerEndpoint(transport: clientTransport);
-      callContext = RpcMiddlewareContext(
+      callContext = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'TestService',
         methodName: 'TestMethod',
         context: RpcContext.empty(),
+        direction: RpcCallDirection.outgoing,
       );
     });
 

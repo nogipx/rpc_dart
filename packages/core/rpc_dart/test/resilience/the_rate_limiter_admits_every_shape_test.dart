@@ -25,13 +25,14 @@ const int _n = 100;
 
 int _frozenClock() => 0;
 
-RpcMiddlewareContext _ctx(String method) {
+RpcCallInfo _ctx(String method) {
   final (clientTransport, _) = RpcChannelTransport.memoryPair();
-  return RpcMiddlewareContext(
+  return RpcCallInfo(
     endpoint: RpcCallerEndpoint(transport: clientTransport),
     serviceName: 'Feed',
     methodName: method,
     context: RpcContext.empty(),
+    direction: RpcCallDirection.incoming,
   );
 }
 

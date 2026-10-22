@@ -8,7 +8,7 @@ import 'package:test/test.dart';
 /// The pushback a rate-limit refusal carries is the time until the limiter
 /// admits again: a caller that waits exactly that long is let in.
 void main() {
-  late RpcMiddlewareContext call;
+  late RpcCallInfo call;
   var nowUs = 0;
 
   setUp(() {
@@ -16,11 +16,12 @@ void main() {
     final (client, _) = RpcChannelTransport.memoryPair();
     final endpoint = RpcCallerEndpoint(transport: client);
     addTearDown(endpoint.close);
-    call = RpcMiddlewareContext(
+    call = RpcCallInfo(
       endpoint: endpoint,
       serviceName: 'S',
       methodName: 'M',
       context: RpcContext.empty(),
+      direction: RpcCallDirection.incoming,
     );
   });
 

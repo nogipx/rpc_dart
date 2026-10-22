@@ -23,17 +23,18 @@ import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
 void main() {
-  late RpcMiddlewareContext ctx;
+  late RpcCallInfo ctx;
 
   setUp(() {
     final (client, _) = RpcChannelTransport.memoryPair();
     final endpoint = RpcCallerEndpoint(transport: client);
     addTearDown(endpoint.close);
-    ctx = RpcMiddlewareContext(
+    ctx = RpcCallInfo(
       endpoint: endpoint,
       serviceName: 'S',
       methodName: 'M',
       context: RpcContext.empty(),
+      direction: RpcCallDirection.outgoing,
     );
   });
 

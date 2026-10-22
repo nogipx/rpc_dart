@@ -116,8 +116,8 @@ not zero-copy, and a method without codecs fails on them.
    take `logger:`, a `LogScope`. Inside
    a handler, log through `context?.log`, which is already scoped to
    `rpc.responder.<Service>.<method>`.
-5. **There are no `interceptors:` or `middlewares:` constructor parameters.**
-   Use `addInterceptor` / `addMiddleware`. The first interceptor added is the
+5. **There is no `interceptors:` constructor parameter.**
+   Use `addInterceptor`. The first interceptor added is the
    outermost. Add a circuit breaker before a retry interceptor, or the retry
    will retry `CircuitBreakerOpenException` (UNAVAILABLE).
 6. **Limits live on the transport, not the endpoint.** Pass an
@@ -152,7 +152,7 @@ and a pitfalls list.
 | Task | File |
 | --- | --- |
 | Define a service from an annotated interface with `rpc_dart_generator` (recommended); transfer modes, peer services, versioning | [code-generation.md](references/code-generation.md) |
-| Hand-written contracts; endpoints; peer mode; middleware vs interceptors; annotation reference | [contracts-and-endpoints.md](references/contracts-and-endpoints.md) |
+| Hand-written contracts; endpoints; peer mode; interceptors; annotation reference | [contracts-and-endpoints.md](references/contracts-and-endpoints.md) |
 | Server, client and bidirectional streams; cancellation; backpressure | [streaming.md](references/streaming.md) |
 | Serialization (`IRpcSerializable`, `RpcCodec`, `RpcBinaryCodec`, primitives), transfer modes, compression | [codecs-and-compression.md](references/codecs-and-compression.md) |
 | Deadlines, cancellation, headers and metadata rules, per-call scope | [context-and-metadata.md](references/context-and-metadata.md) |

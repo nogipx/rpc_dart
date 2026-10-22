@@ -10,7 +10,7 @@ SPDX-License-Identifier: MIT
 message sizes, buffered bytes, stream and handler counts, metadata shape, and
 the credit-based flow-control windows. It is input validation and resource
 limiting. It is NOT authentication or authorization; do that in an
-interceptor or middleware.
+interceptor.
 
 ## Rules
 
@@ -65,7 +65,7 @@ final restored = RpcSecurityPolicy.fromMap(policy.toMap());
 | `maxDecodedItems` | 1048576 (`CborCodec.defaultMaxItems`) | CBOR data items one inbound message decodes to (each map key, value and container counts one), in both directions, generated codecs included. A message is decoded before interceptors run, so this bounds what an unauthenticated call costs. A list of N ints is N + 1 items: raise it on an endpoint that receives larger lists. Non-CBOR codecs are not affected. |
 | `maxBufferedMessagesPerStream` | 8192 | Un-consumed MESSAGES (payloads and direct objects) queued for one stream. The only queue bound that sees zero-copy payloads. With `flowControlWindowBytes` on it is also granted to the peer as message credit, so small messages travel at most this many per round trip. With only the connection window on there is no message credit and a slow consumer of small messages can reach it. Not applied to request queues on a transport whose `grantsMessageCredit` is false (HTTP/2); there each queued message is charged its bytes per stream, and its bytes plus a fixed 128 against the connection total. |
 | `maxActiveStreams` | 4096 | Live streams per connection, both directions. Bounds stream state, not running work. |
-| `maxConcurrentHandlers` | `null` (no limit) | Handlers running at once per connection. Slot held until the handler (and its middleware/interceptors, and for streams the response stream) finishes. |
+| `maxConcurrentHandlers` | `null` (no limit) | Handlers running at once per connection. Slot held until the handler (and its interceptors, and for streams the response stream) finishes. |
 | `maxMetadataBytes` | 64 KiB | Total header name + value text of one inbound metadata block. |
 | `maxHeaders` | 128 | Header count per metadata block. |
 | `maxHeaderNameBytes` | 128 | One header name; also rejects any char `<= 0x20` or `0x7F`. |

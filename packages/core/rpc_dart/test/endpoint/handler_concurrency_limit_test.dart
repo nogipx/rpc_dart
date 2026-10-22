@@ -104,7 +104,7 @@ class _Blocker extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {

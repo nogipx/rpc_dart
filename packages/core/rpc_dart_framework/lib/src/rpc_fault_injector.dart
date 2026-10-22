@@ -92,7 +92,7 @@ class RpcFaultInjector extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
@@ -102,7 +102,7 @@ class RpcFaultInjector extends IRpcInterceptor {
 
   @override
   FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
@@ -112,7 +112,7 @@ class RpcFaultInjector extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
@@ -122,7 +122,7 @@ class RpcFaultInjector extends IRpcInterceptor {
 
   @override
   FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {

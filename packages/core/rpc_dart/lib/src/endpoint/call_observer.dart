@@ -70,7 +70,7 @@ final class RpcCallCancelled extends RpcCallOutcome {
 /// ```dart
 /// final class SlowCallLog extends RpcCallObserverInterceptor<String> {
 ///   @override
-///   String onCallStart(RpcMiddlewareContext call, RpcMethodType type) =>
+///   String onCallStart(RpcCallInfo call, RpcMethodType type) =>
 ///       '${call.serviceName}.${call.methodName}';
 ///
 ///   @override
@@ -85,7 +85,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
 
   /// A call of [type] reached this interceptor. Returns the state handed to
   /// every later hook of the same call.
-  S onCallStart(RpcMiddlewareContext call, RpcMethodType type);
+  S onCallStart(RpcCallInfo call, RpcMethodType type);
 
   /// The call that [onCallStart] returned [state] for is over. Called exactly
   /// once per call.
@@ -108,7 +108,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) => _observeResponse(
@@ -119,7 +119,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) => _observeResponse(
@@ -130,7 +130,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
 
   @override
   Future<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) => _observeStream(
@@ -141,7 +141,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
 
   @override
   Future<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) => _observeStream(
@@ -151,7 +151,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
   );
 
   Future<T> _observeResponse<T>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     RpcMethodType type,
     Future<T> Function(RpcContext context) next,
   ) async {
@@ -171,7 +171,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
   }
 
   Future<Stream<T>> _observeStream<T>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     RpcMethodType type,
     FutureOr<Stream<T>> Function(RpcContext context) next,
   ) async {

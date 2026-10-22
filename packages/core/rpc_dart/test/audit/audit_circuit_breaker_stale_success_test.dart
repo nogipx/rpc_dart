@@ -17,16 +17,17 @@ import 'package:test/test.dart';
 
 void main() {
   group('R1: circuit breaker stale-success reset', () {
-    late RpcMiddlewareContext ctx;
+    late RpcCallInfo ctx;
 
     setUp(() {
       final (clientTransport, _) = RpcChannelTransport.memoryPair();
       final endpoint = RpcCallerEndpoint(transport: clientTransport);
-      ctx = RpcMiddlewareContext(
+      ctx = RpcCallInfo(
         endpoint: endpoint,
         serviceName: 'S',
         methodName: 'M',
         context: RpcContext.empty(),
+        direction: RpcCallDirection.outgoing,
       );
     });
 

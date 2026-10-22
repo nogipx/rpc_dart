@@ -5,7 +5,7 @@
 
 part of '_index.dart';
 
-/// Which way a call goes, from the endpoint running the middleware.
+/// Which way a call goes, from the endpoint running the interceptor.
 enum RpcCallDirection {
   /// A call this endpoint makes.
   outgoing,
@@ -14,10 +14,9 @@ enum RpcCallDirection {
   incoming,
 }
 
-/// Middleware/interceptor context passed through request/response lifecycle.
-/// Provides endpoint reference, service/method names, and the current
-/// [RpcContext].
-class RpcMiddlewareContext {
+/// The call an interceptor is running in: the endpoint, the method and the
+/// current [RpcContext].
+class RpcCallInfo {
   /// The endpoint processing this call.
   final RpcEndpointBase endpoint;
 
@@ -31,71 +30,39 @@ class RpcMiddlewareContext {
   ///
   /// Fixed for the stage: an interceptor hands the stages below it a
   /// different one by passing it to `next`, and each stage gets its own
-  /// [RpcMiddlewareContext]. A response middleware sees the context the
-  /// handler was called with.
+  /// [RpcCallInfo].
   final RpcContext context;
 
   /// Whether this endpoint is making the call or serving it.
   ///
-  /// Matters on an `RpcPeerEndpoint`, whose one middleware list runs both
-  /// ways; on a caller or responder endpoint it is always the same. Set by the
-  /// endpoint's own pipelines; null only for a context built by hand.
-  final RpcCallDirection? direction;
+  /// Matters on an `RpcPeerEndpoint`, whose one interceptor list runs both
+  /// ways; on a caller or responder endpoint it is always the same.
+  final RpcCallDirection direction;
 
-  /// Creates an [RpcMiddlewareContext] for the given call.
-  RpcMiddlewareContext({
+  /// Creates an [RpcCallInfo] for the given call.
+  RpcCallInfo({
     required this.endpoint,
     required this.serviceName,
     required this.methodName,
     required this.context,
-    this.direction,
+    required this.direction,
   });
 
   /// Creates a copy with updated fields.
-  RpcMiddlewareContext copyWith({
+  RpcCallInfo copyWith({
     RpcEndpointBase? endpoint,
     String? serviceName,
     String? methodName,
     RpcContext? context,
     RpcCallDirection? direction,
   }) {
-    return RpcMiddlewareContext(
+    return RpcCallInfo(
       endpoint: endpoint ?? this.endpoint,
       serviceName: serviceName ?? this.serviceName,
       methodName: methodName ?? this.methodName,
       context: context ?? this.context,
       direction: direction ?? this.direction,
     );
-  }
-}
-
-/// Base interface for middleware.
-///
-/// Allows request/response mutation before passing to the next component.
-/// Implementations may return a new instance or the original object.
-abstract class IRpcMiddleware {
-  /// Creates a constant middleware instance.
-  const IRpcMiddleware();
-
-  /// Called before the user handler executes.
-  ///
-  /// Returned value is passed to the next middleware/interceptor.
-  FutureOr<TRequest> processRequest<TRequest>(
-    RpcMiddlewareContext call,
-    TRequest request,
-  ) async {
-    return request;
-  }
-
-  /// Called after the user handler returns a result.
-  ///
-  /// Returned value is passed to the next middleware/interceptor or back to
-  /// the caller.
-  FutureOr<TResponse> processResponse<TResponse>(
-    RpcMiddlewareContext call,
-    TResponse response,
-  ) async {
-    return response;
   }
 }
 
@@ -121,7 +88,8 @@ typedef RpcBidirectionalStreamNext<TRequest, TResponse> =
 /// Interceptor interface.
 ///
 /// Wraps user handlers and may short-circuit the chain by returning a custom
-/// result.
+/// result. It may also change what passes through: hand [next] a different
+/// request, or map the request or response stream.
 ///
 /// Every method passes through by default. An interceptor that CHECKS calls
 /// (authentication, authorization, a quota) overrides [check], which runs for
@@ -131,7 +99,7 @@ typedef RpcBidirectionalStreamNext<TRequest, TResponse> =
 /// ```dart
 /// final class RequireToken extends IRpcInterceptor {
 ///   @override
-///   void check(RpcMiddlewareContext call) {
+///   void check(RpcCallInfo call) {
 ///     if (call.context.getHeader('authorization') == null) {
 ///       throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
 ///     }
@@ -148,14 +116,14 @@ abstract class IRpcInterceptor {
   /// Throw (an [RpcStatusException]) to refuse the call: it ends with that
   /// status and nothing after this interceptor runs. Return a future only when
   /// the check is asynchronous; a synchronous one costs the call nothing.
-  FutureOr<void> check(RpcMiddlewareContext call) {}
+  FutureOr<void> check(RpcCallInfo call) {}
 
   /// Unary call interceptor.
   ///
   /// Implementations may mutate context/request and must call [next] to
   /// continue. For pass-through, call `return next(call.context, request);`.
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
@@ -164,7 +132,7 @@ abstract class IRpcInterceptor {
 
   /// Server-stream call interceptor.
   FutureOr<Stream<TResponse>> interceptServerStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcServerStreamNext<TRequest, TResponse> next,
   ) async {
@@ -173,7 +141,7 @@ abstract class IRpcInterceptor {
 
   /// Client-stream call interceptor.
   Future<TResponse> interceptClientStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcClientStreamNext<TRequest, TResponse> next,
   ) async {
@@ -182,7 +150,7 @@ abstract class IRpcInterceptor {
 
   /// Bidirectional-stream call interceptor.
   FutureOr<Stream<TResponse>> interceptBidirectionalStream<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     Stream<TRequest> requests,
     RpcBidirectionalStreamNext<TRequest, TResponse> next,
   ) async {

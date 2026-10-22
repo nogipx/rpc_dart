@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
-// A peer endpoint runs one middleware list for the calls it makes and the calls
-// it serves. RpcMiddlewareContext.direction tells the two apart, so middleware
+// A peer endpoint runs one interceptor list for the calls it makes and the
+// calls it serves. RpcCallInfo.direction tells the two apart, so an interceptor
 // that belongs to one side -- auth injected on outgoing, checked on incoming --
 // does not have to guess from incidental signals.
 
@@ -26,17 +26,11 @@ final class _Svc extends RpcResponderContract {
   }
 }
 
-final class _Record extends IRpcMiddleware {
-  final seen = <RpcCallDirection?>[];
+final class _Record extends IRpcInterceptor {
+  final seen = <RpcCallDirection>[];
 
   @override
-  Future<TRequest> processRequest<TRequest>(
-    RpcMiddlewareContext call,
-    TRequest request,
-  ) async {
-    seen.add(call.direction);
-    return request;
-  }
+  void check(RpcCallInfo call) => seen.add(call.direction);
 }
 
 Future<void> _echo(RpcPeerEndpoint from) =>
@@ -49,12 +43,12 @@ Future<void> _echo(RpcPeerEndpoint from) =>
     );
 
 void main() {
-  test('a peer middleware sees outgoing, then incoming', () async {
+  test('a peer interceptor sees outgoing, then incoming', () async {
     final (ta, tb) = RpcChannelTransport.pair();
     final a = RpcPeerEndpoint(transport: ta)..registerServiceContract(_Svc());
     final b = RpcPeerEndpoint(transport: tb)..registerServiceContract(_Svc());
     final record = _Record();
-    a.addMiddleware(record);
+    a.addInterceptor(record);
     a.start();
     b.start();
     addTearDown(() async {

@@ -99,7 +99,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) async {
@@ -185,7 +185,7 @@ class RpcRetryInterceptor extends IRpcInterceptor {
   /// error is what the caller sees.
   Future<void> _awaitReconnectIfConnectionIsGone(
     Object error,
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
   ) async {
     if (error is! RpcStatusException) return;
     if (error.statusCode != RpcStatus.unavailable) return;

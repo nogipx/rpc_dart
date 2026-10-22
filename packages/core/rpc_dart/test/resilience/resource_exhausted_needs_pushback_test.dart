@@ -140,11 +140,12 @@ void main() {
       await client.close();
     });
     final breaker = RpcCircuitBreakerInterceptor(failureThreshold: 2);
-    final call = RpcMiddlewareContext(
+    final call = RpcCallInfo(
       endpoint: endpoint,
       serviceName: 'Svc',
       methodName: 'Echo',
       context: RpcContext.empty(),
+      direction: RpcCallDirection.outgoing,
     );
     Future<Object?> attempt(RpcStatusException error) => breaker
         .interceptUnary<String, String>(call, 'x', (_, _) async => throw error)

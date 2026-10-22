@@ -15,7 +15,6 @@ final class RpcEndpointMetrics {
   /// Creates a snapshot; the endpoints build these.
   const RpcEndpointMetrics({
     required this.isActive,
-    required this.middlewareCount,
     required this.interceptorCount,
     required this.transportClosed,
     required this.transportType,
@@ -38,9 +37,6 @@ final class RpcEndpointMetrics {
 
   /// Whether the endpoint is open.
   final bool isActive;
-
-  /// Middlewares added to the endpoint.
-  final int middlewareCount;
 
   /// Interceptors added to the endpoint.
   final int interceptorCount;
@@ -102,7 +98,6 @@ final class RpcEndpointMetrics {
   /// out.
   Map<String, Object?> toJson() => {
     'isActive': isActive,
-    'middlewareCount': middlewareCount,
     'interceptorCount': interceptorCount,
     'transportClosed': transportClosed,
     'transportType': transportType,

@@ -16,7 +16,7 @@ final class RequireTokenInterceptor extends IRpcInterceptor {
   const RequireTokenInterceptor();
 
   @override
-  void check(RpcMiddlewareContext call) {
+  void check(RpcCallInfo call) {
     if (call.context.getHeader('authorization') == null) {
       throw RpcStatusException(RpcStatus.unauthenticated, 'missing token');
     }
@@ -28,7 +28,7 @@ final class AsyncTokenInterceptor extends IRpcInterceptor {
   const AsyncTokenInterceptor();
 
   @override
-  Future<void> check(RpcMiddlewareContext call) async {
+  Future<void> check(RpcCallInfo call) async {
     await Future<void>.delayed(const Duration(milliseconds: 5));
     if (call.context.getHeader('authorization') == null) {
       throw RpcStatusException(RpcStatus.permissionDenied, 'no grant');
@@ -43,11 +43,11 @@ final class _Order extends IRpcInterceptor {
   final List<String> seen;
 
   @override
-  void check(RpcMiddlewareContext call) => seen.add('$name.check');
+  void check(RpcCallInfo call) => seen.add('$name.check');
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) {

@@ -8,7 +8,6 @@ part of '_index.dart';
 /// Base class for all RPC endpoints.
 abstract base class RpcEndpointBase {
   final IRpcTransport _transport;
-  final List<IRpcMiddleware> _middlewares = [];
   final List<IRpcInterceptor> _interceptors = [];
 
   /// Optional label attached to log messages for easier identification.
@@ -31,7 +30,6 @@ abstract base class RpcEndpointBase {
     _CallerCounts? caller,
   }) => RpcEndpointMetrics(
     isActive: _isActive,
-    middlewareCount: _middlewares.length,
     interceptorCount: _interceptors.length,
     transportClosed: _transport.isClosed,
     transportType: _transport.runtimeType.toString(),
@@ -139,14 +137,6 @@ abstract base class RpcEndpointBase {
     );
   }
 
-  /// Adds [middleware] to the processing chain.
-  void addMiddleware(IRpcMiddleware middleware) {
-    _middlewares.add(middleware);
-    if (_log.isInternal) {
-      _log.internal('Middleware added: ${middleware.toString()}');
-    }
-  }
-
   /// Adds [interceptor] to the processing chain.
   void addInterceptor(IRpcInterceptor interceptor) {
     _interceptors.add(interceptor);
@@ -183,7 +173,6 @@ abstract base class RpcEndpointBase {
 
     _log.internal('Closing RpcEndpoint');
     _isActive = false;
-    _middlewares.clear();
     _interceptors.clear();
 
     try {
@@ -206,106 +195,19 @@ abstract base class RpcEndpointBase {
     }
   }
 
-  RpcMiddlewareContext _createMiddlewareContext(
+  RpcCallInfo _createCallInfo(
     String serviceName,
     String methodName,
     RpcContext context,
-    RpcCallDirection? direction,
+    RpcCallDirection direction,
   ) {
-    return RpcMiddlewareContext(
+    return RpcCallInfo(
       endpoint: this,
       serviceName: serviceName,
       methodName: methodName,
       context: context,
       direction: direction,
     );
-  }
-
-  /// Both middleware loops iterate a SNAPSHOT.
-  ///
-  /// The loop body awaits, so the list can be mutated between two `moveNext()`
-  /// calls, and both mutators are ordinary API: [close] does
-  /// `_middlewares.clear()` and [addMiddleware] appends. Iterating the list
-  /// itself throws `ConcurrentModificationError` into the in-flight call — a
-  /// `StateError`, so the caller gets that instead of an RPC status. One
-  /// middleware is enough, because the `moveNext()` that ENDS the loop is the one
-  /// that checks, and `.reversed` is a lazy view of the same list rather than a
-  /// copy.
-  ///
-  /// The empty check is not just an optimisation for the common case — it is what
-  /// keeps a call with no middleware free of a per-call allocation.
-  Future<TRequest> _applyRequestMiddlewares<TRequest>(
-    RpcMiddlewareContext context,
-    TRequest request,
-  ) async {
-    if (_middlewares.isEmpty) return request;
-    var current = request;
-
-    for (final middleware in List.of(_middlewares)) {
-      current = await Future<TRequest>.value(
-        middleware.processRequest<TRequest>(context, current),
-      );
-    }
-
-    return current;
-  }
-
-  Future<TResponse> _applyResponseMiddlewares<TResponse>(
-    RpcMiddlewareContext context,
-    TResponse response,
-  ) async {
-    if (_middlewares.isEmpty) return response;
-    var current = response;
-
-    for (final middleware in List.of(_middlewares.reversed)) {
-      current = await Future<TResponse>.value(
-        middleware.processResponse<TResponse>(context, current),
-      );
-    }
-
-    return current;
-  }
-
-  /// Both stream helpers hand the source back UNCHANGED when there is no
-  /// middleware, rather than wrapping it in an `async*` that forwards each
-  /// message: the wrapper costs a hop and an allocation per message to iterate
-  /// an empty list.
-  ///
-  /// **The middleware set is therefore fixed when the stream is BUILT**, which
-  /// is the same rule interceptors follow — their chain is built once,
-  /// synchronously, at call start.
-  Stream<TRequest> _applyRequestMiddlewaresToStream<TRequest>(
-    RpcMiddlewareContext context,
-    Stream<TRequest> requests,
-  ) {
-    if (_middlewares.isEmpty) return requests;
-    return _mapRequests(context, requests);
-  }
-
-  Stream<TRequest> _mapRequests<TRequest>(
-    RpcMiddlewareContext context,
-    Stream<TRequest> requests,
-  ) async* {
-    await for (final request in requests) {
-      yield await _applyRequestMiddlewares<TRequest>(context, request);
-    }
-  }
-
-  Stream<TResponse> _applyResponseMiddlewaresToStream<TResponse>(
-    RpcMiddlewareContext context,
-    Stream<TResponse> responses,
-  ) {
-    if (_middlewares.isEmpty) return responses;
-    return _mapResponses(context, responses);
-  }
-
-  Stream<TResponse> _mapResponses<TResponse>(
-    RpcMiddlewareContext context,
-    Stream<TResponse> responses,
-  ) async* {
-    await for (final response in responses) {
-      yield await _applyResponseMiddlewares<TResponse>(context, response);
-    }
   }
 
   /// Called with the context the interceptors hand the handler, [origin]
@@ -344,7 +246,7 @@ abstract base class RpcEndpointBase {
   /// call a turn per interceptor.
   static Future<void>? _beforeCall(
     IRpcInterceptor interceptor,
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
   ) {
     final pending = interceptor.check(call);
     return pending is Future<void> ? pending : null;
@@ -357,21 +259,23 @@ abstract base class RpcEndpointBase {
   /// `next` more than once (a retry) reads `call.context` again for each
   /// attempt. Rebinding one shared object hands it the context the stages
   /// BELOW it built on the attempt before, and their changes stack.
-  static RpcMiddlewareContext _stage(
-    RpcMiddlewareContext call,
-    RpcContext ctx,
-  ) => identical(ctx, call.context) ? call : call.copyWith(context: ctx);
+  static RpcCallInfo _stage(RpcCallInfo call, RpcContext ctx) =>
+      identical(ctx, call.context) ? call : call.copyWith(context: ctx);
 
-  Future<({TResponse response, RpcContext context})>
-  _invokeUnaryInterceptors<TRequest, TResponse>(
-    RpcMiddlewareContext context,
-    TRequest request,
-    Future<TResponse> Function(RpcContext ctx, TRequest request) handler,
-  ) async {
-    final origin = context.context.cancellationToken;
-    var chosen = context.context;
+  /// Runs [handler] through the interceptors for a unary call.
+  Future<TResponse> _handleUnary<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required RpcCallDirection direction,
+    required TRequest request,
+    required Future<TResponse> Function(RpcContext ctx, TRequest request)
+    handler,
+  }) async {
+    final info = _createCallInfo(serviceName, methodName, context, direction);
+    final origin = context.cancellationToken;
     Future<TResponse> invokeHandler(RpcContext ctx, TRequest req) async {
-      chosen = _keepCancellable(origin, ctx);
+      final chosen = _keepCancellable(origin, ctx);
       _handlerContextChosen(origin, chosen);
       return handler(chosen, req);
     }
@@ -381,7 +285,7 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, req) async {
-        final call = _stage(context, ctx);
+        final call = _stage(info, ctx);
         final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptUnary<TRequest, TResponse>(
@@ -392,21 +296,26 @@ abstract base class RpcEndpointBase {
       };
     }
 
-    final response = await next(context.context, request);
-    return (response: response, context: chosen);
+    return next(context, request);
   }
 
-  Future<({Stream<TResponse> stream, RpcContext context})>
-  _invokeServerStreamInterceptors<TRequest, TResponse>(
-    RpcMiddlewareContext context,
-    TRequest request,
-    FutureOr<Stream<TResponse>> Function(RpcContext ctx, TRequest request)
+  /// Runs [handler] through the interceptors for a server-stream call.
+  Stream<TResponse> _handleServerStream<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required RpcCallDirection direction,
+    required TRequest request,
+    required FutureOr<Stream<TResponse>> Function(
+      RpcContext ctx,
+      TRequest request,
+    )
     handler,
-  ) async {
-    final origin = context.context.cancellationToken;
-    var chosen = context.context;
+  }) async* {
+    final info = _createCallInfo(serviceName, methodName, context, direction);
+    final origin = context.cancellationToken;
     FutureOr<Stream<TResponse>> invokeHandler(RpcContext ctx, TRequest req) {
-      chosen = _keepCancellable(origin, ctx);
+      final chosen = _keepCancellable(origin, ctx);
       _handlerContextChosen(origin, chosen);
       return handler(chosen, req);
     }
@@ -416,7 +325,7 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, req) async {
-        final call = _stage(context, ctx);
+        final call = _stage(info, ctx);
         final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptServerStream<TRequest, TResponse>(
@@ -427,27 +336,29 @@ abstract base class RpcEndpointBase {
       };
     }
 
-    final stream = await Future<Stream<TResponse>>.value(
-      next(context.context, request),
-    );
-
-    return (stream: stream, context: chosen);
+    yield* await next(context, request);
   }
 
-  Future<({TResponse response, RpcContext context})>
-  _invokeClientStreamInterceptors<TRequest, TResponse>(
-    RpcMiddlewareContext context,
-    Stream<TRequest> requests,
-    Future<TResponse> Function(RpcContext ctx, Stream<TRequest> requests)
+  /// Runs [handler] through the interceptors for a client-stream call.
+  Future<TResponse> _handleClientStream<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required RpcCallDirection direction,
+    required Stream<TRequest> requests,
+    required Future<TResponse> Function(
+      RpcContext ctx,
+      Stream<TRequest> requests,
+    )
     handler,
-  ) async {
-    final origin = context.context.cancellationToken;
-    var chosen = context.context;
+  }) async {
+    final info = _createCallInfo(serviceName, methodName, context, direction);
+    final origin = context.cancellationToken;
     Future<TResponse> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) async {
-      chosen = _keepCancellable(origin, ctx);
+      final chosen = _keepCancellable(origin, ctx);
       _handlerContextChosen(origin, chosen);
       return handler(chosen, reqs);
     }
@@ -457,7 +368,7 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, reqs) async {
-        final call = _stage(context, ctx);
+        final call = _stage(info, ctx);
         final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptClientStream<TRequest, TResponse>(
@@ -468,27 +379,29 @@ abstract base class RpcEndpointBase {
       };
     }
 
-    final response = await next(context.context, requests);
-    return (response: response, context: chosen);
+    return next(context, requests);
   }
 
-  Future<({Stream<TResponse> stream, RpcContext context})>
-  _invokeBidirectionalInterceptors<TRequest, TResponse>(
-    RpcMiddlewareContext context,
-    Stream<TRequest> requests,
-    FutureOr<Stream<TResponse>> Function(
+  /// Runs [handler] through the interceptors for a bidirectional-stream call.
+  Stream<TResponse> _handleBidirectionalStream<TRequest, TResponse>({
+    required String serviceName,
+    required String methodName,
+    required RpcContext context,
+    required RpcCallDirection direction,
+    required Stream<TRequest> requests,
+    required FutureOr<Stream<TResponse>> Function(
       RpcContext ctx,
       Stream<TRequest> requests,
     )
     handler,
-  ) async {
-    final origin = context.context.cancellationToken;
-    var chosen = context.context;
+  }) async* {
+    final info = _createCallInfo(serviceName, methodName, context, direction);
+    final origin = context.cancellationToken;
     FutureOr<Stream<TResponse>> invokeHandler(
       RpcContext ctx,
       Stream<TRequest> reqs,
     ) {
-      chosen = _keepCancellable(origin, ctx);
+      final chosen = _keepCancellable(origin, ctx);
       _handlerContextChosen(origin, chosen);
       return handler(chosen, reqs);
     }
@@ -498,7 +411,7 @@ abstract base class RpcEndpointBase {
     for (final interceptor in _interceptors.reversed) {
       final previous = next;
       next = (ctx, reqs) async {
-        final call = _stage(context, ctx);
+        final call = _stage(info, ctx);
         final before = _beforeCall(interceptor, call);
         if (before != null) await before;
         return interceptor.interceptBidirectionalStream<TRequest, TResponse>(
@@ -509,157 +422,6 @@ abstract base class RpcEndpointBase {
       };
     }
 
-    final stream = await Future<Stream<TResponse>>.value(
-      next(context.context, requests),
-    );
-
-    return (stream: stream, context: chosen);
-  }
-
-  /// Runs [handler] through middleware and interceptors for a unary call.
-  Future<TResponse> _handleUnary<TRequest, TResponse>({
-    required String serviceName,
-    required String methodName,
-    required RpcContext context,
-    RpcCallDirection? direction,
-    required TRequest request,
-    required Future<TResponse> Function(RpcContext ctx, TRequest request)
-    handler,
-  }) async {
-    final middlewareContext = _createMiddlewareContext(
-      serviceName,
-      methodName,
-      context,
-      direction,
-    );
-    final normalizedRequest = await _applyRequestMiddlewares<TRequest>(
-      middlewareContext,
-      request,
-    );
-
-    final interceptorResult =
-        await _invokeUnaryInterceptors<TRequest, TResponse>(
-          middlewareContext,
-          normalizedRequest,
-          handler,
-        );
-
-    final normalizedResponse = await _applyResponseMiddlewares<TResponse>(
-      _stage(middlewareContext, interceptorResult.context),
-      interceptorResult.response,
-    );
-
-    return normalizedResponse;
-  }
-
-  /// Runs [handler] through middleware and interceptors for a server-stream call.
-  Stream<TResponse> _handleServerStream<TRequest, TResponse>({
-    required String serviceName,
-    required String methodName,
-    required RpcContext context,
-    RpcCallDirection? direction,
-    required TRequest request,
-    required FutureOr<Stream<TResponse>> Function(
-      RpcContext ctx,
-      TRequest request,
-    )
-    handler,
-  }) async* {
-    final middlewareContext = _createMiddlewareContext(
-      serviceName,
-      methodName,
-      context,
-      direction,
-    );
-    final normalizedRequest = await _applyRequestMiddlewares<TRequest>(
-      middlewareContext,
-      request,
-    );
-
-    final interceptorResult =
-        await _invokeServerStreamInterceptors<TRequest, TResponse>(
-          middlewareContext,
-          normalizedRequest,
-          handler,
-        );
-
-    yield* _applyResponseMiddlewaresToStream<TResponse>(
-      _stage(middlewareContext, interceptorResult.context),
-      interceptorResult.stream,
-    );
-  }
-
-  /// Runs [handler] through middleware and interceptors for a client-stream call.
-  Future<TResponse> _handleClientStream<TRequest, TResponse>({
-    required String serviceName,
-    required String methodName,
-    required RpcContext context,
-    RpcCallDirection? direction,
-    required Stream<TRequest> requests,
-    required Future<TResponse> Function(
-      RpcContext ctx,
-      Stream<TRequest> requests,
-    )
-    handler,
-  }) async {
-    final middlewareContext = _createMiddlewareContext(
-      serviceName,
-      methodName,
-      context,
-      direction,
-    );
-    final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
-      middlewareContext,
-      requests,
-    );
-
-    final interceptorResult =
-        await _invokeClientStreamInterceptors<TRequest, TResponse>(
-          middlewareContext,
-          normalizedRequests,
-          handler,
-        );
-
-    return _applyResponseMiddlewares<TResponse>(
-      _stage(middlewareContext, interceptorResult.context),
-      interceptorResult.response,
-    );
-  }
-
-  /// Runs [handler] through middleware and interceptors for a bidirectional-stream call.
-  Stream<TResponse> _handleBidirectionalStream<TRequest, TResponse>({
-    required String serviceName,
-    required String methodName,
-    required RpcContext context,
-    RpcCallDirection? direction,
-    required Stream<TRequest> requests,
-    required FutureOr<Stream<TResponse>> Function(
-      RpcContext ctx,
-      Stream<TRequest> requests,
-    )
-    handler,
-  }) async* {
-    final middlewareContext = _createMiddlewareContext(
-      serviceName,
-      methodName,
-      context,
-      direction,
-    );
-    final normalizedRequests = _applyRequestMiddlewaresToStream<TRequest>(
-      middlewareContext,
-      requests,
-    );
-
-    final interceptorResult =
-        await _invokeBidirectionalInterceptors<TRequest, TResponse>(
-          middlewareContext,
-          normalizedRequests,
-          handler,
-        );
-
-    yield* _applyResponseMiddlewaresToStream<TResponse>(
-      _stage(middlewareContext, interceptorResult.context),
-      interceptorResult.stream,
-    );
+    yield* await next(context, requests);
   }
 }

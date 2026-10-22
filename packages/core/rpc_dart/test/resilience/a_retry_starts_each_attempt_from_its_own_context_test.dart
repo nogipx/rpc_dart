@@ -112,7 +112,7 @@ final class _AlwaysUnavailable extends RpcResponderContract {
 final class _AppendHeader extends IRpcInterceptor {
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) {
@@ -131,7 +131,7 @@ final class _PerAttemptTimeout extends IRpcInterceptor {
 
   @override
   Future<TResponse> interceptUnary<TRequest, TResponse>(
-    RpcMiddlewareContext call,
+    RpcCallInfo call,
     TRequest request,
     RpcUnaryNext<TRequest, TResponse> next,
   ) => next(call.context.withTimeout(perAttempt), request);

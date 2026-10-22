@@ -96,15 +96,12 @@ IRpcContract new new()
 IRpcFlowCredit method deferFlowCredit(int streamId) -> void
 IRpcFlowCredit method returnFlowCredit(int streamId, int bytes) -> void
 IRpcFlowCredit new new()
-IRpcInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
-IRpcInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
-IRpcInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
-IRpcInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
-IRpcInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+IRpcInterceptor method check(RpcCallInfo call) -> FutureOr<void>
+IRpcInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+IRpcInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+IRpcInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+IRpcInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
 IRpcInterceptor new new()
-IRpcMiddleware method processRequest<TRequest>(RpcMiddlewareContext call, TRequest request) -> FutureOr<TRequest>
-IRpcMiddleware method processResponse<TResponse>(RpcMiddlewareContext call, TResponse response) -> FutureOr<TResponse>
-IRpcMiddleware new new()
 IRpcMultiplexedChannel field incoming: Stream<RpcTransportMessage> (get)
 IRpcMultiplexedChannel field isClosed: bool (get)
 IRpcMultiplexedChannel field supportsZeroCopy: bool (get)
@@ -309,14 +306,21 @@ RpcCallDirection static field values: List<RpcCallDirection> (get)
 RpcCallFailed field error: Object (get)
 RpcCallFailed field stackTrace: StackTrace (get)
 RpcCallFailed new new(Object error, StackTrace stackTrace)
-RpcCallObserverInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
+RpcCallInfo field context: RpcContext (get)
+RpcCallInfo field direction: RpcCallDirection (get)
+RpcCallInfo field endpoint: RpcEndpointBase (get)
+RpcCallInfo field methodName: String (get)
+RpcCallInfo field serviceName: String (get)
+RpcCallInfo method copyWith({RpcEndpointBase? endpoint, String? serviceName, String? methodName, RpcContext? context, RpcCallDirection? direction}) -> RpcCallInfo
+RpcCallInfo new new({required RpcEndpointBase endpoint, required String serviceName, required String methodName, required RpcContext context, required RpcCallDirection direction})
+RpcCallObserverInterceptor method check(RpcCallInfo call) -> FutureOr<void>
 RpcCallObserverInterceptor method contextFor(S state, RpcContext context) -> RpcContext
-RpcCallObserverInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
-RpcCallObserverInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
-RpcCallObserverInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
-RpcCallObserverInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcCallObserverInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcCallObserverInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcCallObserverInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcCallObserverInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
 RpcCallObserverInterceptor method onCallEnd(S state, RpcCallOutcome outcome, Duration duration) -> void
-RpcCallObserverInterceptor method onCallStart(RpcMiddlewareContext call, RpcMethodType type) -> S
+RpcCallObserverInterceptor method onCallStart(RpcCallInfo call, RpcMethodType type) -> S
 RpcCallObserverInterceptor method onResponseError(S state, Object error, StackTrace stackTrace) -> void
 RpcCallObserverInterceptor method onResponseMessage(S state) -> void
 RpcCallObserverInterceptor method runCall<T>(S state, Future<T> Function() body) -> Future<T>
@@ -349,7 +353,6 @@ RpcCallerEndpoint field isActive: bool (get)
 RpcCallerEndpoint field transport: IRpcTransport (get)
 RpcCallerEndpoint method activeCallCount(String serviceName, String methodName) -> int
 RpcCallerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
-RpcCallerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
 RpcCallerEndpoint method bidirectionalStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcCallerEndpoint method cancelAll([String? reason]) -> int
 RpcCallerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
@@ -430,11 +433,11 @@ RpcCircuitBreakerInterceptor field failureThreshold: int (get)
 RpcCircuitBreakerInterceptor field probeAbandonTimeout: Duration (get)
 RpcCircuitBreakerInterceptor field resetTimeout: Duration (get)
 RpcCircuitBreakerInterceptor field state: CircuitBreakerState (get)
-RpcCircuitBreakerInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
-RpcCircuitBreakerInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
-RpcCircuitBreakerInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
-RpcCircuitBreakerInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
-RpcCircuitBreakerInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcCircuitBreakerInterceptor method check(RpcCallInfo call) -> FutureOr<void>
+RpcCircuitBreakerInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcCircuitBreakerInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcCircuitBreakerInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcCircuitBreakerInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
 RpcCircuitBreakerInterceptor method reset() -> void
 RpcCircuitBreakerInterceptor new new({int failureThreshold, Duration resetTimeout, bool Function(Object)? failureOn, Duration probeAbandonTimeout})
 RpcClientConnecting field attempt: int (get)
@@ -580,7 +583,6 @@ RpcEndpointBase field debugLabel: String? (get)
 RpcEndpointBase field isActive: bool (get)
 RpcEndpointBase field transport: IRpcTransport (get)
 RpcEndpointBase method addInterceptor(IRpcInterceptor interceptor) -> void
-RpcEndpointBase method addMiddleware(IRpcMiddleware middleware) -> void
 RpcEndpointBase method close() -> Future<void>
 RpcEndpointBase method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcEndpointBase method health() -> Future<RpcEndpointHealth>
@@ -602,7 +604,6 @@ RpcEndpointMetrics field isActive: bool (get)
 RpcEndpointMetrics field isDraining: bool? (get)
 RpcEndpointMetrics field isListening: bool? (get)
 RpcEndpointMetrics field metadataStreams: int? (get)
-RpcEndpointMetrics field middlewareCount: int (get)
 RpcEndpointMetrics field openStreams: int? (get)
 RpcEndpointMetrics field pendingRequests: int? (get)
 RpcEndpointMetrics field preBindBuffers: int? (get)
@@ -613,7 +614,7 @@ RpcEndpointMetrics field trackedMethods: int? (get)
 RpcEndpointMetrics field transportClosed: bool (get)
 RpcEndpointMetrics field transportType: String (get)
 RpcEndpointMetrics method toJson() -> Map<String, Object?>
-RpcEndpointMetrics new new({required bool isActive, required int middlewareCount, required int interceptorCount, required bool transportClosed, required String transportType, String? debugLabel, int? registeredContracts, int? registeredMethods, bool? isListening, bool? isDraining, int? openStreams, int? preMethodBufferedBytes, int? metadataStreams, int? bufferedMessages, int? preBindBuffers, int? activeResponders, List<String>? contractKeys, int? pendingRequests, int? trackedMethods, List<String>? activeMethodKeys})
+RpcEndpointMetrics new new({required bool isActive, required int interceptorCount, required bool transportClosed, required String transportType, String? debugLabel, int? registeredContracts, int? registeredMethods, bool? isListening, bool? isDraining, int? openStreams, int? preMethodBufferedBytes, int? metadataStreams, int? bufferedMessages, int? preBindBuffers, int? activeResponders, List<String>? contractKeys, int? pendingRequests, int? trackedMethods, List<String>? activeMethodKeys})
 RpcEndpointPingExchange field sentAt: DateTime (get)
 RpcEndpointPingExchange field streamId: int (get)
 RpcEndpointPingExchange field transport: IRpcTransport (get)
@@ -835,13 +836,6 @@ RpcMethodType static field clientStream: RpcMethodType (get)
 RpcMethodType static field serverStream: RpcMethodType (get)
 RpcMethodType static field unary: RpcMethodType (get)
 RpcMethodType static field values: List<RpcMethodType> (get)
-RpcMiddlewareContext field context: RpcContext (get)
-RpcMiddlewareContext field direction: RpcCallDirection? (get)
-RpcMiddlewareContext field endpoint: RpcEndpointBase (get)
-RpcMiddlewareContext field methodName: String (get)
-RpcMiddlewareContext field serviceName: String (get)
-RpcMiddlewareContext method copyWith({RpcEndpointBase? endpoint, String? serviceName, String? methodName, RpcContext? context, RpcCallDirection? direction}) -> RpcMiddlewareContext
-RpcMiddlewareContext new new({required RpcEndpointBase endpoint, required String serviceName, required String methodName, required RpcContext context, RpcCallDirection? direction})
 RpcNoConnectionException field details: List<RpcErrorDetail> (get)
 RpcNoConnectionException field isPushback: bool (get)
 RpcNoConnectionException field message: String (get)
@@ -899,7 +893,6 @@ RpcPeerEndpoint field registeredContracts: Map<String, RpcResponderContract> (ge
 RpcPeerEndpoint field transport: IRpcTransport (get)
 RpcPeerEndpoint method activeCallCount(String serviceName, String methodName) -> int
 RpcPeerEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
-RpcPeerEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
 RpcPeerEndpoint method bidirectionalStream<TRequest, TResponse>({required String serviceName, required String methodName, required Stream<TRequest> requests, IRpcCodec<TRequest>? requestCodec, IRpcCodec<TResponse>? responseCodec, RpcContext? context}) -> Stream<TResponse>
 RpcPeerEndpoint method cancelAll([String? reason]) -> int
 RpcPeerEndpoint method cancelMethod(String serviceName, String methodName, [String? reason]) -> int
@@ -950,13 +943,13 @@ RpcRateLimitException field message: String (get)
 RpcRateLimitException field statusCode: RpcStatus (get)
 RpcRateLimitException field statusDetailsBin: Uint8List? (get)
 RpcRateLimitException new new(String message, {Duration? retryAfter})
-RpcRateLimiter method check(RpcMiddlewareContext call) -> FutureOr<void>
+RpcRateLimiter method check(RpcCallInfo call) -> FutureOr<void>
 RpcRateLimiter method dispose() -> void
-RpcRateLimiter method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
-RpcRateLimiter method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
-RpcRateLimiter method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
-RpcRateLimiter method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
-RpcRateLimiter new new({RateLimit? global, Map<String, RateLimit> perService, Map<String, RateLimit> perMethod, RateLimit? perKeyFallback, String? Function(RpcMiddlewareContext)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, int Function()? nowMicros})
+RpcRateLimiter method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcRateLimiter method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcRateLimiter method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcRateLimiter method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcRateLimiter new new({RateLimit? global, Map<String, RateLimit> perService, Map<String, RateLimit> perMethod, RateLimit? perKeyFallback, String? Function(RpcCallInfo)? keyExtractor, Duration cleanupInterval, int maxTrackedKeys, bool meterServerStreamMessages, int Function()? nowMicros})
 RpcRawErrorDetail field typeUrl: String (get)
 RpcRawErrorDetail field value: Uint8List (get)
 RpcRawErrorDetail method encode() -> Uint8List
@@ -988,7 +981,6 @@ RpcResponderEndpoint field isDraining: bool (get)
 RpcResponderEndpoint field registeredContracts: Map<String, RpcResponderContract> (get)
 RpcResponderEndpoint field transport: IRpcTransport (get)
 RpcResponderEndpoint method addInterceptor(IRpcInterceptor interceptor) -> void
-RpcResponderEndpoint method addMiddleware(IRpcMiddleware middleware) -> void
 RpcResponderEndpoint method close() -> Future<void>
 RpcResponderEndpoint method collectEndpointMetrics() -> RpcEndpointMetrics
 RpcResponderEndpoint method drain({Duration timeout}) -> Future<void>
@@ -1012,11 +1004,11 @@ RpcRetryInfo static method decodeAny(Uint8List data) -> RpcErrorDetail
 RpcRetryInterceptor field backoff: BackoffPolicy (get)
 RpcRetryInterceptor field maxAttempts: int (get)
 RpcRetryInterceptor field retryOn: bool Function(Object)? (get)
-RpcRetryInterceptor method check(RpcMiddlewareContext call) -> FutureOr<void>
-RpcRetryInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
-RpcRetryInterceptor method interceptClientStream<TRequest, TResponse>(RpcMiddlewareContext call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
-RpcRetryInterceptor method interceptServerStream<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
-RpcRetryInterceptor method interceptUnary<TRequest, TResponse>(RpcMiddlewareContext call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcRetryInterceptor method check(RpcCallInfo call) -> FutureOr<void>
+RpcRetryInterceptor method interceptBidirectionalStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, FutureOr<Stream<TResponse>> Function(RpcContext, Stream<TRequest>) next) -> FutureOr<Stream<TResponse>>
+RpcRetryInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
+RpcRetryInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
+RpcRetryInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
 RpcRetryInterceptor new new({int maxAttempts, BackoffPolicy backoff, bool Function(Object)? retryOn})
 RpcSecurityPolicy field advertisedWindowBytes: int? (get)
 RpcSecurityPolicy field closeOnProtocolError: bool (get)
@@ -1186,7 +1178,6 @@ type IRpcConnectionBuffer [required] : Object (transport.dart, transport_io.dart
 type IRpcContract : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcFlowCredit : Object (transport.dart, transport_io.dart)
 type IRpcInterceptor [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type IRpcMiddleware [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type IRpcMultiplexedChannel [required] : Object (transport.dart, transport_io.dart)
 type IRpcReconnectOutcome : Object (transport.dart, transport_io.dart)
 type IRpcSerializable : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1214,6 +1205,7 @@ type RpcBoolX :  (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallCancelled : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallDirection : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallFailed : Object, RpcCallOutcome (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcCallInfo : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallObserverInterceptor<S> : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallOutcome [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcCallScope : Object (rpc_dart.dart, transport.dart, transport_io.dart)
@@ -1280,7 +1272,6 @@ type RpcMetadata : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcMetadataViolationException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcMethod : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcMethodType : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcMiddlewareContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcNoConnectionException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcNull : IRpcSerializable, Object, RpcPrimitiveMessage<void> (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcNullX :  (rpc_dart.dart, transport.dart, transport_io.dart)

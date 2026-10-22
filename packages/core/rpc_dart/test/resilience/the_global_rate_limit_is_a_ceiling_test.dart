@@ -27,18 +27,19 @@ class _Clock {
   int call() => us;
 }
 
-RpcMiddlewareContext _ctx(String method) {
+RpcCallInfo _ctx(String method) {
   final (clientTransport, _) = RpcChannelTransport.memoryPair();
-  return RpcMiddlewareContext(
+  return RpcCallInfo(
     endpoint: RpcCallerEndpoint(transport: clientTransport),
     serviceName: 'Feed',
     methodName: method,
     context: RpcContext.empty(),
+    direction: RpcCallDirection.incoming,
   );
 }
 
 /// Opens [_n] unary calls through [limiter] and counts how many were admitted.
-Future<int> _admitted(RpcRateLimiter limiter, RpcMiddlewareContext ctx) async {
+Future<int> _admitted(RpcRateLimiter limiter, RpcCallInfo ctx) async {
   var ok = 0;
   for (var i = 0; i < _n; i++) {
     try {

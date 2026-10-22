@@ -667,8 +667,8 @@ base mixin RpcCallerPipelineMixin on RpcEndpointBase {
 
       if (fromCancel) {
         // sub.cancel() on the consumer side awaits this handler, so nothing
-        // here may block. `requests` is typically a suspended async*
-        // middleware chain (_applyRequestMiddlewaresToStream), and cancelling
+        // here may block. `requests` may be a suspended async* an
+        // interceptor wrapped around the request stream, and cancelling
         // a generator parked in `await for` does not complete until its
         // upstream produces again -- which, for a bidi request stream the
         // caller keeps open, is never. Awaiting it deadlocks cancel(). Fire

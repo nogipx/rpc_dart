@@ -25,7 +25,7 @@ extension _ResponderPipelineAdmission on RpcResponderPipelineMixin {
   /// other end — the slot is returned when the WORK ends, not when the stream
   /// is torn down.
   ///
-  /// **Wrapped around the whole middleware+interceptor+handler chain**, not the
+  /// **Wrapped around the whole interceptor+handler chain**, not the
   /// user handler alone: an interceptor parked on either side of `next()` is
   /// work outside the handler, and releasing it with the stream reproduces the
   /// exact defect this limit exists for, one layer out.

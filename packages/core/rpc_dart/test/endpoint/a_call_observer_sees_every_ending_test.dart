@@ -31,7 +31,7 @@ final class _Recorder extends RpcCallObserverInterceptor<_Ending> {
       _ended.stream.firstWhere((e) => e.method == method);
 
   @override
-  _Ending onCallStart(RpcMiddlewareContext call, RpcMethodType type) =>
+  _Ending onCallStart(RpcCallInfo call, RpcMethodType type) =>
       _Ending(call.methodName, type);
 
   @override

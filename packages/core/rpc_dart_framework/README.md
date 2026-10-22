@@ -49,7 +49,7 @@ Each module declares what it needs (`dependencies`), what it provides (`configur
 2. For each module: `configure(container)`, then `configureWithEnv(container, env)`. Both are synchronous.
 3. Spawn the isolate of each `RpcIsolateModule`.
 4. For each module: `await onStart(container)`.
-5. Build and start the transport server. For each new connection, the app adds the `onError` / `onCall` hooks, the `interceptors`, the `middlewares`, registers every server module's `buildContracts`, and starts the endpoint.
+5. Build and start the transport server. For each new connection, the app adds the `onError` / `onCall` hooks, the `interceptors`, registers every server module's `buildContracts`, and starts the endpoint.
 6. Call `afterModulesStart(container)`, if given.
 
 Every `onStart` finishes before the server accepts a connection, so `buildContracts` can resolve what `onStart` registers.
@@ -83,7 +83,7 @@ await RpcApp.server(
 ).run(); // blocks until SIGTERM / SIGINT, then stops cleanly
 ```
 
-`server` receives an `RpcResponderMode`. Pass it to the server's `mode:` parameter. If you do not, no contracts are registered and the app serves nothing. `RpcApp.server` also takes `middlewares` and `afterModulesStart`.
+`server` receives an `RpcResponderMode`. Pass it to the server's `mode:` parameter. If you do not, no contracts are registered and the app serves nothing. `RpcApp.server` also takes `afterModulesStart`.
 
 `run()` handles OS signals. Use `start()` / `stop()` for manual control (e.g. in tests).
 
@@ -478,7 +478,7 @@ test('getUser returns correct user', () async {
 });
 ```
 
-`RpcTestApp.start` takes `modules`, `interceptors`, `middlewares` (responder side), `callerInterceptors`, `callerMiddlewares` (caller side), `config`, and `env` (overrides `config.env`). `app.health()` returns the app's `RpcAppHealth`. `dispose()` closes `app.caller`, then stops the app as `RpcApp.stop()` does: the server drains (within `config.drainTimeout`), modules stop in reverse order (each within `config.shutdownTimeout`, errors logged to `config.logger`), isolates terminate. It is safe to call twice. A `start` that fails partway rolls back as `RpcApp.start()` does and rethrows.
+`RpcTestApp.start` takes `modules`, `interceptors` (responder side), `callerInterceptors` (caller side), `config`, and `env` (overrides `config.env`). `app.health()` returns the app's `RpcAppHealth`. `dispose()` closes `app.caller`, then stops the app as `RpcApp.stop()` does: the server drains (within `config.drainTimeout`), modules stop in reverse order (each within `config.shutdownTimeout`, errors logged to `config.logger`), isolates terminate. It is safe to call twice. A `start` that fails partway rolls back as `RpcApp.start()` does and rethrows.
 
 `RpcTestApp` supports all module types (`RpcModule`, `RpcServerModule`, `RpcIsolateModule`), `RpcAppConfig` hooks, env overrides, and topological module ordering.
 
