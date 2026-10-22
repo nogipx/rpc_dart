@@ -703,6 +703,10 @@ class RpcChannelTransport extends IRpcTransport
   @override
   IRpcFlowCredit get flowCredit => this;
 
+  /// True: the channel protocol carries message credit.
+  @override
+  bool get grantsMessageCredit => true;
+
   @override
   IRpcConnectionBuffer get connectionBuffer => this;
 

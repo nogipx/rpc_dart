@@ -375,8 +375,9 @@ abstract class IRpcTransport {
   /// returns false, and a client-stream or bidi call there is failed for how
   /// many bytes it has waiting, never for how many messages.
   ///
-  /// The default, true, keeps the depth bound.
-  bool get grantsMessageCredit => true;
+  /// The default is false, the answer for a transport that does no flow
+  /// control. `RpcChannelTransport` returns true.
+  bool get grantsMessageCredit => false;
 
   /// The connection-wide total of request bytes held un-consumed, or null when
   /// the transport keeps none.

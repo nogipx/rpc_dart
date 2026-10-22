@@ -149,7 +149,10 @@ their `codec`.
 - **`maxActiveStreams` counts a call until it ends**, not until half-close.
 - **An un-consumed stream is bounded by queue depth** as well as bytes, and
   buffering is charged to one per-connection total. A peer that sends without
-  reading gets `RESOURCE_EXHAUSTED` instead of growing memory.
+  reading gets `RESOURCE_EXHAUSTED` instead of growing memory. The depth bound
+  applies to request queues only where the transport tells the peer the depth
+  (`IRpcTransport.grantsMessageCredit`, true on `RpcChannelTransport`, false
+  by default); elsewhere each queued message is charged its bytes.
 - **One CBOR message has an item budget**, so a small message cannot decode to
   a huge object graph.
 - **A derived context cannot outlive its parent.**
