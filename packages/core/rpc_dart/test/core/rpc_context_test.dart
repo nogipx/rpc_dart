@@ -6,7 +6,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart/src/_internal.dart';
 import 'package:test/test.dart';
 
 const _key = RpcContextKey<String>('key');

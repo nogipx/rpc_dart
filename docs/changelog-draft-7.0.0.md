@@ -91,7 +91,7 @@ No error message is a contract: match on the type or the status.
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` |
 | health metric `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` and its `timeout` | `RpcDeadlineExceededException(deadline)` |
-| `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans belong to `rpc_dart_opentelemetry` |
+| `RpcContextUtils` | not exported; the endpoint gives a call without a trace id one, `RpcContext.withTraceId(id)` joins a trace. Spans belong to `rpc_dart_opentelemetry` |
 | `ctx.createChild()`, `ctx.createChildWith(headers:, timeout:)`, `RpcContextBuilder.inheritFrom(ctx)` | `ctx.forward(headers:, timeout:)`, which drops this context's credentials; pass one on by naming it in `headers` |
 | `RpcContextBuilder` | the `RpcContext` factories and `with...` copies; `withBearerAuth`, `withBasicAuth` and `withApiKey` are on `RpcContext` |
 | `RpcContextUtils.merge(left, right)` | gone; chain `with...` copies |

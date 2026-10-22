@@ -40,8 +40,8 @@ class ClientStreamingExample {
     try {
       // 1: aggregating text messages.
       print('\n--- 1: aggregating text messages ---');
-      final context1 = RpcContextUtils.withTracing(
-        traceId: 'client-stream-123',
+      final context1 = RpcContext.withTraceId(
+        'client-stream-123',
       ).withValue(_aggregationType, 'text');
       final messages = [
         'Message 1: Hello',

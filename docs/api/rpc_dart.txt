@@ -531,10 +531,6 @@ RpcContext static method monotonicNow() -> DateTime
 RpcContext static method sanitize(RpcContext context) -> RpcContext
 RpcContextKey field name: String (get)
 RpcContextKey new new(String name)
-RpcContextUtils new new()
-RpcContextUtils static method generateTraceId() -> String
-RpcContextUtils static method traceIdFor(String requestId) -> String
-RpcContextUtils static method withTracing({String? traceId}) -> RpcContext
 RpcDataTransferMode static field auto: RpcDataTransferMode (get)
 RpcDataTransferMode static field codec: RpcDataTransferMode (get)
 RpcDataTransferMode static field values: List<RpcDataTransferMode> (get)
@@ -1233,7 +1229,6 @@ type RpcConstants : Object (transport.dart, transport_io.dart)
 type RpcContentTypeValidation : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContext : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcContextKey<T> : Object (rpc_dart.dart, transport.dart, transport_io.dart)
-type RpcContextUtils : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcDataTransferMode : Enum, Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcDeadlineExceededException : Exception, Object, RpcException, RpcStatusException (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcDebugInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)

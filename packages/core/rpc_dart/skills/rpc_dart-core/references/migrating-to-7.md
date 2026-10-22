@@ -52,7 +52,7 @@ builds a transport, a channel or frames imports
 | header count and size limits on `RpcContext` | `RpcSecurityPolicy` (`maxHeaders`, `maxHeaderNameBytes`, `maxHeaderValueBytes`) |
 | health detail `clientStreamBuffers` | `preBindBuffers` |
 | `RpcDeadlineExceededException(deadline, timeout)` | `RpcDeadlineExceededException(deadline)` |
-| `RpcContextUtils.withTracing(spanId:, parentSpanId:)` | `withTracing(traceId:)`; spans come from `rpc_dart_opentelemetry` |
+| `RpcContextUtils.withTracing(...)`, `RpcContextUtils.generateTraceId()` | nothing: the endpoint gives a call without a trace id one; `RpcContext.withTraceId(id)` to join a trace. Spans come from `rpc_dart_opentelemetry` |
 | `RpcHeaders.xRouteService` | gone; route on the method path |
 | `const RpcCancelledException(...)`, `const CircuitBreakerOpenException()` | drop `const` |
 | `RpcList.toMutableList()` | `toList()`; `RpcList` is an `Iterable` and `where` returns an `Iterable` |
