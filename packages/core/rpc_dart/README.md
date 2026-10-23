@@ -272,7 +272,9 @@ endpoint per connection, `RpcWriteBacklog` to stop reading a peer that reads
 nothing, `RpcWriteCoalescer` to join the frames of one event-loop turn into
 one write, and the drain helpers. A server on a `dart:io` socket also imports
 `package:rpc_dart/transport_io.dart`, whose `RpcHeaderBoundedServerSocket`
-bounds an HTTP request's header block in bytes and time.
+bounds an HTTP request's header block in bytes and time. A client there gets
+`RpcSecureSocket.startConnect`, a TLS connect for `HttpClient.connectionFactory`
+whose cancel also closes a socket still in the handshake.
 
 Factories on `RpcChannelTransport`:
 

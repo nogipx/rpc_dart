@@ -3,8 +3,8 @@ refines: U-17
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/src/rpc_isolate_module.dart, packages/notify/*/lib/**]
 applies: opening a connection takes several stages (TCP, TLS, an upgrade, a protocol preface or SETTINGS, a ready message) and a timeout or a default guards the open
 breaks: a hang that never ends: connect() or reconnect() waits forever on a peer that answered the first stage only.
-applied: [754, 755, 773, 800, 826, 904]
-status: confirmed (round 904)
+applied: [754, 755, 773, 800, 826, 904, 906]
+status: confirmed (round 906)
 rank: 8
 ---
 
@@ -75,3 +75,11 @@ default and an explicit null are different arms.
   read the SDK source, not the parameter name.** wss and https end on time
   and still leak the socket (B-314).
   `../rounds/904-a-silent-tls-handshake-ends-at-the-connect-timeout.md`.
+- **Round 906** — the wss half of B-314, measured in a reconnect loop: 25
+  sockets open after 15 s, none released by dispose -> at most 1, 0.
+  `SecureSocket.startConnect`'s cancel ends only TCP, so HttpClient's timeout
+  stopped the wait and kept the socket. `RpcSecureSocket.startConnect` in
+  `transport_io.dart` closes it in either stage; the wss throughput did not
+  move (P-358). **A timeout that ends the wait is half a bound: count what the
+  abandoned attempt still holds, in a loop.**
+  `../rounds/906-a-silent-tls-peer-no-longer-leaks-a-wss-socket-per-attempt.md`.

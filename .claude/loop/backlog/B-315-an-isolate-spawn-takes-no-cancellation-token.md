@@ -5,7 +5,7 @@ commit: b5e7f667
 paths: [packages/transport/rpc_dart_isolate/lib/src/isolate_transport.dart, packages/transport/rpc_dart_isolate/lib/src/isolate_transport_web.dart]
 probe: none
 reason: risk — read from the code in round 905, not measured: RpcIsolateTransport.spawn is the one async transport open left without a cancellationToken, so a dispose mid-spawn waits for the worker's ready or startupTimeout (30 s)
-rank: 5
+rank: 6
 ---
 
 # B-315 — an isolate spawn takes no cancellation token

@@ -5,7 +5,7 @@ commit: 99126bfa
 paths: [packages/transport/rpc_dart_isolate/test/audit/startup_failure_releases_the_isolate_test.dart]
 probe: P-327
 reason: bench — intermittent: red once in round 897's full gate ("never reached the failed startup"), green alone 3/3 and in the next full gate
-rank: 8
+rank: 9
 ---
 
 # B-311 — the failed startup witness never reached its startup

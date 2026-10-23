@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:rpc_dart/transport_io.dart' show RpcSecureSocket;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -23,8 +24,9 @@ const bool platformHonoursPingInterval = true;
 /// upgrade request's headers there.
 ///
 /// With a factory set, `HttpClient` leaves TLS to it for a direct connection
-/// and still tunnels through a proxy itself, so both are done here as dart:io
-/// would: `SecureSocket` for https, the proxy's plain socket otherwise.
+/// and still tunnels through a proxy itself. TLS goes through
+/// [RpcSecureSocket]: with dart:io's own connect, a timeout or a cancel during
+/// the handshake left the socket open, one per reconnect attempt.
 Future<ConnectionTask<Socket>> Function(Uri, String?, int?) _sameOriginOnly(
   Uri target,
 ) {
@@ -43,7 +45,7 @@ Future<ConnectionTask<Socket>> Function(Uri, String?, int?) _sameOriginOnly(
       return Socket.startConnect(proxyHost, proxyPort);
     }
     return uri.isScheme('https')
-        ? SecureSocket.startConnect(host, port)
+        ? RpcSecureSocket.startConnect(host, port)
         : Socket.startConnect(host, port);
   };
 }
@@ -108,6 +110,7 @@ Future<WebSocketChannel> openWebSocket(
     final WebSocket webSocket;
     if (ceiling != null) {
       final own = client ?? HttpClient();
+      own.connectionFactory = _sameOriginOnly(uri);
       try {
         webSocket = await connectBounded(
           uri,

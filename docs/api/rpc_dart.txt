@@ -1034,6 +1034,8 @@ RpcRetryInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInf
 RpcRetryInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
 RpcRetryInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
 RpcRetryInterceptor new new({int maxAttempts, RpcBackoffPolicy backoff, bool Function(Object)? retryOn})
+RpcSecureSocket new new()
+RpcSecureSocket static method startConnect(Object host, int port, {SecurityContext? context, bool Function(X509Certificate)? onBadCertificate, void Function(String)? keyLog, List<String>? supportedProtocols}) -> Future<ConnectionTask<SecureSocket>>
 RpcSecurityPolicy field advertisedWindowBytes: int? (get)
 RpcSecurityPolicy field closeOnProtocolError: bool (get)
 RpcSecurityPolicy field contentTypeValidation: RpcContentTypeValidation (get)
@@ -1321,6 +1323,7 @@ type RpcResponderEndpointMetrics : Object, RpcEndpointMetrics (rpc_dart.dart, tr
 type RpcResponderMode : Object, RpcServerMode (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcRetryInfo : Object, RpcErrorDetail (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcRetryInterceptor : IRpcInterceptor, Object (rpc_dart.dart, transport.dart, transport_io.dart)
+type RpcSecureSocket : Object (transport_io.dart)
 type RpcSecurityPolicy : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcServerMode [required] : Object (rpc_dart.dart, transport.dart, transport_io.dart)
 type RpcService : Object (rpc_dart.dart, transport.dart, transport_io.dart)

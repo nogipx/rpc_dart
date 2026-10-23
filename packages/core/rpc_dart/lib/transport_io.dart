@@ -10,4 +10,5 @@ library;
 
 export 'src/integration/header_bounded_server_socket.dart'
     show RpcHeaderBoundedServerSocket;
+export 'src/integration/secure_socket_connect.dart' show RpcSecureSocket;
 export 'transport.dart';

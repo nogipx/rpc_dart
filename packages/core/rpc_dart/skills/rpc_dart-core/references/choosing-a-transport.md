@@ -61,8 +61,11 @@ Notes:
 parser, the flow-control interfaces, `RpcTrailers`, `RpcConnectionHost`,
 `RpcWriteBacklog`, `RpcWriteCoalescer`) are not in `rpc_dart.dart`. Import
 `package:rpc_dart/transport.dart`, which re-exports `rpc_dart.dart`. The
-`dart:io`-only `RpcHeaderBoundedServerSocket` is in
-`package:rpc_dart/transport_io.dart`.
+`dart:io`-only `RpcHeaderBoundedServerSocket` and `RpcSecureSocket` are in
+`package:rpc_dart/transport_io.dart`. `RpcSecureSocket.startConnect` is a TLS
+connect for `HttpClient.connectionFactory` whose cancel also closes a socket
+still in the handshake; `SecureSocket.startConnect` cancels only the TCP
+connect.
 
 A custom channel extends `IRpcChannel` and writes `isClosed`, `incoming`,
 `send` and `close`. `closeFor(RpcChannelCloseReason)` is called when the peer
