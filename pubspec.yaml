@@ -269,7 +269,7 @@ melos:
     # runtime through `finishBoot`, a no-op after boot. Exits 2 (not 0) when no
     # native toolchain is present, so "nothing checked" never reads as a pass.
     analyze:native:
-      description: Type-check the rpc_dart_wasm iOS/Android plugin sources.
+      description: Type-check the rpc_dart_wasm iOS/macOS/Android plugin sources.
       run: packages/transport/rpc_dart_wasm/tool/check_native.sh
 
     # The only thing that EXECUTES the plugin's Swift/Kotlin. Needs a booted
@@ -291,7 +291,12 @@ melos:
         # when a simulator AND an emulator are both up, which is the normal
         # state when checking both platforms -- and BOTH must be checked: the
         # two boot scripts share no code.
-        if [ -n "${RPC_WASM_DEVICE:-}" ]; then
+        #
+        # macOS runs JS guests only (JavaScriptCore), so there it runs the JS
+        # guest's suite alone; the WASM suites are for iOS and Android.
+        if [ "${RPC_WASM_DEVICE:-}" = "macos" ]; then
+          fvm flutter test integration_test/js_guest_test.dart -d macos
+        elif [ -n "${RPC_WASM_DEVICE:-}" ]; then
           fvm flutter test integration_test -d "$RPC_WASM_DEVICE"
         else
           fvm flutter test integration_test

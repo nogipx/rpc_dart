@@ -95,9 +95,10 @@ back. Its `lib/` is still covered by `melos run analyze`.
 
 ## The wasm plugin's native code
 
-`rpc_dart_wasm` ships a Swift and a Kotlin plugin, and `melos run test:wasm`
-exercises the Dart bridge alone. Neither `analyze` nor `test` compiles a line of
-either, so a native change ships unverified unless you run:
+`rpc_dart_wasm` ships Swift plugins for iOS (WKWebView, WASM guests) and macOS
+(JavaScriptCore, JS guests) and a Kotlin one for Android, and `melos run
+test:wasm` exercises the Dart bridge alone. Neither `analyze` nor `test`
+compiles a line of them, so a native change ships unverified unless you run:
 
 - **`melos run analyze:native`** — type-checks both against the real frameworks
   (Flutter engine, WebKit, androidx.javascriptengine). Needs Xcode for the
@@ -113,6 +114,9 @@ either, so a native change ships unverified unless you run:
   separate strings in separate languages, so a fix to one is never a fix to
   the other, and some cases only exist on one (`Platform.isIOS` skips are
   explained in the test).
+  A change to the macOS plugin runs there: `RPC_WASM_DEVICE=macos melos run
+  test:wasm:device` runs `integration_test/js_guest_test.dart` alone, on the
+  desktop, no device to boot.
 
 Two build constraints the example encodes, both of which fail the build
 outright rather than degrading: `minSdk = 26` (androidx.javascriptengine's

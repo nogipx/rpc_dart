@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-/// WASM runtime bridge transport for rpc_dart.
+/// Guest bridge transport for rpc_dart: a Dart guest compiled to WASM or to
+/// JavaScript, in an embedded JS engine, over a byte pipe.
 ///
 /// A Flutter package. [RpcWasmTransport] runs over any [RpcWasmBridge]; this
 /// library also ships one, [RpcFlutterWasmBridge], whose native plugin runs a
-/// dart2wasm guest on iOS and Android. Another runtime's loader implements
-/// [RpcWasmBridge] and hands it to [RpcWasmTransport].
+/// dart2wasm guest on iOS and Android and a dart2js guest on macOS. Another
+/// runtime's loader implements [RpcWasmBridge] and hands it to
+/// [RpcWasmTransport].
 ///
 /// On a JS-interop platform -- the web, and inside the guest itself -- the
 /// Flutter bridge is not exported. [RpcWasm] is the guest side and works only

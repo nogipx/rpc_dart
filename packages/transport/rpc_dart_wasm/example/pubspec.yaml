@@ -66,6 +66,7 @@ flutter:
   assets:
     - assets/guest.wasm
     - assets/guest.mjs
+    - assets/guest.js
 
   # To add assets to your application, add an assets section, like this:
   # assets:

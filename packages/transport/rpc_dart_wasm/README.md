@@ -6,12 +6,14 @@ SPDX-License-Identifier: MIT
 
 # rpc_dart_wasm
 
-WASM runtime bridge transport for `rpc_dart`.
+Guest bridge transport for `rpc_dart`: a Dart guest compiled to WASM
+(`dart compile wasm`) or to JavaScript (`dart compile js`), running in an
+embedded JS engine, talks rpc_dart to its host over a byte pipe.
 
-This package is intentionally runtime-agnostic. It does not load `.wasm`
-modules by itself. Instead, a runtime backend
-extends the byte-only `RpcWasmBridge`, and `RpcWasmTransport.fromBridge`
-turns it into a normal `IRpcTransport`.
+This package is intentionally runtime-agnostic. A runtime backend extends the
+byte-only `RpcWasmBridge`, and `RpcWasmTransport.fromBridge` turns it into a
+normal `IRpcTransport`. The Flutter backend it ships runs WASM guests on iOS
+and Android and JS guests on macOS.
 
 ```dart
 final transport = RpcWasmTransport.fromBridge(
@@ -23,9 +25,11 @@ final endpoint = RpcPeerEndpoint(transport: transport);
 endpoint.start();
 ```
 
-## WASM Bootstrap
+## Guest Bootstrap
 
-Code compiled to WASM can bootstrap itself with `RpcWasm.run(...)`:
+A guest compiled to WASM or to JavaScript bootstraps itself with
+`RpcWasm.run(...)`; it is written in `dart:js_interop` alone, which is the same
+under dart2wasm and dart2js:
 
 ```dart
 import 'package:rpc_dart_wasm/rpc_wasm.dart';
@@ -96,6 +100,42 @@ To send bytes back to the host, call:
 _rpcWasmSendBytes(bytes); // bytes is Uint8Array
 ```
 
+### A guest compiled to JavaScript (macOS)
+
+On macOS the plugin runs a guest compiled with `dart compile js` in a
+JavaScriptCore context of its own, on a queue of its own. A bare JavaScriptCore
+has nothing of a browser page, so the plugin gives the guest what dart2js
+expects of one: `setTimeout`/`setInterval` and their `clear`, microtasks
+(`self.scheduleImmediate`), `console` (to `bridge.console`, with levels),
+`crypto.getRandomValues`, `performance.now` (from `Date.now()`, millisecond
+resolution) and `self`.
+
+```dart
+final support = await RpcFlutterWasmBridge.checkSupport();
+if (!support.canRunJsGuest) {
+  throw StateError('JS guests do not run on this platform');
+}
+
+final bridge = await RpcFlutterWasmBridge.loadJs(
+  code: guestJs, // the output of `dart compile js`
+  scripts: [RpcJsScript('main.js', appScript)],
+);
+```
+
+`scripts` are evaluated after the guest, in the same context: code the
+application runs beside its runtime, calling what the guest installed (say, a
+plugin's own script over an API the guest exports). A throw in the guest or in
+a script fails the load with its message (`main.js:3: ReferenceError: ...`);
+after boot, an uncaught error reaches `console` as an `E:` line. A guest that
+uses `RpcWasm.run` reports its own errors there too, from the zone the
+bootstrap runs it in; a script's unhandled promise rejection is not reported,
+as JavaScriptCore offers no hook for it.
+
+The context lives in the app's process and does not die on its own; `close()`
+stops its timers and releases it. WASM guests do not load on macOS (`load`
+answers UNAVAILABLE), and iOS and Android load no JS guest (`loadJs` answers
+UNAVAILABLE).
+
 ## Bridge Protocol
 
 `RpcWasmBridge` exchanges only `Uint8List` frames:
@@ -122,7 +162,7 @@ No RPC-level JSON and no WASM-specific envelope is added by this package.
 Expected backends:
 
 - Flutter plugin backend: an offscreen WKWebView on iOS, JavaScriptSandbox on
-  Android.
+  Android (WASM guests); a JavaScriptCore context on macOS (JS guests).
 - Browser backend: `dart:js_interop` / JS functions.
 - Native backend: wasmtime/wasmer embedding.
 - Test backend: paired in-memory bridge.
@@ -155,6 +195,18 @@ against Android's 10 ms, and Android carries a 1 KiB payload in 8.8 ms against
 iOS's 31 ms — so the cheaper platform depends on whether your calls are chatty
 or bulky.
 
+On macOS a JS guest runs in the app's own process, so a call crosses no process
+boundary, only the platform channel and the context's queue
+(`integration_test/js_guest_test.dart`, the same guest compiled with
+`dart compile js`, a debug build on an Apple silicon Mac):
+
+| shape           |    n | macOS p50 | macOS p99 |
+| --------------- | ---: | --------- | --------- |
+| empty unary     |  200 | 1.7 ms    | 4.3 ms    |
+| 1 KiB response  |  200 | 1.4 ms    | 3.2 ms    |
+| 64 KiB response |  100 | 1.7 ms    | 3.1 ms    |
+| 1 MiB response  |   20 | 8.5 ms    | 12.3 ms   |
+
 Budget accordingly: this transport is for isolating untrusted or hot-swappable
 logic, not for chatty per-item calls. Batch where you can.
 
@@ -165,16 +217,18 @@ its page is permanently hidden — and WebKit throttles timers in hidden pages.
 Measured lag over the requested delay, ten samples each, clocked inside the
 guest:
 
-| delay          | Android median | iOS median |
-| -------------- | -------------- | ---------- |
-| `Timer(1 ms)`  | 3 ms           | 0 ms       |
-| `Timer(10 ms)` | 4 ms           | 1 ms       |
-| `Timer(100 ms)`| 5 ms           | 1 ms       |
-| `Timer(1 s)`   | 7 ms           | 99 ms      |
+| delay          | Android median | iOS median | macOS median |
+| -------------- | -------------- | ---------- | ------------ |
+| `Timer(1 ms)`  | 3 ms           | 0 ms       | 0 ms         |
+| `Timer(10 ms)` | 4 ms           | 1 ms       | 1 ms         |
+| `Timer(100 ms)`| 5 ms           | 1 ms       | 1 ms         |
+| `Timer(1 s)`   | 7 ms           | 99 ms      | 1 ms         |
 
-So deadlines, keepalives and backoff inside a guest are usable on both. iOS is
-tighter at short delays and drifts about 10% on a one-second timer; Android is a
-flat few milliseconds throughout.
+So deadlines, keepalives and backoff inside a guest are usable on all three. iOS
+is tighter at short delays and drifts about 10% on a one-second timer; Android
+is a flat few milliseconds throughout; macOS keeps its timers on a dispatch
+queue of the context's own, nothing throttles them, and its clock reads whole
+milliseconds.
 
 ### `Stopwatch` needs a shim on Android, and has one
 

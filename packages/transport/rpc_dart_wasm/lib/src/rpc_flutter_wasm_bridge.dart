@@ -39,10 +39,29 @@ final class RpcWasmSupportInfo {
       details['wasmCompilationSupported'] != false &&
       details['namedDataSupported'] != false;
 
+  /// Whether [RpcFlutterWasmBridge.loadJs] can succeed here: the plugin runs
+  /// a guest compiled to JavaScript (macOS, on JavaScriptCore). A plugin
+  /// that does not say so runs none.
+  bool get canRunJsGuest => jsEngineAvailable && details['jsGuest'] == true;
+
   @override
   String toString() =>
       'RpcWasmSupportInfo(jsEngine=$jsEngineAvailable, '
-      'wasm=$webAssemblyAvailable, gc=$wasmGcSupported)';
+      'wasm=$webAssemblyAvailable, gc=$wasmGcSupported, '
+      'jsGuest=$canRunJsGuest)';
+}
+
+/// A script a JS guest's runtime evaluates after the guest itself, in the
+/// same context: what the application runs beside its runtime (a plugin's
+/// own code, calling the API the guest installed). [name] is how errors in
+/// it are reported.
+final class RpcJsScript {
+  const RpcJsScript(this.name, this.code);
+
+  final String name;
+  final String code;
+
+  Map<String, String> toMap() => {'name': name, 'code': code};
 }
 
 /// Flutter plugin implementation of [RpcWasmBridge].
@@ -202,21 +221,57 @@ final class RpcFlutterWasmBridge extends RpcWasmBridge {
     required Uint8List wasmBytes,
     required String mjsCode,
     String jsBootPrefix = '',
-  }) async {
+  }) => _load('loadRuntime', {
+    'wasm': wasmBytes,
+    'mjs': mjsCode,
+    'jsBootPrefix': jsBootPrefix,
+  });
+
+  /// Loads a Dart guest compiled to JavaScript (`dart compile js`), where the
+  /// plugin runs one ([RpcWasmSupportInfo.canRunJsGuest]): macOS, in a
+  /// JavaScriptCore context of its own.
+  ///
+  /// The guest boots as a WASM one does, with [RpcWasm.run]: its
+  /// `dart:js_interop` code is the same under dart2js. The runtime gives it
+  /// what dart2js expects of a page and a bare engine lacks -- timers,
+  /// `console`, `crypto.getRandomValues`, `performance.now`, `self` -- then
+  /// evaluates [jsBootPrefix], [code], and [scripts] in order, in the same
+  /// context. A throw in any of them fails the load with its message; after
+  /// boot, uncaught errors reach [console] as `E:` lines.
+  ///
+  /// Throws an [RpcStatusException] (UNAVAILABLE) where the plugin runs no
+  /// JS guest.
+  static Future<RpcFlutterWasmBridge> loadJs({
+    required String code,
+    List<RpcJsScript> scripts = const [],
+    String jsBootPrefix = '',
+  }) => _load('loadJsRuntime', {
+    'code': code,
+    'scripts': [for (final s in scripts) s.toMap()],
+    'jsBootPrefix': jsBootPrefix,
+  });
+
+  static Future<RpcFlutterWasmBridge> _load(
+    String method,
+    Map<String, Object?> args,
+  ) async {
     final bridge = RpcFlutterWasmBridge._(
       _newRuntimeId(),
       ServicesBinding.instance.defaultBinaryMessenger,
     );
     final Map<String, Object?> map;
     try {
-      final result = await _channel
-          .invokeMethod<Map<Object?, Object?>>('loadRuntime', {
-            'wasm': wasmBytes,
-            'mjs': mjsCode,
-            'jsBootPrefix': jsBootPrefix,
-            'runtimeId': bridge.runtimeId,
-          });
+      final result = await _channel.invokeMethod<Map<Object?, Object?>>(
+        method,
+        {...args, 'runtimeId': bridge.runtimeId},
+      );
       map = (result ?? const <Object?, Object?>{}).cast<String, Object?>();
+    } on MissingPluginException {
+      bridge._release();
+      throw RpcStatusException(
+        RpcStatus.unavailable,
+        'The native plugin on this platform does not answer $method',
+      );
     } catch (_) {
       bridge._release();
       rethrow;
@@ -227,7 +282,7 @@ final class RpcFlutterWasmBridge extends RpcWasmBridge {
       bridge._release();
       throw RpcStatusException(
         RpcStatus.unavailable,
-        'Failed to load WASM runtime: ${error ?? "no id"}',
+        'Failed to load the runtime: ${error ?? "no id"}',
       );
     }
     if (runtimeId != bridge.runtimeId) {

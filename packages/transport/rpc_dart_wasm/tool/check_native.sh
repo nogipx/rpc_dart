@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: MIT
 #
-# Type-checks the plugin's NATIVE halves.
+# Type-checks the plugin's NATIVE halves: iOS and macOS Swift, Android Kotlin.
 #
 # `flutter test` covers the Dart bridge and nothing else, so a change to
 # RpcDartWasmPlugin.swift or RpcDartWasmPlugin.kt ships unverified: this package
@@ -24,6 +24,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG="$(dirname "$HERE")"
 SWIFT_SRC="$PKG/ios/Classes/RpcDartWasmPlugin.swift"
+MACOS_SRC="$PKG/macos/rpc_dart_wasm/Sources/rpc_dart_wasm/RpcDartWasmPlugin.swift"
 KOTLIN_SRC="$PKG/android/src/main/kotlin/com/nogipx/rpc_dart_wasm/RpcDartWasmPlugin.kt"
 WORK="${TMPDIR:-/tmp}/rpc_dart_wasm_check_native"
 mkdir -p "$WORK"
@@ -74,6 +75,29 @@ check_swift() {
     pass "swift: RpcDartWasmPlugin.swift type-checks against Flutter + WebKit"
   else
     fail "swift: RpcDartWasmPlugin.swift does not type-check"
+  fi
+}
+
+# --- macOS: type-check the Swift against FlutterMacOS.xcframework -----------
+check_swift_macos() {
+  if [[ ! -f "$MACOS_SRC" ]]; then skip "swift (macos): no source at $MACOS_SRC"; return; fi
+  if ! command -v xcrun >/dev/null 2>&1; then skip "swift (macos): xcrun not found (needs Xcode)"; return; fi
+
+  local fw sdk
+  fw="$FLUTTER_SDK/bin/cache/artifacts/engine/darwin-x64/FlutterMacOS.xcframework/macos-arm64_x86_64"
+  if [[ -z "$FLUTTER_SDK" || ! -d "$fw" ]]; then
+    skip "swift (macos): FlutterMacOS.xcframework not found (run 'flutter precache --macos')"
+    return
+  fi
+  sdk="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+  if [[ -z "$sdk" ]]; then skip "swift (macos): no macosx SDK"; return; fi
+
+  ran=1
+  if xcrun --sdk macosx swiftc -typecheck \
+      -target arm64-apple-macos10.15 -sdk "$sdk" -F "$fw" "$MACOS_SRC"; then
+    pass "swift (macos): RpcDartWasmPlugin.swift type-checks against FlutterMacOS + JavaScriptCore"
+  else
+    fail "swift (macos): RpcDartWasmPlugin.swift does not type-check"
   fi
 }
 
@@ -185,6 +209,7 @@ check_kotlin() {
 
 note "rpc_dart_wasm: checking native sources"
 check_swift
+check_swift_macos
 check_kotlin
 
 if [[ "$failed" -ne 0 ]]; then exit 1; fi

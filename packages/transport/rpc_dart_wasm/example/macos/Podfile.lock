@@ -1,0 +1,22 @@
+PODS:
+  - FlutterMacOS (1.0.0)
+  - rpc_dart_wasm (0.2.1):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - rpc_dart_wasm (from `Flutter/ephemeral/.symlinks/plugins/rpc_dart_wasm/macos`)
+
+EXTERNAL SOURCES:
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  rpc_dart_wasm:
+    :path: Flutter/ephemeral/.symlinks/plugins/rpc_dart_wasm/macos
+
+SPEC CHECKSUMS:
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  rpc_dart_wasm: 56bb0f9edd306b2040d23412811f3b2b4a45fcef
+
+PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
+
+COCOAPODS: 1.11.3

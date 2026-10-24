@@ -12,6 +12,7 @@
 
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_wasm/rpc_wasm.dart';
@@ -162,6 +163,17 @@ final class _EchoService extends RpcResponderContract {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         return log.join(',').rpc;
       },
+    );
+
+    // A global of the guest's context, as text: what a script evaluated after
+    // the guest (`loadJs(scripts:)`) left there.
+    addUnaryMethod<RpcString, RpcString>(
+      methodName: 'Global',
+      requestCodec: _codec,
+      responseCodec: _codec,
+      handler: (request, {RpcContext? context}) async =>
+          '${globalContext.getProperty<JSAny?>(request.value.toJS).dartify()}'
+              .rpc,
     );
 
     addUnaryMethod<RpcString, RpcString>(

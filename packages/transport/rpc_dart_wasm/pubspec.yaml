@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 name: rpc_dart_wasm
-description: Runtime-agnostic WASM bridge transport for rpc_dart — turns any byte-level wasm bridge into an IRpcTransport.
+description: Runtime-agnostic guest bridge transport for rpc_dart — turns any byte-level bridge to a WASM or JS guest into an IRpcTransport.
 version: 0.2.1
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
@@ -20,6 +20,8 @@ flutter:
         package: com.nogipx.rpc_dart_wasm
         pluginClass: RpcDartWasmPlugin
       ios:
+        pluginClass: RpcDartWasmPlugin
+      macos:
         pluginClass: RpcDartWasmPlugin
 
 topics:
