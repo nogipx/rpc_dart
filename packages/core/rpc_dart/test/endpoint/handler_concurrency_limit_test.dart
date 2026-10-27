@@ -112,7 +112,7 @@ class _Blocker extends IRpcInterceptor {
     try {
       if (beforeNext) {
         await gate.future;
-        return next(call.context, request);
+        return await next(call.context, request);
       }
       final response = await next(call.context, request);
       await gate.future;
