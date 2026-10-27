@@ -329,6 +329,31 @@ class RpcHttpResponderTransport extends IRpcTransport {
       return _reject(400, request);
     }
 
+    // Collect and validate request headers.
+    // One value per field line, as shelf combined it. A peer that sent a key
+    // twice arrives here JOINED with ',' and is handed to the handler that way,
+    // which is the same rule the caller's receive path follows: joined and
+    // repeated are equivalent on the wire, and only the receiver knows whether
+    // a given key's comma separates values or belongs inside one.
+    final requestHeaders = <RpcHeader>[];
+    request.headers.forEach((name, value) {
+      requestHeaders.add(RpcHeader(name, value));
+    });
+
+    // Bounds the total as well as each header.
+    try {
+      policy.validateMetadata(RpcMetadata(requestHeaders));
+    } on RpcMetadataViolationException catch (e) {
+      _warnRejected(
+        _Rejection.metadata,
+        'Rejected request: metadata violation — $e',
+      );
+      // The reason travels: the caller repeats a bounded, single-line prefix
+      // of this body in `grpc-message`, so a peer learns WHICH limit it hit
+      // instead of only "HTTP 400 from /Svc/echo".
+      return _reject(400, request, body: 'Metadata violation: ${e.message}');
+    }
+
     final streamId = _idManager.generateId();
     final pending = _PendingResponse(request);
     _pending[streamId] = pending;
@@ -338,33 +363,6 @@ class RpcHttpResponderTransport extends IRpcTransport {
     }
 
     try {
-      // Collect and validate request headers.
-      // One value per field line, as shelf combined it. A peer that sent a key
-      // twice arrives here JOINED with ',' and is handed to the handler that way,
-      // which is the same rule the caller's receive path follows: joined and
-      // repeated are equivalent on the wire, and only the receiver knows whether
-      // a given key's comma separates values or belongs inside one.
-      final requestHeaders = <RpcHeader>[];
-      request.headers.forEach((name, value) {
-        requestHeaders.add(RpcHeader(name, value));
-      });
-
-      // Bounds the total as well as each header.
-      try {
-        policy.validateMetadata(RpcMetadata(requestHeaders));
-      } on RpcMetadataViolationException catch (e) {
-        _warnRejected(
-          _Rejection.metadata,
-          'Rejected request: metadata violation — $e [streamId: $streamId]',
-        );
-        _pending.remove(streamId);
-        _idManager.releaseId(streamId);
-        // The reason travels: the caller repeats a bounded, single-line prefix
-        // of this body in `grpc-message`, so a peer learns WHICH limit it hit
-        // instead of only "HTTP 400 from /Svc/echo".
-        return _reject(400, request, body: 'Metadata violation: ${e.message}');
-      }
-
       // Read request body.
       //
       // On overflow, stop buffering but KEEP consuming to the end, discarding
