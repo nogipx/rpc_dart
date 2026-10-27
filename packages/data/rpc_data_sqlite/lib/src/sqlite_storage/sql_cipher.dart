@@ -45,7 +45,7 @@ class SqlCipherKey {
 
     try {
       final symmetricKey = Paseto.symmetricKeyFromPaserk(trimmed);
-      return symmetricKey.withSecretKey((keyBytes) async {
+      return await symmetricKey.withSecretKey((keyBytes) async {
         return SqlCipherKey.fromBytes(
           keyBytes: Uint8List.fromList(await keyBytes.extractBytes()),
         );
