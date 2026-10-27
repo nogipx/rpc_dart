@@ -81,6 +81,26 @@ void instrument(RpcResponderEndpoint server, RpcCallerEndpoint client) {
 
 Every call through either endpoint now produces a span.
 
+Each interceptor takes only the calls of its side: the server the calls its
+endpoint serves, the client the calls it makes (`RpcCallInfo.direction`). So
+an `RpcPeerEndpoint`, which makes and serves calls through one interceptor
+list, takes both, and each call gets one span of the right kind:
+
+```dart
+peer
+  ..addInterceptor(OtelRpcInterceptor(tracer: tracer))
+  ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
+```
+
+`where:` narrows the calls either one traces; a call it turns down passes
+through untraced. A server stream that lives as long as a session would be one
+span for all of it:
+
+```dart
+bool notFeed(RpcCallInfo call) => call.methodName != 'feed';
+OtelRpcInterceptor(tracer: tracer, where: notFeed);
+```
+
 ## Spans
 
 Each span is named `<Service>/<Method>`, with kind `server` (from

@@ -52,6 +52,13 @@ final class OtelRpcCall {
 /// [SpanKind.server]; the client injects the context and uses
 /// [SpanKind.client]).
 ///
+/// Each sees only the calls of its side: the server the calls its endpoint
+/// serves, the client the calls it makes. On an `RpcPeerEndpoint`, which
+/// makes and serves calls through one interceptor list, both go on the same
+/// endpoint and each call gets one span of the right kind. [where] narrows
+/// that further (a long-lived stream that would be one span for a whole
+/// session, say); a call it turns down passes through untraced.
+///
 /// A span ends with status OK when the call succeeds, CANCELLED when it is
 /// cancelled (its consumer cancelled the response stream), and the call's
 /// error status when it fails. A streamed response records every error on the
@@ -61,7 +68,14 @@ abstract class OtelRpcInterceptorBase
   final Tracer tracer;
   final RpcOtelMetrics? metrics;
 
-  const OtelRpcInterceptorBase({required this.tracer, this.metrics});
+  /// Which calls of its side it traces; all when null.
+  final bool Function(RpcCallInfo call)? where;
+
+  const OtelRpcInterceptorBase({
+    required this.tracer,
+    this.metrics,
+    this.where,
+  });
 
   /// Which side this interceptor sits on. Determines the metric namespace
   /// (`rpc.server.*` vs `rpc.client.*`) used by [RpcOtelMetrics.recordCall].
@@ -81,6 +95,14 @@ abstract class OtelRpcInterceptorBase
     RpcMethodType.clientStream => 'client_stream',
     RpcMethodType.bidirectionalStream => 'bidirectional_stream',
   };
+
+  @override
+  bool observes(RpcCallInfo call, RpcMethodType type) =>
+      call.direction ==
+          (metricSide == RpcMetricSide.server
+              ? RpcCallDirection.incoming
+              : RpcCallDirection.outgoing) &&
+      (where?.call(call) ?? true);
 
   @override
   OtelRpcCall onCallStart(RpcCallInfo call, RpcMethodType type) {

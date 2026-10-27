@@ -43,7 +43,7 @@ abstract final class OtelRpcKeys {
 /// ));
 /// ```
 class OtelRpcInterceptor extends OtelRpcInterceptorBase {
-  const OtelRpcInterceptor({required super.tracer, super.metrics});
+  const OtelRpcInterceptor({required super.tracer, super.metrics, super.where});
 
   @override
   RpcMetricSide get metricSide => RpcMetricSide.server;

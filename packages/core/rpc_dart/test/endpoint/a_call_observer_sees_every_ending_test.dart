@@ -25,10 +25,15 @@ final class _Ending {
 
 final class _Recorder extends RpcCallObserverInterceptor<_Ending> {
   final endings = <_Ending>[];
+  final skipped = <String>{};
   final _ended = StreamController<_Ending>.broadcast(sync: true);
 
   Future<_Ending> next(String method) =>
       _ended.stream.firstWhere((e) => e.method == method);
+
+  @override
+  bool observes(RpcCallInfo call, RpcMethodType type) =>
+      !skipped.contains(call.methodName);
 
   @override
   _Ending onCallStart(RpcCallInfo call, RpcMethodType type) =>
@@ -145,6 +150,13 @@ void main() {
     final e = await ended;
     expect(e.type, RpcMethodType.unary);
     expect(e.outcome, isA<RpcCallSucceeded>());
+  });
+
+  test('a call it does not observe passes through untouched', () async {
+    recorder.skipped.addAll(['ok', 'three']);
+    expect((await unary('ok')).value, 'missing');
+    expect(await serverStream('three').length, 3);
+    expect(recorder.endings, isEmpty);
   });
 
   test('a unary call that throws fails with the error', () async {

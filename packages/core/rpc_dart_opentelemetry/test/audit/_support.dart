@@ -47,6 +47,7 @@ RpcCallInfo buildCall({
   String service = 'TestService',
   String method = 'testMethod',
   RpcContext? context,
+  RpcCallDirection direction = RpcCallDirection.incoming,
 }) {
   final (_, serverTransport) = RpcChannelTransport.memoryPair();
   final endpoint = RpcResponderEndpoint(transport: serverTransport);
@@ -55,6 +56,6 @@ RpcCallInfo buildCall({
     serviceName: service,
     methodName: method,
     context: context ?? RpcContext.empty(),
-    direction: RpcCallDirection.incoming,
+    direction: direction,
   );
 }

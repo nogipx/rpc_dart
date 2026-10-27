@@ -191,6 +191,8 @@ their `codec`.
 - `IRpcInterceptor.check`: a check that runs for every call shape.
 - `RpcCallObserverInterceptor`: observe every call of every shape. An interceptor
   can tell an outgoing call from an incoming one.
+  `observes(call, type)` picks the calls it sees; one it does not passes
+  through untouched.
 - `IRpcServer.stop(drainTimeout:)` stops admitting and waits for in-flight
   calls; `pair()` builds a client.
 - For transport authors: `RpcWriteBacklog` (with `reads`), `RpcWriteCoalescer`,
@@ -276,6 +278,9 @@ their `codec`.
   spans the log spans' own ids, so one trace crosses processes.
   `otelTraceparent` gives the active OTel span for
   `LogController(ambientParent:)`; a log span's links become `SpanLink`s.
+- The server interceptor traces only the calls its endpoint serves, the client
+  one only those it makes, so both go on an `RpcPeerEndpoint` and each call is
+  one span of the right kind. `where:` narrows the calls either traces.
 
 ## rpc_dart_websocket (next version)
 

@@ -38,13 +38,14 @@ void main() {
     final interceptor = OtelRpcClientInterceptor(tracer: t.tracer);
 
     RpcContext? seen;
-    await interceptor.interceptUnary<String, String>(buildCall(), 'req', (
-      ctx,
-      req,
-    ) async {
-      seen = ctx;
-      return 'res';
-    });
+    await interceptor.interceptUnary<String, String>(
+      buildCall(direction: RpcCallDirection.outgoing),
+      'req',
+      (ctx, req) async {
+        seen = ctx;
+        return 'res';
+      },
+    );
 
     final span = t.exporter.spans.single;
     expect(

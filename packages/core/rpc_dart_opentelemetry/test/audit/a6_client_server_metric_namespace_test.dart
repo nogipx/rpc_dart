@@ -8,6 +8,7 @@ library;
 import 'package:opentelemetry/api.dart';
 // ignore: implementation_imports
 import 'package:opentelemetry/src/experimental_api.dart' show Counter, Meter;
+import 'package:rpc_dart/rpc_dart.dart';
 import 'package:rpc_dart_opentelemetry/rpc_dart_opentelemetry.dart';
 import 'package:test/test.dart';
 
@@ -76,7 +77,7 @@ void main() {
     );
 
     await interceptor.interceptUnary<String, String>(
-      buildCall(),
+      buildCall(direction: RpcCallDirection.outgoing),
       'req',
       (ctx, req) async => 'res',
     );
@@ -106,7 +107,7 @@ void main() {
       (ctx, req) async => 'res',
     );
     await client.interceptUnary<String, String>(
-      buildCall(),
+      buildCall(direction: RpcCallDirection.outgoing),
       'req',
       (ctx, req) async => 'res',
     );

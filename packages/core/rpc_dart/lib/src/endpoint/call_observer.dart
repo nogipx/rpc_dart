@@ -62,7 +62,7 @@ final class RpcCallCancelled extends RpcCallOutcome {
 /// it. The stream itself is passed through unchanged, pause and resume
 /// included.
 ///
-/// The optional hooks: [contextFor] changes the context the rest of the chain
+/// The optional hooks: [observes] picks the calls it sees, [contextFor] changes the context the rest of the chain
 /// runs with, [runCall] runs the rest of the chain inside something (a zone),
 /// and [onResponseMessage] / [onResponseError] see each event of a streamed
 /// response.
@@ -90,6 +90,12 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
   /// The call that [onCallStart] returned [state] for is over. Called exactly
   /// once per call.
   void onCallEnd(S state, RpcCallOutcome outcome, Duration duration);
+
+  /// Whether this interceptor observes [call]. A call it does not observe
+  /// passes through untouched: no hook is called for it. True by default;
+  /// on an `RpcPeerEndpoint`, whose one interceptor list runs both ways, an
+  /// observer of one side checks [RpcCallInfo.direction] here.
+  bool observes(RpcCallInfo call, RpcMethodType type) => true;
 
   /// The context the rest of the chain runs with. Unchanged by default.
   RpcContext contextFor(S state, RpcContext context) => context;
@@ -155,6 +161,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
     RpcMethodType type,
     Future<T> Function(RpcContext context) next,
   ) async {
+    if (!observes(call, type)) return next(call.context);
     final state = onCallStart(call, type);
     final clock = Stopwatch()..start();
     try {
@@ -175,6 +182,7 @@ abstract class RpcCallObserverInterceptor<S> extends IRpcInterceptor {
     RpcMethodType type,
     FutureOr<Stream<T>> Function(RpcContext context) next,
   ) async {
+    if (!observes(call, type)) return next(call.context);
     final state = onCallStart(call, type);
     final clock = Stopwatch()..start();
     final Stream<T> source;

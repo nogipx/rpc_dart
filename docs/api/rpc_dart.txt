@@ -299,6 +299,7 @@ RpcCallObserverInterceptor method interceptBidirectionalStream<TRequest, TRespon
 RpcCallObserverInterceptor method interceptClientStream<TRequest, TResponse>(RpcCallInfo call, Stream<TRequest> requests, Future<TResponse> Function(RpcContext, Stream<TRequest>) next) -> Future<TResponse>
 RpcCallObserverInterceptor method interceptServerStream<TRequest, TResponse>(RpcCallInfo call, TRequest request, FutureOr<Stream<TResponse>> Function(RpcContext, TRequest) next) -> FutureOr<Stream<TResponse>>
 RpcCallObserverInterceptor method interceptUnary<TRequest, TResponse>(RpcCallInfo call, TRequest request, Future<TResponse> Function(RpcContext, TRequest) next) -> Future<TResponse>
+RpcCallObserverInterceptor method observes(RpcCallInfo call, RpcMethodType type) -> bool
 RpcCallObserverInterceptor method onCallEnd(S state, RpcCallOutcome outcome, Duration duration) -> void
 RpcCallObserverInterceptor method onCallStart(RpcCallInfo call, RpcMethodType type) -> S
 RpcCallObserverInterceptor method onResponseError(S state, Object error, StackTrace stackTrace) -> void

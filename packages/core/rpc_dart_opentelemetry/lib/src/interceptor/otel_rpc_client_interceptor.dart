@@ -26,7 +26,11 @@ import 'otel_rpc_interceptor_base.dart';
 ///   ..addInterceptor(OtelRpcClientInterceptor(tracer: tracer));
 /// ```
 class OtelRpcClientInterceptor extends OtelRpcInterceptorBase {
-  const OtelRpcClientInterceptor({required super.tracer, super.metrics});
+  const OtelRpcClientInterceptor({
+    required super.tracer,
+    super.metrics,
+    super.where,
+  });
 
   @override
   RpcMetricSide get metricSide => RpcMetricSide.client;
