@@ -55,3 +55,15 @@ class _RpcContextSetter implements TextMapSetter<Map<String, String>> {
     carrier[key] = value;
   }
 }
+
+/// The OTel span active in [context] (default `Context.current`) as a W3C
+/// `traceparent`, or null when there is none: give it to
+/// `LogController(ambientParent: otelTraceparent)`, and a log span started
+/// with no parent of its own inside an RPC handler is a child of the
+/// server's span, with ids the OTel trace has.
+String? otelTraceparent([Context? context]) {
+  final c = spanContextFromContext(context ?? Context.current);
+  if (!c.isValid) return null;
+  final flags = c.traceFlags.toRadixString(16).padLeft(2, '0');
+  return '00-${c.traceId}-${c.spanId}-$flags';
+}

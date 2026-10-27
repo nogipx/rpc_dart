@@ -209,11 +209,11 @@ becomes a `rpc.metrics.record_failed` event on the span.
 `LogControllerOtelOutput` is a `LogOutput`. Add it to the `LogController`
 outputs (`logging-and-health.md`). Constructor: `tracer:` (required),
 `rootContextProvider:` (`Context Function()?`), `maxOpenSpans:` (1024),
-`spanTtl:` (5 min), `sweepInterval:` (30 s).
+`spanTtl:` (5 min), `sweepInterval:` (30 s), `ids:` (`LogSpanIds?`, below).
 
 | `LogController` record | OpenTelemetry |
 | --- | --- |
-| `LogSpanStart` | a new span; child of its parent log span when `parentSpanId` is set |
+| `LogSpanStart` | a new span; child of its parent log span when `parentSpanId` is set; child of a remote span context when that parent is not open here but its ids are W3C ones (`startSpan(parent:)` in another process); its `links` as `SpanLink`s |
 | `LogEvent` inside an open log span | `span.addEvent(message, attributes)` |
 | `LogEvent` outside any span | a zero-duration span named `log.<scope>` |
 | `LogSpan` (end) | data as attributes, `ok`/`error` status, span ended |
@@ -232,6 +232,49 @@ LogController buildTracedLogger(Tracer tracer) => LogController(
 
 Call `controller.dispose()` at shutdown. It disposes this output, which ends
 every span still open.
+
+### One trace across processes
+
+A log span names its place in its trace as a W3C `traceparent`
+(`LogSpanHandle.traceparent`). Send it with the work, and the other process
+opens its span with it (`LogScope.startSpan(name, parent: traceparent)`): its
+log span is a child of the first, in the same trace. For OTel to see that, the
+first OTel span must carry the log span's own ids. Give the tracer provider a
+`LogSpanIds` and the same instance to the output: every span the output opens
+then has its log span's span id, and a root its log span's trace id. Any
+other span (an interceptor's, the app's own) gets random ids as before.
+
+```dart
+import 'package:opentelemetry/sdk.dart' as sdk;
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_opentelemetry/rpc_dart_opentelemetry.dart';
+
+LogController buildLinkedLogger(List<sdk.SpanProcessor> processors) {
+  final ids = LogSpanIds();
+  final provider = sdk.TracerProviderBase(
+    processors: processors,
+    idGenerator: ids,
+  );
+  return LogController(
+    outputs: [
+      LogControllerOtelOutput(tracer: provider.getTracer('svc'), ids: ids),
+    ],
+  );
+}
+```
+
+Without `ids:` spans still nest within a process, but the remote child points
+at ids no exporter saw.
+
+Inside an RPC handler a log span nests under the server's span in OTel. For
+its `traceparent` to name that trace too, give the controller
+`ambientParent: otelTraceparent`: a log span with no parent of its own then
+takes the active OTel span as its parent, with its ids.
+
+A span that answers a message (a fact, an event) said in another span names
+that one in `startSpan(links:)`; the output makes each an OTel `SpanLink`,
+as OpenTelemetry advises for messaging: the answer starts its own trace,
+linked to the one that said it.
 
 ## Pitfalls
 

@@ -232,6 +232,31 @@ open log span becomes a span event; one outside any log span becomes its own
 zero-duration span. Keep the controller's `minLevel` at `info` or above, or
 every debug line becomes a span.
 
+**One trace across processes.** A log span names its place in its trace as a
+W3C `traceparent` (`LogSpanHandle.traceparent`); a span another process opens
+with it (`LogScope.startSpan(name, parent: traceparent)`) is its child. A
+parent this output never opened, named by W3C ids, becomes a remote span
+context. For the remote child to find its parent in the backend, the parent's
+OTel span must carry the log span's ids: give the tracer provider a
+`LogSpanIds` and pass the same one as `ids:`.
+
+```dart
+final ids = LogSpanIds();
+final provider = TracerProviderBase(processors: processors, idGenerator: ids);
+final output = LogControllerOtelOutput(
+  tracer: provider.getTracer('svc'),
+  ids: ids,
+);
+```
+
+Every span the output opens then has its log span's span id, and a root its
+trace id; other spans (an interceptor's, the app's own) keep random ids.
+
+Inside an RPC handler a log span nests under the server's span in OTel; give
+the controller `ambientParent: otelTraceparent` so its `traceparent` names
+that trace too. A log span's `links` (`startSpan(links:)`, the spans of the
+messages it answers) become `SpanLink`s.
+
 Spans whose end record never arrives are bounded: past `maxOpenSpans` (default
 1024) the oldest are ended, and a sweep every `sweepInterval` (default 30 s)
 ends any open longer than `spanTtl` (default 5 min). `dispose()` ends whatever

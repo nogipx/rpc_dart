@@ -270,6 +270,12 @@ their `codec`.
   gives the attribute value. The interceptors are built on
   `RpcCallObserverInterceptor`, and `OtelRpcInterceptorBase` is exported.
 - The recorded status is the one the caller receives.
+- `LogControllerOtelOutput` makes a log span whose parent is of another
+  process (W3C ids, not open here) a child of that remote span context.
+  `LogSpanIds`, given to the tracer provider and as `ids:`, gives the OTel
+  spans the log spans' own ids, so one trace crosses processes.
+  `otelTraceparent` gives the active OTel span for
+  `LogController(ambientParent:)`; a log span's links become `SpanLink`s.
 
 ## rpc_dart_websocket (next version)
 
