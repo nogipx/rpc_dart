@@ -6,7 +6,7 @@ library;
 // SPDX-License-Identifier: MIT
 
 import 'package:opentelemetry/api.dart';
-// ignore: implementation_imports
+// ignore: implementation_imports, experimental_member_use
 import 'package:opentelemetry/src/experimental_api.dart' show Counter, Meter;
 import 'package:rpc_dart_opentelemetry/rpc_dart_opentelemetry.dart';
 import 'package:test/test.dart';

@@ -102,10 +102,12 @@ void main() {
     final host = _Process(ids: true, ambient: true);
     final peer = _Process(ids: true);
     final rpc = host.tracer.startSpan('Service/method');
+    // ignore: experimental_member_use
     final token = api.Context.attach(
       api.contextWithSpan(api.Context.current, rpc),
     );
     final call = host.logs.scope('host').startSpan('call');
+    // ignore: experimental_member_use
     api.Context.detach(token);
     peer.logs.scope('peer').startSpan('serve', parent: call.traceparent).end();
     call.end();

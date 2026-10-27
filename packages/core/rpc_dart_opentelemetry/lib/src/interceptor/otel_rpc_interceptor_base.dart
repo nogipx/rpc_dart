@@ -159,6 +159,8 @@ abstract class OtelRpcInterceptorBase
     Context otelContext,
     Future<T> Function() body,
   ) async {
+    // opentelemetry has no stable way to make a context current.
+    // ignore: experimental_member_use
     final outcome = await zone(otelContext).run<Future<_Outcome<T>>>(() async {
       try {
         return _Outcome.value(await body());
