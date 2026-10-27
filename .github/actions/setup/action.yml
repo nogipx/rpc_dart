@@ -19,9 +19,15 @@ runs:
     # the file is not there, and newer runners treat that as a step failure
     # instead of a warning — taking the whole job with it. The matcher only adds
     # inline annotations on analyzer output, which nothing here depends on.
+    #
+    # sdk is the Dart bundled with the Flutter in .fvmrc, not `stable`. The
+    # global fvm/melos binstubs run with whatever `dart` is on PATH, and inside
+    # `melos exec` that is the pinned SDK. Activated by a newer Dart, they refuse
+    # it: "fvm as globally activated doesn't support Dart 3.10.1". The last step
+    # below fails the job if the two drift apart.
     - uses: dart-lang/setup-dart@v1
       with:
-        sdk: stable
+        sdk: 3.10.1
         problem-matcher: false
 
     # fvm keeps its managed SDKs under ~/fvm — cache them so `fvm install` only
@@ -42,3 +48,9 @@ runs:
         export PATH="$HOME/.pub-cache/bin:$PATH"
         # Reads .fvmrc -> ensures the pinned Flutter (+ bundled Dart) is present.
         fvm install
+        bootstrap=$(dart --version 2>&1 | awk '{print $4}')
+        pinned=$(fvm dart --version 2>&1 | awk '/Dart SDK version/ {print $4}')
+        if [ "$bootstrap" != "$pinned" ]; then
+          echo "::error::setup-dart installs Dart $bootstrap, .fvmrc pins Dart $pinned. Set sdk: $pinned in .github/actions/setup/action.yml."
+          exit 1
+        fi
