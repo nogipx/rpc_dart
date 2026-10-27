@@ -63,6 +63,41 @@ jobs:
       - name: Run tests (no external services)
         run: melos run test:unit
 
+  # The same analyze + test:unit on the latest stable Dart instead of the pinned
+  # one, to learn early what a new SDK breaks. A new SDK release must not turn
+  # main red, so this job reports and never fails the workflow.
+  #
+  # rpc_dart_wasm is left out: it needs Flutter, and Flutter pins its own Dart.
+  # Infos are not fatal here: a new SDK deprecates APIs, and those infos are
+  # printed for reading rather than failing the job on every run.
+  stable:
+    name: "Latest stable Dart"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: lint
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      # The melos scripts call `fvm dart ...`. This `fvm` drops its first word,
+      # so they run the `dart` on PATH, which is the stable one.
+      - name: fvm shim for the stable SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\nexec "$@"\n' > "$RUNNER_TEMP/bin/fvm"
+          chmod +x "$RUNNER_TEMP/bin/fvm"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+          dart pub global activate melos
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Analyze (workspace members, warnings fatal)
+        run: melos exec --concurrency 6 -- dart analyze --fatal-warnings .
+      - name: Run tests (no external services)
+        run: melos run test:unit
+
   # Flutter wasm transport is NOT a workspace member; test it standalone.
   wasm:
     name: "Wasm (Flutter)"
