@@ -107,6 +107,9 @@ Future<List<String>> _startWarnings({
 }
 
 final class _Warnings extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   final List<String> warnings = [];
 
   @override

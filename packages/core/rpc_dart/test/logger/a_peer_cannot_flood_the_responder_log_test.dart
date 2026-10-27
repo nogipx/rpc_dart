@@ -14,6 +14,9 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final class _Counting extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   _Counting() : super(minLevel: RpcLogLevel.debug);
 
   final warnings = <String>[];

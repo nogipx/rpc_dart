@@ -106,6 +106,9 @@ Future<void> _nextOnline(RpcClientConnection connection) => connection.state
 /// as a repeat opening frame and a new call served late look the same from
 /// outside, and only the first leaves a record.
 class _Warnings extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   final lines = <String>[];
 
   @override

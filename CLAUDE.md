@@ -273,3 +273,10 @@ Both halves are witnessable and should be tested that way —
 `test/transports/flow_controller_logging_test.dart` is the worked example. Note
 the guard cannot be seen from the record stream (a filtered record is discarded
 either way); count calls into a `LogScope` subclass instead.
+
+**A controller nothing reads takes nothing.** With no output and no listener of
+its `stream`, `LogController.accepts` is false at every level and a span is the
+no-op one, so a controller wired in but never read builds nothing. A test (or a
+sink) that subclasses `LogController` and takes records in its own `add`
+overrides `hasSinks` to `true`; a test of level resolution gives the controller
+an output that drops what it gets.

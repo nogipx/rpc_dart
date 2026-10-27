@@ -12,6 +12,9 @@ import 'package:rpc_dart/transport.dart';
 import 'package:test/test.dart';
 
 final class _Capture extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   _Capture() : super(minLevel: RpcLogLevel.internal);
 
   final messages = <String>[];

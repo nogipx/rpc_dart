@@ -164,6 +164,9 @@ void main() {
 /// log call cannot be observed from the record stream — a filtered record is
 /// discarded either way.
 class _Counting extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   int errors = 0;
 
   @override

@@ -50,7 +50,7 @@ final class _CountingScope extends LogScope {
 
 final class _Capture {
   _Capture({RpcLogLevel minLevel = RpcLogLevel.internal})
-    : controller = LogController(minLevel: minLevel) {
+    : controller = LogController(outputs: [_drop], minLevel: minLevel) {
     controller.stream.listen(records.add);
   }
 
@@ -233,7 +233,10 @@ void main() {
         // `LogScope.internal` takes a String, so reaching the call at all means
         // the interpolation already ran. An unguarded site therefore builds a
         // string per park and throws it away, on the hot path.
-        final controller = LogController(minLevel: RpcLogLevel.warning);
+        final controller = LogController(
+          outputs: [_drop],
+          minLevel: RpcLogLevel.warning,
+        );
         final scope = _CountingScope(controller);
         final fc = build(bare, logger: scope);
         fc.handleInbound(_grant(1, '1000'));
@@ -261,7 +264,10 @@ void main() {
     test('GUARD: with internal enabled the message IS built', () async {
       // The other arm, without which the witness above passes on a site that
       // simply never logs. The two must differ in exactly this.
-      final controller = LogController(minLevel: RpcLogLevel.internal);
+      final controller = LogController(
+        outputs: [_drop],
+        minLevel: RpcLogLevel.internal,
+      );
       final scope = _CountingScope(controller);
       final fc = build(bare, logger: scope);
       fc.handleInbound(_grant(1, '1000'));
@@ -304,3 +310,12 @@ void main() {
     expect(fc.creditFor(1), 1000);
   });
 }
+
+/// An output that drops what it gets: a controller with it is read, so its
+/// level is what decides (a controller nothing reads takes nothing).
+final class _Drop extends LogOutput {
+  @override
+  void write(LogRecord record) {}
+}
+
+final _drop = _Drop();

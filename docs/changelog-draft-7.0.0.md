@@ -139,6 +139,10 @@ their `codec`.
 
 ### Behaviour you will notice without changing code
 
+- A `LogController` with no output and no listener of its `stream` takes
+  nothing: every guard is false and spans are no-ops, so a controller wired in
+  but never read costs nothing. A subclass that takes records in its own `add`
+  overrides `hasSinks` to `true`.
 - **A server compresses responses only when told to.** It used to gzip every
   response for a client that accepted gzip. `compressionEnabled: true` on the
   server, `RpcConnectionHost` or `RpcResponderEndpoint` turns it on; on
@@ -195,6 +199,19 @@ their `codec`.
   built-in gzip codec.
 - Unary tolerates a gRPC frame split across transport messages.
 - An Agent Skill ships with the package: `dart run skills get`.
+- `LogScope.isEnabled(level)` and `LogSpanHandle.isEnabled(level)`: the guard
+  for any level. A span event its scope's filter drops is no longer kept in
+  `LogSpan.events`, so a span tells no more than the level lets through.
+- Spans across processes: a root span gets a W3C trace id,
+  `LogSpanHandle.traceparent` names a span, and `LogScope.startSpan(parent:)`
+  opens a child of a span of another process. `startSpan(links:)` names the
+  spans one follows from (`LogSpanStart.links`), and
+  `LogController(ambientParent:)` gives a span with no parent the span of
+  the work running now.
+- With `spansEnabled: false` a span is detached: no ids, no records, its
+  events told as plain events.
+- `LogScope.noop` hands out one span for every `startSpan` and `withSpan`,
+  so code that opens spans costs no allocation without a logger.
 
 ---
 

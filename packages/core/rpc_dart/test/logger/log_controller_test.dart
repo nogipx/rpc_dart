@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+import 'dart:async';
+
 import 'package:rpc_dart/rpc_dart.dart';
 import 'package:test/test.dart';
 
@@ -19,6 +21,45 @@ class _CollectorOutput extends LogOutput {
 }
 
 void main() {
+  group('a controller nothing reads takes nothing', () {
+    test('no output and no listener: no level passes, no span is made', () {
+      final c = LogController(minLevel: RpcLogLevel.internal);
+      final scope = c.scope('api');
+      expect(c.hasSinks, isFalse);
+      expect(scope.isInternal, isFalse);
+      expect(scope.isEnabled(RpcLogLevel.fatal), isFalse);
+      final span = scope.startSpan('op');
+      expect(span.isEnded, isTrue, reason: 'the no-op span');
+      expect(scope.startSpan('other'), same(span));
+      c.dispose();
+    });
+
+    test('an output or a listener added later is served from then on', () {
+      final c = LogController(minLevel: RpcLogLevel.debug);
+      final scope = c.scope('api');
+      final out = _CollectorOutput();
+      c.addOutput(out);
+      expect(scope.isDebug, isTrue);
+      scope.info('now');
+      expect(out.events.single.message, 'now');
+      c.removeOutput(out);
+      expect(scope.isDebug, isFalse);
+      final heard = <LogRecord>[];
+      final sub = c.stream.listen(heard.add);
+      expect(scope.isDebug, isTrue);
+      expect(scope.startSpan('op').isEnded, isFalse);
+      unawaited(sub.cancel());
+      c.dispose();
+    });
+
+    test('a subclass that takes records in add says it is a sink', () {
+      final c = _Sink();
+      c.scope('api').warning('told');
+      expect(c.taken, ['told']);
+      c.dispose();
+    });
+  });
+
   group('LogController', () {
     late _CollectorOutput output;
     late LogController controller;
@@ -196,4 +237,16 @@ class _ScopeFilteredOutput extends LogOutput {
 
   @override
   void write(LogRecord record) => records.add(record);
+}
+
+final class _Sink extends LogController {
+  final taken = <String>[];
+
+  @override
+  bool get hasSinks => true;
+
+  @override
+  void add(LogRecord record) {
+    if (record is LogEvent) taken.add(record.message);
+  }
 }

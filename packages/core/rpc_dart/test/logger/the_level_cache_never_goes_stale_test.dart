@@ -25,7 +25,7 @@ const _scope = 'rpc_dart.transport.websocket.caller';
 void main() {
   group('GUARD: resolution is unchanged', () {
     test('a scope override applies', () {
-      final c = LogController(minLevel: RpcLogLevel.warning);
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning);
       final log = LogScope(c, _scope);
       expect(log.isInternal, isFalse);
 
@@ -34,7 +34,7 @@ void main() {
     });
 
     test('the LONGEST matching prefix wins, not the first', () {
-      final c = LogController(minLevel: RpcLogLevel.warning)
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning)
         ..setScopeLevel('rpc_dart', RpcLogLevel.internal)
         ..setScopeLevel('rpc_dart.transport.websocket', RpcLogLevel.error);
 
@@ -47,7 +47,7 @@ void main() {
     });
 
     test('a tag override beats a scope override', () {
-      final c = LogController(minLevel: RpcLogLevel.warning)
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning)
         ..setScopeLevel('rpc_dart', RpcLogLevel.error)
         ..setTagLevel('noisy', RpcLogLevel.internal);
 
@@ -56,7 +56,7 @@ void main() {
     });
 
     test('an unmatched scope falls back to minLevel', () {
-      final c = LogController(minLevel: RpcLogLevel.internal)
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.internal)
         ..setScopeLevel('something.else', RpcLogLevel.error);
       expect(LogScope(c, _scope).isInternal, isTrue);
     });
@@ -68,7 +68,7 @@ void main() {
   // FIX introduces, which the defect never had: a stale answer.
   group('GUARD: the cache cannot go stale', () {
     test('adding an override after a resolution takes effect', () {
-      final c = LogController(minLevel: RpcLogLevel.warning);
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning);
       final log = LogScope(c, _scope);
       expect(log.isInternal, isFalse); // populates the cache
 
@@ -81,7 +81,7 @@ void main() {
     });
 
     test('CHANGING an override takes effect', () {
-      final c = LogController(minLevel: RpcLogLevel.warning)
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning)
         ..setScopeLevel('rpc_dart', RpcLogLevel.internal);
       final log = LogScope(c, _scope);
       expect(log.isInternal, isTrue);
@@ -91,7 +91,7 @@ void main() {
     });
 
     test('clearing an override takes effect', () {
-      final c = LogController(minLevel: RpcLogLevel.warning)
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning)
         ..setScopeLevel('rpc_dart', RpcLogLevel.internal);
       final log = LogScope(c, _scope);
       expect(log.isInternal, isTrue);
@@ -104,7 +104,7 @@ void main() {
       // The awkward case: a public mutable field, so nothing calls a setter that
       // could clear the cache. The cache remembers which minLevel it was built
       // under and discards itself when that changes.
-      final c = LogController(minLevel: RpcLogLevel.warning);
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning);
       final log = LogScope(c, _scope);
       expect(log.isInternal, isFalse);
 
@@ -122,7 +122,7 @@ void main() {
     });
 
     test('a tag override added later still beats the cached scope', () {
-      final c = LogController(minLevel: RpcLogLevel.warning);
+      final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning);
       final log = LogScope(c, _scope, tag: 'noisy');
       expect(log.isInternal, isFalse);
 
@@ -139,7 +139,7 @@ void main() {
     // `child()` concatenates names, so a caller creating many short-lived scopes
     // grows the map. It is cleared wholesale at the bound; what must not happen is
     // a wrong answer on either side of that.
-    final c = LogController(minLevel: RpcLogLevel.warning)
+    final c = LogController(outputs: [_drop], minLevel: RpcLogLevel.warning)
       ..setScopeLevel('rpc_dart.keep', RpcLogLevel.internal);
 
     for (var i = 0; i < 1200; i++) {
@@ -148,3 +148,12 @@ void main() {
     }
   });
 }
+
+/// An output that drops what it gets: a controller with it is read, so its
+/// level is what decides (a controller nothing reads takes nothing).
+final class _Drop extends LogOutput {
+  @override
+  void write(LogRecord record) {}
+}
+
+final _drop = _Drop();

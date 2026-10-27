@@ -47,6 +47,11 @@ class LogSpanStart implements LogRecord {
   /// Operation name.
   final String name;
 
+  /// Spans this one follows from without being their child, each a W3C
+  /// `traceparent` (`LogScope.startSpan(links:)`): what a message said led
+  /// to, when the span that said it may long be over.
+  final List<String> links;
+
   /// Creates a [LogSpanStart] record.
   LogSpanStart({
     required this.spanId,
@@ -54,6 +59,7 @@ class LogSpanStart implements LogRecord {
     required this.name,
     this.parentSpanId,
     this.traceId,
+    this.links = const [],
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 }

@@ -29,6 +29,9 @@ final _codec = RpcCodec(RpcString.fromJson);
 /// Counts records by level, with `internal` admitted so a zero at `error` can be
 /// told from a log that was deleted rather than moved.
 class _Counting extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   _Counting() : super(minLevel: RpcLogLevel.internal);
 
   int errors = 0;

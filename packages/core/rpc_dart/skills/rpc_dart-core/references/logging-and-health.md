@@ -34,6 +34,11 @@ SPDX-License-Identifier: MIT
 | --- | --- | --- |
 | `minLevel` | `RpcLogLevel.debug` | Global threshold for events. Mutable field. |
 | `spansEnabled` | `true` | Spans bypass level filtering and sampling; this turns them off. Mutable field. |
+
+A controller with no output and no listener of its `stream` takes nothing:
+`accepts` (so every guard) is false and a span is the no-op one, until an
+output or a listener comes (`hasSinks`). A subclass that takes records in its
+own `add` overrides `hasSinks` to `true`.
 | `clock` | `DateTime.now` | Timestamp source; inject a fake in tests. |
 | `outputs` | `[]` | `LogOutput` sinks. |
 | `enrichers` | `[]` | `LogEnricher`s adding fields to every record. |
@@ -92,7 +97,22 @@ Derivation: `child(name)` (appends `.name`), `withTag(tag)`,
 Spans: `startSpan(name)` returns a `LogSpanHandle` (`event`, `addData`,
 `startSpan`, `end(status:, error:, stackTrace:)`); `withSpan(name, body)` and
 `withSpanSync` end the span with `LogSpanStatus.ok` or `LogSpanStatus.error`
-and rethrow.
+and rethrow. A span without a trace id starts a trace of its own, with a W3C
+trace id; `span.traceparent` names it for another process, which joins it as
+a child with `startSpan(name, parent: traceparent)` (a malformed one is
+ignored). A span that answers a message said in another span, which may be
+over by then, names it in `links:` (its `traceparent`s) rather than as its
+parent. `LogController(ambientParent:)` gives a span with no parent and no
+trace of its own the span of the work running now (`otelTraceparent` from
+`rpc_dart_opentelemetry` reads the OTel context). With `spansEnabled: false`
+a span is detached: no ids, no start or end records, its events plain
+events.
+
+Guards: `isDebug`, `isTrace`, `isInternal`, and `isEnabled(level)` for any
+level, `info` and `warning` too, when the message or its `data` costs
+something to build. A span has `isEnabled(level)` as well: an event its
+scope's filter drops is neither emitted nor kept in `LogSpan.events`. Spans
+themselves ignore the level.
 
 ```dart
 final class OrderService {

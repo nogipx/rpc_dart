@@ -82,6 +82,11 @@ class LogScope {
   /// Whether debug-level records pass the current filter.
   bool get isDebug => _controller.accepts(RpcLogLevel.debug, name, tag);
 
+  /// Whether records at [level] pass the current filter: the guard for any
+  /// level, `info` and `warning` too, so a call that builds its message or
+  /// its `data` builds nothing a filter would drop.
+  bool isEnabled(RpcLogLevel level) => _controller.accepts(level, name, tag);
+
   // --- Hierarchy ---
 
   /// This scope with the given parts replaced; the controller, bound span
@@ -182,20 +187,62 @@ class LogScope {
   // --- Span methods ---
 
   /// Start a span. Must be ended explicitly via [LogSpanHandle.end].
+  ///
+  /// [parent] is the [LogSpanHandle.traceparent] of a span in another
+  /// process (W3C Trace Context): this span joins its trace as its child.
+  /// A malformed one is ignored. Without a parent or a trace id, a span is
+  /// a child of the controller's [LogController.ambientParent], if it names
+  /// one, else it starts a trace of its own, with a new W3C trace id.
+  ///
+  /// [links] are spans it follows from without being their child (their
+  /// `traceparent`s): the span that said a message this one answers.
+  /// Malformed ones are dropped.
+  ///
+  /// With [LogController.spansEnabled] off, the span is detached: no ids,
+  /// no start or end records, its events told as plain events.
   LogSpanHandle startSpan(
     String spanName, {
     Map<String, Object>? data,
     String? traceId,
+    String? parent,
+    Iterable<String> links = const [],
   }) {
+    if (!_controller.hasSinks) return _noopSpan;
+    if (!_controller.spansEnabled) {
+      return LogSpanHandle._detached(
+        scope: name,
+        onEvent: _controller.add,
+        accepts: (level) => _controller.accepts(level, name, tag),
+        clock: _clock,
+      );
+    }
+    final ambient =
+        parent == null &&
+            traceId == null &&
+            _traceId == null &&
+            _parentSpanId == null
+        ? _controller.ambientParent?.call()
+        : null;
+    final from = parent ?? ambient;
+    final remote = from == null ? null : _parseTraceparent(from);
     return LogSpanHandle._(
       name: spanName,
       scope: name,
-      parentSpanId: _parentSpanId,
-      traceId: traceId ?? _traceId,
+      parentSpanId: remote?.spanId ?? _parentSpanId,
+      traceId:
+          remote?.traceId ??
+          traceId ??
+          _traceId ??
+          LogSpanHandle._randomHex(16),
       data: data != null ? {...?_boundData, ...data} : _boundData,
       onComplete: _controller.add,
       onEvent: _controller.add,
       onStart: _controller.add,
+      accepts: (level) => _controller.accepts(level, name, tag),
+      links: [
+        for (final l in links)
+          if (_parseTraceparent(l) != null) l,
+      ],
       clock: _clock,
     );
   }
@@ -302,6 +349,8 @@ class _NoopLogScope implements LogScope {
   bool get isTrace => false;
   @override
   bool get isDebug => false;
+  @override
+  bool isEnabled(RpcLogLevel level) => false;
 
   @override
   LogScope child(String childName, {String? tag}) => this;
@@ -349,19 +398,21 @@ class _NoopLogScope implements LogScope {
     String spanName, {
     Map<String, Object>? data,
     String? traceId,
-  }) => _NoopSpanHandle();
+    String? parent,
+    Iterable<String> links = const [],
+  }) => _noopSpan;
   @override
   Future<T> withSpan<T>(
     String spanName,
     Future<T> Function(LogSpanHandle span) body, {
     Map<String, Object>? data,
-  }) => body(_NoopSpanHandle());
+  }) => body(_noopSpan);
   @override
   T withSpanSync<T>(
     String spanName,
     T Function(LogSpanHandle span) body, {
     Map<String, Object>? data,
-  }) => body(_NoopSpanHandle());
+  }) => body(_noopSpan);
 
   @override
   void _log(
@@ -372,6 +423,10 @@ class _NoopLogScope implements LogScope {
     Map<String, Object>? data,
   }) {}
 }
+
+/// The one span of [LogScope.noop], and of a controller nothing reads: it is
+/// ended from the start and keeps nothing, so one serves every caller.
+final LogSpanHandle _noopSpan = _NoopSpanHandle();
 
 class _NoopSpanHandle extends LogSpanHandle {
   _NoopSpanHandle() : super._noop();

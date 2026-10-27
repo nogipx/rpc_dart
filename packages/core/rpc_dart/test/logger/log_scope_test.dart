@@ -153,5 +153,16 @@ void main() {
       final syncResult = noop.withSpanSync('test', (s) => 'ok');
       expect(syncResult, 'ok');
     });
+
+    test('noop spans are one span: a span opened costs no allocation', () {
+      final noop = LogScope.noop;
+      final a = noop.startSpan('a');
+      expect(noop.startSpan('b', parent: a.traceparent), same(a));
+      expect(a.startSpan('child'), same(a));
+      expect(noop.withSpanSync('c', (s) => s), same(a));
+      expect(a.isEnded, isTrue);
+      expect(a.isEnabled(RpcLogLevel.fatal), isFalse);
+      expect(a.traceparent, isNull);
+    });
   });
 }

@@ -208,6 +208,9 @@ Future<_Run> _closeWithAPendingRequest() async {
 /// the controller because a level guard cannot be observed from the record stream: a
 /// filtered record is discarded either way.
 class _Counting extends LogController {
+  // It takes records in its own add, before any filter: a sink.
+  @override
+  bool get hasSinks => true;
   int warnings = 0;
 
   @override

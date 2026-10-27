@@ -112,8 +112,10 @@ LogConfig field tagLevels: Map<String, RpcLogLevel> (get)
 LogConfig method toJson() -> Map<String, dynamic>
 LogConfig new fromJson(Map<String, dynamic> json)
 LogConfig new new({required RpcLogLevel minLevel, Map<String, RpcLogLevel> scopeLevels, Map<String, RpcLogLevel> tagLevels})
+LogController field ambientParent: String? Function()? (get)
 LogController field clock: DateTime Function() (get)
 LogController field config: LogConfig (get)
+LogController field hasSinks: bool (get)
 LogController field minLevel: RpcLogLevel (get/set)
 LogController field spansEnabled: bool (get/set)
 LogController field stream: Stream<LogRecord> (get)
@@ -130,7 +132,7 @@ LogController method scope(String name, {String? tag}) -> LogScope
 LogController method setRedactor(LogRedactor? redactor) -> void
 LogController method setScopeLevel(String scope, RpcLogLevel level) -> void
 LogController method setTagLevel(String tag, RpcLogLevel level) -> void
-LogController new new({RpcLogLevel minLevel, bool spansEnabled, DateTime Function()? clock, List<LogOutput> outputs, List<LogEnricher> enrichers, SamplingConfig? sampling, LogRedactor? redactor})
+LogController new new({RpcLogLevel minLevel, bool spansEnabled, DateTime Function()? clock, List<LogOutput> outputs, List<LogEnricher> enrichers, SamplingConfig? sampling, LogRedactor? redactor, String? Function()? ambientParent})
 LogEnricher method enrich(LogRecord record) -> Map<String, Object>
 LogEnricher new new()
 LogEvent field data: Map<String, Object>? (get)
@@ -184,7 +186,8 @@ LogScope method error(String message, {Object? error, StackTrace? stackTrace, Ma
 LogScope method fatal(String message, {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) -> void
 LogScope method info(String message, {Map<String, Object>? data}) -> void
 LogScope method internal(String message, {Map<String, Object>? data}) -> void
-LogScope method startSpan(String spanName, {Map<String, Object>? data, String? traceId}) -> LogSpanHandle
+LogScope method isEnabled(RpcLogLevel level) -> bool
+LogScope method startSpan(String spanName, {Map<String, Object>? data, String? traceId, String? parent, Iterable<String> links}) -> LogSpanHandle
 LogScope method trace(String message, {Map<String, Object>? data}) -> void
 LogScope method warning(String message, {Object? error, StackTrace? stackTrace, Map<String, Object>? data}) -> void
 LogScope method withContext({String? traceId, String? requestId}) -> LogScope
@@ -218,18 +221,21 @@ LogSpanHandle field parentSpanId: String? (get)
 LogSpanHandle field scope: String (get)
 LogSpanHandle field spanId: String (get)
 LogSpanHandle field traceId: String? (get)
+LogSpanHandle field traceparent: String? (get)
 LogSpanHandle method addData(Map<String, Object> data) -> void
 LogSpanHandle method end({LogSpanStatus status, Object? error, StackTrace? stackTrace}) -> void
 LogSpanHandle method event(String message, {RpcLogLevel level, Map<String, Object>? data}) -> void
+LogSpanHandle method isEnabled(RpcLogLevel level) -> bool
 LogSpanHandle method startSpan(String childName, {Map<String, Object>? data}) -> LogSpanHandle
 LogSpanStart field data: Map<String, Object>? (get)
+LogSpanStart field links: List<String> (get)
 LogSpanStart field name: String (get)
 LogSpanStart field parentSpanId: String? (get)
 LogSpanStart field scope: String (get)
 LogSpanStart field spanId: String (get)
 LogSpanStart field timestamp: DateTime (get)
 LogSpanStart field traceId: String? (get)
-LogSpanStart new new({required String spanId, required String scope, required String name, String? parentSpanId, String? traceId, DateTime? timestamp})
+LogSpanStart new new({required String spanId, required String scope, required String name, String? parentSpanId, String? traceId, List<String> links, DateTime? timestamp})
 LogSpanStatus static field error: LogSpanStatus (get)
 LogSpanStatus static field ok: LogSpanStatus (get)
 LogSpanStatus static field values: List<LogSpanStatus> (get)

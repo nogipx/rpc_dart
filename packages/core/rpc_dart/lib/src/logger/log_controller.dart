@@ -71,6 +71,7 @@ class LogController {
     List<LogEnricher> enrichers = const [],
     SamplingConfig? sampling,
     LogRedactor? redactor,
+    this.ambientParent,
   }) : clock = clock ?? DateTime.now,
        _outputs = List.of(outputs),
        _enrichers = List.of(enrichers),
@@ -103,7 +104,11 @@ class LogController {
 
   /// Quick check whether a record at [level] from [scope] would pass filtering.
   /// Used by [LogScope] guards (isTrace, isInternal) and pre-filter in _log().
+  ///
+  /// False while nothing takes records ([hasSinks]): a controller nobody
+  /// reads builds no message, data or span, whatever its level.
   bool accepts(RpcLogLevel level, String scope, [String? tag]) {
+    if (!hasSinks) return false;
     final threshold = _resolveLevel(scope, tag);
     return level >= threshold;
   }
@@ -146,9 +151,18 @@ class LogController {
   /// but can be disabled entirely via this flag.
   bool spansEnabled;
 
+  /// The span of the work running now, as a W3C `traceparent`, for a span
+  /// that has no parent, no trace of its own and no remote parent: it
+  /// becomes that span's child (an RPC span an interceptor opened, so its
+  /// ids are the ones a remote child must name). Null, or answering null:
+  /// such a span starts a trace of its own. `rpc_dart_opentelemetry`'s
+  /// `otelTraceparent` reads the OTel context.
+  final String? Function()? ambientParent;
+
   /// Submit a log record to the pipeline. Synchronous, non-blocking.
   void add(LogRecord record) {
-    if (_disposed) return;
+    // Nothing takes it: nothing to enrich, redact or route.
+    if (_disposed || !hasSinks) return;
 
     // Spans bypass level filter and sampling — they are structural telemetry,
     // not log messages. A span records that an operation happened and how long
@@ -208,6 +222,15 @@ class LogController {
       _streamController.add(enrichedRecord);
     }
   }
+
+  /// Whether anything takes records now: an output, or a listener of
+  /// [stream]. Asked at every record, so an output added later, or a
+  /// listener, is served from then on; a span started while there was
+  /// none stays a no-op span.
+  ///
+  /// A subclass that takes records in its own [add] is a sink too, and says
+  /// so by overriding this.
+  bool get hasSinks => _outputs.isNotEmpty || _streamController.hasListener;
 
   /// Broadcast stream of records that passed all filters.
   Stream<LogRecord> get stream => _streamController.stream;
