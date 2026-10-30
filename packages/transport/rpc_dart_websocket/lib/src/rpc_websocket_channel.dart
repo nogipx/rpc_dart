@@ -95,7 +95,9 @@ final class RpcWebSocketNonBinaryFrame extends RpcException
 ///
 /// Two ways to be safe. Call [close] and let it close the socket, which sets the
 /// flag first and is why every library teardown path is unaffected. Or, if you
-/// must close the raw socket yourself, build it inside `runZonedGuarded`: the
+/// must close the raw socket yourself, build the channel with
+/// `rpcWebSocketChannel(socket)` (`io.dart`): it builds it in a zone where that
+/// one write is dropped and every other error goes on as before. The
 /// construction zone is what decides where that throw lands.
 ///
 /// `RpcWebSocketCallerTransport.connect` and the server's accept path build the

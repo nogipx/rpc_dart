@@ -261,6 +261,34 @@ message before rpc_dart sees it. See "Deploy behind a proxy" below. Nor does
 it stop reading a client that reads nothing: the server's unsent answers to
 it are not bounded.
 
+### Keeping the dart:io socket yourself
+
+A server that upgrades sockets itself and keeps each `WebSocket` (to close them
+all on stop) wraps it with `rpcWebSocketChannel(socket)` from `io.dart`, not
+`IOWebSocketChannel(socket)`:
+
+```dart
+import 'dart:io';
+
+import 'package:rpc_dart/rpc_dart.dart';
+import 'package:rpc_dart_websocket/io.dart';
+import 'package:rpc_dart_websocket/rpc_dart_websocket.dart';
+
+Future<RpcPeerEndpoint> accept(HttpRequest request) async {
+  final socket = await WebSocketTransformer.upgrade(request);
+  return RpcPeerEndpoint(
+    transport: RpcWebSocketResponderTransport(rpcWebSocketChannel(socket)),
+  )..start();
+}
+```
+
+Closing a socket out from under its channel while a frame is on its way makes
+dart:io refuse the write, `Bad state: StreamSink is closed`, in the zone the
+channel was built in, where nothing catches it; in the root zone it ends the
+isolate. `rpcWebSocketChannel` builds the channel in a zone where that one
+write is dropped, the socket it was for being gone; every other error goes on
+as before. Closing the endpoint before the socket avoids the window too.
+
 ### Per-connection setup and callbacks
 
 ```dart

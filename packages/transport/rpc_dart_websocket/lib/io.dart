@@ -11,4 +11,5 @@
 library;
 
 export 'src/websocket_http_server.dart' show bindRpcWebSocketHttpServer;
+export 'src/websocket_io_channel.dart' show rpcWebSocketChannel;
 export 'src/websocket_io_connections.dart' show rpcWebSocketConnections;
