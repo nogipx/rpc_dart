@@ -10,7 +10,7 @@
       "Bash(melos exec:*)",
       "Bash(melos list:*)",
       "Bash(reuse lint:*)",
-      "Bash(python3 /Users/nogipx/nogipx_vault/projects/libraries/rpc_dart/.claude/skills/evidence-loop/scripts/loop.py:*)",
+      "Bash(python3 /Users/nogipx/.kimi-code/skills/evidence-loop/scripts/loop.py:*)",
       "Bash(git status:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",
@@ -31,16 +31,6 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/navigation_guard.py\"",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/skills/evidence-loop/scripts/journal_guard.py\"",
             "timeout": 10
           }
         ]
