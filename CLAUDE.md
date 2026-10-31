@@ -197,23 +197,18 @@ is what the skill recommends), `framework.md`, `compression.md`,
   has no `build_runner`. Fence it as ```text and check it against real
   generator output by hand (a scratch package under `.dart_tool/probe/`).
 
-## The evidence-loop skill is linked, not copied
+## The evidence-loop skill is global; the journal is this repository's
 
 `.claude/loop/` — the journal, 350 rounds of it — belongs to this repository and
-is in git. The skill that reads it lives in its own repository and is linked in:
+is in git. The skill that reads it lives in the global skills now:
+`~/.kimi-code/skills/evidence-loop` (symlinked as `~/.claude/skills/evidence-loop`,
+developed in its own repository). Nothing of it is linked into this tree; a
+fresh clone needs nothing — `loop.py` runs from the global skill, and
+`.claude/settings.json` allows it at that path. Nothing fires it on its own:
+the loop is invoked, and the journal guard is a per-project opt-in, not
+installed here.
 
-```
-ln -s <path>/evidence-loop-skill .claude/skills/evidence-loop
-```
-
-**The link is gitignored on purpose.** It points outside this tree, so a
-committed symlink would be a dangling path in every other clone. After a fresh
-clone the skill is simply absent until that command is run; `loop.py` then works
-through the link, and `.claude/settings.json` already allows it at that path.
-
-Fix the skill in its own repository, not through the link. An edit made here
-lands in the other repository's working tree, where it is easy to commit by
-accident into an unrelated change.
+Fix the skill in its own repository, not in the global copy.
 
 ## Renames leave history alone
 
