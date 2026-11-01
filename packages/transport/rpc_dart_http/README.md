@@ -103,6 +103,15 @@ RpcHttpCallerTransport privateCaTransport() {
 ```
 
 Do not set `badCertificateCallback` to return `true`. It accepts every
+
+The client the transport creates for itself (VM) connects TLS through
+`RpcSecureSocket` and carries a 30 s `connectTimeout` (pass `connectTimeout:
+null` for none), so a cancelled or timed-out call frees its socket instead of
+leaving it in a dead handshake — `dart:io`'s own `SecureSocket.startConnect`
+cancels only the TCP stage. An injected `IOClient` does not get either: keep
+its `SecurityContext` and set `connectionFactory` to
+`RpcSecureSocket.startConnect` and a `connectionTimeout` yourself if you want
+them.
 certificate, including an attacker's.
 
 A client you pass in stays yours: `close()` closes only a client the transport

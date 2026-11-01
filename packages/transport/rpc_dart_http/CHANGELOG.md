@@ -4,6 +4,25 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## Unreleased
+
+### Security
+
+- **The caller's https connects are bounded and cancellable.** The owned
+  client routes TLS through `RpcSecureSocket` and carries a 30 s
+  `connectTimeout` (new knob, null for none). Before, a peer that accepted TCP
+  and never answered TLS kept the call's socket for as long as it liked —
+  measured at 16 s and counting per abandoned attempt (P-353), because
+  `dart:io`'s `SecureSocket.startConnect` cancels only the TCP stage and
+  nothing else could close a socket a dead handshake owned. A connection still
+  being established has no request to abort — `package:http` attaches the
+  abort only after its `openUrl` returns — so the socket is freed at
+  `connectTimeout`, the earliest release `dart:io` offers without giving up
+  per-call connection pooling. A caller-supplied `http.Client` is untouched;
+  with an `IOClient` of your own, set `connectionFactory` to
+  `RpcSecureSocket.startConnect` and a `connectionTimeout` for the same
+  properties. Witness: `a_silent_tls_peer_drops_the_https_socket_test.dart`.
+
 ## 0.4.0
 
 ### Breaking

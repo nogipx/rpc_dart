@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:rpc_dart/transport.dart';
 
 import 'body_accumulator.dart';
+import 'owned_http_client.dart';
 
 /// Pending outgoing HTTP call state.
 final class _PendingCall {
@@ -170,6 +171,19 @@ class RpcHttpCallerTransport extends IRpcTransport {
   /// transport created, because closing one it was given breaks it for every other
   /// user. Close yours when you are done with it.
   ///
+  /// The client this transport creates for itself (dart:io) connects TLS
+  /// through `RpcSecureSocket` and carries [connectTimeout]: cancelling a
+  /// call frees its socket, where `dart:io`'s own
+  /// `SecureSocket.startConnect` cancels only the TCP stage and leaves it
+  /// open — measured at ~16 s per abandoned https attempt (P-353). Two
+  /// limits matter, and they bite at different stages: once the request is on
+  /// the wire, [close]'s abort closes the socket at once; while the
+  /// connection is still being established, `package:http` has no request to
+  /// abort yet, so the socket is freed at [connectTimeout] instead. A client
+  /// you pass in is untouched — with an `IOClient` of your own, set its
+  /// `connectionFactory` to `RpcSecureSocket.startConnect` and its
+  /// `connectionTimeout` for the same properties.
+  ///
   /// [policy] bounds what a RESPONSE may cost this client, and is reported to
   /// the endpoint layers through [securityPolicy]. It defaults to
   /// `const RpcSecurityPolicy()`, so the built-in limits apply out of the box.
@@ -178,10 +192,13 @@ class RpcHttpCallerTransport extends IRpcTransport {
     http.Client? httpClient,
     RpcSecurityPolicy policy = const RpcSecurityPolicy(),
     LogScope? logger,
+    Duration? connectTimeout = const Duration(seconds: 30),
   }) : _baseUrl = baseUrl.endsWith('/')
            ? baseUrl.substring(0, baseUrl.length - 1)
            : baseUrl,
-       _httpClient = httpClient ?? http.Client(),
+       _httpClient =
+           httpClient ??
+           createOwnedHttpClient(connectionTimeout: connectTimeout),
        _ownsHttpClient = httpClient == null,
        _policy = policy,
        _log = logger?.child('HttpCallerTransport') ?? LogScope.noop;

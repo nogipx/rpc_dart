@@ -3,7 +3,7 @@ refines: U-17
 paths: [packages/transport/*/lib/**, packages/core/rpc_dart/lib/src/resilience/**, packages/core/rpc_dart_framework/lib/src/rpc_isolate_module.dart, packages/notify/*/lib/**]
 applies: opening a connection takes several stages (TCP, TLS, an upgrade, a protocol preface or SETTINGS, a ready message) and a timeout or a default guards the open
 breaks: a hang that never ends: connect() or reconnect() waits forever on a peer that answered the first stage only.
-applied: [754, 755, 773, 800, 826, 904, 906]
+applied: [754, 755, 773, 800, 826, 904, 906, 907]
 status: confirmed (round 906)
 rank: 8
 ---
