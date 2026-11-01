@@ -4,7 +4,7 @@
 
 name: rpc_dart_wasm
 description: Runtime-agnostic guest bridge transport for rpc_dart — turns any byte-level bridge to a WASM or JS guest into an IRpcTransport.
-version: 0.2.1
+version: 0.3.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -31,7 +31,7 @@ topics:
 dependencies:
   flutter:
     sdk: flutter
-  rpc_dart: '>=6.0.0 <7.0.0'
+  rpc_dart: '>=7.0.0 <8.0.0'
 
 dev_dependencies:
   flutter_test:

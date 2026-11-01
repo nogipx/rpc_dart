@@ -4,6 +4,28 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.0
+
+- **Breaking:**
+  - The security policy is `policy:`; header conversion requires one.
+  - Requires `http2 ^3.1.0`.
+  - A failed connect is a status.
+  - Reconnect lives in `RpcClientConnection`.
+  - A cancel is not a request, and a live id refuses a second open.
+- **New:**
+  - A connection cap.
+  - The connect is bounded, not just the proxy's reply.
+  - The caller transport is ready once the peer sends SETTINGS.
+  - Health details count outgoing pumps.
+- **Fixed:**
+  - One stream's error no longer fails every call.
+  - A message larger than the window is no longer refused.
+  - A peer that never sends SETTINGS is dropped.
+  - The TLS server selects h2 in ALPN, and a TLS peer that did not choose h2 is refused.
+  - `secureConnect` works through a CONNECT proxy, and GOAWAY is seen through one.
+  - Reading stops while 1 MiB of answers is unsent.
+  - A stream cut mid-message is an error on every ending.
+
 ## 0.3.0
 
 The largest release this transport has had. It is the one a gRPC deployment

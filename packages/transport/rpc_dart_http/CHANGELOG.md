@@ -4,10 +4,27 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
-## Unreleased
+## 0.5.0
 
-### Security
-
+- **Breaking:**
+  - The security policy is `policy:`, and `policy: null` (checks off) is gone: the default policy applies.
+  - A redirect is a refusal, not a second request.
+  - Response headers are no longer split on the comma.
+  - The bare responder transport gets the limits its server has.
+- **New:**
+  - A per-chunk body idle timeout, on by default.
+  - An unfinished request header block is bounded.
+- **Fixed:**
+  - `maxActiveStreams` is enforced on the caller.
+  - Abandoning a call abandons the request.
+  - A caller's cancel reaches the handler.
+  - Error details reach the caller over HTTP/1.1.
+  - Repeated request metadata is joined, not dropped.
+  - Routing uses the path relative to the mount.
+  - A failed request no longer logs the base URL's password.
+  - Stop and restart wait for the drain in flight.
+  - Metadata that breaks the policy is refused before a stream id is spent on
+    it.
 - **The caller's https connects are bounded and cancellable.** The owned
   client routes TLS through `RpcSecureSocket` and carries a 30 s
   `connectTimeout` (new knob, null for none). Before, a peer that accepted TCP

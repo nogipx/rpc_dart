@@ -4,6 +4,12 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 2.2.1
+
+- A failed PASERK key read is wrapped in `FormatException`, so a corrupt key
+  is a readable error instead of a raw exception from the crypto layer.
+- Requires `rpc_dart` 7.0.0.
+
 ## 2.2.0
 
 ### Changed

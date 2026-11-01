@@ -4,6 +4,10 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 1.3.1
+
+- Requires `rpc_dart` 7.0.0 and the new companions.
+
 ## 1.3.0
 
 ### Changed

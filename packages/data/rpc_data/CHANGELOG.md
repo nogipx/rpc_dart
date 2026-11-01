@@ -4,6 +4,13 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 5.3.0
+
+- A watcher or subscriber that stops reading no longer holds every change or
+  the topic. Buffered events are sized with core's `approxJsonBytes`.
+- A data error keeps its status and code on the wire.
+- rpc_blob: one contract for a conditional delete across all four adapters.
+
 ## 5.2.0
 
 ### Changed

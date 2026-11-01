@@ -3,4 +3,4 @@
 // SPDX-License-Identifier: MIT
 
 /// This package's version, as in its pubspec. A test keeps the two equal.
-const packageVersion = '0.3.1';
+const packageVersion = '0.4.0';

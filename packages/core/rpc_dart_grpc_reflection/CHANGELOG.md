@@ -4,6 +4,12 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.0
+
+- **Breaking:** `processRequestForTest` and `parseFileDescriptorSet` are gone.
+- Protobuf is read and written through core. A missing dependency set is
+  warned about once.
+
 ## 0.3.0
 
 ### Fixed

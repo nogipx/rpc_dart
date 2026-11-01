@@ -4,9 +4,29 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
-## Unreleased
+## 0.3.0
 
 ### Added
+
+- **Guests compiled to JavaScript, on macOS.** `RpcFlutterWasmBridge.loadJs`
+  runs a guest built with `dart compile js` in a JavaScriptCore context of its
+  own, with what dart2js expects of a page installed (timers, microtasks,
+  `console`, `crypto.getRandomValues`, `performance.now`, `self`), and
+  `scripts` evaluated after it in the same context. The guest bootstraps with
+  `RpcWasm.run`, unchanged: its `dart:js_interop` code is the same under
+  dart2js. `RpcWasmSupportInfo.canRunJsGuest` says where it runs. The byte
+  channels are the iOS and Android ones, so the bridge is the same.
+- `tool/check_native.sh` type-checks the macOS Swift, and
+  `RPC_WASM_DEVICE=macos melos run test:wasm:device` runs the JS guest's suite
+  on the desktop.
+- `fromBridge` takes a logger.
+- **Android:** a long guest stream is not cut off, a sandbox killed while idle is reported, and a runtime loads after the sandbox died.
+- **iOS:** the guest queue is bounded, and concurrent support probes agree.
+- **Both platforms:**
+  - Frames sent while either side boots are kept.
+  - Guest timers fire in deadline order.
+  - A client-stream call to a dart2wasm guest works.
+  - `canRunDartWasm` says no where load would refuse.
 
 - **Guests compiled to JavaScript, on macOS.** `RpcFlutterWasmBridge.loadJs`
   runs a guest built with `dart compile js` in a JavaScriptCore context of its

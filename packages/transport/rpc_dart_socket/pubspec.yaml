@@ -4,7 +4,7 @@
 
 name: rpc_dart_socket
 description: Unix domain socket and TCP transport for rpc_dart on the Dart VM. A caller connect and a server that owns its listening socket.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/nogipx/rpc_dart.git
 homepage: https://rpc.nogipx.dev
 issue_tracker: https://github.com/nogipx/rpc_dart/issues
@@ -20,7 +20,7 @@ topics:
   - ipc
 
 dependencies:
-  rpc_dart: '>=6.3.0 <7.0.0'
+  rpc_dart: '>=7.0.0 <8.0.0'
 
 dev_dependencies:
   lints: ^6.0.0

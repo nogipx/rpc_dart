@@ -4,6 +4,53 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.6.0
+
+- **Breaking:**
+  - `headersProvider:` and `reconnectFactory:` on the caller are replaced by
+    `RpcClientConnection`; build `headers:` inside its factory, which runs for
+    every connection.
+  - A failed connect is a gRPC status, and a disconnected transport refuses in
+    one shape.
+  - A stopped server refuses connections instead of abandoning them.
+  - The endpoint callbacks are refused. `createWithContracts` passes
+    `logController` through.
+- **New:**
+  - `maxConnections`.
+  - `bindRpcWebSocketHttpServer` bounds the upgrade request.
+  - The caller transport reports when it is ready.
+  - Half-open detection where the platform drops ping.
+  - `frameProgressTimeout` (default 60 s, `null` disables): while a frame is
+    unfinished its bytes must keep arriving within the window or the connection
+    is closed, on the server upgrade path and the client connect alike.
+    `pingInterval` fires only on total silence, so a peer dripping one byte at
+    a time used to hold its connection past any keepalive; between frames
+    there is no deadline, and an idle connection is a legitimate one.
+  - A one-time warning when neither `allowedOrigins` nor `allowUpgrade` is
+    configured, to the new optional `logger:` parameter (stderr fallback): an
+    ungated server upgrades any origin, cross-site WebSocket hijacking
+    included, and the gate cannot be defaulted because the allowed origins are
+    the application's to know. The warning makes an ungated deployment a
+    visible choice.
+- **Hardening:**
+  - `connect()` is bounded by default.
+  - An unfinished message is bounded before `dart:io` buffers it, and a message in thousands of fragments is refused.
+  - Inbound pings are rate-limited.
+  - Reading stops while 1 MiB of answers is unsent.
+  - Credentials and close reasons no longer reach the log unescaped.
+  - Several inputs that killed the server no longer do: a repeated `Sec-WebSocket-Key` and a refused frame during the handshake.
+  - A raw socket closed under an established channel is survived.
+- **Fixed:**
+  - `RpcClientConnection` reconnects after a server restart.
+  - A peer client can answer calls.
+  - A reused peer stream id gets its own answer.
+  - An ended connection returns its `maxConnections` slot.
+  - A refused request with a stalled body receives its 400/403. The refusal
+    drain cancelled the request-body subscription before writing the status,
+    and cancelling a dart:io request stream tears the connection down — the
+    peer read a TCP reset instead of the answer. The response is written
+    first, the cancellation after.
+
 ## 0.5.0
 
 ### Added

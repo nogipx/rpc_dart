@@ -4,6 +4,14 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.2.0
+
+- Requires `rpc_dart` 7.0.0; see its changelog for the breaking changes this
+  pulls in (every public type `Rpc`-prefixed, one client connection, the peer
+  endpoint, channel close reasons, `compressionEnabled` on every server).
+- `connectRpcSocket` abandons a connect on a cancellation token.
+- An oversized request keeps its status instead of failing the connection.
+
 ## 0.1.0
 
 First release: rpc_dart over Unix domain sockets and TCP on the Dart VM.

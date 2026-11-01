@@ -4,6 +4,23 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.5.0
+
+- **Breaking:** `OtelRpcInterceptorBase.startSpan(call, String callType)`
+  becomes `startSpan(call, RpcMethodType type)`; `callTypeAttribute(type)`
+  gives the attribute value. The interceptors are built on
+  `RpcCallObserverInterceptor`, and `OtelRpcInterceptorBase` is exported.
+- The recorded status is the one the caller receives.
+- `LogControllerOtelOutput` makes a log span whose parent is of another
+  process (W3C ids, not open here) a child of that remote span context.
+  `LogSpanIds`, given to the tracer provider and as `ids:`, gives the OTel
+  spans the log spans' own ids, so one trace crosses processes.
+  `otelTraceparent` gives the active OTel span for
+  `LogController(ambientParent:)`; a log span's links become `SpanLink`s.
+- The server interceptor traces only the calls its endpoint serves, the client
+  one only those it makes, so both go on an `RpcPeerEndpoint` and each call is
+  one span of the right kind. `where:` narrows the calls either traces.
+
 ## 0.4.0
 
 ### Changed

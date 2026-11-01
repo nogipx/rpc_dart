@@ -4,6 +4,21 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.6.0
+
+- **Breaking:**
+  - `RpcApp.server(server: (onEndpoint) => ...)` becomes `server: (mode) => ... mode: mode`.
+  - `RpcCallEvent.callType` / `RpcSpyEntry.callType` strings become `RpcMethodType`. `RpcSpyEntry` is `RpcCallEvent`, with `outcome`; `calledAt` is gone.
+  - App health is typed: `modules['X'].level` (`RpcHealthStatus`) and `endpoints[i]` (`RpcEndpointHealth`). Maps remain only in `toJson()`.
+  - The typedef `RpcCallObserver` is `RpcCallEventHandler`.
+  - `RpcTestApp` runs as an `RpcApp`.
+- **New:** `RpcAppConfig.copyWith`.
+- **Fixed:**
+  - Modules start before the server accepts connections, and every teardown stops the server before the modules.
+  - Only modules that started are stopped. `stop()` waits for a `start()` in progress, does not wait on a hung `onStart`, and concurrent `stop()` calls share one stop.
+  - A dead isolate worker makes the app unhealthy.
+  - A failed `RpcTestApp.start` rolls back what it started.
+
 ## 0.5.0
 
 ### Changed

@@ -4,6 +4,19 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.7.0
+
+- **Regenerate.** A per-method codec override now applies to its own method
+  only, as `<Base>Codecs.requestOf<Method>` / `responseOf<Method>`. It used to
+  apply to every method with the same type.
+- Every type a gRPC descriptor names is described; stored fields are described;
+  codecs compile for bare primitives.
+- A service method named like a member of the contract bases (`dispose`,
+  `setup`, `endpoint`, `callUnary`, ...) fails the build with that name,
+  instead of producing code that does not compile.
+- A bare `double` sent from a web peer decodes on the VM: dart2js writes 2.0
+  as a CBOR integer, and the generated decoder now reads it through `num`.
+
 ## 0.6.0
 
 ### Changed

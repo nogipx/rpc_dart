@@ -4,6 +4,13 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.4.0
+
+- Record buffers are bounded in bytes as well as records.
+- The collector contract is generated and reports real ids. Remote text is
+  escaped in the console and the MCP view. The collector upgrades through the
+  transport's guards.
+
 ## 0.3.1
 
 ### Changed

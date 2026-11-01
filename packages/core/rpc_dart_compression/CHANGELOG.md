@@ -4,6 +4,13 @@ SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
 SPDX-License-Identifier: MIT
 -->
 
+## 0.3.0
+
+- **Breaking:** `maxDecompressedSize: null` means no limit; `-1` is gone. A
+  decompressor's size overrun is `RESOURCE_EXHAUSTED`.
+- Native platforms always decompress through `dart:io` and stop at the limit
+  mid-stream. Gzip shorter than an empty frame is rejected.
+
 ## 0.2.0
 
 ### Security
