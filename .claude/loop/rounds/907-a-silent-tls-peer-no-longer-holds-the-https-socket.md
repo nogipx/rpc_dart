@@ -92,14 +92,14 @@ The full-repo `melos run test` was not run; the change touches one package.
 
 ## Siblings
 
-- member: caller — fixed in this round, `a_silent_tls_peer_drops_the_https_socket_test.dart`
-- member: responder — n/a — the server's side of a silent handshake (a peer that never sends ClientHello holding an accepted socket) is a different defect, open as B-316
-- member: channel — n/a — in-process, no TLS
-- member: http — fixed in this round
-- member: http2 — fixed in rounds 904/905, `a_silent_tls_peer_ends_the_connect_test.dart` (P-353 promoted) and the per-attempt cancellation token
-- member: websocket — fixed in round 906, P-356
-- member: isolate — n/a — in-process, no TLS
-- member: wasm — n/a — no TLS of its own
+- caller: fixed here — the http caller's owned client, this round's witness.
+- responder: deferred — B-316; the server's side of a silent handshake (a peer that never sends ClientHello holding an accepted socket) is unmeasured for websocket and http.
+- channel: n/a — in-process, no TLS.
+- http: fixed here — `a_silent_tls_peer_drops_the_https_socket_test.dart`; the CANARY arm (timeout without the factory) keeps the socket, so the close is the factory's.
+- http2: clean — rounds 904/905 put its TLS on a socket closed at the timeout and gave the connect a cancellation token; P-353 h2 closed at 1012 ms.
+- websocket: clean — round 906, P-356.
+- isolate: n/a — in-process, no TLS.
+- wasm: n/a — an in-process runtime, no socket.
 
 ## Not fixed
 
