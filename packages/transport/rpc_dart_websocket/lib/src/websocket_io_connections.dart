@@ -319,8 +319,15 @@ void _answer(HttpRequest request, int status, String message) {
 /// kind that carries a body at all (dart:io hands a connection-upgrade request
 /// none). The bound is what makes that acceptable, and it is the same bound.
 ///
-/// The subscription is CANCELLED on expiry: a `.timeout()` on the drain future
-/// would answer while the read loop kept running.
+/// The answer goes out BEFORE the drain subscription is cancelled: cancelling
+/// a dart:io request stream tears the connection down, and a connection the
+/// peer reads as reset never delivers the status — measured as every stalled
+/// refusal settling 'closed' with the 400 lost on the way.
+///
+/// The subscription is still CANCELLED, after the answer, fire-and-forget: a
+/// `.timeout()` on the drain future would answer while the read loop kept
+/// running, and a cancel error after the peer is gone must not reach the
+/// root zone.
 Future<void> _drainThenAnswer(
   HttpRequest request,
   int status,
@@ -335,8 +342,6 @@ Future<void> _drainThenAnswer(
   } catch (_) {
     // The peer is gone, or it spent its budget. The status below is still
     // worth trying.
-  } finally {
-    await sub?.cancel();
   }
   try {
     // A refused connection is closed after its answer, so each connection
@@ -351,4 +356,8 @@ Future<void> _drainThenAnswer(
     // is nobody left to tell, and throwing here would land in the root zone and
     // kill the isolate.
   }
+  // After the answer the connection is closing and the drain has nothing left
+  // to wait for. Not awaited: its only possible outcome now is an error about
+  // a peer that already left, which nobody can act on.
+  unawaited(sub?.cancel().catchError((Object _) {}));
 }

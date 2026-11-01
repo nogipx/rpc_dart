@@ -16,6 +16,13 @@
 //   plain POST, refused, bounded   : 16 of 16, connection cut at the budget
 //   upgrade, refused               : 16 of 16 answered 403
 //
+// The bound closed the drain, but the status did not survive it: the body
+// subscription was cancelled BEFORE the answer, and cancelling a dart:io
+// request stream tears the connection down — measured again, 8 sockets,
+// window 12s: all 8 settled 'closed', none saw the 400. The answer now goes
+// out first and the subscription is cancelled after it, fire-and-forget:
+// 8 of 8 settle 'HTTP/1.1 400 Bad Request'.
+//
 // The path exists ONLY when allowedOrigins or allowUpgrade is configured, so it
 // is reachable exactly on the servers that turned the origin check on. Same
 // defect as rpc_dart_http's `_reject`, fixed one round earlier.
@@ -49,10 +56,10 @@ Future<int> _serve({required void Function() onUpgrade}) async {
 
 /// Opens a request -- a POST promising a body and sending almost none, or a
 /// plain upgrade -- then holds the connection. Completes on the server's first
-/// byte, or on close.
+/// byte, or on close. [origin] null omits the header.
 Future<String> _slowBody(
   int port,
-  String origin, {
+  String? origin, {
   required bool upgrade,
 }) async {
   final socket = await Socket.connect('127.0.0.1', port);
@@ -74,11 +81,11 @@ Future<String> _slowBody(
               'connection: Upgrade\r\n'
               'sec-websocket-version: 13\r\n'
               'sec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
-              'origin: $origin\r\n'
+              '${origin == null ? '' : 'origin: $origin\r\n'}'
               '\r\n'
         : 'POST / HTTP/1.1\r\n'
               'host: 127.0.0.1:$port\r\n'
-              'origin: $origin\r\n'
+              '${origin == null ? '' : 'origin: $origin\r\n'}'
               'content-length: 100000\r\n'
               '\r\n',
   );
@@ -97,9 +104,11 @@ Future<List<String>> _settleAll(List<Future<String>> attacks) => Future.wait(
 
 void main() {
   test(
-    'a refused request with a body that never arrives is let go',
+    'a refused request with a body that never arrives is let go WITH its 403',
     () async {
-      // WITNESS. Pre-fix all 8 read STILL DRAINING, at any window.
+      // WITNESS. Pre-fix all 8 read 'closed': the drain deadline fired and
+      // the connection was cut, but cancelling the body subscription first
+      // destroyed the connection before the 403 was flushed.
       final port = await _serve(onUpgrade: () {});
 
       final settled = await _settleAll([
@@ -112,9 +121,37 @@ void main() {
         isEmpty,
         reason: 'the refusal drain must have a deadline',
       );
+      expect(
+        settled,
+        everyElement(contains('403')),
+        reason: 'the refused peer must receive its status, not just a reset',
+      );
     },
     timeout: const Timeout(Duration(seconds: 90)),
   );
+
+  test('a shape-refused request with a body that never arrives is let go WITH '
+      'its 400', () async {
+    // Same drain, reached without an Origin header: the gate passes a
+    // request that sends none, and the non-upgrade shape check refuses it
+    // with 400. The status must survive the drain here too.
+    final port = await _serve(onUpgrade: () {});
+
+    final settled = await _settleAll([
+      for (var i = 0; i < _sockets; i++) _slowBody(port, null, upgrade: false),
+    ]);
+
+    expect(
+      settled.where((s) => s == 'STILL DRAINING'),
+      isEmpty,
+      reason: 'the refusal drain must have a deadline',
+    );
+    expect(
+      settled,
+      everyElement(contains('400')),
+      reason: 'the refused peer must receive its status, not just a reset',
+    );
+  }, timeout: const Timeout(Duration(seconds: 90)));
 
   test(
     'GUARD: a permitted origin still upgrades',
