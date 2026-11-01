@@ -24,12 +24,19 @@ const String _webSocketGuid = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 /// of what was written to it is unsent, so a peer that reads nothing is not
 /// answered into memory.
 ///
+/// [frameProgressTimeout] bounds how long one frame may take to finish
+/// arriving (default 60 seconds, null disables): a peer that starts a frame
+/// and then drips bytes defeats `pingInterval` keepalive, which fires only on
+/// total silence — see [WebSocketFrameGuard.midFrame] for what counts as
+/// stalled. Between frames a peer may idle indefinitely.
+///
 /// No `permessage-deflate`: the caller takes the dart:io path when compression
 /// is on.
 Future<WebSocket> upgradeBounded(
   HttpRequest request, {
   required int maxMessageBytes,
   dynamic Function(List<String> protocols)? protocolSelector,
+  Duration? frameProgressTimeout = const Duration(seconds: 60),
 }) async {
   final response = request.response;
   String? protocol;
@@ -81,6 +88,7 @@ Future<WebSocket> upgradeBounded(
       socket,
       maxMessageBytes,
       maxUnsentBytes: RpcWriteBacklog.defaultServerMax,
+      frameProgressTimeout: frameProgressTimeout,
     ),
     protocol: protocol,
     serverSide: true,
@@ -93,13 +101,17 @@ Future<WebSocket> upgradeBounded(
 ///
 /// The handshake is dart:io's own `WebSocket.connect`, done here so the socket
 /// can be guarded before `WebSocket.fromUpgradedSocket` reads it. [client]
-/// carries TLS, proxies and the connect timeout. No `permessage-deflate`.
+/// carries TLS, proxies and the connect timeout. [frameProgressTimeout] is
+/// the client-side twin of [upgradeBounded]'s: it bounds how long one inbound
+/// frame may take to finish arriving, killing a server that drips bytes to
+/// defeat `pingInterval`. No `permessage-deflate`.
 Future<WebSocket> connectBounded(
   Uri uri, {
   required HttpClient client,
   required int maxMessageBytes,
   Iterable<String>? protocols,
   Map<String, Object>? headers,
+  Duration? frameProgressTimeout = const Duration(seconds: 60),
 }) async {
   final httpUri = uri.replace(scheme: uri.isScheme('wss') ? 'https' : 'http');
   final nonce = Uint8List(16);
@@ -159,7 +171,11 @@ Future<WebSocket> connectBounded(
   final protocol = response.headers.value('Sec-WebSocket-Protocol');
   final socket = await response.detachSocket();
   return WebSocket.fromUpgradedSocket(
-    _BoundedSocket(socket, maxMessageBytes),
+    _BoundedSocket(
+      socket,
+      maxMessageBytes,
+      frameProgressTimeout: frameProgressTimeout,
+    ),
     protocol: protocol,
     serverSide: false,
     compression: CompressionOptions.compressionOff,
@@ -171,16 +187,38 @@ Future<WebSocket> connectBounded(
 ///
 /// Past the ceiling the socket is destroyed: dart:io writes to it through
 /// `addStream`, so a close frame of our own cannot be interleaved safely.
+///
+/// [frameProgressTimeout] bounds how long one frame may take to finish
+/// arriving, counted from its first byte and reset by every admitted chunk:
+/// a peer that starts a frame and then drips bytes slowly enough to defeat
+/// `pingInterval` keepalive (which fires only on total silence) is cut off.
+/// Between frames there is no deadline at all. Null disables.
 final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
-  _BoundedSocket(Socket socket, int maxMessageBytes, {int? maxUnsentBytes})
-    : this._(
-        socket,
-        maxMessageBytes,
-        RpcWriteBacklog(maxUnsentBytes: maxUnsentBytes),
-      );
+  _BoundedSocket(
+    Socket socket,
+    int maxMessageBytes, {
+    int? maxUnsentBytes,
+    Duration? frameProgressTimeout,
+  }) : this._(
+         socket,
+         maxMessageBytes,
+         RpcWriteBacklog(maxUnsentBytes: maxUnsentBytes),
+         frameProgressTimeout,
+       );
 
-  _BoundedSocket._(this._socket, int maxMessageBytes, this._backlog)
-    : super(_guarded(_socket, maxMessageBytes, _backlog));
+  _BoundedSocket._(
+    this._socket,
+    int maxMessageBytes,
+    this._backlog,
+    Duration? frameProgressTimeout,
+  ) : super(
+        _guarded(
+          _socket,
+          maxMessageBytes,
+          _backlog,
+          frameProgressTimeout: frameProgressTimeout,
+        ),
+      );
 
   final Socket _socket;
   final RpcWriteBacklog _backlog;
@@ -188,13 +226,26 @@ final class _BoundedSocket extends StreamView<Uint8List> implements Socket {
   static Stream<Uint8List> _guarded(
     Socket socket,
     int maxMessageBytes,
-    RpcWriteBacklog backlog,
-  ) {
+    RpcWriteBacklog backlog, {
+    Duration? frameProgressTimeout,
+  }) {
     final guard = WebSocketFrameGuard(maxMessageBytes);
+    Timer? progress;
+    void rearm() {
+      progress?.cancel();
+      progress = null;
+      final limit = frameProgressTimeout;
+      if (limit == null || !guard.midFrame) return;
+      progress = Timer(limit, () => socket.destroy());
+    }
+
     return backlog.reads(
       socket,
       admit: (data) {
-        if (guard.admit(data)) return true;
+        if (guard.admit(data)) {
+          rearm();
+          return true;
+        }
         // Bytes read together with the upgrade request are replayed by
         // dart:http and keep arriving after destroy(); the reads stream
         // cancels its subscription, which is what stops them.
@@ -335,6 +386,16 @@ final class WebSocketFrameGuard {
   bool _finalData = false;
   int _messageBytes = 0;
   int _messageFragments = 0;
+
+  /// Whether the bytes admitted so far leave a frame unfinished — part of a
+  /// header read, or a payload not fully skipped.
+  ///
+  /// The read-progress deadline hangs off this: between frames a peer may
+  /// idle for as long as it likes (a rare-event subscription sends nothing
+  /// for hours and is legitimate), but bytes that START a frame and then
+  /// stall are dribbling — the one pattern `pingInterval` cannot see, since
+  /// dart:io pings only on total silence.
+  bool get midFrame => _headerLen > 0 || _inPayload;
 
   /// Feeds [data]; false once a frame is past a ceiling, after which nothing
   /// more should be read.

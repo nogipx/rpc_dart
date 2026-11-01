@@ -27,6 +27,14 @@ import 'websocket_server_policy.dart';
 /// [protocolSelector] is forwarded to [WebSocketTransformer] for subprotocol
 /// negotiation.
 ///
+/// [frameProgressTimeout] bounds how long one frame may take to finish
+/// arriving, counted from its first byte and reset by every chunk (default 60
+/// seconds, null disables). `pingInterval` cannot catch a peer that starts a
+/// frame and then drips bytes: dart:io pings only on total silence, so without
+/// this deadline such a peer holds its connection, and everything on it,
+/// indefinitely. Between frames there is no deadline — an idle connection is
+/// a legitimate one.
+///
 /// [compression] defaults to OFF where dart:io's default is ON. dart:io
 /// inflates each message with no output limit before rpc_dart sees it, so
 /// [RpcSecurityPolicy.maxMessageLengthBytes] cannot bound it and a few hundred
@@ -43,6 +51,13 @@ import 'websocket_server_policy.dart';
 /// non-browser client sends none, and the attack being stopped is a browser
 /// riding cookies it cannot read. More than one `Origin` header is refused.
 ///
+/// Configuring neither [allowedOrigins] nor [allowUpgrade] means ANY origin
+/// is upgraded, cross-site WebSocket hijacking included. That default is
+/// deliberate — non-browser clients send no `Origin` and the gate cannot know
+/// the application's origins — but it emits a one-time warning (to [logger],
+/// or stderr when none is given) so an ungated deployment is a visible choice,
+/// not an oversight.
+///
 /// [allowUpgrade] runs after [allowedOrigins]; both must accept. Synchronous on
 /// purpose — it is in the accept path, where an await serializes every
 /// handshake. If it throws the connection is refused and the server lives: the
@@ -54,10 +69,11 @@ import 'websocket_server_policy.dart';
 /// of its own, so a peer that sends fragments and never a final one is
 /// buffered for as long as it writes. With compression off, each frame's
 /// header is read off the socket first, and a message past the largest frame
-/// the policy admits closes the connection before its payload is read, and a
-/// peer is not read while more than 1 MiB written to it is unsent. With
-/// compression on, or with any other source of `WebSocketChannel`s, neither
-/// holds.
+/// the policy admits closes the connection before its payload is read, a peer
+/// is not read while more than 1 MiB written to it is unsent, and a frame
+/// that stalls mid-arrival past [frameProgressTimeout] closes the connection.
+/// With compression on, or with any other source of `WebSocketChannel`s,
+/// none of those holds.
 ///
 /// That policy is the `RpcWebSocketServer`'s: the server hands it over when it
 /// starts, and a limit raised there raises this one. [policy] overrides it for
@@ -87,7 +103,12 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
   Set<String>? allowedOrigins,
   bool Function(HttpRequest request)? allowUpgrade,
   RpcSecurityPolicy? policy,
+  LogScope? logger,
+  Duration? frameProgressTimeout = const Duration(seconds: 60),
 }) {
+  if (allowedOrigins == null && allowUpgrade == null) {
+    _warnNoOriginGate(logger);
+  }
   final ceiling = _MessageCeiling(policy);
   // Lower-cased ONCE. `_upgradeAllowed` ran `trim().toLowerCase()` over every
   // configured origin on every handshake, which allocates a string per entry per
@@ -170,6 +191,7 @@ Stream<WebSocketChannel> rpcWebSocketConnections(
           gated,
           maxMessageBytes: () => ceiling.bytes,
           protocolSelector: protocolSelector,
+          frameProgressTimeout: frameProgressTimeout,
         );
   return _PolicyAwareConnections(
     sockets.map((socket) {
@@ -228,6 +250,7 @@ Stream<WebSocket> _upgradeEach(
   Stream<HttpRequest> requests, {
   required int Function() maxMessageBytes,
   dynamic Function(List<String> protocols)? protocolSelector,
+  Duration? frameProgressTimeout,
 }) {
   final out = StreamController<WebSocket>();
   StreamSubscription<HttpRequest>? sub;
@@ -239,6 +262,7 @@ Stream<WebSocket> _upgradeEach(
             request,
             maxMessageBytes: maxMessageBytes(),
             protocolSelector: protocolSelector,
+            frameProgressTimeout: frameProgressTimeout,
           ).then(
             (socket) {
               // A cancelled subscription leaves the controller open but with
@@ -297,6 +321,32 @@ bool _upgradeAllowed(
 /// sending a slow body, so there is nothing here for an operator to tune.
 /// Generous enough that an ordinary body finishes.
 const Duration _refusalDrainBudget = Duration(seconds: 5);
+
+/// Whether this process has emitted the no-origin-gate warning.
+bool _warnedNoOriginGate = false;
+
+/// Emits a one-time warning that neither `allowedOrigins` nor `allowUpgrade`
+/// is configured — any web origin may complete the upgrade and ride ambient
+/// browser credentials.
+void _warnNoOriginGate(LogScope? logger) {
+  if (_warnedNoOriginGate) return;
+  _warnedNoOriginGate = true;
+  const message =
+      'rpcWebSocketConnections: no allowedOrigins or allowUpgrade gate is '
+      'configured — any web origin can open a WebSocket to this server and '
+      'ride ambient browser credentials (CSWSH). Pass allowedOrigins to '
+      'refuse cross-origin handshakes, or allowUpgrade to inspect the '
+      'request. Requests without an Origin header (every non-browser '
+      'client) are unaffected by the gate.';
+  if (logger != null) {
+    logger.warning(message);
+  } else {
+    // No logger wired in — fall back to stderr so the choice is still visible,
+    // the same trade-off RpcHttpCorsPolicy makes for its '*' warning.
+    // ignore: avoid_print
+    print(message);
+  }
+}
 
 void _answer(HttpRequest request, int status, String message) {
   unawaited(_drainThenAnswer(request, status, message));

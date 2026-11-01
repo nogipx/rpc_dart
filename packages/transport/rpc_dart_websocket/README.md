@@ -205,6 +205,12 @@ Future<RpcWebSocketServer> serve(RpcResponderContract service) async {
 - `pingInterval` — default 30 s. Detects peers that went silent; without it a
   dead connection and its contracts are kept forever (`HttpServer.idleTimeout`
   does not apply to an upgraded socket). Pass `null` to disable.
+- `frameProgressTimeout` — default 60 s. While a frame is unfinished, its bytes
+  must keep arriving within this window or the connection is closed.
+  `pingInterval` cannot catch a peer that drips one byte at a time: dart:io
+  pings only on total silence, so without this deadline such a peer held its
+  connection, and everything on it, forever. Between frames there is no
+  deadline — an idle connection is a legitimate one. Pass `null` to disable.
 - `compression` — default off (`dart:io` defaults to on). With it on, a peer can
   send a small message that inflates without limit before any rpc_dart check,
   and the frame checks below do not run at all: no per-message ceiling, and no
@@ -217,9 +223,16 @@ Future<RpcWebSocketServer> serve(RpcResponderContract service) async {
 With compression off, each WebSocket frame header is checked as it arrives: a
 message larger than the policy allows closes the connection before its payload
 is buffered, and so does a client pinging faster than 16 times a second after
-a burst of 256. And while more than 1 MiB of what the server wrote to a client
+a burst of 256. A frame that stalls mid-arrival past `frameProgressTimeout`
+is cut too. And while more than 1 MiB of what the server wrote to a client
 is unsent, it stops reading that client, so a client that sends calls and
 reads nothing is not answered into memory.
+
+Configuring neither `allowedOrigins` nor `allowUpgrade` upgrades ANY origin —
+cross-site WebSocket hijacking included — so the library prints a one-time
+warning on an ungated server. The gate cannot be defaulted: the allowed
+origins are the application's to know, and requests without an `Origin` header
+(every non-browser client) must keep working.
 
 ### With another HTTP stack
 
