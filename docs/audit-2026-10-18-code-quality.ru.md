@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Аудит качества кода: ядро и транспорты, 2026-10-18
 
 Охват: `lib/` каждого пакета в `packages/core/` и `packages/transport/`

@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Major release: proposed decisions
 
 Companion to [audit-2026-10-18-code-quality.md](audit-2026-10-18-code-quality.md).

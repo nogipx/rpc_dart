@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Code-quality audit after the major-release refactor, 2026-10-19
 
 Scope: `lib/` of every package under `packages/core/` and `packages/transport/`,

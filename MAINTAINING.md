@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+
+SPDX-License-Identifier: MIT
+-->
+
 # Maintaining rpc_dart
 
 The procedures `CLAUDE.md` points at: publishing, the release flow, and the two
