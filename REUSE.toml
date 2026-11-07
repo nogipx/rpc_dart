@@ -11,6 +11,7 @@ path = [
   "**/.pubignore",
   "**/*.podspec",
   "**/*.md",
+  "**/*.json",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Karim \"nogipx\" Mamatkazin <nogipx@gmail.com>"

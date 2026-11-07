@@ -19,6 +19,7 @@ hooks:
       source: sqlite3mc
 
 workspace:
+  - packages/agent/rpc_acp
   - packages/blob/rpc_blob
   - packages/blob/rpc_blob_minio
   - packages/blob/rpc_blob_sqlite
@@ -41,6 +42,7 @@ workspace:
   - packages/transport/rpc_dart_http2
   - packages/transport/rpc_dart_isolate
   - packages/transport/rpc_dart_socket
+  - packages/transport/rpc_dart_stdio
   - packages/transport/rpc_dart_websocket
   # rpc_dart_wasm is intentionally NOT a workspace member: it is the only Flutter
   # package, and including it forces the whole workspace into a single lockfile
@@ -55,6 +57,7 @@ melos:
 
   # Named package groups for `--category <name>` filtering.
   categories:
+    agent: [packages/agent/**]
     core: [packages/core/**]
     transport: [packages/transport/**]
     data: [packages/data/**]
@@ -443,6 +446,7 @@ melos:
         -- ':!:.claude/*' ':!:*/SKILL.md'
         ':!:packages/transport/rpc_dart_wasm/example/*'
         ':!:docs/api/*'
+        ':!:*/docs/*'
         ':!:LICENSE' ':!:*/LICENSE' ':!:LICENSES/*' ':!:*.license'
         ':!:REUSE.toml' ':!:*/REUSE.toml'
         | xargs -0 reuse annotate
@@ -457,6 +461,18 @@ melos:
     check:skills:
       description: Validate the Agent Skills shipped inside packages.
       run: fvm dart run tool/check_skills.dart
+
+    check:acp-methods:
+      description: Check rpc_acp method inventory against pinned ACP metadata.
+      run: python3 packages/agent/rpc_acp/tool/wire/check_protocol_methods.py
+
+    check:acp-wire:
+      description: Validate sampled rpc_acp v1 and v2 wire calls against pinned schemas.
+      run: sh packages/agent/rpc_acp/tool/wire/check_wire.sh
+
+    check:acp-client:
+      description: Run rpc_acp client against independent ACP TCK fixture agents.
+      run: sh packages/agent/rpc_acp/tool/tck/check_client_interop.sh
 
     # --- Maintenance: raise an in-repo dependency floor across packages ---
     # Only needed when a sibling starts using a new API of the bumped package
@@ -514,6 +530,8 @@ melos:
         melos run format &&
         melos run analyze &&
         melos run check:skills &&
+        melos run check:acp-methods &&
+        melos run check:acp-wire &&
         melos run api:check &&
         melos run license:check &&
         melos run test:unit
@@ -624,9 +642,3 @@ melos:
           fi
         done
         git push --follow-tags
-
-    claude:
-      run: claude --system-prompt="$(serena prompts print-cc-system-prompt-override)"
-
-    serena:
-      run: serena start-mcp-server --transport streamable-http --port 9121

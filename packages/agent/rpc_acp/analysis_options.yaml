@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+include: package:lints/recommended.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    todo: ignore
+
+linter:
+  rules:
+    - prefer_final_locals
+    - unawaited_futures
+    - avoid_print: false

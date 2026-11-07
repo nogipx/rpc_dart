@@ -63,6 +63,33 @@ jobs:
       - name: Run tests (no external services)
         run: melos run test:unit
 
+  acp:
+    name: "ACP schema and compatibility"
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Resolve workspace
+        run: fvm dart pub get
+      - name: Check pinned method inventory
+        run: melos run check:acp-methods
+      - name: Validate wire against pinned v1 and v2 schemas
+        run: melos run check:acp-wire
+      - name: Test ACP client against reference agents
+        run: melos run check:acp-client
+      - name: Upload ACP schema traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acp-schema-traces
+          path: packages/agent/rpc_acp/.dart_tool/acp-schema-reports/*
+          if-no-files-found: ignore
+
   # The same analyze + test:unit on the latest stable Dart instead of the pinned
   # one, to learn early what a new SDK breaks. A new SDK release must not turn
   # main red, so this job reports and never fails the workflow.

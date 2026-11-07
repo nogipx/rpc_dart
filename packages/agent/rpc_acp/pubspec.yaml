@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+name: rpc_acp
+description: >-
+  Transport-agnostic ACP protocol client, with an opaque
+  JSON-RPC tunnel over rpc_dart peers. No dart:io.
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  # Dogfooding, as rpc_agents does: a core change that breaks this package
+  # breaks it here, before a release, rather than after one.
+  rpc_dart: any
+
+dev_dependencies:
+  build_runner: ^2.11.1
+  lints: ^6.0.0
+  test: ^1.25.0
+  # Generates the single opaque bidirectional tunnel contract.
+  rpc_dart_generator: any
+  rpc_dart_stdio: any

@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Karim "nogipx" Mamatkazin <nogipx@gmail.com>
+#
+# SPDX-License-Identifier: MIT
+
+name: rpc_dart_stdio
+description: Raw byte channel over standard input and output for rpc_dart peers.
+version: 0.1.0
+repository: https://github.com/nogipx/rpc_dart.git
+homepage: https://rpc.nogipx.dev
+issue_tracker: https://github.com/nogipx/rpc_dart/issues
+resolution: workspace
+
+environment:
+  sdk: ^3.10.1
+
+topics:
+  - rpc
+  - stdio
+  - ipc
+
+dependencies:
+  rpc_dart: '>=7.0.0 <8.0.0'
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

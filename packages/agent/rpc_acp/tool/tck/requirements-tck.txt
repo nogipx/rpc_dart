@@ -1,0 +1,1 @@
+acp-tck @ git+https://github.com/agentclientprotocol/acp-tck@3d46e2168aa3c23fe3853d539141a65a54d6a880
