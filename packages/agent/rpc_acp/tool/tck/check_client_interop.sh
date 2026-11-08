@@ -7,7 +7,7 @@
 set -eu
 
 package_dir=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-revision=$(awk -F@ 'NF > 1 { print $NF }' "$package_dir/tool/tck/requirements-tck.txt")
+revision=$(awk -F@ '$1 == "acp-tck " { print $NF }' "$package_dir/tool/tck/requirements-tck.txt")
 source_dir="$package_dir/.dart_tool/acp-tck-source-$revision"
 
 if [ ! -d "$source_dir/.git" ]; then

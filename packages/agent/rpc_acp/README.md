@@ -17,6 +17,17 @@ an ACP agent; agent behavior belongs to the agent process.
 version rules, session updates, and reverse requests from the agent. A local
 agent can use `AcpJsonLineConnection` for its JSON-RPC stdio boundary.
 
+For the unstable MCP-over-ACP transport, register `AcpMcpServer` instances in
+the `AcpClient` constructor and pass their `toJson()` values as `mcpServers`
+when creating, loading, or resuming a session. The agent must advertise
+`mcpCapabilities.acp` in v1 or `session.mcp.acp` in v2. The registered handler
+receives inner MCP methods and parameters and returns a carrier containing
+exactly one `result` or `error`. Its notification callback sends a related
+`mcp/message` notification while the request is active. The client rejects
+unknown server IDs and ACP declarations the agent did not advertise support
+for. This path has an in-memory protocol test; external-agent interoperability
+has not been verified.
+
 For a remote agent, wrap an `RpcPeerEndpoint` with `RpcAcpConnection` and pass
 it to `AcpClient`. At the agent host, register `AcpTunnelReceiver` on another
 `RpcPeerEndpoint` and give it the agent's `IAcpConnection`. Start each endpoint

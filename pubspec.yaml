@@ -447,6 +447,7 @@ melos:
         ':!:packages/transport/rpc_dart_wasm/example/*'
         ':!:docs/api/*'
         ':!:*/docs/*'
+        ':!:*.txt'
         ':!:LICENSE' ':!:*/LICENSE' ':!:LICENSES/*' ':!:*.license'
         ':!:REUSE.toml' ':!:*/REUSE.toml'
         | xargs -0 reuse annotate

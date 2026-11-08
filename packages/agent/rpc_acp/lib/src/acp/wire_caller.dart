@@ -10,7 +10,7 @@ import 'wire.dart';
 
 /// ACP semantics on the application side of any [IAcpConnection].
 final class AcpWireCaller {
-  AcpWireCaller(this._wire, this._app) {
+  AcpWireCaller(this._wire, this._app, {this.onMcpMessage}) {
     _wire.onAgentRequest = _handleAgentRequest;
     _wire.onAgentNotification = (method, params) {
       if (method == 'elicitation/complete') {
@@ -24,6 +24,11 @@ final class AcpWireCaller {
   }
 
   final JsonRpcWire _wire;
+  final Future<Map<String, dynamic>> Function(Map<String, dynamic>)?
+  onMcpMessage;
+
+  void notifyMcpMessage(Map<String, dynamic> params) =>
+      _wire.notify('mcp/message', params);
 
   /// The protocol version negotiated on this connection. Every request
   /// after `initialize` is translated into this version's wire shape;
@@ -366,6 +371,12 @@ final class AcpWireCaller {
     Map<String, dynamic> params,
   ) async {
     switch (method) {
+      case 'mcp/message':
+        final handler = onMcpMessage;
+        if (handler == null) {
+          throw const JsonRpcException(-32601, 'MCP over ACP is not enabled');
+        }
+        return handler(params);
       case 'session/request_permission':
         // fromJson reads both wire shapes: v1's bare `toolCall` and v2's
         // required title + subject union.

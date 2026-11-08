@@ -264,6 +264,31 @@ final class AuthMethod {
 typedef PermissionHandler =
     Future<PermissionDecision> Function(PermissionRequest request);
 
+/// One MCP server provided by this client over the ACP connection.
+/// This is the unstable ACP transport, not a stdio or HTTP MCP server.
+final class AcpMcpServer {
+  const AcpMcpServer({
+    required this.name,
+    required this.serverId,
+    required this.handle,
+  });
+
+  final String name;
+  final String serverId;
+  final Future<Map<String, dynamic>> Function(
+    String method,
+    Map<String, dynamic>? params,
+    void Function(String method, Map<String, dynamic>? params) notify,
+  )
+  handle;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'type': 'acp',
+    'name': name,
+    'serverId': serverId,
+  };
+}
+
 /// Client-side method handlers: the fs/terminal/elicitation surface the
 /// agent may call when the client advertises it. Each is nullable; a null
 /// handler means "not supported", and a well-behaved agent never calls
@@ -383,9 +408,26 @@ final class AcpClient {
     PermissionHandler? onPermissionRequest,
     AcpClientHandlers handlers = const AcpClientHandlers(),
     this.capabilities = const AcpClientCapabilities(),
+    List<AcpMcpServer> mcpServers = const [],
   }) {
+    for (final server in mcpServers) {
+      if (server.serverId.isEmpty ||
+          server.name.isEmpty ||
+          _mcpServers.containsKey(server.serverId)) {
+        throw ArgumentError.value(
+          server.serverId,
+          'mcpServers',
+          'MCP server names and IDs must be nonempty and IDs unique',
+        );
+      }
+      _mcpServers[server.serverId] = server;
+    }
     _wire = JsonRpcWire(connection);
-    _agent = AcpWireCaller(_wire, AcpAppService(onPermissionRequest, handlers));
+    _agent = AcpWireCaller(
+      _wire,
+      AcpAppService(onPermissionRequest, handlers),
+      onMcpMessage: _handleMcpMessage,
+    );
     _commandSub = _wire.allUpdates.listen((record) {
       _trackCommands(parseSessionUpdate(record.$2));
     });
@@ -395,6 +437,88 @@ final class AcpClient {
 
   late final JsonRpcWire _wire;
   late final AcpWireCaller _agent;
+  final _mcpServers = <String, AcpMcpServer>{};
+  final _boundMcpServers = <String>{};
+  bool _agentSupportsMcpAcp = false;
+
+  Future<Map<String, dynamic>> _handleMcpMessage(
+    Map<String, dynamic> message,
+  ) async {
+    final serverId = message['serverId'];
+    final requestId = message['requestId'];
+    final method = message['method'];
+    if (serverId is! String ||
+        requestId is! String ||
+        method is! String ||
+        method.isEmpty) {
+      throw const JsonRpcException(-32602, 'Invalid MCP message');
+    }
+    final server = _boundMcpServers.contains(serverId)
+        ? _mcpServers[serverId]
+        : null;
+    if (server == null) {
+      throw const JsonRpcException(-32602, 'Unknown MCP server');
+    }
+    final rawParams = message['params'];
+    if (rawParams != null && rawParams is! Map) {
+      throw const JsonRpcException(-32602, 'Invalid MCP params');
+    }
+    var active = true;
+    try {
+      final outcome = await server.handle(
+        method,
+        (rawParams as Map?)?.cast<String, dynamic>(),
+        (notificationMethod, notificationParams) {
+          if (!active) {
+            throw StateError('MCP request is no longer active');
+          }
+          _agent.notifyMcpMessage(<String, dynamic>{
+            'serverId': serverId,
+            'requestId': requestId,
+            'method': notificationMethod,
+            'params': ?notificationParams,
+          });
+        },
+      );
+      if (outcome.containsKey('result') && !outcome.containsKey('error')) {
+        return <String, dynamic>{'result': outcome['result']};
+      }
+      final error = outcome['error'];
+      if (!outcome.containsKey('result') &&
+          error is Map &&
+          error['code'] is int &&
+          error['message'] is String) {
+        return <String, dynamic>{'error': error};
+      }
+      throw const JsonRpcException(-32603, 'Invalid MCP outcome');
+    } finally {
+      active = false;
+    }
+  }
+
+  List<Map<String, dynamic>>? _prepareMcpServers(
+    List<Map<String, dynamic>>? servers,
+  ) {
+    if (servers == null) return null;
+    final declared = <String>{};
+    for (final server in servers) {
+      if (server['type'] != 'acp') continue;
+      if (!_agentSupportsMcpAcp) {
+        throw StateError('Agent does not advertise MCP over ACP');
+      }
+      final id = server['serverId'];
+      if (id is! String || !_mcpServers.containsKey(id)) {
+        throw ArgumentError.value(
+          id,
+          'mcpServers',
+          'ACP MCP server is not registered on this client',
+        );
+      }
+      declared.add(id);
+    }
+    _boundMcpServers.addAll(declared);
+    return servers;
+  }
 
   /// What this client advertised at initialize.
   final AcpClientCapabilities capabilities;
@@ -454,6 +578,13 @@ final class AcpClient {
         ]);
       }
       _protocolVersion = result.protocolVersion;
+      final advertised = result.agentCapabilities;
+      final session = advertised['session'];
+      final sessionMcp = session is Map ? session['mcp'] : null;
+      final v1Mcp = advertised['mcpCapabilities'];
+      _agentSupportsMcpAcp = result.protocolVersion >= 2
+          ? sessionMcp is Map && sessionMcp['acp'] != null
+          : v1Mcp is Map && v1Mcp['acp'] == true;
       return result;
     } on Object catch (error) {
       final typed = AcpUnsupportedProtocolVersion.fromRpcError(error);
@@ -504,7 +635,7 @@ final class AcpClient {
       NewSessionRequest(
         cwd: cwd,
         additionalDirectories: additionalDirectories,
-        mcpServers: mcpServers,
+        mcpServers: _prepareMcpServers(mcpServers),
       ),
     );
     // v2 agents may advertise the initial command surface in the setup
@@ -537,7 +668,7 @@ final class AcpClient {
       sessionId: sessionId,
       cwd: cwd,
       additionalDirectories: additionalDirectories,
-      mcpServers: mcpServers,
+      mcpServers: _prepareMcpServers(mcpServers),
     ),
   );
 
@@ -557,7 +688,7 @@ final class AcpClient {
             sessionId: sessionId,
             cwd: cwd,
             additionalDirectories: additionalDirectories,
-            mcpServers: mcpServers,
+            mcpServers: _prepareMcpServers(mcpServers),
           ),
         )
         .map((event) => parseSessionUpdate(event.raw));
@@ -577,7 +708,7 @@ final class AcpClient {
         sessionId: sessionId,
         cwd: cwd,
         additionalDirectories: additionalDirectories,
-        mcpServers: mcpServers,
+        mcpServers: _prepareMcpServers(mcpServers),
       ),
     );
     final commands = result.availableCommands;
